@@ -1,0 +1,121 @@
+Metadata-Version: 2.4
+Name: ucl-tools
+Version: 1.0.0
+Summary: UCL Tools SDK for getting and executing tools
+License: MIT
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: requests>=2.25.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+
+# ucl-tools (Python)
+
+UCL Tools SDK for Python - Get and execute tools via REST API.
+
+## Installation
+
+```bash
+pip install ucl-tools
+```
+
+## Usage
+
+```python
+from ucl_sdk import UCLClient
+
+client = UCLClient(
+    space_id="your-space-id",
+    tenant_id="your-tenant-id",      # optional, defaults to ""
+    gateway_id="your-gateway-id",    # optional, defaults to space_id
+    api_key="your-api-key",          # either api_key or auth_token required
+    # auth_token="your-auth-token",
+)
+
+# Get available tools
+tools = client.get_tools(limit=10)
+print(tools)
+
+# Get tools filtered by prompt (search by keywords)
+email_tools = client.get_tools(limit=10, prompt="send email")
+print(email_tools)
+
+# Execute a tool
+result = client.execute_tool(
+    tool_name="tool_name",
+    parameters={
+        "param1": "value1",
+    },
+)
+print(result)
+```
+
+## API Reference
+
+### `UCLClient`
+
+#### Constructor Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `space_id` | `str` | Yes | - | Your space ID |
+| `tenant_id` | `str` | No | `""` | Your tenant ID |
+| `gateway_id` | `str` | No | `space_id` | Your gateway ID |
+| `api_key` | `str` | No* | - | Your API key |
+| `auth_token` | `str` | No* | - | Your auth token |
+
+*Either `api_key` or `auth_token` is required.
+
+#### Methods
+
+##### `get_tools(limit: int = 10, prompt: Optional[str] = None) -> list[Tool]`
+
+Retrieves available tools. Optionally filter by keywords in tool name or description.
+
+```python
+class Tool(TypedDict):
+    name: str
+    description: str
+    inputSchema: dict[str, Any]
+```
+
+##### `execute_tool(tool_name: str, parameters: Optional[dict] = None) -> ExecuteToolResponse`
+
+Executes a tool.
+
+```python
+class ExecuteToolResponse(TypedDict):
+    body: dict[str, Any]
+    rawBody: str
+    statusCode: int
+```
+
+## Development
+
+```bash
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install in development mode
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Run type checking
+mypy ucl_sdk
+```
+
+## License
+
+MIT
