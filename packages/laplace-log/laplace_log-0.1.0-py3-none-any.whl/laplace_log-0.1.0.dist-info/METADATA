@@ -1,0 +1,230 @@
+Metadata-Version: 2.4
+Name: laplace-log
+Version: 0.1.0
+Summary: Unified logging utilities for Laplace applications
+Author: SemionTche
+License-Expression: GPL-3.0-only
+Project-URL: Homepage, https://github.com/SemionTche/laplace_log
+Project-URL: Repository, https://github.com/SemionTche/laplace_log
+Project-URL: Issues, https://github.com/SemionTche/laplace_log/issues
+Keywords: logging,laplace,utilities
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Dynamic: license-file
+
+# laplace_log
+
+A **small, opinionated logging helper** built on top of Python’s standard `logging` module.
+
+`laplace_log` is designed for **multi-module / multi-process scientific or application projects** where you want:
+
+- One **central logger initialization**
+- Logs from **your app + third‑party libraries**
+- Clear **application names** in logs (e.g. `laplace.opt`)
+- Automatic **daily log folders**
+- Simple `log.info(...)` usage everywhere
+- `print()` statements captured into logs
+
+No magic, no external dependencies — just structured, predictable logging.
+
+---
+
+## Features
+
+- ✅ Root logger configuration (captures library logs)
+- ✅ Application‑named logger (`app_name`)
+- ✅ File + console handlers with independent levels
+- ✅ Automatic folder structure: `logs/YYYY-MM-DD/app_name.log`
+- ✅ `print()` and `stderr` redirection into logs
+- ✅ Simple `log.info(...)` helper available everywhere
+- ✅ Singleton design (initialize once, use everywhere)
+
+---
+
+## Installation
+
+Install with pip:
+
+```bash
+pip install laplace-log
+```
+
+---
+
+## Quick Start
+
+### 1. Initialize the logger **once** (entry point)
+
+```python
+from laplace_log.log_lhc import LoggerLHC, log
+
+LoggerLHC(
+    app_name="laplace.opt",
+    file_level="debug",
+    console_level="info",
+)
+
+log.info("Starting OptWindow...")
+```
+
+### 2. Use logging anywhere
+
+```python
+from laplace_log.log_lhc import log
+
+log.debug("Debug message")
+log.info("Information")
+log.warning("Something looks odd")
+log.error("Something went wrong")
+```
+
+No need to pass logger instances around.
+
+---
+
+## Log Output Example
+
+```text
+2026-01-20 10:21:47 [INFO] [laplace.opt] Starting OptWindow...
+2026-01-20 10:21:48 [WARNING] [numpy] overflow encountered in exp
+2026-01-20 10:21:49 [INFO] [root] A print statement
+```
+
+- **App logs** use your `app_name`
+- **Library logs** keep their original logger names
+- **print() statements** appear as `root`
+
+---
+
+## Folder Structure
+
+```text
+logs/
+└── 2026-01-20/
+    └── laplace_opt.log
+```
+
+- A new folder is created **each day**
+- Dots in `app_name` are replaced by underscores for filenames
+
+---
+
+## Design Overview
+
+### Root logger
+
+The **root logger** is configured with:
+
+- File handler (persistent logs)
+- Console handler (stdout)
+
+This ensures **all third‑party libraries** are captured automatically.
+
+### Application logger
+
+Each app uses its own named logger:
+
+```python
+logging.getLogger("laplace.opt")
+```
+
+This name appears in log records and helps identify the source clearly.
+
+---
+
+## The `log` Helper
+
+`log` is a lightweight helper object:
+
+```python
+from laplace_log.log_lhc import log
+log.info("Hello")
+```
+
+Internally, it forwards calls to the initialized `LoggerLHC` instance.
+
+If logging is used **before initialization**, an explicit error is raised:
+
+```text
+RuntimeError: Logger not initialized! Call LoggerLHC(app_name, ...) first.
+```
+
+This avoids silent failures.
+
+---
+
+## Print Redirection
+
+All `print()` and `sys.stderr` output is redirected:
+
+- Printed normally to the console
+- Also logged at `INFO` level via the root logger
+
+This is useful for:
+
+- Legacy code
+- Debug prints
+- Third‑party libraries using `print`
+
+---
+
+## Configuration Options
+
+```python
+LoggerLHC(
+    app_name: str,
+    log_root: Path | str | None = None,
+    file_level: str = "debug",
+    console_level: str = "info",
+)
+```
+
+| Parameter | Description |
+|---------|------------|
+| `app_name` | Logical name of your application (`laplace.opt`, `lapalce.server`, …) |
+| `log_root` | Base folder for logs (default: current working directory) |
+| `file_level` | Minimum level written to file |
+| `console_level` | Minimum level printed to console |
+
+---
+
+## Intended Use Cases
+
+- Scientific applications (optimization, simulations)
+- Multi‑process systems (master / worker / optimizer)
+- GUI + backend projects
+- Long‑running experiments
+- Any project needing **clean, centralized logs**
+
+---
+
+## What This Is *Not*
+
+- ❌ A replacement for `logging`
+- ❌ A framework
+- ❌ A distributed logging system
+
+It is a **thin, explicit convenience layer**.
+
+---
+
+## License
+
+ GPL-3.0 license
+
+---
+
+## Philosophy
+
+> *Logging should be boring, explicit, and predictable.*
+
+`laplace_log` exists to remove boilerplate while keeping full control.
+
+If you understand Python logging, this library will never surprise you.
