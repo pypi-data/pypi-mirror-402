@@ -1,0 +1,245 @@
+# TODO:
+#  * Use ruff
+#  * Decide on good configurations for tools
+#  * Use pre-commit
+#  * Use MyPy
+[build-system]
+build-backend = "setuptools.build_meta"
+# This list should contain anything used in setup.py, or during the build
+# process. These should not be aggressively pinned to allow the package to built
+# on as many different systems as possible.
+requires = [
+    "setuptools>=64",
+    "setuptools-scm>=8", # used to maintain _version.py
+    "pybind11",
+    "pkgconfig",
+    "packaging",
+]
+
+[project]
+authors = [
+    { name = "Reinis Cirpons", email = "rc234@st-andrews.ac.uk" },
+    { name = "Joseph Edwards", email = "jde1@st-andrews.ac.uk" },
+    { name = "James Mitchell", email = "jdm3@st-andrews.ac.uk" },
+    { name = "Maria Tsalakou", email = "mt200@st-andrews.ac.uk" },
+    { name = "Murray Whyte", email = "mw231@st-andrews.ac.uk" },
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Natural Language :: English",
+]
+
+# This list should contain any external package installed within this package.
+# These should not be aggressively pinned to allow the package to be used on as
+# many different systems as possible.
+dependencies = ["graphviz>=0.21", "numpy>=2.2.6", "typing-extensions>=4.15.0"]
+
+description   = "A python package for the libsemigroups C++ library."
+dynamic       = ["version"]
+license       = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+# TODO: Uncomment and update
+# maintainers = [{ name = "My Organization", email = "myemail@email.com" }]
+name            = "libsemigroups_pybind11"
+readme          = "README.md"
+requires-python = ">=3.10"
+
+[project.urls]
+Changelog     = "https://libsemigroups.github.io/libsemigroups_pybind11/changelog.html"
+Documentation = "https://libsemigroups.github.io/libsemigroups_pybind11/"
+Homepage      = "https://github.com/libsemigroups/libsemigroups_pybind11"
+Issues        = "https://github.com/libsemigroups/libsemigroups_pybind11/issues"
+
+[project.optional-dependencies]
+# This list should contain any package used to build the docs.
+# These should not be aggressively pinned to allow the package doc to be built
+# on as many different systems as possible.
+docs = [
+    "beautifulsoup4>=4.14.2",
+    "sphinx>=8.2 ; python_full_version >= '3.11'",
+    "sphinx>=8.1.3 ; python_full_version < '3.11'",
+    "sphinx-copybutton>=0.5.2",
+    "sphinx-rtd-theme>=3.0.2",
+    "sphinxcontrib-bibtex>=2.6.5",
+]
+
+# This list should contain any package used to test the package.
+# These should not be aggressively pinned to allow the package to be tested
+# on as many different systems as possible.
+test = ["pytest>=8.4.2"]
+
+[dependency-groups]
+# This list should contain any package used in the development of
+# libsemigroups_pybind11.
+dev  = ["ipython>=9.6.0", { include-group = "lint" }]
+lint = ["codespell>=2.4.1", "cpplint>=2.0.2", "pylint>=4.0.2", "ruff>=0.14.2"]
+
+###################################################################
+# Tools
+###################################################################
+
+# CIBuildwheel
+
+[tool.cibuildwheel]
+build-frontend  = "build[uv]"
+build-verbosity = 1
+skip            = "cp314t*"
+test-command    = "pytest {project}/tests"
+test-extras     = ["test"]
+
+[tool.cibuildwheel.linux]
+before-all = ["source {project}/etc/make-libsemigroups.sh", "make install"]
+
+
+[tool.cibuildwheel.linux.environment]
+CXX             = "g++"
+CXXFLAGS        = "-O2"
+LD_LIBRARY_PATH = "$LD_LIBRARY_PATH:/usr/lib:/usr/local/lib"
+
+[tool.cibuildwheel.macos]
+before-all = ["source {project}/etc/make-libsemigroups.sh", "sudo make install"]
+
+[tool.cibuildwheel.macos.environment]
+CXX                      = "clang++"
+CXXFLAGS                 = "-O2"
+MACOSX_DEPLOYMENT_TARGET = "11.0"
+
+# Codespell
+
+[tool.codespell]
+ignore-multiline-regex = "codespell:begin-ignore.*codespell:end-ignore"
+ignore-words-list      = "nd,toword,groupe,theses"
+skip                   = "./.git,./docs/_build/*,./gh-pages,uv.lock"
+
+# Setuptools
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools_scm]
+version_file = "src/libsemigroups_pybind11/_version.py"
+
+# Ruff
+
+[tool.ruff]
+exclude     = ["build_tools/", "etc/"]
+line-length = 100
+
+[tool.ruff.lint]
+ignore = [
+    "E111",   # indentation-with-invalid-multiple 
+    "E114",   # indentation-with-invalid-multiple-comment 
+    "E117",   # over-indented 
+    "F401",   # unused-import
+    "SIM108", # use-ternary-operator
+]
+select = [
+    "B",   # flake8-bugbear
+    "E",   # pycodestyle
+    "F",   # Pyflakes
+    "I",   # isort
+    "SIM", # flake8-simplify
+    "UP",  # pyupgrade
+]
+
+
+[tool.ruff.lint.per-file-ignores]
+"setup.py" = [
+    "E402", # module-import-not-at-top-of-file
+]
+"src/libsemigroups_pybind11/presentation/examples.py" = [
+    "E501", # line-too-long
+]
+"tests/test_constants.py" = ["SIM"]
+
+[tool.ruff.lint.isort]
+combine-as-imports      = true
+known-first-party       = ["_libsemigroups_pybind11"]
+split-on-trailing-comma = false
+
+[tool.ruff.format]
+docstring-code-format     = true
+skip-magic-trailing-comma = true
+
+# Pylint
+
+[tool.pylint]
+load-plugins = [
+    "pylint.extensions.bad_builtin",
+    "pylint.extensions.check_elif",
+    "pylint.extensions.code_style",
+    "pylint.extensions.comparison_placement",
+    "pylint.extensions.confusing_elif",
+    "pylint.extensions.consider_refactoring_into_while_condition",
+    "pylint.extensions.dict_init_mutate",
+    "pylint.extensions.docparams",
+    "pylint.extensions.docstyle",
+    "pylint.extensions.dunder",
+    "pylint.extensions.for_any_all",
+    "pylint.extensions.no_self_use",
+    "pylint.extensions.overlapping_exceptions",
+    "pylint.extensions.redefined_loop_name",
+    "pylint.extensions.set_membership",
+    "pylint.extensions.typing",
+]
+
+disable = [
+    "consider-using-assignment-expr",                 # Turn on to suggest the use of the assignment expression :=
+    "consider-using-namedtuple-or-dataclass",         # Turn on to suggest the use of namedtuple over a dictionary
+    "duplicate-code",                                 # Turn on to complain about duplicate code
+    "fixme",                                          # Turn on to complain about fixme/todo comments
+    "locally-disabled",                               # Turn on to complain about locally disabling pylint
+    "suppressed-message",                             # Turn on to complain when a locally disabled warning would have thrown
+    "use-implicit-booleaness-not-comparison-to-zero", # Turn on to complain about not using integers' boolean-ness
+]
+
+extension-pkg-allow-list = ["_libsemigroups_pybind11"]
+ignore                   = ["_version.py"]
+jobs                     = 0
+logging-format-style     = "new"
+max-line-length          = 100
+py-version               = "3.10"
+recursive                = true
+
+
+# Pytest
+
+[tool.pytest.ini_options]
+addopts              = ["-ra", "--showlocals", "--strict-markers", "--strict-config"]
+console_output_style = "progress"
+filterwarnings       = ["error"]
+log_cli_level        = "INFO"
+markers              = ["quick", "standard", "extreme", "fail"]
+minversion           = "6.0"
+testpaths            = ["tests"]
+verbosity_test_cases = 1
+xfail_strict         = true
+
+# uv
+
+[tool.uv]
+environments = ["sys_platform == 'darwin'", "sys_platform == 'linux'"]
+
+[tool.uv.dependency-groups]
+dev = { requires-python = ">=3.12" }
+
+# TODO: Decide if we want to use mypy
+# [tool.mypy]
+# files = "src"
+# python_version = "3.9"
+# strict = true
+# enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+# warn_unreachable = true
+
+# [[tool.mypy.overrides]]
+# module = [ "_libsemigroups_pybind11", ]
+# ignore_missing_imports = true
