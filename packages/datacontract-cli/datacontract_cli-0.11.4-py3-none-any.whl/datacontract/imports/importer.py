@@ -1,0 +1,44 @@
+from abc import ABC, abstractmethod
+from enum import Enum
+
+from open_data_contract_standard.model import OpenDataContractStandard
+
+
+class Importer(ABC):
+    def __init__(self, import_format) -> None:
+        self.import_format = import_format
+
+    @abstractmethod
+    def import_source(
+        self,
+        source: str,
+        import_args: dict,
+    ) -> OpenDataContractStandard:
+        """Import a data contract from a source.
+
+        All importers now return OpenDataContractStandard (ODCS) format.
+        """
+        pass
+
+
+class ImportFormat(str, Enum):
+    sql = "sql"
+    avro = "avro"
+    dbt = "dbt"
+    dbml = "dbml"
+    glue = "glue"
+    jsonschema = "jsonschema"
+    json = "json"
+    bigquery = "bigquery"
+    odcs = "odcs"
+    unity = "unity"
+    spark = "spark"
+    iceberg = "iceberg"
+    parquet = "parquet"
+    csv = "csv"
+    protobuf = "protobuf"
+    excel = "excel"
+
+    @classmethod
+    def get_supported_formats(cls):
+        return list(map(lambda c: c.value, cls))
