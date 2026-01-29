@@ -1,0 +1,135 @@
+# mf2dom
+
+Microformats2 (mf2) parser and deterministic renderer powered by JustHTML.
+
+`mf2dom` focuses on:
+- Correct mf2 parsing (validated against the official `microformats-tests` suite)
+- Deterministic HTML rendering and stable round-trips (`HTML -> mf2 -> HTML`)
+- A small runtime surface area (no network I/O, no BeautifulSoup)
+
+## Installation
+
+```bash
+pip install mf2dom
+```
+
+Requires Python 3.11+.
+
+## Quickstart
+
+Parse mf2 JSON from HTML:
+
+```python
+import mf2dom
+
+html = '<a class="h-card u-url p-name" href="/me">Alice</a>'
+doc = mf2dom.parse(html, base_url="https://example.com/")
+print(doc["items"])
+```
+
+The parsed document is a dict with `items`, `rels`, and `rel-urls` keys (mf2 JSON shape).
+
+Render mf2 JSON back into canonical HTML:
+
+```python
+html2 = mf2dom.render(doc)
+```
+
+Async parsing (offloads to a thread):
+
+```python
+doc = await mf2dom.parse_async(html, base_url="https://example.com/")
+```
+
+## API
+
+- `mf2dom.parse(html, *, base_url=None, url=None) -> dict`
+  - `html` can be a string/bytes, a `justhtml.JustHTML` instance, or a JustHTML root node.
+  - `base_url` controls resolution of relative URLs (preferred). `url` is a deprecated alias.
+- `mf2dom.parse_async(...)` is `parse(...)` via `asyncio.to_thread(...)`.
+- `mf2dom.render(doc) -> str` renders a deterministic HTML representation of an mf2 document.
+
+## JavaScript/TypeScript Renderer
+
+A TypeScript implementation of the renderer is available in `src/mf2dom-ts/` for client-side rendering (e.g., with sql-wasm.js).
+
+### Installation
+
+```bash
+cd src/mf2dom-ts
+npm install
+npm run build
+```
+
+### Usage
+
+**ES Module:**
+```javascript
+import { render, renderItemElement, renderItems } from './dist/mf2dom.esm.js';
+
+// Render full document to HTML string
+const html = render(mf2Document);
+
+// Render to DOM element (most efficient for client-side)
+const main = render(mf2Document, { asElement: true });
+document.body.appendChild(main);
+
+// Render single item
+const card = renderItemElement(hCard);
+
+// Batch render with DocumentFragment (efficient for lists)
+const fragment = renderItems(entries);
+container.appendChild(fragment);
+```
+
+**Browser script tag:**
+```html
+<script src="dist/mf2dom.min.js"></script>
+<script>
+  const html = mf2dom.render(doc);
+  // or
+  const el = mf2dom.render(doc, { asElement: true });
+</script>
+```
+
+### Build Output
+
+| File | Size | Use Case |
+|------|------|----------|
+| `dist/mf2dom.esm.js` | 5.2kb | ES modules (bundlers, modern browsers) |
+| `dist/mf2dom.cjs` | 5.7kb | CommonJS (Node.js) |
+| `dist/mf2dom.min.js` | 5.7kb | Browser `<script>` tag |
+
+## Why mf2dom vs mf2py?
+
+Both libraries parse microformats, but they optimize for different use cases:
+
+- Choose `mf2dom` if you need deterministic rendering, stable round-trips, and a smaller/no-network
+  runtime surface (useful for normalization, caching, and “canonical mf2 HTML” fixtures).
+- Choose `mf2py` if you need URL fetching, microformats1 compatibility, metaformats support, or
+  wider Python version support.
+
+## Testing & correctness
+
+- Official parsing fixtures: `tests/test_official_microformats_suite.py` runs the upstream
+  `microformats-tests` JSON fixtures.
+- Coverage gate: `pyproject.toml` enforces 100% branch coverage.
+
+To run the official fixture suite locally, check out `microformats-tests` as a sibling directory:
+
+```bash
+git clone https://github.com/microformats/microformats-tests ../microformats-tests
+```
+
+## Development (uv)
+
+```bash
+uv sync --group dev
+uv run pytest
+uv run coverage run -m pytest && uv run coverage report
+uv run pre-commit install
+```
+
+## License
+
+AGPL 3
