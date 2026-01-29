@@ -1,0 +1,417 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"          # Unified release (Python + Node SDK + CLI)
+      - "py-v*"       # Python SDK only
+      - "node-v*"     # Node SDK + CLI bin packages
+      - "node-cli-v*" # CLI bin packages only (release before node-v* when updating bin versions)
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (without v prefix)"
+        required: true
+      target:
+        description: "What to release"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - python
+          - node
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  # Run CI checks first
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
+  # Determine what to release based on tag or input
+  check-release:
+    needs: [ci]
+    name: Check release target
+    runs-on: ubuntu-latest
+    outputs:
+      release_python: ${{ steps.check.outputs.release_python }}
+      release_node: ${{ steps.check.outputs.release_node }}
+      release_node_cli: ${{ steps.check.outputs.release_node_cli }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Determine release targets
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            TARGET="${{ github.event.inputs.target }}"
+            if [ "$TARGET" = "all" ] || [ "$TARGET" = "python" ]; then
+              echo "release_python=true" >> $GITHUB_OUTPUT
+            else
+              echo "release_python=false" >> $GITHUB_OUTPUT
+            fi
+            if [ "$TARGET" = "all" ] || [ "$TARGET" = "node" ]; then
+              echo "release_node=true" >> $GITHUB_OUTPUT
+              echo "release_node_cli=true" >> $GITHUB_OUTPUT
+            else
+              echo "release_node=false" >> $GITHUB_OUTPUT
+              echo "release_node_cli=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            TAG="${GITHUB_REF_NAME}"
+            # Extract version (strip v, py-v, node-v, or node-cli-v prefix)
+            VERSION=$(echo "$TAG" | sed -E 's/^(py-|node-cli-|node-)?v//')
+            if [[ "$TAG" == py-v* ]]; then
+              echo "release_python=true" >> $GITHUB_OUTPUT
+              echo "release_node=false" >> $GITHUB_OUTPUT
+              echo "release_node_cli=false" >> $GITHUB_OUTPUT
+            elif [[ "$TAG" == node-cli-v* ]]; then
+              # CLI bin packages only (no SDK)
+              echo "release_python=false" >> $GITHUB_OUTPUT
+              echo "release_node=false" >> $GITHUB_OUTPUT
+              echo "release_node_cli=true" >> $GITHUB_OUTPUT
+            elif [[ "$TAG" == node-v* ]]; then
+              # Full node release (SDK + CLI bin packages)
+              echo "release_python=false" >> $GITHUB_OUTPUT
+              echo "release_node=true" >> $GITHUB_OUTPUT
+              echo "release_node_cli=true" >> $GITHUB_OUTPUT
+            else
+              # v* tag releases everything
+              echo "release_python=true" >> $GITHUB_OUTPUT
+              echo "release_node=true" >> $GITHUB_OUTPUT
+              echo "release_node_cli=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Releasing version: $VERSION"
+
+  # ============================================
+  # Python SDK
+  # ============================================
+
+  build-wheels:
+    name: Build wheel (${{ matrix.target }})
+    needs: [check-release]
+    if: needs.check-release.outputs.release_python == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: macosx_arm64
+            goos: darwin
+            goarch: arm64
+          - os: macos-14
+            target: macosx_x86_64
+            goos: darwin
+            goarch: amd64
+          - os: ubuntu-latest
+            target: manylinux_x86_64
+            goos: linux
+            goarch: amd64
+          - os: ubuntu-latest
+            target: manylinux_aarch64
+            goos: linux
+            goarch: arm64
+          - os: windows-latest
+            target: win_amd64
+            goos: windows
+            goarch: amd64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for hatch-vcs
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Build wheel
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          uv build --wheel
+
+      - name: Rename wheel for platform
+        shell: bash
+        run: |
+          cd dist
+          for f in *.whl; do
+            # Replace py3-none-any with py3-none-<platform>
+            newname=$(echo "$f" | sed "s/py3-none-any/py3-none-${{ matrix.target }}/")
+            if [ "$f" != "$newname" ]; then
+              mv "$f" "$newname"
+            fi
+          done
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.target }}
+          path: dist/*.whl
+
+  build-sdist:
+    name: Build source distribution
+    needs: [check-release]
+    if: needs.check-release.outputs.release_python == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for hatch-vcs
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Build sdist
+        run: uv build --sdist
+
+      - name: Upload sdist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [check-release, build-wheels, build-sdist]
+    if: needs.check-release.outputs.release_python == 'true' && !failure() && !cancelled()
+    runs-on: ubuntu-latest
+    environment: release
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Publish to PyPI
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          uv publish dist/*
+
+  # ============================================
+  # Node CLI bin packages
+  # ============================================
+
+  build-node-cli:
+    name: Build CLI bin packages
+    needs: [check-release]
+    if: needs.check-release.outputs.release_node_cli == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Get version
+        id: version
+        run: |
+          echo "version=${{ needs.check-release.outputs.version }}" >> $GITHUB_OUTPUT
+
+      - name: Build Go CLI for all platforms
+        run: |
+          cd cli
+
+          # Darwin ARM64
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o ../node/bin-darwin-arm64/bin/cat-experiments ./cmd/cat-experiments
+
+          # Darwin x64
+          GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o ../node/bin-darwin-x64/bin/cat-experiments ./cmd/cat-experiments
+
+          # Linux ARM64
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o ../node/bin-linux-arm64/bin/cat-experiments ./cmd/cat-experiments
+
+          # Linux x64
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o ../node/bin-linux-x64/bin/cat-experiments ./cmd/cat-experiments
+
+          # Windows x64
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ../node/bin-win32-x64/bin/cat-experiments.exe ./cmd/cat-experiments
+
+      - name: Update bin package versions
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+
+          for dir in node/bin-darwin-arm64 node/bin-darwin-x64 node/bin-linux-arm64 node/bin-linux-x64 node/bin-win32-x64; do
+            cd $dir
+            npm version $VERSION --no-git-tag-version --allow-same-version
+            cd ../..
+          done
+
+      - name: Upload CLI bin packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-cli-packages
+          path: |
+            node/bin-darwin-arm64/
+            node/bin-darwin-x64/
+            node/bin-linux-arm64/
+            node/bin-linux-x64/
+            node/bin-win32-x64/
+
+  publish-npm-cli:
+    name: Publish CLI to npm
+    needs: [check-release, build-node-cli]
+    if: needs.check-release.outputs.release_node_cli == 'true' && !failure() && !cancelled()
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Download CLI bin packages
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-cli-packages
+          path: node
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish platform packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Ensure we have the right npm config for auth
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
+          for dir in node/bin-darwin-arm64 node/bin-darwin-x64 node/bin-linux-arm64 node/bin-linux-x64 node/bin-win32-x64; do
+            cd $dir
+            npm publish --access public --provenance || true  # Allow failure if already published
+            cd ../..
+          done
+
+  # ============================================
+  # Node SDK
+  # ============================================
+
+  build-node-sdk:
+    name: Build Node SDK
+    needs: [check-release]
+    if: needs.check-release.outputs.release_node == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Get version
+        id: version
+        run: |
+          echo "version=${{ needs.check-release.outputs.version }}" >> $GITHUB_OUTPUT
+
+      - name: Update SDK package version
+        run: |
+          cd node/sdk
+          npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+
+      - name: Build SDK TypeScript
+        run: |
+          cd node/sdk
+          npm install --ignore-scripts
+          npm run build
+
+      - name: Upload SDK package
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-sdk-package
+          path: node/sdk/
+
+  publish-npm-sdk:
+    name: Publish SDK to npm
+    needs: [check-release, build-node-sdk, publish-npm-cli]
+    if: needs.check-release.outputs.release_node == 'true' && !failure() && !cancelled()
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Download SDK package
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-sdk-package
+          path: node/sdk
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish SDK package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd node/sdk
+          # Ensure we have the right npm config for auth
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
+          npm publish --access public --provenance
+
+  # ============================================
+  # GitHub Release
+  # ============================================
+
+  create-release:
+    name: Create GitHub Release
+    needs: [check-release, build-wheels, build-sdist, build-node-cli, build-node-sdk, publish-pypi, publish-npm-cli, publish-npm-sdk]
+    if: always() && !failure() && !cancelled()
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+        continue-on-error: true  # Some artifacts may not exist
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          name: v${{ needs.check-release.outputs.version }}

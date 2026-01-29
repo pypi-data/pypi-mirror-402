@@ -1,0 +1,94 @@
+[project]
+name = "cat-experiments"
+dynamic = ["version"]
+description = "Standalone evaluation engine for LLM applications"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+authors = [{ name = "CAT Cafe Team", email = "team@cat-cafe.dev" }]
+keywords = ["evaluation", "llm", "testing", "ai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = ["typing-extensions>=4.5.0"]
+
+[project.optional-dependencies]
+phoenix = ["arize-phoenix-client>=1.22.0"]
+# Tracing extra: only needs API and SDK for span capture.
+# OTLP export is handled by the Go CLI, not Python.
+tracing = [
+    "opentelemetry-api>=1.36.0",
+    "opentelemetry-sdk>=1.36.0",
+]
+cat-cafe = ["cat-cafe-client>=0.0.3"]
+
+[project.scripts]
+cat-experiments-executor = "cat.experiments.executor.executor_main:cli_main"
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+# Match v*, py-v*, but ignore node-v* tags (those are for Node releases)
+# Falls back to 0.0.0.dev if no matching tag found
+fallback-version = "0.0.0.dev0"
+
+[tool.hatch.version.raw-options]
+# This pattern matches v1.2.3 or py-v1.2.3 but NOT node-v1.2.3
+git_describe_command = ["git", "describe", "--tags", "--long", "--match", "v[0-9]*", "--match", "py-v[0-9]*"]
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/cat/experiments/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cat"]
+exclude = [
+    "src/cat/experiments/runner",
+]
+
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "hatch_build.py"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = ["-v", "--tb=short"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.1",
+    "pytest-asyncio>=1.3.0",
+    "ruff>=0.14.8",
+    "arize-phoenix-client>=1.27.1",
+    "cat-cafe-client>=0.0.3",
+    "pyright>=1.1.407",
+    "opentelemetry-api>=1.36.0",
+    "opentelemetry-sdk>=1.36.0",
+    "pre-commit>=4.5.1",
+]
