@@ -1,0 +1,158 @@
+import click
+import sys
+import subprocess
+from yrb.adapter.pip_adapter import run_pip
+from yrb.adapter.conda_adapter import run_conda
+from yrb.adapter.poetry_adapter import run_poetry
+from yrb.adapter.pdm_adapter import run_pdm
+from yrb.core.cache_manager import clean_cache
+from yrb.core.mirror_pool import add_custom_mirror, get_mirrors
+from yrb.cli.exception_handler import handle_exception
+
+@click.group(invoke_without_command=True)
+@click.pass_context
+def cli(ctx):
+    """Python国内下载加速工具"""
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+@cli.command(
+    name="pip",
+    context_settings=dict(
+        ignore_unknown_options=True,
+        allow_extra_args=True
+    )
+)
+@click.pass_context
+@handle_exception
+def pip_cmd(ctx):
+    """
+    执行pip命令（自动加速）
+    示例：yrb pip install numpy
+    """
+    sys.exit(run_pip(ctx.args))
+
+@cli.command(
+    name="conda",
+    context_settings=dict(
+        ignore_unknown_options=True,
+        allow_extra_args=True
+    )
+)
+@click.pass_context
+@handle_exception
+def conda_cmd(ctx):
+    """
+    执行conda命令（自动加速）
+    示例：yrb conda install numpy
+    """
+    sys.exit(run_conda(ctx.args))
+
+@cli.command(
+    name="poetry",
+    context_settings=dict(
+        ignore_unknown_options=True,
+        allow_extra_args=True
+    )
+)
+@click.pass_context
+@handle_exception
+def poetry_cmd(ctx):
+    """
+    执行poetry命令（尝试加速）
+    示例：yrb poetry add numpy
+    """
+    sys.exit(run_poetry(ctx.args))
+
+@cli.command(
+    name="pdm",
+    context_settings=dict(
+        ignore_unknown_options=True,
+        allow_extra_args=True
+    )
+)
+@click.pass_context
+@handle_exception
+def pdm_cmd(ctx):
+    """
+    执行pdm命令（自动加速）
+    示例：yrb pdm add numpy
+    """
+    sys.exit(run_pdm(ctx.args))
+
+@cli.command(
+    name="python",
+    context_settings=dict(
+        ignore_unknown_options=True,
+        allow_extra_args=True
+    )
+)
+@click.pass_context
+@handle_exception
+def python_cmd(ctx):
+    """
+    执行python命令（自动识别 -m pip 并加速）
+    示例：yrb python -m pip install numpy
+    """
+    args = ctx.args
+    # 检查是否为 python -m pip 调用
+    if len(args) >= 2 and args[0] == "-m" and args[1] == "pip":
+        # 复用 run_pip 逻辑，传入 pip 之后的参数
+        sys.exit(run_pip(args[2:]))
+    else:
+        # 其他 python 命令直接透传
+        try:
+            cmd = [sys.executable] + args
+            sys.exit(subprocess.run(cmd).returncode)
+        except Exception as e:
+            click.echo(f"Error running python: {e}", err=True)
+            sys.exit(1)
+
+@cli.command(name="clean")
+@handle_exception
+def clean_cmd():
+    """清理缓存"""
+    if clean_cache():
+        click.echo("Cache cleaned successfully.")
+    else:
+        click.echo("Failed to clean cache.")
+
+@cli.command(name="info")
+@handle_exception
+def info_cmd():
+    """显示配置信息"""
+    click.echo("YRB Tool - Python国内下载加速工具 v1.0.0")
+    click.echo("\nSupported Mirrors:")
+    for tool in ["pip", "conda"]:
+        click.echo(f"\n[{tool}]")
+        for m in get_mirrors(tool):
+            click.echo(f"  - {m['name']}: {m['url']}")
+            
+    click.echo("\nSupported Tools:")
+    click.echo("  - pip")
+    click.echo("  - conda")
+    click.echo("  - poetry (partial support)")
+    click.echo("  - pdm")
+
+@cli.command(name="test")
+@handle_exception
+def test_cmd():
+    """
+    运行自检测试
+    强制重新测速并显示结果
+    """
+    # 简单调用测速逻辑验证连通性
+    from yrb.core.speed_test import get_best_mirror
+    click.echo("Testing connectivity (forcing refresh)...")
+    try:
+        # 强制测速，忽略缓存
+        best_pip = get_best_mirror(get_mirrors("pip"), force=True)
+        click.echo(f"Pip Best Mirror: {best_pip['name']} ({best_pip.get('delay', 'N/A')}ms)")
+        
+        best_conda = get_best_mirror(get_mirrors("conda"), force=True)
+        click.echo(f"Conda Best Mirror: {best_conda['name']} ({best_conda.get('delay', 'N/A')}ms)")
+        
+        click.echo("\nAll checks passed.")
+    except Exception as e:
+        click.echo(f"Self-test failed: {e}")
+        sys.exit(1)
