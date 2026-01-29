@@ -1,0 +1,148 @@
+Metadata-Version: 2.2
+Name: rsyncdirector_deploy
+Version: 0.0.4
+Summary: Deployment tools for the rsyncdirector module
+Author-email: Ryan Chapin <rchapin@nbinteractive.com>
+License: This software is released under the Revised BSD License.
+        
+        Copyright (c) 2019, Ryan Chapin, https//:www.ryanchapin.com
+        All rights reserved.
+        
+        Redistribution  and  use  in  source  and binary forms, with or
+        without modification, are permitted provided that the following
+        conditions are met:
+        
+        *   Redistributions  of  source  code  must  retain  the  above
+        copyright  notice,  this  list  of conditions and the following
+        disclaimer.
+        
+        *  Redistributions  in  binary  form  must  reproduce the above
+        copyright  notice,  this  list  of conditions and the following
+        disclaimer in the documentation and or other materials provided
+        with the distribution.
+        
+        *  Neither  the  name  of  Ryan  Chapin  nor  the  names of its
+        contributors may be used to endorse or promote products derived
+        from this software without specific prior written permission.
+        
+        THIS   SOFTWARE  IS  PROVIDED  BY  THE  COPYRIGHT  HOLDERS  AND
+        CONTRIBUTORS  "AS  IS"  AND  ANY EXPRESS OR IMPLIED WARRANTIES,
+        INCLUDING,  BUT  NOT  LIMITED  TO,  THE  IMPLIED  WARRANTIES OF
+        MERCHANTABILITY  AND  FITNESS  FOR  A  PARTICULAR  PURPOSE  ARE
+        DISCLAIMED.   IN   NO  EVENT  SHALL  RYAN  CHAPIN,  ANY  HEIRS,
+        SUCCESSORS,  EXECUTORS AND OR ASSIGNS BE LIABLE FOR ANY DIRECT,
+        INDIRECT,  INCIDENTAL,  SPECIAL,  EXEMPLARY,  OR  CONSEQUENTIAL
+        DAMAGES   (INCLUDING,   BUT  NOT  LIMITED  TO,  PROCUREMENT  OF
+        SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+        BUSINESS  INTERRUPTION)  HOWEVER  CAUSED  AND  ON ANY THEORY OF
+        LIABILITY,  WHETHER  IN  CONTRACT,  STRICT  LIABILITY,  OR TORT
+        (INCLUDING  NEGLIGENCE  OR OTHERWISE) ARISING IN ANY WAY OUT OF
+        THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+        SUCH DAMAGE.
+        
+Project-URL: Homepage, https://github.com/rchapin/rsyncdirector/deploy
+Project-URL: readme, https://github.com/rchapin/rsyncdirector/deploy/README.md
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Operating System :: POSIX :: Linux
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: bcrypt==5.0.0
+Requires-Dist: certifi==2025.11.12
+Requires-Dist: cffi==2.0.0
+Requires-Dist: charset-normalizer==3.4.4
+Requires-Dist: cryptography==46.0.3
+Requires-Dist: decorator==5.2.1
+Requires-Dist: deprecated==1.3.1
+Requires-Dist: fabric==3.2.2
+Requires-Dist: idna==3.11
+Requires-Dist: invoke==2.2.1
+Requires-Dist: paramiko==4.0.0
+Requires-Dist: pycparser==2.23
+Requires-Dist: pynacl==1.6.1
+Requires-Dist: pyyaml==6.0.1
+Requires-Dist: requests==2.32.5
+Requires-Dist: urllib3==2.5.0
+Requires-Dist: wrapt==2.0.1
+
+# RsyncDirector Deployment
+
+A command line program for automating the deployment of [`rsyncdirector`](https://github.com/rchapin/rsyncdirector) instances.
+
+## Install RsyncDirector Deployment
+
+### Create a Virtual Environment
+1. Ensure that there is a compatible version of Python installed. See `pyproject.toml` for details.
+
+1. Export the path to the Python interpreter and the path to the virtenv and create and source the virtenv.
+    ```
+    export PYTHON_PATH=<path-to-your-interpreter>
+    export VIRT_ENV_PATH=<path-to-virt-env-parent-dir>
+    $PYTHON_PATH -mvenv $VIRT_ENV_PATH
+    . $VIRT_ENV_PATH/bin/activate
+    ```
+
+### Install install from PyPi or build and install from the `.whl` file.
+
+#### From PyPi
+```
+pip install rsyncdirector_deploy
+```
+
+#### Build and Install from Wheel
+
+1.  Build
+    ```
+    pip install -r ./requirements_dev.txt && \
+    python -m build && \
+    twine check dist/*
+    ```
+
+1. Install the wheel file
+    ```
+    pip install ./dist/rsyncdirector_deploy-<version>-py3-none-any.whl
+    ```
+
+1. Run `rsyncdirector_deploy -h` to confirm installation and to see details on how to run it.
+
+### Distribute SSH Keys
+The `rsyncdirector_deploy` program uses the Python [Fabric](https://www.fabfile.org/) library which depends on the Python [Paramiko](https://www.paramiko.org/) library for the core SSH protocol implementation to run commands on the remote hosts over SSH.  SSH connections are currently authenticated using passphrase-less SSH keys.
+
+1. Distribute public SSH keys for the user under which you will run the deployment program on your localhost to the `root` user on the hosts on which you want to install `rsyncdirector`.
+
+## Using the Deployment Tool to Install RsyncDirector
+Following is an outline of the operations and commands required to run `rynscdirector`.  The `rsyncdirector_deployment` tool automates all of the following operations except the distribution of keys.
+
+1. Create an `rsyncdirector.yaml` config file to define the data that you want to `rsync`.  See the [`rsyncdirector.yaml` file](https://github.com/rchapin/rsyncdirector/blob/main/rsyncdirector/resources/rsyncdirector.yaml) for a complete example with explanation.
+
+1. Install Python on the target host:
+    ```
+    rsyncdirector_deploy python -h
+    ```
+
+1. Install `rsyncdirector` configs on the target host and optionally create an `rsyncdirector` user under which the application will run.  The user under which `rsyncdirector` runs MUST have read access to all data to be `rsync`ed.  In many cases, this can just be the `root` user to avoid having to create an additional user and ensure that the user has read access to all of the source data.
+    ```
+    rsyncdirector_deploy rsyncdirector configs -h
+    ```
+
+1. Install the `rsyncdirector` application
+    ```
+    rsyncdirector_deploy rsyncdirector install -h
+    ```
+
+1. Distribute SSH keys for the aforementioned user to the remote host(s) to which you will be syncing data
+    Create ssh key pairs for the aforementioned user under which the `rsyncdirector` will run and distribute the public keys to the users on the remote hosts to which you will be syncing data.
+
+    Best practice is to create a non-root user on the remote host to which data will be synced and then have create an `rsyncdirector` configuration that connects using that user.
+
+    For example: in order to be able to read any files on the source host, run the `rsyncdirector` as root.  On the remote host to which data is to be synced create a `backup` user and create a directory where the `backup` users has `r-w-x` permissions.  Create an ssh key-pair for the `root` user on the localhost and distribute the public key to the remote host adding it to the `backup` user's `authorized_keys` file.
+
+## Development
+Do the following if you want to develop and debug the installation scripts using VSCode.
+
+1. Create a virtual environment as described in the Setup section above.
+1. Pip install the additional `requirements_dev.txt` dependencies.
+1. Add the `deployment` directory to VSCode.
+1. Click on the Debug tab and select from one of the launch configuratons defined in the `launch.json` file.  You must have the `main.py` file selected in the IDE before clicking on the Debug play button.
+
