@@ -1,0 +1,171 @@
+# =============================================================================
+# ExplodeThoseBits (etb) Configuration File
+# =============================================================================
+# This file contains all configurable options for the etb library.
+# All values shown are the defaults unless otherwise noted.
+# =============================================================================
+
+# Path to the signature dictionary file (JSON format)
+# Contains file format signatures for detection (PNG, JPEG, PDF, etc.)
+signature_dictionary_path: "signatures.json"
+
+# =============================================================================
+# Early Stopping Configuration
+# =============================================================================
+# Multi-level early stopping reduces search space from O(8^n) to O(8^d) where d << n
+# This is CRITICAL for computational feasibility.
+
+early_stopping:
+  # Level 1: Initial check at 2-4 bytes
+  # Checks signature prefix match and basic heuristics
+  # Reduces to ~4,096 paths per starting position
+  level1_bytes: 4
+  
+  # Level 2: Secondary check at 8 bytes
+  # Validates entropy bounds and checksum patterns
+  # Prevents explosion to 16M+ paths
+  level2_bytes: 8
+  
+  # Level 3: Final check at 16 bytes
+  # Validates structural coherence
+  # Absolute cutoff before infeasible territory
+  level3_bytes: 16
+  
+  # Enable adaptive threshold adjustment based on running statistics
+  # When enabled, thresholds tighten when good candidates are found
+  adaptive_thresholds: true
+  
+  # Minimum heuristic score to continue at each level
+  # Lower values = more permissive (explore more paths)
+  # Higher values = more aggressive pruning
+  level1_threshold: 0.2
+  level2_threshold: 0.3
+  level3_threshold: 0.4
+
+# =============================================================================
+# Entropy Thresholds
+# =============================================================================
+# Shannon entropy bounds for filtering byte sequences
+
+entropy_thresholds:
+  # Minimum entropy threshold
+  # Sequences below this are likely repeated patterns (garbage)
+  # Range: [0.0, 8.0]
+  min: 0.1
+  
+  # Maximum entropy threshold
+  # Sequences above this are likely random/encrypted
+  # May still be valid for compressed formats
+  # Range: [0.0, 8.0]
+  max: 7.9
+
+# =============================================================================
+# Heuristics Configuration
+# =============================================================================
+# Scoring weights and thresholds for candidate evaluation
+
+heuristics:
+  # Composite scoring weights (should sum to 1.0)
+  weights:
+    # Weight for signature match score
+    # Higher = prioritize known file format matches
+    signature: 0.40
+    
+    # Weight for heuristic analysis score
+    # Higher = prioritize entropy/distribution analysis
+    heuristic: 0.30
+    
+    # Weight for length/completeness score
+    # Higher = prioritize longer reconstructions
+    length: 0.15
+    
+    # Weight for structural validity score
+    # Higher = prioritize internal consistency
+    structure: 0.15
+  
+  # Minimum ratio of printable ASCII characters for text detection
+  # Range: [0.0, 1.0]
+  min_printable_ratio: 0.95
+  
+  # Maximum consecutive null bytes before applying penalty
+  # Longer runs indicate likely garbage data
+  max_null_run: 16
+
+# =============================================================================
+# Bit Pruning Configuration
+# =============================================================================
+# Controls which bit positions are explored during path generation
+# Reduces search space from O(8^d) to O(k^d) where k < 8
+
+bit_pruning:
+  # Pruning mode:
+  # - "exhaustive": All 8 bit positions (O(8^d)) - most thorough
+  # - "msb_only": Only bits 4-7 (O(4^d)) - faster, good for most formats
+  # - "single_bit": Only 2 configured positions (O(2^d)) - fastest
+  # - "custom": User-defined bit mask
+  mode: "exhaustive"
+  
+  # Custom bit mask (used when mode is "custom")
+  # Each bit position corresponds to whether that position is allowed
+  # 0xFF = all positions, 0xF0 = MSB only, etc.
+  custom_mask: 255
+
+# =============================================================================
+# Memoization Configuration
+# =============================================================================
+# Caching layer for evaluated prefix results
+# Converts repeated work to O(1) lookups
+
+memoization:
+  # Enable/disable the memoization cache
+  enabled: true
+  
+  # Maximum cache size in megabytes
+  # Larger = more cache hits, more memory usage
+  max_cache_size_mb: 1024
+  
+  # Maximum number of cache entries
+  # Limits memory usage regardless of entry size
+  max_entries: 1000000
+
+# =============================================================================
+# Performance Configuration
+# =============================================================================
+# Tuning parameters for parallel execution
+
+performance:
+  # Number of CPU threads for host coordination
+  # Set to number of CPU cores for best performance
+  max_parallel_workers: 8
+  
+  # Number of concurrent CUDA streams
+  # More streams = better GPU utilization, more memory
+  cuda_streams: 4
+  
+  # Number of paths processed per kernel launch
+  # Larger = better GPU efficiency, more latency
+  batch_size: 65536
+
+# =============================================================================
+# Output Configuration
+# =============================================================================
+# Controls what results are returned and how
+
+output:
+  # Number of top candidates to return
+  # Higher = more results, more memory
+  top_n_results: 10
+  
+  # Save partial matches that didn't complete
+  # Useful for debugging and analysis
+  save_partials: false
+  
+  # Include reconstruction paths in output
+  # Paths show exactly which bits were selected
+  include_paths: true
+  
+  # Metrics verbosity level:
+  # - "minimal": Basic success/failure only
+  # - "standard": Include timing and path counts
+  # - "full": Include all metrics (prune rates, cache stats, etc.)
+  metrics_verbosity: "full"
