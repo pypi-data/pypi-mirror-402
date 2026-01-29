@@ -1,0 +1,168 @@
+A `Command Line Interface` (CLI) is best understood as a simple language you use to tell a computer what to do. Like natural language, it’s structured around verbs (actions), nouns (things), and modifiers (details).
+
+### CLI Sentence Structure
+  - verb [options] noun [arguments] : Do this action, in this way, to this thing, with these details
+  - `cp report.pdf backup/`
+    - Verb: copy, Noun: source, Noun: destination
+  - `git commit -m "Fix login bug"`
+    - git (tool), commit (verb), -m (modifier), Argument (message)
+  - `docker run -p 8080:80 nginx`
+    - docker (tool), run (verb), Modifier + argument, Noun (image)
+    - 📖 English: `“Run an Nginx container, mapping port 8080 to 80.”`
+
+### Breaking Down CLI Commands
+```md
+When reading or writing a command, ask:
+  - What action do I want? → Verb
+  - On what? → Noun
+  - How exactly? → Options / flags
+  - With what details? → Arguments
+```
+
+### Verb (Command)
+  - The verb tells the system what action to perform.
+```bash
+Examples:
+
+ls → list
+cp → copy
+mv → move
+rm → remove
+git commit → commit changes
+
+Think of verbs as actions.
+```
+
+### Noun (Target / Object)
+  - The noun is what the action is performed on.
+```md
+Examples:
+
+Files: `file.txt`
+Directories: `src/`
+Resources: `origin, main, container`
+```
+
+### Adjectives / Modifiers (Options & Flags)
+  - Modifiers change how the verb behaves.
+  - They usually start with: `- (short flag) -- (long flag)`
+```bash
+Examples:
+
+-l → long format
+-a → include hidden items
+--recursive → apply action recursively
+```
+
+
+## Demo
+```bash
+civiclens --help
+civiclens --version
+
+civiclens ingest \
+    --source s3 \
+    --path s3://eo-archive \
+    --chunk-size 1200
+```
+
+### Example
+```bash 
+civiclens query "How does this EO affect education?" --audience teen
+
+civiclens query "How does this executive order affect education?" \
+  --audience teen \
+  --top-k 5 \
+  --show-sources
+
+civiclens prompt "How does this executive order affect education?" \
+  --temperature 0.0 \
+  --max-tokens 1024 \
+  --model "gpt-oss-20b" \
+  --url "http://localhost:11434/api/chat"
+
+```
+
+### Example
+```bash 
+civiclens eval \
+  --dataset benchmarks/eo_questions.json \
+  --metrics faithfulness answer_relevance context_recall context_precision \
+  --top-k 5 \
+  --save-results
+```
+
+### Add this to TOML
+```bash
+[project]
+name = "civiclens"
+version = "0.1.0"
+description = "CivicLens AI – civic education and executive document analysis"
+requires-python = ">=3.9"
+
+[project.scripts]
+civiclens = "civiclens.cli:main"
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+```
+
+### Install
+```bash
+uv pip install -e .
+
+which civiclens
+
+
+civiclens --help
+civiclens query "How does this EO affect education?"
+civiclens eval --dataset benchmarks/eo_questions.json
+```
+
+### Docker deployment
+```bash
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY . .
+RUN pip install .
+
+EXPOSE 11434
+
+ENTRYPOINT ["civiclens"]
+
+
+# To build and run the Docker container 
+docker build -t civiclens-app .
+
+# Run
+docker run -it civiclens-app --help
+docker run -it civiclens-app info
+docker run -it civiclens-app query "who won the first world cup in soccer?"
+docker run -it civiclens-app  prompt "who won the first world cup in soccer?" -p 11434:11434
+# docker run -it civiclens-app eval --dataset benchmarks/eo_questions.json
+
+# Push
+docker tag civiclens-app worldbosskafka/civiclens-app:latest
+```
+
+### Deploy to PyPI
+```bash
+# Build the package
+uv build
+
+# https://pypi.org/
+export PYPI_TOKEN=
+# Publish
+uv publish --username __token__ --password $PYPI_TOKEN
+
+# install 
+uv pip install civiclens==0.3.0
+pip install civiclens==0.3.0
+pip install civiclens
+```
+
