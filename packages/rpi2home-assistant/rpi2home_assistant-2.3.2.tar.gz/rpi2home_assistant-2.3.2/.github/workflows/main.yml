@@ -1,0 +1,67 @@
+name: main CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # -------------------------------------------------------------------------- 
+  #                                    build                                   
+  # -------------------------------------------------------------------------- 
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v6
+    - name: install pypi-packaged dependencies
+      run: sudo pip3 install build
+
+    # test Python packaging
+    - name: package the pypi
+      run: |
+        python3 -m build
+
+  # -------------------------------------------------------------------------- 
+  #                           formatter_and_linter                                   
+  # -------------------------------------------------------------------------- 
+  formatter_and_linter:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v6
+    - name: install pypi-packaged dependencies
+      run: sudo pip3 install black ruff
+    - name: run formatter
+      run: black . --check
+    - name: run linter
+      run: ruff check src/raspy2mqtt/
+    
+  # -------------------------------------------------------------------------- 
+  #                                   tests                                   
+  # -------------------------------------------------------------------------- 
+  tests:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v6
+
+    # testcontainers 4.6.0 has introduced the MosquittoContainer, see
+    # https://github.com/testcontainers/testcontainers-python/releases/tag/testcontainers-v4.6.0
+    - name: install pypi-packaged dependencies for unit and integration tests
+      run: sudo pip3 install pytest 'testcontainers>=4.6.0' paho-mqtt aiomqtt schema
+
+    # FIXME: we should have all dependencies centralized in the TOML file and install them as:
+    # - name: Install dependencies
+    #   run: |
+    #     poetry install --no-interaction --with dev --all-extras
+    #     poetry show --tree
+
+    - name: run unit tests
+      run: pytest -vvv -m unit
+
+    - name: build docker image
+      run: docker build -t rpi2home-assistant:latest .
+    - name: run integration tests
+      run: pytest -vvv --capture=no -m integration

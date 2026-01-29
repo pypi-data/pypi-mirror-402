@@ -1,0 +1,29 @@
+[Unit]
+Description=Raspberry PI to Home Assistant bridge through MQTT for wired sensors/actuators
+After=network-online.target
+Wants=network-online.target
+
+StartLimitIntervalSec=500
+StartLimitBurst=5
+
+[Service]
+Type=simple
+
+# assume that the 'make raspbian_install' command was used and thus that there is a venv
+# containing the rpi2home-assistant software installed in the /root home:
+ExecStart=/root/rpi2home-assistant-venv/bin/raspy2mqtt -c /etc/rpi2home-assistant.yaml
+
+# the following env variable is important; lack of that will result in 
+#  RuntimeError: Failed to add edge detection
+Environment="GPIOZERO_PIN_FACTORY=pigpio"
+
+# PYTHONUNBUFFERED is important to ensure sdtout is flushed timely so "journalctl" shows logs of this service unit:
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=5s
+
+# the time between a graceful SIGTERM and the brute SIGKILL:
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target
