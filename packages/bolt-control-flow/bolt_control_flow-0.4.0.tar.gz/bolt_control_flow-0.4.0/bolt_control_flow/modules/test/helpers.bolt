@@ -1,0 +1,84 @@
+from collections.abc import Callable, Generator
+from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import Any, Optional
+
+
+indent = 0
+def log_say(msg: str, /) -> None:
+    indented_msg = ("  " * indent) + msg
+    say indented_msg
+    print(indented_msg)
+
+@contextmanager
+def log_block(name: str) -> Generator[None, Any, None]:
+    log_say(f"> {name}")
+    global indent
+    indent += 1
+    yield
+    indent -= 1
+    log_say(f"< {name}")
+
+def test(name: str, enabled: bool = True) -> Callable[[Callable[[], Any]], None]:
+    def decorator(test: Callable[[], Any]) -> None:
+        if enabled:
+            with log_block(name):
+                test()
+        else:
+            log_say(f"{name} (test disabled)")
+        
+        print()
+        raw f" "
+
+    return decorator
+
+RangeTuple = tuple[Optional[int], Optional[int]]
+
+min_int32 = -(2**31)
+max_int32 = (2**31) - 1
+
+@dataclass(frozen=True)
+class IntRange:
+    min: int
+    max: int
+
+    def __init__(self, value: int | RangeTuple) -> None:
+        if isinstance(value, int):
+            object.__setattr__(self, "min", value)
+            object.__setattr__(self, "max", value)
+        else:
+            min, max = value
+            if min is None:
+                min = min_int32
+            
+            if max is None:
+                max = max_int32
+            object.__setattr__(self, "min", min)
+            object.__setattr__(self, "max", max)
+
+    def intersect(self, other: "IntRange") -> Optional["IntRange"]:
+        if other.min > self.max or self.min > other.max:
+            return None
+
+        return IntRange((max(self.min, other.min), min(self.max, other.max)))
+
+    def to_tuple(self) -> RangeTuple:
+        return (self.min, self.max)
+
+    def __str__(self) -> str:
+        min = self.min
+        max = self.max
+
+        if min == max:
+            return str(min)
+
+        if min == min_int32:
+            if max == max_int32:
+                # Minecraft doesn't allow ".." for omitting both endpoints
+                return f"{min}.."
+            else:
+                return f"..{max}"
+        elif max == max_int32:
+            return f"{min}.."
+        else:
+            return f"{min}..{max}"
