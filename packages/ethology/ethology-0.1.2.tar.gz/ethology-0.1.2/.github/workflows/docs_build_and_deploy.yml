@@ -1,0 +1,66 @@
+name: Docs Build and Deploy
+
+# Generate the documentation on all merges to main, all pull requests, or by
+# manual workflow dispatch. The build job can be used as a CI check that the
+# docs still build successfully. The deploy job only runs when a tag is
+# pushed and actually moves the generated html to the gh-pages branch
+# (which triggers a GitHub pages deployment).
+
+# The deploy job also runs when a push is made to the main branch or a manual
+# workflow dispatch is made.
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+# Cancel in-progress runs if a new run is triggered, except for main branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  linting:
+    # scheduled workflows should not run on forks
+    if: (${{ github.event_name == 'schedule' }} && ${{ github.repository_owner == 'neuroinformatics-unit' }} && ${{ github.ref == 'refs/heads/main' }}) || (${{ github.event_name != 'schedule' }})
+    runs-on: ubuntu-latest
+    steps:
+      - uses: neuroinformatics-unit/actions/lint@v2
+
+  build_sphinx_docs:
+    name: Build Sphinx Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: neuroinformatics-unit/actions/build_sphinx_docs@v2
+        with:
+          python-version: 3.13 # default for the action is 3.x
+          use-make: true
+          fetch-tags: true
+          use-artifactci: lazy
+
+  check_tag:
+    name: Check if trigger is tag and if it points to commit on main
+    runs-on: ubuntu-latest
+    outputs:
+      tag_on_main: ${{ steps.check.outputs.tag_on_main }}
+    steps:
+      - uses: neuroinformatics-unit/actions/check_tag_on_main@v2
+        id: check
+
+  deploy_sphinx_docs:
+    name: Deploy Sphinx Docs
+    needs: [build_sphinx_docs, check_tag]
+    permissions:
+      contents: write
+    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || needs.check_tag.outputs.tag_on_main == 'true')) || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: neuroinformatics-unit/actions/deploy_sphinx_docs_multiversion@v2
+        with:
+          secret_input: ${{ secrets.GITHUB_TOKEN }}
+          use-make: true
+          switcher-url: https://ethology.neuroinformatics.dev/latest/_static/switcher.json
