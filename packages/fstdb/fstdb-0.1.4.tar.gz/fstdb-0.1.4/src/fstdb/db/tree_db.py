@@ -1,0 +1,122 @@
+"""
+TreeDB module - TreeNode를 확장하여 다양한 경로 입력을 받는 클래스
+"""
+
+from pathlib import Path
+from typing import Optional, Generic, TypeVar, Dict, Set, Type, List
+from ..tree import TreeNode
+from .context import RecordContext, FileSystemContext
+from ..tree.context import TreeContext
+from .path_manager import RecordPath
+
+NodeType = TypeVar('NodeType', bound=TreeNode)
+
+
+class _TreeDB(Generic[NodeType]):
+    
+    def __init__(self, path:Optional[Path], tree:Optional[NodeType], tree_db_context: RecordContext[NodeType], 
+    tree_context: TreeContext[NodeType], NodeClass: Type[NodeType]):
+
+        assert any([path, tree])
+        assert not all([path, tree])
+
+        self.record_context: RecordContext[NodeType] = tree_db_context
+        self.tree_context: TreeContext[NodeType] = tree_context
+        self.NodeClass = NodeClass
+
+        if path is not None:
+            self.tree: NodeType = self.record_context.create_tree(path)
+        else:
+            self.tree: NodeType = tree
+
+        self.id_record_dict: Dict[int, NodeType] = self.record_context.get_id_record_dict(self.tree)
+        self.ids: Set[int] = self.record_context.get_ids(self.tree)
+        self.records: List[NodeType] = self.record_context.get_records(self.tree)
+        self.len: int = len(self.records)
+
+
+    def get_record(self, id: int) -> NodeType:
+        if id not in self.id_record_dict:
+            raise ValueError(f"Record with id {id} does not exist")
+        return self.id_record_dict[id]
+
+    def get_sub_db(self, name:RecordPath) -> '_TreeDB[NodeType]':
+        tokens = self.record_context.path_manager.tokenize(name)
+        node = self.tree_context.get_child(self.tree, tokens)
+        return _TreeDB(path = None, tree = node, tree_db_context = self.record_context, tree_context = self.tree_context, NodeClass = self.NodeClass)
+
+    def create_record(self, name:RecordPath) -> int:
+        # RecordContext에서 레코드 생성
+        record = self.record_context.create_record(self.tree, name, self.ids)
+        
+        # TreeDB 상태 업데이트
+        record_id = self.record_context.get_id(record)
+        self.id_record_dict[record_id] = record
+        self.ids.add(record_id)
+        self.records.append(record)
+        self.len += 1
+        
+        return record_id
+
+    def remove_record(self, id: int) -> None:
+        record = self.get_record(id)
+        self.tree_context.remove_child(record, remove_empty_parent=False)
+        self.id_record_dict.pop(id)
+        self.ids.remove(id)
+        self.records.remove(record)
+        self.len -= 1
+
+    def __len__(self) -> int:
+        return self.len
+
+    def __contains__(self, id: int) -> bool:
+        return id in self.ids
+
+
+class TreeDB(_TreeDB[NodeType]):
+    """
+    _TreeDB를 확장하여 실제 파일 시스템에 파일/폴더를 생성/삭제하는 클래스
+    """
+    
+    def __init__(self, 
+        path: Optional[Path], 
+        tree: Optional[NodeType], 
+        tree_db_context: RecordContext[NodeType], 
+        tree_context: TreeContext[NodeType],
+        NodeClass: Type[NodeType]
+    ):
+        super().__init__(path, tree, tree_db_context, tree_context, NodeClass)
+        self.fs_context = FileSystemContext()
+    
+    def create_record(self, name: RecordPath) -> int:
+        """레코드를 생성하고 실제 파일 시스템에 파일/폴더를 생성합니다."""
+        # 부모 클래스의 create_record 호출
+        record_id = super().create_record(name)
+        
+        # 생성된 레코드 가져오기
+        record = self.get_record(record_id)
+        
+        # 실제 파일/폴더 생성
+        record_path = self.tree_context.get_record_path(record)
+        self.fs_context.create(record_path)
+        
+        return record_id
+    
+    def remove_record(self, id: int) -> None:
+        """레코드를 제거하고 실제 파일 시스템에서 파일/폴더를 삭제합니다."""
+        # 레코드 가져오기 (삭제 전에)
+        record = self.get_record(id)
+        record_path = self.tree_context.get_record_path(record)
+        
+        # 부모 클래스의 remove_record 호출
+        super().remove_record(id)
+        
+        # 실제 파일/폴더 삭제
+        self.fs_context.remove(record_path)
+    
+    def get_sub_db(self, name: RecordPath) -> 'TreeDB[NodeType]':
+        """하위 데이터베이스를 가져옵니다."""
+        # 부모 클래스의 로직을 재사용하되 TreeDB로 반환
+        tokens = self.record_context.path_manager.tokenize(name)
+        node = self.tree_context.get_child(self.tree, tokens)
+        return TreeDB(path=None, tree=node, tree_db_context=self.record_context, tree_context=self.tree_context, NodeClass=self.NodeClass)
