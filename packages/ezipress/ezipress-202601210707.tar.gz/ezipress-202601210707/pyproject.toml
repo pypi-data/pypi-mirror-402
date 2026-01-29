@@ -1,0 +1,205 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ezipress"
+dynamic = ["version"]
+description = "File image re-compression tool - supports ZIP, RAR, EPUB format image compression processing"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Sam Weng", email = "eyes1971@gmail.com"}
+]
+maintainers = [
+    {name = "Sam Weng", email = "eyes1971@gmail.com"}
+]
+keywords = [
+    "compression", "image", "zip", "rar", "epub", "optimization",
+    "batch processing", "file processing", "image compression", "file processing"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: System :: Archiving :: Compression",
+    "Topic :: Utilities"
+]
+requires-python = ">=3.8"
+dependencies = [
+    "Pillow>=9.0.0",
+    "numpy>=1.20.0",
+    "scikit-fuzzy>=0.4.0",
+    # [Fixed] 'rarfile' moved to optional dependencies [rar] and [full] to match setup.py design, allowing users to install optionally.
+    "colorama>=0.4.0; sys_platform == 'win32'"
+]
+
+[project.optional-dependencies]
+# Development dependencies
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=22.0.0",
+    "isort>=5.10.0",
+    "flake8>=5.0.0",
+    "mypy>=1.0.0",
+    "pre-commit>=2.20.0"
+]
+
+# Documentation dependencies
+docs = [
+    "sphinx>=5.0.0",
+    "sphinx-rtd-theme>=1.0.0",
+    "myst-parser>=0.18.0"
+]
+
+# Full installation (includes all optional dependencies)
+full = [
+    "rarfile>=4.0",
+    "colorama>=0.4.0"
+]
+
+# Windows specific dependencies
+windows = [
+    "colorama>=0.4.0",
+    "pywin32>=304; sys_platform == 'win32'"
+]
+
+# Linux/macOS RAR support
+rar = [
+    "rarfile>=4.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/eyes1971/ezipress"
+Documentation = "https://ezipress.readthedocs.io/"
+Repository = "https://github.com/eyes1971/ezipress"
+"Bug Tracker" = "https://github.com/eyes1971/ezipress/issues"
+Changelog = "https://github.com/eyes1971/ezipress/blob/main/CHANGELOG.md"
+
+[project.scripts]
+ezipress = "src.cli:main"
+img-ezipress = "src.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+exclude = ["tests*", "docs*", "examples*"]
+
+[tool.setuptools.package-data]
+src = [
+    "py.typed",
+    "*.md",
+    "*.txt"
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "src.get_version"}
+
+# Black code formatting configuration
+[tool.black]
+line-length = 88
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+# isort import sorting configuration
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["src"]
+known_third_party = ["PIL", "numpy", "skfuzzy", "rarfile", "colorama"]
+
+# MyPy type checking configuration
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "skfuzzy.*",
+    "rarfile.*",
+    "colorama.*"
+]
+ignore_missing_imports = true
+
+# Pytest testing configuration
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--cov=src",
+    "--cov-report=html",
+    "--cov-report=term-missing",
+    "--cov-fail-under=80",
+    "-v"
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests"
+]
+
+# Coverage.py configuration
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "setup.py",
+    "*/venv/*",
+    "*/.venv/*"
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:"
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
