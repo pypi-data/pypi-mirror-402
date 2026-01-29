@@ -1,0 +1,46 @@
+# Cosmic Explorer Pro
+
+An incredibly cool space MCP with real-time data, space weather, exoplanet discovery, Mars rover feeds, and interactive space simulations!
+
+## Installation
+
+```bash
+uvx cosmic-explorer-pro
+```
+
+## Tools
+
+- `track_iss_live`: Get ISS location with live tracking, next pass times for any location, and crew details
+- `get_space_weather`: Get current space weather including solar flares, geomagnetic storms, and aurora predictions
+- `discover_exoplanets`: Discover fascinating exoplanets with detailed characteristics and habitability analysis
+- `mars_rover_update`: Get the latest updates from Mars rovers including weather, recent photos, and mission status
+- `simulate_space_mission`: Run an interactive space mission simulation with real physics and challenges
+- `cosmic_event_tracker`: Track upcoming cosmic events like eclipses, meteor showers, planetary alignments, and celestial phenomena
+
+## Resources
+
+- `cosmic://missions`: Comprehensive database of past, current, and planned space missions
+- `cosmic://technology`: Cutting-edge space technologies and their applications
+- `cosmic://phenomena`: Guide to fascinating cosmic phenomena and celestial events
+
+## Prompts
+
+- `space_mission_commander`: Generate detailed mission briefings as an experienced space mission commander
+- `cosmic_discovery_narrator`: Narrate cosmic discoveries and space phenomena with dramatic flair and scientific accuracy
+
+## Claude Desktop Configuration
+
+```json
+{
+  "mcpServers": {
+    "cosmic-explorer-pro": {
+      "command": "uvx",
+      "args": ["cosmic-explorer-pro"]
+    }
+  }
+}
+```
+
+---
+
+Generated with MCP Builder
