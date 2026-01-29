@@ -1,0 +1,1924 @@
+"""
+Unit tests for Apple Search Ads Client.
+"""
+
+import pytest
+from unittest.mock import Mock, patch, mock_open
+import pandas as pd
+from datetime import datetime
+import time
+import requests
+
+from apple_search_ads import AppleSearchAdsClient
+
+
+class TestAppleSearchAdsClient:
+    """Test cases for AppleSearchAdsClient."""
+
+    @pytest.fixture
+    def mock_credentials(self):
+        """Mock credentials for testing."""
+        return {
+            "client_id": "test_client_id",
+            "team_id": "test_team_id",
+            "key_id": "test_key_id",
+            "private_key_content": "-----BEGIN PRIVATE KEY-----\ntest_key\n-----END PRIVATE KEY-----",
+        }
+
+    @pytest.fixture
+    def client(self, mock_credentials):
+        """Create a client instance with mock credentials."""
+        return AppleSearchAdsClient(**mock_credentials)
+
+    def test_client_initialization_with_params(self, mock_credentials):
+        """Test client initialization with parameters."""
+        client = AppleSearchAdsClient(**mock_credentials)
+        assert client.client_id == "test_client_id"
+        assert client.team_id == "test_team_id"
+        assert client.key_id == "test_key_id"
+        assert client.private_key_content == mock_credentials["private_key_content"]
+
+    @patch.dict(
+        "os.environ",
+        {
+            "APPLE_SEARCH_ADS_CLIENT_ID": "env_client_id",
+            "APPLE_SEARCH_ADS_TEAM_ID": "env_team_id",
+            "APPLE_SEARCH_ADS_KEY_ID": "env_key_id",
+            "APPLE_SEARCH_ADS_PRIVATE_KEY_PATH": "/path/to/key.p8",
+        },
+    )
+    @patch("builtins.open", mock_open(read_data="test_key_content"))
+    def test_client_initialization_with_env_vars(self):
+        """Test client initialization with environment variables."""
+        client = AppleSearchAdsClient()
+        assert client.client_id == "env_client_id"
+        assert client.team_id == "env_team_id"
+        assert client.key_id == "env_key_id"
+        assert client.private_key_path == "/path/to/key.p8"
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_client_initialization_missing_credentials(self):
+        """Test client initialization with missing credentials."""
+        with pytest.raises(ValueError) as exc_info:
+            AppleSearchAdsClient(client_id="test")
+        assert "Missing required credentials" in str(exc_info.value)
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_client_initialization_missing_private_key(self):
+        """Test client initialization with missing private key."""
+        with pytest.raises(ValueError) as exc_info:
+            AppleSearchAdsClient(client_id="test", team_id="test", key_id="test")
+        assert "Missing private key" in str(exc_info.value)
+
+    def test_client_initialization_with_private_key_path(self):
+        """Test client initialization with private key path."""
+        mock_file_content = (
+            "-----BEGIN PRIVATE KEY-----\ntest_key_from_file\n-----END PRIVATE KEY-----"
+        )
+        with patch("builtins.open", mock_open(read_data=mock_file_content)) as mock_file:
+            with patch("os.path.exists", return_value=True):
+                client = AppleSearchAdsClient(
+                    client_id="test",
+                    team_id="test",
+                    key_id="test",
+                    private_key_path="/path/to/key.p8",
+                )
+                assert client.private_key_path == "/path/to/key.p8"
+                assert client.private_key_content is None  # Not loaded yet
+
+                # Test that private key is loaded when needed
+                loaded_key = client._load_private_key()
+                assert loaded_key == mock_file_content
+                mock_file.assert_called_once_with("/path/to/key.p8", "r")
+
+    def test_client_initialization_with_missing_private_key_file(self):
+        """Test client initialization when private key file doesn't exist."""
+        with patch("os.path.exists", return_value=False):
+            client = AppleSearchAdsClient(
+                client_id="test",
+                team_id="test",
+                key_id="test",
+                private_key_path="/nonexistent/path/key.p8",
+            )
+
+            # Private key file error happens when loading, not during init
+            with pytest.raises(FileNotFoundError) as exc_info:
+                client._load_private_key()
+
+            assert "Private key file not found" in str(exc_info.value)
+
+    def test_load_private_key_no_path_provided(self):
+        """Test _load_private_key when private_key_path is None."""
+        client = AppleSearchAdsClient(
+            client_id="test", team_id="test", key_id="test", private_key_content="test_key_content"
+        )
+
+        # Manually set both to None to trigger the missing line
+        client.private_key_content = None
+        client.private_key_path = None
+
+        with pytest.raises(ValueError) as exc_info:
+            client._load_private_key()
+
+        assert "No private key path provided" in str(exc_info.value)
+
+    @patch("jwt.encode")
+    def test_generate_client_secret(self, mock_jwt_encode, client):
+        """Test JWT client secret generation."""
+        mock_jwt_encode.return_value = "test_jwt_token"
+
+        secret = client._generate_client_secret()
+
+        assert secret == "test_jwt_token"
+        mock_jwt_encode.assert_called_once()
+
+        # Check JWT payload
+        call_args = mock_jwt_encode.call_args
+        payload = call_args[0][0]
+        assert payload["sub"] == "test_client_id"
+        assert payload["iss"] == "test_team_id"
+        assert payload["aud"] == "https://appleid.apple.com"
+
+    @patch("requests.post")
+    def test_get_access_token(self, mock_post, client):
+        """Test access token retrieval."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"access_token": "test_access_token"}
+        mock_response.raise_for_status = Mock()
+        mock_post.return_value = mock_response
+
+        with patch.object(client, "_generate_client_secret", return_value="test_secret"):
+            token = client._get_access_token()
+
+        assert token == "test_access_token"
+        assert client._token == "test_access_token"
+        mock_post.assert_called_once_with(
+            "https://appleid.apple.com/auth/oauth2/token",
+            data={
+                "grant_type": "client_credentials",
+                "client_id": "test_client_id",
+                "client_secret": "test_secret",
+                "scope": "searchadsorg",
+            },
+        )
+
+    @patch("requests.post")
+    def test_get_access_token_none_returned(self, mock_post, client):
+        """Test access token retrieval when None is returned."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"access_token": None}
+        mock_response.raise_for_status = Mock()
+        mock_post.return_value = mock_response
+
+        with patch.object(client, "_generate_client_secret", return_value="test_secret"):
+            with pytest.raises(ValueError) as exc_info:
+                client._get_access_token()
+
+        assert "Failed to obtain access token" in str(exc_info.value)
+
+    def test_get_access_token_cached(self, client):
+        """Test that cached token is returned when still valid."""
+        # Set up a cached token
+        client._token = "cached_token"
+        # Use time.time() for consistency with the code
+        client._token_expiry = time.time() + 1800  # 30 minutes from now
+
+        # Get token should return cached token without making API call
+        with patch("requests.post") as mock_post:
+            token = client._get_access_token()
+
+            assert token == "cached_token"
+            mock_post.assert_not_called()
+
+    def test_get_headers_without_org(self, client):
+        """Test header generation without organization context."""
+        with patch.object(client, "_get_access_token", return_value="test_token"):
+            headers = client._get_headers(include_org_context=False)
+
+        assert headers == {"Authorization": "Bearer test_token", "Content-Type": "application/json"}
+
+    def test_get_headers_with_org(self, client):
+        """Test header generation with organization context."""
+        client.org_id = "12345"
+        with patch.object(client, "_get_access_token", return_value="test_token"):
+            headers = client._get_headers(include_org_context=True)
+
+        assert headers == {
+            "Authorization": "Bearer test_token",
+            "Content-Type": "application/json",
+            "X-AP-Context": "orgId=12345",
+        }
+
+    @patch("requests.request")
+    def test_make_request(self, mock_request, client):
+        """Test making API requests."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"data": "test"}
+        mock_response.raise_for_status = Mock()
+        mock_request.return_value = mock_response
+
+        with patch.object(client, "_get_headers", return_value={"test": "header"}):
+            result = client._make_request("https://test.url", method="GET")
+
+        assert result == {"data": "test"}
+        mock_request.assert_called_once_with(
+            method="GET", url="https://test.url", headers={"test": "header"}, json=None, params=None
+        )
+
+    @patch("requests.request")
+    def test_make_request_http_error(self, mock_request, client):
+        """Test API request with HTTP error."""
+        mock_response = Mock()
+        mock_response.status_code = 404
+        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("404 Not Found")
+        mock_request.return_value = mock_response
+
+        with patch.object(client, "_get_headers", return_value={"test": "header"}):
+            with pytest.raises(requests.exceptions.HTTPError):
+                client._make_request("https://test.url")
+
+    @patch("requests.request")
+    def test_make_request_rate_limit_error(self, mock_request, client):
+        """Test API request with rate limit error (429)."""
+        mock_response = Mock()
+        mock_response.status_code = 429
+        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
+            "429 Too Many Requests"
+        )
+        mock_request.return_value = mock_response
+
+        with patch.object(client, "_get_headers", return_value={"test": "header"}):
+            with pytest.raises(requests.exceptions.HTTPError):
+                client._make_request("https://test.url")
+
+    @patch("requests.request")
+    def test_make_request_server_error(self, mock_request, client):
+        """Test API request with server error (500)."""
+        mock_response = Mock()
+        mock_response.status_code = 500
+        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
+            "500 Internal Server Error"
+        )
+        mock_request.return_value = mock_response
+
+        with patch.object(client, "_get_headers", return_value={"test": "header"}):
+            with pytest.raises(requests.exceptions.HTTPError):
+                client._make_request("https://test.url")
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_all_organizations(self, mock_make_request, client):
+        """Test fetching all organizations."""
+        mock_make_request.return_value = {
+            "data": [
+                {"orgId": "123", "orgName": "Test Org 1"},
+                {"orgId": "456", "orgName": "Test Org 2"},
+            ]
+        }
+
+        orgs = client.get_all_organizations()
+
+        assert len(orgs) == 2
+        assert orgs[0]["orgId"] == "123"
+        assert orgs[1]["orgName"] == "Test Org 2"
+        mock_make_request.assert_called_once_with(
+            f"{client.BASE_URL}/acls", include_org_context=False
+        )
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_all_organizations_empty_response(self, mock_make_request, client):
+        """Test fetching organizations with empty response."""
+        mock_make_request.return_value = {}
+
+        orgs = client.get_all_organizations()
+
+        assert orgs == []
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_app_details(self, mock_make_request, client):
+        """Test fetching app details."""
+        client.org_id = "test_org_id"
+        mock_make_request.return_value = {
+            "data": {
+                "id": 284815942,
+                "adamId": 284815942,
+                "appName": "Trip Trek",
+                "artistName": "Trip Trek",
+                "primaryLanguage": "en-US",
+                "primaryGenre": ">Mobile Software Applications>Utilities",
+                "secondaryGenre": ">Mobile Software Applications>Reference",
+                "deviceClasses": ["IPHONE", "IPAD"],
+                "iconPictureUrl": "https://example.com/icon.png",
+                "isPreOrder": "false",
+                "availableStorefronts": ["US"],
+            }
+        }
+
+        details = client.get_app_details("284815942")
+
+        assert details["adamId"] == 284815942
+        assert details["appName"] == "Trip Trek"
+        assert details["artistName"] == "Trip Trek"
+        assert details["primaryLanguage"] == "en-US"
+        assert "IPHONE" in details["deviceClasses"]
+        assert "US" in details["availableStorefronts"]
+        mock_make_request.assert_called_once_with(f"{client.BASE_URL}/apps/284815942", method="GET")
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_app_details_empty_response(self, mock_make_request, client):
+        """Test fetching app details with empty response."""
+        client.org_id = "test_org_id"
+        mock_make_request.return_value = {}
+
+        details = client.get_app_details("999999999")
+
+        assert details == {}
+
+    def test_get_org_id_already_set(self, client):
+        """Test _get_org_id when org_id is already set."""
+        client.org_id = "existing_org_id"
+
+        # Should return without making any API calls
+        client._get_org_id()
+
+        assert client.org_id == "existing_org_id"
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_org_id_no_organizations(self, mock_make_request, client):
+        """Test _get_org_id when no organizations are found."""
+        # Clear org_id to force fetch
+        client.org_id = None
+
+        # Mock empty response
+        mock_make_request.return_value = {"data": []}
+
+        with pytest.raises(ValueError) as exc_info:
+            client._get_org_id()
+
+        assert "No organization found" in str(exc_info.value)
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_org_id_success(self, mock_make_request, client):
+        """Test successful _get_org_id call."""
+        # Clear org_id to force fetch
+        client.org_id = None
+
+        # Mock response with organization
+        mock_make_request.return_value = {"data": [{"orgId": "789", "orgName": "Test Org"}]}
+
+        org_id = client._get_org_id()
+
+        assert org_id == "789"
+        assert client.org_id == "789"
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_campaigns(self, mock_make_request, client):
+        """Test fetching campaigns."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": [
+                {"id": "1", "name": "Campaign 1", "status": "ENABLED"},
+                {"id": "2", "name": "Campaign 2", "status": "PAUSED"},
+            ]
+        }
+
+        campaigns = client.get_campaigns()
+
+        assert len(campaigns) == 2
+        assert campaigns[0]["fetched_org_id"] == "123"
+        assert campaigns[1]["name"] == "Campaign 2"
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_campaigns_with_supply_sources(self, mock_make_request, client):
+        """Test that campaigns include supplySources field."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": [
+                {
+                    "id": "1",
+                    "name": "Search Campaign",
+                    "supplySources": ["APPSTORE_SEARCH_RESULTS"],
+                },
+                {
+                    "id": "2",
+                    "name": "Today Tab Campaign",
+                    "supplySources": ["APPSTORE_TODAY_TAB"],
+                },
+            ]
+        }
+
+        campaigns = client.get_campaigns()
+
+        assert len(campaigns) == 2
+        assert campaigns[0]["supplySources"] == ["APPSTORE_SEARCH_RESULTS"]
+        assert campaigns[1]["supplySources"] == ["APPSTORE_TODAY_TAB"]
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_campaigns_filter_by_supply_source(self, mock_make_request, client):
+        """Test filtering campaigns by supply_source."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": [
+                {
+                    "id": "1",
+                    "name": "Search Campaign",
+                    "supplySources": ["APPSTORE_SEARCH_RESULTS"],
+                },
+                {
+                    "id": "2",
+                    "name": "Today Tab Campaign",
+                    "supplySources": ["APPSTORE_TODAY_TAB"],
+                },
+                {
+                    "id": "3",
+                    "name": "Search Tab Campaign",
+                    "supplySources": ["APPSTORE_SEARCH_TAB"],
+                },
+            ]
+        }
+
+        # Filter for search results campaigns only
+        campaigns = client.get_campaigns(supply_source="APPSTORE_SEARCH_RESULTS")
+
+        assert len(campaigns) == 1
+        assert campaigns[0]["name"] == "Search Campaign"
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_campaigns_filter_no_match(self, mock_make_request, client):
+        """Test filtering campaigns when no campaigns match the supply_source."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": [
+                {
+                    "id": "1",
+                    "name": "Search Campaign",
+                    "supplySources": ["APPSTORE_SEARCH_RESULTS"],
+                },
+            ]
+        }
+
+        campaigns = client.get_campaigns(supply_source="APPSTORE_TODAY_TAB")
+
+        assert len(campaigns) == 0
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_adgroups(self, mock_make_request, client):
+        """Test fetching ad groups for a campaign."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": [
+                {"id": "1", "name": "Ad Group 1", "status": "ENABLED"},
+                {"id": "2", "name": "Ad Group 2", "status": "PAUSED"},
+            ]
+        }
+
+        adgroups = client.get_adgroups("campaign123")
+
+        assert len(adgroups) == 2
+        assert adgroups[0]["name"] == "Ad Group 1"
+        assert adgroups[1]["status"] == "PAUSED"
+        mock_make_request.assert_called_once_with(
+            f"{client.BASE_URL}/campaigns/campaign123/adgroups", params={"limit": 1000}
+        )
+
+    @patch.object(AppleSearchAdsClient, "_get_org_id")
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_adgroups_no_org_id(self, mock_make_request, mock_get_org_id, client):
+        """Test fetching ad groups when org_id is not set."""
+        client.org_id = None
+        mock_make_request.return_value = {"data": []}
+
+        adgroups = client.get_adgroups("campaign123")
+
+        mock_get_org_id.assert_called_once()
+        assert adgroups == []
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_keywords(self, mock_make_request, client):
+        """Test fetching keywords for a campaign."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": [
+                {
+                    "id": 542370642,
+                    "adGroupId": 427916203,
+                    "text": "targeting keyword example 1",
+                    "status": "PAUSED",
+                    "matchType": "BROAD",
+                    "bidAmount": {"amount": "100", "currency": "USD"},
+                    "modificationTime": "2024-04-08T21:03:02.216",
+                    "deleted": False,
+                },
+                {
+                    "id": 542370643,
+                    "adGroupId": 427916203,
+                    "text": "targeting keyword example 2",
+                    "status": "ACTIVE",
+                    "matchType": "EXACT",
+                    "bidAmount": {"amount": "50", "currency": "USD"},
+                    "modificationTime": "2024-04-08T17:53:10.899",
+                    "deleted": False,
+                },
+            ]
+        }
+
+        keywords = client.get_keywords("campaign123")
+
+        assert len(keywords) == 2
+        assert keywords[0]["text"] == "targeting keyword example 1"
+        assert keywords[0]["status"] == "PAUSED"
+        assert keywords[0]["matchType"] == "BROAD"
+        assert keywords[1]["status"] == "ACTIVE"
+        assert keywords[1]["matchType"] == "EXACT"
+        mock_make_request.assert_called_once()
+        call_args = mock_make_request.call_args
+        assert (
+            call_args[0][0]
+            == f"{client.BASE_URL}/campaigns/campaign123/adgroups/targetingkeywords/find"
+        )
+        assert call_args[1]["method"] == "POST"
+        # Should filter out deleted by default
+        assert {"field": "deleted", "operator": "EQUALS", "values": ["false"]} in call_args[1][
+            "json_data"
+        ]["conditions"]
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_keywords_with_adgroup_filter(self, mock_make_request, client):
+        """Test fetching keywords filtered by ad group."""
+        client.org_id = "123"
+        mock_make_request.return_value = {"data": []}
+
+        client.get_keywords("campaign123", adgroup_id="adgroup456")
+
+        call_args = mock_make_request.call_args
+        conditions = call_args[1]["json_data"]["conditions"]
+        assert {"field": "adGroupId", "operator": "EQUALS", "values": ["adgroup456"]} in conditions
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_keywords_include_deleted(self, mock_make_request, client):
+        """Test fetching keywords including deleted ones."""
+        client.org_id = "123"
+        mock_make_request.return_value = {"data": []}
+
+        client.get_keywords("campaign123", include_deleted=True)
+
+        call_args = mock_make_request.call_args
+        json_data = call_args[1]["json_data"]
+        # Should not have conditions when include_deleted=True and no adgroup filter
+        assert "conditions" not in json_data or len(json_data.get("conditions", [])) == 0
+
+    @patch.object(AppleSearchAdsClient, "_get_org_id")
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_keywords_no_org_id(self, mock_make_request, mock_get_org_id, client):
+        """Test fetching keywords when org_id is not set."""
+        client.org_id = None
+        mock_make_request.return_value = {"data": []}
+
+        client.get_keywords("campaign123")
+
+        mock_get_org_id.assert_called_once()
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_update_keyword_bid_success(self, mock_make_request, client):
+        """Test successful keyword bid update."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": [
+                {
+                    "id": 542370642,
+                    "adGroupId": 427916203,
+                    "text": "targeting keyword example",
+                    "status": "ACTIVE",
+                    "matchType": "BROAD",
+                    "bidAmount": {"amount": "1.50", "currency": "USD"},
+                    "modificationTime": "2024-04-08T21:03:02.216",
+                    "deleted": False,
+                }
+            ]
+        }
+
+        result = client.update_keyword_bid(
+            campaign_id="campaign123",
+            adgroup_id="adgroup456",
+            keyword_id="keyword789",
+            bid_amount=1.50,
+            currency="USD",
+        )
+
+        assert result["id"] == 542370642
+        assert result["bidAmount"]["amount"] == "1.50"
+        assert result["bidAmount"]["currency"] == "USD"
+        mock_make_request.assert_called_once()
+        call_args = mock_make_request.call_args
+        assert (
+            call_args[0][0] == f"{client.BASE_URL}/campaigns/campaign123/adgroups/adgroup456"
+            "/targetingkeywords/bulk"
+        )
+        assert call_args[1]["method"] == "PUT"
+        assert call_args[1]["json_data"] == [
+            {"id": "keyword789", "bidAmount": {"amount": "1.5", "currency": "USD"}}
+        ]
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_update_keyword_bid_string_amount(self, mock_make_request, client):
+        """Test keyword bid update with string bid amount."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": [{"id": 123, "bidAmount": {"amount": "2.00", "currency": "EUR"}}]
+        }
+
+        result = client.update_keyword_bid(
+            campaign_id="c1",
+            adgroup_id="ag1",
+            keyword_id="kw1",
+            bid_amount="2.00",
+            currency="EUR",
+        )
+
+        assert result["bidAmount"]["amount"] == "2.00"
+        call_args = mock_make_request.call_args
+        assert call_args[1]["json_data"][0]["bidAmount"]["amount"] == "2.0"
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_update_keyword_bid_currency_normalization(self, mock_make_request, client):
+        """Test currency is normalized to uppercase."""
+        client.org_id = "123"
+        mock_make_request.return_value = {"data": [{"id": 123}]}
+
+        client.update_keyword_bid(
+            campaign_id="c1",
+            adgroup_id="ag1",
+            keyword_id="kw1",
+            bid_amount=1.0,
+            currency="usd",
+        )
+
+        call_args = mock_make_request.call_args
+        assert call_args[1]["json_data"][0]["bidAmount"]["currency"] == "USD"
+
+    def test_update_keyword_bid_negative_amount(self, client):
+        """Test that negative bid amount raises ValueError."""
+        client.org_id = "123"
+
+        with pytest.raises(ValueError) as exc_info:
+            client.update_keyword_bid(
+                campaign_id="c1",
+                adgroup_id="ag1",
+                keyword_id="kw1",
+                bid_amount=-1.50,
+                currency="USD",
+            )
+
+        assert "must be positive" in str(exc_info.value)
+
+    def test_update_keyword_bid_zero_amount(self, client):
+        """Test that zero bid amount raises ValueError."""
+        client.org_id = "123"
+
+        with pytest.raises(ValueError) as exc_info:
+            client.update_keyword_bid(
+                campaign_id="c1",
+                adgroup_id="ag1",
+                keyword_id="kw1",
+                bid_amount=0,
+                currency="USD",
+            )
+
+        assert "must be positive" in str(exc_info.value)
+
+    def test_update_keyword_bid_invalid_amount(self, client):
+        """Test that non-numeric bid amount raises ValueError."""
+        client.org_id = "123"
+
+        with pytest.raises(ValueError) as exc_info:
+            client.update_keyword_bid(
+                campaign_id="c1",
+                adgroup_id="ag1",
+                keyword_id="kw1",
+                bid_amount="invalid",
+                currency="USD",
+            )
+
+        assert "Invalid bid_amount" in str(exc_info.value)
+
+    def test_update_keyword_bid_invalid_currency_length(self, client):
+        """Test that currency with wrong length raises ValueError."""
+        client.org_id = "123"
+
+        with pytest.raises(ValueError) as exc_info:
+            client.update_keyword_bid(
+                campaign_id="c1",
+                adgroup_id="ag1",
+                keyword_id="kw1",
+                bid_amount=1.50,
+                currency="US",
+            )
+
+        assert "Invalid currency" in str(exc_info.value)
+
+    def test_update_keyword_bid_invalid_currency_format(self, client):
+        """Test that currency with non-alpha characters raises ValueError."""
+        client.org_id = "123"
+
+        with pytest.raises(ValueError) as exc_info:
+            client.update_keyword_bid(
+                campaign_id="c1",
+                adgroup_id="ag1",
+                keyword_id="kw1",
+                bid_amount=1.50,
+                currency="US1",
+            )
+
+        assert "Invalid currency" in str(exc_info.value)
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_update_keyword_bid_empty_response(self, mock_make_request, client):
+        """Test keyword bid update with empty response."""
+        client.org_id = "123"
+        mock_make_request.return_value = {}
+
+        result = client.update_keyword_bid(
+            campaign_id="c1",
+            adgroup_id="ag1",
+            keyword_id="kw1",
+            bid_amount=1.50,
+            currency="USD",
+        )
+
+        assert result == {}
+
+    @patch.object(AppleSearchAdsClient, "_get_org_id")
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_update_keyword_bid_no_org_id(self, mock_make_request, mock_get_org_id, client):
+        """Test keyword bid update when org_id is not set."""
+        client.org_id = None
+        mock_make_request.return_value = {"data": [{"id": 123}]}
+
+        client.update_keyword_bid(
+            campaign_id="c1",
+            adgroup_id="ag1",
+            keyword_id="kw1",
+            bid_amount=1.50,
+            currency="USD",
+        )
+
+        mock_get_org_id.assert_called_once()
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_update_keyword_bid_http_error(self, mock_make_request, client):
+        """Test keyword bid update with HTTP error."""
+        client.org_id = "123"
+        mock_make_request.side_effect = requests.exceptions.HTTPError("404 Not Found")
+
+        with pytest.raises(requests.exceptions.HTTPError):
+            client.update_keyword_bid(
+                campaign_id="c1",
+                adgroup_id="ag1",
+                keyword_id="kw1",
+                bid_amount=1.50,
+                currency="USD",
+            )
+
+    @patch.object(AppleSearchAdsClient, "get_all_organizations")
+    @patch.object(AppleSearchAdsClient, "get_campaigns")
+    def test_get_all_campaigns(self, mock_get_campaigns, mock_get_orgs, client):
+        """Test fetching campaigns from all organizations."""
+        # Mock organizations
+        mock_get_orgs.return_value = [
+            {"orgId": "123", "orgName": "Org 1"},
+            {"orgId": "456", "orgName": "Org 2"},
+        ]
+
+        # Mock campaigns for each org
+        mock_get_campaigns.side_effect = [
+            [{"id": "1", "name": "Campaign 1", "fetched_org_id": "123"}],
+            [{"id": "2", "name": "Campaign 2", "fetched_org_id": "456"}],
+        ]
+
+        campaigns = client.get_all_campaigns()
+
+        assert len(campaigns) == 2
+        assert campaigns[0]["name"] == "Campaign 1"
+        assert campaigns[1]["name"] == "Campaign 2"
+        assert mock_get_campaigns.call_count == 2
+
+    @patch.object(AppleSearchAdsClient, "get_all_organizations")
+    @patch.object(AppleSearchAdsClient, "get_campaigns")
+    def test_get_all_campaigns_with_error(self, mock_get_campaigns, mock_get_orgs, client):
+        """Test get_all_campaigns error handling."""
+        # Mock organizations
+        mock_get_orgs.return_value = [
+            {"orgId": "123", "orgName": "Org 1"},
+            {"orgId": "456", "orgName": "Org 2"},
+        ]
+
+        # First org succeeds, second org fails
+        mock_get_campaigns.side_effect = [
+            [{"id": "1", "name": "Campaign 1"}],
+            Exception("API Error"),
+        ]
+
+        campaigns = client.get_all_campaigns()
+
+        # Should still return campaigns from successful org
+        assert len(campaigns) == 1
+        assert campaigns[0]["name"] == "Campaign 1"
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_campaign_report(self, mock_make_request, client):
+        """Test fetching campaign report."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": {
+                "reportingDataResponse": {
+                    "row": [
+                        {
+                            "metadata": {
+                                "campaignId": "1",
+                                "campaignName": "Test Campaign",
+                                "adamId": "123456",
+                            },
+                            "granularity": [
+                                {
+                                    "date": "2024-01-01",
+                                    "impressions": 1000,
+                                    "taps": 50,
+                                    "totalInstalls": 10,
+                                    "totalNewDownloads": 6,
+                                    "totalRedownloads": 4,
+                                    "latOnInstalls": 8,
+                                    "latOffInstalls": 2,
+                                    "localSpend": {"amount": 100.0, "currency": "USD"},
+                                    "avgCPM": {"amount": 5.0, "currency": "USD"},
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
+        }
+
+        start_date = datetime(2024, 1, 1)
+        end_date = datetime(2024, 1, 7)
+
+        df = client.get_campaign_report(start_date, end_date)
+
+        assert not df.empty
+        assert len(df) == 1
+        assert df.iloc[0]["campaign_name"] == "Test Campaign"
+        assert df.iloc[0]["spend"] == 100.0
+        assert df.iloc[0]["adam_id"] == "123456"
+        # Verify new metrics fields
+        assert df.iloc[0]["new_downloads"] == 6
+        assert df.iloc[0]["redownloads"] == 4
+        assert df.iloc[0]["lat_on_installs"] == 8
+        assert df.iloc[0]["lat_off_installs"] == 2
+        assert df.iloc[0]["avg_cpm"] == 5.0
+
+    @patch.object(AppleSearchAdsClient, "get_all_organizations")
+    @patch.object(AppleSearchAdsClient, "get_campaign_report")
+    def test_get_daily_spend(self, mock_get_report, mock_get_orgs, client):
+        """Test getting daily spend."""
+        # Mock organizations
+        mock_get_orgs.return_value = [{"orgId": "123", "orgName": "Test Org"}]
+
+        mock_df = pd.DataFrame(
+            {
+                "date": ["2024-01-01", "2024-01-01", "2024-01-02"],
+                "spend": [100.0, 50.0, 75.0],
+                "impressions": [1000, 500, 750],
+                "taps": [50, 25, 40],
+                "installs": [10, 5, 8],
+            }
+        )
+        mock_get_report.return_value = mock_df
+
+        result = client.get_daily_spend(days=7)
+
+        assert len(result) == 2  # Two unique dates
+        assert result.iloc[0]["spend"] == 150.0  # 100 + 50
+        assert result.iloc[1]["spend"] == 75.0
+        assert "taps" in result.columns
+
+    @patch.object(AppleSearchAdsClient, "get_all_organizations")
+    @patch.object(AppleSearchAdsClient, "get_campaigns_with_details")
+    @patch.object(AppleSearchAdsClient, "get_campaign_report")
+    def test_get_daily_spend_by_app(
+        self, mock_get_report, mock_get_campaigns, mock_get_orgs, client
+    ):
+        """Test getting daily spend by app."""
+        # Mock organizations
+        mock_get_orgs.return_value = [{"orgId": "123", "orgName": "Test Org"}]
+
+        # Mock campaigns with app IDs
+        mock_get_campaigns.return_value = [
+            {"id": "1", "adamId": "123456"},
+            {"id": "2", "adamId": "789012"},
+        ]
+
+        # Mock campaign report
+        mock_df = pd.DataFrame(
+            {
+                "date": ["2024-01-01", "2024-01-01", "2024-01-02"],
+                "campaign_id": ["1", "2", "1"],
+                "spend": [100.0, 50.0, 75.0],
+                "impressions": [1000, 500, 750],
+                "taps": [50, 25, 40],
+                "installs": [10, 5, 8],
+            }
+        )
+        mock_get_report.return_value = mock_df
+
+        start_date = datetime(2024, 1, 1)
+        end_date = datetime(2024, 1, 2)
+
+        result = client.get_daily_spend_by_app(start_date, end_date)
+
+        assert len(result) == 3  # 3 date-app combinations
+        assert "123456" in result["app_id"].values
+        assert "789012" in result["app_id"].values
+        assert "taps" in result.columns
+        assert "campaigns" in result.columns  # campaign count
+
+    @patch.object(AppleSearchAdsClient, "get_all_campaigns")
+    def test_get_campaigns_with_details_all_orgs(self, mock_get_all_campaigns, client):
+        """Test get_campaigns_with_details with fetch_all_orgs=True."""
+        mock_campaigns = [
+            {"id": "1", "name": "Campaign 1", "adamId": "123456"},
+            {"id": "2", "name": "Campaign 2", "adamId": "789012"},
+        ]
+        mock_get_all_campaigns.return_value = mock_campaigns
+
+        campaigns = client.get_campaigns_with_details(fetch_all_orgs=True)
+
+        assert campaigns == mock_campaigns
+        mock_get_all_campaigns.assert_called_once()
+
+    @patch.object(AppleSearchAdsClient, "_get_org_id")
+    @patch.object(AppleSearchAdsClient, "get_campaigns")
+    def test_get_campaigns_with_details_single_org(
+        self, mock_get_campaigns, mock_get_org_id, client
+    ):
+        """Test get_campaigns_with_details with fetch_all_orgs=False."""
+        client.org_id = None
+        mock_campaigns = [{"id": "1", "name": "Campaign 1"}]
+        mock_get_campaigns.return_value = mock_campaigns
+
+        campaigns = client.get_campaigns_with_details(fetch_all_orgs=False)
+
+        assert campaigns == mock_campaigns
+        mock_get_org_id.assert_called_once()
+        mock_get_campaigns.assert_called_once()
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_campaign_report_with_string_dates(self, mock_make_request, client):
+        """Test campaign report with string date inputs."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": {
+                "reportingDataResponse": {
+                    "row": [
+                        {
+                            "metadata": {"campaignId": "1"},
+                            "granularity": [
+                                {
+                                    "date": "2024-01-01",
+                                    "impressions": 100,
+                                    "taps": 10,
+                                    "totalInstalls": 1,
+                                    "localSpend": {"amount": 10.0, "currency": "USD"},
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
+        }
+
+        # Test with string dates
+        df = client.get_campaign_report("2024-01-01", "2024-01-07")
+
+        assert not df.empty
+        assert len(df) == 1
+
+    @patch.object(AppleSearchAdsClient, "_get_org_id")
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_campaign_report_no_org_id(self, mock_make_request, mock_get_org_id, client):
+        """Test campaign report when org_id needs to be fetched."""
+        client.org_id = None
+        mock_make_request.return_value = {"data": {"reportingDataResponse": {"row": []}}}
+
+        df = client.get_campaign_report(datetime(2024, 1, 1), datetime(2024, 1, 7))
+
+        mock_get_org_id.assert_called_once()
+        assert df.empty
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_campaigns_with_org_id_param_and_finally(self, mock_make_request, client):
+        """Test get_campaigns with org_id parameter and finally block."""
+        client.org_id = "original_org"
+        mock_make_request.return_value = {"data": [{"id": "1", "name": "Campaign"}]}
+
+        # Call with specific org_id
+        campaigns = client.get_campaigns(org_id="specific_org")
+
+        # Should restore original org_id via finally block
+        assert client.org_id == "original_org"
+        assert len(campaigns) == 1
+        assert campaigns[0]["fetched_org_id"] == "specific_org"
+
+    @patch.object(AppleSearchAdsClient, "_get_org_id")
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_campaigns_no_org_id(self, mock_make_request, mock_get_org_id, client):
+        """Test get_campaigns when both org_id param and self.org_id are None."""
+        client.org_id = None
+        mock_make_request.return_value = {"data": []}
+
+        campaigns = client.get_campaigns(org_id=None)
+
+        mock_get_org_id.assert_called_once()
+        assert campaigns == []
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_campaign_report_legacy_format(self, mock_make_request, client):
+        """Test campaign report with legacy 'rows' response format."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": {
+                "rows": [
+                    {
+                        "metadata": {
+                            "campaignId": "1",
+                            "campaignName": "Legacy Campaign",
+                            "adamId": "999888",
+                        },
+                        "granularity": [
+                            {
+                                "date": "2024-01-01",
+                                "impressions": 200,
+                                "taps": 20,
+                                "totalInstalls": 2,
+                                "localSpend": {"amount": 20.0, "currency": "USD"},
+                            }
+                        ],
+                    }
+                ]
+            }
+        }
+
+        df = client.get_campaign_report(datetime(2024, 1, 1), datetime(2024, 1, 7))
+
+        assert not df.empty
+        assert len(df) == 1
+        assert df.iloc[0]["campaign_name"] == "Legacy Campaign"
+        assert df.iloc[0]["adam_id"] == "999888"
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_campaign_report_legacy_metrics_format(self, mock_make_request, client):
+        """Test campaign report with legacy 'metrics' format without granularity."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": {
+                "rows": [
+                    {
+                        "metadata": {
+                            "date": "2024-01-01",
+                            "campaignId": "1",
+                            "campaignName": "Legacy Campaign",
+                        },
+                        "metrics": {
+                            "impressions": 300,
+                            "taps": 30,
+                            "totalInstalls": 3,
+                            "localSpend": {"amount": 30.0, "currency": "USD"},
+                        },
+                    }
+                ]
+            }
+        }
+
+        df = client.get_campaign_report(datetime(2024, 1, 1), datetime(2024, 1, 7))
+
+        assert not df.empty
+        assert len(df) == 1
+        assert df.iloc[0]["campaign_name"] == "Legacy Campaign"
+        assert df.iloc[0]["spend"] == 30.0
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_campaign_report_empty_rows(self, mock_make_request, client):
+        """Test campaign report with empty rows."""
+        client.org_id = "123"
+        mock_make_request.return_value = {"data": {"reportingDataResponse": {"row": []}}}
+
+        df = client.get_campaign_report(datetime(2024, 1, 1), datetime(2024, 1, 7))
+
+        assert df.empty
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_campaign_report_with_null_nested_fields(self, mock_make_request, client):
+        """Test campaign report handles None values in nested fields like totalAvgCPI."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": {
+                "reportingDataResponse": {
+                    "row": [
+                        {
+                            "metadata": {
+                                "campaignId": "1",
+                                "campaignName": "Test Campaign",
+                            },
+                            "granularity": [
+                                {
+                                    "date": "2024-01-01",
+                                    "impressions": 100,
+                                    "taps": 10,
+                                    "totalInstalls": 2,
+                                    "localSpend": None,
+                                    "totalAvgCPI": None,
+                                    "avgCPT": None,
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
+        }
+
+        df = client.get_campaign_report("2024-01-01", "2024-01-07")
+
+        assert not df.empty
+        assert len(df) == 1
+        assert df.iloc[0]["spend"] == 0
+        assert df.iloc[0]["avg_cpa"] == 0
+        assert df.iloc[0]["avg_cpt"] == 0
+        assert df.iloc[0]["currency"] == "USD"
+
+    @patch.object(AppleSearchAdsClient, "get_all_organizations")
+    @patch.object(AppleSearchAdsClient, "get_campaign_report")
+    def test_get_daily_spend_empty_campaign_data(self, mock_get_report, mock_get_orgs, client):
+        """Test get_daily_spend with empty campaign data."""
+        mock_get_orgs.return_value = [{"orgId": "123"}]
+        mock_get_report.return_value = pd.DataFrame()  # Empty DataFrame
+
+        result = client.get_daily_spend(days=7)
+
+        assert result.empty
+
+    @patch.object(AppleSearchAdsClient, "get_campaigns")
+    def test_get_daily_spend_single_org(self, mock_get_campaigns, client):
+        """Test get_daily_spend with fetch_all_orgs=False."""
+        client.org_id = "123"
+
+        with patch.object(client, "get_campaign_report") as mock_report:
+            mock_report.return_value = pd.DataFrame(
+                {
+                    "date": ["2024-01-01"],
+                    "spend": [100.0],
+                    "impressions": [1000],
+                    "taps": [50],
+                    "installs": [5],
+                }
+            )
+
+            result = client.get_daily_spend(days=7, fetch_all_orgs=False)
+
+            assert len(result) == 1
+            assert result.iloc[0]["spend"] == 100.0
+
+    @patch.object(AppleSearchAdsClient, "get_all_organizations")
+    @patch.object(AppleSearchAdsClient, "get_campaign_report")
+    def test_get_daily_spend_with_exception(self, mock_get_report, mock_get_orgs, client):
+        """Test get_daily_spend with exception during report fetching."""
+        mock_get_orgs.return_value = [{"orgId": "123"}, {"orgId": "456"}]
+        mock_get_report.side_effect = [
+            pd.DataFrame(
+                {
+                    "date": ["2024-01-01"],
+                    "spend": [50.0],
+                    "impressions": [500],
+                    "taps": [10],
+                    "installs": [2],
+                }
+            ),
+            Exception("API Error"),
+        ]
+
+        result = client.get_daily_spend(days=7)
+
+        # Should still return data from successful org
+        assert len(result) == 1
+        assert result.iloc[0]["spend"] == 50.0
+
+    @patch.object(AppleSearchAdsClient, "get_all_organizations")
+    @patch.object(AppleSearchAdsClient, "get_campaigns_with_details")
+    @patch.object(AppleSearchAdsClient, "get_campaign_report")
+    def test_get_daily_spend_by_app_empty_campaign_data(
+        self, mock_report, mock_campaigns, mock_orgs, client
+    ):
+        """Test get_daily_spend_by_app with empty campaign data."""
+        mock_orgs.return_value = [{"orgId": "123"}]
+        mock_campaigns.return_value = []
+        mock_report.return_value = pd.DataFrame()
+
+        result = client.get_daily_spend_by_app(datetime(2024, 1, 1), datetime(2024, 1, 2))
+
+        assert result.empty
+
+    @patch.object(AppleSearchAdsClient, "get_all_organizations")
+    @patch.object(AppleSearchAdsClient, "get_campaigns_with_details")
+    @patch.object(AppleSearchAdsClient, "get_campaign_report")
+    def test_get_daily_spend_by_app_no_app_mapping(
+        self, mock_report, mock_campaigns, mock_orgs, client
+    ):
+        """Test get_daily_spend_by_app when no apps are mapped."""
+        # Mock organizations
+        mock_orgs.return_value = [{"orgId": "123"}]
+
+        # Campaigns without adamId
+        mock_campaigns.return_value = [
+            {"id": "1", "name": "Campaign 1"},
+            {"id": "2", "name": "Campaign 2"},
+        ]
+        mock_report.return_value = pd.DataFrame(
+            {
+                "campaign_id": ["1", "2"],
+                "date": ["2024-01-01", "2024-01-01"],
+                "spend": [100.0, 50.0],
+            }
+        )
+
+        result = client.get_daily_spend_by_app(datetime(2024, 1, 1), datetime(2024, 1, 2))
+
+        assert result.empty
+
+    @patch.object(AppleSearchAdsClient, "get_campaigns_with_details")
+    @patch.object(AppleSearchAdsClient, "get_campaign_report")
+    def test_get_daily_spend_by_app_single_org(self, mock_report, mock_campaigns, client):
+        """Test get_daily_spend_by_app with fetch_all_orgs=False."""
+        client.org_id = "123"
+        mock_campaigns.return_value = [{"id": "1", "adamId": "999"}]
+        mock_report.return_value = pd.DataFrame(
+            {
+                "campaign_id": ["1"],
+                "date": ["2024-01-01"],
+                "spend": [100.0],
+                "impressions": [1000],
+                "taps": [10],
+                "installs": [2],
+            }
+        )
+
+        result = client.get_daily_spend_by_app(
+            datetime(2024, 1, 1), datetime(2024, 1, 2), fetch_all_orgs=False
+        )
+
+        assert len(result) == 1
+        assert result.iloc[0]["app_id"] == "999"
+
+    @patch.object(AppleSearchAdsClient, "get_all_organizations")
+    @patch.object(AppleSearchAdsClient, "get_campaigns_with_details")
+    @patch.object(AppleSearchAdsClient, "get_campaign_report")
+    def test_get_daily_spend_by_app_with_exception(
+        self, mock_report, mock_campaigns, mock_orgs, client
+    ):
+        """Test get_daily_spend_by_app with exception during report fetching."""
+        mock_orgs.return_value = [{"orgId": "123"}, {"orgId": "456"}]
+        mock_campaigns.return_value = [{"id": "1", "adamId": "999"}]
+
+        # First org succeeds, second fails
+        mock_report.side_effect = [
+            pd.DataFrame(
+                {
+                    "campaign_id": ["1"],
+                    "date": ["2024-01-01"],
+                    "spend": [50.0],
+                    "impressions": [500],
+                    "taps": [5],
+                    "installs": [1],
+                }
+            ),
+            Exception("API Error"),
+        ]
+
+        result = client.get_daily_spend_by_app(datetime(2024, 1, 1), datetime(2024, 1, 2))
+
+        # Should still return data from successful org
+        assert len(result) == 1
+        assert result.iloc[0]["spend"] == 50.0
+
+    @patch.object(AppleSearchAdsClient, "get_all_organizations")
+    @patch.object(AppleSearchAdsClient, "get_campaigns_with_details")
+    @patch.object(AppleSearchAdsClient, "get_campaign_report")
+    def test_get_daily_spend_by_app_string_dates(
+        self, mock_report, mock_campaigns, mock_orgs, client
+    ):
+        """Test get_daily_spend_by_app with string dates in filtering."""
+        # Mock organizations
+        mock_orgs.return_value = [{"orgId": "123"}]
+
+        client.org_id = "123"
+        mock_campaigns.return_value = [{"id": "1", "adamId": "999"}]
+
+        # Return data outside the date range to test filtering
+        mock_report.return_value = pd.DataFrame(
+            {
+                "campaign_id": ["1", "1", "1"],
+                "date": ["2023-12-31", "2024-01-01", "2024-01-03"],
+                "spend": [10.0, 20.0, 30.0],
+                "impressions": [100, 200, 300],
+                "taps": [1, 2, 3],
+                "installs": [0, 1, 1],
+            }
+        )
+
+        result = client.get_daily_spend_by_app("2024-01-01", "2024-01-02")
+
+        # Should only include data within date range
+        assert len(result) == 1
+        assert result.iloc[0]["date"] == "2024-01-01"
+        assert result.iloc[0]["spend"] == 20.0
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_adgroup_report(self, mock_make_request, client):
+        """Test fetching ad group report."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": {
+                "reportingDataResponse": {
+                    "row": [
+                        {
+                            "metadata": {
+                                "adGroupId": "ag1",
+                                "adGroupName": "Test Ad Group",
+                                "adGroupStatus": "ENABLED",
+                            },
+                            "granularity": [
+                                {
+                                    "date": "2024-01-01",
+                                    "impressions": 500,
+                                    "taps": 25,
+                                    "totalInstalls": 5,
+                                    "localSpend": {"amount": 50.0, "currency": "USD"},
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
+        }
+
+        df = client.get_adgroup_report("campaign123", "2024-01-01", "2024-01-07")
+
+        assert not df.empty
+        assert len(df) == 1
+        assert df.iloc[0]["adgroup_name"] == "Test Ad Group"
+        assert df.iloc[0]["adgroup_id"] == "ag1"
+        assert df.iloc[0]["campaign_id"] == "campaign123"
+        assert df.iloc[0]["spend"] == 50.0
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_adgroup_report_legacy_format(self, mock_make_request, client):
+        """Test ad group report with legacy 'metrics' format."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": {
+                "rows": [
+                    {
+                        "metadata": {
+                            "date": "2024-01-01",
+                            "adGroupId": "ag1",
+                            "adGroupName": "Legacy Ad Group",
+                            "adGroupStatus": "PAUSED",
+                        },
+                        "metrics": {
+                            "impressions": 200,
+                            "taps": 10,
+                            "installs": 2,
+                            "localSpend": {"amount": 25.0, "currency": "USD"},
+                        },
+                    }
+                ]
+            }
+        }
+
+        df = client.get_adgroup_report("campaign123", datetime(2024, 1, 1), datetime(2024, 1, 7))
+
+        assert not df.empty
+        assert len(df) == 1
+        assert df.iloc[0]["adgroup_name"] == "Legacy Ad Group"
+        assert df.iloc[0]["adgroup_status"] == "PAUSED"
+        assert df.iloc[0]["spend"] == 25.0
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_adgroup_report_empty(self, mock_make_request, client):
+        """Test ad group report with empty response."""
+        client.org_id = "123"
+        mock_make_request.return_value = {"data": {"reportingDataResponse": {"row": []}}}
+
+        df = client.get_adgroup_report("campaign123", "2024-01-01", "2024-01-07")
+
+        assert df.empty
+
+    @patch.object(AppleSearchAdsClient, "_get_org_id")
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_adgroup_report_no_org_id(self, mock_make_request, mock_get_org_id, client):
+        """Test ad group report when org_id needs to be fetched."""
+        client.org_id = None
+        mock_make_request.return_value = {"data": {"reportingDataResponse": {"row": []}}}
+
+        df = client.get_adgroup_report("campaign123", "2024-01-01", "2024-01-07")
+
+        mock_get_org_id.assert_called_once()
+        assert df.empty
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_keyword_report(self, mock_make_request, client):
+        """Test fetching keyword report."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": {
+                "reportingDataResponse": {
+                    "row": [
+                        {
+                            "metadata": {
+                                "keywordId": "kw1",
+                                "keyword": "test keyword",
+                                "keywordStatus": "ACTIVE",
+                                "matchType": "EXACT",
+                                "adGroupId": "ag1",
+                                "bidAmount": {"amount": 1.50, "currency": "USD"},
+                            },
+                            "granularity": [
+                                {
+                                    "date": "2024-01-01",
+                                    "impressions": 100,
+                                    "taps": 10,
+                                    "totalInstalls": 2,
+                                    "localSpend": {"amount": 15.0, "currency": "USD"},
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
+        }
+
+        df = client.get_keyword_report("campaign123", "2024-01-01", "2024-01-07")
+
+        assert not df.empty
+        assert len(df) == 1
+        assert df.iloc[0]["keyword"] == "test keyword"
+        assert df.iloc[0]["keyword_id"] == "kw1"
+        assert df.iloc[0]["match_type"] == "EXACT"
+        assert df.iloc[0]["bid_amount"] == 1.50
+        assert df.iloc[0]["campaign_id"] == "campaign123"
+        assert df.iloc[0]["adgroup_id"] == "ag1"
+        assert df.iloc[0]["spend"] == 15.0
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_keyword_report_legacy_format(self, mock_make_request, client):
+        """Test keyword report with legacy 'metrics' format."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": {
+                "rows": [
+                    {
+                        "metadata": {
+                            "date": "2024-01-01",
+                            "keywordId": "kw1",
+                            "keyword": "legacy keyword",
+                            "keywordStatus": "PAUSED",
+                            "matchType": "BROAD",
+                            "adGroupId": "ag1",
+                            "bidAmount": {"amount": 2.00, "currency": "USD"},
+                        },
+                        "metrics": {
+                            "impressions": 50,
+                            "taps": 5,
+                            "installs": 1,
+                            "localSpend": {"amount": 10.0, "currency": "USD"},
+                        },
+                    }
+                ]
+            }
+        }
+
+        df = client.get_keyword_report("campaign123", datetime(2024, 1, 1), datetime(2024, 1, 7))
+
+        assert not df.empty
+        assert len(df) == 1
+        assert df.iloc[0]["keyword"] == "legacy keyword"
+        assert df.iloc[0]["match_type"] == "BROAD"
+        assert df.iloc[0]["bid_amount"] == 2.00
+        assert df.iloc[0]["spend"] == 10.0
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_keyword_report_no_bid_amount(self, mock_make_request, client):
+        """Test keyword report when bid_amount is missing."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": {
+                "reportingDataResponse": {
+                    "row": [
+                        {
+                            "metadata": {
+                                "keywordId": "kw1",
+                                "keyword": "no bid keyword",
+                                "keywordStatus": "ACTIVE",
+                                "matchType": "EXACT",
+                                "adGroupId": "ag1",
+                            },
+                            "granularity": [
+                                {
+                                    "date": "2024-01-01",
+                                    "impressions": 100,
+                                    "taps": 10,
+                                    "totalInstalls": 2,
+                                    "localSpend": {"amount": 15.0, "currency": "USD"},
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
+        }
+
+        df = client.get_keyword_report("campaign123", "2024-01-01", "2024-01-07")
+
+        assert not df.empty
+        assert df.iloc[0]["bid_amount"] == 0
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_keyword_report_empty(self, mock_make_request, client):
+        """Test keyword report with empty response."""
+        client.org_id = "123"
+        mock_make_request.return_value = {"data": {"reportingDataResponse": {"row": []}}}
+
+        df = client.get_keyword_report("campaign123", "2024-01-01", "2024-01-07")
+
+        assert df.empty
+
+    @patch.object(AppleSearchAdsClient, "_get_org_id")
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_keyword_report_no_org_id(self, mock_make_request, mock_get_org_id, client):
+        """Test keyword report when org_id needs to be fetched."""
+        client.org_id = None
+        mock_make_request.return_value = {"data": {"reportingDataResponse": {"row": []}}}
+
+        df = client.get_keyword_report("campaign123", "2024-01-01", "2024-01-07")
+
+        mock_get_org_id.assert_called_once()
+        assert df.empty
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_search_term_report(self, mock_make_request, client):
+        """Test fetching search term report."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": {
+                "reportingDataResponse": {
+                    "row": [
+                        {
+                            "metadata": {
+                                "keywordId": "kw1",
+                                "keyword": "test keyword",
+                                "searchTermText": "actual search term",
+                                "searchTermSource": "TARGETED",
+                                "matchType": "EXACT",
+                                "adGroupId": "ag1",
+                            },
+                            "granularity": [
+                                {
+                                    "date": "2024-01-01",
+                                    "impressions": 100,
+                                    "taps": 10,
+                                    "totalInstalls": 2,
+                                    "localSpend": {"amount": 15.0, "currency": "USD"},
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
+        }
+
+        df = client.get_search_term_report("campaign123", "2024-01-01", "2024-01-07")
+
+        assert not df.empty
+        assert len(df) == 1
+        assert df.iloc[0]["search_term"] == "actual search term"
+        assert df.iloc[0]["search_term_source"] == "TARGETED"
+        assert df.iloc[0]["keyword"] == "test keyword"
+        assert df.iloc[0]["keyword_id"] == "kw1"
+        assert df.iloc[0]["match_type"] == "EXACT"
+        assert df.iloc[0]["campaign_id"] == "campaign123"
+        assert df.iloc[0]["adgroup_id"] == "ag1"
+        assert df.iloc[0]["spend"] == 15.0
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_search_term_report_legacy_format(self, mock_make_request, client):
+        """Test search term report with legacy 'metrics' format."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": {
+                "rows": [
+                    {
+                        "metadata": {
+                            "date": "2024-01-01",
+                            "keywordId": "kw1",
+                            "keyword": "legacy keyword",
+                            "searchTermText": "legacy search term",
+                            "searchTermSource": "AUTO",
+                            "matchType": "BROAD",
+                            "adGroupId": "ag1",
+                        },
+                        "metrics": {
+                            "impressions": 50,
+                            "taps": 5,
+                            "installs": 1,
+                            "localSpend": {"amount": 10.0, "currency": "USD"},
+                        },
+                    }
+                ]
+            }
+        }
+
+        df = client.get_search_term_report(
+            "campaign123", datetime(2024, 1, 1), datetime(2024, 1, 7)
+        )
+
+        assert not df.empty
+        assert len(df) == 1
+        assert df.iloc[0]["search_term"] == "legacy search term"
+        assert df.iloc[0]["search_term_source"] == "AUTO"
+        assert df.iloc[0]["match_type"] == "BROAD"
+        assert df.iloc[0]["spend"] == 10.0
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_search_term_report_empty(self, mock_make_request, client):
+        """Test search term report with empty response."""
+        client.org_id = "123"
+        mock_make_request.return_value = {"data": {"reportingDataResponse": {"row": []}}}
+
+        df = client.get_search_term_report("campaign123", "2024-01-01", "2024-01-07")
+
+        assert df.empty
+
+    @patch.object(AppleSearchAdsClient, "_get_org_id")
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_search_term_report_no_org_id(self, mock_make_request, mock_get_org_id, client):
+        """Test search term report when org_id needs to be fetched."""
+        client.org_id = None
+        mock_make_request.return_value = {"data": {"reportingDataResponse": {"row": []}}}
+
+        df = client.get_search_term_report("campaign123", "2024-01-01", "2024-01-07")
+
+        mock_get_org_id.assert_called_once()
+        assert df.empty
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_adgroup_search_term_report(self, mock_make_request, client):
+        """Test fetching ad group search term report."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": {
+                "reportingDataResponse": {
+                    "row": [
+                        {
+                            "metadata": {
+                                "keywordId": "kw1",
+                                "keyword": "test keyword",
+                                "searchTermText": "adgroup search term",
+                                "searchTermSource": "AUTO",
+                                "matchType": "BROAD",
+                                "adGroupId": "ag1",
+                            },
+                            "granularity": [
+                                {
+                                    "date": "2024-01-01",
+                                    "impressions": 50,
+                                    "taps": 5,
+                                    "totalInstalls": 1,
+                                    "localSpend": {"amount": 10.0, "currency": "USD"},
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
+        }
+
+        df = client.get_adgroup_search_term_report(
+            "campaign123", "adgroup456", "2024-01-01", "2024-01-07"
+        )
+
+        assert not df.empty
+        assert len(df) == 1
+        assert df.iloc[0]["search_term"] == "adgroup search term"
+        assert df.iloc[0]["search_term_source"] == "AUTO"
+        assert df.iloc[0]["adgroup_id"] == "ag1"
+        assert df.iloc[0]["spend"] == 10.0
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_adgroup_search_term_report_empty(self, mock_make_request, client):
+        """Test ad group search term report with empty response."""
+        client.org_id = "123"
+        mock_make_request.return_value = {"data": {"reportingDataResponse": {"row": []}}}
+
+        df = client.get_adgroup_search_term_report(
+            "campaign123", "adgroup456", "2024-01-01", "2024-01-07"
+        )
+
+        assert df.empty
+
+    @patch.object(AppleSearchAdsClient, "_get_org_id")
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_adgroup_search_term_report_no_org_id(
+        self, mock_make_request, mock_get_org_id, client
+    ):
+        """Test ad group search term report when org_id needs to be fetched."""
+        client.org_id = None
+        mock_make_request.return_value = {"data": {"reportingDataResponse": {"row": []}}}
+
+        df = client.get_adgroup_search_term_report(
+            "campaign123", "adgroup456", "2024-01-01", "2024-01-07"
+        )
+
+        mock_get_org_id.assert_called_once()
+        assert df.empty
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_create_impression_share_report(self, mock_make_request, client):
+        """Test creating an impression share report."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": {
+                "id": 986235,
+                "name": "test_report",
+                "startTime": "2024-01-20",
+                "endTime": "2024-01-29",
+                "granularity": "DAILY",
+                "state": "QUEUED",
+                "downloadUri": "https://blobstore.apple.com...",
+            }
+        }
+
+        result = client.create_impression_share_report(
+            name="test_report",
+            start_date="2024-01-20",
+            end_date="2024-01-29",
+            granularity="DAILY",
+            countries=["US", "AU"],
+        )
+
+        assert result["id"] == 986235
+        assert result["name"] == "test_report"
+        assert result["state"] == "QUEUED"
+
+        # Verify the request was made with correct data
+        call_args = mock_make_request.call_args
+        assert call_args[1]["method"] == "POST"
+        json_data = call_args[1]["json_data"]
+        assert json_data["name"] == "test_report"
+        assert json_data["granularity"] == "DAILY"
+        assert "selector" in json_data
+        assert json_data["selector"]["conditions"][0]["field"] == "countryOrRegion"
+        assert json_data["selector"]["conditions"][0]["values"] == ["US", "AU"]
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_create_impression_share_report_with_adam_ids(self, mock_make_request, client):
+        """Test creating an impression share report with adam_ids filter."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": {
+                "id": 986236,
+                "name": "test_report_2",
+                "state": "QUEUED",
+            }
+        }
+
+        result = client.create_impression_share_report(
+            name="test_report_2",
+            start_date="2024-01-20",
+            end_date="2024-01-29",
+            adam_ids=["1252497129", "282614216"],
+        )
+
+        assert result["id"] == 986236
+
+        # Verify adam_ids condition was added
+        call_args = mock_make_request.call_args
+        json_data = call_args[1]["json_data"]
+        assert json_data["selector"]["conditions"][0]["field"] == "adamId"
+        assert json_data["selector"]["conditions"][0]["values"] == ["1252497129", "282614216"]
+
+    @patch.object(AppleSearchAdsClient, "_get_org_id")
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_create_impression_share_report_no_org_id(
+        self, mock_make_request, mock_get_org_id, client
+    ):
+        """Test creating impression share report when org_id needs to be fetched."""
+        client.org_id = None
+        mock_make_request.return_value = {"data": {"id": 123, "state": "QUEUED"}}
+
+        client.create_impression_share_report(
+            name="test", start_date="2024-01-01", end_date="2024-01-07"
+        )
+
+        mock_get_org_id.assert_called_once()
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_impression_share_report(self, mock_make_request, client):
+        """Test getting impression share report status."""
+        client.org_id = "123"
+        mock_make_request.return_value = {
+            "data": {
+                "id": 7615231,
+                "name": "test_report",
+                "state": "COMPLETED",
+                "downloadUri": "https://blobstore.apple.com...",
+                "dimensions": ["appName", "adamId", "countryOrRegion", "searchTerm"],
+                "metrics": ["lowImpressionShare", "highImpressionShare", "rank"],
+            }
+        }
+
+        result = client.get_impression_share_report(7615231)
+
+        assert result["id"] == 7615231
+        assert result["state"] == "COMPLETED"
+        assert "downloadUri" in result
+        assert "lowImpressionShare" in result["metrics"]
+
+    @patch.object(AppleSearchAdsClient, "_make_request")
+    def test_get_impression_share_report_empty(self, mock_make_request, client):
+        """Test getting impression share report with empty response."""
+        client.org_id = "123"
+        mock_make_request.return_value = {}
+
+        result = client.get_impression_share_report(999)
+
+        assert result == {}
+
+    @patch.object(AppleSearchAdsClient, "_download_impression_share_report")
+    @patch.object(AppleSearchAdsClient, "get_impression_share_report")
+    @patch.object(AppleSearchAdsClient, "create_impression_share_report")
+    def test_get_impression_share_data(self, mock_create, mock_get_report, mock_download, client):
+        """Test the convenience method that creates, polls, and downloads."""
+        client.org_id = "123"
+        mock_create.return_value = {"id": 123, "state": "QUEUED"}
+        mock_get_report.return_value = {
+            "id": 123,
+            "state": "COMPLETED",
+            "downloadUri": "https://example.com/report.csv",
+        }
+        mock_download.return_value = pd.DataFrame(
+            {
+                "appName": ["Test App"],
+                "searchTerm": ["test keyword"],
+                "lowImpressionShare": [0.1],
+                "highImpressionShare": [0.3],
+            }
+        )
+
+        df = client.get_impression_share_data(
+            name="test",
+            start_date="2024-01-01",
+            end_date="2024-01-07",
+            countries=["US"],
+            poll_interval=0,  # No delay for tests
+        )
+
+        assert not df.empty
+        assert "appName" in df.columns
+        assert "lowImpressionShare" in df.columns
+        mock_create.assert_called_once()
+        mock_get_report.assert_called()
+        mock_download.assert_called_once()
+
+    @patch.object(AppleSearchAdsClient, "get_impression_share_report")
+    @patch.object(AppleSearchAdsClient, "create_impression_share_report")
+    def test_get_impression_share_data_timeout(self, mock_create, mock_get_report, client):
+        """Test timeout when report doesn't complete."""
+        client.org_id = "123"
+        mock_create.return_value = {"id": 123, "state": "QUEUED"}
+        mock_get_report.return_value = {"id": 123, "state": "PROCESSING"}
+
+        with pytest.raises(TimeoutError):
+            client.get_impression_share_data(
+                name="test",
+                start_date="2024-01-01",
+                end_date="2024-01-07",
+                poll_interval=0,
+                max_wait=0,  # Immediate timeout
+            )
+
+    @patch.object(AppleSearchAdsClient, "create_impression_share_report")
+    def test_get_impression_share_data_create_fails(self, mock_create, client):
+        """Test when report creation fails."""
+        client.org_id = "123"
+        mock_create.return_value = {}
+
+        df = client.get_impression_share_data(
+            name="test", start_date="2024-01-01", end_date="2024-01-07"
+        )
+
+        assert df.empty
