@@ -1,0 +1,85 @@
+[build-system]
+
+# Тут мы указываем сборщики
+# setuptools-scm тут может и не очень нужен, но указан на будущее
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gonchaya"
+authors = [{name = "Alexander Firsov", email="gonchaya@gifara.ru"}]
+version = "0.0.10"
+
+# Лежат в корне проекта
+readme = "README.md"
+license = {file = "LICENSE"}
+
+# Требуемая версия python
+requires-python = ">=3.12"
+
+# См. категории на pypi:
+# https://pypi.org/classifiers/
+# Для примера укажем категорию к которой принадлежит лицензия
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "License :: OSI Approved :: BSD License", # Исправлено с Apache на BSD
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Natural Language :: English",
+    "Natural Language :: Russian",
+]
+
+# Зависимости пакета, можно указывать версии с помощью операторов == и >= 
+dependencies = [
+#  "requests",
+  "colorama",
+]
+
+# тут указываются динамические "свойства" пакета
+# см. [tool.setuptools.dynamic] 
+##dynamic = ["version"] # для плоского проекта возникает гонка с импортом colorama
+
+# Необязательные зависимости можно установить из корня проекта:
+# pip install -e '.[dev]'
+# pip install -e '.[test]'
+# флаг -e нужен для создания ссылки вместо непосредственной установки (лишнего копирования файлов)
+[project.optional-dependencies]
+
+# Зависимости для тестирования
+test = [
+  "pytest",
+]
+
+# А это для разработки
+dev = [
+  "black",
+  "pylint",
+]
+
+[project.urls]
+# Тут можно указать ссылку на репозиторий на гитхаб
+Repository = "https://github.com/Alexander-Firsov/gonchaya"
+Homepage = "https://github.com/Alexander-Firsov/gonchaya"
+
+# Версию пакета можно вытаскивать из кода
+#[tool.setuptools.dynamic]
+#version = {attr = "gonchaya.__version__"}
+
+# При установке будут автоматически созданы исполняемые файлы в ~/.local/bin или в /usr/bin
+[project.scripts]
+# <команда> = <модуль откуда импортируем функцию>:<имя функции>
+gonchaya-cli = "gonchaya.cli:cli"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_functions = ["test_*"]
+addopts = [
+#  "-vv",				        # подробный вывод хода теста
+  "--import-mode=importlib"  	# меньше проблем с импортами
+]
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["gonchaya*"]
