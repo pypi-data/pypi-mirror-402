@@ -1,0 +1,46 @@
+#!/bin/bash
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# SSH ControlMaster setup - reuse single connection for all git operations
+SSH_CONTROL_PATH="/tmp/ssh-release-$$-%r@%h:%p"
+export GIT_SSH_COMMAND="ssh -o ControlMaster=auto -o ControlPath=$SSH_CONTROL_PATH -o ControlPersist=60"
+
+cleanup() {
+    # Close the control socket if it exists
+    ssh -o ControlPath="$SSH_CONTROL_PATH" -O exit git@github.com 2>/dev/null || true
+}
+trap cleanup EXIT
+
+# Fail if there are any modified files (but allow untracked files)
+if ! git diff-index --quiet HEAD --; then
+    echo "Error: You have uncommitted changes to tracked files"
+    git status --short
+    exit 1
+fi
+
+git push
+
+# Extract version from pyproject.toml if it exists, otherwise fall back to setup.py
+if [ -f pyproject.toml ]; then
+    VERSION=$(cat pyproject.toml | toml2json | jq -rc '.project.version')
+else
+    VERSION=$(python3 setup.py --version)
+fi
+
+# Tag the commit with the extracted version
+git tag "$VERSION"
+git push --tags
+
+rm -rf dist *.egg-info build
+
+# Build the source distribution (use setup.py or build)
+if [ -f pyproject.toml ]; then
+    python3 -m build
+else
+    python3 setup.py sdist
+fi
+
+# Upload to PyPI using Twine
+twine upload -p $(cat token) dist/*
