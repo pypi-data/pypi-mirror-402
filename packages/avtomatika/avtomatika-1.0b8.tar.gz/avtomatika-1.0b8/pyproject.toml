@@ -1,0 +1,98 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "avtomatika"
+version = "1.0b8"
+description = "A state-machine based orchestrator for long-running AI and other jobs."
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "aiohttp~=3.12",
+    "python-json-logger~=4.0",
+    "graphviz~=0.21",
+    "zstandard~=0.24",
+    "aioprometheus~=23.12",
+    "msgpack~=1.1",
+    "orjson~=3.11",
+]
+
+[project.optional-dependencies]
+redis = ["redis~=7.1"]
+s3 = ["obstore>=0.2", "aiofiles~=23.2"]
+history = ["aiosqlite~=0.22", "asyncpg~=0.30"]
+telemetry = [
+    "opentelemetry-api~=1.39",
+    "opentelemetry-sdk~=1.39",
+    "opentelemetry-exporter-otlp~=1.39",
+    "opentelemetry-instrumentation-aiohttp-client~=0.59b0",
+]
+test = [
+    "pytest~=9.0",
+    "pytest-asyncio~=1.1",
+    "fakeredis~=2.33",
+    "pytest-aiohttp~=1.1",
+    "pytest-mock~=3.14",
+    "aioresponses~=0.7",
+    "backports.zstd~=1.2",
+    "opentelemetry-instrumentation-aiohttp-client",
+    "obstore>=0.2",
+    "aiofiles~=23.2",
+]
+all = [
+    "avtomatika[redis]",
+    "avtomatika[history]",
+    "avtomatika[telemetry]",
+    "avtomatika[s3]",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/avtomatika-ai/avtomatika"
+"Bug Tracker" = "https://github.com/avtomatika-ai/avtomatika/issues"
+
+[tool.setuptools.package-data]
+"avtomatika" = ["api.html"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+markers = [
+    "e2e: marks tests as end-to-end tests",
+]
+
+[tool.ruff]
+src = ["src", "tests"]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "A", "SIM", "C4", "PLC2401"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["avtomatika"]
+
+[tool.ruff.format]
+quote-style = "double"
+skip-magic-trailing-comma = false
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["avtomatika"]
+package_path = "src"
+disallow_incomplete_defs = true
+disallow_untyped_calls = true
+no_implicit_optional = true
+ignore_missing_imports = true
+follow_imports = "skip"
+warn_unused_ignores = true
+warn_return_any = true
+disallow_any_unimported = false
+exclude = ["tests/"]
