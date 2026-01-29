@@ -1,0 +1,1 @@
+BROWSER_PROCESS_NAMES = ["chrome", "msedge", "firefox", "brave"]
