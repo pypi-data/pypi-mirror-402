@@ -1,0 +1,208 @@
+{% load static %}
+
+{% block select %}
+  {{ form.media.css }}
+  <link href="{% static 'dist/css/select2.min.css' %}" rel="stylesheet">
+<style>
+    #report_modal {
+        z-index: 1500!important; /* или другое значение, если требуется */
+    }
+
+    .modal-backdrop.show {
+        z-index: 1037!important; /* или другое значение, если требуется */
+    }
+
+    #modal-report {
+        background: rgba(0, 0, 0, 0.5);
+    }
+</style>
+
+<style>
+  .form-check-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr); /* можно менять на 2 или 3 */
+      gap: 8px;
+      list-style: none;
+      padding-left: 0;
+  }
+
+  .form-check-grid li {
+      display: flex;
+      align-items: center;
+      padding: 6px;
+      border-radius: 6px;
+  }
+
+  /* Добавляем шахматную раскраску */
+  .form-check-grid li:nth-child(even) {
+      background-color: #f7f7f7;
+  }
+
+  .form-check-grid li:nth-child(odd) {
+      background-color: #ffffff;
+  }
+
+  /* checkbox отступы */
+  .form-check-grid input[type="checkbox"] {
+      margin-right: 6px;
+  }
+</style>
+
+
+{% endblock select %}
+
+<div class="overlay-container" id="overlay"></div>
+
+<form method="POST" action="{% url url_name %}" id="downloadForm">
+    {% csrf_token %}
+
+        {% for field in form %}
+        <label>{{ field.label }}</label>
+
+        {% if field.name == 'loan_portfolio_field' %}
+            <ul class="form-check-grid">
+                {% for checkbox in field|dictsort:"choice_label" %}
+                    <li>{{ checkbox }}</li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            {{ field }}
+        {% endif %}
+    {% endfor %}
+
+    <div class="modal-footer justify-content-around">
+        <button type="button" class="btn btn-secondary report-close-button">Закрыть</button>
+        <button type="submit" class="btn btn-success ml-auto" name="download">Скачать</button>
+    </div>
+</form>
+
+<div class="modal fade" tabindex="-1" id="report_modal" style="">
+    <div class="modal-dialog">
+        <div class="modal-content glass-modal-content border-0">
+            <div class="modal-header">
+                <h5 class="modal-title">Загрузка отчета</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="report_modal_content"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-secondary" data-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block script %}
+  {{ form.media.js }}
+  <script src="{% static 'dist/js/select2.full.min.js' %}"></script>
+  <script>
+    $(document).ready(function () {
+        var task_id = null;
+
+        function checkStatus(taskId) {
+            $.getJSON(`${window.location.protocol}//${window.location.host}/reports/task/${taskId}`, function (data) {
+                if (data.status == "SUCCESS") {
+                    if (data.error) {
+                        $('#report_modal_content').html(
+                            `<div class="overlay-wrapper">
+                                <div class="overlay">
+                                    <p>Ошибка при формировании отчета</p>
+                                    <p>${data.error}</p>
+                                </div>
+                            </div>`
+                        );
+                        return;
+                    } else {
+                        console.log(data);
+                        $('#report_modal_content').html(
+                            `<div class="px-1 py-1 w-100">
+                                <div class="text-center mb-4">
+                                    <div class="mb-3">
+                                        <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+                                    </div>
+                                    <h5 class="font-weight-bold">Отчет успешно сформирован</h5>
+                                </div>
+                                <div class="list-group w-100">
+                                    ${data.files.map(function (file) {
+                                        var decodedName = decodeURIComponent(file.name);
+                                        return `
+                                            <a href="${window.location.protocol}//${window.location.host}${file.url}"
+                                               class="list-group-item list-group-item-action border rounded d-flex align-items-center p-3 mb-2 shadow-none"
+                                               style="background-color: #f8f9fa;">
+                                                <div class="mr-3 text-success">
+                                                    <i class="far fa-file-alt fa-2x"></i>
+                                                </div>
+                                                <div class="flex-grow-1" style="min-width: 0;">
+                                                    <h6 class="mb-1 text-dark font-weight-bold text-break"
+                                                        style="word-wrap: break-word; overflow-wrap: break-word;">
+                                                        ${decodedName}
+                                                    </h6>
+                                                    <small class="text-muted"><i class="fas fa-download mr-1"></i> Скачать файл</small>
+                                                </div>
+                                            </a>`;
+                                    }).join('')}
+                                </div>
+                            </div>`
+                        );
+                    }
+                } else if (data.status == "FAILURE") {
+                    $('#report_modal_content').html(
+                        `<div class="overlay-wrapper">
+                            <div class="overlay">
+                                <p>Ошибка при формировании отчета</p>
+                            </div>
+                        </div>`
+                    );
+                } else {
+                    setTimeout(function () {
+                        checkStatus(taskId);
+                    }, 500);
+                }
+            });
+        }
+
+      $('#downloadForm').submit(function (event) {
+            event.preventDefault();
+
+            var formData = $(this).serialize();
+            var postUrl = $(this).attr('action');
+
+            $.post({
+                url: postUrl,
+                data: formData,
+                beforeSend: function () {
+                    $('#report_modal_content').html(
+                        `<div class="text-center py-5">
+                            <div class="mb-3 text-primary">
+                                <i class="fas fa-circle-notch fa-spin fa-3x"></i>
+                            </div>
+                            <h5 class="text-dark font-weight-bold">Формируем отчет...</h5>
+                            <p class="text-muted small mb-0">Это может занять некоторое время</p>
+                        </div>`
+                    );
+                    if ($.fn.modal) {
+                        $('#report_modal').modal('show');
+                    } else {
+                        jQuery.noConflict();
+                        $('#report_modal').modal('show');
+                    }
+                },
+                success: function (response) {
+                    console.log('POST request successful');
+                    console.log(response);
+                    checkStatus(response.task_id);
+                },
+                error: function (error) {
+                    console.log('Error in POST request');
+                    console.log(error);
+                },
+                complete: function () {}
+            });
+        });
+    });
+  </script>
+
+{% endblock script %}
