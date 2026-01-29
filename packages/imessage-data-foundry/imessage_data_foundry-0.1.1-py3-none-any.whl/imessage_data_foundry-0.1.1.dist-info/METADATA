@@ -1,0 +1,265 @@
+Metadata-Version: 2.4
+Name: imessage-data-foundry
+Version: 0.1.1
+Summary: Generate realistic, schema-accurate iMessage databases for testing and development
+Project-URL: Homepage, https://github.com/johnlarkin1/imessage-data-foundry
+Project-URL: Repository, https://github.com/johnlarkin1/imessage-data-foundry
+Project-URL: Issues, https://github.com/johnlarkin1/imessage-data-foundry/issues
+Author-email: John Larkin <john@johnjlarkin.com>
+License: MIT License
+        
+        Copyright (c) 2026 John Larkin
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+License-File: LICENSE
+Keywords: imessage,macos,mock-data,sqlite,testing
+Classifier: Development Status :: 3 - Alpha
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: MacOS
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Database
+Classifier: Topic :: Software Development :: Testing
+Requires-Python: >=3.11
+Requires-Dist: anthropic>=0.18.0
+Requires-Dist: faker>=24.0.0
+Requires-Dist: huggingface-hub>=0.20.0
+Requires-Dist: inquirerpy>=0.3.4
+Requires-Dist: mlx-lm>=0.25.2; sys_platform == 'darwin'
+Requires-Dist: openai>=1.12.0
+Requires-Dist: phonenumbers>=8.13.0
+Requires-Dist: psutil>=5.9.0
+Requires-Dist: pydantic-settings>=2.2.0
+Requires-Dist: pydantic>=2.6.0
+Requires-Dist: rich>=13.7.0
+Requires-Dist: textual>=0.47.0
+Provides-Extra: dev
+Requires-Dist: mypy>=1.8.0; extra == 'dev'
+Requires-Dist: pytest-asyncio>=0.23.0; extra == 'dev'
+Requires-Dist: pytest-cov>=4.1.0; extra == 'dev'
+Requires-Dist: pytest>=8.0.0; extra == 'dev'
+Requires-Dist: ruff>=0.3.0; extra == 'dev'
+Requires-Dist: types-psutil>=5.9.0; extra == 'dev'
+Description-Content-Type: text/markdown
+
+# iMessage Data Foundry
+
+Generate realistic iMessage and Address Book sqlite databases for mock testing and demo applications.
+
+## Overview
+
+iMessage Data Foundry creates synthetic `chat.db` SQLite databases that exactly mirror the macOS iMessage schema. You have the option to use Ai to generate the personas and conversations. You can either use local models through mlx (note, really only for apple silicon though given the dependency on `mlx-lm`.), or OpenAI / Anthropic endpoints.
+
+Good use cases for this synthetic data are:
+
+- **Testing** iMessage analysis tools and exporters
+- **Development** of applications that interface with iMessage data
+- **Demos** and documentation requiring realistic message data
+
+## Features
+
+- **Full Schema Replication** — Exact match of macOS iMessage `chat.db` structure
+- **Multi-Version Support** — Sonoma (14.x), Sequoia (15.x), and Tahoe (26.x)
+- **AI-Powered Personas** — Generate realistic personas with distinct personalities
+- **Natural Conversations** — LLM-generated messages that feel authentic
+- **Persona Library** — Save and reuse personas across database generations
+- **Group Chats** — Support for both 1:1 and group conversations
+- **Realistic Timestamps** — Natural message timing with conversation batching
+- **Attachment Stubs** — Placeholder attachments with proper database records
+
+## Installation
+
+### From PyPI (recommended)
+
+```bash
+pip install imessage-data-foundry
+```
+
+### With uvx (no install required)
+
+```bash
+uvx imessage-data-foundry
+```
+
+### With pipx
+
+```bash
+pipx install imessage-data-foundry
+```
+
+### From source
+
+```bash
+git clone https://github.com/johnlarkin1/imessage-data-foundry.git
+cd imessage-data-foundry
+pip install -e .
+```
+
+## Quick Start
+
+```bash
+# Launch the TUI
+uvx imessage-data-foundry
+
+# Or run directly
+uv run python -m imessage_data_foundry
+```
+
+## CLI Options
+
+```bash
+imessage-data-foundry --help
+imessage-data-foundry --version
+imessage-data-foundry --output ~/Desktop/chat.db
+imessage-data-foundry # interactive mode (this is the default)
+```
+
+## Configuration
+
+### LLM Provider
+
+Select your preferred LLM provider from the **Settings** menu in the app. Available providers depend on which API keys you have configured.
+
+### API Keys
+
+Set API keys as environment variables before running the app:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+# or
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+### Local Models
+
+For local inference on Apple Silicon, install `mlx-lm`:
+
+```bash
+pip install mlx-lm
+```
+
+Settings are stored in `~/.config/imessage-data-foundry/foundry.db`.
+
+## Usage
+
+### Creating Personas
+
+Personas can be created manually or generated by AI:
+
+```
+┌─ Create Persona ─────────────────────────────────┐
+│                                                  │
+│  Name: Sarah Chen                                │
+│  Phone: +1 (555) 123-4567                        │
+│  Relationship: Close friend from college         │
+│                                                  │
+│  Personality:                                    │
+│  Outgoing, tech-savvy software engineer who      │
+│  loves hiking and craft coffee. Quick to         │
+│  respond with enthusiasm and emoji.              │
+│                                                  │
+│  [Generate with AI]  [Save]  [Cancel]            │
+│                                                  │
+└──────────────────────────────────────────────────┘
+```
+
+### Generating Conversations
+
+1. Select personas to include
+2. Choose chat type (1:1 or group)
+3. Set message count target
+4. Optionally provide a conversation seed
+5. Generate!
+
+### Output
+
+The generated `chat.db` file can be used with any tool that reads iMessage databases:
+
+```bash
+# Example: Use with imessage-exporter
+imessage-exporter -p ./output/chat.db -f html -o ./export/
+```
+
+## API Keys
+
+You'll need an API key from one of the supported providers:
+
+| Provider  | Get API Key                                 |
+| --------- | ------------------------------------------- |
+| OpenAI    | https://platform.openai.com/api-keys        |
+| Anthropic | https://console.anthropic.com/settings/keys |
+
+## Project Structure
+
+```
+imessage-data-foundry/
+├── imessage_data_foundry/
+│   ├── cli/               # CLI application and flows
+│   ├── db/                # Database schema and building
+│   ├── personas/          # Persona management
+│   ├── conversations/     # Conversation generation
+│   ├── llm/               # LLM provider integrations
+│   ├── settings/          # Settings storage
+│   └── utils/             # Utility functions
+├── tests/                 # Test suite
+└── docs/                  # Documentation
+```
+
+## Schema Compatibility
+
+Generated databases are tested for compatibility with:
+
+- [imessage-exporter](https://github.com/ReagentX/imessage-exporter)
+- [imessage_reader](https://github.com/niftycode/imessage_reader)
+- [imessage_tools](https://github.com/my-other-github-account/imessage_tools)
+
+## Limitations
+
+- **Text-only focus** — Reactions, read receipts, and message effects are not simulated
+- **Placeholder attachments** — Attachments are stubs, not real media files
+- **macOS-centric** — Schema targets macOS; iOS backup databases may differ slightly
+
+## Development
+
+```bash
+# Install dev dependencies
+uv sync --dev
+
+# Run tests
+uv run pytest
+
+# Run type checking
+uv run mypy src/
+
+# Format code
+uv run ruff format src/
+```
+
+## License
+
+MIT License — See [LICENSE](LICENSE) for details.
+
+## Acknowledgments
+
+- Schema research informed by [imessage-exporter](https://github.com/ReagentX/imessage-exporter)
+- Built with [Textual](https://textual.textualize.io/) for the beautiful TUI
