@@ -1,0 +1,37 @@
+envs:
+  example:
+    params:
+      parent_app: 00_app_of_apps
+    apps:
+      00_app_of_apps: {params: {parent_app: null}}
+      01_yaml_app: {}
+      02_jinja2_app: {}
+      03_kustomize_app: {}
+      04_kustomize_helm_app: {}
+      05_argocd_managed_helm_app:
+        vars:
+          argocd_application_cr_template: |
+            apiVersion: argoproj.io/v1alpha1
+            kind: Application
+            metadata:
+              name: {{ __application.application_name }}
+              namespace: argocd
+            spec:
+              project: default
+              source:
+                chart: hello-world
+                repoURL: https://helm.github.io/examples
+                targetRevision: 0.1.0
+                helm:
+                  releaseName: hello-world
+              destination:
+                server: https://kubernetes.default.svc
+                namespace: argocd
+      06_helmfile_app: {params: {non_k8s_files_to_render: ['helmfile.yaml.j2']}}
+
+vars:
+  argocd:
+    source:
+      repo_url: https://github.com/my_user/my_repo.git
+  namespace: kube-default
+  version: 0.1.0
