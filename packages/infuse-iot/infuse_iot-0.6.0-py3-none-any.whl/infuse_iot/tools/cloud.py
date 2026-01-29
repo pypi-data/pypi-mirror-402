@@ -1,0 +1,305 @@
+#!/usr/bin/env python3
+
+"""Infuse-IoT cloud interaction"""
+
+__author__ = "Jordan Yates"
+__copyright__ = "Copyright 2024, Embeint Holdings Pty Ltd"
+
+import sys
+from http import HTTPStatus
+from json import loads
+from typing import Any
+
+from tabulate import tabulate
+
+from infuse_iot.api_client import Client
+from infuse_iot.api_client.api.board import (
+    create_board,
+    get_board_by_id,
+    get_boards,
+)
+from infuse_iot.api_client.api.coap import get_coap_files
+from infuse_iot.api_client.api.device import (
+    get_device_by_device_id,
+    get_device_kv_entries_by_device_id,
+    get_device_last_route_by_device_id,
+    get_device_state_by_id,
+)
+from infuse_iot.api_client.api.organisation import (
+    create_organisation,
+    get_all_organisations,
+    get_organisation_by_id,
+)
+from infuse_iot.api_client.models import COAPFilesList, Error, NewBoard, NewOrganisation
+from infuse_iot.api_client.types import Unset
+from infuse_iot.commands import InfuseCommand
+from infuse_iot.credentials import get_api_key
+
+
+class CloudSubCommand:
+    def __init__(self, args):
+        self.args = args
+
+    def run(self):
+        """Run cloud sub-command"""
+
+    def client(self):
+        """Get API client object ready to use"""
+        return Client(base_url="https://api.infuse-iot.com").with_headers({"x-api-key": f"Bearer {get_api_key()}"})
+
+
+class Organisations(CloudSubCommand):
+    @classmethod
+    def add_parser(cls, parser):
+        parser_orgs = parser.add_parser("orgs", help="Infuse-IoT organisations")
+        parser_orgs.set_defaults(command_class=cls)
+
+        tool_parser = parser_orgs.add_subparsers(title="commands", metavar="<command>", required=True)
+
+        list_parser = tool_parser.add_parser("list", help="List all organisations")
+        list_parser.set_defaults(command_fn=cls.list)
+
+        create_parser = tool_parser.add_parser("create", help="Create new organisation")
+        create_parser.add_argument("--name", "-n", type=str, required=True)
+        create_parser.set_defaults(command_fn=cls.create)
+
+    def run(self):
+        with self.client() as client:
+            self.args.command_fn(self, client)
+
+    def list(self, client: Client):
+        org_list = []
+
+        orgs = get_all_organisations.sync(client=client)
+        if isinstance(orgs, Error) or orgs is None:
+            sys.exit(f"Organisation query failed {orgs}")
+        for o in orgs:
+            org_list.append([o.name, o.id])
+
+        print(
+            tabulate(
+                org_list,
+                headers=["Name", "ID"],
+            )
+        )
+
+    def create(self, client: Client):
+        rsp = create_organisation.sync_detailed(
+            client=client,
+            body=NewOrganisation(self.args.name),
+        )
+
+        if rsp.status_code == HTTPStatus.CREATED:
+            assert rsp.parsed is not None
+            print(f"Created organisation {rsp.parsed.name} with ID {rsp.parsed.id}")
+        else:
+            c = loads(rsp.content.decode("utf-8"))
+            print(f"<{rsp.status_code}>: {c['message']}")
+
+
+class Boards(CloudSubCommand):
+    @classmethod
+    def add_parser(cls, parser):
+        parser_boards = parser.add_parser("boards", help="Infuse-IoT hardware platforms")
+        parser_boards.set_defaults(command_class=cls)
+
+        tool_parser = parser_boards.add_subparsers(title="commands", metavar="<command>", required=True)
+
+        list_parser = tool_parser.add_parser("list", help="List all hardware platforms")
+        list_parser.set_defaults(command_fn=cls.list)
+
+        create_parser = tool_parser.add_parser("create", help="Create new hardware platform")
+        create_parser.add_argument("--name", "-n", type=str, required=True, help="New board name")
+        create_parser.add_argument("--org", "-o", type=str, required=True, help="Organisation ID")
+        create_parser.add_argument("--soc", "-s", type=str, required=True, help="Board system on chip")
+        create_parser.add_argument("--desc", "-d", type=str, required=True, help="Board description")
+        create_parser.set_defaults(command_fn=cls.create)
+
+    def run(self):
+        with self.client() as client:
+            self.args.command_fn(self, client)
+
+    def list(self, client: Client):
+        board_list = []
+
+        orgs = get_all_organisations.sync(client=client)
+        if isinstance(orgs, Error) or orgs is None:
+            sys.exit(f"Organisation query failed {orgs}")
+        for org in orgs:
+            boards = get_boards.sync(client=client, organisation_id=org.id)
+            if isinstance(boards, Error) or boards is None:
+                sys.exit(f"Boards query failed {boards}")
+
+            for b in boards:
+                board_list.append([b.name, b.id, b.soc, org.name, b.description])
+
+        print(
+            tabulate(
+                board_list,
+                headers=["Name", "ID", "SoC", "Organisation", "Description"],
+            )
+        )
+
+    def create(self, client: Client):
+        rsp = create_board.sync_detailed(
+            client=client,
+            body=NewBoard(
+                name=self.args.name,
+                description=self.args.desc,
+                soc=self.args.soc,
+                organisation_id=self.args.org,
+            ),
+        )
+        if rsp.status_code == HTTPStatus.CREATED:
+            assert rsp.parsed is not None
+            print(f"Created board {rsp.parsed.name} with ID {rsp.parsed.id}")
+        else:
+            c = loads(rsp.content.decode("utf-8"))
+            print(f"<{rsp.status_code}>: {c['message']}")
+
+
+class Device(CloudSubCommand):
+    @classmethod
+    def add_parser(cls, parser):
+        parser_boards = parser.add_parser("device", help="Infuse-IoT devices")
+        parser_boards.set_defaults(command_class=cls)
+
+        tool_parser = parser_boards.add_subparsers(title="commands", metavar="<command>", required=True)
+
+        info_parser = tool_parser.add_parser("info", help="General device information")
+        info_parser.set_defaults(command_fn=cls.info)
+        info_parser.add_argument("--id", type=str, required=True, help="Infuse-IoT device ID")
+        kv_parser = tool_parser.add_parser("kv_state", help="Key-Value device state")
+        kv_parser.set_defaults(command_fn=cls.kv_state)
+        kv_parser.add_argument("--id", type=str, required=True, help="Infuse-IoT device ID")
+        kv_parser.add_argument("--schedules", action="store_true", help="Display task schedules")
+
+    def run(self):
+        with self.client() as client:
+            self.args.command_fn(self, client)
+
+    def info(self, client: Client):
+        id_int = int(self.args.id, 0)
+        id_str = f"{id_int:016x}"
+        info = get_device_by_device_id.sync(client=client, device_id=id_str)
+        if info is None:
+            sys.exit(f"No device with Infuse-IoT ID {id_str} found")
+        metadata: list[tuple[str, Any]] = []
+        if info.metadata:
+            metadata = [(f"Metadata.{k}", v) for k, v in info.metadata.additional_properties.items()]
+
+        org = get_organisation_by_id.sync(client=client, id=info.organisation_id)
+        board = get_board_by_id.sync(client=client, id=info.board_id)
+        state = get_device_state_by_id.sync(client=client, id=info.id)
+        route = get_device_last_route_by_device_id.sync(client=client, device_id=id_str)
+
+        table: list[tuple[str, Any]] = [
+            ("UUID", info.id),
+            ("MCU ID", info.mcu_id),
+            ("Organisation", f"{info.organisation_id} ({org.name if org else 'Unknown'})"),
+            ("Board", f"{info.board_id} ({board.name if board else 'Unknown'})"),
+            ("Created", info.created_at),
+            ("Updated", info.updated_at),
+            *metadata,
+        ]
+        if state is not None:
+            v = state.application_version
+
+            table += [
+                ("~~~State~~~", ""),
+                ("Updated", state.updated_at),
+            ]
+            if state.application_id:
+                table += [("Application ID", f"0x{state.application_id:08x}")]
+            if v:
+                table += [("Version", f"{v.major}.{v.minor}.{v.revision}+{v.build_num:08x}")]
+        if route is not None:
+            table += [
+                ("~~~Latest Route~~~", ""),
+                ("Interface", route.interface.upper()),
+            ]
+            if route.bt_adv:
+                table += [("BT Address", f"{route.bt_adv.address} ({route.bt_adv.type_})")]
+
+        print(tabulate(table))
+
+    def _kv_display(self, table: list[tuple[str, Any]], name_base: str, dictionary: dict):
+        for name, value in dictionary.items():
+            if isinstance(value, dict):
+                self._kv_display(table, f"{name_base}.{name}", value)
+            else:
+                table.append((f"{name_base}.{name}", value))
+
+    def kv_state(self, client: Client):
+        id_int = int(self.args.id, 0)
+        id_str = f"{id_int:016x}"
+
+        kv_state = get_device_kv_entries_by_device_id.sync(client=client, device_id=id_str)
+        if kv_state is None:
+            print(f"Unable to query KV state for {id_str}")
+            return
+
+        table: list[tuple[str, Any]] = []
+        for element in kv_state:
+            key = element.key_name if isinstance(element.key_name, str) else str(element.key_id)
+
+            # Don't display task schedules unless requested
+            if key == "TASK_SCHEDULES" and not self.args.schedules:
+                continue
+
+            if isinstance(element.data, Unset):
+                table.append((key, "Not set"))
+            else:
+                if isinstance(element.decoded, Unset):
+                    table.append((key, element.data))
+                else:
+                    self._kv_display(table, key, element.decoded.additional_properties)
+
+        print(tabulate(table))
+
+
+class Coap(CloudSubCommand):
+    @classmethod
+    def add_parser(cls, parser):
+        parser_coap = parser.add_parser("coap", help="CoAP file server")
+        parser_coap.set_defaults(command_class=cls)
+
+        tool_parser = parser_coap.add_subparsers(title="commands", metavar="<command>", required=True)
+
+        list_parser = tool_parser.add_parser("list", help="List all CoAP files")
+        list_parser.set_defaults(command_fn=cls.list)
+
+    def run(self):
+        with self.client() as client:
+            self.args.command_fn(self, client)
+
+    def list(self, client: Client):
+        files = get_coap_files.sync(client=client)
+
+        if isinstance(files, COAPFilesList):
+            sorted_list: list[str] = sorted(files.filenames)
+            print("CoAP Files:")
+            print("\t" + "\n\t".join(sorted_list))
+        else:
+            print(f"Failed to retrieve file list {files}")
+
+
+class SubCommand(InfuseCommand):
+    NAME = "cloud"
+    HELP = "Infuse-IoT cloud interaction"
+    DESCRIPTION = "Infuse-IoT cloud interaction"
+
+    @classmethod
+    def add_parser(cls, parser):
+        subparser = parser.add_subparsers(title="commands", metavar="<command>", required=True)
+
+        Organisations.add_parser(subparser)
+        Boards.add_parser(subparser)
+        Device.add_parser(subparser)
+        Coap.add_parser(subparser)
+
+    def __init__(self, args):
+        self.tool = args.command_class(args)
+
+    def run(self):
+        self.tool.run()
