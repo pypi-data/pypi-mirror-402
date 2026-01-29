@@ -1,0 +1,792 @@
+"""Node implementations for the NL2SPARQL LangGraph agent."""
+
+import json
+import re
+from typing import Any
+
+from .state import NL2SPARQLState
+
+
+def get_llm(
+    provider: str = "openai",
+    model: str | None = None,
+    temperature: float = 0,
+    tier: str = "default",
+    api_key: str | None = None,
+):
+    """
+    Get LLM client for the specified provider.
+
+    Args:
+        provider: LLM provider ("openai", "anthropic", "mistral", "gemini", "ollama")
+        model: Model name (uses provider default if None)
+        temperature: Sampling temperature
+        tier: Model tier - "fast" for cheaper/faster, "default" for standard capability
+        api_key: API key (uses environment variable if None)
+
+    Returns:
+        LangChain chat model instance
+    """
+    # Default models per provider and tier
+    DEFAULT_MODELS = {
+        "openai": {"fast": "gpt-4.1-mini", "default": "gpt-4.1"},
+        "anthropic": {"fast": "claude-3-5-haiku-latest", "default": "claude-sonnet-4-20250514"},
+        "mistral": {"fast": "mistral-small-latest", "default": "mistral-large-latest"},
+        "gemini": {"fast": "gemini-1.5-flash", "default": "gemini-1.5-pro"},
+        "ollama": {"fast": "llama3.2", "default": "llama3.2"},
+    }
+
+    if provider not in DEFAULT_MODELS:
+        raise ValueError(f"Unsupported provider: {provider}. Choose from: {list(DEFAULT_MODELS.keys())}")
+
+    # Use provided model or default based on tier
+    if model is None:
+        model = DEFAULT_MODELS[provider][tier]
+
+    if provider == "openai":
+        try:
+            from langchain_openai import ChatOpenAI
+            kwargs = {"model": model, "temperature": temperature}
+            if api_key:
+                kwargs["api_key"] = api_key
+            return ChatOpenAI(**kwargs)
+        except ImportError:
+            raise ImportError("langchain-openai required. Install with: pip install langchain-openai")
+
+    elif provider == "anthropic":
+        try:
+            from langchain_anthropic import ChatAnthropic
+            kwargs = {"model": model, "temperature": temperature}
+            if api_key:
+                kwargs["api_key"] = api_key
+            return ChatAnthropic(**kwargs)
+        except ImportError:
+            raise ImportError("langchain-anthropic required. Install with: pip install langchain-anthropic")
+
+    elif provider == "mistral":
+        try:
+            from langchain_mistralai import ChatMistralAI
+            kwargs = {"model": model, "temperature": temperature}
+            if api_key:
+                kwargs["api_key"] = api_key
+            return ChatMistralAI(**kwargs)
+        except ImportError:
+            raise ImportError("langchain-mistralai required. Install with: pip install langchain-mistralai")
+
+    elif provider == "gemini":
+        try:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            kwargs = {"model": model, "temperature": temperature}
+            if api_key:
+                kwargs["google_api_key"] = api_key
+            return ChatGoogleGenerativeAI(**kwargs)
+        except ImportError:
+            raise ImportError("langchain-google-genai required. Install with: pip install langchain-google-genai")
+
+    elif provider == "ollama":
+        try:
+            from langchain_ollama import ChatOllama
+            # Ollama doesn't use API keys
+            return ChatOllama(model=model, temperature=temperature)
+        except ImportError:
+            raise ImportError("langchain-ollama required. Install with: pip install langchain-ollama")
+
+
+def analyze_question(state: NL2SPARQLState) -> dict[str, Any]:
+    """Analyze the question to understand what's needed."""
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    # Use fast tier for analysis (cheaper, faster)
+    llm = get_llm(
+        provider=state["provider"],
+        model=state["model"],
+        tier="fast",
+        api_key=state["api_key"],
+    )
+
+    analysis_prompt = f"""Analyze this natural language question for SPARQL translation to the LiITA linguistic knowledge base.
+
+Question: {state["question"]}
+Language: {state["language"]}
+
+Determine:
+1. patterns: List of patterns needed. Choose from:
+   - EMOTION_LEXICON (emotions, feelings, polarity)
+   - TRANSLATION (dialect translations - Sicilian, Parmigiano)
+   - SENSE_DEFINITION (word definitions from CompL-it)
+   - SENSE_COUNT (number of senses, polysemy)
+   - SEMANTIC_RELATION (hypernyms, hyponyms, meronyms, part-of relations)
+   - LEXICAL_RELATION (synonyms, antonyms)
+   - POS_FILTER (part of speech filtering - nouns, verbs, adjectives, etc.)
+   - MORPHO_REGEX (word patterns - starts with, ends with, contains)
+   - LEXICAL_FORM (inflected forms, conjugations, declensions, gender, number)
+   - ETYMOLOGY (word origins, derivations)
+   - COUNT_ENTITIES (counting queries)
+
+2. complexity: "simple" (1 pattern), "moderate" (2 patterns), "complex" (3+ patterns or multi-dialect)
+
+3. requires_service: true ONLY if needs CompL-it data (definitions, semantic relations, synonyms)
+   - TRUE for: definitions, hypernyms, hyponyms, meronyms, synonyms, antonyms
+   - FALSE for: emotions (ELITA), translations (dialects), POS filters, morphology, Latin
+
+4. requires_translation: true if needs dialect translations
+
+5. dialects: list of dialects needed, e.g., ["sicilian", "parmigiano"]
+
+Respond in JSON format only:
+{{"patterns": [...], "complexity": "...", "requires_service": true/false, "requires_translation": true/false, "dialects": [...]}}"""
+
+    response = llm.invoke([
+        SystemMessage(content="You are an expert at analyzing linguistic queries for the LiITA knowledge base."),
+        HumanMessage(content=analysis_prompt)
+    ])
+
+    try:
+        # Extract JSON from response
+        content = response.content
+        # Handle markdown code blocks
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0]
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0]
+
+        analysis = json.loads(content.strip())
+    except (json.JSONDecodeError, IndexError):
+        # Fallback to basic analysis
+        analysis = {
+            "patterns": ["POS_FILTER"],
+            "complexity": "simple",
+            "requires_service": False,
+            "requires_translation": False,
+            "dialects": []
+        }
+
+    return {
+        "detected_patterns": analysis.get("patterns", []),
+        "complexity": analysis.get("complexity", "simple"),
+        "requires_service": analysis.get("requires_service", False),
+        "requires_translation": analysis.get("requires_translation", False),
+        "dialects_needed": analysis.get("dialects", []),
+    }
+
+
+def plan_query(state: NL2SPARQLState) -> dict[str, Any]:
+    """Break complex queries into sub-tasks."""
+    from langchain_core.messages import HumanMessage
+
+    if state["complexity"] == "simple":
+        return {"sub_tasks": [state["question"]], "current_task_index": 0}
+
+    # Use fast tier for planning
+    llm = get_llm(
+        provider=state["provider"],
+        model=state["model"],
+        tier="fast",
+        api_key=state["api_key"],
+    )
+
+    planning_prompt = f"""Break this complex query into logical SPARQL construction steps:
+
+Question: {state["question"]}
+Patterns needed: {state["detected_patterns"]}
+Dialects: {state["dialects_needed"]}
+Needs CompL-it SERVICE: {state["requires_service"]}
+
+Create a step-by-step plan. Each step should describe what SPARQL patterns to add.
+
+Example for "Find Italian adjectives with Sicilian and Parmigiano translations and definitions":
+1. "Query CompL-it SERVICE for Italian adjectives with definitions"
+2. "Link to LiITA lemma and filter by POS"
+3. "Add Sicilian translation via separate Italian lexical entry"
+4. "Add Parmigiano translation via separate Italian lexical entry"
+
+Return as JSON array of step descriptions:
+["step1", "step2", ...]"""
+
+    response = llm.invoke([HumanMessage(content=planning_prompt)])
+
+    try:
+        content = response.content
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0]
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0]
+        sub_tasks = json.loads(content.strip())
+    except (json.JSONDecodeError, IndexError):
+        sub_tasks = [state["question"]]
+
+    return {
+        "sub_tasks": sub_tasks,
+        "current_task_index": 0
+    }
+
+
+def retrieve_examples(state: NL2SPARQLState) -> dict[str, Any]:
+    """Retrieve relevant examples and constraints."""
+    from ..retrieval.hybrid_retriever import HybridRetriever
+    from ..constraints.prompt_builder import get_constraints_for_patterns
+
+    retriever = HybridRetriever()
+
+    # Get current sub-task or full question
+    current_query = state["question"]
+    if state["sub_tasks"]:
+        idx = min(state["current_task_index"], len(state["sub_tasks"]) - 1)
+        current_query = state["sub_tasks"][idx]
+
+    # Retrieve examples
+    examples = retriever.retrieve(current_query, top_k=5)
+
+    # Build constraints based on detected patterns
+    constraints = get_constraints_for_patterns(state["detected_patterns"])
+
+    return {
+        "retrieved_examples": [
+            {"nl": ex.example.nl, "sparql": ex.example.sparql, "score": ex.score}
+            for ex in examples
+        ],
+        "relevant_constraints": constraints
+    }
+
+
+def generate_sparql(state: NL2SPARQLState) -> dict[str, Any]:
+    """Generate SPARQL query using LLM."""
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    # Use default tier for generation (more capable model)
+    llm = get_llm(
+        provider=state["provider"],
+        model=state["model"],
+        tier="default",
+        api_key=state["api_key"],
+    )
+
+    # Build refinement context from history
+    refinement_context = ""
+    if state["refinement_history"]:
+        refinement_context = "\n\n## PREVIOUS ATTEMPTS (learn from these errors!):\n"
+        for i, attempt in enumerate(state["refinement_history"][-3:], 1):
+            refinement_context += f"\n### Attempt {i}:\n"
+            refinement_context += f"Query:\n```sparql\n{attempt.get('sparql', 'N/A')[:500]}\n```\n"
+            refinement_context += f"Error: {attempt.get('error', 'Unknown')}\n"
+            refinement_context += f"Results: {attempt.get('result_count', 0)}\n"
+
+    # Build examples text
+    examples_text = ""
+    for ex in state["retrieved_examples"][:3]:
+        examples_text += f"\n### Example:\nQuestion: {ex['nl']}\n```sparql\n{ex['sparql']}\n```\n"
+
+    # Include discovered schema if available (from ontology retrieval)
+    schema_context = ""
+    if state.get("schema_context"):
+        # Use detailed ontology descriptions (preferred)
+        schema_context = f"\n\n{state['schema_context']}"
+    elif state["discovered_properties"]:
+        # Fallback to just URIs
+        schema_context = f"\n\n## Discovered Properties:\n{', '.join(state['discovered_properties'][:20])}"
+
+    # Explicit SERVICE instruction based on requires_service flag
+    if state["requires_service"]:
+        service_instruction = """- This query REQUIRES a SERVICE block to query CompL-it
+- Use: SERVICE <https://klab.ilc.cnr.it/graphdb-compl-it/> { ... }"""
+    else:
+        service_instruction = """- DO NOT use any SERVICE block for this query
+- All data needed is in the main LiITA graphs (no external federation needed)"""
+
+    generation_prompt = f"""Generate a SPARQL query for the LiITA knowledge base.
+
+## CRITICAL CONSTRAINTS
+{state["relevant_constraints"]}
+
+## Similar Examples
+{examples_text}
+{schema_context}
+{refinement_context}
+
+## Question to translate:
+{state["question"]}
+
+## Requirements:
+- Patterns needed: {state["detected_patterns"]}
+- Dialects: {state["dialects_needed"]}
+
+## SERVICE BLOCK INSTRUCTION:
+{service_instruction}
+
+Generate ONLY the complete SPARQL query. No explanations."""
+
+    system_prompt = """You are an expert SPARQL query generator for the LiITA linguistic knowledge base.
+
+MANDATORY PREFIXES (use these EXACT URIs - do NOT modify them):
+PREFIX dct: <http://purl.org/dc/terms/>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX elita: <http://w3id.org/elita/>
+PREFIX lexinfo: <http://www.lexinfo.net/ontology/3.0/lexinfo#>
+PREFIX lila: <http://lila-erc.eu/ontologies/lila/>
+PREFIX lime: <http://www.w3.org/ns/lemon/lime#>
+PREFIX marl: <http://www.gsi.upm.es/ontologies/marl/ns#>
+PREFIX ontolex: <http://www.w3.org/ns/lemon/ontolex#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX vartrans: <http://www.w3.org/ns/lemon/vartrans#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+CRITICAL: Copy the prefixes EXACTLY as shown above. Common mistakes to AVOID:
+- elita: must be <http://w3id.org/elita/> NOT <http://w3id.org/elita/ontology#>
+- marl: must be <http://www.gsi.upm.es/ontologies/marl/ns#> NOT <http://www.w3.org/ns/marl#>
+
+CRITICAL RULES:
+1. Translation direction is ALWAYS Italian → Dialect (never dialect → Italian)
+2. For multi-dialect queries, use DIFFERENT Italian lexical entry variables for each dialect
+3. Use dcterms:isPartOf with LemmaBank URI to identify dialect lemmas (NO GRAPH clauses)
+4. Never reuse a variable for both a URI and a literal value
+5. Variables bound in SERVICE can be used outside, but NOT vice versa
+
+SERVICE BLOCK RULES (VERY IMPORTANT):
+6. Only use SERVICE block when querying CompL-it for definitions or semantic relations
+7. The ONLY valid SERVICE endpoint is: SERVICE <https://klab.ilc.cnr.it/graphdb-compl-it/>
+8. NEVER use localhost, made-up URLs, or any other SERVICE endpoints
+9. For EMOTION queries (ELITA), do NOT use SERVICE - emotions are in GRAPH <http://w3id.org/elita>
+10. For TRANSLATION queries (dialects), do NOT use SERVICE - translations are in the main LiITA data
+
+LINKING LIITA TO COMPL-IT (CRITICAL):
+11. When starting from a LiITA lemma and needing CompL-it data (definitions, semantic relations):
+    - Use the SAME variable name (?writtenRep) in both GRAPH and SERVICE blocks
+    - The shared variable creates a NATURAL JOIN - no FILTER needed
+    - NEVER use FILTER(STR(?x) = STR(?y)) to compare variables across SERVICE boundaries
+
+    CORRECT pattern:
+    GRAPH <http://liita.it/data> {
+        ?lemma a lila:Lemma ; ontolex:writtenRep ?writtenRep .
+    }
+    SERVICE <https://klab.ilc.cnr.it/graphdb-compl-it/> {
+        ?word ontolex:canonicalForm [ ontolex:writtenRep ?writtenRep ] ;
+              ontolex:sense [ skos:definition ?definition ] .
+    }
+
+    WRONG - causes "variable not assigned" error:
+    GRAPH <http://liita.it/data> {
+        ?lemma a lila:Lemma ; ontolex:writtenRep ?lilaRep .
+    }
+    SERVICE <https://klab.ilc.cnr.it/graphdb-compl-it/> {
+        ?word ontolex:canonicalForm [ ontolex:writtenRep ?complRep ] .
+        FILTER(STR(?complRep) = STR(?lilaRep))  # ERROR: ?lilaRep not visible inside SERVICE!
+    }"""
+
+    response = llm.invoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=generation_prompt)
+    ])
+
+    # Extract SPARQL from response
+    sparql = response.content.strip()
+
+    # Remove markdown code blocks if present
+    if "```sparql" in sparql:
+        sparql = sparql.split("```sparql")[1].split("```")[0].strip()
+    elif "```" in sparql:
+        sparql = sparql.split("```")[1].split("```")[0].strip()
+
+    return {
+        "generated_sparql": sparql,
+        "generation_attempts": state.get("generation_attempts", 0) + 1
+    }
+
+
+def _check_variable_reuse(sparql: str) -> str | None:
+    """Check for common variable reuse bugs in SPARQL.
+
+    Detects when a variable is used both as a URI (subject/object position)
+    and as a literal (in writtenRep). This is a common LLM mistake.
+
+    Returns error message if bug found, None otherwise.
+    """
+    # Find variables used in writtenRep (these should be literals)
+    literal_vars = set(re.findall(r'writtenRep\s+(\?\w+)', sparql))
+
+    # Find variables used as subjects (at start of triple pattern)
+    # Pattern: newline/brace followed by ?var followed by space/predicate
+    subject_vars = set(re.findall(r'(?:^|\{|\.\s*)\s*(\?\w+)\s+(?:a\s|ontolex:|lexinfo:|skos:|lila:|rdf:|rdfs:)', sparql, re.MULTILINE))
+
+    # Find overlap - variables used both as literal and as subject/URI
+    reused_vars = literal_vars & subject_vars
+
+    if reused_vars:
+        return f"Variable reuse error: {', '.join(reused_vars)} used both as URI and literal. Use different variable names."
+
+    return None
+
+
+def _fix_case_sensitive_filters(sparql: str) -> tuple[str, bool]:
+    """Fix case-sensitive string equality filters to case-insensitive regex.
+
+    Converts patterns like:
+        FILTER(STR(?var) = "string")
+        FILTER(?var = "string")
+
+    To case-insensitive regex:
+        FILTER(REGEX(STR(?var), "^string$", "i"))
+
+    This is a targeted fix that doesn't change query structure.
+    Used when a query returns 0 results due to case mismatch (e.g., "rabbia" vs "Rabbia").
+
+    Returns:
+        tuple: (fixed_sparql, was_modified)
+    """
+    modified = False
+
+    # Pattern 1: FILTER(STR(?var) = "string")
+    pattern1 = r'FILTER\s*\(\s*STR\s*\(\s*(\?\w+)\s*\)\s*=\s*"([^"]+)"\s*\)'
+
+    def replace1(match):
+        nonlocal modified
+        modified = True
+        var = match.group(1)
+        value = match.group(2)
+        # Escape regex special characters in the value
+        escaped_value = re.escape(value)
+        return f'FILTER(REGEX(STR({var}), "^{escaped_value}$", "i"))'
+
+    sparql = re.sub(pattern1, replace1, sparql)
+
+    # Pattern 2: FILTER(?var = "string") - direct variable comparison
+    pattern2 = r'FILTER\s*\(\s*(\?\w+)\s*=\s*"([^"]+)"\s*\)'
+
+    def replace2(match):
+        nonlocal modified
+        modified = True
+        var = match.group(1)
+        value = match.group(2)
+        escaped_value = re.escape(value)
+        return f'FILTER(REGEX(STR({var}), "^{escaped_value}$", "i"))'
+
+    sparql = re.sub(pattern2, replace2, sparql)
+
+    return sparql, modified
+
+
+def _fix_service_clause(sparql: str) -> tuple[str, bool]:
+    """Remove SERVICE clause wrapper while keeping its content.
+
+    Some endpoints (like Virtuoso) may return permission errors when using
+    federated SERVICE queries. This fix removes the SERVICE wrapper and keeps
+    the triple patterns inside, making them execute against the local endpoint.
+
+    Example:
+        SERVICE <https://klab.ilc.cnr.it/graphdb-compl-it/> {
+            ?word ontolex:canonicalForm [ ontolex:writtenRep ?wr ] .
+            FILTER(STR(?wr) = "coniglio")
+        }
+
+    Becomes:
+        ?word ontolex:canonicalForm [ ontolex:writtenRep ?wr ] .
+        FILTER(STR(?wr) = "coniglio")
+
+    Returns:
+        tuple: (fixed_sparql, was_modified)
+    """
+    # Find SERVICE blocks with their content
+    # Pattern: SERVICE <uri> { ... }
+    service_pattern = r'SERVICE\s*<[^>]+>\s*\{'
+
+    match = re.search(service_pattern, sparql, re.IGNORECASE)
+    if not match:
+        return sparql, False
+
+    # Find the matching closing brace for the SERVICE block
+    start_pos = match.end() - 1  # Position of opening brace
+    brace_count = 1
+    pos = start_pos + 1
+
+    while pos < len(sparql) and brace_count > 0:
+        if sparql[pos] == '{':
+            brace_count += 1
+        elif sparql[pos] == '}':
+            brace_count -= 1
+        pos += 1
+
+    if brace_count != 0:
+        # Unbalanced braces, can't safely fix
+        return sparql, False
+
+    end_pos = pos - 1  # Position of closing brace
+
+    # Extract content inside SERVICE block
+    service_content = sparql[start_pos + 1:end_pos].strip()
+
+    # Remove the SERVICE block and replace with its content
+    # We need to preserve proper spacing/newlines
+    before_service = sparql[:match.start()].rstrip()
+    after_service = sparql[end_pos + 1:].lstrip()
+
+    # Reconstruct the query with proper formatting
+    # If before ends with '{', add newline + indentation
+    if before_service.endswith('{'):
+        fixed_sparql = before_service + '\n  ' + service_content
+    else:
+        fixed_sparql = before_service + '\n' + service_content
+
+    if after_service:
+        fixed_sparql += '\n' + after_service
+
+    return fixed_sparql, True
+
+
+def is_service_error(error_message: str) -> bool:
+    """Check if an error message indicates a SERVICE clause problem.
+
+    Args:
+        error_message: The error message from query execution
+
+    Returns:
+        True if the error is related to SERVICE clause issues
+    """
+    if not error_message:
+        return False
+
+    error_lower = error_message.lower()
+    service_error_indicators = [
+        'service',
+        'sparul',
+        'load service data',
+        'access denied',
+        'permission',
+        'federat',
+        'remote endpoint',
+        'connection refused',
+        'timeout',  # SERVICE queries can timeout
+        'sr619',    # Virtuoso error code
+    ]
+
+    return any(indicator in error_lower for indicator in service_error_indicators)
+
+
+def execute_query(state: NL2SPARQLState) -> dict[str, Any]:
+    """Execute the SPARQL query against the endpoint."""
+    from ..validation.endpoint import validate_endpoint
+    from ..validation.syntax import validate_syntax
+
+    sparql = state["generated_sparql"]
+
+    # Check for variable reuse bug (same var for URI and literal)
+    reuse_error = _check_variable_reuse(sparql)
+    if reuse_error:
+        return {
+            "execution_result": None,
+            "result_count": 0,
+            "execution_error": reuse_error
+        }
+
+    # First check syntax
+    syntax_valid, syntax_error = validate_syntax(sparql)
+
+    if not syntax_valid:
+        return {
+            "execution_result": None,
+            "result_count": 0,
+            "execution_error": f"Syntax error: {syntax_error}"
+        }
+
+    # Execute against endpoint
+    success, error, count, results = validate_endpoint(sparql, timeout=30)
+
+    # If SERVICE error, try removing SERVICE clause and execute locally
+    # This handles Virtuoso permission errors like "SPARUL LOAD SERVICE DATA access denied"
+    if error and is_service_error(error):
+        fixed_sparql, was_fixed = _fix_service_clause(sparql)
+        if was_fixed:
+            # Re-execute without SERVICE clause
+            success2, error2, count2, results2 = validate_endpoint(fixed_sparql, timeout=30)
+            if success2 and not error2:
+                # The fix worked! Update the generated query and return new results
+                return {
+                    "execution_result": results2,
+                    "result_count": count2 or 0,
+                    "execution_error": None,
+                    # Update the generated_sparql with the fixed version
+                    "generated_sparql": fixed_sparql,
+                }
+            # If fix didn't work, fall through to return original error
+
+    # If no results and no error, try fixing case-sensitive filters
+    # This handles cases like "rabbia" vs "Rabbia" without regenerating the whole query
+    if success and (count is None or count == 0) and not error:
+        fixed_sparql, was_fixed = _fix_case_sensitive_filters(sparql)
+        if was_fixed:
+            # Re-execute with case-insensitive filters
+            success2, error2, count2, results2 = validate_endpoint(fixed_sparql, timeout=30)
+            if success2 and count2 and count2 > 0:
+                # The fix worked! Update the generated query and return new results
+                return {
+                    "execution_result": results2,
+                    "result_count": count2,
+                    "execution_error": None,
+                    # Update the generated_sparql with the fixed version
+                    "generated_sparql": fixed_sparql,
+                }
+
+    return {
+        "execution_result": results,
+        "result_count": count or 0,
+        "execution_error": error
+    }
+
+
+def verify_results(state: NL2SPARQLState) -> dict[str, Any]:
+    """Verify query execution results.
+
+    Checks for:
+    1. Technical errors (syntax, execution) - triggers refine
+    2. Zero results after minor fixes - triggers explore/refine
+
+    Does NOT perform semantic verification of results because LLMs lack
+    domain knowledge and over-aggressive verification introduces bugs.
+    """
+    validation_errors = []
+    has_technical_error = False
+
+    # Check for actual execution errors (technical failures)
+    if state["execution_error"]:
+        error_msg = state["execution_error"].lower()
+        if any(err in error_msg for err in ["syntax", "parse", "timeout", "connection", "500", "error"]):
+            validation_errors.append(state["execution_error"])
+            has_technical_error = True
+
+    # Query is syntactically valid if no technical errors
+    syntax_valid = not has_technical_error
+
+    # Store first syntactically valid query as fallback
+    # (only on first attempt, when first_valid_sparql is empty)
+    first_valid_sparql = state.get("first_valid_sparql", "")
+    if syntax_valid and not first_valid_sparql and state["generated_sparql"]:
+        first_valid_sparql = state["generated_sparql"]
+
+    # Zero results (after minor fixes in execute_query) should trigger explore/refine
+    # But we still consider the query "syntactically valid" for fallback purposes
+    if state["result_count"] == 0 and not has_technical_error:
+        validation_errors.append("Query returned 0 results - will try explore/refine")
+
+    is_valid = len(validation_errors) == 0
+
+    # Calculate confidence
+    if is_valid:
+        confidence = min(1.0, 0.5 + (state["result_count"] / 100) * 0.5)
+    elif syntax_valid:
+        confidence = 0.4  # Syntax OK but no results
+    else:
+        confidence = 0.2  # Technical error
+
+    return {
+        "is_valid": is_valid,
+        "validation_errors": validation_errors,
+        "final_sparql": state["generated_sparql"] if is_valid else "",
+        "confidence": confidence,
+        "first_valid_sparql": first_valid_sparql,
+        "explanation": (
+            f"Query returned {state['result_count']} results."
+            if is_valid
+            else f"Issues: {'; '.join(validation_errors)}"
+        )
+    }
+
+
+def refine_query(state: NL2SPARQLState) -> dict[str, Any]:
+    """Record the failed attempt and prepare for retry."""
+
+    # Create refinement entry
+    refinement_entry = {
+        "sparql": state["generated_sparql"],
+        "error": "; ".join(state["validation_errors"]),
+        "result_count": state["result_count"]
+    }
+
+    return {
+        "refinement_history": [refinement_entry],
+        # Reset for next attempt
+        "generated_sparql": "",
+        "execution_result": None,
+        "execution_error": None,
+        "is_valid": False,
+        "validation_errors": []
+    }
+
+
+def explore_schema(state: NL2SPARQLState) -> dict[str, Any]:
+    """Explore ontology to find relevant classes and properties for the query.
+
+    Uses semantic search over ontology definitions to discover appropriate
+    vocabulary based on the user's question. This is more effective than
+    querying the endpoint for property URIs because it provides:
+    - Property/class descriptions (what they mean)
+    - Domain/range information (how to use them)
+    - SPARQL usage examples
+    """
+    from ..retrieval.ontology_retriever import OntologyRetriever
+
+    try:
+        retriever = OntologyRetriever()
+
+        # Retrieve properties and classes relevant to the question
+        # Focus on properties since they're most important for query construction
+        properties = retriever.retrieve_properties(state["question"], top_k=8)
+        classes = retriever.retrieve_classes(state["question"], top_k=4)
+
+        # Combine and format for the prompt
+        all_entries = properties + classes
+        schema_context = retriever.format_for_prompt(all_entries, include_examples=True)
+
+        # Also store URIs for backward compatibility
+        discovered_uris = [item.entry.uri for item in all_entries]
+
+        return {
+            "discovered_properties": discovered_uris,
+            "schema_context": schema_context,  # Detailed descriptions for prompt
+            "schema_explored": True
+        }
+
+    except Exception as e:
+        # Fallback if ontology retrieval fails
+        return {
+            "discovered_properties": [],
+            "schema_context": f"Schema exploration failed: {str(e)}",
+            "schema_explored": True
+        }
+
+
+def output_result(state: NL2SPARQLState) -> dict[str, Any]:
+    """Prepare final output.
+
+    Priority:
+    1. Valid query with results → use it
+    2. Exhausted attempts → use first syntactically valid query (fallback)
+    3. No valid query → return error
+    """
+
+    # If we have a valid result with results, use it
+    if state["is_valid"] and state["final_sparql"]:
+        return {
+            "explanation": f"Successfully generated query with {state['result_count']} results after {state['generation_attempts']} attempt(s)."
+        }
+
+    # If we exhausted attempts, prefer first syntactically valid query as fallback
+    # This is better than later attempts which may have introduced errors
+    first_valid = state.get("first_valid_sparql", "")
+    if first_valid:
+        return {
+            "final_sparql": first_valid,
+            "confidence": 0.3,
+            "explanation": f"Returning first syntactically valid query after {state['generation_attempts']} attempts. Refinement did not improve results."
+        }
+
+    # Fallback to last generated query if no first_valid
+    if state["generated_sparql"]:
+        return {
+            "final_sparql": state["generated_sparql"],
+            "confidence": 0.2,
+            "explanation": f"Best effort after {state['generation_attempts']} attempts. Issues: {'; '.join(state['validation_errors'])}"
+        }
+
+    return {
+        "explanation": "Failed to generate a valid query."
+    }
