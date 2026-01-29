@@ -1,0 +1,40 @@
+## drop-in replacement for `django-memoize`
+
+[![python-latest](https://img.shields.io/pypi/pyversions/django-memoize-compat?logo=python&logoColor=FFE873)](https://www.python.org/downloads/)
+[![pypi](https://img.shields.io/badge/pypi-3.0.0-blue?logo=pypi&logoColor=FFE873)](https://pypi.org/project/django-memoize-compat/)
+[![status](https://img.shields.io/pypi/status/django-memoize-compat)](https://pypi.org/project/django-memoize-compat/)
+[![pypi_downloads](https://img.shields.io/pypi/dm/django-memoize-compat)](https://pypi.org/project/django-memoize-compat/)
+[![license](https://img.shields.io/pypi/l/django-memoize-compat)](https://github.com/rdnve/django-memoize-compat/blob/master/LICENSE)
+
+### intro
+
+this package is a modern, maintained drop-in replacement for the no longer maintained [django-memoize](https://pypi.org/project/django-memoize/) package.
+
+it preserves the original public api:
+- `memoize(timeout=...)`
+- `delete_memoized(func, *args)`
+- `delete_memoized_verhash(func)`
+
+fully compatible with:
+- django 5.x
+- python 3.12 / 3.13
+- redis 7
+
+### installation
+
+```bash
+# via pypi (recommended)
+$ python -m pip install -U django-memoize-compat
+```
+
+### usage
+
+```python
+from memoize_compat import memoize, delete_memoized
+
+@memoize(timeout=60)
+def expensive(a, b):
+    return a + b
+
+delete_memoized(expensive, 1, 2)
+```
