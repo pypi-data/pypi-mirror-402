@@ -1,0 +1,46 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  pypi-publish:
+    name: Upload release to PyPI
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/sef-agents
+    permissions:
+      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+      contents: read  # Required to checkout the repository
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for tags
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.5.5"
+
+      - name: Build package
+        run: uv build
+
+      - name: Version Consistency Check
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          PYPROJECT_VERSION=$(grep -m 1 'version =' pyproject.toml | cut -d '"' -f 2)
+          echo "Tag: $TAG_VERSION"
+          echo "PyProject: $PYPROJECT_VERSION"
+          if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]; then
+            echo "Error: Version mismatch! Tag is $TAG_VERSION but pyproject.toml is $PYPROJECT_VERSION"
+            exit 1
+          fi
+
+      - name: Check Metadata (Twine)
+        run: uv tool run twine check dist/*
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

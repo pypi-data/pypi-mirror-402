@@ -1,0 +1,80 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+
+  - repo: local
+    hooks:
+      - id: detect-secrets
+        name: detect-secrets (Audit)
+        entry: bash -c 'NEW_SECRETS=$(uv run detect-secrets scan . 2>/dev/null | uv run detect-secrets audit --diff --baseline .secrets.baseline - 2>/dev/null | grep -c "Secret Type" || true); [ "$NEW_SECRETS" -gt 0 ] && echo "❌ $NEW_SECRETS new secrets detected!" && exit 1 || echo "✅ No new secrets"'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: bandit
+        name: bandit (SAST)
+        entry: bash -c 'uv run bandit -r src/ -f json -o bandit-report.json --exit-zero && uv run python -c "import json, sys; d=json.load(open(\"bandit-report.json\")); hc=[r for r in d.get(\"results\",[]) if r.get(\"issue_severity\") in [\"HIGH\",\"CRITICAL\"]]; sys.exit(1 if hc else 0)"'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: pip-audit
+        name: pip-audit (Dependencies)
+        entry: bash -c 'uv run pip-audit . --desc --format json --output pip-audit-report.json 2>/dev/null || true; grep -qE "severity.*CRITICAL|severity.*HIGH" pip-audit-report.json 2>/dev/null && echo "❌ CRITICAL/HIGH vulnerabilities!" && exit 1 || echo "✅ Dependencies safe"'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+
+  - repo: local
+    hooks:
+      - id: check-policy
+        name: Policy Scan (Security/License/URL)
+        entry: uv run python -m sef_agents.security_scan --no-report
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: check-lock
+        name: Check usage of uv.lock
+        entry: uv lock --check
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: pytest-collect
+        name: pytest (Test Collection & Import Check)
+        entry: bash -c 'uv run pytest --collect-only -q || (echo "❌ Test collection failed - fix imports before committing" && exit 1)'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: pytest-fast
+        name: pytest (Fast Smoke Tests - Stop on First Failure)
+        entry: bash -c 'uv run pytest -x --maxfail=1 -q || (echo "❌ Tests failed - fix before committing" && exit 1)'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: ruff-format-validate-all
+        name: Validate all files are formatted
+        entry: bash scripts/check-format.sh
+        language: system
+        pass_filenames: false
+        always_run: true
