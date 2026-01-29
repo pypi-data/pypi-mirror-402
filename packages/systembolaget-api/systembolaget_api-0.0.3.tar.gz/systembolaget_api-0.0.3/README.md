@@ -1,0 +1,61 @@
+<p align="center">
+  <img src="https://i.imgur.com/WiaFd47.png" />
+</p>
+
+# SystembolagetAPI
+
+
+[![PyPI version](https://img.shields.io/pypi/v/systembolaget-api?style=for-the-badge)](https://pypi.org/project/systembolaget-api/) [![License](https://img.shields.io/badge/license-WTFPL-green?style=for-the-badge)](https://github.com/dunderrrrrr/systembolaget-api/blob/main/LICENSE) ![Python](https://img.shields.io/badge/Python-3.10-blue?style=for-the-badge)
+
+
+SystembolagetAPI lets you search and filter for products on [Systembolaget](https://www.systembolaget.se/) using their unofficial client api.
+
+## Install
+
+SystembolagetAPI is available on [PyPI](https://pypi.org/project/systembolaget-api/).
+
+```bash
+uv add systembolaget-api
+pip install systembolaget-api
+```
+
+## Usage
+
+```python
+from systembolaget_api import (
+    FilterOptions,
+    SystembolagetAPI,
+    SystembolagetClient,
+)
+
+client = SystembolagetClient()
+api = SystembolagetAPI(client)
+
+# Simple query only
+api.search("Nils Oscar")
+
+# Query with filters
+api.search("wine", FilterOptions(price_max=200, country=["France"]))
+
+# Everything
+api.search(
+    query="red wine",
+    options=FilterOptions(
+        price_min=100,
+        price_max=500,
+        country=["France", "Italy"],
+        vintage=[2018, 2019],
+    ),
+)
+
+# Simple search with sorting
+api.search("Nils Oscar", sort_by="ProductLaunchDate", sort_direction="Ascending")
+
+# With filters too
+api.search(
+    query="wine",
+    sort_by="Price",
+    sort_direction="Descending",
+    options=FilterOptions(price_max=200, country=["France"]),
+)
+```
