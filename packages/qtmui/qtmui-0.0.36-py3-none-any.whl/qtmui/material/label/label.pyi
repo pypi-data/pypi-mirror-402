@@ -1,0 +1,19 @@
+from typing import Callable, Optional, Union
+from PySide6.QtWidgets import QLabel, QWidget, QSizePolicy, QHBoxLayout, QSpacerItem, QPushButton
+from PySide6.QtCore import Qt, QEvent
+from PySide6.QtGui import QPalette
+from ..system.color_manipulator import rgba_to_hex, rgb2hex
+from qtmui.hooks import State, useEffect
+from qtmui.material.styles import useTheme
+from qtmui.material.styles.create_theme.components.get_qss_styles import get_qss_style
+from ..py_tool_button import PyToolButton
+from ..py_iconify import PyIconify, Iconify
+from qtmui.i18n.use_translation import translate, i18n
+from ..widget_base import PyWidgetBase
+class Label:
+    def __init__(self, parent, id, align, text: Optional[Union[State, str, Callable]], color: str, classes, gutterBottom, noWrap, paragraph, size: str, sx: str, startIcon: Optional[Union[str, PyIconify, Iconify]], endIcon: Optional[Union[str, PyIconify, Iconify]], variant: str, **kwargs): ...
+    def _init_ui(self): ...
+    def reTranslation(self, value): ...
+    def _set_stylesheet(self): ...
+    def changeEvent(self, event: QEvent): ...
+    def _setIcon(self): ...
