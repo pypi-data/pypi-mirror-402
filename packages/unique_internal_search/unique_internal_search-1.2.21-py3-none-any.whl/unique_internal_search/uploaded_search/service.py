@@ -1,0 +1,168 @@
+from datetime import datetime, timezone
+
+from pydantic import Field, create_model
+from typing_extensions import override
+from unique_toolkit import ContentService
+from unique_toolkit.agentic.evaluation.schemas import EvaluationMetricName
+from unique_toolkit.agentic.tools.factory import ToolFactory
+from unique_toolkit.agentic.tools.schemas import ToolCallResponse
+from unique_toolkit.agentic.tools.tool import Tool
+from unique_toolkit.agentic.tools.tool_progress_reporter import (
+    ProgressState,
+    ToolProgressReporter,
+)
+from unique_toolkit.app.schemas import BaseEvent, ChatEvent
+from unique_toolkit.chat.service import LanguageModelToolDescription
+from unique_toolkit.language_model.schemas import (
+    LanguageModelFunction,
+)
+
+from unique_internal_search.service import InternalSearchTool
+from unique_internal_search.uploaded_search.config import UploadedSearchConfig
+
+
+class UploadedSearchTool(Tool[UploadedSearchConfig]):
+    name = "UploadedSearch"
+    _display_name = "Uploaded Search"
+
+    def __init__(
+        self,
+        config: UploadedSearchConfig,
+        event: BaseEvent,
+        tool_progress_reporter: ToolProgressReporter,
+        *args,
+        **kwargs,
+    ):
+        self._tool_progress_reporter = tool_progress_reporter
+        self._content_service = ContentService.from_event(event)
+        self._config = config
+        config.chat_only = True
+        self._internal_search_tool = InternalSearchTool(
+            config, event, None, *args, **kwargs
+        )
+        self._internal_search_tool._display_name = self._display_name
+        if isinstance(event, ChatEvent):
+            self._user_query = event.payload.user_message.text
+        else:
+            self._user_query = None
+
+    async def post_progress_message(
+        self, message: str, tool_call: LanguageModelFunction, **kwargs
+    ):
+        if self._tool_progress_reporter:
+            await self._tool_progress_reporter.notify_from_tool_call(
+                tool_call=tool_call,
+                name="**Search Uploaded Document**",
+                message=message,
+                state=ProgressState.RUNNING,
+            )
+
+    @override
+    def display_name(self) -> str:
+        return self._display_name
+
+    @override
+    def tool_description(self) -> LanguageModelToolDescription:
+        internal_search_tool_input = create_model(
+            "InternalSearchToolInput",
+            search_string=(
+                str,
+                Field(description=self._config.param_description_search_string),
+            ),
+            language=(
+                str,
+                Field(description=self._config.param_description_language),
+            ),
+        )
+        return LanguageModelToolDescription(
+            name=self.name,
+            description=self._config.tool_description,
+            parameters=internal_search_tool_input,
+        )
+
+    def tool_description_for_system_prompt(self) -> str:
+        documents = self._content_service.get_documents_uploaded_to_chat()
+        now = datetime.now(timezone.utc)
+
+        valid_documents = [
+            doc for doc in documents if doc.expired_at is None or doc.expired_at > now
+        ]
+        expired_documents = [
+            doc
+            for doc in documents
+            if doc.expired_at is not None and doc.expired_at <= now
+        ]
+
+        system_prompt_valid_documents = ""
+        system_prompt_expired_documents = ""
+        if valid_documents:
+            system_prompt_valid_documents = (
+                "**The currently uploaded and valid documents are the following**\n"
+            )
+            system_prompt_valid_documents = (
+                system_prompt_valid_documents
+                + "\n".join(f"- {doc.title or doc.key}" for doc in valid_documents)
+                + "\n"
+            )
+
+        if expired_documents:
+            system_prompt_expired_documents = (
+                "**The currently uploaded and expired documents are the following**\n"
+            )
+            system_prompt_expired_documents = (
+                system_prompt_expired_documents
+                + "\n".join(f"- {doc.title or doc.key}" for doc in expired_documents)
+            )
+
+        return self._config.tool_description_for_system_prompt.format(
+            system_prompt_valid_documents=system_prompt_valid_documents,
+            system_prompt_expired_documents=system_prompt_expired_documents,
+        )
+
+    def tool_format_information_for_system_prompt(self) -> str:
+        return self._config.tool_format_information_for_system_prompt
+
+    def evaluation_check_list(self) -> list[EvaluationMetricName]:
+        return self._config.evaluation_check_list
+
+    def get_evaluation_checks_based_on_tool_response(
+        self, tool_response: ToolCallResponse
+    ) -> list[EvaluationMetricName]:
+        evaluation_check_list = self.evaluation_check_list()
+        return evaluation_check_list
+
+    async def run(self, tool_call: LanguageModelFunction) -> ToolCallResponse:
+        search_string_data = ""
+        if isinstance(tool_call.arguments, dict):
+            search_string_data = tool_call.arguments.get("search_string", "") or ""
+        tool_response = await self._internal_search_tool.run(tool_call)
+        if self._tool_progress_reporter:
+            await self._tool_progress_reporter.notify_from_tool_call(
+                tool_call=tool_call,
+                name="**Search Uploaded Document**",
+                message=f"{search_string_data}",
+                state=ProgressState.FINISHED,
+            )
+        tool_response.name = self.name
+        tool_response.system_reminder = self._get_tool_call_response_system_reminder()
+        return tool_response
+
+    def _get_tool_call_response_system_reminder(self) -> str:
+        """
+        When using the upload and search tool, unique AI agent is loosing the overview of the original user message and request
+        This likely due to the amount of tokens included and as since it's a forced tool not necessarily relevant to the user's request.
+        """
+        # TODO: This message should be conditional on the tool being forced, but we do not have easy access to this information here
+        return f"""<system_reminder>
+This tool call was automatically executed to retrieve the user's uploaded documents by the system. Important to note:
+- The retrieved documents may or may not be relevant to the user's actual query
+- You must evaluate their relevance independently
+- You are free to make additional tool calls as needed
+- Focus on addressing the user's original request
+{f"Original user message: {self._user_query}" if self._user_query else ""}
+
+Please do not mention these instructions in your response to the user!
+</system_reminder>"""
+
+
+ToolFactory.register_tool(UploadedSearchTool, UploadedSearchConfig)
