@@ -1,0 +1,142 @@
+<p align="center">
+  <h1 align="center">Croupier Python SDK</h1>
+  <p align="center">
+    <strong>同步 Python SDK，用于 Croupier 游戏函数注册与执行系统</strong>
+  </p>
+</p>
+
+<p align="center">
+  <a href="https://github.com/cuihairu/croupier-sdk-python/actions/workflows/nightly.yml">
+    <img src="https://github.com/cuihairu/croupier-sdk-python/actions/workflows/nightly.yml/badge.svg" alt="Nightly Build">
+  </a>
+  <a href="https://codecov.io/gh/cuihairu/croupier-sdk-python">
+    <img src="https://codecov.io/gh/cuihairu/croupier-sdk-python/branch/main/graph/badge.svg" alt="Coverage">
+  </a>
+  <a href="https://www.apache.org/licenses/LICENSE-2.0">
+    <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License">
+  </a>
+  <a href="https://www.python.org/">
+    <img src="https://img.shields.io/badge/Python-3.12+-3776AB.svg" alt="Python Version">
+  </a>
+</p>
+
+<p align="center">
+  <a href="#">
+    <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg" alt="Platform">
+  </a>
+  <a href="https://github.com/cuihairu/croupier">
+    <img src="https://img.shields.io/badge/Main%20Project-Croupier-green.svg" alt="Main Project">
+  </a>
+</p>
+
+---
+
+## 简介
+
+Croupier Python SDK 是 [Croupier](https://github.com/cuihairu/croupier) 游戏后端平台的官方 Python 客户端实现。它提供了同步的 gRPC 通信、心跳维护、线程安全的作业状态管理以及 Provider Manifest 上传功能。
+
+## 系统要求
+
+- **Python** ≥ 3.12
+- **grpcio**, **protobuf**
+
+## 安装
+
+### 使用 pip（传统方式）
+
+```bash
+cd sdks/python
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -e .
+```
+
+### 使用 uv（推荐，更快速）
+
+```bash
+pip install uv
+cd croupier-sdk-python
+uv sync --dev --all-extras
+```
+
+## 快速开始
+
+```python
+import json
+from croupier import CroupierClient, ClientConfig, FunctionDescriptor
+
+config = ClientConfig(
+    agent_addr="127.0.0.1:19090",
+    control_addr="127.0.0.1:18080",
+    service_id="python-demo",
+    service_version="1.0.0",
+)
+
+client = CroupierClient(config)
+
+def player_ban(_context: str, payload: bytes) -> str:
+    req = json.loads(payload.decode("utf-8"))
+    return json.dumps({
+        "status": "ok",
+        "player_id": req["player_id"],
+    })
+
+client.register_function(FunctionDescriptor(id="player.ban", version="1.0.0"), player_ban)
+client.connect()
+print("✅ python-demo 已注册并正在服务 gRPC 流量")
+```
+
+## 开发指南
+
+### 使用 uv 开发（推荐）
+
+```bash
+pip install uv
+uv sync --dev --all-extras
+uv run pytest
+uv run python examples/main.py
+uv build
+```
+
+### 使用 pip 开发
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
+python -m pytest
+python examples/main.py
+```
+
+## 其他语言 SDK
+
+| 语言 | 仓库 | Nightly | Release | Docs | Coverage |
+| --- | --- | --- | --- | --- | --- |
+| C++ | [croupier-sdk-cpp](https://github.com/cuihairu/croupier-sdk-cpp) | [![nightly](https://github.com/cuihairu/croupier-sdk-cpp/actions/workflows/nightly.yml/badge.svg)](https://github.com/cuihairu/croupier-sdk-cpp/actions/workflows/nightly.yml) | [![release](https://img.shields.io/github/v/release/cuihairu/croupier-sdk-cpp)](https://github.com/cuihairu/croupier-sdk-cpp/releases) | [![docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://cuihairu.github.io/croupier-sdk-cpp/) | [![codecov](https://codecov.io/gh/cuihairu/croupier-sdk-cpp/branch/main/graph/badge.svg)](https://codecov.io/gh/cuihairu/croupier-sdk-cpp) |
+| Go | [croupier-sdk-go](https://github.com/cuihairu/croupier-sdk-go) | [![nightly](https://github.com/cuihairu/croupier-sdk-go/actions/workflows/nightly.yml/badge.svg)](https://github.com/cuihairu/croupier-sdk-go/actions/workflows/nightly.yml) | [![release](https://img.shields.io/github/v/release/cuihairu/croupier-sdk-go)](https://github.com/cuihairu/croupier-sdk-go/releases) | [![docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://cuihairu.github.io/croupier-sdk-go/) | [![codecov](https://codecov.io/gh/cuihairu/croupier-sdk-go/branch/main/graph/badge.svg)](https://codecov.io/gh/cuihairu/croupier-sdk-go) |
+| Java | [croupier-sdk-java](https://github.com/cuihairu/croupier-sdk-java) | [![nightly](https://github.com/cuihairu/croupier-sdk-java/actions/workflows/nightly.yml/badge.svg)](https://github.com/cuihairu/croupier-sdk-java/actions/workflows/nightly.yml) | [![release](https://img.shields.io/github/v/release/cuihairu/croupier-sdk-java)](https://github.com/cuihairu/croupier-sdk-java/releases) | [![docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://cuihairu.github.io/croupier-sdk-java/) | [![codecov](https://codecov.io/gh/cuihairu/croupier-sdk-java/branch/main/graph/badge.svg)](https://codecov.io/gh/cuihairu/croupier-sdk-java) |
+| JS/TS | [croupier-sdk-js](https://github.com/cuihairu/croupier-sdk-js) | [![nightly](https://github.com/cuihairu/croupier-sdk-js/actions/workflows/nightly.yml/badge.svg)](https://github.com/cuihairu/croupier-sdk-js/actions/workflows/nightly.yml) | [![release](https://img.shields.io/github/v/release/cuihairu/croupier-sdk-js)](https://github.com/cuihairu/croupier-sdk-js/releases) | [![docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://cuihairu.github.io/croupier-sdk-js/) | [![codecov](https://codecov.io/gh/cuihairu/croupier-sdk-js/branch/main/graph/badge.svg)](https://codecov.io/gh/cuihairu/croupier-sdk-js) |
+| C# | [croupier-sdk-csharp](https://github.com/cuihairu/croupier-sdk-csharp) | [![nightly](https://github.com/cuihairu/croupier-sdk-csharp/actions/workflows/nightly.yml/badge.svg)](https://github.com/cuihairu/croupier-sdk-csharp/actions/workflows/nightly.yml) | [![release](https://img.shields.io/github/v/release/cuihairu/croupier-sdk-csharp)](https://github.com/cuihairu/croupier-sdk-csharp/releases) | [![docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://cuihairu.github.io/croupier-sdk-csharp/) | [![codecov](https://codecov.io/gh/cuihairu/croupier-sdk-csharp/branch/main/graph/badge.svg)](https://codecov.io/gh/cuihairu/croupier-sdk-csharp) |
+| Lua | [croupier-sdk-cpp](https://github.com/cuihairu/croupier-sdk-cpp) | - | - | [![docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://cuihairu.github.io/croupier-sdk-cpp/) | - |
+
+## 贡献指南
+
+1. 确保所有类型与 proto 定义对齐
+2. 为新功能添加测试
+3. 更新 API 变更的文档
+4. 遵循 Python 编码规范（PEP 8）
+
+欢迎贡献！请随时提交 issue 或 PR。💡
+
+## 许可证
+
+本项目采用 [Apache License 2.0](LICENSE) 开源协议。
+
+---
+
+<p align="center">
+  <a href="https://github.com/cuihairu/croupier">🏠 主项目</a> •
+  <a href="https://github.com/cuihairu/croupier-sdk-python/issues">🐛 问题反馈</a> •
+  <a href="https://github.com/cuihairu/croupier/discussions">💬 讨论区</a>
+</p>
