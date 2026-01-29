@@ -1,0 +1,157 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'searchLaboratoryStoreLog'
+    description: 'Search laboratory store logs'
+paths:
+  /laboratory-store-logs:
+    get:
+      tags:
+        - 'searchLaboratoryStoreLog'
+      summary: 'Search laboratory store logs'
+      description: ''
+      operationId: 'getLaboratoryStoreLogs'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - in: 'query'
+          name: 'q'
+          description: 'Keyword to search on'
+          schema:
+            type: string
+        - in: 'query'
+          name: 'ls[eq]'
+          description: 'Laboratory store id to include'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'ls[neq]'
+          description: 'Laboratory store id to exclude'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'cdate[gte]'
+          description: 'Filter on creation date greater than (equals) to this date'
+          schema:
+            type: string
+            format: date-time
+        - in: 'query'
+          name: 'cdate[lte]'
+          description: 'Filter on creation date less than (equals) to this date'
+          schema:
+            type: string
+            format: date-time
+        - in: 'query'
+          name: 'orderBy'
+          description: 'Order logs using specific sorting'
+          schema:
+            type: string
+            enum: ['CREATED_AT:asc', 'CREATED_AT:desc']
+            default: 'CREATED_AT:desc'
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for'
+          schema:
+            type: integer
+            minimum: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of notifications per page'
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 50
+            default: 10
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLaboratoryStoreLogs'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+
+components:
+  schemas:
+    PaginatedLaboratoryStoreLogs:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/AnyLaboratoryStoreLog'
+          required:
+            - records
+
+    LaboratoryStoreLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'Laboratory store id'
+          required:
+            - id
+
+    AnyLaboratoryStoreLog:
+      oneOf:
+        - $ref: '#/components/schemas/LaboratoryStoreLog'
+      discriminator:
+        propertyName: type
+        mapping:
+          FEATURED: '#/components/schemas/LaboratoryStoreLog'
+
+    LaboratoryStoreLog:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/Log'
+        - type: object
+          properties:
+            type:
+              type: string
+              pattern: '^(FEATURED)$'
+            laboratoryStore:
+              $ref: '#/components/schemas/LaboratoryStoreLink'
+          required:
+            - laboratoryStore
+            - type
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

@@ -1,0 +1,1177 @@
+openapi: 3.0.0
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: This is the REST API of LCDP products
+  version: 1.0.0
+  title: lcdp-monolith-service
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: contact@lecomptoirdespharmacies.fr
+  license:
+    name: Apache 2.0
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: searchSaleOffer
+    description: Search Sale Offers
+  - name: manageSaleOffer
+    description: Manage Sale Offers
+paths:
+  /sale-offers:
+    get:
+      tags:
+        - searchSaleOffer
+      summary: Search sale offers
+      description: ''
+      operationId: getSaleOffers
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+        capabilities:
+          - PHARMDESTOCK_READ
+          - LABORATORY_READ
+      parameters:
+        - in: query
+          name: q
+          description: 'Keyword to search in sale offer, product or laboratory'
+          schema:
+            type: string
+        - in: query
+          name: 'lab[eq]'
+          description: Laboratory to search on (can be given multiple time which result in a OR condition)
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'o[eq]'
+          description: Filter on owner id to include in the search (can be given multiple time which result in a OR condition)
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'o[neq]'
+          description: Filter on owner id to exclude from the search (can be given multiple time which result in a AND condition)
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'st[eq]'
+          description: Filter on status to include in the search (can be given multiple time which result in a OR condition)
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/SaleOfferStatus'
+        - in: query
+          name: 'st[neq]'
+          description: Filter on status to exclude from the search (can be given multiple time which result in a AND condition)
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/SaleOfferStatus'
+        - in: query
+          name: 'p[eq]'
+          description: Filter on product ids to include in the search (can be given multiple time which result in a OR condition)
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'p[neq]'
+          description: Filter on product ids to exclude from the search (can be given multiple time which result in a AND condition)
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'p[depleted]'
+          description: Filter on products for which user id given have depleted their sale offer (can be given multiple time which result in a OR condition)
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'ref[eq]'
+          description: Filter on reference to include in the search (can be given multiple time which result in a OR condition)
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          name: 'ref[neq]'
+          description: Filter on reference to exclude from the search (can be given multiple time which result in a AND condition)
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          name: 'pt[eq]'
+          description: Product type to search on
+          schema:
+            type: string
+        - in: query
+          name: 'spt[eq]'
+          description: Secondary product type to include
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: 'cdate[gte]'
+          description: Filter on creation date greater than (equals) to this date
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: 'cdate[lte]'
+          description: Filter on creation date less than (equals) to this date
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: 'udate[gte]'
+          description: Filter on update date greater than (equals) to this date
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: 'udate[lte]'
+          description: Filter on update date less than (equals) to this date
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: 'stdate[gte]'
+          description: Filter on journal -> statusUpdatedAt greater than (equals) to this date
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: 'sNumberOfSales[gte]'
+          description: Filter on statistic -> numberOfSales greater than (equals) to this number
+          schema:
+            type: integer
+            format: int32
+        - in: query
+          name: 'stReason[eq]'
+          description: Filter on statusReason
+          schema:
+            $ref: '#/components/schemas/SaleOfferStatusReason'
+        - in: query
+          name: 'stockRemainingQuantity[gte]'
+          description: |
+            Filter on Stock.remainingQuantity greater than (equals) to this number (null value is considered as infinite)
+          schema:
+            type: integer
+        - in: query
+          name: 'stockRemainingQuantity[lte]'
+          description: |
+            Filter on Stock.remainingQuantity less than (equals) to this number (null value is considered as infinite)
+          schema:
+            type: integer
+        - in: query
+          name: 'stockLapsingDate[lte]'
+          description: |
+            Filter on Stock.lapsingDate less than (equals) to this date. (null value is considered as infinite)
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: 'stockLapsingDate[gte]'
+          description: |
+            Filter on Stock.lapsingDate greater than (equals) to this date. (null value is considered as infinite)
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: 'soldOutSoon[eq]'
+          description: |
+            Filter on stock remaining quantity that will be sold out soon
+          schema:
+            type: boolean
+        - in: 'query'
+          name: 'tags[co]'
+          description: 'Filter on tags contains this values'
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          name: orderBy
+          description: "Order sale offers using specific sorting. Note : If sorting filter end with 'asc' or 'desc' it allow to select ascending or descending."
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - 'PRODUCT_NAME:asc'
+                - 'PRODUCT_NAME:desc'
+                - 'PRODUCT_BARCODES_PRINCIPAL:asc'
+                - 'PRODUCT_BARCODES_PRINCIPAL:desc'
+                - 'MINIMAL_UNIT_PRICE:asc'
+                - 'MINIMAL_UNIT_PRICE:desc'
+                - 'STOCK_LAPSING_DATE:asc'
+                - 'STOCK_LAPSING_DATE:desc'
+                - 'BEST_REBATE:asc'
+                - 'BEST_REBATE:desc'
+                - 'STOCK_BATCH:asc'
+                - 'STOCK_BATCH:desc'
+                - 'STOCK_REMAINING_QUANTITY:asc'
+                - 'STOCK_REMAINING_QUANTITY:desc'
+                - 'STATUS:asc'
+                - 'STATUS:desc'
+                - 'DISTRIBUTION_MODE_TYPE:asc'
+                - 'DISTRIBUTION_MODE_TYPE:desc'
+                - 'DISTRIBUTION_MODE_MAXIMAL_QUANTITY:asc'
+                - 'DISTRIBUTION_MODE_MAXIMAL_QUANTITY:desc'
+                - 'DISTRIBUTION_MODE_MINIMAL_QUANTITY:asc'
+                - 'DISTRIBUTION_MODE_MINIMAL_QUANTITY:desc'
+                - 'DISTRIBUTION_MODE_SOLD_BY:asc'
+                - 'DISTRIBUTION_MODE_SOLD_BY:desc'
+                - 'OWNER_COMPANY_LEGAL_NAME:asc'
+                - 'OWNER_COMPANY_LEGAL_NAME:desc'
+                - 'CREATED_AT:desc'
+                - 'CREATED_AT:asc'
+                - 'UPDATED_AT:asc'
+                - 'UPDATED_AT:desc'
+                - 'JOURNAL_STATUS_UPDATED_AT:asc'
+                - 'JOURNAL_STATUS_UPDATED_AT:desc'
+                - 'STATISTIC_LAST_SALE_DATE:asc'
+                - 'STATISTIC_LAST_SALE_DATE:desc'
+            default: ['PRODUCT_NAME:asc']
+        - in: query
+          name: distinctBy
+          description: Allow to group request result with this value
+          schema:
+            type: string
+            enum:
+              - 'PRODUCT:LATEST_CREATED'
+        - in: query
+          name: p
+          description: Page number to search for (start at 0)
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: pp
+          description: 'Number of sale offers per page. Tip : Set 0 to get only metadata.'
+          schema:
+            type: integer
+            maximum: 5000
+            default: 5000
+            minimum: 0
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSaleOffers'
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '403':
+          description: Access denied
+    post:
+      tags:
+        - manageSaleOffer
+      summary: Create a new sale offer
+      description: |
+        Create a new sale offer. WARNING : There is some special restrictions according the user that create sale offer
+        # All :
+          - Owner should have a valid mangopay mandate
+          - Unit price should be lower than product unitPrice
+          - For unitary sale offer, minimalQuantity should be lower than stock remainingQuantity
+        # Pharmacy :
+          - Can only create UNITARY sale offer
+          - Sale offer should have at least one item in quantity
+          - Can not set images on sale offers
+          - Can not create sale offers without stock
+          - Can create sale offer only for legal allowed products
+          - Batch should be auhtorized by ANSM/DGCCRF
+          - Lapsing date of stock must be after REQUIRED_LAPSING_MONTHS months
+        # Laboratory :
+          - Can not create a sale offer on a product that already have an existing non-disabled sale offer
+          - Can create sale offer without lapsing
+          - Can create sale offer without remaining quantity
+      operationId: createSaleOffer
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+        capabilities:
+          - PHARMDESTOCK_READ
+          - LABORATORY_READ
+      parameters:
+        - in: query
+          name: from
+          description: Reference of the sale offer to clone from
+          required: false
+          schema:
+            type: string
+      requestBody:
+        description: Fields to use for sale offer creation
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaleOfferCreationParameters'
+      responses:
+        '201':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaleOffer'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Access denied
+    delete:
+      tags:
+        - manageSaleOffer
+      summary: 'Delete sale offers filtered by user, sale offer status and product id'
+      description: |
+        # As Administrator :
+            - Can only use this endpoint if at least one of this parameters is set :
+                - o[eq]
+                - p[eq]
+                - ref[eq]
+      operationId: deleteSaleOffers
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+        capabilities:
+          - PHARMDESTOCK_READ
+          - LABORATORY_READ
+      parameters:
+        - in: query
+          name: 'o[eq]'
+          description: Filter on owner id to include in the search (can be given multiple time which result in a OR condition)
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'st[eq]'
+          description: Filter on status to include in the search (can be given multiple time which result in a OR condition)
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/SaleOfferStatus'
+        - in: query
+          name: 'p[eq]'
+          description: Filter on product ids to include in the search (can be given multiple time which result in a OR condition)
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'ref[eq]'
+          description: Filter on reference to include in the search (can be given multiple time which result in a OR condition)
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          name: 'ref[neq]'
+          description: Filter on reference to exclude from the search (can be given multiple time which result in a AND condition)
+          schema:
+            type: array
+            items:
+              type: string
+      responses:
+        '200':
+          description: successful operation
+        '403':
+          description: Access denied
+    patch:
+      tags:
+        - manageSaleOffer
+      summary: Update lot of sale offers
+      operationId: updateSaleOffers
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+        capabilities:
+          - PHARMDESTOCK_READ
+          - LABORATORY_READ
+      parameters:
+        - in: query
+          name: 'o[eq]'
+          description: Filter on owner id to be affected by the modification (can be given multiple time which result in a OR condition)
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'ref[eq]'
+          description: Filter on reference to be affected by the modification (can be given multiple time which result in a OR condition)
+          schema:
+            type: array
+            items:
+              type: string
+      requestBody:
+        description: Modification to apply to selected items
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/SaleOfferUpdateParameters'
+      responses:
+        '204':
+          description: successful operation
+        400:
+          description: 'Some arguments are invalid'
+        401:
+          description: 'User is not authorized to modify this sale offer'
+        403:
+          description: 'Access denied'
+        404:
+          description: Sale Offer not found
+        412:
+          description: |
+            Precondition failed with values :
+             - CODE009
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+  '/sale-offers/{saleOfferReference}':
+    get:
+      tags:
+        - searchSaleOffer
+      summary: Get one sale offer
+      description: ''
+      operationId: getSaleOffer
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+        capabilities:
+          - PHARMDESTOCK_READ
+          - LABORATORY_READ
+      parameters:
+        - in: path
+          name: saleOfferReference
+          required: true
+          description: The ref of the sale offer to get.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaleOffer'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '403':
+          description: Access denied
+        '404':
+          description: Sale Offer not found
+    delete:
+      tags:
+        - manageSaleOffer
+      summary: Delete a sale offer
+      operationId: deleteSaleOffer
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+        capabilities:
+          - PHARMDESTOCK_READ
+          - LABORATORY_READ
+      parameters:
+        - in: path
+          name: saleOfferReference
+          required: true
+          description: The reference of the sale offer to delete.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: successful operation
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '403':
+          description: Access denied
+        '404':
+          description: Sale Offer not found
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+    patch:
+      tags:
+        - manageSaleOffer
+      summary: Update sale offer'
+      operationId: updateSaleOffer
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+        capabilities:
+          - PHARMDESTOCK_READ
+          - LABORATORY_READ
+      parameters:
+        - in: path
+          name: saleOfferReference
+          required: true
+          description: The reference of the sale offer to update.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/SaleOfferUpdateParameters'
+      responses:
+        200:
+          description: successful operation
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/SaleOffer'
+        400:
+          description: 'Some arguments are invalid'
+        401:
+          description: 'User is not authorized to modify this sale offer'
+        403:
+          description: 'Access denied'
+        404:
+          description: Sale Offer not found
+        412:
+          description: |
+            Precondition failed with values :
+             - CODE009
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+
+  '/sale-offers/{saleOfferReference}/versions':
+    post:
+      tags:
+        - manageSaleOffer
+      summary: Create new version of a sale offer
+      description: |
+        Version can not be created on 'DISABLED' sale offer;
+        In addition, sale offer version creation have the same restrictions as sale offer from scratch.
+        Please consult documentation of 'createSaleOffer' operation id
+      operationId: createSaleOfferVersion
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+        capabilities:
+          - PHARMDESTOCK_READ
+          - LABORATORY_READ
+      parameters:
+        - in: path
+          name: saleOfferReference
+          required: true
+          description: The id of the sale offer to view similar one.
+          schema:
+            type: string
+      requestBody:
+        description: Fields modifications for the new version
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaleOfferNewVersionParameters'
+      responses:
+        '201':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaleOffer'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Access denied
+        '404':
+          description: Sale Offer not found
+        '412':
+          description: |
+            Precondition failed with values :
+             - CODE009
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '417':
+          description: No modification from the current version
+        '503':
+          description: Service unavailable
+components:
+  schemas:
+    PaginatedSaleOffers:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/SaleOffer'
+          required:
+            - records
+    SaleOffer:
+      type: object
+      properties:
+        reference:
+          type: string
+          description: Unique identifier for this sale offer
+        status:
+          $ref: '#/components/schemas/SaleOfferStatus'
+        statusReason:
+          $ref: '#/components/schemas/SaleOfferStatusReason'
+        product:
+          $ref: '#/components/schemas/ProductLink'
+        stock:
+          $ref: '#/components/schemas/Stock'
+        description:
+          type: string
+          nullable: true
+          description: Description of the sale offer
+        distributionMode:
+          $ref: '#/components/schemas/AnyIdentifiedDistributionMode'
+        minimalUnitPrice:
+          type: number
+          nullable: true
+          description: The minimal unit price for this sale offer.
+        bestRebate:
+          type: integer
+          maximum: 100
+          description: |
+            Best Rebate for this sale offer
+            Zero in case of 'QUOTATION' distribution mode
+        soldOutSoon:
+          type: boolean
+          nullable: true
+          description: True if the stock is sold out soon. If 'null' then not been computed yet or not enough data to compute.
+        owner:
+          $ref: '#/components/schemas/OwnerLink'
+        updatedAt:
+          type: string
+          format: date-time
+          description: 'Last update date time (RFC 3339, section 5.6)'
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation date of this Content
+        images:
+          $ref: '#/components/schemas/Images'
+        rank:
+          type: integer
+          nullable: true
+          description: Rank of this sale offer. Only useful for laboratories sale offer yet
+        tags:
+          type: array
+          items:
+            type: string
+          description: Labels of the sale offer
+        journal:
+          $ref: '#/components/schemas/SaleOfferJournal'
+        statistic:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/SaleOfferStatisticLink'
+      required:
+        - reference
+        - status
+        - statusReason
+        - product
+        - description
+        - distributionMode
+        - bestRebate
+        - soldOutSoon
+        - owner
+        - updatedAt
+        - createdAt
+        - images
+        - rank
+        - tags
+        - journal
+        - statistic
+
+    DistributionRange:
+      type: object
+      properties:
+        quantity:
+          type: integer
+          description: Number of item per batch
+          # Limit quantity for a sale offer (to avoid to overflow int32 values when we sum quantities for a user)
+          maximum: 99999
+        unitPrice:
+          type: number
+          description: The unit price as a decimal.
+          minimum: 0.01
+          maximum: 999999.99
+        freeUnits:
+          type: integer
+          description: Number of free units per batch
+      required:
+        - quantity
+        - unitPrice
+        - freeUnits
+
+    IdentifiedDistributionRange:
+      allOf:
+        - $ref: '#/components/schemas/DistributionRange'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: Range id.
+            rebate:
+              type: integer
+              maximum: 100
+              description: Rebate for this distribution range
+          required:
+            - id
+            - rebate
+    AnyDistributionMode:
+      oneOf:
+        - $ref: '#/components/schemas/RangeDistributionMode'
+        - $ref: '#/components/schemas/QuotationDistributionMode'
+        - $ref: '#/components/schemas/UnitaryDistributionMode'
+      discriminator:
+        propertyName: type
+        mapping:
+          RANGE: '#/components/schemas/RangeDistributionMode'
+          QUOTATION: '#/components/schemas/QuotationDistributionMode'
+          UNITARY: '#/components/schemas/UnitaryDistributionMode'
+      example:
+        type: UNITARY
+        unitPrice: 3.52
+        minimalQuantity: 12
+        maximalQuantity: 24
+        soldBy: 1
+    AnyIdentifiedDistributionMode:
+      oneOf:
+        - $ref: '#/components/schemas/IdentifiedRangeDistributionMode'
+        - $ref: '#/components/schemas/QuotationDistributionMode'
+        - $ref: '#/components/schemas/UnitaryDistributionMode'
+      discriminator:
+        propertyName: type
+        mapping:
+          RANGE: '#/components/schemas/IdentifiedRangeDistributionMode'
+          QUOTATION: '#/components/schemas/QuotationDistributionMode'
+          UNITARY: '#/components/schemas/UnitaryDistributionMode'
+      example:
+        type: UNITARY
+        unitPrice: 3.52
+        minimalQuantity: 12
+        maximalQuantity: 24
+        soldBy: 1
+
+    DistributionMode:
+      type: object
+      properties:
+        type:
+          type: string
+          description: Type of distribution for this sale offer
+          pattern: ^(RANGE|QUOTATION|UNITARY)$
+        minimalQuantity:
+          type: integer
+          minimum: 1
+          description: |
+            Minimum buyable quantity for each order
+        maximalQuantity:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: |
+            Maximum buyable quantity for each order
+            Null value signify there is no limit of buyable quantity (just limited by Stock.remainingQuantity)
+      required:
+        - type
+        - minimalQuantity
+        - maximalQuantity
+
+    RangeDistributionMode:
+      allOf:
+        - $ref: '#/components/schemas/DistributionMode'
+        - type: object
+          properties:
+            ranges:
+              type: array
+              description: Available range to buy product.
+              items:
+                $ref: '#/components/schemas/DistributionRange'
+          required:
+            - ranges
+    IdentifiedRangeDistributionMode:
+      allOf:
+        - $ref: '#/components/schemas/DistributionMode'
+        - type: object
+          properties:
+            ranges:
+              type: array
+              description: Available range to buy product.
+              items:
+                $ref: '#/components/schemas/IdentifiedDistributionRange'
+          required:
+            - ranges
+    QuotationDistributionMode:
+      allOf:
+        - $ref: '#/components/schemas/DistributionMode'
+        - type: object
+          properties:
+            soldBy:
+              type: integer
+              minimum: 1
+              description: Sold by this step value
+          required:
+            - soldBy
+    UnitaryDistributionMode:
+      allOf:
+        - $ref: '#/components/schemas/DistributionMode'
+        - type: object
+          properties:
+            unitPrice:
+              type: number
+              description: The unit price as a decimal.
+              minimum: 0.01
+              maximum: 999999.99
+            soldBy:
+              type: integer
+              minimum: 1
+              description: Sold by this step value
+          required:
+            - unitPrice
+            - soldBy
+    Stock:
+      type: object
+      properties:
+        remainingQuantity:
+          type: integer
+          description: Number of element in the quantity
+          nullable: true
+          # Limit quantity for a sale offer (to avoid to overflow int32 values when we sum quantities for a user)
+          maximum: 99999
+        lapsingDate:
+          type: string
+          format: date
+          description: 'Lapsing date of items in this stock (RFC 3339, section 5.6)'
+          nullable: true
+        batch:
+          type: string
+          description: Name of this stock batch
+          nullable: true
+    Images:
+      type: object
+      description: Tagged images for a sale offer
+      properties:
+        first:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ProductImageLink'
+        second:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ProductImageLink'
+        third:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ProductImageLink'
+    ProductImageLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: Id of the image
+            versions:
+              $ref: 'common.yaml#/components/schemas/ImageVersions'
+    ProductLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: Identifier of the product
+            name:
+              type: string
+              description: Name of the product
+            barcodes:
+              $ref: 'product.yaml#/components/schemas/Barcodes'
+    OwnerLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: Id of the owner
+            nickname:
+              type: string
+              maxLength: 64
+              description: User nickname
+            company:
+              type: object
+              description: Infos about the user company
+              properties:
+                legalName:
+                  type: string
+                  nullable: true
+
+    SaleOfferUpdateParameters:
+      description: |
+        For sale offer status, with following preconditions according destination:
+          # ARCHIVED :
+            - You are the owner or you are ADMINISTRATOR
+            - Sale offer in status (WAITING_FOR_PRODUCT, ENABLED, HOLIDAY, ASKING_FOR_INVOICE)
+          # OTHERS :
+            - You are ADMINISTRATOR
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/SaleOfferStatus'
+        stock:
+          type: object
+          properties:
+            remainingQuantity:
+              type: integer
+              format: int
+              nullable: true
+              # Limit quantity for a sale offer (to avoid to overflow int32 values when we sum quantities for a user)
+              maximum: 99999
+        rank:
+          type: integer
+          nullable: true
+          description: Rank of this sale offer. Only useful for laboratories sale offer yet
+
+    SaleOfferStatus:
+      type: string
+      enum:
+        - WAITING_FOR_PRODUCT
+        - ENABLED
+        - DISABLED
+        - REFUSED
+        - ARCHIVED
+        - HOLIDAY
+        - ASKING_FOR_INVOICE
+      description: Sale offer status
+
+    SaleOfferCreationParameters:
+      type: object
+      description: |
+        All these fields are optional when copying from an existing sale offer.
+        List of fields required in case of sale offer creation from scratch :
+          - ownerId
+          - productId
+          - distributionMode
+      properties:
+        ownerId:
+          type: integer
+          format: int64
+          description: Owner of the sale offer
+        productId:
+          type: integer
+          format: int64
+          description: Id of the product to create sale offer on.
+        stock:
+          $ref: '#/components/schemas/Stock'
+        distributionMode:
+          $ref: '#/components/schemas/AnyDistributionMode'
+        description:
+          type: string
+          nullable: true
+          description: Free text to describe this sale offer
+        images:
+          $ref: '#/components/schemas/SaleOfferCreationImagesParameters'
+        rank:
+          type: integer
+          nullable: true
+          description: Rank of this sale offer. Only useful for laboratories sale offer yet
+        tags:
+          type: array
+          items:
+            type: string
+          description: Labels of the sale offer
+
+    SaleOfferCreationImagesParameters:
+      type: object
+      description: Tagged images for a sale offer
+      properties:
+        first:
+          type: integer
+          format: int64
+          nullable: true
+          description: Image id to display as sale offer first photo
+        second:
+          type: integer
+          format: int64
+          nullable: true
+          description: Image id to display as sale offer secondary photo
+        third:
+          type: integer
+          format: int64
+          nullable: true
+          description: Image id to display as sale offer third photo
+    SaleOfferNewVersionParameters:
+      type: object
+      properties:
+        stock:
+          $ref: '#/components/schemas/Stock'
+        distributionMode:
+          $ref: '#/components/schemas/AnyDistributionMode'
+        images:
+          $ref: '#/components/schemas/SaleOfferCreationImagesParameters'
+        description:
+          type: string
+          nullable: true
+          description: Free text to describe this sale offer
+        rank:
+          type: integer
+          nullable: true
+          description: Rank of this sale offer. Only useful for laboratories sale offer yet
+    SaleOfferJournal:
+      type: object
+      description: Journal of the sale offer
+      properties:
+        statusUpdatedBy:
+          type: integer
+          format: int64
+          nullable: true
+          description: Id of the user that modified status
+        statusUpdatedAt:
+          type: string
+          format: date-time
+          description: 'Date of the updated status (RFC 3339, section 5.6)'
+      required:
+        - statusUpdatedBy
+        - statusUpdatedAt
+
+    SaleOfferStatisticLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            lastSaleDate:
+              type: string
+              format: date-time
+              description: Date of the last sale which occurred for this sale offer
+            numberOfSales:
+              type: integer
+              format: int32
+              description: Number of sale during lifespan of this sale offer
+            soldOutCoefficient:
+              type: number
+              format: float
+              description: Sold out coefficient to factor with sale offer reamining quantity
+            soldOutThreshold:
+              type: number
+              format: float
+              description: |
+                Threshold under which a sale offer will be considered as sold out soon, such as :
+                soldOutSoon = (soldOutCoefficient * remainingQuantity) < soldOutThreshold
+
+    SaleOfferStatusReason:
+      type: string
+      enum:
+        [
+          'OUTDATED',
+          'SOLD_OUT',
+          'PRODUCT_PROSCRIPTION',
+          'OWNER_SELLING_CAPABILITY',
+          'PRODUCT_STATUS',
+          'ORDER_COUNTERPROPOSAL',
+          'ORDER_CANCELLED',
+          'OTHER',
+        ]
+      description: 'Reason of the status change or current status.'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

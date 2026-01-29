@@ -1,0 +1,426 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7077/api/v1'
+info:
+  description: 'This is the REST API of LCDP catalog'
+  version: '1.0.0'
+  title: 'lcdp-catalog'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'ManageProductInsight'
+    description: 'Manage Product Insight '
+  - name: 'SearchProductInsight'
+    description: 'Search Product Insight '
+
+paths:
+  /product-insights:
+    get:
+      tags:
+        - 'SearchProductInsight'
+      summary: 'Search for product insights'
+      operationId: 'getProductInsights'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - in: 'query'
+          name: 'signatures[anyeq]'
+          description: 'Any signature that equal to values'
+          schema:
+            type: array
+            items:
+              type: string
+        - in: 'query'
+          name: 'jUpdatedAt[gte]'
+          description: 'Filter on journal -> UpdatedAt greater than (equals) to this date'
+          schema:
+            type: string
+            format: date-time
+        - in: 'query'
+          name: 'orderBy'
+          description: Sort by
+          schema:
+            type: string
+            enum:
+              [
+                'PRODUCT_NAME:ASC',
+                'PRODUCT_NAME:DESC',
+                'BARCODES_PRINCIPAL:ASC',
+                'BARCODES_PRINCIPAL:DESC',
+              ]
+            default: 'PRODUCT_NAME:ASC'
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for (start at 0)'
+          schema:
+            type: integer
+            minimum: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of user per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: "Product insight's found"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProductInsights'
+        403:
+          description: 'Access denied'
+        400:
+          description: 'Bad Request'
+    post:
+      tags:
+        - 'ManageProductInsight'
+      summary: Create a new product insight
+      description: |
+        Create a new product insight.
+      operationId: 'createProductInsight'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductInsightCreateOrUpdateParameters'
+      responses:
+        200:
+          description: 'Successful operation.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductInsight'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        409:
+          description: 'Product insight already exists'
+        412:
+          description: 'Precondition failed, for example you duplicate element in signature'
+
+  /product-insights/{productInsightId}:
+    get:
+      tags:
+        - 'SearchProductInsight'
+      summary: 'Retrieve a product insight with ID'
+      operationId: 'getProductInsight'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/ProductInsightIdParameter'
+      responses:
+        200:
+          description: 'Product insight found'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductInsight'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Product insight not found'
+    patch:
+      tags:
+        - 'ManageProductInsight'
+      summary: 'Update product insight'
+      operationId: 'updateProductInsight'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/ProductInsightIdParameter'
+      requestBody:
+        description: 'Modifications to apply'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductInsightCreateOrUpdateParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductInsight'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Product insight not found'
+        409:
+          description: 'Product insight already exists with this signature'
+        412:
+          description: 'Precondition failed, for example you duplicate element in signature'
+    delete:
+      tags:
+        - 'ManageProductInsight'
+      summary: 'Delete product insight'
+      operationId: 'deleteProductInsight'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/ProductInsightIdParameter'
+      responses:
+        204:
+          description: 'successful operation'
+        404:
+          description: 'No product insight found'
+        403:
+          description: 'Access denied'
+        400:
+          description: 'Bad Request'
+
+components:
+  parameters:
+    ProductInsightIdParameter:
+      in: path
+      name: productInsightId
+      required: true
+      description: The id of the product insight concerned by the request
+      schema:
+        type: integer
+        format: int64
+
+  schemas:
+    ProductInsight:
+      description: |
+        A product insight is an element that describe particular values for some product fields.
+        Note that an insight dispose of a unique numeric 'id' identifier and is also identifiable by its signatures.
+        Signatures are a list of string which are uniquely associated to this insight, they are oftenly composed of
+        product barcodes. A consumer can fill insight signatures with any string (eg: product barcode) and consumer 
+        can then retrieve insights by these signatures.
+        Important note : Difference between 'signatures' and 'barcodes' is that the first one is used to identify uniquely an insight
+           and second one is used to give relevant field value to product, without unicity constraint.
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 'Product Insight Id'
+        signatures:
+          type: array
+          items:
+            type: string
+            description: 'Any string that identify the insight, you may use barcode'
+          minItems: 1
+          uniqueItems: true
+        barcodes:
+          $ref: 'product.yaml#/components/schemas/Barcodes'
+        name:
+          type: string
+          nullable: true
+        dci:
+          type: string
+          nullable: true
+        unitWeight:
+          type: number
+          minimum: 0.01
+          multipleOf: 0.01
+          nullable: true
+          description: 'Weight of a single unit in grams'
+        unitPrice:
+          type: number
+          nullable: true
+          description: 'Public price of the product'
+        type:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ProductTypeLink'
+        secondaryType:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ProductSecondaryTypeLink'
+        laboratory:
+          nullable: true
+          allOf:
+            - $ref: 'product.yaml#/components/schemas/LaboratoryLink'
+        vat:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/VatLink'
+        storageType:
+          nullable: true
+          allOf:
+            - $ref: 'product.yaml#/components/schemas/ProductStorageType'
+        journal:
+          $ref: '#/components/schemas/ProductInsightJournal'
+      required:
+        - id
+        - signatures
+        - journal
+
+    ProductInsightJournal:
+      type: object
+      description: Journal of the product insight
+      properties:
+        updatedAt:
+          type: string
+          format: date-time
+          description: 'Update date of this product'
+        unitPriceUpdatedAt:
+          type: string
+          format: date-time
+          description: 'Date of the updated price (RFC 3339, section 5.6)'
+      required:
+        - updatedAt
+
+    PaginatedProductInsights:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductInsight'
+          required:
+            - records
+
+    ProductInsightCreateOrUpdateParameters:
+      type: object
+      properties:
+        signatures:
+          type: array
+          items:
+            type: string
+            description: 'Any string that identify the insight, you may use barcode'
+          minItems: 1
+          uniqueItems: true
+        barcodes:
+          $ref: 'product.yaml#/components/schemas/Barcodes'
+        name:
+          type: string
+          nullable: true
+        dci:
+          type: string
+          nullable: true
+        unitWeight:
+          type: number
+          minimum: 0.01
+          multipleOf: 0.01
+          nullable: true
+          description: 'Weight of a single unit in grams'
+        unitPrice:
+          type: number
+          nullable: true
+          description: 'Public price of the product'
+        typeId:
+          type: string
+          nullable: true
+          description: 'Product Type Identifier'
+        secondaryTypeId:
+          type: string
+          nullable: true
+          description: 'Product Secondary Type Identifier'
+        laboratoryId:
+          type: integer
+          format: int64
+          nullable: true
+          description: 'Laboratory ID'
+        vatId:
+          type: string
+          nullable: true
+          description: 'VAT identifier'
+        storageType:
+          nullable: true
+          allOf:
+            - $ref: 'product.yaml#/components/schemas/ProductStorageType'
+      required:
+        - signatures
+
+    ProductTypeLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: string
+              description: 'Id of the product type (machine name)'
+            name:
+              type: string
+              description: 'Readable name for display'
+
+    ProductSecondaryTypeLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: string
+              description: 'Id of the product secondary type'
+            name:
+              type: string
+              description: 'Readable name for display'
+
+    VatLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              description: Vat Id
+              type: string
+            name:
+              description: Vat name
+              type: string
+            value:
+              description: Vat value
+              type: number
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

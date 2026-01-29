@@ -1,0 +1,382 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7076/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-pharmaide-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'searchSaleOfferStatistics'
+    description: 'Search in inventory with different criteria'
+  - name: 'searchUserStatistics'
+    description: 'Search in inventory with different criteria'
+
+paths:
+  /sale-offer-statistics:
+    get:
+      tags:
+        - 'searchSaleOfferStatistics'
+      summary: 'Search sale offers statistics'
+      operationId: 'getSaleOfferStatistics'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+        capabilities:
+          - PHARMDESTOCK_READ
+          - LABORATORY_READ
+      parameters:
+        - in: 'query'
+          name: 'ref[eq]'
+          description: 'Filter on reference to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: string
+        - in: 'query'
+          name: 'o[eq]'
+          description: 'Filter on owner id to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'orderBy'
+          description: "Order statistics using specific sorting. Note : If sorting filter end with 'asc' or 'desc' it allow to select ascending or descending."
+          schema:
+            type: array
+            items:
+              type: string
+              enum: ['REFERENCE:asc', 'REFERENCE:desc']
+            default: ['REFERENCE:desc']
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for (start at 0)'
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of sale offer statistics per page'
+          schema:
+            type: integer
+            maximum: 50
+            default: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSaleOfferStatistics'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+
+  /sale-offer-statistics/{saleOfferStatisticId}:
+    get:
+      tags:
+        - 'searchSaleOfferStatistics'
+      summary: 'Get a sale offer statistic'
+      operationId: 'getSaleOfferStatistic'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+        capabilities:
+          - PHARMDESTOCK_READ
+          - LABORATORY_READ
+      parameters:
+        - in: path
+          name: saleOfferStatisticId
+          required: true
+          description: The id of the sale offer statistic to get.
+          schema:
+            type: string
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaleOfferStatistic'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Statistic not found'
+
+  /user-statistics:
+    get:
+      tags:
+        - 'searchUserStatistics'
+      summary: 'Search users statistics'
+      operationId: 'getUserStatistics'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+        capabilities:
+          - PHARMDESTOCK_READ
+          - LABORATORY_READ
+      parameters:
+        - in: 'query'
+          name: 'userId[eq]'
+          description: 'Filter on user id to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for (start at 0)'
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of user statistics per page'
+          schema:
+            type: integer
+            maximum: 50
+            default: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUserStatistics'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+
+  /user-statistics/{userStatisticId}:
+    get:
+      tags:
+        - 'searchUserStatistics'
+      summary: 'Get a user statistic'
+      operationId: 'getUserStatistic'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+        capabilities:
+          - PHARMDESTOCK_READ
+          - LABORATORY_READ
+      parameters:
+        - in: path
+          name: userStatisticId
+          required: true
+          description: The id of the user statistic to get.
+          schema:
+            type: string
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStatistic'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Statistic not found'
+
+components:
+  schemas:
+    PaginatedSaleOfferStatistics:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/SaleOfferStatistic'
+          required:
+            - records
+
+    SaleOfferStatistic:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 'Unique id representing this statistic'
+        reference:
+          type: string
+          description: 'Reference of the sale offer'
+        lastSaleDate:
+          type: string
+          format: date-time
+          description: 'Date of the last sale which occurred for this sale offer'
+        numberOfSales:
+          type: integer
+          format: int32
+          description: 'Number of sale during lifespan of this sale offer'
+        soldOutCoefficient:
+          type: number
+          format: float
+          description: 'Sold out coefficient to factor with sale offer reamining quantity'
+        soldOutThreshold:
+          type: number
+          format: float
+          description: |
+            Threshold under which a sale offer will be considered as sold out soon, such as :
+            soldOutSoon = (soldOutCoefficient * remainingQuantity) < soldOutThreshold
+        owner:
+          allOf:
+            - $ref: '#/components/schemas/UserLink'
+
+    PaginatedUserStatistics:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/UserStatistic'
+          required:
+            - records
+
+    UserStatistic:
+      type: object
+      description: |
+        All these statistics are computed based on a sampling taking the last [Variable] 'user.statistics.long_term_sampling_days' days
+      properties:
+        id:
+          type: string
+          description: 'Unique id representing this statistic'
+        user:
+          allOf:
+            - $ref: '#/components/schemas/UserLink'
+        longTermQoS:
+          type: object
+          properties:
+            numberOfSales:
+              type: integer
+              format: int32
+              nullable: true
+              minimum: 0
+              description: 'Number of sales'
+            salesErrorRate:
+              type: number
+              minimum: 0
+              maximum: 1
+              description: 'Rate of sales that have at least one removed or refunded item'
+            salesCanceledRate:
+              type: number
+              nullable: true
+              minimum: 0
+              maximum: 1
+              description: 'Rate of sales that have been canceled, ignoring cancellation issued by the buyer without any reason'
+            salesLitigationRate:
+              type: number
+              nullable: true
+              minimum: 0
+              maximum: 1
+              description: 'Rate of sales that are associated to a litigation'
+            salesResponsivenessDelay:
+              type: number
+              nullable: true
+              minimum: 0
+              description: 'Average delay (in days) of responsiveness for sales (delay between order created by buyer and accepted/modified/canceled by seller or administrator)'
+            deliveryDelay:
+              type: number
+              nullable: true
+              minimum: 0
+              description: 'Average delay (in days) of delivery for sales'
+        shortTermQoS:
+          type: object
+          properties:
+            numberOfSales:
+              type: integer
+              format: int32
+              nullable: true
+              minimum: 0
+              description: 'Number of sales'
+            numberOfSalesWithModification:
+              type: integer
+              format: int32
+              nullable: true
+              minimum: 0
+              description: 'Number of sales with modification'
+            salesModificationRate:
+              type: number
+              nullable: true
+              minimum: 0
+              maximum: 1
+              description: 'Rate of sales that have been modified'
+
+    UserLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'Id of the user'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

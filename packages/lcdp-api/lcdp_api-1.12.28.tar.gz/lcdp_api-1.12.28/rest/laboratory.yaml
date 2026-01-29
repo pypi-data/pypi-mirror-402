@@ -1,0 +1,197 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP laboratories'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'searchLaboratory'
+    description: 'Get laboratories'
+  - name: 'manageLaboratory'
+    description: 'Modify laboratories'
+paths:
+  /laboratories:
+    get:
+      tags:
+        - 'searchLaboratory'
+      summary: 'Search laboratories'
+      description: ''
+      operationId: 'getLaboratories'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: 'query'
+          name: 'q'
+          description: 'Keyword to search on'
+          schema:
+            type: string
+        - in: 'query'
+          name: 'name[eq]'
+          description: 'Name of the laboratory equal to this'
+          schema:
+            type: string
+        - in: 'query'
+          name: 'id[eq]'
+          description: 'Filter laboratories by ids'
+          schema:
+            type: 'array'
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'orderBy'
+          description: "Order laboratories using specific sorting. Note : If sorting filter end with 'asc' or 'desc' it allow to select ascending or descending."
+          schema:
+            type: string
+            enum: ['NAME:asc', 'NAME:desc']
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for (start at 0)'
+          schema:
+            type: integer
+            minimum: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of orders per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLaboratories'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+    post:
+      tags:
+        - 'manageLaboratory'
+      summary: 'Create laboratory with a name'
+      description: ''
+      operationId: 'createLaboratory'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      requestBody:
+        description: 'Name of the laboratory to create'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LaboratoryCreationParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Laboratory'
+        403:
+          description: 'Access denied'
+        409:
+          description: 'Laboratory already exist'
+
+  /laboratories/{laboratoryId}:
+    get:
+      tags:
+        - 'searchLaboratory'
+      summary: 'Get laboratory info with his ID'
+      operationId: 'getLaboratory'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: path
+          name: 'laboratoryId'
+          required: true
+          description: 'A Laboratory Id'
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Laboratory'
+        404:
+          description: 'Laboratory not found'
+        403:
+          description: 'Access denied'
+components:
+  schemas:
+    PaginatedLaboratories:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/Laboratory'
+          required:
+            - records
+
+    Laboratory:
+      type: 'object'
+      description: 'Laboratory details'
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 'Laboratory identifier'
+        name:
+          type: string
+          description: 'The laboratory name'
+
+    LaboratoryCreationParameters:
+      type: 'object'
+      description: 'Laboratory object creation'
+      properties:
+        name:
+          type: string
+          description: 'The laboratory name'
+      required:
+        - name
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

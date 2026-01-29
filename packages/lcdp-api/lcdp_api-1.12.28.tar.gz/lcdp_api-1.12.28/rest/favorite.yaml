@@ -1,0 +1,299 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7077/api/v1'
+info:
+  description: 'This is the REST API of LCDP preference'
+  version: '1.0.0'
+  title: 'lcdp-preference'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'manageFavorite'
+    description: 'Manage favorite'
+
+paths:
+  /favorite-products:
+    get:
+      tags:
+        - 'manageFavoriteProduct'
+      summary: 'Get an favorite list'
+      operationId: 'getFavoriteProducts'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - in: 'query'
+          name: 'q'
+          description: 'Search in product name'
+          schema:
+            type: string
+        - in: 'query'
+          name: 'productEq'
+          description: 'Filter on product id'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'ownerEq'
+          description: 'Filter on owner id'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'orderBy'
+          description: "Order orders using specific sorting. Note : If sorting filter end with 'asc' or 'desc' it allow to select ascending or descending."
+          schema:
+            type: string
+            enum:
+              [
+                'CREATED_AT:ASC',
+                'CREATED_AT:DESC',
+                'PRODUCT_NAME:ASC',
+                'PRODUCT_NAME:DESC',
+              ]
+            default: 'CREATED_AT:DESC'
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for (start at 0)'
+          schema:
+            type: integer
+            minimum: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of favorites per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFavoriteProducts'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+    post:
+      tags:
+        - 'manageFavoriteProduct'
+      summary: Create a new favorite
+      description: |
+        Create a new favorite.
+      operationId: 'createFavoriteProduct'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FavoriteProductCreationParameters'
+      responses:
+        200:
+          description: 'Successful operation.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavoriteProduct'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Product not found'
+        409:
+          description: 'Favorite already exists'
+
+  /favorite-products/{favoriteProductId}:
+    get:
+      tags:
+        - 'manageFavoriteProduct'
+      summary: 'Get one favorite Product'
+      operationId: 'getFavoriteProduct'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - $ref: '#/components/parameters/FavoriteProductId'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavoriteProduct'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Favorite Id not found'
+
+    delete:
+      tags:
+        - 'manageFavoriteProduct'
+      summary: 'Delete the favorite'
+      operationId: 'deleteFavoriteProduct'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - $ref: '#/components/parameters/FavoriteProductId'
+      responses:
+        200:
+          description: 'successful operation'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Favorite Id not found'
+
+components:
+  parameters:
+    FavoriteProductId:
+      in: path
+      name: 'favoriteProductId'
+      description: |
+        Id of the favorite
+      required: true
+      schema:
+        type: integer
+        format: int64
+
+  schemas:
+    FavoriteProductCreationParameters:
+      type: object
+      required:
+        - productId
+        - ownerId
+      properties:
+        productId:
+          type: integer
+          format: int64
+          description: 'product id of the favorite'
+        ownerId:
+          type: integer
+          format: int64
+          description: 'Owner of the favorite'
+
+    FavoriteProduct:
+      type: object
+      required:
+        - id
+        - createdAt
+        - product
+        - owner
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 'Favorite id'
+        createdAt:
+          type: string
+          format: date-time
+          description: 'Creation date of the favorite'
+        product:
+          $ref: '#/components/schemas/ProductLink'
+        owner:
+          $ref: '#/components/schemas/UserLink'
+
+    UserLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          required:
+            - id
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'User id'
+
+    ProductLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'Product id'
+            name:
+              type: string
+              description: 'Product name'
+            status:
+              $ref: 'product.yaml#/components/schemas/ProductStatus'
+            barcodes:
+              $ref: 'product.yaml#/components/schemas/Barcodes'
+          required:
+            - id
+
+    PaginatedFavoriteProducts:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/FavoriteProduct'
+          required:
+            - records
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

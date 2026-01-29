@@ -1,0 +1,306 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP threads'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'searchThread'
+    description: Retrieve search thread
+  - name: 'searchThreadComment'
+    description: Retrieve search comment for a thread
+  - name: 'manageThreadComment'
+    description: Manage thread comment
+paths:
+  /threads/{threadId}:
+    get:
+      tags:
+        - searchThread
+      summary: Get a thread
+      description: Get a thread by id
+      operationId: 'getThread'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/ThreadIdParameter'
+      responses:
+        200:
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Thread'
+        403:
+          description: 'Access denied'
+        404:
+          description: Thread not found
+
+  /threads/{threadId}/comments:
+    get:
+      tags:
+        - searchThreadComment
+      summary: Search comments for a thread
+      description: Get comments for thread
+      operationId: 'getThreadComments'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/ThreadIdParameter'
+        - in: query
+          name: 'orderBy'
+          description: Sort by
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                [
+                  'UPDATED_AT:desc',
+                  'UPDATED_AT:asc',
+                  'CREATED_AT:desc',
+                  'CREATED_AT:asc',
+                ]
+            default: ['CREATED_AT:desc']
+        - in: query
+          name: 'p'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: 'pp'
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 50
+      responses:
+        200:
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedComments'
+        403:
+          description: 'Access denied'
+        404:
+          description: Thread not found
+    post:
+      tags:
+        - manageThreadComment
+      summary: Create a comment in a thread
+      description: Create a comment in a thread
+      operationId: 'createThreadComment'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/ThreadIdParameter'
+      requestBody:
+        required: true
+        description: 'Comment to create'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentCreationParameters'
+      responses:
+        200:
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        400:
+          description: Bad request
+        403:
+          description: 'Access denied'
+        404:
+          description: Thread not found
+
+  /threads/{threadId}/comments/{commentId}:
+    patch:
+      tags:
+        - manageThreadComment
+      summary: Manage a comment in a thread
+      description: |
+        Update content of a comment
+        Only the author of the comment can update the comment.
+      operationId: 'updateThreadComment'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/ThreadIdParameter'
+        - $ref: '#/components/parameters/CommentIdParameter'
+      requestBody:
+        required: true
+        description: 'Comment to update'
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/CommentUpdateParameters'
+      responses:
+        200:
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        400:
+          description: Bad request
+        403:
+          description: 'Access denied'
+        404:
+          description: Comment not found
+
+components:
+  parameters:
+    ThreadIdParameter:
+      in: 'path'
+      name: 'threadId'
+      required: true
+      description: The id of the thread concerned by the request
+      schema:
+        type: integer
+        format: int64
+
+    CommentIdParameter:
+      in: 'path'
+      name: 'commentId'
+      required: true
+      description: The id of the comment concerned by the request
+      schema:
+        type: integer
+        format: int64
+
+  schemas:
+    Thread:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        comments:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+      required:
+        - id
+        - comments
+
+    Comment:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        author:
+          $ref: '#/components/schemas/AuthorLink'
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation date of this message
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update date of this message
+
+    PaginatedComments:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/Comment'
+          required:
+            - records
+
+    AuthorLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+            firstname:
+              type: string
+              description: User firstname
+            lastname:
+              type: string
+              description: User lastname
+            nickname:
+              type: string
+              description: User nickname
+            avatar:
+              type: string
+              description: User avatar
+              format: uri
+          required:
+            - id
+            - nickname
+            - avatar
+
+    ThreadLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+          required:
+            - id
+
+    CommentCreationParameters:
+      allOf:
+        - $ref: '#/components/schemas/CommentUpdateParameters'
+        - type: object
+          properties:
+            authorId:
+              type: integer
+              format: int64
+          required:
+            - authorId
+
+    CommentUpdateParameters:
+      type: object
+      properties:
+        content:
+          type: string
+      required:
+        - content
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

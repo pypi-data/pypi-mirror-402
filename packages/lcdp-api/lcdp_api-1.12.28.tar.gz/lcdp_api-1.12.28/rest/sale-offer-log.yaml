@@ -1,0 +1,163 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP sale offer logs'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'searchSaleOfferLog'
+    description: 'Search Sale Offers logs'
+paths:
+  /sale-offer-logs:
+    get:
+      tags:
+        - 'searchSaleOfferLog'
+      summary: 'Search sale offers'
+      description: ''
+      operationId: 'getSaleOfferLogs'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - in: 'query'
+          name: 'q'
+          description: 'Keyword to search on'
+          schema:
+            type: string
+        - in: 'query'
+          name: 'saleOffer[eq]'
+          description: 'Sale offer to include'
+          schema:
+            type: array
+            items:
+              type: string
+        - in: 'query'
+          name: 'saleOffer[neq]'
+          description: 'Sale offer to exclude'
+          schema:
+            type: array
+            items:
+              type: string
+        - in: 'query'
+          name: 'cdate[gte]'
+          description: 'Filter on creation date greater than (equals) to this date'
+          schema:
+            type: string
+            format: date-time
+        - in: 'query'
+          name: 'cdate[lte]'
+          description: 'Filter on creation date less than (equals) to this date'
+          schema:
+            type: string
+            format: date-time
+        - in: 'query'
+          name: 'orderBy'
+          description: 'Order logs using specific sorting'
+          schema:
+            type: string
+            enum: ['CREATED_AT:asc', 'CREATED_AT:desc']
+            default: 'CREATED_AT:desc'
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for'
+          schema:
+            type: integer
+            minimum: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of notifications per page'
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 50
+            default: 10
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSaleOfferLogs'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+
+components:
+  schemas:
+    PaginatedSaleOfferLogs:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/AnySaleOfferLog'
+          required:
+            - records
+
+    SaleOfferLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            reference:
+              type: string
+              description: 'Sale offer reference'
+          required:
+            - reference
+
+    AnySaleOfferLog:
+      oneOf:
+        - $ref: '#/components/schemas/SaleOfferLog'
+      discriminator:
+        propertyName: type
+        mapping:
+          STATUS: '#/components/schemas/SaleOfferLog'
+
+    SaleOfferLog:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/Log'
+        - type: object
+          properties:
+            updatedBy:
+              type: integer
+              format: int64
+              nullable: true
+              description: Id of the user that updated status
+            reason:
+              $ref: 'sale-offer.yaml#/components/schemas/SaleOfferStatusReason'
+            type:
+              type: string
+              pattern: '^(STATUS)$'
+            saleOffer:
+              $ref: '#/components/schemas/SaleOfferLink'
+          required:
+            - updatedBy
+            - reason
+            - saleOffer
+            - type
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

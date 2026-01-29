@@ -1,0 +1,425 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7076/api/v1'
+info:
+  description: 'This is the REST API of LCDP product recommendation'
+  version: '1.0.0'
+  title: 'lcdp-data-intelligence'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'SearchProductRecommendation'
+    description: 'Get product recommendation'
+  - name: 'SearchProductPriceRecommendation'
+    description: 'Get product price recommendation'
+paths:
+  /product-price-recommendations:
+    get:
+      tags:
+        - 'SearchProductPriceRecommendation'
+      summary: 'Get product price recommendation'
+      operationId: 'getProductPriceRecommendations'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: 'query'
+          name: 'pId[eq]'
+          description: 'Filter on product ids to search on (can be given multiple time which result in a OR condition)'
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'orderBy'
+          description: 'Sort by'
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                ['PRICE:asc', 'PRICE:desc', 'CREATED_AT:asc', 'CREATED_AT:desc']
+            default: ['PRICE:asc']
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for (start at 0)'
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of recommendation per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+            default: 50
+      responses:
+        200:
+          description: 'Product price recommendation list found'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProductPriceRecommendations'
+        400:
+          description: 'Bad request'
+        403:
+          description: 'Access denied'
+        500:
+          description: 'Server error'
+
+  /product-recommendations:
+    get:
+      tags:
+        - 'SearchProductRecommendation'
+      summary: 'Get product recommendation'
+      operationId: 'getProductRecommendations'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - in: 'query'
+          name: 'userId[eq]'
+          description: 'Targeted user'
+          schema:
+            type: integer
+            format: int64
+            description: |
+              Identifier of the targeted user.
+              - If set : will send personnalized recommendation for the user
+              - If not set : will send recommendation not filtered by user id
+        - in: 'query'
+          name: 'userId[pr]'
+          description: |
+            Set to True : return recommendation with userId not null
+            Set to False : return recommendation with userId null ( Default recommendation )
+          schema:
+            type: boolean
+        - in: 'query'
+          name: 'type[eq]'
+          description: 'Types of the recommendation'
+          required: true
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/ProductRecommendationType'
+        - in: 'query'
+          name: 'orderBy'
+          description: 'Sort by'
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                [
+                  'RELEVANCE:asc',
+                  'RELEVANCE:desc',
+                  'CREATED_AT:asc',
+                  'CREATED_AT:desc',
+                  'TYPE:asc',
+                  'TYPE:desc',
+                ]
+            default: ['TYPE:desc', 'CREATED_AT:desc', 'RELEVANCE:desc']
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for (start at 0)'
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of recommendation per page'
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        200:
+          description: 'Product recommendation list found'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProductRecommendations'
+        400:
+          description: 'Bad request'
+        403:
+          description: 'Access denied'
+        500:
+          description: 'Server error'
+
+  /favorite-product-recommendations:
+    get:
+      tags:
+        - 'SearchFavoriteProductRecommendation'
+      summary: 'Get favorite product recommendation'
+      operationId: 'getFavoriteProductRecommendations'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - in: 'query'
+          name: 'userId[eq]'
+          description: 'Targeted user'
+          schema:
+            type: integer
+            format: int64
+            description: |
+              Identifier of the targeted user.
+              - If set : will send personnalized favorite product recommendation for the user
+              - If not set : will send favorite product recommendation not filtered by user id
+        - in: 'query'
+          name: 'userId[pr]'
+          description: |
+            Set to True : return recommendation with userId not null
+            Set to False : return recommendation with userId null ( Default recommendation )
+          schema:
+            type: boolean
+        - in: 'query'
+          name: 'productId[eq]'
+          description: 'Filter on product id to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'productId[neq]'
+          description: 'Filter on product id to exclude in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'orderBy'
+          description: 'Sort by'
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                [
+                  'RELEVANCE:asc',
+                  'RELEVANCE:desc',
+                  'CREATED_AT:asc',
+                  'CREATED_AT:desc',
+                ]
+            default: ['RELEVANCE:desc']
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for (start at 0)'
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of recommendation per page'
+          schema:
+            type: integer
+            maximum: 30
+            minimum: 0
+            default: 30
+      responses:
+        200:
+          description: 'Favorite product recommendation list found'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFavoriteProductRecommendations'
+        400:
+          description: 'Bad request'
+        403:
+          description: 'Access denied'
+        500:
+          description: 'Server error'
+
+components:
+  schemas:
+    ########################
+    # Entities
+    ########################
+    PaginatedProductRecommendations:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductRecommendation'
+          required:
+            - records
+
+    ProductRecommendation:
+      type: object
+      description: |
+        If user is null : the recommendation is a default recommendation
+        if user is not null : the recommendation is personnalized for the user
+      properties:
+        id:
+          type: string
+          description: 'unique identifier of the product recommendation'
+        user:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/UserLink'
+        product:
+          allOf:
+            - $ref: '#/components/schemas/ProductLink'
+        type:
+          $ref: '#/components/schemas/ProductRecommendationType'
+        score:
+          nullable: true
+          type: number
+          description: |
+            A number between 0 and 1 who determine how much relevant the recommendation is.
+            1 : Best recommendation
+            0 : Not the best recommendation
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - product
+
+    PaginatedFavoriteProductRecommendations:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/FavoriteProductRecommendation'
+          required:
+            - records
+
+    FavoriteProductRecommendation:
+      type: object
+      description: |
+        If user is null : the recommendation is a default recommendation
+        if user is not null : the recommendation is personnalized for the user
+      properties:
+        id:
+          type: string
+          description: 'Unique identifier of the favorite product recommendation'
+        user:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/UserLink'
+        product:
+          allOf:
+            - $ref: '#/components/schemas/ProductLink'
+        score:
+          nullable: true
+          type: number
+          description: |
+            A number who start at 0.
+            Higher the score is, better the recommandation is good
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - product
+
+    ProductRecommendationType:
+      type: string
+      enum:
+        [
+          'BUYING_HISTORY',
+          'SELLING_SIMILARITY',
+          'BUYING_SIMILARITY',
+          'BUYING_UNDERSTOCK',
+        ]
+      description: |
+        - BUYING_HISTORY : Based on user buying history
+        - BUYING_SIMILARITY : Based on similarity with other user purchases
+        - SELLING_SIMILARITY : Based on similarity with other user sales
+        - BUYING_UNDERSTOCK : Based on the needs of products to be bought by a user
+
+    ProductLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'Identifier of the product'
+
+    UserLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'Id of the user'
+
+    PaginatedProductPriceRecommendations:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductPriceRecommendation'
+          required:
+            - records
+
+    ProductPriceRecommendation:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 'unique identifier of the product price recommendation'
+        product:
+          allOf:
+            - $ref: '#/components/schemas/ProductLink'
+        price:
+          type: number
+          description: 'Recommended sale price for the product'
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - product
+        - price
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

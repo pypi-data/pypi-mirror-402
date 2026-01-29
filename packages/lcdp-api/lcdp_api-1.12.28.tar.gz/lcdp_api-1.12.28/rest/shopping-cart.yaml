@@ -1,0 +1,1038 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'ManageCart'
+    description: 'Manage cart'
+  - name: 'ManageCartSubCart'
+    description: 'Mange cart SubCarts'
+  - name: 'ManageCartSubCartLine'
+    description: 'Manage user Cart SubCart lines'
+paths:
+
+  /carts/{cartId}:
+    get:
+      tags:
+        - 'ManageCart'
+      summary: 'Get current cart'
+      operationId: 'getCart'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - $ref: '#/components/parameters/CartIdParameter'
+      responses:
+        200:
+          description: 'Cart retrieved successfully'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        404:
+          description: 'Cart not found'
+        403:
+          description: 'Access denied'
+
+    post:
+      tags:
+        - 'ManageCart'
+      summary: 'Create current cart if get cart return object not found'
+      operationId: 'createCart'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - $ref: '#/components/parameters/CartIdParameter'
+      responses:
+        200:
+          description: 'Cart created successfully'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        409:
+          description: 'Cart already exist'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        404:
+          description: 'Object not found'
+
+  /carts/me:
+    get:
+      tags:
+        - 'ManageCart'
+      summary: 'Get current cart'
+      operationId: 'getCurrentCart'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      responses:
+        200:
+          description: 'Cart retrieved successfully'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        404:
+          description: 'Cart not found'
+        403:
+          description: 'Access denied'
+
+    post:
+      tags:
+        - 'ManageCart'
+      summary: 'Create current cart if get cart return object not found'
+      operationId: 'createCurrentCart'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      responses:
+        200:
+          description: 'Cart created successfully'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        409:
+          description: 'Cart already exist'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        404:
+          description: 'Object not found'
+
+
+  /carts/{cartId}/sub-carts:
+    get:
+      tags:
+        - 'ManageCartSubCart'
+      summary: 'Get user cart split by SubCart'
+      operationId: 'getCartSubCarts'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - $ref: '#/components/parameters/CartIdParameter'
+        - in: query
+          name: orderBy
+          description: "Order sub carts using specific sorting. Note : If sorting filter end with 'asc' or 'desc' it allow to select ascending or descending."
+          schema:
+            type: string
+            enum:
+              - 'UPDATED_AT:asc'
+              - 'UPDATED_AT:desc'
+              - 'TOTAL_EXCLUDING_TAXES:asc'
+              - 'TOTAL_EXCLUDING_TAXES:desc'
+            default: 'TOTAL_EXCLUDING_TAXES:desc'
+      responses:
+        200:
+          description: 'Sub carts retrieved successfully'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CartSubCart'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Object not found'
+
+  /carts/me/sub-carts:
+    get:
+      tags:
+        - 'ManageCartSubCart'
+      summary: 'Get user cart split by SubCart'
+      operationId: 'getCurrentCartSubCarts'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - in: query
+          name: orderBy
+          description: "Order sub carts using specific sorting. Note : If sorting filter end with 'asc' or 'desc' it allow to select ascending or descending."
+          schema:
+            type: string
+            enum:
+              - 'UPDATED_AT:asc'
+              - 'UPDATED_AT:desc'
+              - 'TOTAL_EXCLUDING_TAXES:asc'
+              - 'TOTAL_EXCLUDING_TAXES:desc'
+            default: 'TOTAL_EXCLUDING_TAXES:desc'
+      responses:
+        200:
+          description: 'Sub carts retrieved successfully'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CartSubCart'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Object not found'
+
+
+  /carts/{cartId}/sub-carts/{subCartId}:
+    get:
+      tags:
+        - 'ManageCartSubCart'
+      summary: 'Get user sub cart for a specific SubCart'
+      operationId: 'getCartSubCart'
+      parameters:
+        - $ref: '#/components/parameters/CartIdParameter'
+        - name: subCartId
+          in: path
+          description: SubCart unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      responses:
+        200:
+          description: 'Sub cart retrieved successfully'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartSubCart'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Object not found'
+    delete:
+      tags:
+        - 'ManageCartSubCart'
+      summary: 'Delete a SubCart for user cart'
+      operationId: 'deleteCartSubCart'
+      parameters:
+        - $ref: '#/components/parameters/CartIdParameter'
+        - name: subCartId
+          in: path
+          description: SubCart unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      responses:
+        204:
+          description: 'Sub cart deleted successfully'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Object not found'
+
+  /carts/me/sub-carts/{subCartId}:
+    get:
+      tags:
+        - 'ManageCartSubCart'
+      summary: 'Get user sub cart for a specific SubCart'
+      operationId: 'getCurrentCartSubCart'
+      parameters:
+        - name: subCartId
+          in: path
+          description: SubCart unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      responses:
+        200:
+          description: 'Sub cart retrieved successfully'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartSubCart'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Object not found'
+    delete:
+      tags:
+        - 'ManageCartSubCart'
+      summary: 'Delete a SubCart for user cart'
+      operationId: 'deleteCurrentCartSubCart'
+      parameters:
+        - name: subCartId
+          in: path
+          description: SubCart unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      responses:
+        204:
+          description: 'Sub cart deleted successfully'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Object not found'
+
+
+  /carts/{cartId}/sub-carts/{subCartId}/lines:
+    get:
+      tags:
+        - 'ManageCartSubCartLine'
+      summary: 'Get all cart lines for a SubCart'
+      operationId: 'getCartSubCartLines'
+      parameters:
+        - $ref: '#/components/parameters/CartIdParameter'
+        - name: subCartId
+          in: path
+          description: SubCart unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+
+      responses:
+        200:
+          description: 'Sub cart lines retrived successfully'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CartSubCartLine'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Object not found'
+        500:
+          description: 'Server error'
+
+    post:
+      tags:
+        - 'ManageCartSubCartLine'
+      summary: 'Create or update a cart line if its already exist'
+      description: |
+        If Sale Offer from 'offerReference' is a distribution type 'RANGE', then distributedRangeId should not be null.
+        In any case, 'quantity' field should be >= 0
+      operationId: 'createOrUpdateCartSubCartLines'
+      parameters:
+        - $ref: '#/components/parameters/CartIdParameter'
+        - name: subCartId
+          in: path
+          description: SubCart unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      requestBody:
+        required: true
+        description: 'Sale offer shopped by the client'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShoppedOffer'
+      responses:
+        200:
+          description: 'Cart lines created successfully'
+          headers:
+            X-Quantity-Exceeded:
+              schema:
+                type: integer
+                format: int32
+                description: 'Value of desired quantity exceeded for this sale offer'
+        400:
+          description: |
+            Bad request failed with potential values :
+             - CODE013
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        412:
+          description: 'Precondition failed'
+        404:
+          description: 'Object not found'
+        500:
+          description: 'Server error'
+
+  /carts/me/sub-carts/{subCartId}/lines:
+    get:
+      tags:
+        - 'ManageCartSubCartLine'
+      summary: 'Get all cart lines for a SubCart'
+      operationId: 'getCurrentCartSubCartLines'
+      parameters:
+        - name: subCartId
+          in: path
+          description: SubCart unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      responses:
+        200:
+          description: 'Sub cart lines retrived successfully'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CartSubCartLine'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Object not found'
+        500:
+          description: 'Server error'
+
+    post:
+      tags:
+        - 'ManageCartSubCartLine'
+      summary: 'Create or update a cart line if its already exist'
+      description: |
+        If Sale Offer from 'offerReference' is a distribution type 'RANGE', then distributedRangeId should not be null.
+        In any case, 'quantity' field should be >= 0
+      operationId: 'createOrUpdateCurrentCartSubCartLines'
+      parameters:
+        - name: subCartId
+          in: path
+          description: SubCart unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      requestBody:
+        required: true
+        description: 'Sale offer shopped by the client'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShoppedOffer'
+      responses:
+        200:
+          description: 'Cart lines created successfully'
+          headers:
+            X-Quantity-Exceeded:
+              schema:
+                type: integer
+                format: int32
+                description: 'Value of desired quantity exceeded for this sale offer'
+        400:
+          description: |
+            Bad request failed with potential values :
+             - CODE013
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        412:
+          description: 'Precondition failed'
+        404:
+          description: 'Object not found'
+        500:
+          description: 'Server error'
+
+
+  /carts/{cartId}/sub-carts/{subCartId}/lines/{lineId}:
+    get:
+      tags:
+        - 'ManageCartSubCartLine'
+      summary: 'Get user cart line'
+      operationId: 'getCartSubCartLine'
+      parameters:
+        - $ref: '#/components/parameters/CartIdParameter'
+        - name: subCartId
+          in: path
+          description: SubCart unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: lineId
+          in: path
+          description: Cart line unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      responses:
+        200:
+          description: 'Cart line updated successfully'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartSubCartLine'
+        404:
+          description: 'Object not found'
+        403:
+          description: 'Access denied'
+
+    patch:
+      tags:
+        - 'ManageCartSubCartLine'
+      summary: 'Update user cart line'
+      operationId: 'updateCartSubCartLine'
+      parameters:
+        - $ref: '#/components/parameters/CartIdParameter'
+        - name: subCartId
+          in: path
+          description: SubCart unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: lineId
+          in: path
+          description: cart line unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      requestBody:
+        required: true
+        description: 'Line to update by the client'
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/CartSubCartLineUpdateParameters'
+      responses:
+        200:
+          description: 'Cart line updated successfully'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartSubCartLine'
+          headers:
+            X-Quantity-Exceeded:
+              schema:
+                type: integer
+                format: int32
+                description: 'Value of desired quantity exceeded for this sale offer'
+        400:
+          description: |
+            Bad request failed with potential values :
+             - CODE013
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Not found'
+        5XX:
+          description: 'Server error'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+    delete:
+      tags:
+        - 'ManageCartSubCartLine'
+      summary: 'Delete user cart line'
+      description: |
+        Permit to delete a shopping cart line who is in current user shopping cart
+      operationId: 'deleteCartSubCartLine'
+      parameters:
+        - $ref: '#/components/parameters/CartIdParameter'
+        - name: subCartId
+          in: path
+          description: SubCart unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: lineId
+          in: path
+          description: cart line unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      responses:
+        204:
+          description: 'Cart lines deleted successfully'
+        404:
+          description: 'Shopping cart line not found'
+        5XX:
+          description: 'Server error'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+
+  /carts/me/sub-carts/{subCartId}/lines/{lineId}:
+    get:
+      tags:
+        - 'ManageCartSubCartLine'
+      summary: 'Get user cart line'
+      operationId: 'getCurrentCartSubCartLine'
+      parameters:
+        - name: subCartId
+          in: path
+          description: SubCart unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: lineId
+          in: path
+          description: Cart line unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      responses:
+        200:
+          description: 'Cart line updated successfully'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartSubCartLine'
+        404:
+          description: 'Object not found'
+        403:
+          description: 'Access denied'
+
+    patch:
+      tags:
+        - 'ManageCartSubCartLine'
+      summary: 'Update user cart line'
+      operationId: 'updateCurrentCartSubCartLine'
+      parameters:
+        - name: subCartId
+          in: path
+          description: SubCart unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: lineId
+          in: path
+          description: cart line unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      requestBody:
+        required: true
+        description: 'Line to update by the client'
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/CartSubCartLineUpdateParameters'
+      responses:
+        200:
+          description: 'Cart line updated successfully'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartSubCartLine'
+          headers:
+            X-Quantity-Exceeded:
+              schema:
+                type: integer
+                format: int32
+                description: 'Value of desired quantity exceeded for this sale offer'
+        400:
+          description: |
+            Bad request failed with potential values :
+             - CODE013
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Not found'
+        5XX:
+          description: 'Server error'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+    delete:
+      tags:
+        - 'ManageCartSubCartLine'
+      summary: 'Delete user cart line'
+      description: |
+        Permit to delete a shopping cart line who is in current user shopping cart
+      operationId: 'deleteCurrentCartSubCartLine'
+      parameters:
+        - name: subCartId
+          in: path
+          description: SubCart unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: lineId
+          in: path
+          description: cart line unique identifier
+          required: true
+          schema:
+            type: integer
+            format: int64
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      responses:
+        204:
+          description: 'Cart lines deleted successfully'
+        404:
+          description: 'Shopping cart line not found'
+        5XX:
+          description: 'Server error'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+
+components:
+  parameters:
+    CartIdParameter:
+      in: 'path'
+      name: 'cartId'
+      description: 'Cart id, match user id'
+      required: true
+      schema:
+        type: integer
+        format: int64
+
+  schemas:
+    Cart:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        lineCount:
+          type: integer
+          format: int32
+        subCarts:
+          type: array
+          items:
+            $ref: 'common.yaml#/components/schemas/HttpLink'
+
+    CartSubCart:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update date of this sub cart
+        transport:
+          type: object
+          properties:
+            minimumPrice:
+              type: number
+              nullable: true
+              description: Minimum price to buy
+            totalShippingFeesExcludingTaxes:
+              type: number
+              description: 'Total shipping fees price of the sub cart excluding taxes'
+            freeCarriageThreshold:
+              type: number
+              nullable: true
+              description: 'Limit in euro (totalExcludingTaxes) to achieve to have free shipping fees. If no free carriage threshold reachable, value is null.'
+            deliveryDelay:
+              type: integer
+              description: Delivery delay in days
+          required:
+            - minimumPrice
+            - totalShippingFeesExcludingTaxes
+            - freeCarriageThreshold
+            - deliveryDelay
+        seller:
+          $ref: '#/components/schemas/SellerLink'
+        lineCount:
+          type: integer
+          format: int32
+        lines:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        totalBuyerCommissionExcludingTaxes:
+          type: number
+          description: 'Total buyer commission for this sub cart'
+        totalExcludingTaxes:
+          type: number
+          description: 'Total price of the cart excluding taxes'
+      required:
+        - id
+        - updatedAt
+        - transport
+        - seller
+        - lineCount
+        - lines
+        - totalBuyerCommissionExcludingTaxes
+        - totalExcludingTaxes
+
+    CartSubCartLine:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        quantity:
+          type: integer
+          description: 'Quantity desired by the buyer'
+        product:
+          $ref: '#/components/schemas/ProductLink'
+        saleOffer:
+          $ref: '#/components/schemas/SaleOfferLink'
+        distributionRangeId:
+          type: integer
+          format: int64
+        totalExcludingTaxes:
+          type: number
+          description: 'Total price of the line excluding taxes'
+      required:
+        - id
+        - quantity
+        - product
+        - saleOffer
+        - totalExcludingTaxes
+
+    SaleOfferLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            reference:
+              type: string
+              description: 'Sale offer reference'
+            status:
+              $ref: 'sale-offer.yaml#/components/schemas/SaleOfferStatus'
+            stock:
+              $ref: 'sale-offer.yaml#/components/schemas/Stock'
+            bestRebate:
+              type: integer
+              maximum: 100
+              description: 'Best Rebate for this sale offer'
+            distributionMode:
+              $ref: 'sale-offer.yaml#/components/schemas/AnyIdentifiedDistributionMode'
+          required:
+            - reference
+
+    SellerLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'Unique identifier of the seller'
+            nickname:
+              type: string
+              maxLength: 64
+              description: 'User nickname'
+            role:
+              $ref: 'user.yaml#/components/schemas/UserRole'
+
+    ProductLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'Database Identifier of the product'
+            barcodes:
+              $ref: 'product.yaml#/components/schemas/Barcodes'
+            name:
+              type: string
+              description: 'Name of the product'
+            shortName:
+              type: string
+              nullable: true
+              description: 'Shorted name of the product'
+            storageType:
+              nullable: true
+              allOf:
+                - $ref: 'product.yaml#/components/schemas/ProductStorageType'
+          required:
+            - id
+            - barcodes
+            - name
+            - shortName
+            - storageType
+
+    CartSubCartLineUpdateParameters:
+      type: object
+      properties:
+        distributedRangeId:
+          type: integer
+          format: int64
+          description: 'Identifier of the distributed range to change in cart line'
+          default: null
+        quantity:
+          type: integer
+          description: 'Quantity to change in cart line'
+      required:
+        - quantity
+
+    ShoppedOffer:
+      type: object
+      properties:
+        offerReference:
+          type: string
+          description: 'Reference of the sale offer'
+        distributedRangeId:
+          type: integer
+          format: int64
+          description: 'Identifier of picked distributed range'
+          default: null
+        quantity:
+          type: integer
+          description: 'Quantity to add in the cart'
+      required:
+        - offerReference
+        - quantity
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

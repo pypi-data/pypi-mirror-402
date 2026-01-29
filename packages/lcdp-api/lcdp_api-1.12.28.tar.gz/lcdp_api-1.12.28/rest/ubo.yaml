@@ -1,0 +1,248 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'SearchUboDeclaration'
+    description: 'Get UBO'
+  - name: 'ManageUboDeclaration'
+    description: 'Update UBO'
+paths:
+  /ubo-declarations/{uboDeclarationId}:
+    get:
+      tags:
+        - 'SearchUboDeclaration'
+      summary: "Retrieve user's UBO"
+      description: |
+        Preconditions :
+         - You can only put on ubo declaration id mapping your user id (except admin)
+      operationId: 'getUboDeclaration'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: path
+          required: true
+          name: 'uboDeclarationId'
+          description: 'UBO declaration id'
+          schema:
+            type: 'integer'
+            format: 'int64'
+      responses:
+        200:
+          description: 'UBO found'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UboDeclaration'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'User not found'
+
+    put:
+      tags:
+        - 'ManageUboDeclaration'
+      summary: 'Create or update UBO declaration'
+      description: |
+        Preconditions :
+        # All :
+         - Ubo declaration can be created/updated only if status is in ('CREATED', 'INCOMPLETE', 'VALIDATED', 'REFUSED')
+         - If status is in ('CREATED', 'INCOMPLETE'), all existing ubos mangopayId should be in the request (+ potential new ones).
+         - User 'scaEnrollmentStatus' should be 'ACTIVE'
+        # Non-Admin :
+         - You can only put on ubo declaration id mapping your user id
+      operationId: 'createOrUpdateUboDeclaration'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: path
+          required: true
+          name: 'uboDeclarationId'
+          description: 'Ubo declaration id'
+          schema:
+            type: 'integer'
+            format: 'int64'
+      requestBody:
+        description: 'Fields to use for ubo creation. WARNING: most fields are required'
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UboDeclarationCreationOrUpdateParameters'
+      responses:
+        200:
+          description: 'UBO created'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UboDeclaration'
+        400:
+          description: |
+            Bad request failed with potential values :
+             - CODE000
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'User not found'
+        412:
+          description: |
+            Precondition failed with values :
+             - CODE009
+             - CODE023
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+
+components:
+  schemas:
+    ########################
+    # Entities
+    ########################
+
+    UboDeclaration:
+      type: object
+      properties:
+        id:
+          description: UBO's ID
+          type: integer
+          format: int64
+        mangopayId:
+          type: string
+        reason:
+          type: string
+        message:
+          type: string
+        status:
+          type: string
+          enum:
+            [
+              'UNKNOWN',
+              'CREATED',
+              'VALIDATION_ASKED',
+              'VALIDATED',
+              'REFUSED',
+              'INCOMPLETE',
+            ]
+        ubos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ubo'
+
+    Ubo:
+      type: object
+      properties:
+        mangopayId:
+          type: string
+        firstname:
+          type: string
+        lastname:
+          type: string
+        address:
+          $ref: '#/components/schemas/Address'
+        nationality:
+          $ref: '#/components/schemas/Country'
+        birthday:
+          type: string
+          format: date
+        birthplace:
+          $ref: '#/components/schemas/Birthplace'
+      required:
+        - firstname
+        - lastname
+        - address
+        - nationality
+        - birthday
+        - birthplace
+
+    Birthplace:
+      type: object
+      properties:
+        city:
+          type: string
+        country:
+          $ref: '#/components/schemas/Country'
+      required:
+        - city
+        - country
+
+    Address:
+      type: object
+      properties:
+        street:
+          type: string
+        street2:
+          type: string
+        city:
+          type: string
+        zipcode:
+          type: string
+          pattern: ^[0-9]{5,5}$
+        region:
+          type: string
+          nullable: true
+        country:
+          $ref: '#/components/schemas/Country'
+      required:
+        - street
+        - city
+        - zipcode
+        - region
+        - country
+
+    Country:
+      type: object
+      properties:
+        name:
+          type: string
+        iso:
+          type: string
+      required:
+        - name
+        - iso
+
+    UboDeclarationCreationOrUpdateParameters:
+      type: object
+      properties:
+        ubos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ubo'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

@@ -1,0 +1,89 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'ManageLitigation'
+    description: 'Client declare litigation'
+
+paths:
+  /litigations:
+    post:
+      tags:
+        - 'ManageLitigation'
+      summary: 'Client create litigation'
+      description: |
+        Preconditions :
+         - Order status resolved from 'orderReference' should be in (WAITING_FOR_VALIDATION, DELIVERY_ONGOING, DELIVERY_LATE, WAITING_FOR_ADMIN_VALIDATION)
+      operationId: 'createLitigation'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      requestBody:
+        required: true
+        description: 'Form data'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LitigationCreationParameters'
+      responses:
+        204:
+          description: 'Message sent'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Order not found'
+        412:
+          description: 'Precondition failed'
+
+components:
+  schemas:
+    LitigationCreationParameters:
+      type: object
+      properties:
+        userId:
+          type: integer
+          format: int64
+        title:
+          type: string
+        message:
+          type: string
+        orderReference:
+          type: string
+      required:
+        - userId
+        - title
+        - message
+        - orderReference
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

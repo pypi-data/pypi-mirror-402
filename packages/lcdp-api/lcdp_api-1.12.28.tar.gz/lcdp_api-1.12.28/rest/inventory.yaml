@@ -1,0 +1,1671 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-pharmaide-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'SearchInventory'
+    description: 'Search in inventory with different criteria'
+  - name: 'ManageInventory'
+    description: 'Manage user inventory'
+  - name: 'SearchInventorySynchronization'
+    description: 'Search user inventory synchronizations'
+  - name: 'ManageInventorySynchronization'
+    description: 'Manage user inventory synchronizations'
+paths:
+  /inventories:
+    get:
+      tags:
+        - 'SearchInventory'
+      summary: 'Get all inventories'
+      operationId: 'getInventories'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - PHARMAIDE_READ
+      parameters:
+        - in: query
+          name: 'id[eq]'
+          description: 'Inventory id, match user id'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: p
+          description: 'Page number'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: pp
+          description: 'Number of products per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedInventories'
+        401:
+          description: 'Unhauthorized (no pharmaide access)'
+        403:
+          description: 'Access denied'
+  /inventories/{inventoryId}:
+    get:
+      tags:
+        - 'SearchInventory'
+      summary: 'Get inventory by id'
+      operationId: 'getInventory'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - PHARMAIDE_READ
+      parameters:
+        - $ref: '#/components/parameters/InventoryIdParameter'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Inventory'
+        401:
+          description: 'Unhauthorized (no pharmaide access)'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Inventory not found'
+
+  /inventories/me/active-products:
+    get:
+      tags:
+        - 'SearchInventory'
+      summary: 'Search products with params for current user'
+      operationId: 'getCurrentInventoryActiveProducts'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - PHARMAIDE_UPDATE
+      parameters:
+        - in: query
+          name: q
+          description: "Product's name, cip, cip13 or ean start with"
+          schema:
+            type: string
+        - in: query
+          name: 'lab[eq]'
+          description: 'Laboratory to search on (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'pt[eq]'
+          description: 'Product type to search on'
+          schema:
+            type: string
+        - in: query
+          name: orderBy
+          description: 'Sort by'
+          schema:
+            type: string
+            default: 'PRODUCT_NAME:asc'
+            enum:
+              [
+                'PRODUCT_NAME:asc',
+                'PRODUCT_NAME:desc',
+                'PRODUCT_BARCODES_PRINCIPAL:asc',
+                'PRODUCT_BARCODES_PRINCIPAL:desc',
+                'ACTIVE_STOCK:asc',
+                'ACTIVE_STOCK:desc',
+                'TOTAL_ACTIVE_SALE_OFFERS:asc',
+                'TOTAL_ACTIVE_SALE_OFFERS:desc',
+                'SYNCRHONIZED:asc',
+                'SYNCRHONIZED:desc',
+              ]
+        - in: query
+          name: p
+          description: 'Page number'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: pp
+          description: 'Number of products per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedActiveProducts'
+        401:
+          description: 'Unhauthorized (no pharmaide access)'
+        403:
+          description: 'Access denied'
+
+  /inventories/{inventoryId}/active-products:
+    get:
+      tags:
+        - 'SearchInventory'
+      summary: 'Search products with params for an inventory'
+      operationId: 'getInventoryActiveProducts'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+        capabilities:
+          - PHARMAIDE_UPDATE
+      parameters:
+        - $ref: '#/components/parameters/InventoryIdParameter'
+        - in: query
+          name: q
+          description: "Product's name, cip, cip13 or ean start with"
+          schema:
+            type: string
+        - in: query
+          name: 'lab[eq]'
+          description: 'Laboratory to search on (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'pt[eq]'
+          description: 'Product type to search on'
+          schema:
+            type: string
+        - in: query
+          name: orderBy
+          description: 'Sort by'
+          schema:
+            type: string
+            default: 'PRODUCT_NAME:asc'
+            enum:
+              [
+                'PRODUCT_NAME:asc',
+                'PRODUCT_NAME:desc',
+                'ACTIVE_STOCK:asc',
+                'ACTIVE_STOCK:desc',
+                'TOTAL_ACTIVE_SALE_OFFERS:asc',
+                'TOTAL_ACTIVE_SALE_OFFERS:desc',
+                'SYNCRHONIZED:asc',
+                'SYNCRHONIZED:desc',
+              ]
+        - in: query
+          name: p
+          description: 'Page number'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: pp
+          description: 'Number of products per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedActiveProducts'
+        403:
+          description: 'Access denied (no pharmaide access)'
+        404:
+          description: 'User or product not found'
+
+  /inventories/me/overstock-products:
+    get:
+      tags:
+        - 'SearchInventory'
+      summary: 'Get products that the pharmacian should destock'
+      operationId: 'getCurrentInventoryOverstockProducts'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - PHARMAIDE_SELL
+      parameters:
+        - in: query
+          name: 'q'
+          schema:
+            type: string
+        - in: query
+          name: 'lab[eq]'
+          description: 'Laboratory to search on (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'pt[eq]'
+          description: 'Product type to search on'
+          schema:
+            type: string
+        - in: query
+          name: 'bl[eq]'
+          description: 'Get blacklisted products or not'
+          schema:
+            type: boolean
+        - in: query
+          name: 'forecast[gte]'
+          description: 'Forecast is Greater than or equal (null value is considered as infinite)'
+          schema:
+            type: integer
+        - in: query
+          name: 'forecast[lte]'
+          description: 'Subscription date Less than or equal (null value is considered as infinite)'
+          schema:
+            type: integer
+        - in: query
+          name: 'forecast[pr]'
+          description: 'Filter overstock products if forecast is present or not'
+          schema:
+            type: boolean
+        - in: query
+          name: 'isUnsold[eq]'
+          description: 'If true, retrieve only products unsold within a year.'
+          schema:
+            type: boolean
+        - in: query
+          name: 'orderBy'
+          schema:
+            default: 'PRODUCT_NAME:ASC'
+            type: string
+            enum:
+              [
+                'PRODUCT_NAME:ASC',
+                'PRODUCT_NAME:DESC',
+                'CURRENT_STOCK:ASC',
+                'CURRENT_STOCK:DESC',
+                'CURRENT_OVERSTOCK:ASC',
+                'CURRENT_OVERSTOCK:DESC',
+                'OPPORTUNITY:DESC',
+                'OPPORTUNITY:ASC',
+                'FORECAST:DESC',
+                'FORECAST:ASC',
+              ]
+        - in: query
+          name: 'p'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: 'pp'
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 50
+      responses:
+        200:
+          description: 'Success'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOverstockProducts'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        401:
+          description: 'Unhauthorized (no pharmaide access)'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'User or product not found'
+    patch:
+      tags:
+        - 'ManageInventory'
+      summary: 'Add product to black list'
+      operationId: 'updateCurrentInventoryOverstockProducts'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - PHARMAIDE_SELL
+      parameters:
+        - in: 'query'
+          name: 'p[eq]'
+          description: 'Product equals to this id'
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        description: 'Information about product update'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OverstockProductUpdateParameters'
+      responses:
+        204:
+          description: 'Product added to black list'
+        401:
+          description: 'Unhauthorized (no pharmaide access)'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'User or product not found'
+
+  /inventories/{inventoryId}/overstock-products:
+    get:
+      tags:
+        - 'SearchInventory'
+      summary: 'Get products that the pharmacian should destock'
+      operationId: 'getInventoryOverstockProducts'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+        capabilities:
+          - PHARMAIDE_SELL
+      parameters:
+        - $ref: '#/components/parameters/InventoryIdParameter'
+        - in: query
+          name: 'q'
+          schema:
+            type: string
+        - in: query
+          name: 'lab[eq]'
+          description: 'Laboratory to search on (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'pt[eq]'
+          description: 'Product type to search on'
+          schema:
+            type: string
+        - in: query
+          name: 'bl[eq]'
+          description: 'Get blacklisted products or not'
+          schema:
+            type: boolean
+        - in: query
+          name: 'forecast[gte]'
+          description: 'Forecast is Greater than or equal (null value is considered as infinite)'
+          schema:
+            type: integer
+        - in: query
+          name: 'forecast[lte]'
+          description: 'Subscription date Less than or equal (null value is considered as infinite)'
+          schema:
+            type: integer
+        - in: query
+          name: 'forecast[pr]'
+          description: 'Filter overstock products if forecast is present or not'
+          schema:
+            type: boolean
+        - in: query
+          name: 'isUnsold[eq]'
+          description: 'If true, retrieve only products unsold within a year.'
+          schema:
+            type: boolean
+        - in: query
+          name: 'orderBy'
+          schema:
+            default: 'PRODUCT_NAME:ASC'
+            type: string
+            enum:
+              [
+                'PRODUCT_NAME:ASC',
+                'PRODUCT_NAME:DESC',
+                'CURRENT_STOCK:ASC',
+                'CURRENT_STOCK:DESC',
+                'CURRENT_OVERSTOCK:ASC',
+                'CURRENT_OVERSTOCK:DESC',
+                'OPPORTUNITY:DESC',
+                'OPPORTUNITY:ASC',
+                'FORECAST:DESC',
+                'FORECAST:ASC',
+              ]
+        - in: query
+          name: 'p'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: 'pp'
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 50
+      responses:
+        200:
+          description: 'Success'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOverstockProducts'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied (no pharmaide access)'
+        404:
+          description: 'User or product not found'
+    patch:
+      tags:
+        - 'ManageInventory'
+      summary: 'Add product to black list'
+      operationId: 'updateInventoryOverstockProducts'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+        capabilities:
+          - PHARMAIDE_SELL
+      parameters:
+        - $ref: '#/components/parameters/InventoryIdParameter'
+        - in: 'query'
+          name: 'p[eq]'
+          description: 'Product equals to this id'
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        description: 'Information about product update'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OverstockProductUpdateParameters'
+      responses:
+        204:
+          description: 'Product added to black list'
+        403:
+          description: 'Access denied (no pharmaide access)'
+        404:
+          description: 'User or product not found'
+
+  /inventories/me/misaligned-products:
+    get:
+      tags:
+        - 'SearchInventory'
+      summary: "Get product's where an action is required"
+      operationId: 'getCurrentInventoryMisalignedProducts'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - PHARMAIDE_UPDATE
+      parameters:
+        - in: query
+          name: 'q'
+          schema:
+            type: string
+        - in: query
+          name: 'lab[eq]'
+          description: 'Laboratory to search on (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'pt[eq]'
+          description: 'Product type to search on'
+          schema:
+            type: string
+        - in: query
+          name: 'orderBy'
+          schema:
+            type: string
+            default: 'PRODUCT_NAME:ASC'
+            enum:
+              [
+                'PRODUCT_NAME:ASC',
+                'PRODUCT_NAME:DESC',
+                'CURRENT_STOCK:ASC',
+                'CURRENT_STOCK:DESC',
+                'ACTIVE_STOCK:ASC',
+                'ACTIVE_STOCK:DESC',
+                'TOTAL_ACTIVE_SALE_OFFERS:ASC',
+                'TOTAL_ACTIVE_SALE_OFFERS:DESC',
+              ]
+        - in: query
+          name: 'p'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: 'pp'
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 50
+      responses:
+        200:
+          description: 'Success'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMisalignedProducts'
+        401:
+          description: 'Unhauthorized (no pharmaide access)'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'User or product not found'
+
+  /inventories/{inventoryId}/misaligned-products:
+    get:
+      tags:
+        - 'SearchInventory'
+      summary: "Get product's where an action is required"
+      operationId: 'getInventoryMisalignedProducts'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+        capabilities:
+          - PHARMAIDE_UPDATE
+      parameters:
+        - $ref: '#/components/parameters/InventoryIdParameter'
+        - in: query
+          name: 'q'
+          schema:
+            type: string
+        - in: query
+          name: 'lab[eq]'
+          description: 'Laboratory to search on (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'pt[eq]'
+          description: 'Product type to search on'
+          schema:
+            type: string
+        - in: query
+          name: 'orderBy'
+          schema:
+            type: string
+            default: 'PRODUCT_NAME:ASC'
+            enum:
+              [
+                'PRODUCT_NAME:ASC',
+                'PRODUCT_NAME:DESC',
+                'CURRENT_STOCK:ASC',
+                'CURRENT_STOCK:DESC',
+                'ACTIVE_STOCK:ASC',
+                'ACTIVE_STOCK:DESC',
+                'TOTAL_ACTIVE_SALE_OFFERS:ASC',
+                'TOTAL_ACTIVE_SALE_OFFERS:DESC',
+              ]
+        - in: query
+          name: 'p'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: 'pp'
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 50
+      responses:
+        200:
+          description: 'Success'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMisalignedProducts'
+        403:
+          description: 'Access denied (no pharmaide access)'
+        404:
+          description: 'User or product not found'
+
+  /inventories/me/understock-products:
+    get:
+      tags:
+        - 'SearchInventory'
+      summary: 'Get products that the pharmacian should buy'
+      operationId: 'getCurrentInventoryUnderstockProducts'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - PHARMAIDE_BUY
+      parameters:
+        - in: query
+          name: 'pId[eq]'
+          description: 'Filter on product id to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'orderBy'
+          schema:
+            default: 'CURRENT_UNDERSTOCK:ASC'
+            type: string
+            enum: ['CURRENT_UNDERSTOCK:ASC', 'CURRENT_UNDERSTOCK:DESC']
+        - in: query
+          name: 'p'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: 'pp'
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 50
+      responses:
+        200:
+          description: 'Success'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUnderstockProducts'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        401:
+          description: 'Unhauthorized (no pharmaide understock access)'
+        403:
+          description: 'Access denied'
+
+  /inventories/{inventoryId}/understock-products:
+    get:
+      tags:
+        - 'SearchInventory'
+      summary: 'Get products that the pharmacian should buy'
+      operationId: 'getInventoryUnderstockProducts'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+        capabilities:
+          - PHARMAIDE_BUY
+      parameters:
+        - $ref: '#/components/parameters/InventoryIdParameter'
+        - in: query
+          name: 'pId[eq]'
+          description: 'Filter on product id to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'orderBy'
+          schema:
+            default: 'CURRENT_UNDERSTOCK:ASC'
+            type: string
+            enum: ['CURRENT_UNDERSTOCK:ASC', 'CURRENT_UNDERSTOCK:DESC']
+        - in: query
+          name: 'p'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: 'pp'
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 50
+      responses:
+        200:
+          description: 'Success'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUnderstockProducts'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied (no pharmaide access)'
+
+  /inventories/me/statistics:
+    get:
+      tags:
+        - 'SearchInventory'
+      summary: 'Get advices statistics'
+      operationId: 'getCurrentInventoryStatistics'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - PHARMAIDE_READ
+      parameters:
+        - in: query
+          name: 'overstockBl[eq]'
+          description: 'Get overstock blacklisted products or not'
+          schema:
+            type: boolean
+        - in: query
+          name: 'overstockForecast[gte]'
+          description: 'Overstock forecast is Greater than or equal (null value is considered as infinite)'
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'Success'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Statistics'
+        403:
+          description: 'Access denied'
+
+  /inventories/{inventoryId}/statistics:
+    get:
+      tags:
+        - 'SearchInventory'
+      summary: 'Get advices statistics'
+      operationId: 'getInventoryStatistics'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+        capabilities:
+          - PHARMAIDE_READ
+      parameters:
+        - $ref: '#/components/parameters/InventoryIdParameter'
+        - in: query
+          name: 'overstockBl[eq]'
+          description: 'Get overstock blacklisted products or not'
+          schema:
+            type: boolean
+        - in: query
+          name: 'overstockForecast[gte]'
+          description: 'Overstock forecast is Greater than or equal (null value is considered as infinite)'
+          schema:
+            type: integer
+      responses:
+        200:
+          description: 'Success'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Statistics'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Inventory not found'
+
+  /inventories/me/synchronizations/{synchronizationId}:
+    put:
+      tags:
+        - 'ManageInventorySynchronization'
+      summary: 'Change synchronization mode on products for current user'
+      operationId: 'createOrUpdateCurrentInventorySynchronization'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - PHARMAIDE_UPDATE
+      parameters:
+        - $ref: '#/components/parameters/SynchronizationIdParameter'
+      requestBody:
+        description: 'A JSON containing the product synchronizations for the current user.'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Synchronization'
+      responses:
+        200:
+          description: 'successful operation'
+        401:
+          description: 'Unhauthorized (no pharmaide access)'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Product not found'
+
+  /inventories/{inventoryId}/synchronizations/{synchronizationId}:
+    put:
+      tags:
+        - 'ManageInventorySynchronization'
+      summary: 'Change synchronization mode on products for a user'
+      operationId: 'createOrUpdateInventorySynchronization'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - PHARMAIDE_UPDATE
+      parameters:
+        - $ref: '#/components/parameters/InventoryIdParameter'
+        - $ref: '#/components/parameters/SynchronizationIdParameter'
+      requestBody:
+        description: 'A JSON containing the product synchronizations for the current user.'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Synchronization'
+      responses:
+        200:
+          description: 'successful operation'
+        401:
+          description: 'Unhauthorized (no pharmaide access)'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'User or product not found'
+
+  /inventories/me/synchronizations:
+    get:
+      tags:
+        - 'SearchInventorySynchronization'
+      summary: |
+        Get synchronizations of the current user
+      operationId: 'getCurrentInventorySynchronizations'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - PHARMAIDE_UPDATE
+      parameters:
+        - in: query
+          required: false
+          name: id[eq]
+          description: 'List of affected product IDs'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          required: false
+          name: mode[eq]
+          description: 'Only synchronizations matching given modes'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/SynchronizationMode'
+        - in: query
+          required: false
+          name: mode[neq]
+          description: 'Only synchronizations not matching given modes'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/SynchronizationMode'
+        - in: query
+          name: p
+          description: 'Page number'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: pp
+          description: 'Number of products per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedIdentifiedSynchronization'
+    patch:
+      tags:
+        - 'ManageInventorySynchronization'
+      summary: |
+        Replace synchronization for each product matched by syncMode:
+        If syncMode is not defined, so replace all product synchronization
+      operationId: 'updateCurrentInventorySynchronizations'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - PHARMAIDE_UPDATE
+      parameters:
+        - in: query
+          required: false
+          name: id[eq]
+          description: 'List of affected product IDs'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          required: false
+          name: mode[eq]
+          description: 'Only synchronizations matching given modes'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/SynchronizationMode'
+        - in: query
+          required: false
+          name: mode[neq]
+          description: 'Only synchronizations not matching given modes'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/SynchronizationMode'
+      requestBody:
+        description: 'A JSON containing the product synchronization for the current user.'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Synchronization'
+      responses:
+        200:
+          description: 'successful operation'
+        401:
+          description: 'Unhauthorized (no pharmaide access)'
+        403:
+          description: 'Access denied'
+    put:
+      tags:
+        - 'ManageInventorySynchronization'
+      summary: 'Replace the list of product synchronizations for the current user'
+      operationId: 'createOrUpdateCurrentInventorySynchronizations'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - PHARMAIDE_UPDATE
+      requestBody:
+        description: |
+          A JSON array containing the complete list of product synchronizations for the current user.
+          This list will fully replace any existing product synchronizations
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/IdentifiedSynchronization'
+      responses:
+        200:
+          description: 'successful operation'
+        401:
+          description: 'Unhauthorized (no pharmaide access)'
+        403:
+          description: 'Access denied'
+
+  /inventories/{inventoryId}/synchronizations:
+    get:
+      tags:
+        - 'SearchInventorySynchronization'
+      summary: |
+        Get synchronizations of the current user
+      operationId: 'getInventorySynchronizations'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - PHARMAIDE_UPDATE
+      parameters:
+        - $ref: '#/components/parameters/InventoryIdParameter'
+        - in: query
+          required: false
+          name: id[eq]
+          description: 'List of affected product IDs'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          required: false
+          name: mode[eq]
+          description: 'Only synchronizations matching given modes'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/SynchronizationMode'
+        - in: query
+          required: false
+          name: mode[neq]
+          description: 'Only synchronizations not matching given modes'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/SynchronizationMode'
+        - in: query
+          name: p
+          description: 'Page number'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: pp
+          description: 'Number of products per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedIdentifiedSynchronization'
+    patch:
+      tags:
+        - 'ManageInventorySynchronization'
+      summary: |
+        Replace synchronization for each product matched by syncMode:
+        If syncMode is not defined, so replace all product synchronization
+      operationId: 'updateInventorySynchronizations'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - PHARMAIDE_UPDATE
+      parameters:
+        - $ref: '#/components/parameters/InventoryIdParameter'
+        - in: query
+          required: false
+          name: id[eq]
+          description: 'List of affected product IDs'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          required: false
+          name: mode[eq]
+          description: 'Only synchronizations matching given modes'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/SynchronizationMode'
+        - in: query
+          required: false
+          name: mode[neq]
+          description: 'Only synchronizations not matching given modes'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/SynchronizationMode'
+      requestBody:
+        description: 'A JSON containing the product synchronization for the current user.'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Synchronization'
+      responses:
+        200:
+          description: 'successful operation'
+        401:
+          description: 'Unhauthorized (no pharmaide access)'
+        403:
+          description: 'Access denied'
+    put:
+      tags:
+        - 'ManageInventorySynchronization'
+      summary: 'Replace the list of product synchronizations for a user'
+      operationId: 'createOrUpdateInventorySynchronizations'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - PHARMAIDE_UPDATE
+      parameters:
+        - $ref: '#/components/parameters/InventoryIdParameter'
+      requestBody:
+        description: |
+          A JSON array containing the complete list of product synchronizations for the user.
+          This list will fully replace any existing product synchronizations
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/IdentifiedSynchronization'
+      responses:
+        200:
+          description: 'successful operation'
+        401:
+          description: 'Unhauthorized (no pharmaide access)'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'User not found'
+
+  /inventories/{inventoryId}/offer-refreshes:
+    post:
+      tags:
+        - 'ManageOfferSynchronization'
+      summary: 'Create inventory offer refresh'
+      operationId: 'createInventoryOfferRefresh'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/InventoryIdParameter'
+      responses:
+        204:
+          description: 'No content'
+        403:
+          description: 'Access denied'
+
+components:
+  parameters:
+    InventoryIdParameter:
+      in: 'path'
+      name: 'inventoryId'
+      description: 'Inventory id, match user id'
+      required: true
+      schema:
+        type: integer
+        format: int64
+
+    SynchronizationIdParameter:
+      in: 'path'
+      name: 'synchronizationId'
+      description: 'Synchronization id'
+      required: true
+      schema:
+        type: integer
+        format: int64
+
+  schemas:
+    PaginatedInventories:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/Inventory'
+          required:
+            - records
+
+    Inventory:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 'Inventory id, match user id'
+        availableStockProductCount:
+          type: integer
+          description: 'Number of products with stock available in Offisante'
+        activeProducts:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        overstockProducts:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        misalignedProducts:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        understockProducts:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        journal:
+          type: object
+          properties:
+            lastStockSyncDate:
+              type: string
+              format: date-time
+              description: 'Last synchronization date of stock'
+
+    PaginatedActiveProducts:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/ActiveProduct'
+          required:
+            - records
+
+    PaginatedOverstockProducts:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/OverstockProduct'
+          required:
+            - records
+
+    PaginatedMisalignedProducts:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/MisalignedProduct'
+          required:
+            - records
+
+    PaginatedUnderstockProducts:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/UnderstockProduct'
+          required:
+            - records
+
+    OverstockProductUpdateParameters:
+      type: object
+      properties:
+        blacklisted:
+          type: boolean
+          description: 'Product need to be blacklisted or not'
+
+    ActiveProduct:
+      type: object
+      properties:
+        product:
+          $ref: '#/components/schemas/ProductLink'
+        totalActiveSaleOffers:
+          type: integer
+          format: int32
+          description: 'Number of sale offer that are active with this product'
+        activeStock:
+          type: integer
+          format: int32
+          description: 'Quantity of product currently in active sale offers'
+        updatedAt:
+          type: string
+          format: date-time
+          description: 'Date of last update of the product'
+
+    OverstockProduct:
+      type: object
+      properties:
+        product:
+          $ref: '#/components/schemas/ProductLink'
+        details:
+          type: string
+          description: 'Details about overstock (in French)'
+        currentStock:
+          type: integer
+          description: 'Quantity of product currently available in user stock'
+        currentOverstock:
+          type: integer
+          description: 'Stock the user should take out of stock'
+        opportunity:
+          type: number
+          description: 'Retail value of the overstock ( overstock quantity * product price )'
+        blacklisted:
+          type: boolean
+          description: 'If product is in the black listed product'
+        forecast:
+          type: integer
+          nullable: true
+          description: |
+            The forecast is the number of days client will take to get rid of all his product stock.
+            Important note : If forecast is 'null', it means that we can not compute this value as product was
+            unsold since more than one year.
+        isUnsold:
+          type: boolean
+          description: True if the product has not been sold by the pharmacist within a year.
+        updatedAt:
+          type: string
+          format: date-time
+          description: 'Date of last update of the product'
+      required:
+        - product
+        - details
+        - currentStock
+        - currentOverstock
+        - opportunity
+        - blacklisted
+        - forecast
+        - isUnsold
+
+    MisalignedProduct:
+      type: object
+      properties:
+        product:
+          $ref: '#/components/schemas/ProductLink'
+        totalActiveSaleOffers:
+          type: integer
+          description: 'Number of sale offer that are active with this product'
+        activeStock:
+          type: integer
+          format: int32
+          description: 'Quantity of product currently in active sale offers'
+        currentStock:
+          type: integer
+          format: int32
+          description: 'Quantity of product currently available in user stock'
+        updatedAt:
+          type: string
+          format: date-time
+          description: 'Date of last update of the product'
+
+    UnderstockProduct:
+      type: object
+      properties:
+        product:
+          $ref: '#/components/schemas/ProductLink'
+        currentStock:
+          type: integer
+          description: 'Quantity of product currently available in user stock'
+        currentUnderstock:
+          type: integer
+          description: 'Stock the user should buy'
+
+    Statistics:
+      type: object
+      properties:
+        activeProducts:
+          $ref: '#/components/schemas/StatisticsActiveProducts'
+        misalignedProducts:
+          $ref: '#/components/schemas/StatisticsMisalignedProducts'
+        overstockProducts:
+          $ref: '#/components/schemas/StatisticsOverstockProducts'
+
+    StatisticsActiveProducts:
+      type: object
+      properties:
+        totalActive:
+          type: integer
+          description: 'Number of products for which customer sale offers are active'
+        totalSynchronized:
+          type: integer
+          description: 'Number of products for which automatic updating is activated'
+
+    StatisticsMisalignedProducts:
+      type: object
+      properties:
+        totalMisalignedSaleOffers:
+          type: integer
+          description: 'Number of sale offers that require a user decision'
+
+    StatisticsOverstockProducts:
+      type: object
+      properties:
+        opportunity:
+          type: number
+          description: 'Total potential income by taking out of stock'
+
+    ProductLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+            barcodes:
+              $ref: 'product.yaml#/components/schemas/Barcodes'
+            name:
+              type: string
+              description: 'Name of the product'
+
+    SynchronizationMode:
+      type: string
+      description: |
+        Synchronization state of the product
+          * UP_AND_DOWN: Automatic creation/update and deletion of sale offers according to your available stock.
+            Note : Will create its own offer, meaning if you already have a sale offer on a product, it will create a duplicate.
+            Note 2 : Setting 'NONE' to a synchronizationId with mode 'UP_AND_DOWN' will delete the associated sale offers.
+          * DOWN: Automatic update of existing sale offers according to your available stock.
+            Note : Will only update sale offer if there is only one sale offer active on a given product.
+            Note 2 : Setting 'NONE' to a synchronizationId with mode 'DOWN' will not archive the existing sale offers.
+          * NONE: Do not synchronize synchronizationId according to available stock.
+      enum:
+        - UP_AND_DOWN
+        - DOWN
+        - NONE
+
+    Synchronization:
+      type: object
+      description: |
+        Object that describe the way products should be synchronized.
+        Note : 'proposal' should only be given when mode is 'UP_AND_DOWN'
+      properties:
+        buffer:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/AnyBuffer'
+        proposal:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/SynchronizationProposal'
+        mode:
+          $ref: '#/components/schemas/SynchronizationMode'
+      required:
+        - buffer
+        - proposal
+        - mode
+
+    SynchronizationProposal:
+      type: object
+      nullable: true
+      description: |
+        Data to use when a sale offer should be created because user stock is too high
+      properties:
+        unitPrice:
+          type: number
+        soldBy:
+          type: integer
+          format: int32
+        minimalQuantity:
+          type: integer
+          format: int32
+        lapsingDate:
+          type: string
+          format: date-time
+          nullable: true
+        batch:
+          type: string
+          nullable: true
+      required:
+        - unitPrice
+        - soldBy
+        - minimalQuantity
+        - lapsingDate
+        - batch
+
+    PaginatedIdentifiedSynchronization:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/IdentifiedSynchronization'
+          required:
+            - records
+
+    IdentifiedSynchronization:
+      allOf:
+        - $ref: '#/components/schemas/Synchronization'
+        - type: object
+          properties:
+            id:
+              description: Id of the synchronization, linked to the product id associated with this synchronization
+              type: integer
+              format: int64
+          required:
+            - id
+
+    AnyBuffer:
+      oneOf:
+        - $ref: '#/components/schemas/FixedBuffer'
+        - $ref: '#/components/schemas/SalesForecastBuffer'
+      discriminator:
+        propertyName: strategy
+        mapping:
+          FIXED: '#/components/schemas/FixedBuffer'
+          SALES_FORECAST: '#/components/schemas/SalesForecastBuffer'
+
+    Buffer:
+      type: object
+      description: |
+        Buffer to apply on current inventory stock when synchronizing user stock with his offer.
+        For example, if buffer is raw 10 units and stock is 15 units, the final offer on platform should be 5 units
+      properties:
+        strategy:
+          type: string
+          description: Buffer strategy
+          pattern: ^(FIXED|SALES_FORECAST)$
+      required:
+        - strategy
+
+    FixedBuffer:
+      allOf:
+        - $ref: '#/components/schemas/Buffer'
+        - type: object
+          properties:
+            quantity:
+              type: integer
+              format: int64
+
+    SalesForecastBuffer:
+      allOf:
+        - $ref: '#/components/schemas/Buffer'
+        - type: object
+          properties:
+            coefficient:
+              type: number
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

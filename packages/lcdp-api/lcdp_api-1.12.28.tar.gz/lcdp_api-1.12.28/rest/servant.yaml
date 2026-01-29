@@ -1,0 +1,162 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'searchServant'
+    description: 'Search Servant'
+  - name: 'manageServant'
+    description: 'Manage Servant'
+  - name: 'manageTask'
+    description: 'Manage Task'
+paths:
+  /servants:
+    get:
+      tags:
+        - 'searchServant'
+      summary: 'Search servants'
+      description: ''
+      operationId: 'getServants'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Servants'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+
+  /servants/salaries:
+    post:
+      tags:
+        - 'manageServant'
+      summary: 'Pay a servant'
+      description: ''
+      operationId: 'receiveSalary'
+      responses:
+        200:
+          description: 'successful operation'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+
+  /tasks/{taskId}/occurrences:
+    post:
+      tags:
+        - 'manageTask'
+      summary: 'Ask for creation of new taskId occurrence'
+      operationId: 'createTaskOccurrence'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          description: The id of the task to execute.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        201:
+          description: 'Additional occurrence added'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Task not found'
+
+components:
+  schemas:
+    Servants:
+      type: array
+      items:
+        $ref: '#/components/schemas/Servant'
+
+    Servant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 'Unique identifier for this servant'
+        birthDate:
+          type: string
+          format: date-time
+          description: Date of birth
+        expectedSalary:
+          type: string
+          format: duration
+          description: Expected salary for this servant
+        lastSalary:
+          type: string
+          format: date-time
+          description: Date of last received salary
+        tasks:
+          $ref: '#/components/schemas/Tasks'
+      required:
+        - id
+        - lastSalary
+        - tasks
+
+    Tasks:
+      type: array
+      items:
+        $ref: '#/components/schemas/Task'
+
+    Task:
+      type: 'object'
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 'Id of the task'
+        lastSuccessfulDate:
+          type: string
+          format: 'date-time'
+      required:
+        - name
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

@@ -1,0 +1,129 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP contents'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: manageContent
+    description: Manage contents
+  - name: searchContent
+    description: Retrieve contents
+paths:
+  /contents/{contentSlug}:
+    get:
+      tags:
+        - searchContent
+      summary: Search the content identified by contentSlug
+      operationId: 'getContent'
+      parameters:
+        - $ref: '#/components/parameters/ContentSlugParameter'
+      responses:
+        200:
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Content'
+        400:
+          description: Invalid content slug supplied
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        404:
+          description: Content not found
+    put:
+      tags:
+        - manageContent
+      summary: Create or update content identified by contentSlug
+      operationId: 'createOrUpdateContent'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/ContentSlugParameter'
+      requestBody:
+        description: 'Information about the content to create/update'
+        required: true
+        content:
+          application/json:
+            schema:
+              type: string
+              description: Text of this Content
+      responses:
+        200:
+          description: Existing content was updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Content'
+        201:
+          description: New content was created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Content'
+        400:
+          description: Invalid Content slug supplied
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        503:
+          description: User creation is temporary out of service
+
+components:
+  parameters:
+    ContentSlugParameter:
+      in: 'path'
+      name: 'contentSlug'
+      required: true
+      description: The slug of the content to retrieve.
+      schema:
+        type: string
+
+  schemas:
+    Content:
+      type: object
+      properties:
+        slug:
+          type: string
+          description: Unique name identifying this content
+        text:
+          type: string
+          description: Text of this Content
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation date of this Content
+        udpatedAt:
+          type: string
+          format: date-time
+          description: Last update date of this Content
+        version:
+          type: integer
+          description: Current version number
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

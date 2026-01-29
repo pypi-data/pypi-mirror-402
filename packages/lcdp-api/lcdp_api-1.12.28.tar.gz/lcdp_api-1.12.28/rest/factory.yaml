@@ -1,0 +1,626 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP factory'
+  version: '1.0.0'
+  title: 'lcdp-factory-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'searchAssembly'
+    description: 'Search assembly'
+  - name: 'manageAssembly'
+    description: 'Manage assembly'
+
+paths:
+  /assemblies:
+    get:
+      tags:
+        - 'searchAssembly'
+      summary: 'Search assemblies'
+      description: ''
+      operationId: 'getAssemblies'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: query
+          name: 'id[eq]'
+          description: 'Filter on assembly id to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          name: 'id[neq]'
+          description: 'Filter on assembly id to exclude in the search (can be given multiple time which result in a AND condition)'
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          name: 'o[eq]'
+          description: 'Filter on owner id to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'o[neq]'
+          description: 'Filter on owner id to exclude in the search (can be given multiple time which result in a AND condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'st[eq]'
+          description: 'Filter on status to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/AssemblyStatus'
+        - in: 'query'
+          name: 'st[neq]'
+          description: 'Filter on status to exclude from the search (can be given multiple time which result in a AND condition)'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/AssemblyStatus'
+        - in: 'query'
+          name: 'ft[eq]'
+          description: 'Filter on factory type to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/FactoryType'
+        - in: 'query'
+          name: 'ft[neq]'
+          description: 'Filter on factory type to exclude from the search (can be given multiple time which result in a AND condition)'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/FactoryType'
+        - in: query
+          name: 'tags[co]'
+          description: 'Filter on tags contains this value'
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          name: 'cdate[gte]'
+          description: 'Filter on creation date greater than (equals) to this date'
+          schema:
+            type: string
+            format: date-time
+        - in: 'query'
+          name: 'cdate[lte]'
+          description: 'Filter on creation date less than (equals) to this date'
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: 'udate[gte]'
+          description: 'Filter on update date greater than (equals) to this date'
+          schema:
+            type: string
+            format: date-time
+        - in: 'query'
+          name: 'udate[lte]'
+          description: 'Filter on update date less than (equals) to this date'
+          schema:
+            type: string
+            format: date-time
+        - in: 'query'
+          name: 'orderBy'
+          description: 'Order logs using specific sorting'
+          schema:
+            type: string
+            enum:
+              [
+                'TOTAL_STEPS:asc',
+                'TOTAL_STEPS:desc',
+                'CREATED_AT:asc',
+                'CREATED_AT:desc',
+                'UPDATED_AT:asc',
+                'UPDATED_AT:desc',
+              ]
+            default: 'UPDATED_AT:desc'
+        - in: query
+          name: p
+          description: 'Page number'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: pp
+          description: 'Number of assemblies per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAssemblies'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+    post:
+      tags:
+        - 'manageAssembly'
+      summary: 'Create a assembly'
+      description: ''
+      operationId: 'createAssembly'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssemblyCreationParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assembly'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+        409:
+          description: 'Assembly already exists'
+        422:
+          description: 'Unprocessable Entity'
+
+  /assemblies/{assemblyId}:
+    get:
+      tags:
+        - 'searchAssembly'
+      description: |
+        Get a assembly
+        Restrictions :
+         - You must be owner of the assembly (except role 'ADMINISTRATOR')
+      operationId: 'getAssembly'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/AssemblyIdParameter'
+      responses:
+        200:
+          description: 'Successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assembly'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Assembly not found'
+    delete:
+      tags:
+        - 'manageAssembly'
+      description: 'Delete assembly'
+      operationId: 'deleteAssembly'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/AssemblyIdParameter'
+      responses:
+        204:
+          description: 'Assembly deleted'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Assembly not found'
+
+  /assemblies/{assemblyId}/output:
+    get:
+      tags:
+        - 'searchAssembly'
+      description: |
+        Download a assembly output
+        Restrictions :
+         - You must be owner of the assembly (except role 'ADMINISTRATOR')
+      operationId: 'getAssemblyOutput'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/AssemblyIdParameter'
+      responses:
+        200:
+          description: 'Successful operation'
+          content:
+            application/json:
+              schema:
+                nullable: true
+                allOf:
+                  - $ref: '#/components/schemas/AssemblyOutput'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Assembly not found'
+
+  /assemblies/{assemblyId}/input:
+    get:
+      tags:
+        - 'searchAssembly'
+      description: |
+        Download a assembly input
+        Restrictions :
+         - You must be owner of the assembly (except role 'ADMINISTRATOR')
+      operationId: 'getAssemblyInput'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/AssemblyIdParameter'
+      responses:
+        200:
+          description: 'successful operation'
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename=myFile.json'
+          content:
+            application/json:
+              schema:
+                type: string
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Assembly not found'
+
+components:
+  parameters:
+    AssemblyIdParameter:
+      in: path
+      name: assemblyId
+      required: true
+      description: 'The id of the assembly'
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    PaginatedAssemblies:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/Assembly'
+
+    Assembly:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUID of the assembly
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        factoryType:
+          $ref: '#/components/schemas/FactoryType'
+        owner:
+          $ref: '#/components/schemas/UserLink'
+        totalSteps:
+          type: integer
+          description: Number of steps
+        successfulSteps:
+          type: integer
+          description: Number of done steps
+        failedSteps:
+          type: integer
+          description: Number of failed steps
+        output:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        input:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        updatedAt:
+          type: string
+          format: date-time
+          description: Update date of this assembly
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation date of this assembly
+        journal:
+          $ref: '#/components/schemas/AssemblyJournal'
+        tags:
+          type: array
+          description: 'Associated tags for this assembly'
+          items:
+            type: string
+
+    AssemblyOutput:
+      type: array
+      items:
+        type: object
+        properties:
+          unit:
+            description: Free form object containing meaningful information to describe the processed unit
+            type: object
+          status:
+            description: Is the current unit succeeded or failed
+            type: string
+            enum: ['SUCCEEDED', 'FAILED']
+          statusComment:
+            description: Additional details about the succeeded or failed cause
+            type: string
+        required:
+          - unit
+          - status
+          - statusComment
+
+    AssemblyStatus:
+      type: string
+      description: assembly status values
+      enum:
+        - PENDING
+        - PREPROCESSING
+        - PROCESSING
+        - POSTPROCESSING
+        - PREPROCESSING_FAILED
+        - PROCESSING_FAILED
+        - POSTPROCESSING_FAILED
+        - DONE
+
+    FactoryType:
+      type: string
+      description: Type of the factory/algorithm to use for this assembly
+      pattern: ^(PRODUCT_UPSERT|SALE_OFFER_UPSERT|OFFER_PLANIFICATION)$
+
+    AssemblyCreationParameters:
+      type: object
+      properties:
+        ownerId:
+          type: integer
+          format: int64
+        factory:
+          $ref: '#/components/schemas/AnyFactory'
+        tags:
+          type: array
+          description: 'Associated tags for this product'
+          items:
+            type: string
+      required:
+        - ownerId
+        - factory
+
+    UserLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'Id of the owner'
+
+    AnyFactory:
+      oneOf:
+        - $ref: '#/components/schemas/ProductUpsertFactory'
+        - $ref: '#/components/schemas/SaleOfferUpsertFactory'
+        - $ref: '#/components/schemas/OfferPlanificationFactory'
+      discriminator:
+        propertyName: type
+        mapping:
+          PRODUCT_UPSERT: '#/components/schemas/ProductUpsertFactory'
+          SALE_OFFER_UPSERT: '#/components/schemas/SaleOfferUpsertFactory'
+          OFFER_PLANIFICATION: '#/components/schemas/OfferPlanificationFactory'
+
+    Factory:
+      type: object
+      properties:
+        type:
+          $ref: '#/components/schemas/FactoryType'
+      required:
+        - type
+
+    AssemblyJournal:
+      type: object
+      properties:
+        startedAt:
+          type: string
+          format: date-time
+          description: Date when the status pass from PENDING to PREPROCESSING, PROCESSING or POSTPROCESSING
+        endedAt:
+          type: string
+          format: date-time
+          description: Date when the status pass to PREPROCESSING_FAILED, PROCESSING_FAILED or DONE
+
+    Product:
+      type: object
+      properties:
+        principalBarcode:
+          type: string
+        name:
+          type: string
+        dci:
+          type: string
+          nullable: true
+        laboratoryName:
+          type: string
+          description: 'Name of the laboratory'
+        unitWeight:
+          type: number
+          minimum: 0.01
+          multipleOf: 0.01
+          nullable: true
+          description: 'Weight of a single unit in grams'
+        typeId:
+          type: string
+          nullable: true
+          description: 'Product Type Identifier'
+        vatId:
+          type: string
+          nullable: true
+          description: 'VAT identifier'
+        unitPrice:
+          type: number
+          nullable: true
+          description: 'Public price of the product'
+        status:
+          $ref: 'product.yaml#/components/schemas/ProductStatus'
+
+    ProductUpsertFactory:
+      allOf:
+        - $ref: '#/components/schemas/Factory'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                type: object
+                properties:
+                  product:
+                    $ref: '#/components/schemas/Product'
+
+    SaleOfferUpsertFactory:
+      allOf:
+        - $ref: '#/components/schemas/Factory'
+        - type: object
+          properties:
+            clean:
+              type: boolean
+              default: false
+              description: If 'True', will remove all the sale offer of the user which are not concerned by this payload.
+            sellerId:
+              type: integer
+              format: int64
+            records:
+              type: array
+              items:
+                type: object
+                properties:
+                  reference:
+                    type: string
+                  product:
+                    $ref: '#/components/schemas/Product'
+                  distributionMode:
+                    $ref: 'sale-offer.yaml#/components/schemas/AnyDistributionMode'
+                  stock:
+                    $ref: 'sale-offer.yaml#/components/schemas/Stock'
+                  status:
+                    $ref: 'sale-offer.yaml#/components/schemas/SaleOfferStatus'
+          required:
+            - sellerId
+
+    OfferPlanificationFactory:
+      allOf:
+        - $ref: '#/components/schemas/Factory'
+        - type: object
+          properties:
+            offerName:
+              type: string
+              description: |
+                Name of the offer planification.
+                The created sale offers will be tag with this name.
+                Only sale offers tagged with this name will be updated or deleted.
+                If name is "null", then it means "all offers" so every sale offers may be updated or deleted.
+              nullable: true
+            clean:
+              type: boolean
+              default: false
+              description: If 'True', will remove all the sale offer of the user which are not concerned by this payload.
+            sellerId:
+              type: integer
+              format: int64
+            records:
+              type: array
+              items:
+                type: object
+                properties:
+                  product:
+                    $ref: '#/components/schemas/Product'
+                  distributionMode:
+                    $ref: 'sale-offer.yaml#/components/schemas/AnyDistributionMode'
+                  stock:
+                    $ref: 'sale-offer.yaml#/components/schemas/Stock'
+                  rank:
+                    type: integer
+                    nullable: true
+                    description: Rank of this ad. Only useful for laboratories ad yet
+                  description:
+                    type: string
+                    nullable: true
+                    description: Description of the sale offer
+          required:
+            - offerName
+            - sellerId
+
+    StatusEnum:
+      type: string
+      enum:
+        - PENDING
+        - PREPROCESSING
+        - PROCESSING
+        - POSTPROCESSING
+        - PREPROCESSING_FAILED
+        - PROCESSING_FAILED
+        - POSTPROCESSING_FAILED
+        - DONE
+      description: Status of the assembly
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

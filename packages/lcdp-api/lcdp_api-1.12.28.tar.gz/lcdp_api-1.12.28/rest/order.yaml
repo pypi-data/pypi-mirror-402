@@ -1,0 +1,2452 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP orders'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'manageMetaOrder'
+    description: 'Manage Meta-Order'
+  - name: 'searchOrder'
+    description: 'Search Order'
+  - name: 'manageOrder'
+    description: 'Manage Order'
+  - name: 'manageOrderItem'
+    description: 'Manage Order Item'
+  - name: 'searchOrderItem'
+    description: 'search Order Item'
+  - name: 'manageFreeCarriageCoupon'
+    description: 'Manage Free Carriage Coupon'
+  - name: 'searchFreeCarriageCoupon'
+    description: 'Search Free Carriage Coupon'
+paths:
+  /meta-orders:
+    post:
+      tags:
+        - 'manageMetaOrder'
+      summary: Create a new meta-order
+      description: |
+        Create a new meta-order. A meta-order represent a group of orders created at the same time.
+      operationId: 'createMetaOrder'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - CAN_BUY
+          - PHARMDESTOCK_READ
+          - LABORATORY_READ
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MetaOrderCreationParameters'
+      responses:
+        201:
+          description: 'Successful operation.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetaOrderWithWarnings'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+        412:
+          description: |
+            Precondition failed with values :
+             - CODE008
+             - CODE023
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        422:
+          description: 'No meta order can be created due to multiple warnings'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AnyMetaOrderWarning'
+
+  /meta-orders/{metaOrderId}/validated:
+    put:
+      tags:
+        - 'manageMetaOrder'
+      summary: Set meta-order validated flag
+      description: |
+        Set the validated flag for meta-order identified by metaOrderId.
+        # You can not :
+          - Set flag with value true if already true
+          - Set flag with value false if already true
+        Preconditions for TRUE :
+          - Buyer have accepted the CGV
+      operationId: 'setMetaOrderValidated'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - CAN_BUY
+          - PHARMDESTOCK_READ
+          - LABORATORY_READ
+      parameters:
+        - in: path
+          name: 'metaOrderId'
+          description: |
+            Id of the meta-order
+          required: true
+          schema:
+            type: integer
+            format: int64
+            description: Meta-Order identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: boolean
+              description: 'New validated flag value'
+      responses:
+        200:
+          description: 'successful operation'
+        400:
+          description: 'Bad Request'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+        412:
+          description: |
+            Precondition failed with values :
+             - CODE003
+             - CODE009
+             - CODE014
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        501:
+          description: 'Not implemented'
+
+  /orders/{orderReference}/anomalies:
+    patch:
+      tags:
+        - 'manageOrder'
+      summary: Update anomaly flag
+      operationId: 'updateOrderAnomalies'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - in: path
+          name: 'orderReference'
+          description: |
+            Reference of the order
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/AnomaliesUpdateParameters'
+      responses:
+        200:
+          description: 'successful operation'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+
+  /orders/{orderReference}/accepted:
+    put:
+      tags:
+        - 'manageOrder'
+      summary: Set order accepted flag
+      description: |
+        Set the accepted flag for order identified by OrderId.
+        # Preconditions :
+          ## Common
+            - 'paused' property is false
+            - 'accepted' property is false (Limitation that may be removed in the future)
+            - Status in (WAITING_FOR_SELLER_ACCEPTANCE, WAITING_FOR_BUYER_ACCEPTANCE, SELLER_ACCEPTANCE_DELAY, BUYER_ACCEPTANCE_DELAY)
+          ## As seller
+            - Status in (WAITING_FOR_SELLER_ACCEPTANCE, SELLER_ACCEPTANCE_DELAY)
+          ## As buyer
+            - Status in (WAITING_FOR_BUYER_ACCEPTANCE, BUYER_ACCEPTANCE_DELAY)
+          ## As admin
+            - No additional
+      operationId: 'setOrderAccepted'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/OrderReferenceParameter'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: boolean
+              description: 'New accepted flag value'
+      responses:
+        200:
+          description: 'successful operation'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+        412:
+          description: |
+            Precondition failed with values :
+              - CODE020
+        429:
+          description: 'Too many requests. This can occurs if multiple person try to modify this order at the same time.'
+        503:
+          description: 'Service unavailable'
+
+  /orders/{orderReference}/delivery-confirmed:
+    put:
+      tags:
+        - 'manageOrder'
+      summary: Set order deliveryConfirmed flag
+      description: |
+        Set the deliveryConfirmed flag for order identified by OrderId.
+        # Preconditions :
+        - 'paused' property is false
+        - Status in (DELIVERY_ONGOING, DELIVERY_LATE, WAITING_FOR_VALIDATION, WAITING_FOR_ADMIN_VALIDATION)
+        - 'deliveryConfirmed' property is false (Limitation that may be removed in the future)
+        - You are the BUYER
+      operationId: 'setOrderDeliveryConfirmed'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - $ref: '#/components/parameters/OrderReferenceParameter'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: boolean
+              description: 'New deliveryConfirmed flag value'
+      responses:
+        200:
+          description: 'successful operation'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+        412:
+          description: 'Precondition failed if order state is unexpected'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        429:
+          description: 'Too many requests. This can occurs if multiple person try to modify this order at the same time.'
+
+  /orders/{orderReference}/in-litigation:
+    put:
+      tags:
+        - 'manageOrder'
+      summary: Set order litigation flag
+      description: |
+        Set the litigation flag for order identified by orderReference.
+        # Preconditions :
+        - You are an Admin
+      operationId: 'setOrderInLitigation'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - in: path
+          name: 'orderReference'
+          description: |
+            Reference of the order
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: boolean
+              description: 'New litigation flag value'
+      responses:
+        200:
+          description: 'successful operation'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Not found'
+        429:
+          description: 'Too many requests. This can occurs if multiple person try to modify this order at the same time.'
+
+  /orders/{orderReference}/paused:
+    put:
+      tags:
+        - 'manageOrder'
+      summary: Set order paused flag
+      description: |
+        Set the paused flag for order identified by orderReference.
+        # Preconditions :
+        - You are an admin
+      operationId: 'setOrderPaused'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - in: path
+          name: 'orderReference'
+          description: |
+            Reference of the order
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: boolean
+              description: 'New paused flag value'
+      responses:
+        200:
+          description: 'successful operation'
+        400:
+          description: 'Bad Request'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Order not found'
+
+  /orders/{orderReference}/reservations:
+    get:
+      tags:
+        - 'searchOrder'
+      summary: Get reservations for an order
+      description: |
+        Preconditions :
+          - You are administrator, BUYER or SELLER
+      operationId: 'getOrderReservations'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - in: path
+          name: 'orderReference'
+          description: |
+            Reference of the order
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Reservation'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Not found'
+
+  /orders/{orderReference}/reservations/{reservationId}:
+    patch:
+      tags:
+        - 'manageOrder'
+      summary: Update order reservations
+      description: |
+        # Preconditions :
+          - 'released' can not be greater than 'claimed'
+          - 'released' can be modified only if 'limitedStock' is true
+      operationId: 'updateOrderReservation'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - in: path
+          name: 'orderReference'
+          description: |
+            Reference of the order
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: 'reservationId'
+          description: |
+            Id of the reservation. To be uniquely identified, it will match the following pattern : {order.reference}-{saleOffer.reference}
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/ReservationUpdateParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        400:
+          description: |
+            Bad request with values :
+             - CODE015
+             - CODE016
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+        412:
+          description: |
+            Precondition failed if, for example, reservation exists on a non quantity limited sale offer
+            In day to day life, this should never occurs.
+
+  /orders/{orderReference}:
+    get:
+      tags:
+        - 'searchOrder'
+      summary: 'Get one order'
+      description: ''
+      operationId: 'getOrder'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/OrderReferenceParameter'
+      responses:
+        200:
+          description: 'successful operation'
+          headers:
+            Etag:
+              $ref: 'common.yaml#/components/headers/Etag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+            application/directlog:
+              schema:
+                type: string
+                format: binary
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Order not found'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        406:
+          description: 'Mime type not acceptable'
+    patch:
+      tags:
+        - 'manageOrder'
+      summary: 'Update an order'
+      description: |
+        # Preconditions :
+          ## tags
+            - You are an admin
+          ## statusReason / statusCause
+            - You are the user who set the status or you are currently setting the status
+          ## Status (As Admin)
+            - Always possible
+          ## Status (As Seller)
+            - CANCELED: 
+              > Current status in (WAITING_FOR_SELLER_ACCEPTANCE, WAITING_FOR_BUYER_ACCEPTANCE, SELLER_ACCEPTANCE_DELAY, BUYER_ACCEPTANCE_DELAY)
+            - OTHERS:
+              > Not authorized
+           ## Status (As buyer)
+            - CANCELED:
+              > Current status in (WAITING_FOR_SELLER_ACCEPTANCE, WAITING_FOR_BUYER_ACCEPTANCE, SELLER_ACCEPTANCE_DELAY, BUYER_ACCEPTANCE_DELAY)
+            - OTHERS:
+              > Not authorized
+      operationId: 'updateOrder'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/OrderReferenceParameter'
+      requestBody:
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/OrderUpdateParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        400:
+          description: 'Bad Request'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Order not found'
+        412:
+          description: |
+            Precondition failed with values :
+              - CODE020
+        429:
+          description: 'Too many requests. This can occurs if multiple person try to modify this order at the same time.'
+
+  /orders:
+    get:
+      tags:
+        - 'searchOrder'
+      summary: 'Search orders'
+      description: ''
+      operationId: 'getOrders'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: 'query'
+          name: 'bors[eq]'
+          description: 'Filter on buyer/seller id to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'b[eq]'
+          description: 'Filter on buyer id to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'b[neq]'
+          description: 'Filter on buyer id to exclude from the search (can be given multiple time which result in a AND condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 's[eq]'
+          description: 'Filter on seller id to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 's[neq]'
+          description: 'Filter on seller id to exclude from the search (can be given multiple time which result in a AND condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'type[eq]'
+          description: 'Filter on type to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/OrderType'
+        - in: 'query'
+          name: 'type[neq]'
+          description: 'Filter on type to exclude from the search (can be given multiple time which result in a AND condition)'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/OrderType'
+        - in: 'query'
+          name: 'st[eq]'
+          description: 'Filter on status to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/OrderStatus'
+        - in: 'query'
+          name: 'st[neq]'
+          description: 'Filter on status to exclude from the search (can be given multiple time which result in a AND condition)'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/OrderStatus'
+        - in: 'query'
+          name: 'pid[eq]'
+          description: 'Filter on product ids to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'pid[neq]'
+          description: 'Filter on product ids to exclude from the search (can be given multiple time which result in a AND condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'cdate[gte]'
+          description: 'Filter on creation date greater than (equals) to this date'
+          schema:
+            type: string
+            format: date-time
+        - in: 'query'
+          name: 'cdate[lte]'
+          description: 'Filter on creation date less than (equals) to this date'
+          schema:
+            type: string
+            format: date-time
+        - in: 'query'
+          name: 'dc[eq]'
+          description: 'Filter orders where deliveryConfirmed property equals this'
+          schema:
+            type: boolean
+        - in: 'query'
+          name: 'ref[li]'
+          description: "Filter on reference 'like' this value"
+          schema:
+            type: string
+        - in: 'query'
+          name: 'paused[eq]'
+          description: 'Filter orders where paused property equals this'
+          schema:
+            type: boolean
+        - in: 'query'
+          name: 'tags[co]'
+          description: 'Filter on tags contains this values'
+          schema:
+            type: array
+            items:
+              type: string
+        - in: 'query'
+          name: 'orderBy'
+          description: "Order orders using specific sorting. Note : If sorting filter end with 'asc' or 'desc' it allow to select ascending or descending."
+          schema:
+            type: string
+            enum:
+              [
+                'REFERENCE:ASC',
+                'REFERENCE:DESC',
+                'CREATED_AT:ASC',
+                'CREATED_AT:DESC',
+                'TOTAL_ITEMS_INCLUDING_TAXES:ASC',
+                'TOTAL_ITEMS_INCLUDING_TAXES:DESC',
+                'TOTAL_ITEMS_EXCLUDING_TAXES:ASC',
+                'TOTAL_ITEMS_EXCLUDING_TAXES:DESC',
+                'BUYER_NICKNAME:ASC',
+                'BUYER_NICKNAME:DESC',
+                'BUYER_COMPANY_LEGAL_NAME:ASC',
+                'BUYER_COMPANY_LEGAL_NAME:DESC',
+                'SELLER_NICKNAME:ASC',
+                'SELLER_NICKNAME:DESC',
+                'SELLER_COMPANY_LEGAL_NAME:ASC',
+                'SELLER_COMPANY_LEGAL_NAME:DESC',
+                'STATUS:ASC',
+                'STATUS:DESC',
+              ]
+            default: 'CREATED_AT:desc'
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for (start at 0)'
+          schema:
+            type: integer
+            minimum: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of orders per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOrders'
+            application/directlog:
+              schema:
+                type: string
+                format: binary
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        406:
+          description: 'Mime type not acceptable'
+    post:
+      tags:
+        - 'manageOrder'
+      summary: Create a new order
+      description: |
+        Create a new order.
+        *IMPORTANT NOTE :
+        As for the moment, this route can only create order from another one (clone).
+        In order to create new order from shopping cart, please use "meta-order" creation.
+      operationId: 'createOrder'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - in: 'query'
+          name: 'from'
+          description: 'Reference of the order to clone from'
+          required: true
+          schema:
+            type: string
+      responses:
+        201:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        400:
+          description: 'Bad Request'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+
+  /orders/{orderReference}/delivery-voucher:
+    get:
+      tags:
+        - 'searchOrder'
+      summary: 'Get delivery voucher of order identified by orderReference'
+      description: |
+        # Preconditions :
+          - 'paused' property is false
+          - 'deliveryVoucher' property is not null
+      operationId: 'getOrderDeliveryVoucher'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+
+      x-restrict:
+        roles:
+          - LABORATORY
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - $ref: '#/components/parameters/OrderReferenceParameter'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Order not found'
+
+  /orders/{orderReference}/items:
+    get:
+      tags:
+        - 'searchOrderItem'
+      summary: 'Get items for order identified by orderReference'
+      description: ''
+      operationId: 'getOrderItems'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/OrderReferenceParameter'
+        - in: 'query'
+          name: 'orderBy'
+          description: 'Sort by'
+          schema:
+            type: string
+            enum:
+              [
+                'PRODUCT_NAME:ASC',
+                'PRODUCT_NAME:DESC',
+                'CREATED_AT:ASC',
+                'CREATED_AT:DESC',
+                'UPDATED_AT:ASC',
+                'UPDATED_AT:DESC',
+              ]
+            default: 'PRODUCT_NAME:ASC'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderItem'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Order not found'
+    post:
+      tags:
+        - 'manageOrderItem'
+      summary: 'Add item to order identified by orderReference'
+      description: |
+        Preconditions :
+          - Sale offer is owned by order seller and is active
+          - No invoice edited for this order
+          - No payment transaction linked to this order
+      operationId: 'createOrUpdateOrderItem'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/OrderReferenceParameter'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: 'shopping-cart.yaml#/components/schemas/ShoppedOffer'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderItem'
+        400:
+          description: 'Bad Request'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Order not found'
+        412:
+          description: 'Precondition failed'
+
+  /orders/{orderReference}/items/{orderItemId}:
+    patch:
+      tags:
+        - 'manageOrderItem'
+      summary: 'Update order item'
+      description: |
+        Important note :
+          In case of remove: As a business concern, it's mandatory to use "deleteOrderItem" to free up the line in the order.
+            See OrderItemsOperations to check when "deleteOrderItem" can be called.
+            If you call this route with '0' quantity and "deleteOrderItem" must be called, you will receive 412 - Precondition failed.
+        Restrictions :
+          - Order item new quantity should be less or equals the current one
+        Preconditions :
+          - No invoice edited for this order
+          - No payment transaction linked to this order
+          - You are the seller of the order or you are administrator
+      operationId: 'updateOrderItem'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/OrderReferenceParameter'
+        - $ref: '#/components/parameters/OrderItemIdParameter'
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/OrderItemUpdateParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderItem'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+        401:
+          description: 'Unauthorized'
+        404:
+          description: 'Order or order item not found'
+        412:
+          description: 'Precondition failed'
+    delete:
+      tags:
+        - 'manageOrderItem'
+      summary: 'Delete order item'
+      description: |
+        Preconditions :
+          - Order items can be removed (If refund is needed, deletion will be forbidden)
+          - No invoice edited for this order
+          - No payment transaction linked to this order
+          - You are the seller of the order or you are administrator
+      operationId: 'deleteOrderItem'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/OrderReferenceParameter'
+        - $ref: '#/components/parameters/OrderItemIdParameter'
+      responses:
+        204:
+          description: 'Successful operation'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Order or order item not found'
+        412:
+          description: 'Precondition failed'
+
+  /orders/{orderReference}/added-items:
+    get:
+      tags:
+        - 'searchOrderItem'
+      summary: 'Get added items for order identified by orderReference'
+      description: ''
+      operationId: 'getOrderAddedItems'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/OrderReferenceParameter'
+        - in: 'query'
+          name: 'orderBy'
+          description: 'Sort by'
+          schema:
+            type: string
+            enum:
+              [
+                'PRODUCT_NAME:ASC',
+                'PRODUCT_NAME:DESC',
+                'CREATED_AT:ASC',
+                'CREATED_AT:DESC',
+                'UPDATED_AT:ASC',
+                'UPDATED_AT:DESC',
+              ]
+            default: 'PRODUCT_NAME:ASC'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderAddedItem'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Order not found'
+
+  /orders/{orderReference}/removed-items:
+    get:
+      tags:
+        - 'searchOrderItem'
+      summary: 'Get removed items for order identified by orderReference'
+      description: |
+        # Preconditions : 
+          - You are buyer/seller of the order or you are administrator
+      operationId: 'getOrderRemovedItems'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/OrderReferenceParameter'
+        - in: 'query'
+          name: 'orderBy'
+          description: 'Sort by'
+          schema:
+            type: string
+            enum:
+              [
+                'PRODUCT_NAME:ASC',
+                'PRODUCT_NAME:DESC',
+                'CREATED_AT:ASC',
+                'CREATED_AT:DESC',
+                'UPDATED_AT:ASC',
+                'UPDATED_AT:DESC',
+              ]
+            default: 'PRODUCT_NAME:ASC'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderRemovedItem'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Order not found'
+
+  /orders/{orderReference}/removed-items/{removedItemId}:
+    patch:
+      tags:
+        - 'manageOrderItem'
+      summary: 'Update removed item removedItemId for order identified by orderReference'
+      description: |
+        Restictions :
+          Quantity requested cannot be greater than current removed item quantity.
+          Quantity should be greater than 0
+        Side Effects :
+          The difference between current quantity and requested quantity will be added to order item.
+      operationId: 'updateOrderRemovedItem'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/OrderReferenceParameter'
+        - $ref: '#/components/parameters/OrderRemovedItemIdParameter'
+      requestBody:
+        description: 'Updated removed order item'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderRemovedItemUpdateParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderRemovedItem'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+        401:
+          description: 'Unauthorized'
+        404:
+          description: 'Order or order item not found'
+        412:
+          description: 'Precondition failed'
+    delete:
+      tags:
+        - 'manageOrderItem'
+      summary: 'Delete removed item removedItemId for order identified by orderReference'
+      operationId: 'deleteOrderRemovedItem'
+      description: 'Allow to delete a removed item'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/OrderReferenceParameter'
+        - $ref: '#/components/parameters/OrderRemovedItemIdParameter'
+      responses:
+        204:
+          description: 'successful operation'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Removed item not found'
+
+  /orders/{orderReference}/refunded-items:
+    get:
+      tags:
+        - 'searchOrderItem'
+      summary: 'Get refunded items for order identified by orderReference'
+      description: ''
+      operationId: 'getOrderRefundedItems'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/OrderReferenceParameter'
+        - in: 'query'
+          name: 'orderBy'
+          description: 'Sort by'
+          schema:
+            type: string
+            enum:
+              [
+                'PRODUCT_NAME:ASC',
+                'PRODUCT_NAME:DESC',
+                'CREATED_AT:ASC',
+                'CREATED_AT:DESC',
+                'UPDATED_AT:ASC',
+                'UPDATED_AT:DESC',
+              ]
+            default: 'PRODUCT_NAME:ASC'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderRefundedItem'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Order not found'
+    post:
+      tags:
+        - 'manageOrderItem'
+      summary: 'Create refunded item for order identified by orderReference'
+      description: |
+        Restrictions :
+          - Quantity requested cannot be greater than order item quantity.
+          - Quantity should be greater than 0
+      operationId: 'createOrderRefundedItem'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/OrderReferenceParameter'
+      requestBody:
+        description: 'Create refunded order item'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderItemRefundedCreationParameters'
+      responses:
+        201:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderRefundedItem'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+        401:
+          description: 'Unauthorized'
+        404:
+          description: 'Order or order item not found'
+        412:
+          description: 'Precondition failed'
+
+  /orders/{orderReference}/refunded-items/{refundedItemId}:
+    put:
+      tags:
+        - 'manageOrderItem'
+      summary: 'Update refunded item refundedItemId for order identified by orderReference'
+      description: |
+        Restrictions :
+          - Quantity requested cannot be greater than depending order item quantity.
+      operationId: 'updateOrderRefundedItem'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/OrderReferenceParameter'
+        - $ref: '#/components/parameters/OrderRefundedItemIdParameter'
+      requestBody:
+        description: 'Updated refunded order item'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderRefundedItemUpdateParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderRefundedItem'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+        401:
+          description: 'Unauthorized'
+        404:
+          description: 'Order or order item not found'
+        412:
+          description: 'Precondition failed'
+    delete:
+      tags:
+        - 'manageOrderItem'
+      summary: 'Delete refunded item refundedItemId for order identified by orderReference'
+      operationId: 'deleteOrderRefundedItem'
+      description: 'Allow to delete a refunded item'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/OrderReferenceParameter'
+        - $ref: '#/components/parameters/OrderRefundedItemIdParameter'
+      responses:
+        204:
+          description: 'successful operation'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Refunded item not found'
+
+  /orders/{orderReference}/available-items-operations:
+    get:
+      tags:
+        - 'searchOrderItem'
+      summary: 'Get available operations on order items'
+      description: |
+        This is a convenient endpoint to get available operations on order items.
+        Each operation in the returned list ensure that preconditions are met to do it.
+        See description of returned object for more details about each operation.
+      operationId: 'getAvailableOrderItemsOperations'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/OrderReferenceParameter'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderItemsOperation'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Order not found'
+
+  /free-carriage-coupons:
+    post:
+      tags:
+        - 'manageFreeCarriageCoupon'
+      summary: 'Create free carriage coupons'
+      description: |
+        This endpoint allow you to create one or multiple coupons in one API call
+      operationId: 'createFreeCarriageCoupons'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      requestBody:
+        required: true
+        description: 'List of coupons to create'
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/FreeCarriageCouponCreationParameters'
+              minItems: 1
+      responses:
+        201:
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FreeCarriageCoupon'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+
+    get:
+      tags:
+        - 'searchFreeCarriageCoupon'
+      summary: 'Get free carriage coupons'
+      description: |
+        This endpoint allow you to retrieve the free carriage coupons of the system
+      operationId: 'getFreeCarriageCoupons'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: 'query'
+          name: 'owner[eq]'
+          description: 'Filter on owner id to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'validFrom[gte]'
+          description: 'Coupons that start being valid after this date'
+          schema:
+            type: string
+            format: date-time
+        - in: 'query'
+          name: 'validFrom[lte]'
+          description: 'Coupons that start being valid before this date'
+          schema:
+            type: string
+            format: date-time
+        - in: 'query'
+          name: 'validTo[gte]'
+          description: 'Coupons that expires after this date'
+          schema:
+            type: string
+            format: date-time
+        - in: 'query'
+          name: 'validTo[lte]'
+          description: 'Coupons that expires before this date'
+          schema:
+            type: string
+            format: date-time
+        - in: 'query'
+          name: 'usedAt[pr]'
+          description: 'True if usedAt is present and so coupon have been used. False to get unused coupons.'
+          schema:
+            type: boolean
+        - in: 'query'
+          name: 'tags[co]'
+          description: 'Filter on tags contains this values'
+          schema:
+            type: array
+            items:
+              type: string
+        - in: 'query'
+          name: 'tags[nco]'
+          description: 'Filter on tags not containing this values'
+          schema:
+            type: array
+            items:
+              type: string
+        - in: 'query'
+          name: 'orderBy'
+          description: "Order coupons using specific sorting. Note : If sorting filter end with 'asc' or 'desc' it allow to select ascending or descending."
+          schema:
+            type: string
+            enum: ['CREATED_AT:ASC', 'CREATED_AT:DESC']
+            default: 'CREATED_AT:desc'
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for (start at 0)'
+          schema:
+            type: integer
+            minimum: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of free carriage coupon per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFreeCarriageCoupons'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+
+  /free-carriage-coupons/{freeCarriageCouponId}:
+    delete:
+      tags:
+        - 'ManageFreeCarriageCoupon'
+      summary: 'Remove a coupon from the system'
+      operationId: 'deleteFreeCarriageCoupon'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/FreeCarriageCouponIdParameter'
+      responses:
+        204:
+          description: 'successful operation'
+        404:
+          description: 'No free carriage coupon found'
+        403:
+          description: 'Access denied'
+        400:
+          description: 'Bad Request'
+
+components:
+  parameters:
+    OrderReferenceParameter:
+      in: path
+      name: 'orderReference'
+      description: |
+        Reference of the order
+      required: true
+      schema:
+        type: string
+
+    OrderItemIdParameter:
+      in: path
+      name: 'orderItemId'
+      description: |
+        Id of the order item
+      required: true
+      schema:
+        type: integer
+        format: int64
+
+    OrderRemovedItemIdParameter:
+      in: path
+      name: 'removedItemId'
+      description: |
+        Id of the removed order item
+      required: true
+      schema:
+        type: integer
+        format: int64
+
+    OrderRefundedItemIdParameter:
+      in: path
+      name: 'refundedItemId'
+      description: |
+        Id of the refunded order item
+      required: true
+      schema:
+        type: integer
+        format: int64
+
+    FreeCarriageCouponIdParameter:
+      in: path
+      name: freeCarriageCouponId
+      required: true
+      description: The id of the free carriage coupon concerned by the request
+      schema:
+        type: integer
+        format: int64
+
+  schemas:
+    PaginatedOrders:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/Order'
+          required:
+            - records
+
+    MetaOrderWithWarnings:
+      type: object
+      properties:
+        metaOrder:
+          $ref: '#/components/schemas/MetaOrder'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnyMetaOrderWarning'
+
+    MetaOrder:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 'Unique identifier for this meta-order'
+        validated:
+          type: boolean
+          description: 'True if this meta-order was validated. False if not'
+        prices:
+          $ref: '#/components/schemas/MetaOrderPrices'
+        shippingAddress:
+          $ref: 'user.yaml#/components/schemas/Address'
+        billingAddress:
+          $ref: 'user.yaml#/components/schemas/Address'
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+      required:
+        - id
+        - validated
+        - prices
+        - shippingAddress
+        - billingAddress
+        - orders
+
+    AnyMetaOrderWarning:
+      oneOf:
+        - $ref: '#/components/schemas/OrderWarning'
+        - $ref: '#/components/schemas/OrderItemWarning'
+      discriminator:
+        propertyName: type
+        mapping:
+          ORDER: '#/components/schemas/OrderWarning'
+          ORDER_ITEM: '#/components/schemas/OrderItemWarning'
+
+    MetaOrderWarning:
+      type: object
+      properties:
+        type:
+          type: string
+          description: 'What type of warning is it'
+          pattern: '^(ORDER|ORDER_ITEM)$'
+      required:
+        - type
+
+    OrderWarning:
+      allOf:
+        - $ref: '#/components/schemas/MetaOrderWarning'
+        - type: object
+          properties:
+            sellerNickname:
+              type: string
+              description: 'User nickname of the seller associated to this order'
+            cause:
+              type: string
+              enum: ['MINIMUM_PRICE', 'FORBIDDEN_SELLER']
+              description: 'Warning cause'
+          required:
+            - sellerNickname
+            - cause
+
+    OrderItemWarning:
+      allOf:
+        - $ref: '#/components/schemas/MetaOrderWarning'
+        - type: object
+          properties:
+            orderId:
+              type: integer
+              format: int64
+              description: 'Id of the order linked to this warning. Note : Could be absent if all lines from a subcart were ignored.'
+            productName:
+              type: string
+              description: 'Name of the product associated to this line'
+            requestedQuantity:
+              type: integer
+              description: 'Number of items requested by the user'
+            finalQuantity:
+              type: integer
+              description: 'Number of items finally selected for this line'
+            cause:
+              type: string
+              enum:
+                [
+                  'EMPTY_QUANTITY',
+                  'BAD_QUANTITY',
+                  'MAX_QUANTITY',
+                  'OUTDATED_AD',
+                  'RESTRICTED_PRODUCT',
+                ]
+              description: 'Warning cause'
+          required:
+            - productName
+            - requestedQuantity
+            - finalQuantity
+            - cause
+
+    MetaOrderPrices:
+      type: object
+      properties:
+        totalItemsExcludingTaxes:
+          type: number
+          description: 'Total items price excluding taxes for this meta-order'
+        totalItemsTaxes:
+          type: number
+          description: 'Total items V.A.T amount for this meta-order'
+        totalItemsIncludingTaxes:
+          type: number
+          description: 'Total items price including taxes for this meta-order'
+        totalShippingFeesIncludingTaxes:
+          type: number
+          description: 'Total shipping feeds including taxes for this meta-order'
+        totalShippingFeesExcludingTaxes:
+          type: number
+          description: 'Total shipping feeds excluding taxes for this meta-order'
+        totalBuyerCommissionIncludingTaxes:
+          type: number
+          description: 'Total buyer commission including taxes for this meta-order'
+        totalBuyerCommissionExcludingTaxes:
+          type: number
+          description: 'Total buyer commission excluding taxes for this meta-order'
+        totalSellerCommissionIncludingTaxes:
+          type: number
+          description: 'Total buyer commission including taxes for this meta-order'
+        totalSellerCommissionExcludingTaxes:
+          type: number
+          description: 'Total buyer commission excluding taxes for this meta-order'
+      required:
+        - totalItemsExcludingTaxes
+        - totalItemsTaxes
+        - totalItemsIncludingTaxes
+        - totalShippingFeesIncludingTaxes
+        - totalShippingFeesExcludingTaxes
+        - totalBuyerCommissionIncludingTaxes
+        - totalBuyerCommissionExcludingTaxes
+        - totalSellerCommissionIncludingTaxes
+        - totalSellerCommissionExcludingTaxes
+
+    Order:
+      type: object
+      description: |
+        One order contain all items that a buyer request to one seller.
+        If shipping address is empty, use billing address as shipping address
+        * Important note : 
+          Only administrator and the user who modified the status can see the 'statusComment' field
+      properties:
+        reference:
+          type: string
+          description: 'Unique identifier for this order'
+        type:
+          $ref: '#/components/schemas/OrderType'
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        statusReason:
+          $ref: '#/components/schemas/OrderStatusReason'
+        statusComment:
+          type: string
+          nullable: true
+          description: 'Smart sentence given detail about the current status'
+        accepted:
+          type: boolean
+          description: 'True if the seller accepted the order, false if not'
+        paused:
+          type: boolean
+          description: 'True if the order is in pause state, false if not'
+        inLitigation:
+          type: boolean
+          description: 'True if the order is in litigation state, false if not'
+        estimatedDeliveryDate:
+          type: string
+          format: date
+          nullable: true
+          description: 'Estimated delivery date using to order creation date + delivery delay of seller (Business day only). Eg : createdAt: 01/01/2020 / deliveryDelay: 3 => 06/01/2020'
+        deliveryConfirmed:
+          type: boolean
+          description: 'True if buyer confirmed the delivery, false if not'
+        deliveryVoucher:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        createdAt:
+          type: string
+          format: date-time
+          description: 'Creation date of this order'
+        seller:
+          $ref: '#/components/schemas/UserLink'
+        buyer:
+          $ref: '#/components/schemas/UserLink'
+        shippingAddress:
+          $ref: 'user.yaml#/components/schemas/Address'
+        billingAddress:
+          $ref: 'user.yaml#/components/schemas/Address'
+        shipments:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        storageTypes:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/OrderStorageType'
+        maxShipment:
+          type: integer
+          description: 'Number of maximum shipments available'
+        maxShippingDate:
+          type: string
+          format: date
+          description: 'Order shall be shipped before this date'
+        maxParcelPerShipment:
+          type: integer
+          description: 'Max parcel quantity per shipment'
+        prices:
+          $ref: '#/components/schemas/OrderPrices'
+        refundedPrices:
+          $ref: '#/components/schemas/OrderPrices'
+        items:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        addedItems:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        removedItems:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        refundedItems:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        threads:
+          $ref: '#/components/schemas/OrderThreads'
+        anomalies:
+          $ref: '#/components/schemas/Anomalies'
+        reservations:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        availableItemsOperations:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        tags:
+          description: Labels of the order
+          type: array
+          items:
+            type: string
+        journal:
+          $ref: '#/components/schemas/OrderJournal'
+        eTag:
+          type: string
+          description: 'Version of the order. It is changed each time the order or items are updated'
+      required:
+        - reference
+        - type
+        - status
+        - statusReason
+        - accepted
+        - paused
+        - inLitigation
+        - estimatedDeliveryDate
+        - deliveryConfirmed
+        - deliveryVoucher
+        - createdAt
+        - seller
+        - buyer
+        - shippingAddress
+        - billingAddress
+        - shipments
+        - maxShipment
+        - maxParcelPerShipment
+        - prices
+        - items
+        - addedItems
+        - removedItems
+        - refundedItems
+        - threads
+        - anomalies
+        - reservations
+        - availableItemsOperations
+        - tags
+        - journal
+        - eTag
+
+    OrderType:
+      type: string
+      enum: ['LABORATORY', 'PHARMACY']
+      description: 'Immutable and deduced at order creation according to multiple factors (seller role, etc...).'
+
+    OrderStatusReason:
+      type: string
+      enum: ['MAX_QUANTITY', 'OUTDATED_AD', 'OTHER']
+      description: 'Reason of the status change or current status. Note that if you do not give any reason during status change, field will be set to OTHER'
+
+    OrderPrices:
+      type: object
+      properties:
+        totalItemsExcludingTaxes:
+          type: number
+          description: 'Total items price excluding taxes for this order'
+        totalItemsTaxes:
+          type: number
+          description: 'Total items taxes (V.A.T, ...) amount for this order'
+        totalItemsIncludingTaxes:
+          type: number
+          description: 'Total items price including taxes for this order'
+        totalShippingFeesExcludingTaxes:
+          type: number
+          description: 'Total shipping feeds excluding taxes for this order'
+        totalShippingFeesIncludingTaxes:
+          type: number
+          description: 'Total shipping feeds including taxes for this order'
+        totalBuyerCommissionExcludingTaxes:
+          type: number
+          description: 'Total buyer commission excluding taxes for this order'
+        totalBuyerCommissionIncludingTaxes:
+          type: number
+          description: 'Total buyer commission including taxes for this order'
+        totalSellerCommissionIncludingTaxes:
+          type: number
+          description: 'Total buyer commission including taxes for this order'
+        totalSellerCommissionExcludingTaxes:
+          type: number
+          description: 'Total buyer commission excluding taxes for this order'
+
+    OrderThreads:
+      type: object
+      properties:
+        admin:
+          nullable: true
+          allOf:
+            - $ref: 'thread.yaml#/components/schemas/ThreadLink'
+
+    OrderJournal:
+      type: object
+      properties:
+        pricesOnCreation:
+          $ref: '#/components/schemas/OrderPrices'
+        statusUpdatedBy:
+          type: integer
+          format: int64
+          nullable: true
+          description: Id of the user that modified status
+        statusUpdatedAt:
+          type: string
+          format: date-time
+          description: 'Date of the updated status (RFC 3339, section 5.6)'
+        freeCarriageThresholdReachedDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date when free shipping was reached
+        purchasedAt:
+          type: string
+          format: date-time
+          description: Date when the order have been officially created by the buyer and so received by the seller
+        deliveredAt:
+          type: string
+          format: date-time
+          description: |
+            Date when the order have been delivered to the buyer.
+            Important Note : If the transport is not delegated to LCDP, we can not provide this field value.
+        committedAt:
+          type: string
+          format: date-time
+          description: |
+            Date when the seller announced that he is in capability to fulfill the items in order according to
+            their quantities and expiration date.
+        counterProposalAt:
+          type: string
+          format: date-time
+          description: |
+            Date when the seller modified the order by lowering some quantities due to stock / expiration dates.
+        deliveryVoucherBuyerLastViewedAt:
+          type: string
+          format: date-time
+          description: |
+            Date when the buyer last viewed the delivery voucher.
+        deliveryVoucherSellerLastViewedAt:
+          type: string
+          format: date-time
+          description: |
+            Date when the seller last viewed the delivery voucher.
+      required:
+        - statusUpdatedBy
+        - statusUpdatedAt
+        - freeCarriageThresholdReachedDate
+
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 'Id of the order item'
+        product:
+          $ref: '#/components/schemas/ProductLink'
+        saleOffer:
+          $ref: '#/components/schemas/SaleOfferLink'
+        distributionRangeId:
+          type: integer
+          format: int64
+          description: 'Id of the distribution range'
+        quantity:
+          type: integer
+          description: 'Number of pack to buy'
+        multiplier:
+          type: integer
+          description: 'Number of units per pack'
+        freeUnits:
+          type: integer
+          description: 'Total number of free units'
+        prices:
+          $ref: '#/components/schemas/OrderItemPrices'
+        createdAt:
+          type: 'string'
+          format: 'date-time'
+        updatedAt:
+          type: 'string'
+          format: 'date-time'
+
+    OrderAddedItem:
+      allOf:
+        - $ref: '#/components/schemas/OrderItem'
+
+    OrderRemovedItem:
+      allOf:
+        - $ref: '#/components/schemas/OrderItem'
+
+    OrderRefundedItem:
+      allOf:
+        - $ref: '#/components/schemas/OrderItem'
+
+    OrderItemsOperation:
+      type: string
+      enum: ['REFUND', 'REMOVE', 'ADD']
+      description: |
+        Available operations on order items.
+        - REFUND : You can use 'updateOrderItem'
+        - REMOVE : You can use 'updateOrderItem', 'deleteOrderItem' and 'updateOrderRemovedItem'
+        - ADD : You can use 'createOrUpdateOrderItem'
+
+    OrderItemPrices:
+      type: object
+      properties:
+        discountedUnitPriceExcludingTaxes:
+          type: number
+          description: 'Unit price discounted excluding taxes'
+        totalExcludingTaxes:
+          type: number
+          description: 'Total price excluding taxes for this meta-order'
+        totalTaxes:
+          type: number
+          description: 'Total taxes (V.A.T, ...) amount for this meta-order'
+        totalIncludingTaxes:
+          type: number
+          description: 'Total price including taxes for this order'
+        vatRate:
+          type: number
+          description: 'Vat rate for this meta-order'
+
+    OrderItemUpdateParameters:
+      type: object
+      properties:
+        quantity:
+          type: integer
+          description: 'Quantity of the order item'
+      required:
+        - quantity
+
+    OrderRemovedItemUpdateParameters:
+      allOf:
+        - $ref: '#/components/schemas/OrderItemUpdateParameters'
+
+    OrderRefundedItemUpdateParameters:
+      allOf:
+        - $ref: '#/components/schemas/OrderItemUpdateParameters'
+
+    OrderItemRefundedCreationParameters:
+      type: object
+      properties:
+        saleOfferReference:
+          type: string
+          description: 'Reference of the sale offer'
+        distributionRangeId:
+          type: integer
+          format: int64
+          description: 'Id of the distribution range'
+        quantity:
+          type: integer
+          description: 'Quantity of the order item to refund'
+      required:
+        - saleOfferReference
+        - quantity
+
+    OrderStatus:
+      type: string
+      enum:
+        [
+          'WAITING_FOR_SELLER_ACCEPTANCE',
+          'WAITING_FOR_BUYER_ACCEPTANCE',
+          'SELLER_ACCEPTANCE_DELAY',
+          'BUYER_ACCEPTANCE_DELAY',
+          'WAITING_FOR_SENDING',
+          'SENDING_DELAY',
+          'DELIVERY_ONGOING',
+          'WAITING_FOR_VALIDATION',
+          'LITIGATION',
+          'CANCELED',
+          'ARCHIVED',
+          'INVALIDATED',
+          'WAITING_FOR_ADMIN_VALIDATION',
+          'DELIVERY_LATE',
+        ]
+      description: 'Order global status'
+
+    UpdateOrderStatusParameters:
+      type: string
+      enum:
+        [
+          'WAITING_FOR_SELLER_ACCEPTANCE',
+          'WAITING_FOR_BUYER_ACCEPTANCE',
+          'WAITING_FOR_SENDING',
+          'DELIVERY_ONGOING',
+          'WAITING_FOR_VALIDATION',
+          'CANCELED',
+          'ARCHIVED',
+          'WAITING_FOR_ADMIN_VALIDATION',
+        ]
+      description: 'Updatable order status'
+
+    UserLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'Id of the user'
+            firstname:
+              type: string
+              description: User firstname
+            lastname:
+              type: string
+              description: User lastname
+            phone:
+              $ref: 'common.yaml#/components/schemas/Phone'
+            email:
+              $ref: 'common.yaml#/components/schemas/Email'
+            nickname:
+              type: string
+              maxLength: 64
+              description: 'User nickname'
+            company:
+              type: object
+              description: Infos about the user company
+              properties:
+                legalName:
+                  type: string
+                  nullable: true
+          required:
+            - id
+            - nickname
+            - company
+
+    ProductLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'Identifier of the product'
+            barcodes:
+              $ref: 'product.yaml#/components/schemas/Barcodes'
+            name:
+              type: string
+              description: 'Name of the product'
+            storageType:
+              nullable: true
+              allOf:
+                - $ref: 'product.yaml#/components/schemas/ProductStorageType'
+
+    SaleOfferLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            reference:
+              type: string
+              description: 'Sale offer reference'
+          required:
+            - reference
+
+    OrderStorageType:
+      type: string
+      enum: ['UNKNOWN', 'FREE', 'FRIDGE', 'FRESH']
+
+    MetaOrderCreationParameters:
+      type: object
+      properties:
+        cartId:
+          type: integer
+          format: int64
+          description: 'Cart from which to create the meta-order'
+        subCartParameters:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetaOrderCreationSubCartParameters'
+      required:
+        - cartId
+        - subCartParameters
+
+    MetaOrderCreationSubCartParameters:
+      type: object
+      properties:
+        subCartId:
+          type: integer
+          format: int64
+          description: 'Id of the associated sub cart'
+      required:
+        - subCartId
+
+    AnomaliesUpdateParameters:
+      allOf:
+        - $ref: '#/components/schemas/Anomalies'
+
+    Anomalies:
+      type: object
+      properties:
+        lapsingDate:
+          type: boolean
+          description: Error in the lapsing date
+        quantity:
+          type: boolean
+          description: Error in the quantity
+        broken:
+          type: boolean
+          description: Some products are broken
+        delivery:
+          type: boolean
+          description: Error during delivery
+
+    Reservation:
+      type: object
+      description: |
+        This object contains information about sale offer item usage for this order.
+        Note : Removed and Refunded items are still considered here as they should be released manually.
+      properties:
+        id:
+          type: string
+          description: 'Id of the reservation. To be uniquely identified, it will match the following pattern : {order.reference}-{saleOffer.reference}'
+        product:
+          $ref: '#/components/schemas/ProductLink'
+        saleOffer:
+          $ref: '#/components/schemas/SaleOfferLink'
+        limitedStock:
+          type: boolean
+          description: |
+            True if the associated sale offer have a limited stock. False if not.
+            Important note : You can not release claimed items for a non limited-stock sale offer.
+        total:
+          type: integer
+          description: 'Total number of item linked to this order (claimed + released)'
+        claimed:
+          type: integer
+          description: 'Number of item claimed in the sale offer'
+        released:
+          type: integer
+          description: 'Number of item re-inserted in the sale offer'
+
+    ReservationUpdateParameters:
+      type: object
+      properties:
+        released:
+          type: integer
+          description: 'Number of item re-inserted in the sale offer'
+
+    OrderUpdateParameters:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/UpdateOrderStatusParameters'
+        statusReason:
+          $ref: '#/components/schemas/OrderStatusReason'
+        statusComment:
+          type: string
+          nullable: true
+          description: 'Smart sentence given detail about the new status'
+        tags:
+          description: Labels of the order
+          type: array
+          items:
+            type: string
+
+    FreeCarriageCoupon:
+      type: object
+      properties:
+        id:
+          description: 'Id of the coupon'
+          type: integer
+          format: int64
+        owner:
+          $ref: '#/components/schemas/FreeCarriageCouponOwnerLink'
+        validFrom:
+          description: 'Coupon is valid starting from this date (Format uses RFC 3339, section 5.6 - null value is considered as start of universe which means coupon will is valid until validTo)'
+          type: string
+          format: date-time
+          nullable: true
+        validTo:
+          description: 'Coupon is valid until this date (Format uses RFC 3339, section 5.6 - null value is considered as infinite which means coupon will never expires)'
+          type: string
+          format: date-time
+          nullable: true
+        weight:
+          type: integer
+          description: 'Indicate the priority of the coupon. The higher the value, the higher the priority'
+        comment:
+          type: string
+          nullable: true
+          description: Comment about coupon
+        tags:
+          description: 'A list of free texts to qualify the coupon'
+          type: array
+          items:
+            type: string
+        createdAt:
+          description: 'Creation date of this Content'
+          type: string
+          format: date-time
+        updatedAt:
+          description: 'Last update date of this Content'
+          type: string
+          format: date-time
+        usedAt:
+          description: 'Date when coupon was used. If null, the coupon is still unused.'
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - owner
+        - validFrom
+        - validTo
+        - weight
+        - tags
+        - createdAt
+        - updatedAt
+        - usedAt
+
+    FreeCarriageCouponOwnerLink:
+      description: Owner of the free carriage coupon
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              description: 'Id of the owner'
+              type: integer
+              format: int64
+          required:
+            - id
+
+    PaginatedFreeCarriageCoupons:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/FreeCarriageCoupon'
+          required:
+            - records
+
+    FreeCarriageCouponCreationParameters:
+      type: object
+      properties:
+        ownerId:
+          description: 'Client owner of the free carriage coupon'
+          type: integer
+          format: int64
+        validFrom:
+          description: 'Coupon is valid starting from this date (Format uses RFC 3339, section 5.6 - null value is considered as start of universe which means coupon will is valid until validTo)'
+          type: string
+          format: date-time
+          nullable: true
+        validTo:
+          description: 'Coupon is valid until this date (Format uses RFC 3339, section 5.6 - null value is considered as infinite which means coupon will never expires)'
+          type: string
+          format: date-time
+          nullable: true
+        weight:
+          description: 'Indicate the priority of the coupon. The higher the value, the higher the priority'
+          type: integer
+        comment:
+          type: string
+          nullable: true
+          description: Comment about coupon
+        tags:
+          description: 'A list of free texts to qualify the coupon'
+          type: array
+          items:
+            type: string
+      required:
+        - ownerId
+        - validFrom
+        - validTo
+        - weight
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

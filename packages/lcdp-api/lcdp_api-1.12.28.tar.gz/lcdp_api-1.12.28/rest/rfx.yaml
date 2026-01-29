@@ -1,0 +1,438 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of RFx (Request For X)'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'ManageRfi'
+    description: 'Client request for information'
+  - name: 'ManageRfil'
+    description: 'Client request for information about laboratory'
+  - name: 'ManageRfoi'
+    description: 'Client request for order invoice'
+  - name: 'ManageRff'
+    description: 'Client request for feature'
+paths:
+  /rfis:
+    post:
+      tags:
+        - 'ManageRfi'
+      summary: 'Contact form'
+      operationId: 'createRfi'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+        - apiKeyCaptcha: []
+      requestBody:
+        required: true
+        description: 'Form data'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RfiCreationParameters'
+      responses:
+        204:
+          description: 'Message sent'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        404:
+          description: 'Order not found'
+
+  /rfils:
+    post:
+      tags:
+        - 'ManageRfil'
+      summary: 'Create request for information about laboratory'
+      operationId: 'createRfil'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      requestBody:
+        description: 'Fields to use for rfil creation'
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RfilCreationParameters'
+      responses:
+        204:
+          description: 'Message sent to LCDP'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        404:
+          description: 'Laboratory not found'
+
+  /rfois:
+    get:
+      tags:
+        - 'SearchRfoi'
+      summary: 'Search invoice requests'
+      description: |
+        # Preconditions :
+          - Connected User is the BUYER
+          - You are ADMINISTRATOR
+      operationId: 'getRfois'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - in: query
+          name: id[eq]
+          description: Filter invoice requests by ids
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: order[eq]
+          description: order references
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          name: b[eq]
+          description: Buyer Id who request the invoice
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          name: processed[eq]
+          description: The request has been processed ?
+          schema:
+            type: boolean
+        - in: 'query'
+          name: 'orderBy'
+          description: "Order invoice requests using specific sorting. Note : If sorting filter end with 'asc' or 'desc' it allow to select ascending or descending."
+          schema:
+            default: 'CREATED_AT:DESC'
+            type: string
+            enum:
+              [
+                'BUYER_COMPANY_LEGAL_NAME:ASC',
+                'BUYER_COMPANY_LEGAL_NAME:DESC',
+                'SELLER_COMPANY_LEGAL_NAME:ASC',
+                'SELLER_COMPANY_LEGAL_NAME:DESC',
+                'PROCESSED:ASC',
+                'PROCESSED:DESC',
+                'CREATED_AT:ASC',
+                'CREATED_AT:DESC',
+                'UPDATED_AT:ASC',
+                'UPDATED_AT:DESC',
+              ]
+        - in: query
+          name: 'p'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: 'pp'
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 50
+      responses:
+        200:
+          description: 'Success'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRfois'
+        403:
+          description: 'Access denied'
+    post:
+      tags:
+        - 'ManageRfoi'
+      summary: 'Create request for order invoice. Administrator can request an invoice for another user'
+      description: |
+        # Preconditions :
+          - Connected User is the BUYER
+          - You are ADMINISTRATOR
+      operationId: 'createRfoi'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      requestBody:
+        description: 'Fields to use for rfoi creation'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RfoiCreationParameters'
+            example:
+              userId: 12
+              orderReference: 201208095154570
+      responses:
+        200:
+          description: 'Success'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rfoi'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'No order found with this reference'
+        409:
+          description: 'A non processed request already exist for this order'
+
+  /rfois/{rfoiId}:
+    patch:
+      tags:
+        - 'ManageRfoi'
+      summary: 'Update an invoice request'
+      operationId: 'updateRfoi'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - in: path
+          name: rfoiId
+          required: true
+          description: Request for order invoice Id
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        description: 'Object to use in order to update the invoice request'
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/RfoiUpdateParameters'
+            example:
+              processed: true
+      responses:
+        200:
+          description: 'Success'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rfoi'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'RfoiId not found'
+        409:
+          description: 'A non processed request already exist for this order'
+
+  /rffs:
+    post:
+      tags:
+        - 'ManageRff'
+      summary: 'Create request for feature'
+      operationId: 'createRff'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      requestBody:
+        description: 'Fields to use for rff creation'
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RffCreationParameters'
+      responses:
+        204:
+          description: 'Message sent to LCDP'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        404:
+          description: 'User not found'
+
+components:
+  schemas:
+    RfoCreationParameters:
+      type: object
+      properties:
+        userId:
+          type: integer
+          format: int64
+      required:
+        - userId
+
+    RfiCreationParameters:
+      description: |
+        If userId is given email of corresponding user will be included in the request.
+        If email is given in addition to userId, then email will be used. (This allow to give an email address different than current account email address)
+      type: object
+      properties:
+        userId:
+          type: integer
+          format: int64
+        title:
+          type: string
+        message:
+          type: string
+        email:
+          type: string
+        orderReference:
+          type: string
+
+    RfilCreationParameters:
+      type: object
+      properties:
+        userId:
+          type: integer
+          format: int64
+        laboratoryId:
+          type: integer
+          format: int64
+      required:
+        - userId
+        - laboratoryId
+
+    PaginatedRfois:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/Rfoi'
+          required:
+            - records
+
+    RfoiCreationParameters:
+      type: object
+      properties:
+        orderReference:
+          type: string
+          description: Reference of the concerned order
+      required:
+        - orderReference
+
+    RfoiUpdateParameters:
+      type: object
+      properties:
+        processed:
+          type: boolean
+          description: The request has been processed or not
+
+    Rfoi:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        buyer:
+          $ref: '#/components/schemas/UserLink'
+        seller:
+          $ref: '#/components/schemas/UserLink'
+        order:
+          $ref: '#/components/schemas/OrderLink'
+        processed:
+          type: boolean
+          description: The request has been processed or not
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation date of this request
+        udpatedAt:
+          type: string
+          format: date-time
+          description: Last update date of this request (ie date of processing)
+
+    RffCreationParameters:
+      type: object
+      properties:
+        userId:
+          type: integer
+          format: int64
+        featureName:
+          type: string
+          description: Name of the feature the user is interested in
+      required:
+        - userId
+        - featureName
+
+    UserLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'Id of the user'
+            nickname:
+              type: string
+              maxLength: 64
+              description: 'User nickname'
+            company:
+              type: object
+              description: Infos about the user company
+              properties:
+                legalName:
+                  type: string
+                  nullable: true
+
+    OrderLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            reference:
+              type: string
+              description: 'Unique identifier for this order'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+    apiKeyCaptcha:
+      type: apiKey
+      in: header
+      name: x-recaptcha-token
