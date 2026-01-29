@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ecp.amcrypto.org/ecp/schemas/ecp-index-descriptor.schema.json",
+  "title": "Expert Context Pack (ECP) Index Descriptor v1.0",
+  "type": "object",
+  "required": [
+    "index_id",
+    "type",
+    "created_at",
+    "chunking",
+    "retrieval_defaults",
+    "provenance"
+  ],
+  "properties": {
+    "index_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "vector",
+        "keyword",
+        "graph",
+        "hybrid"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "built_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "chunking": {
+      "type": "object",
+      "required": [
+        "method"
+      ],
+      "properties": {
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "max_chars": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "overlap_chars": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "language_hints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "embedding": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "retrieval_defaults": {
+      "type": "object",
+      "properties": {
+        "top_k": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "filters_supported": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "chunks_path"
+      ],
+      "properties": {
+        "index_data_path": {
+          "type": "string"
+        },
+        "file_manifest_path": {
+          "type": "string"
+        },
+        "chunks_path": {
+          "type": "string"
+        },
+        "build_info_path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "vector"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "embedding"
+        ],
+        "properties": {
+          "embedding": {
+            "type": "object",
+            "required": [
+              "model",
+              "dimensions"
+            ],
+            "properties": {
+              "model": {
+                "type": "string",
+                "minLength": 1
+              },
+              "dimensions": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": true
+}
