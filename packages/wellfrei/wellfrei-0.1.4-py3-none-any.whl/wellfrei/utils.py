@@ -1,0 +1,1 @@
+import matplotlib.pyplot as pltimport numpy as npdef draw(sampSize=100):    plt.plot(np.arange(0, sampSize+1),np.random.randint(0, sampSize, size=sampSize+1),'ro:',ms=3,fillstyle='none')    
