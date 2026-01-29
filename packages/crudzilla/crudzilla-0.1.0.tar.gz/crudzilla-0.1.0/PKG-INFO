@@ -1,0 +1,92 @@
+Metadata-Version: 2.4
+Name: crudzilla
+Version: 0.1.0
+Summary: Generate Pydantic models and FastCRUD routers from database schema
+Author: Andrew Maguire
+License-Expression: MIT
+Keywords: code-generation,crud,database,fastapi,postgresql,pydantic,sqlalchemy
+Classifier: Development Status :: 4 - Beta
+Classifier: Framework :: FastAPI
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Database
+Classifier: Topic :: Software Development :: Code Generators
+Classifier: Typing :: Typed
+Requires-Python: >=3.10
+Requires-Dist: fastcrud>=0.15.0
+Requires-Dist: sqlacodegen>=3.0.0
+Requires-Dist: supabase-pydantic>=0.14.0
+Provides-Extra: dev
+Requires-Dist: mypy>=1.0; extra == 'dev'
+Requires-Dist: pytest>=7.0; extra == 'dev'
+Requires-Dist: ruff>=0.1.0; extra == 'dev'
+Description-Content-Type: text/markdown
+
+# crudzilla
+
+Generate Pydantic models and FastCRUD routers from your PostgreSQL database schema.
+
+## Installation
+
+```bash
+pip install crudzilla
+# or
+uv add crudzilla
+```
+
+## Quick Start
+
+```bash
+export DATABASE_URL="postgresql://user:password@localhost:5432/mydb"
+
+crudzilla                                    # Pydantic models only
+crudzilla --generate-routers                 # Include FastCRUD routers
+crudzilla --generate-routers --include-sqlalchemy  # Full generation
+```
+
+## Options
+
+| Option | Description |
+|--------|-------------|
+| `-o, --output-dir` | Output directory for models (default: `generated_models`) |
+| `--routers-dir` | Output directory for routers (default: `src/app/routers/generated`) |
+| `--env-file` | Path to `.env` file containing `DATABASE_URL` |
+| `--schema` | Database schema (default: `public`) |
+| `--exclude-tables` | Tables to exclude (supports wildcards: `audit_*`, `*_log`) |
+| `--include-sqlalchemy` | Generate SQLAlchemy models |
+| `--generate-routers` | Generate FastCRUD routers |
+| `--async-mode` | Generate async CRUD operations |
+| `--dry-run` | Preview without writing files |
+| `--backup` | Backup existing files before overwriting |
+| `-v, --verbose` | Verbose output |
+
+## Output Structure
+
+```
+generated_models/
+├── fastapi/
+│   └── schema_public_latest.py    # Pydantic schemas
+└── sqlalchemy_models.py           # SQLAlchemy models
+
+src/app/routers/generated/
+└── generated.py                   # FastCRUD routers
+```
+
+## Usage in FastAPI
+
+```python
+from fastapi import FastAPI
+from src.app.routers.generated.generated import register_generated_routers
+
+app = FastAPI()
+register_generated_routers(app, prefix="/api/v1/db")
+```
+
+## License
+
+MIT
