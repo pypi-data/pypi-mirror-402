@@ -1,0 +1,687 @@
+# TVRCoint - Time-Varying Cointegration Tests
+
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+A comprehensive Python library for testing time-invariant cointegration against time-varying cointegration alternatives using bootstrap methods.
+
+## Overview
+
+**TVRCoint** implements the methodology from:
+
+1. **Bierens, H.J. & Martins, L.F. (2010)** - "Time-Varying Cointegration" - *Econometric Theory*, 26(5), 1453-1490
+2. **Martins, L.F. (2015)** - "Bootstrap Tests for Time Varying Cointegration" - *Econometric Reviews*
+
+## Installation
+
+```bash
+pip install tvrcoint
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/merwanroudane/tvrcoint.git
+cd tvrcoint
+pip install -e .
+```
+
+## Dependencies
+
+```
+numpy>=1.20.0
+scipy>=1.7.0
+pandas>=1.3.0
+```
+
+---
+
+## Complete API Reference with Examples
+
+### 1. Chebyshev Time Polynomials
+
+```python
+from tvrcoint.chebyshev import (
+    chebyshev_poly,
+    chebyshev_polynomials,
+    chebyshev_matrix,
+    verify_orthonormality,
+    fourier_coefficients,
+    reconstruct_beta
+)
+import numpy as np
+
+# ============================================
+# 1.1 chebyshev_poly(i, t, T)
+# Compute single Chebyshev polynomial value
+# ============================================
+T = 100
+# P_0(t) = 1 for all t
+p0 = chebyshev_poly(0, 50, T)  # Returns 1.0
+
+# P_1(t) = sqrt(2) * cos(pi*(t-0.5)/T)
+p1 = chebyshev_poly(1, 50, T)  # Returns near 0 for middle of series
+
+print(f"P_0,100(50) = {p0}")  # 1.0
+print(f"P_1,100(50) = {p1}")  # ~0
+
+# ============================================
+# 1.2 chebyshev_polynomials(m, T)
+# Get full polynomial matrix
+# ============================================
+m = 5  # Order of polynomials (0 to m)
+P = chebyshev_polynomials(m, T)
+# Shape: (m+1, T) = (6, 100)
+
+print(f"Shape: {P.shape}")  # (6, 100)
+print(f"First row (P_0): {P[0, :5]}")  # All 1s
+
+# ============================================
+# 1.3 verify_orthonormality(m, T)
+# Check if polynomials are orthonormal
+# ============================================
+is_orthonormal = verify_orthonormality(m=5, T=100)
+print(f"Orthonormal: {is_orthonormal}")  # True
+
+# (1/T) * sum(P_i * P_j) = 1 if i==j, 0 otherwise
+
+# ============================================
+# 1.4 chebyshev_matrix(Y, m)
+# Construct extended lagged matrix Y^{(m)}_{t-1}
+# ============================================
+Y = np.random.randn(100, 3)  # T=100, k=3 variables
+m = 2
+
+Y_m = chebyshev_matrix(Y, m)
+# Shape: (T-1, (m+1)*k) = (99, 9)
+
+print(f"Input shape: {Y.shape}")   # (100, 3)
+print(f"Output shape: {Y_m.shape}")  # (99, 9)
+
+# ============================================
+# 1.5 fourier_coefficients(beta_t, T, m)
+# Compute Chebyshev expansion coefficients
+# ============================================
+beta_t = np.random.randn(100, 3)  # Time-varying beta
+xi = fourier_coefficients(beta_t, T=100, m=2)
+# Shape: (m+1, k) = (3, 3)
+
+print(f"Coefficients shape: {xi.shape}")  # (3, 3)
+
+# ============================================
+# 1.6 reconstruct_beta(xi, T)
+# Reconstruct beta_t from coefficients
+# ============================================
+beta_reconstructed = reconstruct_beta(xi, T=100)
+print(f"Reconstructed shape: {beta_reconstructed.shape}")  # (100, 3)
+```
+
+---
+
+### 2. Matrix Computations
+
+```python
+from tvrcoint.matrices import (
+    compute_s_matrices,
+    solve_eigenvalue_problem,
+    compute_lr_statistic
+)
+import numpy as np
+
+np.random.seed(42)
+
+# ============================================
+# 2.1 compute_s_matrices(delta_Y, Y_m, X, include_intercept)
+# Compute S00, S11, S01, S10 matrices
+# ============================================
+T_eff, k, m = 98, 3, 2
+delta_Y = np.random.randn(T_eff, k)  # Differenced data
+Y_m = np.random.randn(T_eff, (m+1)*k)  # Extended lagged data
+
+S = compute_s_matrices(delta_Y, Y_m, include_intercept=True)
+
+print(f"S00 shape: {S['S00'].shape}")  # (3, 3)
+print(f"S11 shape: {S['S11'].shape}")  # (9, 9)
+print(f"S01 shape: {S['S01'].shape}")  # (3, 9)
+print(f"S10 shape: {S['S10'].shape}")  # (9, 3)
+
+# Verify properties
+print(f"S00 symmetric: {np.allclose(S['S00'], S['S00'].T)}")  # True
+print(f"S10 = S01.T: {np.allclose(S['S10'], S['S01'].T)}")    # True
+
+# ============================================
+# 2.2 solve_eigenvalue_problem(S11, S10, S00, S01, r)
+# Solve generalized eigenvalue problem
+# ============================================
+eigenvalues, eigenvectors = solve_eigenvalue_problem(
+    S['S11'], S['S10'], S['S00'], S['S01'], r=3
+)
+
+print(f"Eigenvalues: {eigenvalues}")  # Ordered, largest first
+print(f"All in [0,1]: {np.all((eigenvalues >= 0) & (eigenvalues <= 1))}")  # True
+
+# ============================================
+# 2.3 compute_lr_statistic(lambda_0, lambda_m, T, r)
+# Compute LR test statistic
+# ============================================
+lambda_0 = np.array([0.8, 0.5, 0.3])  # Eigenvalues under H0
+lambda_m = np.array([0.85, 0.55, 0.35])  # Eigenvalues under Ha
+
+lr_stat = compute_lr_statistic(lambda_0, lambda_m, T=100, r=3)
+print(f"LR statistic: {lr_stat:.4f}")  # Non-negative value
+```
+
+---
+
+### 3. Data Simulation
+
+```python
+from tvrcoint.simulation import (
+    generate_cointegrated_data,
+    dgp_bm,
+    dgp_js,
+    dgp_ey,
+    simulate_critical_values
+)
+
+# ============================================
+# 3.1 generate_cointegrated_data(T, k, r, seed)
+# Generate cointegrated data under H0
+# ============================================
+Y = generate_cointegrated_data(T=200, k=3, r=1, seed=42)
+print(f"Data shape: {Y.shape}")  # (200, 3)
+
+# Reproducible with same seed
+Y2 = generate_cointegrated_data(T=200, k=3, r=1, seed=42)
+print(f"Reproducible: {np.allclose(Y, Y2)}")  # True
+
+# ============================================
+# 3.2 dgp_bm(T, k, p, seed)
+# Bierens-Martins (2010) simulation design
+# ============================================
+Y_bm = dgp_bm(T=200, k=2, p=2, seed=42)
+# Bivariate system with r=1, specific alpha/beta
+print(f"BM DGP shape: {Y_bm.shape}")  # (200, 2)
+
+# ============================================
+# 3.3 dgp_js(T, k, seed)
+# Johansen-Swensen (2002) simulation design
+# ============================================
+Y_js = dgp_js(T=200, k=3, seed=42)
+# Trivariate system with r=1
+print(f"JS DGP shape: {Y_js.shape}")  # (200, 3)
+
+# ============================================
+# 3.4 dgp_ey(T, k, seed)
+# Engle-Yoo (1987) simulation design
+# ============================================
+Y_ey = dgp_ey(T=200, k=3, seed=42)
+# Trivariate system with r=2
+print(f"EY DGP shape: {Y_ey.shape}")  # (200, 3)
+
+# ============================================
+# 3.5 simulate_critical_values(m, k, r, T, n_simulations)
+# Monte Carlo simulation for critical values
+# ============================================
+# Note: This is computationally intensive
+results = simulate_critical_values(
+    m=2, k=2, r=1, T=100,
+    n_simulations=1000,  # Use 10000 for accurate results
+    seed=42,
+    verbose=True
+)
+
+print(f"Simulated 5% CV: {results.critical_values[0.05]:.4f}")
+print(f"Empirical size at asymptotic 5%: {results.empirical_size[0.05]:.4f}")
+```
+
+---
+
+### 4. TV-VECM Estimation
+
+```python
+from tvrcoint import TVVECM
+from tvrcoint.tvvecm import fit_vecm, fit_tvvecm
+from tvrcoint.simulation import generate_cointegrated_data
+import numpy as np
+
+np.random.seed(42)
+Y = generate_cointegrated_data(T=200, k=3, r=1)
+
+# ============================================
+# 4.1 TVVECM class
+# Time-Varying Vector Error Correction Model
+# ============================================
+model = TVVECM()
+
+# Standard VECM (m=0)
+results = model.fit(Y, r=1, m=0, p=2, include_drift=True)
+
+print(f"Sample size T: {results.T}")
+print(f"Variables k: {results.k}")
+print(f"Cointegration rank r: {results.r}")
+print(f"Alpha (adjustment) shape: {results.alpha.shape}")  # (3, 1)
+print(f"Beta (cointegrating) shape: {results.beta.shape}")  # (3, 1)
+print(f"Residuals shape: {results.residuals.shape}")  # (T_eff, 3)
+print(f"Eigenvalues: {results.eigenvalues[:3]}")
+print(f"Log-likelihood: {results.log_likelihood:.2f}")
+
+# TV-VECM (m > 0)
+results_tv = model.fit(Y, r=1, m=5, p=2, include_drift=True)
+
+print(f"\nTV-VECM with m=5:")
+print(f"Xi shape: {results_tv.xi.shape}")  # ((m+1)*k, r) = (18, 1)
+print(f"Log-likelihood: {results_tv.log_likelihood:.2f}")
+
+# ============================================
+# 4.2 Reconstruct time-varying beta
+# ============================================
+beta_t = results_tv.beta_t(T=200)  # Shape (T, k, r)
+print(f"Time-varying beta shape: {beta_t.shape}")  # (200, 3, 1)
+
+# Plot time evolution of first cointegrating vector
+# import matplotlib.pyplot as plt
+# plt.plot(beta_t[:, :, 0])
+
+# ============================================
+# 4.3 Convenience functions
+# ============================================
+# Quick standard VECM
+results_quick = fit_vecm(Y, r=1, p=2)
+
+# Quick TV-VECM
+results_tv_quick = fit_tvvecm(Y, r=1, m=3, p=2)
+```
+
+---
+
+### 5. LR Test for Time-Varying Cointegration
+
+```python
+from tvrcoint import TVCTest
+from tvrcoint.lr_test import tvc_test, critical_values_chi2, TVCTestResults
+from tvrcoint.simulation import generate_cointegrated_data
+import numpy as np
+
+np.random.seed(42)
+Y = generate_cointegrated_data(T=200, k=3, r=1)
+
+# ============================================
+# 5.1 TVCTest class
+# LR test: H0 (time-invariant) vs H1 (time-varying)
+# ============================================
+test = TVCTest()
+results = test.test(Y, r=1, m=5, p=1, include_drift=True)
+
+print("LR Test Results:")
+print(f"  LR statistic: {results.statistic:.4f}")
+print(f"  Degrees of freedom: {results.df}")  # m*k*r = 5*3*1 = 15
+print(f"  Asymptotic p-value: {results.pvalue:.4f}")
+
+# Access eigenvalues
+print(f"  Eigenvalues under H0: {results.eigenvalues_0}")
+print(f"  Eigenvalues under H1: {results.eigenvalues_m}")
+
+# ============================================
+# 5.2 results.summary()
+# Get formatted summary
+# ============================================
+print(results.summary())
+
+# ============================================
+# 5.3 test_multiple_m()
+# Test multiple Chebyshev orders
+# ============================================
+multi_results = test.test_multiple_m(
+    Y, r=1, m_values=[1, 2, 5, 10], p=1
+)
+
+print("\nResults for different m values:")
+for m, res in multi_results.items():
+    print(f"  m={m:2d}: LR={res.statistic:8.2f}, df={res.df:3d}, p={res.pvalue:.4f}")
+
+# ============================================
+# 5.4 tvc_test() convenience function
+# ============================================
+results = tvc_test(Y, r=1, m=5, p=1)
+print(f"\nQuick test: LR={results.statistic:.2f}, p={results.pvalue:.4f}")
+
+# ============================================
+# 5.5 critical_values_chi2()
+# Get asymptotic critical values
+# ============================================
+cv = critical_values_chi2(df=15, levels=[0.10, 0.05, 0.01])
+print(f"\nAsymptotic CV (df=15): 10%={cv[0.10]:.2f}, 5%={cv[0.05]:.2f}, 1%={cv[0.01]:.2f}")
+```
+
+---
+
+### 6. Bootstrap Tests (Recommended)
+
+```python
+from tvrcoint import BootstrapTVCTest
+from tvrcoint.bootstrap import bootstrap_tvc_test
+from tvrcoint.simulation import generate_cointegrated_data
+import numpy as np
+
+np.random.seed(42)
+Y = generate_cointegrated_data(T=150, k=2, r=1)
+
+# ============================================
+# 6.1 BootstrapTVCTest class
+# Wild Bootstrap (recommended)
+# ============================================
+test = BootstrapTVCTest()
+
+results = test.test(
+    Y,
+    r=1,                 # Cointegration rank
+    m=5,                 # Chebyshev polynomial order
+    p=1,                 # VAR lag order
+    method='wild',       # 'wild' or 'iid'
+    restricted=False,    # Use unrestricted residuals (recommended)
+    B=399,               # Number of bootstrap replications
+    include_drift=True,
+    seed=42              # For reproducibility
+)
+
+print("Wild Bootstrap Results:")
+print(f"  LR statistic: {results.statistic:.4f}")
+print(f"  Bootstrap p-value: {results.pvalue_bootstrap:.4f}")
+print(f"  Asymptotic p-value: {results.pvalue_asymptotic:.4f}")
+print(f"  Method: {results.method}")
+print(f"  Replications (B): {results.B}")
+
+# ============================================
+# 6.2 Bootstrap critical values
+# ============================================
+print(f"\nBootstrap Critical Values:")
+print(f"  10%: {results.critical_values[0.10]:.4f}")
+print(f"  5%:  {results.critical_values[0.05]:.4f}")
+print(f"  1%:  {results.critical_values[0.01]:.4f}")
+
+# ============================================
+# 6.3 Access bootstrap distribution
+# ============================================
+bs_stats = results.bootstrap_statistics
+print(f"\nBootstrap distribution:")
+print(f"  Mean: {np.mean(bs_stats):.4f}")
+print(f"  Std:  {np.std(bs_stats):.4f}")
+print(f"  Min:  {np.min(bs_stats):.4f}")
+print(f"  Max:  {np.max(bs_stats):.4f}")
+
+# ============================================
+# 6.4 results.summary()
+# ============================================
+print(results.summary())
+
+# ============================================
+# 6.5 i.i.d. Bootstrap
+# For i.i.d. Gaussian errors
+# ============================================
+results_iid = test.test(
+    Y, r=1, m=5, p=1,
+    method='iid',
+    restricted=False,
+    B=399,
+    seed=42
+)
+
+print(f"\ni.i.d. Bootstrap p-value: {results_iid.pvalue_bootstrap:.4f}")
+
+# ============================================
+# 6.6 Restricted vs Unrestricted residuals
+# ============================================
+# Unrestricted: residuals from TV-VECM (m>0) - recommended
+results_ur = test.test(Y, r=1, m=5, p=1, method='wild', restricted=False, B=399)
+
+# Restricted: residuals from standard VECM (m=0)
+results_r = test.test(Y, r=1, m=5, p=1, method='wild', restricted=True, B=399)
+
+print(f"\nUnrestricted p-value: {results_ur.pvalue_bootstrap:.4f}")
+print(f"Restricted p-value: {results_r.pvalue_bootstrap:.4f}")
+
+# ============================================
+# 6.7 bootstrap_tvc_test() convenience function
+# ============================================
+results = bootstrap_tvc_test(
+    Y, r=1, m=5, p=1,
+    method='wild', B=399, seed=42
+)
+print(f"\nQuick bootstrap: p={results.pvalue_bootstrap:.4f}")
+```
+
+---
+
+### 7. Output Formatting
+
+```python
+from tvrcoint.output import (
+    format_results,
+    results_to_latex,
+    results_to_markdown,
+    results_to_html,
+    format_pvalue,
+    create_comparison_table
+)
+from tvrcoint import BootstrapTVCTest
+from tvrcoint.simulation import generate_cointegrated_data
+import numpy as np
+
+np.random.seed(42)
+Y = generate_cointegrated_data(T=150, k=2, r=1)
+
+test = BootstrapTVCTest()
+results = test.test(Y, r=1, m=5, p=1, method='wild', B=199, seed=42)
+
+# ============================================
+# 7.1 format_pvalue()
+# Format p-values with significance stars
+# ============================================
+print("P-value formatting:")
+print(f"  0.001 -> {format_pvalue(0.001)}")   # '0.0010***'
+print(f"  0.03  -> {format_pvalue(0.03)}")    # '0.0300**'
+print(f"  0.08  -> {format_pvalue(0.08)}")    # '0.0800*'
+print(f"  0.15  -> {format_pvalue(0.15)}")    # '0.1500'
+
+# ============================================
+# 7.2 results_to_latex()
+# Export to LaTeX table
+# ============================================
+latex_output = results_to_latex(results)
+print("\nLaTeX output:")
+print(latex_output)
+
+# Save to file
+with open('results_table.tex', 'w') as f:
+    f.write(latex_output)
+
+# ============================================
+# 7.3 results_to_markdown()
+# Export to Markdown table
+# ============================================
+md_output = results_to_markdown(results)
+print("\nMarkdown output:")
+print(md_output)
+
+# ============================================
+# 7.4 results_to_html()
+# Export to HTML with styling
+# ============================================
+html_output = results_to_html(results)
+
+# Save to file
+with open('results_table.html', 'w') as f:
+    f.write(html_output)
+
+print("\nHTML output saved to results_table.html")
+
+# ============================================
+# 7.5 format_results()
+# Generic formatter
+# ============================================
+text_output = format_results(results, 'text')
+latex_output = format_results(results, 'latex')
+md_output = format_results(results, 'markdown')
+html_output = format_results(results, 'html')
+
+# ============================================
+# 7.6 create_comparison_table()
+# Compare multiple test results
+# ============================================
+results_list = []
+for m in [1, 2, 5]:
+    r = test.test(Y, r=1, m=m, p=1, method='wild', B=199, seed=m)
+    results_list.append(r)
+
+comparison_latex = create_comparison_table(
+    results_list,
+    labels=['m=1', 'm=2', 'm=5']
+)
+print("\nComparison table:")
+print(comparison_latex)
+```
+
+---
+
+### 8. Critical Values
+
+```python
+from tvrcoint.critical_values import (
+    get_critical_value,
+    get_asymptotic_critical_value,
+    print_critical_value_table,
+    compare_with_asymptotic,
+    CRITICAL_VALUES
+)
+
+# ============================================
+# 8.1 get_asymptotic_critical_value()
+# Chi-square critical values
+# ============================================
+cv = get_asymptotic_critical_value(m=5, k=2, r=1, level=0.05)
+# df = m*k*r = 10
+print(f"Asymptotic 5% CV (df=10): {cv:.4f}")
+
+cv_01 = get_asymptotic_critical_value(m=5, k=3, r=1, level=0.01)
+# df = 15
+print(f"Asymptotic 1% CV (df=15): {cv_01:.4f}")
+
+# ============================================
+# 8.2 get_critical_value()
+# Get pre-computed or asymptotic CV
+# ============================================
+# Pre-computed (if available)
+cv = get_critical_value(m=2, k=2, r=1, T=100, level=0.05)
+print(f"CV for m=2, k=2, r=1, T=100: {cv:.4f}")
+
+# Falls back to asymptotic if not pre-computed
+cv_fallback = get_critical_value(m=15, k=5, r=2, T=500, level=0.05)
+print(f"CV (fallback): {cv_fallback:.4f}")
+
+# ============================================
+# 8.3 print_critical_value_table()
+# Display pre-computed tables
+# ============================================
+print_critical_value_table(k=2, r=1)
+
+# ============================================
+# 8.4 compare_with_asymptotic()
+# Compare simulated vs asymptotic CVs
+# ============================================
+compare_with_asymptotic(k=2, r=1)
+
+# ============================================
+# 8.5 Access raw data
+# ============================================
+# CRITICAL_VALUES[k][r][T][m] = {'cv_10': ..., 'cv_05': ..., 'cv_01': ...}
+if 2 in CRITICAL_VALUES and 1 in CRITICAL_VALUES[2]:
+    print("\nAvailable T values for k=2, r=1:")
+    print(list(CRITICAL_VALUES[2][1].keys()))
+```
+
+---
+
+## Complete Workflow Example
+
+```python
+"""
+Complete workflow: PPP Hypothesis Testing
+"""
+import numpy as np
+from tvrcoint import BootstrapTVCTest
+from tvrcoint.simulation import generate_cointegrated_data
+from tvrcoint.output import results_to_latex
+
+# 1. Load or simulate data
+np.random.seed(42)
+Y = generate_cointegrated_data(T=200, k=3, r=1)
+# Or: Y = pd.read_csv('ppp_data.csv').values
+
+# 2. Set test parameters
+r = 1    # Cointegration rank
+m = 5    # Chebyshev polynomial order
+p = 1    # VAR lag order
+B = 399  # Bootstrap replications
+
+# 3. Perform bootstrap test
+test = BootstrapTVCTest()
+results = test.test(
+    Y, r=r, m=m, p=p,
+    method='wild',
+    restricted=False,
+    B=B,
+    seed=42
+)
+
+# 4. Display results
+print(results.summary())
+
+# 5. Interpretation
+if results.pvalue_bootstrap < 0.05:
+    print("Conclusion: Reject H0 -> Time-varying cointegration")
+else:
+    print("Conclusion: Cannot reject H0 -> Time-invariant cointegration")
+
+# 6. Export for publication
+latex_table = results_to_latex(results)
+with open('ppp_results.tex', 'w') as f:
+    f.write(latex_table)
+```
+
+---
+
+## Citation
+
+If you use this library in your research, please cite:
+
+```bibtex
+@article{bierens2010time,
+  title={Time-Varying Cointegration},
+  author={Bierens, Herman J. and Martins, Luis F.},
+  journal={Econometric Theory},
+  volume={26},
+  number={5},
+  pages={1453--1490},
+  year={2010},
+  publisher={Cambridge University Press}
+}
+
+@article{martins2015bootstrap,
+  title={Bootstrap Tests for Time Varying Cointegration},
+  author={Martins, Luis F.},
+  journal={Econometric Reviews},
+  year={2015},
+  publisher={Taylor \& Francis}
+}
+```
+
+## Author
+
+**Dr Merwan Roudane**
+- Email: merwanroudane920@gmail.com
+- GitHub: [https://github.com/merwanroudane/tvrcoint](https://github.com/merwanroudane/tvrcoint)
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
