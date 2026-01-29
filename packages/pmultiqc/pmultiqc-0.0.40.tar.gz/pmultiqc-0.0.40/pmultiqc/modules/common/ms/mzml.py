@@ -1,0 +1,282 @@
+from __future__ import annotations
+
+from pathlib import Path
+from datetime import datetime
+from pyopenms import MzMLFile, MSExperiment
+import pandas as pd
+import numpy as np
+
+from pmultiqc.modules.common.ms.base import BaseParser
+from pmultiqc.modules.common.logging import get_logger
+from pmultiqc.modules.common.file_utils import file_prefix
+from pmultiqc.modules.common.ms_io import (
+    get_ms_qc_info,
+    process_long_trends
+)
+
+
+class MzMLReader(BaseParser):
+    def __init__(
+            self,
+            file_paths: list[str | Path],
+            ms_with_psm,
+            identified_spectrum,
+            mzml_charge_plot,
+            mzml_peak_distribution_plot,
+            mzml_peaks_ms2_plot,
+            mzml_charge_plot_1,
+            mzml_peak_distribution_plot_1,
+            mzml_peaks_ms2_plot_1,
+            ms_without_psm,
+            enable_dia: bool = False,
+            enable_mzid: bool = False
+    ) -> None:
+
+        """
+        Read mzML files and extract information
+
+        Args:
+            ms_paths: List of paths to mzML files
+            ms_with_psm: List of MS files with PSMs
+            identified_spectrum: Dictionary of identified spectra by MS file
+            mzml_charge_plot: Histogram for charge distribution of identified spectra
+            mzml_peak_distribution_plot: Histogram for peak distribution of identified spectra
+            mzml_peaks_ms2_plot: Histogram for peaks per MS2 of identified spectra
+            mzml_charge_plot_1: Histogram for charge distribution of unidentified spectra
+            mzml_peak_distribution_plot_1: Histogram for peak distribution of unidentified spectra
+            mzml_peaks_ms2_plot_1: Histogram for peaks per MS2 of unidentified spectra
+            ms_without_psm: List of MS files without PSMs
+            enable_dia: Whether DIA mode is enabled
+            enable_mzid: Whether mzid_plugin mode is enabled
+        """
+
+        super().__init__(file_paths)
+        self.ms_with_psm = ms_with_psm
+        self.identified_spectrum = identified_spectrum
+        self.mzml_charge_plot = mzml_charge_plot
+        self.mzml_peak_distribution_plot = mzml_peak_distribution_plot
+        self.mzml_peaks_ms2_plot = mzml_peaks_ms2_plot
+        self.mzml_charge_plot_1 = mzml_charge_plot_1
+        self.mzml_peak_distribution_plot_1 = mzml_peak_distribution_plot_1
+        self.mzml_peaks_ms2_plot_1 = mzml_peaks_ms2_plot_1
+        self.ms_without_psm = ms_without_psm
+        self.enable_dia = enable_dia
+        self.enable_mzid = enable_mzid
+
+        # Outputs populated by parse()
+        self.mzml_table = {}
+        self.heatmap_charge = {}
+        self.total_ms2_spectra = 0
+        self.ms1_tic = {}
+        self.ms1_bpc = {}
+        self.ms1_peaks = {}
+        self.ms1_general_stats = {}
+        self.current_sum_by_run = {}
+        self.mzml_ms_df = pd.DataFrame()
+        self.long_trends = {}
+
+        self.log = get_logger("pmultiqc.modules.common.ms.mzml")
+
+    def parse(self, **_kwargs) -> None:
+        mzml_table = {}
+        heatmap_charge = {}
+        total_ms2_spectra = 0
+
+        mzml_ms_dicts = list()
+        ms1_tic = {}
+        ms1_bpc = {}
+        ms1_peaks = {}
+        ms1_general_stats = {}
+        current_sum_by_run = {}
+
+        trends_data = {
+            "time": {},
+            "rt": {},
+            "ms2_prec_intensity": {},
+            "ms1_summed_intensity": {}
+        }
+
+        for file_name in self.file_paths:
+            ms1_number = 0
+            ms2_number = 0
+
+            self.log.info(
+                "{}: Parsing mzML file {}...".format(datetime.now().strftime("%H:%M:%S"), file_name)
+            )
+
+            mzml_exp = MSExperiment()
+            MzMLFile().load(file_name, mzml_exp)
+            self.log.info(
+                "{}: Done parsing mzML file {}...".format(datetime.now().strftime("%H:%M:%S"), file_name)
+            )
+
+            m_name = file_prefix(file_name)
+            self.log.info(
+                "{}: Aggregating mzML file {}...".format(datetime.now().strftime("%H:%M:%S"), m_name)
+            )
+
+            spectrums_data = list()
+
+            if mzml_exp.getMetaValue("acquisition_date_time"):
+                acquisition_datetime = str(mzml_exp.getMetaValue("acquisition_date_time"))
+            elif mzml_exp.getDateTime().get():
+                acquisition_datetime = str(mzml_exp.getDateTime().get())
+            else:
+                acquisition_datetime = ""
+
+            charge_2 = 0
+
+            # Collect values for batch processing
+            charge_states_identified = []
+            base_peak_intensities_identified = []
+            peaks_per_ms2_identified = []
+            charge_states_unidentified = []
+            base_peak_intensities_unidentified = []
+            peaks_per_ms2_unidentified = []
+            charge_states_dia = []
+            base_peak_intensities_dia = []
+            peaks_per_ms2_dia = []
+
+            file_has_psm = m_name in self.ms_with_psm
+            identified_spectrum_set = set(self.identified_spectrum.get(m_name, [])) if file_has_psm else set()
+
+            for spectrum in mzml_exp:
+
+                mz_array, intensity_array = spectrum.get_peaks()
+                num_peaks = len(mz_array)
+
+                if num_peaks == 0:
+                    continue
+
+                summed_peak_intensities = float(np.sum(intensity_array))
+
+                ms_level = spectrum.getMSLevel()
+                rt = spectrum.getRT()
+                scan_id = spectrum.getNativeID()
+
+                precursors = spectrum.getPrecursors()
+                precursor_intensity = precursors[0].getIntensity() if precursors else None
+
+                spectrums_data.append(
+                    {
+                        "scan_id": scan_id,
+                        "ms_level": ms_level,
+                        "summed_peak_intensities": summed_peak_intensities,
+                        "rt": rt,
+                        "num_peaks": num_peaks,
+                        "acquisition_datetime": acquisition_datetime,
+                        "precursor_intensity": precursor_intensity,
+                    }
+                )
+
+                if ms_level == 1:
+                    ms1_number += 1
+
+                elif ms_level == 2:
+                    ms2_number += 1
+
+                    charge_state = precursors[0].getCharge() if precursors else 0
+
+                    if self.enable_mzid:
+                        # retention_time: minute
+                        mzml_ms_dicts.append(
+                            {
+                                "spectrumID": scan_id,
+                                "intensity": float(intensity_array.max()),
+                                "retention_time": rt / 60,
+                                "filename": m_name,
+                            }
+                        )
+
+                    peak_per_ms2 = num_peaks
+                    if spectrum.getMetaValue("base peak intensity"):
+                        base_peak_intensity = spectrum.getMetaValue("base peak intensity")
+                    else:
+                        base_peak_intensity = float(intensity_array.max()) if num_peaks > 0 else None
+
+                    if charge_state == 2:
+                        charge_2 += 1
+
+                    if self.enable_dia:
+                        # Collect for batch processing
+                        charge_states_dia.append(charge_state)
+                        base_peak_intensities_dia.append(base_peak_intensity)
+                        peaks_per_ms2_dia.append(peak_per_ms2)
+                        continue
+
+                    if file_has_psm:
+                        if scan_id in identified_spectrum_set:
+                            charge_states_identified.append(charge_state)
+                            base_peak_intensities_identified.append(base_peak_intensity)
+                            peaks_per_ms2_identified.append(peak_per_ms2)
+                        else:
+                            charge_states_unidentified.append(charge_state)
+                            base_peak_intensities_unidentified.append(base_peak_intensity)
+                            peaks_per_ms2_unidentified.append(peak_per_ms2)
+                    else:
+                        if m_name not in self.ms_without_psm:
+                            self.ms_without_psm.append(m_name)
+
+            # Batch add collected values to histograms
+            if self.enable_dia:
+                if charge_states_dia:
+                    self.mzml_charge_plot.add_values_batch(charge_states_dia)
+                if base_peak_intensities_dia:
+                    self.mzml_peak_distribution_plot.add_values_batch(base_peak_intensities_dia)
+                if peaks_per_ms2_dia:
+                    self.mzml_peaks_ms2_plot.add_values_batch(peaks_per_ms2_dia)
+            else:
+                if charge_states_identified:
+                    self.mzml_charge_plot.add_values_batch(charge_states_identified)
+                if base_peak_intensities_identified:
+                    self.mzml_peak_distribution_plot.add_values_batch(base_peak_intensities_identified)
+                if peaks_per_ms2_identified:
+                    self.mzml_peaks_ms2_plot.add_values_batch(peaks_per_ms2_identified)
+                if charge_states_unidentified:
+                    self.mzml_charge_plot_1.add_values_batch(charge_states_unidentified)
+                if base_peak_intensities_unidentified:
+                    self.mzml_peak_distribution_plot_1.add_values_batch(base_peak_intensities_unidentified)
+                if peaks_per_ms2_unidentified:
+                    self.mzml_peaks_ms2_plot_1.add_values_batch(peaks_per_ms2_unidentified)
+
+            heatmap_charge[m_name] = charge_2 / ms2_number if ms2_number > 0 else 0
+            total_ms2_spectra += ms2_number
+            mzml_table[m_name] = {"MS1_Num": ms1_number}
+            mzml_table[m_name]["MS2_Num"] = ms2_number
+            self.log.info(
+                "{}: Done aggregating mzML file {}...".format(
+                    datetime.now().strftime("%H:%M:%S"), m_name
+                )
+            )
+
+            spectrums_df = pd.DataFrame(spectrums_data)
+
+            (
+                ms1_tic[m_name],
+                ms1_bpc[m_name],
+                ms1_peaks[m_name],
+                ms1_general_stats[m_name],
+                current_sum_by_run[m_name],
+            ) = get_ms_qc_info(spectrums_df)
+
+            process_long_trends(spectrums_df, m_name, trends_data)
+
+        self.mzml_table = mzml_table
+        self.heatmap_charge = heatmap_charge
+        self.total_ms2_spectra = total_ms2_spectra
+        self.mzml_ms_df = pd.DataFrame(mzml_ms_dicts)
+
+        ms1_tic = {k: v for k, v in ms1_tic.items() if v is not None}
+        ms1_bpc = {k: v for k, v in ms1_bpc.items() if v is not None}
+        ms1_peaks = {k: v for k, v in ms1_peaks.items() if v is not None}
+        ms1_general_stats = {k: v for k, v in ms1_general_stats.items() if v is not None}
+
+        self.ms1_tic = ms1_tic
+        self.ms1_bpc = ms1_bpc
+        self.ms1_peaks = ms1_peaks
+        self.ms1_general_stats = ms1_general_stats
+        self.current_sum_by_run = current_sum_by_run
+
+        self.long_trends = trends_data
+
+        return None

@@ -1,0 +1,309 @@
+Metadata-Version: 2.4
+Name: pmultiqc
+Version: 0.0.40
+Summary: Python package for quality control of proteomics datasets, based on multiqc package
+License: MIT
+License-File: LICENSE
+Keywords: quantms,proteomics,quality control,MultiQC
+Author: Yasset Perez-Riverol
+Author-email: ypriverol@gmail.com
+Requires-Python: >=3.10
+Classifier: Development Status :: 4 - Beta
+Classifier: Environment :: Console
+Classifier: Environment :: Web Environment
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Natural Language :: English
+Classifier: Operating System :: MacOS :: MacOS X
+Classifier: Operating System :: POSIX
+Classifier: Operating System :: Unix
+Classifier: Programming Language :: JavaScript
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Classifier: Topic :: Scientific/Engineering
+Classifier: Topic :: Scientific/Engineering :: Bio-Informatics
+Classifier: Topic :: Scientific/Engineering :: Visualization
+Requires-Dist: lxml
+Requires-Dist: multiqc (>=1.29,<=1.33)
+Requires-Dist: numpy (>=1.23)
+Requires-Dist: pandas (>=1.5)
+Requires-Dist: pyarrow
+Requires-Dist: pyopenms (<=3.4.0)
+Requires-Dist: pyteomics
+Requires-Dist: scikit-learn (>=1.2)
+Requires-Dist: sdrf-pipelines (>=0.0.32)
+Requires-Dist: statsmodels
+Requires-Dist: urllib3 (>=2.6.1)
+Project-URL: GitHub, https://github.com/bigbio/pmultiqc
+Project-URL: LICENSE, https://github.com/bigbio/pmultiqc/blob/main/LICENSE
+Project-URL: Quantms, https://quantms.org
+Description-Content-Type: text/markdown
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/bigbio/pmultiqc/main/docs/images/pmultiqc_logo_darkbg.svg">
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/bigbio/pmultiqc/main/docs/images/pmultiqc_logo.svg">
+    <img src="https://raw.githubusercontent.com/bigbio/pmultiqc/main/docs/images/pmultiqc_logo.svg" width="45%" alt="pmultiqc Logo"/>
+  </picture>
+</p>
+
+[![Python application](https://github.com/bigbio/pmultiqc/actions/workflows/python-app.yml/badge.svg?branch=main)](https://github.com/bigbio/pmultiqc/actions/workflows/python-app.yml)
+[![Upload Python Package](https://github.com/bigbio/pmultiqc/actions/workflows/python-publish.yml/badge.svg)](https://github.com/bigbio/pmultiqc/actions/workflows/python-publish.yml)
+![PyPI - Version](https://img.shields.io/pypi/v/pmultiqc?style=flat)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/pmultiqc)
+![Pepy Total Downloads](https://img.shields.io/pepy/dt/pmultiqc)
+![GitHub Repo stars](https://img.shields.io/github/stars/bigbio/pmultiqc)
+
+## What is pmultiqc?
+
+pmultiqc is a MultiQC plugin for comprehensive quality control reporting of proteomics data. It generates interactive HTML reports with visualizations and metrics to help you assess the quality of your mass spectrometry-based proteomics experiments.
+
+### Key Features
+
+- Works with multiple proteomics data formats and analysis pipelines
+- Generates interactive HTML reports with visualizations
+- Provides comprehensive QC metrics for MS data
+- Supports different quantification methods (LFQ, TMT, DIA)
+- Integrates with the MultiQC framework
+
+## Supported Data Sources
+
+pmultiqc supports the following data sources:
+
+1. **[quantms pipeline](https://github.com/nf-core/quantms)** output files:
+   - `experimental_design.tsv`: Experimental design file
+   - `*.mzTab`: Results of the identification
+   - `*msstats*.csv`: MSstats/MSstatsTMT input files
+   - `*.mzML`: Spectra files
+   - `*ms_info.tsv`: MS quality control information
+   - `*.idXML`: Identification results
+   - `*.yml`: Pipeline parameters (optional)
+   - `diann_report.tsv` or `diann_report.parquet`: DIA-NN main report (DIA analysis only)
+
+2. **[MaxQuant](https://www.maxquant.org)** result files:
+   - `parameters.txt`: Analysis parameters
+   - `proteinGroups.txt`: Protein identification results
+   - `summary.txt`: Summary statistics
+   - `evidence.txt`: Peptide evidence
+   - `msms.txt`: MS/MS scan information
+   - `msmsScans.txt`: MS/MS scan details
+   - `*sdrf.tsv`: SDRF-Proteomics (optional)
+
+3. **[DIA-NN](https://aptila.bio)** result files:
+   - `report.tsv` or `report.parquet`: DIA-NN main report
+   - `*sdrf.tsv`: SDRF-Proteomics (optional)
+   - `*ms_info.parquet`: mzML statistics after RAW-to-mzML conversion (using **[quantms-utils](https://github.com/bigbio/quantms-utils)**) (optional)
+
+4. **[ProteoBench](https://proteobench.readthedocs.io)** file:
+   - `result_performance.csv`: ProteoBench result file
+
+5. **mzIdentML** files:
+   - `*.mzid`: Identification results
+   - `*.mzML` or `*.mgf`: Corresponding spectra files
+
+6. **[FragPipe](https://fragpipe.nesvilab.org)** files:
+   - `psm.tsv`: FragPipe report files
+
+## Installation
+
+### Install from PyPI
+
+```bash
+# To install the stable release from PyPI:
+pip install pmultiqc
+```
+
+### Install from Source (Without PyPI)
+
+```bash
+# Fork the repository on GitHub
+
+# Clone the repository
+git clone https://github.com/your-username/pmultiqc.git
+cd pmultiqc
+
+# Install the package locally
+pip install .
+
+# Now you can run pmultiqc on your own dataset
+```
+
+## Usage
+
+pmultiqc is used as a plugin for MultiQC. After installation, you can run it using the MultiQC command-line interface.
+
+### Basic Usage
+
+```bash
+multiqc {analysis_dir} -o {output_dir}
+```
+
+Where:
+- `{analysis_dir}` is the directory containing your proteomics data files
+- `{output_dir}` is the directory where you want to save the report
+
+### Examples
+
+#### For quantms pipeline results
+
+```bash
+# Basic usage
+multiqc --quantms-plugin /path/to/quantms/results -o ./report
+
+# With specific options
+multiqc --quantms-plugin /path/to/quantms/results -o ./report --remove-decoy --condition factor
+```
+
+#### For MaxQuant results
+
+```bash
+multiqc --maxquant-plugin /path/to/maxquant/results -o ./report
+```
+
+#### For DIA-NN results
+
+```bash
+multiqc --diann-plugin /path/to/diann/results -o ./report
+```
+
+#### For ProteoBench files
+
+```bash
+multiqc --proteobench-plugin /path/to/proteobench/files -o ./report
+```
+
+#### For mzIdentML files
+
+```bash
+multiqc --mzid-plugin /path/to/mzid/files -o ./report
+```
+
+#### For FragPipe files
+
+```bash
+multiqc --fragpipe-plugin /path/to/fragpipe/files -o ./report
+```
+
+
+### Command-line Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--keep-raw` | Keep filenames in experimental design output as raw | `False` |
+| `--condition` | Create conditions from provided columns | - |
+| `--remove-decoy` | Remove decoy peptides when counting | `True` |
+| `--decoy-affix` | Pre- or suffix of decoy proteins in their accession | `DECOY_` |
+| `--contaminant-affix` | The contaminant prefix or suffix | `CONT` |
+| `--affix-type` | Location of the decoy marker (prefix or suffix) | `prefix` |
+| `--disable-plugin` | Disable pmultiqc plugin | `False` |
+| `--quantification-method` | Quantification method for LFQ experiment | `feature_intensity` |
+| `--disable-table` | Disable protein/peptide table plots for large datasets | `False` |
+| `--ignored-idxml` | Ignore idXML files for faster processing | `False` |
+| `--quantms-plugin` | Generate reports based on Quantms results | `False` |
+| `--diann-plugin` | Generate reports based on DIANN results | `False` |
+| `--maxquant-plugin` | Generate reports based on MaxQuant results | `False` |
+| `--proteobench-plugin` | Generate reports based on ProteoBench result | `False` |
+| `--mzid-plugin` | Generate reports based on mzIdentML files | `False` |
+| `--fragpipe-plugin` | Generate reports based on FragPipe files | `False` |
+| `--disable-hoverinfo` | Disable interactive hover tooltips in the plots | `False` |
+
+## QC Metrics and Visualizations
+
+pmultiqc generates a comprehensive report with multiple sections:
+
+### General Report
+
+- **Experimental Design**: Overview of the dataset structure
+- **Pipeline Performance Overview**: Key metrics including:
+  - Contaminants Score
+  - Peptide Intensity
+  - Charge Score
+  - Missed Cleavages
+  - ID rate over RT
+  - MS2 OverSampling
+  - Peptide Missing Value
+- **Summary Table**: Spectra counts, identification rates, peptide and protein counts
+- **MS1 Information**: Quality metrics at MS1 level
+- **Pipeline Results Statistics**: Overall identification results
+- **Number of Peptides per Protein**: Distribution of peptide counts per protein
+
+### Results Tables
+
+- **Peptide Table**: First 500 peptides in the dataset
+- **PSM Table**: First 500 PSMs (Peptide-Spectrum Matches)
+
+### Identification Statistics
+
+- **Spectra Tracking**: Summary of identification results by file
+- **Search Engine Scores**: Distribution of search engine scores
+- **Precursor Charges Distribution**: Distribution of precursor ion charges
+- **Number of Peaks per MS/MS Spectrum**: Peak count distribution
+- **Peak Intensity Distribution**: MS2 peak intensity distribution
+- **Oversampling Distribution**: Analysis of MS2 oversampling
+- **Delta Mass**: Mass accuracy distribution
+- **Peptide/Protein Quantification Tables**: Quantitative levels across conditions
+
+## Example Reports
+
+You can find example reports on the [docs page](https://bigbio.github.io/pmultiqc).
+
+## Reporting Issues
+
+We have comprehensive issue templates to help you report problems effectively:
+
+- **Bug Reports**: For crashes, incorrect metrics, or unexpected behavior
+- **Metric Requests**: For new proteomics quality control metrics (we actively encourage these!)
+- **Feature Requests**: For new visualizations, data format support, or functionality
+- **Service Issues**: For problems with the PRIDE web service
+- **General Issues**: For questions, suggestions, or issues that don't fit other categories
+
+## Contributing
+
+We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for detailed instructions.
+
+### Quick Start for Contributors
+
+1. Fork the repository
+2. Clone your fork: `git clone https://github.com/YOUR-USERNAME/pmultiqc`
+3. Create a feature branch: `git checkout -b new-feature`
+4. Make your changes
+5. Install in development mode: `pip install -e .`
+6. Test your changes: `cd tests && multiqc resources/LFQ -o ./`
+7. Commit your changes: `git commit -am 'Add new feature'`
+8. Push to the branch: `git push origin new-feature`
+9. Submit a pull request
+
+## License
+
+This project is licensed under the terms of the LICENSE file included in the repository.
+
+## Citation
+
+If you use pmultiqc in your research, please cite our preprint:
+
+**pmultiqc: An open-source, lightweight, and metadata-oriented QC reporting library for MS proteomics**  
+Qi-Xuan Yue, Chengxin Dai, Selvakumar Kamatchinathan, Chakradhar Bandla, Henry Webel, Asier Larrea, Wout Bittremieux, Julian Uszkoreit, Tom David Muller, Jinqiu Xiao, Juergen Cox, Philip Ewels, Vadim Demichev, Oliver Kohlbacher, Timo Sachsenberg, Chris Bielow, Mingze Bai, Yasset Perez-Riverol  
+*bioRxiv* 2025. DOI: [10.1101/2025.11.02.685980](https://doi.org/10.1101/2025.11.02.685980)
+
+Preprint: https://www.biorxiv.org/content/early/2025/11/03/2025.11.02.685980
+
+### BibTeX
+
+```bibtex
+@article{Yue2025.11.02.685980,
+  author = {Yue, Qi-Xuan and Dai, Chengxin and Kamatchinathan, Selvakumar and Bandla, Chakradhar and Webel, Henry and Larrea, Asier and Bittremieux, Wout and Uszkoreit, Julian and Muller, Tom David and Xiao, Jinqiu and Cox, Juergen and Ewels, Philip and Demichev, Vadim and Kohlbacher, Oliver and Sachsenberg, Timo and Bielow, Chris and Bai, Mingze and Perez-Riverol, Yasset},
+  title = {pmultiqc: An open-source, lightweight, and metadata-oriented QC reporting library for MS proteomics},
+  elocation-id = {2025.11.02.685980},
+  year = {2025},
+  doi = {10.1101/2025.11.02.685980},
+  publisher = {Cold Spring Harbor Laboratory},
+  URL = {https://www.biorxiv.org/content/early/2025/11/03/2025.11.02.685980},
+  eprint = {https://www.biorxiv.org/content/early/2025/11/03/2025.11.02.685980.full.pdf},
+  journal = {bioRxiv}
+}
+```

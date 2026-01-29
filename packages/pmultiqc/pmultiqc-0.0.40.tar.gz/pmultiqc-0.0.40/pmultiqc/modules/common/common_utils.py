@@ -1,0 +1,809 @@
+import pandas as pd
+from datetime import datetime
+import os
+import copy
+from collections import OrderedDict
+import numpy as np
+
+from typing import Dict, List
+from multiqc.plots.table_object import InputRow
+from multiqc.types import SampleGroup, SampleName
+
+from sdrf_pipelines.openms.openms import OpenMS
+
+from pmultiqc.modules.common.histogram import Histogram
+from pmultiqc.modules.common.file_utils import file_prefix
+from pmultiqc.modules.common import ms_io
+from pmultiqc.modules.common.logging import get_logger
+
+log = get_logger("pmultiqc.modules.common.common_utils")
+
+
+def read_openms_design(desfile: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    with open(desfile, "r") as f:
+
+        data = f.readlines()
+        s_row = False
+        f_table = []
+        s_table = []
+        f_header = None
+        s_header = None
+
+        for row in data:
+            if row == "\n":
+                continue
+            if "MSstats_Condition" in row:
+                s_row = True
+                s_header = row.replace("\n", "").split("\t")
+            elif s_row:
+                s_table.append(row.replace("\n", "").split("\t"))
+            elif "Spectra_Filepath" in row:
+                f_header = row.replace("\n", "").split("\t")
+            else:
+                f_table.append(row.replace("\n", "").split("\t"))
+
+        if f_header is None:
+            raise ValueError("Cannot find 'Spectra_Filepath' header in file!")
+        if s_header is None:
+            raise ValueError("Cannot find 'MSstats_Condition' header in file!")
+
+        f_table = pd.DataFrame(f_table, columns=f_header)
+        # Vectorized operation is more efficient than apply with lambda
+        f_table["Run"] = f_table["Spectra_Filepath"].apply(file_prefix)
+        s_data_frame = pd.DataFrame(s_table, columns=s_header)
+
+    return s_data_frame, f_table
+
+
+def condition_split(conditions: str) -> dict[str, str]:
+    items = conditions.split(';')
+    key_value_pairs = [item.split('=') for item in items if '=' in item]
+
+    result_dict = {k.strip(): v.strip() for k, v in key_value_pairs}
+    return result_dict
+
+
+def get_ms_path(find_log_files) -> tuple[list[str], bool, list[str]]:
+    ms_paths = []
+    for mzml_current_file in find_log_files("pmultiqc/mzML", filecontents=False):
+        ms_paths.append(os.path.join(mzml_current_file["root"], mzml_current_file["fn"]))
+
+    ms_info_path = []
+    for ms_info in find_log_files("pmultiqc/ms_info", filecontents=False):
+        ms_info_path.append(os.path.join(ms_info["root"], ms_info["fn"]))
+        ms_info_path.sort()
+
+    read_ms_info = False
+    if len(ms_info_path) > 0:
+        read_ms_info = True
+        ms_paths = [
+            file_prefix(i).replace("_ms_info", ".mzML") for i in ms_info_path
+        ]
+
+    return ms_info_path, read_ms_info, ms_paths
+
+
+def parse_mzml(
+        is_bruker: bool = False,
+        read_ms_info: bool = False,
+        ms_info_path: list[str] | None = None,
+        ms_with_psm: list[str] | None = None,
+        identified_spectrum: list[str] | None = None,
+        enable_dia: bool = False,
+        ms_paths: list[str] | None = None,
+        enable_mzid: bool = False,
+):
+
+    ms1_tic = {}
+    ms1_bpc = {}
+    ms1_peaks = {}
+    ms1_general_stats = {}
+    current_sum_by_run = {}
+    long_trends = {}
+
+    if is_bruker and read_ms_info:
+        for file in ms_info_path:
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            log.info(f"{timestamp}: Parsing ms_statistics dataframe {file}...")
+            mzml_df = pd.read_csv(file, sep="\t")
+            (
+                ms1_tic[os.path.basename(file).replace("_ms_info.tsv", "")],
+                ms1_bpc[os.path.basename(file).replace("_ms_info.tsv", "")],
+                ms1_peaks[os.path.basename(file).replace("_ms_info.tsv", "")],
+                ms1_general_stats[os.path.basename(file).replace("_ms_info.tsv", "")],
+                _,
+            ) = ms_io.get_ms_qc_info(mzml_df)
+
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            log.info(f"{timestamp}: Done aggregating ms_statistics dataframe {file}...")
+        return None
+
+    mzml_peak_distribution_plot = Histogram(
+        "Peak Intensity",
+        plot_category="range",
+        breaks=[0, 10, 100, 300, 500, 700, 900, 1000, 3000, 6000, 10000],
+    )
+
+    mzml_charge_plot = Histogram("Precursor Charge", plot_category="frequency")
+
+    mzml_peaks_ms2_plot = Histogram(
+        "#Peaks per MS/MS spectrum",
+        plot_category="range",
+        breaks=[i for i in range(0, 1001, 100)],
+    )
+
+    # New instances are used for dictionary construction.
+    mzml_peak_distribution_plot_1 = copy.deepcopy(mzml_peak_distribution_plot)
+    mzml_charge_plot_1 = copy.deepcopy(mzml_charge_plot)
+    mzml_peaks_ms2_plot_1 = copy.deepcopy(mzml_peaks_ms2_plot)
+
+    ms_without_psm = []
+
+    mzml_ms_df = None
+
+    # Use the class-based MS info reader
+    if read_ms_info:
+        from pmultiqc.modules.common.ms.msinfo import MsInfoReader
+        msinfo_reader = MsInfoReader(
+            file_paths=ms_info_path,
+            ms_with_psm=ms_with_psm,
+            identified_spectrum=identified_spectrum,
+            mzml_charge_plot=mzml_charge_plot,
+            mzml_peak_distribution_plot=mzml_peak_distribution_plot,
+            mzml_peaks_ms2_plot=mzml_peaks_ms2_plot,
+            mzml_charge_plot_1=mzml_charge_plot_1,
+            mzml_peak_distribution_plot_1=mzml_peak_distribution_plot_1,
+            mzml_peaks_ms2_plot_1=mzml_peaks_ms2_plot_1,
+            ms_without_psm=ms_without_psm,
+            enable_dia=enable_dia,
+        )
+        msinfo_reader.parse()
+        mzml_table = msinfo_reader.mzml_table
+        heatmap_charge = msinfo_reader.heatmap_charge
+        total_ms2_spectra = msinfo_reader.total_ms2_spectra
+        ms1_tic = msinfo_reader.ms1_tic
+        ms1_bpc = msinfo_reader.ms1_bpc
+        ms1_peaks = msinfo_reader.ms1_peaks
+        ms1_general_stats = msinfo_reader.ms1_general_stats
+        current_sum_by_run = msinfo_reader.current_sum_by_run
+        long_trends = msinfo_reader.long_trends
+    else:
+        from pmultiqc.modules.common.ms.mzml import MzMLReader
+
+        mzml_reader = MzMLReader(
+            file_paths=ms_paths,
+            ms_with_psm=ms_with_psm,
+            identified_spectrum=identified_spectrum,
+            mzml_charge_plot=mzml_charge_plot,
+            mzml_peak_distribution_plot=mzml_peak_distribution_plot,
+            mzml_peaks_ms2_plot=mzml_peaks_ms2_plot,
+            mzml_charge_plot_1=mzml_charge_plot_1,
+            mzml_peak_distribution_plot_1=mzml_peak_distribution_plot_1,
+            mzml_peaks_ms2_plot_1=mzml_peaks_ms2_plot_1,
+            ms_without_psm=ms_without_psm,
+            enable_dia=enable_dia,
+            enable_mzid=enable_mzid
+        )
+
+        mzml_reader.parse()
+
+        mzml_table = mzml_reader.mzml_table
+        heatmap_charge = mzml_reader.heatmap_charge
+        total_ms2_spectra = mzml_reader.total_ms2_spectra
+        ms1_tic = mzml_reader.ms1_tic
+        ms1_bpc = mzml_reader.ms1_bpc
+        ms1_peaks = mzml_reader.ms1_peaks
+        ms1_general_stats = mzml_reader.ms1_general_stats
+        current_sum_by_run = mzml_reader.current_sum_by_run
+        long_trends = mzml_reader.long_trends
+
+        if enable_mzid:
+            mzml_ms_df = mzml_reader.mzml_ms_df
+
+    for i in sorted(set(ms_without_psm)):
+        log.warning(f"No PSM found in '{i}'!")
+
+    mzml_peaks_ms2_plot.to_dict()
+    mzml_peak_distribution_plot.to_dict()
+
+    ms_info = dict()
+    ms_info["charge_distribution"] = dict()
+    ms_info["peaks_per_ms2"] = dict()
+    ms_info["peak_distribution"] = dict()
+
+    # Construct compound dictionaries to apply to drawing functions.
+    if enable_dia:
+        mzml_charge_plot.to_dict()
+
+        ms_info["charge_distribution"] = {
+            "Whole Experiment": mzml_charge_plot.dict["data"]
+        }
+        ms_info["peaks_per_ms2"] = {
+            "Whole Experiment": mzml_peaks_ms2_plot.dict["data"]
+        }
+        ms_info["peak_distribution"] = {
+            "Whole Experiment": mzml_peak_distribution_plot.dict["data"]
+        }
+    else:
+        mzml_peaks_ms2_plot_1.to_dict()
+        mzml_peak_distribution_plot_1.to_dict()
+        mzml_charge_plot.to_dict()
+        mzml_charge_plot_1.to_dict()
+
+        mzml_charge_plot.dict["cats"].update(mzml_charge_plot_1.dict["cats"])
+        charge_cats_keys = [int(i) for i in mzml_charge_plot.dict["cats"]]
+        charge_cats_keys.sort()
+        mzml_charge_plot.dict["cats"] = OrderedDict(
+            {str(i): mzml_charge_plot.dict["cats"][str(i)] for i in charge_cats_keys}
+        )
+
+        ms_info["charge_distribution"] = {
+            "identified_spectra": mzml_charge_plot.dict["data"],
+            "unidentified_spectra": mzml_charge_plot_1.dict["data"],
+        }
+        ms_info["peaks_per_ms2"] = {
+            "identified_spectra": mzml_peaks_ms2_plot.dict["data"],
+            "unidentified_spectra": mzml_peaks_ms2_plot_1.dict["data"],
+        }
+        ms_info["peak_distribution"] = {
+            "identified_spectra": mzml_peak_distribution_plot.dict["data"],
+            "unidentified_spectra": mzml_peak_distribution_plot_1.dict["data"],
+        }
+
+    median = np.median(list(heatmap_charge.values()))
+    heatmap_charge_score = dict(
+        zip(
+            heatmap_charge.keys(),
+            list(map(lambda v: 1 - np.abs(v - median), heatmap_charge.values())),
+        )
+    )
+
+    return (
+        mzml_table,
+        mzml_peaks_ms2_plot,
+        mzml_peak_distribution_plot,
+        ms_info,
+        total_ms2_spectra,
+        mzml_ms_df,
+        heatmap_charge_score,
+        mzml_charge_plot,
+        ms1_tic,
+        ms1_bpc,
+        ms1_peaks,
+        ms1_general_stats,
+        current_sum_by_run,
+        long_trends
+    )
+
+
+def mod_group_percentage(df):
+
+    df_copy = df.copy()
+
+    if "Modifications" in df_copy.columns and "modifications" not in df_copy.columns:
+        df_copy = df_copy.rename(columns={"Modifications": "modifications"})
+
+    counts = df_copy["modifications"].str.split(",").explode().value_counts()
+    percentage_df = (counts / len(df_copy["modifications"]) * 100).reset_index()
+    percentage_df.columns = ["modifications", "percentage"]
+
+    # Modified (Total)
+    percentage_df.loc[percentage_df["modifications"] == "Unmodified", "percentage"] = (
+            100 - percentage_df.loc[percentage_df["modifications"] == "Unmodified", "percentage"]
+    )
+    percentage_df.loc[percentage_df["modifications"] == "Unmodified", "modifications"] = (
+        "Modified (Total)"
+    )
+
+    return percentage_df
+
+
+def evidence_rt_count(evidence_data):
+    if any(column not in evidence_data.columns for column in ["retention time", "raw file"]):
+        return None
+
+    if "potential contaminant" in evidence_data.columns:
+        evidence_data = evidence_data[evidence_data["potential contaminant"] != "+"].copy()
+
+    rt_range = [evidence_data["retention time"].min(), evidence_data["retention time"].max()]
+
+    def hist_compute(rt_list, rt_range):
+
+        if rt_range[0] < 5:
+            rt_range_min = 0
+        else:
+            rt_range_min = rt_range[0] - 5
+
+        counts, bin_edges = np.histogram(rt_list, bins=np.arange(rt_range_min, rt_range[1] + 5, 1))
+        bin_mid = (bin_edges[:-1] + bin_edges[1:]) / 2
+        rt_counts = pd.DataFrame({"retention_time": bin_mid, "counts": counts})
+
+        return dict(zip(rt_counts["retention_time"], rt_counts["counts"]))
+
+    rt_count_dict = {}
+    for raw_file, group in evidence_data.groupby("raw file"):
+        rt_count_dict[str(raw_file)] = hist_compute(group["retention time"], rt_range)
+
+    return rt_count_dict
+
+
+def evidence_calibrated_mass_error(
+    evidence_data,
+    recompute=False,
+    filter_outliers_ppm: bool = False
+):
+    # filter_outliers_ppm (if True): Remove rows with mass error [ppm] greater than 1000 (Default: False)
+
+    if "potential contaminant" in evidence_data.columns:
+        evidence_data = evidence_data[evidence_data["potential contaminant"] != "+"].copy()
+
+    if recompute:
+        evd_df = recompute_mass_error(evidence_data)
+    else:
+        evd_df = evidence_data.copy()
+
+    if evd_df is None:
+        if any(column not in evidence_data.columns for column in ["mass error [ppm]", "raw file"]):
+            log.warning(
+                "evidence_calibrated_mass_error: Required columns 'mass error [ppm]' or 'raw file' are missing in Evidence DataFrame."
+            )
+            return None
+        else:
+            log.warning(
+                "Missing required columns. Skipping mass error recomputation and falling back to 'mass error [ppm]' and 'raw file' only."
+            )
+            evd_df = evidence_data[["mass error [ppm]", "raw file"]].copy()
+
+    evd_df.dropna(subset=["mass error [ppm]"], inplace=True)
+
+    # Remove rows with absolute mass error [ppm] greater than 1000
+    if filter_outliers_ppm:
+        evd_df = evd_df[evd_df["mass error [ppm]"].abs() <= 1000].copy()
+
+    if evd_df.empty:
+        log.warning("No valid mass error [ppm] values found after filtering.")
+        return None
+
+    max_abs_ppm = evd_df["mass error [ppm]"].abs().max()
+
+    if max_abs_ppm < 100:
+        num_bins = 1000
+    elif max_abs_ppm < 1000:
+        num_bins = 10000
+    elif max_abs_ppm < 5000:
+        num_bins = 50000
+    else:
+        num_bins = 100000
+
+    bin_series = pd.cut(evd_df["mass error [ppm]"], bins=num_bins)
+
+    # Calculate count only once, derive frequency from it
+    count_bin = bin_series.value_counts(sort=False)
+    total_count = count_bin.sum()
+
+    count_bin_data = {
+        float(interval.mid): int(count) for interval, count in count_bin.items()
+    }
+
+    # Derive frequency from counts (more efficient than calling value_counts twice)
+    if total_count > 0:
+        frequency_bin_data = {
+            float(interval.mid): float(count / total_count)
+            for interval, count in count_bin.items()
+        }
+    else:
+        frequency_bin_data = {k: 0.0 for k in count_bin_data.keys()}
+
+    result_dict = {
+        "count": count_bin_data,
+        "frequency": frequency_bin_data,
+    }
+
+    return result_dict
+
+# re-compute mass error
+def recompute_mass_error(evidence_df):
+    required_cols = [
+        "mass error [ppm]",
+        "uncalibrated mass error [ppm]",
+        "raw file",
+        "mass",
+        "charge",
+        "m/z",
+        "uncalibrated - calibrated m/z [ppm]",
+    ]
+
+    if not all(col in evidence_df.columns for col in required_cols):
+        log.info("Evidence is missing one or more required columns in recompute_mass_error.")
+        return None
+
+    df = evidence_df[required_cols].copy()
+
+    decal_df = df.groupby("raw file", as_index=False).agg(
+        decal=("uncalibrated mass error [ppm]", lambda x: np.median(np.abs(x)) > 1e3)
+    )
+
+    if decal_df["decal"].any():
+
+        log.info("Detected at least one raw file with unusually high uncalibrated mass error.")
+
+        df["theoretical_mz"] = df["mass"] / df["charge"] + 1.00726
+        df["mass_error_ppm"] = (df["theoretical_mz"] - df["m/z"]) / df["theoretical_mz"] * 1e6
+        df["uncalibrated_mass_error_ppm"] = (
+                df["mass_error_ppm"] + df["uncalibrated - calibrated m/z [ppm]"]
+        )
+
+        idx_overwrite = df["raw file"].isin(decal_df.loc[decal_df["decal"], "raw file"])
+        df.loc[idx_overwrite, "mass error [ppm]"] = df.loc[idx_overwrite, "mass_error_ppm"]
+        df.loc[idx_overwrite, "uncalibrated mass error [ppm]"] = df.loc[
+            idx_overwrite, "uncalibrated_mass_error_ppm"
+        ]
+
+    else:
+        log.info("No raw files with unusually high uncalibrated mass error detected.")
+
+    return df[["mass error [ppm]", "uncalibrated mass error [ppm]", "raw file"]]
+
+
+def parse_sdrf(
+        sdrf_path,
+        raw_config=None,
+        condition_config=None
+):
+    OpenMS().openms_convert(
+        sdrf_path,
+        raw_config,  # config.kwargs["keep_raw"],
+        False,
+        True,
+        False,
+        condition_config,  # config.kwargs["condition"],
+    )
+
+
+def cal_num_table_at_sample(file_df, data_per_run):
+
+    if file_df.empty:
+        return dict()
+
+    sample_file_df = file_df.copy()
+    sample_file_df["Sample"] = sample_file_df["Sample"].astype(int)
+
+    cal_num_table_sample = dict()
+    for sample, group in sample_file_df.groupby("Sample", sort=True):
+        proteins_set = set()
+        peptides_set = set()
+        unique_peptides_set = set()
+        modified_pep_set = set()
+
+        for run in group["Run"].unique():
+
+            run_data = data_per_run.get(run)
+            if not run_data:
+                continue
+
+            proteins_set.update(run_data.get("proteins", []))
+            peptides_set.update(run_data.get("peptides", []))
+            unique_peptides_set.update(run_data.get("unique_peptides", []))
+            modified_pep_set.update(run_data.get("modified_peps", []))
+
+        cal_num_table_sample[str(sample)] = {
+            "protein_num": len(proteins_set),
+            "peptide_num": len(peptides_set),
+            "unique_peptide_num": len(unique_peptides_set),
+            "modified_peptide_num": len(modified_pep_set),
+        }
+
+    return cal_num_table_sample
+
+
+def cal_msms_identified_rate(ms2_num_data, identified_data):
+
+    identified_rate = dict()
+    for m, msms_info in identified_data.items():
+        identified_ms2 = msms_info.get("Identified", 0)
+        all_ms2 = ms2_num_data.get(m, {}).get("MS2_Num", 0)
+        if all_ms2:
+            identified_rate[m] = {
+                "Identified Rate": identified_ms2 / all_ms2 * 100
+            }
+
+    return identified_rate
+
+
+def aggregate_msms_identified_rate(
+    mzml_table,
+    identified_msms_spectra,
+    sdrf_file_df=None
+):
+    identified_rate_by_run = cal_msms_identified_rate(
+            ms2_num_data=mzml_table,
+            identified_data=identified_msms_spectra
+        )
+
+    if sdrf_file_df is None:
+        return identified_rate_by_run
+
+    else:
+        identified_by_sample = dict()
+        ms2_num_by_sample = dict()
+
+        sdrf_file_df = sdrf_file_df.copy()
+        sdrf_file_df["Sample"] = sdrf_file_df["Sample"].astype(int)
+
+        for sample, group in sdrf_file_df.groupby("Sample", sort=True):
+            runs = group["Run"]
+
+            sample_identified_ms2 = sum(
+                identified_msms_spectra.get(run, {}).get("Identified", 0)
+                for run in runs
+            )
+            sample_all_ms2 = sum(
+                mzml_table.get(run, {}).get("MS2_Num", 0)
+                for run in runs
+            )
+
+            sample_key = f"Sample {str(sample)}"
+
+            identified_by_sample[sample_key] = {"Identified": sample_identified_ms2}
+            ms2_num_by_sample[sample_key] = {"MS2_Num": sample_all_ms2}
+
+        identified_rate_by_sample = cal_msms_identified_rate(
+            ms2_num_data=ms2_num_by_sample,
+            identified_data=identified_by_sample
+        )
+
+        return [identified_rate_by_run, identified_rate_by_sample]
+
+def summarize_modifications(df):
+
+    mod_group_processed = mod_group_percentage(df)
+    mod_plot_dict = dict(
+        zip(mod_group_processed["modifications"], mod_group_processed["percentage"])
+    )
+    modified_cat = mod_group_processed["modifications"]
+
+    return mod_plot_dict, modified_cat
+
+
+def group_charge(df, group_col, charge_col):
+
+    table = df.groupby([group_col, charge_col], sort=True).size().unstack(fill_value=0)
+    table.columns = table.columns.astype(str)
+
+    if group_col == "Sample":
+        table.index = [
+            f"Sample {str(i)}" for i in table.index
+        ]
+
+    return table
+
+
+def sum_matching_dict_values(sum_by_run, value_col, file_df_by_sample):
+
+    runs = set(file_df_by_sample["Run"].tolist())
+
+    result = sum(
+        sum_by_run[k][value_col] for k in runs if k in sum_by_run
+    )
+
+    return result
+
+
+def aggregate_general_stats(
+    ms1_general_stats,
+    current_sum_by_run,
+    sdrf_file_df
+):
+
+    if sdrf_file_df.empty:
+
+        rows_by_group = dict()
+
+        for sample, value in ms1_general_stats.items():
+
+            rows_by_group[sample] = {
+                "AcquisitionDateTime": value.get("AcquisitionDateTime", "-"),
+                "log10(TotalCurrent)": value.get("log10(TotalCurrent)", "-"),
+                "log10(ScanCurrent)": value.get("log10(ScanCurrent)", "-"),
+            }
+    else:
+
+        rows_by_group: Dict[SampleGroup, List[InputRow]] = {}
+
+        for sample in sorted(
+            sdrf_file_df["Sample"].drop_duplicates().tolist(),
+            key=lambda x: (str(x).isdigit(), int(x) if str(x).isdigit() else str(x).lower()),
+        ):
+
+            file_df_sample = sdrf_file_df[sdrf_file_df["Sample"] == sample].copy()
+
+            total_curr_sample = sum_matching_dict_values(
+                sum_by_run=current_sum_by_run,
+                value_col="total_curr",
+                file_df_by_sample=file_df_sample
+            )
+            total_curr_sample = float(np.log10(max(total_curr_sample, 1e-12)))
+
+            scan_curr_sample = sum_matching_dict_values(
+                sum_by_run=current_sum_by_run,
+                value_col="scan_curr",
+                file_df_by_sample=file_df_sample
+            )
+            scan_curr_sample = float(np.log10(max(scan_curr_sample, 1e-12)))
+
+            row_data: List[InputRow] = []
+            row_data.append(
+                InputRow(
+                    sample=SampleName(f"Sample {str(sample)}"),
+                    data={
+                        "AcquisitionDateTime": "-",
+                        "log10(TotalCurrent)": total_curr_sample,
+                        "log10(ScanCurrent)": scan_curr_sample,
+                    },
+                )
+            )
+            for row in file_df_sample.itertuples():
+
+                run_data_temp = ms1_general_stats.get(row.Run, {})
+
+                row_data.append(
+                    InputRow(
+                        sample=SampleName(row.Run),
+                        data={
+                            "AcquisitionDateTime": run_data_temp.get("AcquisitionDateTime", ""),
+                            "log10(TotalCurrent)": run_data_temp.get("log10(TotalCurrent)", ""),
+                            "log10(ScanCurrent)": run_data_temp.get("log10(ScanCurrent)", ""),
+                        },
+                    )
+                )
+            group_name: SampleGroup = SampleGroup(sample)
+            rows_by_group[group_name] = row_data
+
+    return rows_by_group
+
+
+def cal_contaminant_percent(
+    df: pd.DataFrame,
+    protein_col: str,
+    intensity_col: str,
+    run_col: str,
+    contam_affix: str
+):
+    """
+    Calculate the percentage of potential contaminant signal per run.
+    df : pandas.DataFrame
+        Long-form table containing at least the columns referenced by
+        ``protein_col``, ``intensity_col`` and ``run_col``. Each row
+        typically represents a quantified peptide or protein feature.
+    protein_col : str
+        Name of the column in ``df`` that contains protein or protein group
+        identifiers.
+    intensity_col : str
+        Name of the numeric column in ``df`` that holds the intensity.
+    run_col : str
+        Name of the column in ``df`` that identifies the run / raw file.
+    contam_affix : str
+        Substring or pattern used to flag contaminants in ``protein_col``.
+    """
+
+    df = df.copy()
+    df["is_contaminant"] = df[protein_col].str.contains(contam_affix, case=False, na=False)
+
+    df["cont_intensity"] = df[intensity_col].where(df["is_contaminant"], 0)
+    group_stats = df.groupby(run_col).agg(
+        total_intensity=(intensity_col, "sum"),
+        cont_intensity=("cont_intensity", "sum"),
+    )
+    group_stats["contaminant_percent"] = np.where(
+        group_stats["total_intensity"] > 0,
+        group_stats["cont_intensity"] / group_stats["total_intensity"] * 100,
+        0
+    )
+
+    result_dict = dict()
+    for k, v in dict(zip(group_stats.index, group_stats["contaminant_percent"])).items():
+        result_dict[k] = {"Potential Contaminants": v}
+
+    return result_dict
+
+
+def top_n_contaminant_percent(
+    df: pd.DataFrame,
+    not_cont_tag: str,
+    cont_tag_col: str,
+    intensity_col: str,
+    run_col: str,
+    top_n: int = 5,
+):
+    """
+    Calculate per-run intensity percentages for the top N contaminant categories.
+    df : pandas.DataFrame
+        Input peptide- or feature-level table.
+    not_cont_tag : str
+        Tag or label used in ``cont_tag_col`` to mark rows that are *not*
+        contaminants.
+    cont_tag_col : str
+        Name of the column in ``df`` that contains contaminant category labels.
+    intensity_col : str
+        Name of the numeric column in ``df`` that holds intensity values used to
+        quantify contaminants.
+    run_col : str
+        Name of the column in ``df`` that identifies runs.
+    top_n : int, optional
+        Number of contaminant categories to retain as explicit categories.
+    """
+
+    pep_contaminant_df = df[df[cont_tag_col] != not_cont_tag].copy()
+    contaminant_df = (
+        pep_contaminant_df.groupby(cont_tag_col, as_index=False)[intensity_col]
+        .sum()
+        .sort_values(by=[intensity_col, cont_tag_col], ascending=[False, True])
+    )
+
+    top_contaminants = contaminant_df[cont_tag_col].iloc[:top_n].tolist()
+
+    plot_dict = dict()
+    plot_cats = list()
+
+    for file_name, group in df.groupby(run_col):
+        contaminant_rows = group[group[cont_tag_col] != not_cont_tag].copy()
+        contaminant_rows.loc[
+            ~contaminant_rows[cont_tag_col].isin(top_contaminants), cont_tag_col
+        ] = "Other"
+
+        cont_df = (
+            contaminant_rows.groupby(cont_tag_col, as_index=False)[intensity_col]
+            .sum()
+            .sort_values(by=[intensity_col, cont_tag_col], ascending=[False, True])
+            .reset_index(drop=True)
+        )
+        cont_df["contaminant_percent"] = (
+            cont_df[intensity_col] / group[intensity_col].sum()
+        ) * 100
+
+        plot_dict[file_name] = dict(
+            zip(cont_df[cont_tag_col], cont_df["contaminant_percent"])
+        )
+        plot_cats.extend(cont_df[cont_tag_col].tolist())
+
+    plot_dict = {k: v for k, v in plot_dict.items() if v}
+
+    if not plot_dict:
+        return None
+
+    plot_cats = sorted(list(set(plot_cats)))
+
+    if "Other" in plot_cats:
+        plot_cats = [x for x in plot_cats if x != "Other"] + ["Other"]
+
+    result_dict = dict()
+    result_dict["plot_data"] = plot_dict
+    result_dict["cats"] = plot_cats
+
+    return result_dict
+
+
+def mods_statistics(df: pd.DataFrame, run_col: str):
+    """
+    Compute per-run modification statistics formatted for plotting.
+    df : pandas.DataFrame
+        Input table containing identification-level data.
+    run_col : str
+        Name of the column in ``df`` used to group rows by run or raw
+        file.
+    """
+
+    plot_dict = {}
+    modified_cats = []
+
+    for raw_file, group in df.groupby(run_col):
+        group_processed = mod_group_percentage(group)
+        plot_dict[raw_file] = dict(
+            zip(group_processed["modifications"], group_processed["percentage"])
+        )
+        modified_cats.extend(group_processed["modifications"])
+
+    modified_dict = {"plot_data": plot_dict,
+                    "cats": list(sorted(modified_cats, key=lambda x: (x == "Modified (Total)", x)))}
+
+    return modified_dict

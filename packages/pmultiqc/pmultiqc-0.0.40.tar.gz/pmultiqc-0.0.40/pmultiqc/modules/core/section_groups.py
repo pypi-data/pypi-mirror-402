@@ -1,0 +1,245 @@
+from multiqc import report, config
+from multiqc.core.special_case_modules.custom_content import MultiqcModule, CcDict
+from multiqc.plots.plot import Plot
+from multiqc.types import Anchor, SectionId, Section
+
+
+def create_ordered_group_modules(grouped_plot_data: list[dict]):
+
+    for mod_cfg in grouped_plot_data:
+        mod_id = mod_cfg["id"]
+        mod_anchor = Anchor(mod_id)
+        mod_config = mod_cfg.get("config", {})
+        mod_title = mod_config.get("section_name", mod_id.replace("_", " ").title())
+
+        group_module = MultiqcModule(
+            id=mod_id,
+            anchor=mod_anchor,
+            cc_dict=CcDict(
+                config={
+                    "id": mod_id,
+                    "section_name": mod_title,
+                    "description": mod_config.get("description", f"Module for {mod_title}"),
+                },
+                data={},
+            ),
+        )
+
+        sorted_sections = sorted(
+            mod_cfg.get("sections", []),
+            key=lambda s: s.get("order") if s.get("order") is not None else 999,
+        )
+
+        for i, sect in enumerate(sorted_sections):
+
+            plot_obj = sect.get("plot")
+
+            if isinstance(plot_obj, Plot):
+                section_id = sect.get("id", f"{mod_id}_{plot_obj.pconfig.id}")
+                section_name = sect.get("name", plot_obj.pconfig.title)
+            else:
+                section_id = sect.get("id", f"{mod_id}_section_{i}")
+                section_name = sect.get("name", section_id.replace("_", " ").title())
+
+            section = Section(
+                name=section_name or "Unnamed Section",
+                anchor=Anchor(section_id),
+                id=SectionId(section_id),
+                description=sect.get("description", ""),
+                module=group_module.name,
+                module_anchor=group_module.anchor,
+                module_info=group_module.info,
+                helptext=sect.get("helptext", ""),
+                content_before_plot=sect.get("content_before_plot", ""),
+                content=sect.get("content", ""),
+                print_section=True,
+            )
+
+            if isinstance(plot_obj, Plot):
+                section.plot_anchor = plot_obj.anchor
+                report.plot_by_id[plot_obj.anchor] = plot_obj
+            elif isinstance(plot_obj, str):
+                section.plot = plot_obj
+
+            group_module.sections.append(section)
+
+        report.modules.append(group_module)
+
+
+def add_group_modules(groups_dict, analysis_type):
+
+    section_group = list()
+
+    if analysis_type == "proteobench":
+
+        group_configs = [
+            {
+                "id": "precursor_ion",
+                "key": "precursor_sub_section",
+                "name": "Precursor Ion",
+                "description": "",
+            },
+            {
+                "id": "intensity",
+                "key": "log_mean_sub_section",
+                "name": "Intensity",
+                "description": "",
+            },
+            {
+                "id": "std_intensity",
+                "key": "log_std_sub_section",
+                "name": "Standard Deviations of Intensity",
+                "description": "",
+            },
+            {
+                "id": "cv",
+                "key": "cv_sub_section",
+                "name": "Coefficient of Variation",
+                "description": "",
+            },
+            {
+                "id": "log_vs",
+                "key": "log_vs_sub_section",
+                "name": "Log2 Fold Change",
+                "description": "",
+            },
+        ]
+
+    else:
+        group_configs = [
+            {
+                "id": "experiment_setup",
+                "key": "experiment_sub_section",
+                "name": "Experimental Design and Metadata",
+                "description": "",
+            },
+            {
+                "id": "summary_and_heatmap",
+                "key": "summary_sub_section",
+                "name": "Results Overview",
+                "description": "",
+            },
+            {
+                "id": "identification_summary",
+                "key": "identification_sub_section",
+                "name": "Identification Summary",
+                "description": "",
+            },
+            {
+                "id": "search_engine_scores",
+                "key": "search_engine_sub_section",
+                "name": "Search Engine Scores",
+                "description": "",
+            },
+            {
+                "id": "contaminants",
+                "key": "contaminants_sub_section",
+                "name": "Contaminants",
+                "description": "",
+            },
+            {
+                "id": "quantification_analysis",
+                "key": "quantification_sub_section",
+                "name": "Quantification Analysis",
+                "description": "",
+            },
+            {
+                "id": "ms1_analysis",
+                "key": "ms1_sub_section",
+                "name": "MS1 Analysis",
+                "description": "",
+            },
+            {
+                "id": "ms2_and_spectral_stats",
+                "key": "ms2_sub_section",
+                "name": "MS2 and Spectral Stats",
+                "description": "",
+            },
+            {
+                "id": "mass_error_trends",
+                "key": "mass_error_sub_section",
+                "name": "Mass Error Trends",
+                "description": "",
+            },
+            {
+                "id": "rt_quality_control",
+                "key": "rt_qc_sub_section",
+                "name": "RT Quality Control",
+                "description": "",
+            },
+        ]
+
+    for group in group_configs:
+        sections = groups_dict.get(group["key"])
+        if sections:
+            section_group.append(
+                {
+                    "id": group["id"],
+                    "config": {"section_name": group["name"], "description": group["description"]},
+                    "sections": sections,
+                }
+            )
+
+    create_ordered_group_modules(section_group)
+
+    if analysis_type == "proteobench":
+
+        # Note: this is the order required for the report.
+        report_sections = [
+            "pmultiqc",
+            "precursor_ion",
+            "intensity",
+            "std_intensity",
+            "cv",
+            "log_vs"
+        ]
+
+    else:
+        # Note: this is the order required for the report.
+        report_sections = [
+            "pmultiqc",
+            "experiment_setup",
+            "summary_and_heatmap",
+            "identification_summary",
+            "search_engine_scores",
+            "contaminants",
+            "quantification_analysis",
+            "ms1_analysis",
+            "ms2_and_spectral_stats",
+            "mass_error_trends",
+            "rt_quality_control",
+            "software_versions",
+            "multiqc_software_versions",
+            "nf_core_quantms_software",
+            "nf-core-quantms-summary",
+            "workflow_summary",
+            "bigbio-quantms-summary",
+            "bigbio-quantms-methods-description",
+            "nf-core-quantms-methods-description",
+            "methods_description"
+        ]
+
+    config.report_section_order = generate_section_order(report_sections)
+
+
+def generate_section_order(section_list: list):
+
+    section_order = {
+        name: {"order": len(section_list) - i}
+        for i, name in enumerate(section_list)
+    }
+
+    return section_order
+
+
+# Function of add sub_section
+def add_sub_section(sub_section, plot, order=0, description="", helptext=""):
+
+    sub_section.append(
+        {
+            "plot": plot,
+            "order": order,
+            "description": description,
+            "helptext": helptext,
+        }
+    )
