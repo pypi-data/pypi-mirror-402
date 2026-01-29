@@ -1,0 +1,655 @@
+from __future__ import annotations
+
+import inspect
+from contextlib import AsyncExitStack, asynccontextmanager
+from typing import TYPE_CHECKING, Any, AsyncGenerator, cast
+
+from anyio import (
+    TASK_STATUS_IGNORED,
+    AsyncContextManagerMixin,
+    Event,
+    create_memory_object_stream,
+    create_task_group,
+    current_time,
+    fail_after,
+    move_on_after,
+    sleep,
+)
+from anyio.abc import TaskStatus
+from anyio.streams.stapled import StapledObjectStream
+from deprecated.sphinx import versionadded
+from exceptiongroup import catch
+
+from coredis._utils import b, hash_slot, logger, nativestr
+from coredis.commands.constants import CommandName
+from coredis.connection import BaseConnection
+from coredis.exceptions import RETRYABLE, ConnectionError, PubSubError, TimeoutError
+from coredis.parser import (
+    PUBLISH_MESSAGE_TYPES,
+    SUBUNSUB_MESSAGE_TYPES,
+    UNSUBSCRIBE_MESSAGE_TYPES,
+    PubSubMessageTypes,
+)
+from coredis.response.types import PubSubMessage
+from coredis.retry import (
+    CompositeRetryPolicy,
+    ConstantRetryPolicy,
+    NoRetryPolicy,
+    RetryPolicy,
+)
+from coredis.typing import (
+    AnyStr,
+    Awaitable,
+    Callable,
+    Generic,
+    Mapping,
+    MutableMapping,
+    Parameters,
+    RedisValueT,
+    ResponseType,
+    Self,
+    StringT,
+    TypeVar,
+)
+
+if TYPE_CHECKING:
+    import coredis.pool
+
+T = TypeVar("T")
+PoolT = TypeVar("PoolT", bound="coredis.pool.ConnectionPool")
+#: Callables for message handler callbacks. The callbacks
+#:  can be sync or async.
+SubscriptionCallback = Callable[[PubSubMessage], Awaitable[None]] | Callable[[PubSubMessage], None]
+
+
+class BasePubSub(AsyncContextManagerMixin, Generic[AnyStr, PoolT]):
+    channels: MutableMapping[StringT, SubscriptionCallback | None]
+    patterns: MutableMapping[StringT, SubscriptionCallback | None]
+
+    def __init__(
+        self,
+        connection_pool: PoolT,
+        ignore_subscribe_messages: bool = False,
+        retry_policy: RetryPolicy | None = CompositeRetryPolicy(
+            ConstantRetryPolicy((ConnectionError,), 3, 0.1),
+            ConstantRetryPolicy((TimeoutError,), 2, 0.1),
+        ),
+        channels: Parameters[StringT] | None = None,
+        channel_handlers: Mapping[StringT, SubscriptionCallback] | None = None,
+        patterns: Parameters[StringT] | None = None,
+        pattern_handlers: Mapping[StringT, SubscriptionCallback] | None = None,
+        max_buffer_size: int = 1024,
+    ):
+        self.connection_pool = connection_pool
+        self.ignore_subscribe_messages = ignore_subscribe_messages
+        self._connection: coredis.BaseConnection | None = None
+        self._retry_policy = retry_policy or NoRetryPolicy()
+        self._initial_channel_subscriptions = {
+            **{nativestr(channel): None for channel in channels or []},
+            **{nativestr(k): v for k, v in (channel_handlers or {}).items()},
+        }
+        self._initial_pattern_subscriptions = {
+            **{nativestr(pattern): None for pattern in patterns or []},
+            **{nativestr(k): v for k, v in (pattern_handlers or {}).items()},
+        }
+        self._send_stream, self._receive_stream = create_memory_object_stream[PubSubMessage | None](
+            max_buffer_size=max_buffer_size
+        )
+        self._subscribed = Event()
+        self.channels = {}
+        self.patterns = {}
+        self.tries = 0
+
+    @property
+    def connection(self) -> BaseConnection:
+        if not self._connection:
+            raise Exception("Connection not initialized correctly!")
+        return self._connection
+
+    @property
+    def subscribed(self) -> bool:
+        """Indicates if there are subscriptions to any channels or patterns"""
+        return bool(self.channels or self.patterns)
+
+    def __aiter__(self) -> Self:
+        return self
+
+    async def __anext__(self) -> PubSubMessage:
+        while self._subscribed.is_set():
+            if message := await self.get_message():
+                return message
+        raise StopAsyncIteration()
+
+    @asynccontextmanager
+    async def __asynccontextmanager__(self) -> AsyncGenerator[Self]:
+        # auto-reconnection for long-lived pubsub instances
+        async with create_task_group() as tg:
+            await tg.start(self.run)
+            # initialize subscriptions
+            if self._initial_channel_subscriptions:
+                await self.subscribe(**self._initial_channel_subscriptions)
+            if self._initial_pattern_subscriptions:
+                await self.psubscribe(**self._initial_pattern_subscriptions)
+            yield self
+            # cleanup
+            await self.unsubscribe()
+            await self.punsubscribe()
+            self.channels.clear()
+            self.patterns.clear()
+            self._current_scope.cancel()
+
+    async def run(self, *, task_status: TaskStatus[None] = TASK_STATUS_IGNORED) -> None:
+        start_time, started, tries = current_time(), False, 0
+
+        def handle_error(*args: Any) -> None:
+            nonlocal tries, start_time
+            if current_time() - start_time > 10:
+                tries = 0
+            else:
+                tries += 1
+            logger.warning("Cache connection lost, retrying...")
+
+        while True:
+            # retry with exponential backoff
+            await sleep(min(tries**2, 300))
+            with catch({RETRYABLE: handle_error}):
+                async with self.connection_pool.acquire() as self._connection:
+                    async with create_task_group() as tg:
+                        self._current_scope = tg.cancel_scope
+                        tg.start_soon(self._consumer)
+                        tg.start_soon(self._keepalive)
+                        if not started:
+                            task_status.started()
+                            started = True
+                        else:  # resubscribe
+                            if self.channels:
+                                await self.subscribe(*self.channels.keys())
+                            if self.patterns:
+                                await self.psubscribe(*self.patterns.keys())
+                    break
+
+    async def _keepalive(self) -> None:
+        while True:
+            await self.connection.send_command(CommandName.PING)
+            await sleep(15)
+
+    async def _consumer(self) -> None:
+        while True:
+            if self._subscribed.is_set():
+                if response := await self._retry_policy.call_with_retries(
+                    lambda: self.parse_response(block=True),
+                ):
+                    msg = await self.handle_message(response)
+                    self._send_stream.send_nowait(msg)
+            else:
+                await self._subscribed.wait()
+
+    async def psubscribe(
+        self,
+        *patterns: StringT,
+        **pattern_handlers: SubscriptionCallback | None,
+    ) -> None:
+        """
+        Subscribes to channel patterns. Patterns supplied as keyword arguments
+        expect a pattern name as the key and a callable as the value. A
+        pattern's callable will be invoked automatically when a message is
+        received on that pattern rather than producing a message via
+        :meth:`listen`.
+        """
+        new_patterns: MutableMapping[StringT, SubscriptionCallback | None] = {}
+        new_patterns.update(dict.fromkeys(map(self.encode, patterns)))
+
+        for pattern, handler in pattern_handlers.items():
+            new_patterns[self.encode(pattern)] = handler
+        await self.execute_command(CommandName.PSUBSCRIBE, *new_patterns.keys())
+        # update the patterns dict AFTER we send the command. we don't want to
+        # subscribe twice to these patterns, once for the command and again
+        # for the reconnection.
+        self.patterns.update(new_patterns)
+        self._subscribed.set()
+
+    async def punsubscribe(self, *patterns: StringT) -> None:
+        """
+        Unsubscribes from the supplied patterns. If empty, unsubscribe from
+        all patterns.
+        """
+        await self.execute_command(CommandName.PUNSUBSCRIBE, *patterns)
+
+    async def subscribe(
+        self,
+        *channels: StringT,
+        **channel_handlers: SubscriptionCallback | None,
+    ) -> None:
+        """
+        Subscribes to channels. Channels supplied as keyword arguments expect
+        a channel name as the key and a callable as the value. A channel's
+        callable will be invoked automatically when a message is received on
+        that channel rather than producing a message via :meth:`listen` or
+        :meth:`get_message`.
+        """
+
+        new_channels: MutableMapping[StringT, SubscriptionCallback | None] = {}
+        new_channels.update(dict.fromkeys(map(self.encode, channels)))
+
+        for channel, handler in channel_handlers.items():
+            new_channels[self.encode(channel)] = handler
+        await self.execute_command(CommandName.SUBSCRIBE, *new_channels.keys())
+        self.channels.update(new_channels)
+        self._subscribed.set()
+
+    async def unsubscribe(self, *channels: StringT) -> None:
+        """
+        Unsubscribes from the supplied channels. If empty, unsubscribe from
+        all channels
+        """
+
+        await self.execute_command(CommandName.UNSUBSCRIBE, *channels)
+
+    async def get_message(
+        self,
+        ignore_subscribe_messages: bool = False,
+        timeout: int | float | None = None,
+    ) -> PubSubMessage | None:
+        """
+        Gets the next message if one is available, otherwise None.
+
+        :param ignore_subscribe_messages: Whether to skip subscription
+         acknowledgement messages
+        :param timeout: Number of seconds to wait for a message to be available
+         on the connection. If the ``None`` the command will block forever.
+        """
+
+        with move_on_after(timeout):
+            return self._filter_ignored_messages(
+                await self._receive_stream.receive(), ignore_subscribe_messages
+            )
+        return None
+
+    def encode(self, value: StringT) -> StringT:
+        """
+        Encodes the value so that it's identical to what we'll read off the
+        connection
+
+        :meta private:
+        """
+
+        if self.connection_pool.decode_responses and isinstance(value, bytes):
+            value = nativestr(value, self.connection_pool.encoding)
+        elif not self.connection_pool.decode_responses and isinstance(value, str):
+            value = b(value, self.connection_pool.encoding)
+
+        return value
+
+    async def execute_command(
+        self, command: bytes, *args: RedisValueT, **options: RedisValueT
+    ) -> None:
+        """
+        Executes a publish/subscribe command
+
+        :meta private:
+        """
+        await self.connection.send_command(command, *args)
+
+    async def parse_response(
+        self, block: bool = True, timeout: float | None = None
+    ) -> list[ResponseType]:
+        """
+        Parses the response from a publish/subscribe command
+
+        :meta private:
+        """
+        timeout = timeout if timeout and timeout > 0 else None
+        with fail_after(timeout):
+            return await self.connection.fetch_push_message(block=block)
+
+    async def handle_message(self, response: list[ResponseType]) -> PubSubMessage | None:
+        """
+        Parses a pub/sub message. If the channel or pattern was subscribed to
+        with a message handler, the handler is invoked instead of a parsed
+        message being returned.
+
+        :meta private:
+        """
+        message_type = b(response[0])
+        message_type_str = nativestr(response[0])
+        message: PubSubMessage
+
+        if message_type in SUBUNSUB_MESSAGE_TYPES:
+            message = PubSubMessage(
+                type=message_type_str,
+                pattern=cast(StringT, response[1]) if message_type[0] == ord(b"p") else None,
+                # This field is populated in all cases for backward compatibility
+                # as older versions were incorrectly populating the channel
+                # with the pattern on psubscribe/punsubscribe responses.
+                channel=cast(StringT, response[1]),
+                data=cast(int, response[2]),
+            )
+
+        elif message_type in PUBLISH_MESSAGE_TYPES:
+            if message_type == PubSubMessageTypes.PMESSAGE:
+                message = PubSubMessage(
+                    type="pmessage",
+                    pattern=cast(StringT, response[1]),
+                    channel=cast(StringT, response[2]),
+                    data=cast(StringT, response[3]),
+                )
+            else:
+                message = PubSubMessage(
+                    type="message",
+                    pattern=None,
+                    channel=cast(StringT, response[1]),
+                    data=cast(StringT, response[2]),
+                )
+        else:
+            raise PubSubError(f"Unknown message type {message_type_str}")  # noqa
+
+        # if this is an unsubscribe message, remove it from memory
+        if message_type in UNSUBSCRIBE_MESSAGE_TYPES:
+            if message_type == PubSubMessageTypes.PUNSUBSCRIBE:
+                subscribed_dict = self.patterns
+            else:
+                subscribed_dict = self.channels
+            subscribed_dict.pop(message["channel"], None)
+
+        if message_type in PUBLISH_MESSAGE_TYPES:
+            handler = None
+            if message_type == PubSubMessageTypes.PMESSAGE and message["pattern"]:
+                handler = self.patterns.get(message["pattern"], None)
+            elif message["channel"]:
+                handler = self.channels.get(message["channel"], None)
+
+            if handler:
+                handler_response = handler(message)
+                if inspect.isawaitable(handler_response):
+                    await handler_response
+                return None
+        if not (self.channels or self.patterns):
+            self._subscribed = Event()
+
+        return message
+
+    def _filter_ignored_messages(
+        self,
+        message: PubSubMessage | None,
+        ignore_subscribe_messages: bool = False,
+    ) -> PubSubMessage | None:
+        if (
+            message
+            and b(message["type"]) in SUBUNSUB_MESSAGE_TYPES
+            and (self.ignore_subscribe_messages or ignore_subscribe_messages)
+        ):
+            return None
+        return message
+
+
+class PubSub(BasePubSub[AnyStr, "coredis.pool.ConnectionPool"]):
+    """
+    Pub/Sub implementation to be used with :class:`coredis.Redis`
+    that is returned by :meth:`coredis.Redis.pubsub`
+
+    An instance of this class is both an async context manager (to
+    ensure that proper clean up of connections & subscriptions happens automatically)
+    and an async iterator to consume messages from channels or patterns that it is
+    subscribed to.
+
+    Recommended use::
+
+        client = coredis.Redis(decode_responses=True)
+        async for message in client.pubsub(
+          ignore_subscribe_messages=True,
+          channels=["channel-1", "channel-2"]
+        ):
+            match message["channel"]:
+                case "channel-1":
+                    print("first", message["data"])
+                case "channel-2":
+                    print("second", message["data"])
+
+    Or to explicitly subscribe::
+
+        client = coredis.Redis(decode_responses=True)
+        pubsub = client.pubsub()
+        async with pubsub:
+            await pubsub.subscribe("channel-1")
+            assert (await pubsub.get_message())["channel"] == "channel-1"
+            async for message in pubsub:
+                print(message["data"])
+
+    For more details see :ref:`handbook/pubsub:pubsub`
+    """
+
+
+class ClusterPubSub(BasePubSub[AnyStr, "coredis.pool.ClusterConnectionPool"]):
+    """
+    Pub/Sub implementation to be used with :class:`coredis.RedisCluster`
+    that is returned by :meth:`coredis.RedisCluster.pubsub`
+
+    .. note:: This implementation does not particularly benefit from having
+       multiple nodes in a cluster as it subscribes to messages sent to channels
+       using ``PUBLISH`` which in cluster mode results in the message being
+       broadcasted to every node in the cluster. For this reason the subscribing
+       client can subscribe to any node in the cluster to receive messages sent to
+       any channel - which inherently limits the potential for scaling.
+
+       :redis-version:`7.0` introduces the concept of Sharded Pub/Sub which
+       can be accessed by instead using :meth:`coredis.RedisCluster.sharded_pubsub`
+       which uses the implementation in :class:`coredis.commands.ShardedPubSub`.
+
+    An instance of this class is both an async context manager (to
+    ensure that proper clean up of connections & subscriptions happens automatically)
+    and an async iterator to consume messages from channels or patterns that it is
+    subscribed to.
+
+    For more details see :ref:`handbook/pubsub:cluster pub/sub`
+
+    """
+
+    async def run(self, *, task_status: TaskStatus[None] = TASK_STATUS_IGNORED) -> None:
+        start_time, started, tries = current_time(), False, 0
+
+        def handle_error(*args: Any) -> None:
+            nonlocal tries, start_time
+            if current_time() - start_time > 10:
+                tries = 0
+            else:
+                tries += 1
+
+        while True:
+            await sleep(min(tries**2, 300))
+            with catch({RETRYABLE: handle_error}):
+                async with self.connection_pool.acquire() as self._connection:
+                    async with create_task_group() as tg:
+                        self._current_scope = tg.cancel_scope
+                        tg.start_soon(self._consumer)
+                        tg.start_soon(self._keepalive)
+                        if not started:
+                            task_status.started()
+                            started = True
+                        else:  # resubscribe
+                            if self.channels:
+                                await self.subscribe(*self.channels.keys())
+                            if self.patterns:
+                                await self.psubscribe(*self.patterns.keys())
+                    break
+
+
+@versionadded(version="3.6.0")
+class ShardedPubSub(BasePubSub[AnyStr, "coredis.pool.ClusterConnectionPool"]):
+    """
+    Sharded Pub/Sub implementation to be used with :class:`coredis.RedisCluster`
+    that is returned by :meth:`coredis.RedisCluster.sharded_pubsub`
+
+    For details about the server architecture refer to the `Redis manual entry
+    on Sharded Pub/sub <https://redis.io/docs/manual/pubsub/#sharded-pubsub>`__.
+
+    New in :redis-version:`7.0.0`
+
+    .. warning:: Sharded PubSub only supports subscription by channel and does
+       **NOT** support pattern based subscriptions.
+
+    An instance of this class is both an async context manager (to
+    ensure that proper clean up of connections & subscriptions happens automatically)
+    and an async iterator to consume messages from channels that it is subscribed to.
+
+    For more details see :ref:`handbook/pubsub:sharded pub/sub`
+    """
+
+    def __init__(
+        self,
+        connection_pool: coredis.pool.ClusterConnectionPool,
+        ignore_subscribe_messages: bool = False,
+        retry_policy: RetryPolicy | None = None,
+        read_from_replicas: bool = False,
+        channels: Parameters[StringT] | None = None,
+        channel_handlers: Mapping[StringT, SubscriptionCallback] | None = None,
+    ):
+        self.shard_connections: dict[str, BaseConnection] = {}
+        self.node_channel_mapping: dict[str, list[StringT]] = {}
+        self.read_from_replicas = read_from_replicas
+        self._shard_messages = StapledObjectStream(
+            *create_memory_object_stream[list[ResponseType]]()
+        )
+        super().__init__(
+            connection_pool,
+            ignore_subscribe_messages,
+            retry_policy,
+            channels=channels,
+            channel_handlers=channel_handlers,
+        )
+
+    async def subscribe(
+        self,
+        *channels: StringT,
+        **channel_handlers: SubscriptionCallback | None,
+    ) -> None:
+        """
+        :param channels: The shard channels to subscribe to.
+        :param channel_handlers: Channels supplied as keyword arguments expect
+         a channel name as the key and a callable as the value. A channel's
+         callable will be invoked automatically when a message is received on
+         that channel rather than producing a message via :meth:`listen` or
+         :meth:`get_message`.
+        """
+
+        new_channels: MutableMapping[StringT, SubscriptionCallback | None] = {}
+        new_channels.update(dict.fromkeys(map(self.encode, channels)))
+
+        for channel, handler in channel_handlers.items():
+            new_channels[self.encode(channel)] = handler
+        for new_channel in new_channels.keys():
+            await self.execute_command(CommandName.SSUBSCRIBE, new_channel)
+        self.channels.update(new_channels)
+        self._subscribed.set()
+
+    async def unsubscribe(self, *channels: StringT) -> None:
+        """
+        :param channels: The shard channels to unsubscribe from. If None are provided,
+         this will effectively unsubscribe the client from all channels
+         previously subscribed to.
+        """
+
+        for channel in channels or list(self.channels.keys()):
+            await self.execute_command(CommandName.SUNSUBSCRIBE, channel)
+
+    async def psubscribe(
+        self,
+        *patterns: StringT,
+        **pattern_handlers: SubscriptionCallback | None,
+    ) -> None:
+        """
+        Not available in sharded pubsub
+
+        :meta private:
+        """
+        raise NotImplementedError("Sharded PubSub does not support subscription by pattern")
+
+    async def punsubscribe(self, *patterns: StringT) -> None:
+        """
+        Not available in sharded pubsub
+
+        :meta private:
+        """
+        raise NotImplementedError("Sharded PubSub does not support subscription by pattern")
+
+    async def execute_command(
+        self, command: bytes, *args: RedisValueT, **options: RedisValueT
+    ) -> None:
+        assert isinstance(args[0], (bytes, str))
+        channel = nativestr(args[0])
+        slot = hash_slot(b(channel))
+        node = self.connection_pool.nodes.node_from_slot(slot)
+        if node and node.node_id:
+            key = node.node_id
+            return await self.shard_connections[key].send_command(command, *args)
+        raise PubSubError(f"Unable to determine shard for channel {args[0]!r}")
+
+    @asynccontextmanager
+    async def __asynccontextmanager__(self) -> AsyncGenerator[Self]:
+        async with create_task_group() as tg:
+            await tg.start(self.run)
+            # initialize subscriptions
+            if self._initial_channel_subscriptions:
+                await self.subscribe(**self._initial_channel_subscriptions)
+            yield self
+            # cleanu self.unsubscribe()
+            self.channels.clear()
+            self._current_scope.cancel()
+            self.reset()
+
+    async def run(self, *, task_status: TaskStatus[None] = TASK_STATUS_IGNORED) -> None:
+        start_time, started, tries = current_time(), False, 0
+
+        def handle_error(*args: Any) -> None:
+            nonlocal tries, start_time
+            if current_time() - start_time > 10:
+                tries = 0
+            else:
+                tries += 1
+
+        while True:
+            await sleep(min(tries**2, 300))
+            with catch({RETRYABLE: handle_error}):
+                stack = AsyncExitStack()
+                self.shard_connections = {
+                    node.node_id: await stack.enter_async_context(
+                        self.connection_pool.acquire(node=node)
+                    )
+                    for node in self.connection_pool.nodes.all_primaries()
+                    if node.node_id
+                }
+                async with create_task_group() as tg:
+                    self._current_scope = tg.cancel_scope
+                    tg.start_soon(self._consumer)
+                    [
+                        tg.start_soon(self._shard_listener, connection)
+                        for connection in self.shard_connections.values()
+                    ]
+                    if not started:
+                        task_status.started()
+                        started = True
+                    else:  # resubscribe
+                        if self.channels:
+                            await self.subscribe(*self.channels.keys())
+                break
+
+    async def _shard_listener(self, connection: BaseConnection) -> None:
+        while True:
+            with move_on_after(2):
+                message = await connection.fetch_push_message(True)
+                await self._shard_messages.send(message)
+
+    async def parse_response(
+        self, block: bool = True, timeout: float | None = None
+    ) -> list[ResponseType]:
+        timeout = timeout if timeout and timeout > 0 else None
+        with fail_after(timeout):
+            return await self._shard_messages.receive()
+
+    def reset(self) -> None:
+        for connection in self.shard_connections.values():
+            connection.clear_connect_callbacks()
+        self.shard_connections.clear()
+        self.channels = {}
+        self.patterns = {}
+        self.initialized = False
+        self._subscribed = Event()
