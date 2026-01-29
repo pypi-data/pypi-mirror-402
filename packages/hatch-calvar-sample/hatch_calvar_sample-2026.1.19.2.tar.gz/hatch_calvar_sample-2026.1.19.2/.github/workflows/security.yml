@@ -1,0 +1,128 @@
+name: Security Scanning
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  schedule:
+    - cron: '0 0 * * 1'  # Weekly on Monday
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write  # For SARIF uploads
+
+jobs:
+  dependency-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install safety pip-audit
+
+      - name: Generate requirements file
+        run: |
+          pip freeze > requirements-freeze.txt
+
+      - name: Run Safety check
+        run: |
+          safety check --file requirements-freeze.txt || echo "Safety check completed with findings"
+
+      - name: Run pip-audit
+        run: |
+          pip-audit --desc --format json --output pip-audit-report.json || echo "pip-audit completed with findings"
+        continue-on-error: true
+
+      - name: Check for outdated dependencies
+        shell: bash
+        run: |
+          echo "Checking for outdated dependencies..."
+          pip list --outdated --format=json > outdated-deps.json || echo "[]" > outdated-deps.json
+          if [ -s outdated-deps.json ] && [ "$(cat outdated-deps.json)" != "[]" ]; then
+            echo "::warning::Found outdated dependencies"
+            cat outdated-deps.json | python -m json.tool || cat outdated-deps.json
+          else
+            echo "All dependencies are up to date"
+          fi
+        continue-on-error: true
+
+      - name: Upload dependency scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-scan-results
+          path: |
+            pip-audit-report.json
+            outdated-deps.json
+          retention-days: 7
+
+  secret-scanning:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full git history needed for gitleaks
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  code-scanning:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install scanning tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit[sarif] ruff
+
+      - name: Run Bandit security scan with SARIF output
+        shell: bash
+        run: |
+          bandit -r src/ -f sarif -o bandit-results.sarif || true
+          bandit -r src/ -ll || echo "Bandit scan completed"
+        continue-on-error: true
+
+      - name: Upload Bandit SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bandit-results.sarif
+          category: bandit
+        continue-on-error: true
+
+      - name: Run Ruff for code quality
+        shell: bash
+        run: |
+          ruff check --output-format=json --output-file=ruff-report.json . || true
+          ruff check . || echo "Ruff check completed"
+        continue-on-error: true
+
+      - name: Upload security scan artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-scanning-results
+          path: |
+            bandit-results.sarif
+            ruff-report.json
+          retention-days: 7

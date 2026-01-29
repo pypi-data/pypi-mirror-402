@@ -1,0 +1,73 @@
+name: Auto-create Release Tag
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+      - master
+
+jobs:
+  create-tag:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Configure Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Fetch all tags
+        run: |
+          git fetch --tags --force
+
+      - name: Calculate next CalVer version
+        id: version
+        run: |
+          VERSION=$(python scripts/calc_version.py --validate --pep440)
+          echo "Calculated version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          if ! [[ "$VERSION" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[0-9]+$ ]]; then
+            echo "Error: Invalid CalVer format: $VERSION"
+            exit 1
+          fi
+
+      - name: Check if tag already exists
+        id: tag_check
+        run: |
+          TAG_NAME="v${{ steps.version.outputs.version }}"
+          if git rev-parse -q --verify "refs/tags/$TAG_NAME" >/dev/null; then
+            echo "Tag $TAG_NAME already exists, skipping tag creation"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag $TAG_NAME does not exist, will create it"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: steps.tag_check.outputs.exists == 'false'
+        run: |
+          TAG_NAME="v${{ steps.version.outputs.version }}"
+          VERSION="${{ steps.version.outputs.version }}"
+
+          git tag -a "$TAG_NAME" -m "Release $VERSION (auto-created from PR #${{ github.event.pull_request.number }})"
+          git push origin "$TAG_NAME"
+
+          echo "Created and pushed tag: $TAG_NAME"

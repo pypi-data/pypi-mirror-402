@@ -1,0 +1,86 @@
+name: License Compliance
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+jobs:
+  license-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate dev version if needed
+        shell: bash
+        run: |
+          if [ ! -f src/hatch_calvar_sample/VERSION ]; then
+            python -m pip install --upgrade pip
+            VERSION=$(python scripts/calc_version.py --validate --pep440)
+            DEV_VERSION="${VERSION}.dev$(date +%s)"
+            echo "__version__ = \"${DEV_VERSION}\"" > src/hatch_calvar_sample/VERSION
+            echo "Generated VERSION file: ${DEV_VERSION}"
+          else
+            echo "VERSION file already exists"
+          fi
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-licenses licensecheck
+          pip install -e .
+
+      - name: Generate license report
+        shell: bash
+        run: |
+          echo "=== License Report ==="
+          pip-licenses --format=markdown --output-file=license-report.md || true
+          pip-licenses --format=json --output-file=license-report.json || true
+          echo ""
+          cat license-report.md || true
+
+      - name: Check for prohibited licenses
+        shell: bash
+        run: |
+          echo "Checking for prohibited licenses..."
+          # Define allowed licenses (permissive licenses)
+          ALLOWED_LICENSES="MIT|BSD|Apache|ISC|PSF|Python|WTFPL|Unlicense|Public Domain|MPL|LGPL"
+
+          # Check for potentially problematic licenses
+          pip-licenses --format=csv | tail -n +2 | while IFS=',' read -r name version license; do
+            # Remove quotes from license field
+            license=$(echo "$license" | tr -d '"')
+
+            # Check if license is in allowed list
+            if ! echo "$license" | grep -qiE "$ALLOWED_LICENSES"; then
+              # Check for GPL (excluding LGPL which is already allowed)
+              if echo "$license" | grep -qiE "^GPL|GNU General Public"; then
+                echo "::warning::Package $name ($version) has license: $license - Review required"
+              fi
+            fi
+          done
+
+          echo "License check completed"
+
+      - name: Run licensecheck
+        shell: bash
+        run: |
+          licensecheck --zero || echo "License check completed with findings"
+        continue-on-error: true
+
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report
+          path: |
+            license-report.md
+            license-report.json
+          retention-days: 30

@@ -1,0 +1,130 @@
+name: Documentation Quality
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+jobs:
+  docstring-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install documentation tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install interrogate pydocstyle
+
+      - name: Check docstring coverage with interrogate
+        shell: bash
+        run: |
+          echo "=== Docstring Coverage Report ==="
+          interrogate src/ -v --fail-under=50 || echo "::warning::Docstring coverage below 50%"
+
+          echo ""
+          echo "=== Detailed Coverage ==="
+          interrogate src/ -v --generate-badge docs-badge.svg || true
+
+      - name: Check docstring style with pydocstyle
+        shell: bash
+        run: |
+          echo "=== Docstring Style Check ==="
+          # Using numpy convention, ignoring some rules for flexibility
+          pydocstyle src/ --convention=numpy --add-ignore=D100,D104,D105,D107 || echo "::warning::Some docstring style issues found"
+        continue-on-error: true
+
+      - name: Upload documentation badge
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-badge
+          path: docs-badge.svg
+          retention-days: 7
+        continue-on-error: true
+
+  readme-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate README.md
+        shell: bash
+        run: |
+          echo "=== README Validation ==="
+
+          # Check if README.md exists
+          if [ ! -f README.md ]; then
+            echo "::error::README.md not found"
+            exit 1
+          fi
+
+          # Check for required sections
+          echo "Checking for required sections..."
+
+          REQUIRED_SECTIONS=("Installation" "Usage" "License")
+          for section in "${REQUIRED_SECTIONS[@]}"; do
+            if grep -qi "## .*$section" README.md || grep -qi "# .*$section" README.md; then
+              echo "✓ Found section: $section"
+            else
+              echo "::warning::Missing recommended section: $section"
+            fi
+          done
+
+          # Check for badges
+          if grep -q "\!\[.*\](.*\.svg\|.*badge.*)" README.md; then
+            echo "✓ Found badges in README"
+          else
+            echo "::notice::Consider adding status badges to README"
+          fi
+
+          # Check for code examples
+          if grep -q '```' README.md; then
+            echo "✓ Found code examples"
+          else
+            echo "::warning::No code examples found in README"
+          fi
+
+          echo "README validation completed"
+
+      - name: Check for broken internal links
+        shell: bash
+        run: |
+          echo "Checking for potentially broken links..."
+
+          # Extract markdown links and check if files exist
+          grep -oE '\[.*\]\([^)]+\)' README.md | while read -r link; do
+            # Extract the URL part
+            url=$(echo "$link" | sed 's/.*(\(.*\))/\1/')
+
+            # Skip external URLs
+            if echo "$url" | grep -qE '^https?://'; then
+              continue
+            fi
+
+            # Skip anchor links
+            if echo "$url" | grep -q '^#'; then
+              continue
+            fi
+
+            # Check if file exists
+            if [ ! -f "$url" ] && [ ! -d "$url" ]; then
+              echo "::warning::Potentially broken link: $url"
+            fi
+          done || true
+
+          echo "Link check completed"
