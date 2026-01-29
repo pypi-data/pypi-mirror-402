@@ -1,0 +1,114 @@
+Metadata-Version: 2.4
+Name: biolink-helper-pkg
+Version: 1.0.0
+Summary: Standalone BiolinkHelper module extracted from RTX
+Author-email: Your Name <you@example.com>
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: networkx>=2.8
+Requires-Dist: PyYAML>=6.0
+Requires-Dist: requests>=2.25
+
+# BiolinkHelper
+
+`BiolinkHelper` is a lightweight Python utility class for working with a specific **Biolink Model version**.
+Its data source is the [Biolink Model YAML](https://github.com/biolink/biolink-model/blob/master/biolink-model.yaml) file.
+---
+
+## Overview
+
+The `BiolinkHelper` class requires two mandatory inputs at initialization time:
+
+* A **Biolink Model version**
+* A **local cache path** where Biolink resources are stored (or will be stored)
+
+No defaults are assumed.
+
+---
+
+## Installation
+
+
+```bash
+pip install biolink-helper-pkg
+```
+
+---
+
+## Usage
+
+### Basic Example
+
+```python
+from biolink_helper_pkg import BiolinkHelper
+
+helper = BiolinkHelper(
+    biolink_version="4.2.6",
+    cached_path="/data/biolink_cache"
+)
+```
+
+---
+
+## Class API
+
+### `BiolinkHelper`
+
+```python
+class BiolinkHelper:
+
+    def __init__(self, biolink_version, cached_path):
+        ...
+```
+
+#### Parameters
+
+| Name              | Type  | Required | Description                                                                                                 |
+| ----------------- | ----- | -------- |-------------------------------------------------------------------------------------------------------------|
+| `biolink_version` | `str` | Yes      | The Biolink Model version to use (e.g. `"4.2.6"`). This value is mandatory and must be provided explicitly. |
+| `cached_path`     | `str` | Yes      | Path to a directory used for caching Biolink YAML files and lookup maps. Must be readable and writable.     |
+
+> Both parameters are **mandatory**.
+> Initialization will fail if either is missing or invalid.
+
+---
+
+#### How to use
+
+Examples of ways to get **ancestors**:
+```
+biolink_helper.get_ancestors("biolink:Drug")
+biolink_helper.get_ancestors(["biolink:Drug", "biolink:Protein"])
+biolink_helper.get_ancestors("biolink:Drug", include_mixins=False)
+biolink_helper.get_ancestors("biolink:Protein", include_conflations=False)
+biolink_helper.get_ancestors("biolink:treats")
+```
+
+Examples of ways to get **descendants**:
+```
+biolink_helper.get_descendants("biolink:ChemicalEntity")
+biolink_helper.get_descendants(["biolink:ChemicalEntity", "biolink:Protein"])
+biolink_helper.get_descendants("biolink:ChemicalEntity", include_mixins=False)
+biolink_helper.get_descendants("biolink:Protein", include_conflations=False)
+biolink_helper.get_descendants("biolink:related_to")
+```
+
+Ancestors/descendants are always returned in a list. Relevant mixins are included in the returned list by default, but you can turn that behavior off via the `include_mixins` parameter, as shown in some of the above examples. Inclusion of ARAX-defined conflations can be controlled via the `include_conflations` parameter (default is True).
+
+Other available methods include getting **canonical predicates**:
+
+```
+biolink_helper.get_canonical_predicates("biolink:treated_by")
+biolink_helper.get_canonical_predicates(["biolink:treated_by", "biolink:related_to"])
+```
+
+And **filtering out mixins**:
+
+```
+biolink_helper.filter_out_mixins(["biolink:ChemicalEntity", "biolink:PhysicalEssence"]])
+```
+
+
+#### Debugging
+
+The JSON version saved in `cached_path` is just there for easier debugging/viewing.
