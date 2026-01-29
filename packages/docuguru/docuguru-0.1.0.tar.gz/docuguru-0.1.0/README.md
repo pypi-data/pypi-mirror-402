@@ -1,0 +1,176 @@
+# DocuGuru
+
+Herramienta profesional para convertir documentos Markdown a PDF con estilos predefinidos y componentes personalizados.
+
+## Características
+
+- ✅ Conversión de Markdown a PDF de alta calidad
+- ✅ Página de portada automática con título, badge y fecha
+- ✅ Tabla de contenidos generada automáticamente (H1, H2, H3)
+- ✅ Soporte completo para títulos (h1-h6), tablas y listas
+- ✅ Listas ordenadas con números estilizados en círculos
+- ✅ Listas no ordenadas con checkmarks personalizados
+- ✅ Componentes HTML personalizados (info-cards, timelines, summary-cards, etc.)
+- ✅ Estilos profesionales predefinidos
+- ✅ Optimizado para impresión en formato A4
+
+## Instalación
+
+### Requisitos
+
+- Python >= 3.12
+- Poetry (para gestión de dependencias)
+
+### Instalación con Poetry
+
+```bash
+# Clonar el repositorio
+git clone <repository-url>
+cd docuguru
+
+# Instalar dependencias
+poetry install
+
+# Activar el entorno virtual
+poetry shell
+```
+
+### Instalación del paquete
+
+```bash
+# Construir el paquete
+poetry build
+
+# Instalar desde el wheel generado
+pip install dist/docuguru-0.1.0-py3-none-any.whl
+```
+
+## Uso
+
+### Comando Básico
+
+```bash
+docuguru convert documento.md
+```
+
+Esto generará un archivo `documento.pdf` en el mismo directorio.
+
+### Opciones Disponibles
+
+```bash
+docuguru convert documento.md [OPCIONES]
+```
+
+**Opciones:**
+
+- `-o, --output <archivo>`: Especifica la ruta del archivo PDF de salida
+- `-t, --title <título>`: Define el título del documento (por defecto se extrae del primer H1)
+- `--no-cover`: No incluir página de portada
+- `-b, --badge <texto>`: Texto del badge en la portada (por defecto: "Propuesta técnica")
+- `-d, --date <fecha>`: Fecha para la portada (ej: "Diciembre 2025", por defecto: fecha actual)
+
+### Ejemplos
+
+```bash
+# Conversión básica
+docuguru convert propuesta.md
+
+# Con título personalizado y fecha
+docuguru convert propuesta.md -t "Propuesta Técnica" -d "Enero 2025"
+
+# Sin portada
+docuguru convert documento.md --no-cover
+
+# Especificar archivo de salida
+docuguru convert documento.md -o salida/propuesta.pdf
+
+# Con badge personalizado
+docuguru convert documento.md -b "Informe Técnico"
+```
+
+## Documentación de Bloques Personalizados
+
+Para ver todos los bloques HTML personalizados disponibles y cómo usarlos:
+
+```bash
+# Mostrar en consola
+docuguru blocks
+
+# Guardar en archivo
+docuguru blocks -o bloques-documentacion.md
+```
+
+## Componentes Personalizados Disponibles
+
+### 1. Architecture Diagram
+Diagrama de arquitectura centrado.
+
+### 2. Info Card
+Tarjeta informativa para fases o información destacada.
+
+### 3. Timeline
+Línea de tiempo vertical con items conectados.
+
+### 4. Summary Cards
+Tarjetas de resumen horizontales con valores destacados.
+
+### 5. Support Packages
+Tarjetas de paquetes de servicios lado a lado.
+
+### 6. Styled List
+Listas con checkmarks personalizados (✔).
+
+### 7. Warranty Notice
+Bloque de aviso o garantía destacado.
+
+Para más detalles y ejemplos de uso, ejecuta `docuguru blocks`.
+
+## Características de Markdown Soportadas
+
+- **Títulos**: Todos los niveles (h1-h6)
+- **Tablas**: Formato estándar de Markdown
+- **Listas ordenadas**: Con numeración estilizada automática
+- **Listas no ordenadas**: Con checkmarks personalizados
+- **Código**: Bloques de código con syntax highlighting
+- **HTML personalizado**: Componentes custom embebidos
+
+## Estilos Predefinidos
+
+El proyecto incluye un conjunto completo de estilos CSS predefinidos que incluyen:
+
+- Paleta de colores profesional (azules y grises)
+- Tipografía Inter (con múltiples pesos)
+- Gradientes y sombras modernas
+- Optimización para impresión (page-breaks, márgenes)
+- Diseño responsive
+
+## Estructura del Proyecto
+
+```
+docuguru/
+├── src/
+│   └── docuguru/
+│       ├── __init__.py
+│       ├── cli.py              # Interfaz de línea de comandos
+│       ├── markdon_to_html.py  # Conversor Markdown a HTML
+│       ├── html_to_pdf.py      # Generador de PDF
+│       └── default.py          # Estilos CSS predefinidos
+├── tests/                      # Tests unitarios
+├── playground/                 # Archivos de ejemplo
+├── pyproject.toml              # Configuración del proyecto
+└── README.md                   # Este archivo
+```
+
+## Desarrollo
+
+### Ejecutar Tests
+
+```bash
+poetry run pytest
+```
+
+### Construir el Proyecto
+
+```bash
+poetry build
+```
