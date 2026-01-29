@@ -1,0 +1,114 @@
+[project]
+name = "rentcache"
+version = "0.1.1"
+description = "Intelligent caching proxy for Rentcast API with cost management and rate limiting"
+authors = [
+    {name = "Ryan Malloy", email = "ryan@supported.systems"}
+]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet :: Proxy Servers",
+    "Topic :: Database :: Front-Ends",
+]
+keywords = ["rentcast", "api", "cache", "proxy", "real-estate", "property-data", "rate-limiting"]
+
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.0.0",
+    "sqlalchemy>=2.0.0",
+    "aiosqlite>=0.20.0",
+    "redis>=5.0.0",
+    "python-dotenv>=1.0.0",
+    "structlog>=24.0.0",
+    "tenacity>=9.0.0",
+    "slowapi>=0.1.9",
+    "click>=8.1.0",
+    "rich>=13.0.0",
+    "python-multipart>=0.0.12",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=5.0.0",
+    "pytest-mock>=3.14.0",
+    "ruff>=0.7.0",
+    "mypy>=1.13.0",
+    "black>=24.0.0",
+    "pre-commit>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://git.supported.systems/MCP/rentcache"
+Repository = "https://git.supported.systems/MCP/rentcache.git"
+Documentation = "https://git.supported.systems/MCP/rentcache#readme"
+"Bug Tracker" = "https://git.supported.systems/MCP/rentcache/issues"
+
+[project.scripts]
+rentcache = "rentcache.cli:main"
+rentcache-server = "rentcache.server:run"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/rentcache"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rentcache"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["src", "tests"]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+    "ARG", # flake8-unused-arguments
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501", # line too long (handled by formatter)
+    "B008", # do not perform function calls in argument defaults
+]
+
+[tool.black]
+line-length = 100
+target-version = ['py310', 'py311', 'py312', 'py313']
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v --tb=short --cov=src/rentcache --cov-report=html --cov-report=term"
+
+[tool.coverage.run]
+source = ["src/rentcache"]
+omit = ["*/tests/*", "*/test_*.py"]
