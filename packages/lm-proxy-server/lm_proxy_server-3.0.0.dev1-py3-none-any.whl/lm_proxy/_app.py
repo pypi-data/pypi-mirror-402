@@ -1,0 +1,85 @@
+"""
+LM-Proxy Application Entrypoint
+"""
+import logging
+from typing import Optional
+from fastapi import FastAPI
+import typer
+import uvicorn
+
+from .bootstrap import env, bootstrap
+from .core import chat_completions
+from .models_endpoint import models
+
+cli_app = typer.Typer()
+
+
+@cli_app.callback(invoke_without_command=True)
+def run_server(
+    config: Optional[str] = typer.Option(None, help="Path to the configuration file"),
+    debug: Optional[bool] = typer.Option(
+        None, help="Enable debug mode (more verbose logging)"
+    ),
+    env_file: Optional[str] = typer.Option(
+        ".env",
+        "--env",
+        "--env-file",
+        "--env_file",
+        help="Set the .env file to load ENV vars from",
+    ),
+):
+    """
+    Default command for CLI application: Run LM-Proxy web server
+    """
+    try:
+        bootstrap(config=config or "config.toml", env_file=env_file, debug=debug)
+        uvicorn.run(
+            "lm_proxy.app:web_app",
+            host=env.config.host,
+            port=env.config.port,
+            ssl_keyfile=getattr(env.config, 'ssl_keyfile', None),
+            ssl_certfile=getattr(env.config, 'ssl_certfile', None),
+            reload=env.config.dev_autoreload,
+            factory=True,
+        )
+    except Exception as e:
+        if env.debug:
+            raise
+        logging.error(e)
+        raise typer.Exit(code=1)
+
+
+def web_app():
+    """
+    Entrypoint for ASGI server
+    """
+    app = FastAPI(
+        title="LM-Proxy", description="OpenAI-compatible proxy server for LLM inference"
+    )
+    app.add_api_route(
+        path=f"{env.config.api_prefix}/chat/completions",
+        endpoint=chat_completions,
+        methods=["POST"],
+    )
+    app.add_api_route(
+        path=f"{env.config.api_prefix}/models",
+        endpoint=models,
+        methods=["GET"],
+    )
+    # app.add_api_route(path="", endpoint=lambda: {"status": "ok"}, methods=["GET"])
+
+    # @app.middleware("http")
+    # async def log_requests(request, call_next):
+    #     body = await request.body()
+    #     logging.info(f"Request URL: {request.url}")
+    #     logging.info(f"Request Headers: {dict(request.headers)}")
+    #     logging.info(f"Request Body: {body.decode()}")
+    #
+    #     response = await call_next(request)
+    #     return response
+
+    return app
+
+
+if __name__ == "__main__":
+    cli_app()
