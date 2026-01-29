@@ -1,0 +1,95 @@
+cascade_id: vibes_dimension
+internal: true
+description: 'Semantic vibe dimension function. Extracts N vibes from a collection of texts,
+
+  then assigns each text to its dominant vibe.
+
+
+  This is a DIMENSION-shaped function for use in GROUP BY clauses.
+
+  '
+inputs_schema:
+  texts: JSON array of all text values to analyze
+  num_vibes: Number of vibes to extract (default 5)
+  focus: Optional focus/hint for vibe extraction
+sql_function:
+  name: vibes
+  description: 'Extract vibes from text collection and assign each text to a vibe.
+
+    First arg is the column, remaining args are modifiers.
+
+    '
+  shape: DIMENSION
+  mode: mapping
+  args:
+  - name: text
+    type: VARCHAR
+    role: dimension_source
+  - name: num_vibes
+    type: INTEGER
+    default: 5
+  - name: focus
+    type: VARCHAR
+    default: null
+  returns: VARCHAR
+  cache: true
+  operators:
+  - VIBES({{ text }})
+  - VIBES({{ text }}, {{ num_vibes }})
+  - VIBES({{ text }}, {{ num_vibes }}, '{{ focus }}')
+  - '{{ text }} VIBES {{ num_vibes }}'
+  - '{{ text }} VIBES INTO {{ num_vibes }}'
+  test_cases:
+  - sql: SELECT vibes('This is giving main character energy')
+    expect:
+      type: regex
+      pattern: .+
+    description: Vibe extracted
+cells:
+- name: extract_and_assign
+  model: google/gemini-2.5-flash-lite
+  instructions: |
+    Analyze these {{ input.texts | length }} texts and:
+    1. Identify {{ input.num_vibes | default(5) }} distinct vibe categories
+    2. Assign each text to its best-matching vibe
+
+    {% if input.focus %}
+    Focus on: {{ input.focus }}
+    {% endif %}
+
+    Texts to analyze (with index numbers):
+    {% for v in input.texts %}
+    [{{ loop.index0 }}] "{{ v | replace('"', '\\"') }}"
+    {% endfor %}
+
+    Return a JSON object mapping each text's INDEX NUMBER to its assigned vibe:
+
+    {
+      "mapping": {
+        "0": "chill vibes",
+        "1": "chaotic energy",
+        ...
+      }
+    }
+
+    VIBE GUIDELINES:
+    - Vibes capture mood, energy, tone, and atmosphere - the *feel* not just the topic
+    - Use contemporary, expressive language: "main character energy", "cozy autumn vibes", "that 3am energy", "unhinged but make it fashion", "soft life era"
+    - Be creative and evocative - vibes are about emotional resonance
+    - Each vibe name should be 2-5 words max
+    - You are creating exactly {{ input.num_vibes | default(5) }} vibe categories to group these texts
+
+    IMPORTANT:
+    - Use the INDEX NUMBER (0, 1, 2, ...) as keys, NOT the original text
+    - Every input text must be assigned to exactly one vibe
+    - Return ONLY the JSON object
+  rules:
+    max_turns: 1
+    max_attempts: 3
+  output_schema:
+    type: object
+    properties:
+      mapping:
+        type: object
+    required:
+    - mapping
