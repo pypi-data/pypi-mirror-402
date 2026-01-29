@@ -1,0 +1,58 @@
+# Multi-stage build for production frontend
+# Using official bun image for faster builds
+FROM oven/bun:1 AS base
+
+# Dependencies stage
+FROM base AS deps
+WORKDIR /app
+COPY saas-platform/platform-frontend/package.json saas-platform/platform-frontend/bun.lock ./platform-frontend/
+# Use cache mount for bun cache to speed up builds
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    cd platform-frontend && bun install --frozen-lockfile
+
+# Build stage
+FROM deps AS builder
+WORKDIR /app
+COPY saas-platform/platform-frontend/ ./platform-frontend/
+# Provide runtime env vars during build so Next.js can pre-render pages
+ARG SUPABASE_URL
+ARG SUPABASE_ANON_KEY
+ARG PLATFORM_DOMAIN
+ENV NODE_ENV=production \
+    SUPABASE_URL=${SUPABASE_URL} \
+    SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY} \
+    PLATFORM_DOMAIN=${PLATFORM_DOMAIN}
+# Build production bundle with optimizations
+# Next.js standalone output creates minimal production build
+RUN cd platform-frontend && bun run build
+
+# Production stage - optimized for Next.js standalone
+FROM public.ecr.aws/docker/library/node:20-alpine AS final
+WORKDIR /app
+
+# Add non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001
+
+# Only copy what's needed for production
+# The standalone folder has a minimal node_modules with only production dependencies
+COPY --from=builder --chown=nextjs:nodejs /app/platform-frontend/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/platform-frontend/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/platform-frontend/public ./public
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+# Switch to non-root user
+USER nextjs
+
+# Expose port
+EXPOSE 3000
+
+# No health check needed - K8s handles this via readiness/liveness probes
+
+# Start Next.js server
+# Note: standalone output creates a server.js file
+CMD ["node", "server.js"]
