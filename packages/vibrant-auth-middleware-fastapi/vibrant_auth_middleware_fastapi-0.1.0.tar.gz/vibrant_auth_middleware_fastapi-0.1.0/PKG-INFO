@@ -1,0 +1,171 @@
+Metadata-Version: 2.4
+Name: vibrant-auth-middleware-fastapi
+Version: 0.1.0
+Summary: FastAPI authentication middleware with JWT verification and Azure integration
+Author-email: Vibrant Engineering <engineering@vibrant.com>
+License: ISC
+Requires-Python: >=3.11
+Requires-Dist: azure-appconfiguration<2.0.0,>=1.7.0
+Requires-Dist: azure-identity<2.0.0,>=1.15.0
+Requires-Dist: azure-keyvault-secrets<5.0.0,>=4.8.0
+Requires-Dist: fastapi>=0.100.0
+Requires-Dist: python-jose[cryptography]<4.0.0,>=3.3.0
+Provides-Extra: dev
+Requires-Dist: pytest-asyncio<0.20.0,>=0.19.0; extra == 'dev'
+Requires-Dist: pytest<8.0.0,>=7.1.2; extra == 'dev'
+Requires-Dist: ruff<1.0.0,>=0.9.0; extra == 'dev'
+Description-Content-Type: text/markdown
+
+# Vibrant Auth Middleware for FastAPI
+
+JWT authentication middleware with Azure integration for FastAPI applications.
+
+## Features
+
+- JWT verification with automatic algorithm detection (HS256/RS256)
+- Azure Key Vault integration for HS256 secrets
+- Azure App Configuration integration for RS256 public keys
+- FastAPI dependency injection support
+- Cookie-based authentication support (access_token + token_type)
+- Automatic fallback from Authorization header to cookies
+- Caching for improved performance
+
+## Installation
+
+```bash
+pip install vibrant-auth-middleware
+```
+
+## Quick Start
+
+```python
+from fastapi import FastAPI, Depends
+from vibrant_auth_middleware import get_user_id
+
+app = FastAPI()
+
+@app.get("/protected")
+def protected_route(user_id: str = Depends(get_user_id)):
+    return {"user_id": user_id}
+```
+
+## Configuration
+
+Configure via environment variables:
+
+### HS256 (Symmetric Key)
+
+```bash
+# Option 1: Direct secret
+JWT_SECRET_KEY=your-secret-key
+
+# Option 2: Azure Key Vault
+AZURE_KEY_VAULT_URI=https://your-vault.vault.azure.net/
+AZURE_KEY_VAULT_JWT_SECRET=jwt-secret-key  # optional, default: "jwt-secret-key"
+```
+
+### RS256 (Asymmetric Key)
+
+```bash
+# Option 1: Direct public key
+JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
+
+# Option 2: Azure App Configuration
+AZURE_APP_CONFIG_ENDPOINT=https://your-config.azconfig.io
+# or
+AZURE_APP_CONFIG_CONNECTION_STRING=Endpoint=...
+AZURE_APP_CONFIG_JWT_KEY=jwt-public-key  # optional, default: "jwt-public-key"
+```
+
+### JWT Verification Options
+
+```bash
+JWT_AUDIENCE=your-audience      # optional
+JWT_ISSUER=your-issuer          # optional
+JWT_LEEWAY=0                    # optional, seconds for time validation
+```
+
+### Azure Authentication
+
+```bash
+APP_ENV=production  # Uses WorkloadIdentityCredential
+APP_ENV=dev         # Uses DefaultAzureCredential (default)
+```
+
+## API Reference
+
+### `get_user_id`
+
+FastAPI dependency that extracts and validates user_id from JWT token. Supports both Authorization header and cookie-based authentication with automatic fallback.
+
+**Authentication methods (in order of priority):**
+1. Authorization header: `Authorization: Bearer <token>`
+2. Cookies: `access_token` + `token_type` (token_type must be "Bearer")
+
+```python
+@app.get("/me")
+def get_me(user_id: str = Depends(get_user_id)):
+    return {"user_id": user_id}
+```
+
+### `get_user`
+
+FastAPI dependency that extracts and validates the full JWT payload. Supports both Authorization header and cookie-based authentication with automatic fallback.
+
+```python
+from vibrant_auth_middleware import get_user
+
+@app.get("/me")
+def get_me(user: dict = Depends(get_user)):
+    return {"user": user}
+```
+
+### `get_user_id_from_cookie`
+
+FastAPI dependency that extracts and validates user_id exclusively from cookies. Requires both `access_token` and `token_type` cookies, where `token_type` must be "Bearer".
+
+```python
+from vibrant_auth_middleware import get_user_id_from_cookie
+
+@app.get("/me")
+def get_me(user_id: str = Depends(get_user_id_from_cookie)):
+    return {"user_id": user_id}
+```
+
+**Expected cookies:**
+- `access_token`: The JWT token
+- `token_type`: Must be "Bearer"
+
+### `verify_jwt_token`
+
+Verify a JWT token and return its payload.
+
+```python
+from vibrant_auth_middleware import verify_jwt_token
+
+payload = verify_jwt_token(token)
+```
+
+### `get_user_id_from_token`
+
+Extract user_id from a verified JWT token.
+
+```python
+from vibrant_auth_middleware import get_user_id_from_token
+
+user_id = get_user_id_from_token(token)
+```
+
+### `get_token_payload`
+
+Get the full verified token payload.
+
+```python
+from vibrant_auth_middleware import get_token_payload
+
+payload = get_token_payload(token)
+```
+
+## License
+
+ISC
