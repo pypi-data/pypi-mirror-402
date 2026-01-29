@@ -1,0 +1,244 @@
+name: Deployment
+
+on:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+  schedule:
+    - cron: '0 10 * * *'
+
+jobs:
+  deploy-pypi:
+    name: PyPI deployment
+    runs-on: "ubuntu-latest"
+    if: github.event_name != 'push' || github.repository == 'DIRACGrid/diracx'
+    outputs:
+      new-version: ${{ steps.check-tag.outputs.new-version }}
+      create-release: ${{ steps.check-tag.outputs.create-release }}
+    permissions:
+      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing on pypi
+      actions: write
+      checks: write
+      contents: write
+      deployments: write
+      discussions: write
+      issues: write
+      packages: write
+      pages: write
+      pull-requests: write
+      repository-projects: write
+      security-events: write
+      statuses: write
+    defaults:
+      run:
+        # We need extglob for REFERENCE_BRANCH substitution
+        shell: bash -l -O extglob {0}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ github.token }}
+      - run: |
+          git fetch --prune --unshallow
+          git config --global user.email "ci@diracgrid.org"
+          git config --global user.name "DIRACGrid CI"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Installing dependencies
+        run: |
+          python -m pip install \
+              build \
+              python-dateutil \
+              pytz \
+              readme_renderer[md] \
+              requests \
+              setuptools_scm
+      - name: Validate README for PyPI
+        run: |
+          python -m readme_renderer README.md -o /tmp/README.html
+      - name: Extract version from tag
+        id: check-tag
+        run: |
+          set -xeuo pipefail
+          IFS=$'\n\t'
+          # Check if this is a tag push
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # Extract version from the tag
+            export NEW_VERSION="${GITHUB_REF#refs/tags/}"
+            echo "Deploying release $NEW_VERSION"
+            echo "create-release=true" >> $GITHUB_OUTPUT
+            echo "new-version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "Not a tag push, skipping release"
+            echo "create-release=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Build distributions
+        run: |
+          for pkg_dir in $PWD/diracx-*; do
+            echo "Building $pkg_dir"
+            python -m build --outdir $PWD/dist $pkg_dir
+          done
+          # Also build the diracx metapackage
+          python -m build --outdir $PWD/dist .
+      - name: 'Upload Artifact'
+        uses: actions/upload-artifact@v6
+        with:
+          name: diracx-whl
+          path: dist/diracx*.whl
+          retention-days: 5
+      # Use trusted publisher for pypi
+      # https://docs.pypi.org/trusted-publishers/
+      - name: Publish package on PyPI
+        if: steps.check-tag.outputs.create-release == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  docker:
+    needs: deploy-pypi
+    timeout-minutes:  30
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GitHub container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download diracx wheels
+        uses: actions/download-artifact@v7
+        with:
+            name: diracx-whl
+      - name: "Find wheels"
+        id: find_wheel
+        run: |
+          # We need to copy them there to be able to access them in the RUN --mount
+          cp diracx*.whl containers/client/
+          cp diracx*.whl containers/services/
+          for wheel_fn in *.whl; do
+            pkg_name=$(basename "${wheel_fn}" | cut -d '-' -f 1)
+            echo "${pkg_name}-wheel-name=$(ls "${pkg_name}"-*.whl)" >> $GITHUB_OUTPUT
+          done
+
+      - name: Build and push client (release)
+        uses: docker/build-push-action@v6
+        if: ${{ needs.deploy-pypi.outputs.create-release == 'true' }}
+        with:
+          context: containers/client/
+          push: ${{ needs.deploy-pypi.outputs.create-release == 'true' }}
+          tags: "ghcr.io/diracgrid/diracx/client:${{ needs.deploy-pypi.outputs.new-version }}"
+          platforms: linux/amd64,linux/arm64
+          build-args: EXTRA_PACKAGES_TO_INSTALL=DIRACCommon~=9.0.0
+      - name: Build and push services (release)
+        uses: docker/build-push-action@v6
+        if: ${{ needs.deploy-pypi.outputs.create-release == 'true' }}
+        with:
+          context: containers/services/
+          push: ${{ needs.deploy-pypi.outputs.create-release == 'true' }}
+          tags: "ghcr.io/diracgrid/diracx/services:${{ needs.deploy-pypi.outputs.new-version }}"
+          platforms: linux/amd64,linux/arm64
+          build-args: EXTRA_PACKAGES_TO_INSTALL=DIRACCommon~=9.0.0
+
+      - name: Build and push client (dev)
+        uses: docker/build-push-action@v6
+        with:
+          context: containers/client/
+          push: ${{ github.event_name != 'pull_request' && github.repository == 'DIRACGrid/diracx' && github.ref_name == 'main' }}
+          tags: ghcr.io/diracgrid/diracx/client:dev
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            EXTRA_PACKAGES_TO_INSTALL=git+https://github.com/DIRACGrid/DIRAC.git@integration#egg=diraccommon\&subdirectory=dirac-common
+      - name: Build and push services (dev)
+        uses: docker/build-push-action@v6
+        with:
+          context: containers/services/
+          push: ${{ github.event_name != 'pull_request' && github.repository == 'DIRACGrid/diracx' && github.ref_name == 'main' }}
+          tags: ghcr.io/diracgrid/diracx/services:dev
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            EXTRA_PACKAGES_TO_INSTALL=git+https://github.com/DIRACGrid/DIRAC.git@integration#egg=diraccommon\&subdirectory=dirac-common
+
+  update-charts:
+    name: Update Helm charts
+    needs:
+      - deploy-pypi
+      - docker
+    runs-on: ubuntu-latest
+    if: ${{ needs.deploy-pypi.outputs.create-release == 'true' }}
+    steps:
+      - name: Checkout diracx
+        uses: actions/checkout@v6
+        with:
+          path: diracx
+
+      - name: Checkout diracx-charts
+        uses: actions/checkout@v6
+        with:
+          repository: DIRACGrid/diracx-charts
+          token: ${{ secrets.CHARTS_UPDATE_TOKEN }}
+          path: diracx-charts
+
+      - name: Configure Git
+        run: |
+          cd diracx-charts
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update chart versions
+        id: update-versions
+        run: |
+          cd diracx-charts
+          VERSION="${{ needs.deploy-pypi.outputs.new-version }}"
+
+          # Get current chart version before updating
+          CURRENT_CHART_VERSION=$(grep '^version:' diracx/Chart.yaml | sed 's/version: //' | tr -d '"')
+
+          # Use Python script to update versions
+          python ../diracx/.github/workflows/update_chart_version.py \
+            --charts-dir . \
+            --app-version "$VERSION"
+
+          # Get new chart version after update
+          NEW_CHART_VERSION=$(grep '^version:' diracx/Chart.yaml | sed 's/version: //' | tr -d '"')
+
+          echo "current_chart_version=$CURRENT_CHART_VERSION" >> $GITHUB_OUTPUT
+          echo "new_chart_version=$NEW_CHART_VERSION" >> $GITHUB_OUTPUT
+          echo "diracx_version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Install pre-commit
+        run: |
+          pip install pre-commit
+
+      - name: Run pre-commit to update README
+        run: |
+          cd diracx-charts
+          pre-commit run --all-files || true
+
+      - name: Commit and push changes
+        if: success()
+        run: |
+          cd diracx-charts
+
+          # Stage all changes
+          git add -A
+
+          # Check if there are changes to commit
+          if ! git diff --cached --quiet; then
+            # Commit the changes
+            git commit -m "chore: bump chart to ${{ steps.update-versions.outputs.new_chart_version }} for DiracX ${{ steps.update-versions.outputs.diracx_version }}
+
+            - Update appVersion to ${{ steps.update-versions.outputs.diracx_version }}
+            - Update image tag to ${{ steps.update-versions.outputs.diracx_version }}
+            - Bump chart version from ${{ steps.update-versions.outputs.current_chart_version }} to ${{ steps.update-versions.outputs.new_chart_version }}"
+
+            git push origin master
+
+            echo "✅ Successfully pushed chart version ${{ steps.update-versions.outputs.new_chart_version }} and tag ${TAG_NAME}"
+          else
+            echo "No changes to commit"
+          fi
