@@ -1,0 +1,60 @@
+name: cd
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  tagged-release:
+    name: Tagged Release
+    runs-on: windows-2022  # windows-2025 dropped InnoSetup/ISCC
+    environment:
+      name: pypi
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+    - uses: actions/checkout@v6
+    - name: Set up Python
+      uses: actions/setup-python@v6
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+    - name: Install the project
+      run: uv sync --locked --all-extras --group pack
+    - name: Cache prod.keys
+      id: cache-prod-keys
+      uses: actions/cache@v5
+      with:
+        path: prod.keys
+        key: prod-keys
+    - name: Save prod.keys safely
+      if: steps.cache-prod-keys.outputs.cache-hit != 'true'
+      env:
+        PROD_KEYS: ${{ secrets.PROD_KEYS }}
+      run: $env:PROD_KEYS | Out-File prod.keys
+    - name: Build EXE with PyInstaller
+      run: uv run python pyinstaller.py
+    - name: Create Windows Installer with Inno Setup
+      run: |
+        $env:NTON_VERSION = uvx hatch version
+        iscc setup.iss
+        mv dist/NTON-*.exe .
+    - name: Build Portable EXE with PyInstaller
+      shell: pwsh
+      run: |
+        uv run python pyinstaller.py --one-file
+        mv dist/NTON.exe NTON-${{ github.ref_name }}-portable.exe
+    - name: Build project
+      run: uv build
+    - name: Deploy release
+      uses: marvinpinto/action-automatic-releases@latest
+      with:
+        prerelease: false
+        repo_token: "${{ secrets.GITHUB_TOKEN }}"
+        files: |
+          NTON-*.exe
+          NTON-*-portable.exe
+          C:/Users/runneradmin/Desktop/NTON/*.nsp
+    - name: Publish to PyPI
+      run: uv publish
