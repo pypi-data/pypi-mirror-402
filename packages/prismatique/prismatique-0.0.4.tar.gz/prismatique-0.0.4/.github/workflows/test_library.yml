@@ -1,0 +1,51 @@
+name: Test library
+
+# This workflow runs the unit tests for the Python versions 3.9, 3.10, and
+# 3.11. Note that ``numpy`` had to be pinned to a specific version to circumvent
+# a compatibility issue with other libraries, when using earlier versions of
+# Python.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  build:
+    if: github.event.pull_request.draft == false
+    
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
+    env:
+      PY_COLORS: 1
+    strategy:
+      max-parallel: 5
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Setup Conda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        miniconda-version: "latest"
+        activate-environment: test
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        conda install -c conda-forge pyprismatic=2.*=cpu* "numpy==1.26.4"
+        python -m pip install .[tests]
+        
+    - name: Measure code coverage
+      run: source run_tests.sh

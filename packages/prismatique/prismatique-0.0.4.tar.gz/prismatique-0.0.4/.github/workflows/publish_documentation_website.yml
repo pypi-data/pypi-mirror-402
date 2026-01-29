@@ -1,0 +1,65 @@
+name: Publish documentation website
+# This workflow builds the static documentation site and then deploys it to
+# GitHub pages.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+  # Allows you to run this workflow manually from the Actions tab.
+  workflow_dispatch:
+
+jobs:
+  build:
+    if: github.event.pull_request.draft == false
+    
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
+    permissions:
+      id-token: write
+      pages: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    
+    - name: Setup Conda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        auto-update-conda: true
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        conda install -c conda-forge pyprismatic=2.*=cpu*
+        python -m pip install .[docs]
+        
+    - name: Generate documentation
+      run: |
+        git fetch --tags
+        cd docs
+        python build_docs.py
+        cd ../
+
+    - name: Setup pages
+      uses: actions/configure-pages@v5
+
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: './pages'
+
+    - name: Deploy to GitHub pages
+      id: deployment
+      uses: actions/deploy-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
