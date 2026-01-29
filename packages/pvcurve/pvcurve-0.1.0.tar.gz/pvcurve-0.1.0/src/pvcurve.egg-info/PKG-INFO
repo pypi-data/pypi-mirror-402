@@ -1,0 +1,142 @@
+Metadata-Version: 2.4
+Name: pvcurve
+Version: 0.1.0
+Summary: Tools for analyzing pressure–volume curves in plant physiology
+Author: Jean Allen
+License: MIT
+Project-URL: Homepage, https://github.com/jean-allen/pvcurve
+Project-URL: Issues, https://github.com/jean-allen/pvcurve/issues
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: statsmodels
+Requires-Dist: matplotlib
+Requires-Dist: openpyxl
+Dynamic: license-file
+
+# pvcurve
+
+A lightweight python package for analyzing pressure-volume curves. This package provides a simple and fast way to calculate common PV curve metrics (e.g., turgor loss point, capacitance, osmotic potential) with automated turgor loss detection, built-in plotting, and optional outlier detection. All of the math is based on the Williams P-V Curve analyzer (none of the actual science in here is my own; this is just a tool for working with data!). I put it together for [a project I've been working on](https://github.com/jean-allen/spectral_pv_curves) but I'm hopeful that it can be helpful to you too ☺
+
+## Installation
+
+Install directly from GitHub:
+```bash
+pip install git+https://github.com/jean-allen/pvcurve
+```
+
+## Quick start
+
+```python
+import pvcurve as pvc
+my_pv_curve = pvc.read('my_file.xlsx')
+print(my_pv_curve)
+my_pv_curve.plot()
+```
+
+![Example output of my_pv_curve.plot()](https://github.com/jean-allen/pvcurve/tests/output_img.png)
+
+Some example data is available under tests/eugl_1.xlsx, plus a notebook (reading_in_file.ipynb) that shows the same use cases seen here in a bit of a more interactive way.
+
+There's also a data collection excel sheet available under templates/data_collection_template.xlsx -- if this code won't read your data sheet automatically, the fastest solution is probably to copy and paste your data into that collection spreadsheet and just read that instead. (Also consider raising an issue to let me know!)
+
+## Reading data
+
+pvcurve is designed to parse your files automatically and should be able to interpret csv and excel files, so long as the column keys are in the first row of the spreadsheet:
+
+```python
+import pvcurve as pvc
+my_pv_curve = pvc.read('my_data.csv')
+```
+
+Which column contains your Ψ/mass/dry mass data will be inferred automatically by default, but if it's throwing an error or picking up the wrong column, you can specify which column contains what data explicitly:
+
+```python
+my_pv_curve = pvc.read(
+    'my_data.csv',
+    psi_column="Water Potential",
+    mass_column="Wet Mass",
+    dry_mass_column="Dry Mass"
+)
+```
+
+Similarly, units will be inferred automatically from the column names when possible but can also be specified:
+
+```python
+my_pv_curve = pvc.read(
+    'my_data.csv',
+    psi_column="Water Potential",
+    mass_column="Wet Mass",
+    dry_mass_column="Dry Mass",
+    psi_units="bar",
+    mass_units="mg"
+)
+```
+
+The breakpoint for pre-TLP and post-TLP is detected automatically based on the weighted R² of the before/after TLP regressions (same as the Williams P-V Analyzer, just a little more automated). You can visualize the breakpoint selection and how it affects your results by calling the `get_breakpoint` function:
+
+```python
+breakpoint = my_pv_curve.get_breakpoint(plot=True)
+```
+![Example output of my_pv_curve.get_breakpoint(plot=True)](https://github.com/jean-allen/pvcurve/tests/breakpoint.png)
+
+
+I've been thinking about experimenting with other breakpoint detection algorithms so let me know if there's something you think I should try!
+
+## Outlier detection and removal
+
+This is a bit more experimental, but if you have a lot of curves with significant transcription errors, you can automate some of your data cleaning using either of the two outlier detection algorithms I implemented. The default method is to identify outliers based on a confidence interval around the before/after TLP regressions (by default using a 95% confidence interval, as below):
+
+```python
+pv_clean = pv.remove_outliers(method="regression")
+```
+
+The second method detects points that deviate strongly from the local median, calculated using a moving window, for both Ψ and wet mass. It is less prone to false positives, but I've tested it under fewer use cases, so use cautiously:
+
+```python
+pv_clean = pv.remove_outliers(method="local_mad")
+```
+
+## Calculating values and visualizing output
+
+All derived values (e.g., TLP) are calculated when you create your PVCurve object and are stored as attributes. E.g.,:
+
+```python
+print('Turgor Loss Point (MPa):', my_pv_curve.tlp)
+print('Turgor Loss Point Confidence Interval (MPa):', my_pv_curve.tlp_conf_int)
+print('Saturated Water Content:', my_pv_curve.swc)
+print('Bulk elastic modulus (MPa):', my_pv_curve.bulk_elastic_total)
+```
+
+You can plot your data quickly by calling the `plot` function:
+
+```python
+my_pv_curve.plot()
+```
+
+## Saving data
+
+You can save out your data and all of the calculated values to either a csv or an excel sheet:
+
+```python
+my_pv_curve.save_csv("results.csv")
+my_pv_curve.save_excel("results.xlsx")
+```
+
+## References
+
+This is just a software package; all of the actual science happened in these papers and should be credited to these people (and many others):
+
+Bartlett, M.K., Scoffoni, C., Sack, L. (2012). The determinants of leaf turgor loss point and prediction of drought tolerance of species and biomes: a global meta-analysis. Ecology Letters 15: 393-405. https://doi.org/10.1111/j.1461-0248.2012.01751.x
+
+Hinckley, T.M., Duhme, F., Hinckley, A.R., Richter, H. (1980). Water relations of drought hardy shrubs: osmotic potential and stomatal reactivity. Plant, Cell & Environment 3: 131-140. https://doi.org/10.1111/1365-3040.ep11580919
+
+Koide, R.T., Robichaux, R.H., Morse, S.R., Smith, C.M. (1989). Plant water status, hydraulic resistance and capacitance. In: Pearcy, R.W., Ehleringer, J.R., Mooney, H.A., Rundel, P.W. (eds) Plant Physiological Ecology. Springer, Dordrecht. https://doi.org/10.1007/978-94-009-2221-1_9
+
+Sack, L., Cowan, P.D., Jaikumar, N., Holbrook, N.M. (2003). The ‘hydrology’ of leaves: co-ordination of structure and function in temperate woody species. Plant, Cell & Environment 26: 1343-1356. https://doi.org/10.1046/j.0016-8025.2003.01058.x
+
+Scholz, F.G., Phillips, N.G., Bucci, S.J., Meinzer, F.C., Goldstein, G. (2011). Hydraulic capacitance: biophysics and functional significance of internal water sources in relation to tree size. In: Meinzer, F.C., Lachenbruch, B., Dawson, T.E. (eds) Size-and age-related changes in tree structure and function. Springer, Dortrecht, The Netherlands, pp 341–361.
+
+Tyree, M.T., Hammel, H.T. (1972). The Measurement of the Turgor Pressure and the Water Relations of Plants by the Pressure-bomb Technique. Journal of Experimental Botany 23: 267–282. https://doi.org/10.1093/jxb/23.1.267
