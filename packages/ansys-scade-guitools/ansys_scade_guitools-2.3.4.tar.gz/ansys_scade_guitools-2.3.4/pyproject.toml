@@ -1,0 +1,183 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name="ansys-scade-guitools"
+version="2.3.4"
+description ="Python library for extending the Ansys SCADE IDE GUI."
+readme="README.rst"
+
+# only 3.7, 3.10, or >= 3.12
+requires-python = ">=3.7,!=3.8.*,!=3.9.*,!=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    {name = "ANSYS, Inc.", email = "pyansys.core@ansys.com"},
+]
+maintainers = [
+    {name = "ANSYS, Inc.", email = "pyansys.core@ansys.com"},
+]
+dependencies=[
+    "importlib-metadata >= 1.0; python_version < '3.8'",
+    "importlib-metadata >= 4.0; python_version >= '3.8'",
+    "ansys.scade.apitools >= 0.5.0",
+]
+classifiers=[
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Software Development :: Embedded Systems",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.10",
+    "Operating System :: Microsoft :: Windows",
+]
+keywords=["Scade", "IDE", "GUI", "Dialog", "Menu", "Toolbar", "Page", "Settings", "Properties"]
+
+[project.optional-dependencies]
+build = [
+    "build==1.3.0",
+    "twine==6.2.0"
+]
+tests = [
+    "pytest >= 9.0.1; python_version >= '3.8'",
+    "pytest <= 7.4.4; python_version < '3.8'",
+    "pytest-cov >= 6.0.0; python_version >= '3.8'",
+    "pytest-cov <= 4.1.0; python_version < '3.8'",
+    "debugpy",
+]
+doc = [
+    "ansys-sphinx-theme[autoapi]==1.5.2",
+    "autodoc_pydantic==2.2.0",
+    "jupyter_sphinx==0.5.3",
+    "nbsphinx==0.9.7",
+    "numpydoc==1.9.0",
+    "sphinx==8.1.3",
+    "sphinx-autoapi<=3.6.1",
+    "sphinx-autodoc-typehints==3.0.1",
+    "sphinxcontrib-globalsubs==0.1.2",
+    "sphinxcontrib-httpdomain==1.8.1",
+    "sphinx-copybutton==0.5.2",
+    "sphinx-jinja==2.0.2",
+    "sphinxnotes-strike==1.2.1",
+]
+
+[tool.flit.module]
+name = "ansys.scade.guitools"
+
+[project.urls]
+Source = "https://github.com/ansys/scade-guitools"
+Issues = "https://github.com/ansys/scade-guitools/issues"
+Discussions = "https://github.com/ansys/scade-guitools/discussions"
+Documentation = "https://guitools.scade.docs.pyansys.com"
+Releases = "https://github.com/ansys/scade-guitools/releases"
+Homepage = "https://www.ansys.com/products/embedded-software/ansys-scade-suite"
+
+[project.entry-points."ansys.scade.registry"]
+srg = "ansys.scade.guitools:srg"
+register = "ansys.scade.guitools.register:register"
+unregister = "ansys.scade.guitools.unregister:unregister"
+
+[project.scripts]
+register_ansys_scade_guitools = "ansys.scade.guitools.register:main"
+unregister_ansys_scade_guitools = "ansys.scade.guitools.unregister:main"
+
+[tool.ruff]
+line-length = 100
+fix = true
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle, see https://docs.astral.sh/ruff/rules/#pycodestyle-e-w
+    "D",    # pydocstyle, see https://docs.astral.sh/ruff/rules/#pydocstyle-d
+    "F",    # pyflakes, see https://docs.astral.sh/ruff/rules/#pyflakes-f
+    "I",    # isort, see https://docs.astral.sh/ruff/rules/#isort-i
+    "N",    # pep8-naming, see https://docs.astral.sh/ruff/rules/#pep8-naming-n
+    "PTH",  # flake8-use-pathlib, https://docs.astral.sh/ruff/rules/#flake8-use-pathlib-pth
+    "TD",   # flake8-todos, https://docs.astral.sh/ruff/rules/#flake8-todos-td
+]
+ignore = [
+    "E501",  # Line too long. Ignoring this so "ruff.formatter" manages line length.
+]
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+force-sort-within-sections = true
+known-first-party = ["ansys", "conftest", "test_utils"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["D",]
+
+[tool.coverage.run]
+source = ["ansys.scade.guitools"]
+
+[tool.coverage.report]
+show_missing = true
+
+[tool.pytest]
+addopts = [
+    "--ignore=tests/GuiHost",
+    "--ignore=tests/Integration",
+    "-ra",
+    "--cov=ansys.scade.guitools",
+    "--cov-branch",
+    "--cov-report=html:.cov/html",
+    "--cov-report=xml:.cov/xml",
+    "--cov-report=term",
+    "-vv",
+]
+
+[tool.towncrier]
+package = "ansys.scade.guitools"
+directory = "doc/changelog.d"
+filename = "doc/source/changelog.rst"
+start_string = ".. towncrier release notes start\n"
+template = "doc/changelog.d/changelog_template.jinja"
+title_format = "`{version} <https://github.com/ansys/scade-guitools/releases/tag/v{version}>`_ - {project_date}"
+issue_format = "`#{issue} <https://github.com/ansys/scade-guitools/pull/{issue}>`_"
+
+[[tool.towncrier.type]]
+directory = "added"
+name = "Added"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "changed"
+name = "Changed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "fixed"
+name = "Fixed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "dependencies"
+name = "Dependencies"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "miscellaneous"
+name = "Miscellaneous"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "documentation"
+name = "Documentation"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "maintenance"
+name = "Maintenance"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "test"
+name = "Test"
+showcontent = true
