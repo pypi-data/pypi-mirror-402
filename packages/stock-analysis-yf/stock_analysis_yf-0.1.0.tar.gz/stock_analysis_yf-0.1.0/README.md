@@ -1,0 +1,91 @@
+# 📈 Advanced Stock Analysis Suite (yfinance)
+
+A professional-grade Python suite for automated technical analysis of Indian stocks. This tool consolidates multiple high-performance analysis modules into a single, user-friendly execution flow with intelligent caching and centralized configuration.
+
+![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
+![yfinance](https://img.shields.io/badge/data-yfinance-green.svg)
+![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)
+
+---
+
+## 🚀 Key Features
+
+### 1. 🔍 LTP Near Gaps
+Detects significant price gaps (bullish and bearish) and identifies stocks currently trading near these unfilled gap zones—prime areas for potential support or resistance.
+
+### 2. 🧱 Fractal Support & Resistance
+Uses vectorized fractal detection to identify statistically significant price levels. It calculates level strength based on historical touches and proximity.
+
+### 3. 🕯️ Candle & Gap Analysis
+Provides a statistical breakdown of recent price action:
+- Green/Red/Doji distribution.
+- Open = High / Open = Low detection.
+- Sustained gap performance.
+
+### 4. 🧬 Fibonacci Retracement Levels
+Automates the plotting of Fibonacci levels from recent swing highs and lows, highlighting stocks trading near key levels like the 50% or 61.8% "Golden Ratio."
+
+### 5. 📉 Chart Pattern Detection
+Vectorized detection of major classical patterns:
+- **Reversals:** Double Top/Bottom, Head & Shoulders (Regular/Inverse).
+- **Continuation:** Falling/Rising Wedges, Ascending/Descending/Symmetrical Triangles.
+- **Trend Channels:** Ascending and Descending channels.
+
+---
+
+## 📦 Project Structure
+
+```text
+stock_analysis/
+├── run_analysis.py           # 🚀 Main entry point & CONFIG HUB
+├── stock_analysis/       # Core package logic
+│   ├── stock_data_manager.py  # Cache & fetching
+│   ├── chart_patterns.py      # Pattern logic
+│   ├── ... (other modules)
+├── data_cache/               # Local .pkl data storage
+├── outputs/                  # Results, CSVs, and Charts
+└── pyproject.toml            # Build configuration
+```
+
+---
+
+## 🛠️ Installation
+
+1. **Clone or download** this repository.
+2. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+---
+
+## 🚦 Quick Start
+
+### 1. Configure your Scan
+Open `run_analysis.py` at the root. You can easily modify:
+- **Ticker Groups:** NSE indices, NIFTY 500, Custom lists.
+- **Periods:** Change scan duration (e.g., `1y`, `2y`).
+- **Tolerances:** Fine-tune how "near" a level a stock must be.
+
+### 2. Run the Analysis
+```bash
+python run_analysis.py
+```
+
+---
+
+## 💾 Intelligent Caching
+This suite features a **smart slicing cache**. If you've fetched 1 year of data, running a 1-month candle analysis will be **instantaneous**, as it slices the existing local data rather than re-downloading.
+
+## 📊 Outputs
+Results are neatly organized in the `outputs/` folder:
+- **Gaps Result:** Detailed CSV of unfilled gaps.
+- **Support_Resistance:** High-resolution charts with plotted levels.
+- **Fibonacci:** CSV and charts showing retracement proximity.
+- **Chart_Patterns:** Identified breakout/reversal opportunities.
+- **Candle_Analysis:** Summary reports of price action statistics.
+
+---
+
+## ⚖️ Disclaimer
+This project is for **educational and research purposes only**. It does not constitute financial advice. Always verify technical signals with your own due diligence before making trading decisions.
