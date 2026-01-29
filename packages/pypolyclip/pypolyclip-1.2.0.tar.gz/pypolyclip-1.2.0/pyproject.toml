@@ -1,0 +1,186 @@
+[project]
+name = 'pypolyclip'
+description = 'A python driver to the polyclip functions'
+readme = 'README.md'
+license = 'BSD-3-Clause'
+license-files = ['LICENSE.rst']
+authors = [
+    {name = 'Pypolyclip Developers'},
+]
+keywords = [
+    'computational geometry',
+    'polygon clipping',
+    'polygon intersection',
+    'pixelated images',
+    'CUBISM',
+    'polyclip',
+]
+classifiers = [
+    'Intended Audience :: Science/Research',
+    'Natural Language :: English',
+    'Operating System :: OS Independent',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3',
+    'Topic :: Scientific/Engineering :: Astronomy',
+]
+dynamic = ['version']
+requires-python = '>=3.11'
+dependencies = ['numpy>=2.0']
+
+[project.urls]
+Homepage = 'https://github.com/spacetelescope/pypolyclip'
+
+[project.optional-dependencies]
+test = [
+    'matplotlib>=3.9',
+    'pytest-astropy>=0.11',
+]
+
+[build-system]
+requires = [
+    'setuptools>=77.0',
+    'setuptools_scm>=8.1',
+    'numpy>=2.0',
+]
+build-backend = 'setuptools.build_meta'
+
+[tool.setuptools_scm]
+write_to = 'pypolyclip/version.py'
+
+[tool.setuptools]
+zip-safe = false
+include-package-data = false
+
+[tool.setuptools.packages.find]
+namespaces = false
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = [
+    'pypolyclip',
+]
+addopts = [
+    '-ra',
+    '--color=yes',
+    '--strict-config',
+    '--strict-markers',
+]
+log_level = 'INFO'
+log_cli_level = 'INFO'
+xfail_strict = true
+remote_data_strict = true
+filterwarnings = [
+    'error',  # turn warnings into exceptions
+]
+
+[tool.coverage.run]
+omit = [
+    'pypolyclip/tests/*',
+    'pypolyclip/*/tests/*',
+    'pypolyclip/version*',
+    '*/pypolyclip/tests/*',
+    '*/pypolyclip/*/tests/*',
+    '*/pypolyclip/version*',
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    'pragma: no cover',
+    'except ImportError',
+    'raise AssertionError',
+    'raise NotImplementedError',
+    'def main\\(.*\\):',
+    'pragma: py{ignore_python_version}',
+    'def _ipython_key_completions_',
+]
+
+[tool.isort]
+skip_glob = [
+    'pypolyclip/*__init__.py*',
+]
+known_first_party = [
+    'pypolyclip',
+]
+use_parentheses = true
+
+[tool.black]
+force-exclude = """
+(
+  .*
+)
+"""
+
+[tool.bandit.assert_used]
+skips = ['*_test.py', '*/test_*.py']
+
+[tool.cibuildwheel]
+# explicitly skip free-threaded builds
+skip = ["cp*t-*"]
+
+[tool.repo-review]
+ignore = [
+    'MY',  # ignore MyPy
+    'PC110',  # ignore using black or ruff-format in pre-commit
+    'PC111',  # ignore using blacken-docs in pre-commit
+    'PC140',  # ignore using mypy in pre-commit
+    'PC180',  # ignore using prettier in pre-commit
+    'PC901',  # ignore using custom pre-commit update message
+    'PC902',  # ignore custom pre-commit CI autofix message
+    'PP006',  # ignore missing dependency-groups in pyproject.toml
+    'PY005',  # ignore having a tests/ folder
+    'RTD100', # ignore having a .readthedocs.yaml file
+]
+
+[tool.numpydoc_validation]
+checks = [
+    'all',   # report on all checks, except the below
+    'ES01',  # missing extended summary
+    'EX01',  # missing "Examples"
+    'RT01',  # do not require return type for lazy properties
+    'RT02',  # only type in "Returns" section (no name)
+    'SA01',  # missing "See Also"
+    'SA04',  # missing "See Also" description
+    'SS06',  # single-line summary
+]
+
+# don't report on objects that match any of these regex;
+# remember to use single quotes for regex in TOML
+exclude = [
+    '__init__',
+    'setup',
+    '\._.*',  # private functions/methods
+    '^test_*',  # test code
+]
+
+[tool.docformatter]
+    wrap-summaries = 72
+    pre-summary-newline = true
+    make-summary-multi-line = true
+
+[tool.ruff]
+line-length = 79
+
+[tool.ruff.lint.pylint]
+max-statements = 130
+
+[tool.ruff.lint]
+select = ['ALL']
+ignore = [
+    'ANN',  # type annotations
+    'D200',  # unnecessary-multiline-docstring
+    'D205',  # missing-blank-line-after-summary
+    'PLR0913',  # too-many-arguments
+    'PLR2004',  # magic-value-comparison
+    'PT028',  # pytest-parameter-with-default-argument
+    'PTH',  # Pathlib usage
+]
+
+[tool.ruff.lint.per-file-ignores]
+'__init__.py' = ['D104', 'I']  # undocumented-public-package, isort
+'test_*.py' = ['D', 'S101']  # pydocstyle, assert
+
+[tool.ruff.lint.pydocstyle]
+convention = 'numpy'
+
+[tool.ruff.lint.flake8-quotes]
+inline-quotes = 'single'
