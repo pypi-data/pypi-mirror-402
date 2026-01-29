@@ -1,0 +1,16 @@
+{
+  description = "CacheGuard Nix Flake";
+
+  inputs.nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz";
+
+  outputs = {nixpkgs, ...}: let
+    forAllSystems = nixpkgs.lib.genAttrs ["x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin"];
+    nixpkgsFor = forAllSystems (system: import nixpkgs {inherit system;});
+  in {
+    devShells = forAllSystems (
+      system: {
+        default = import ./nix/shell.nix {pkgs = nixpkgsFor.${system};};
+      }
+    );
+  };
+}
