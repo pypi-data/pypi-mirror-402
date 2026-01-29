@@ -1,0 +1,192 @@
+Metadata-Version: 2.4
+Name: frida-fusion
+Version: 0.1.26
+Summary: Hook your mobile tests with Frida
+Author-email: "Helvio Junior (M4v3r1ck)" <helvio_junior@hotmail.com>
+Maintainer-email: "Helvio Junior (M4v3r1ck)" <helvio_junior@hotmail.com>
+Project-URL: Documentation, https://github.com/helviojunior/frida-fusion
+Project-URL: Source, https://github.com/helviojunior/frida-fusion
+Project-URL: Tracker, https://github.com/helviojunior/frida-fusion
+Project-URL: Author, https://github.com/helviojunior
+Keywords: Frida Fusion,Frida,Frida Scripts,development,red team
+Classifier: Development Status :: 4 - Beta
+Classifier: Environment :: Console
+Classifier: Intended Audience :: System Administrators
+Classifier: Natural Language :: English
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Programming Language :: Python :: Implementation :: PyPy
+Classifier: Topic :: Security
+Classifier: Topic :: Utilities
+Requires-Python: <4,>=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: colorama
+Requires-Dist: requests>=2.23.0
+Requires-Dist: frida>=15.1.17
+Requires-Dist: frida-tools>=10.8.0
+Dynamic: license-file
+
+# Frida Fusion 
+<img src="./fusion_logo.svg" alt="Frida Fusion logo" align="right" width="20%"/>
+
+Hook your mobile tests with Frida.
+
+```bash
+ [ FRIDA ]—o—( FUSION )—o—[ MOBILE TESTS ] // v0.1.0
+     > hook your mobile tests with Frida
+
+
+optional arguments:
+  -h, --help                                    show this help message and exit
+
+Device selector:
+  -D [ID], --device [ID]                        Connect to device with the given ID
+  -U, --usb                                     Connect to USB device
+  -R, --remote                                  Connect to remote frida-server
+  -H [HOST], --host [HOST]                      Connect to remote frida-server on HOS
+
+Application selector:
+  -f [APP ID], --package [APP ID]               Spawn application ID
+  -p [PID], --attach-pid [PID]                  Spawn application ID
+
+General Setting:
+  -s [path], --script-path [path]               JS File path or directory with Frida script
+  --delay-injection                             Delay script injection
+  --show-time                                   Display time
+  -o [output file]                              Save output to disk (default: none)
+  -l [level], --min-level [level]               Minimum log level to be displayed (V,D,I,W,E,F) (default: I)
+
+Modules:
+  --list-modules                                List available modules
+  -m ENABLED_MODULES, --module ENABLED_MODULES  Enabled module by name. You can specify multiple values repeating the flag.
+```
+
+## Install
+
+### Via PIPX
+
+> We recommend install using PIPX 
+
+```bash
+sudo apt install pipx
+
+pipx install frida-fusion 
+pipx inject frida-fusion frida==15.1.17 frida-tools==10.8.0
+```
+
+> Note: If you face the error `unable to communicate with remote frida-server; please ensure that major versions match and that the remote Frida has the feature you are trying to use` try to adjust the frida version
+
+
+### Regular instalation
+
+```
+pip3 install frida-fusion
+```
+
+## Custom Frida script
+
+You must provide a custom Frida script as usual. To do this you must provide `-s/--script-path` parameter.
+
+```bash
+# Just one file
+frida-fusion -f [app_id] -U --script-path mytest.js
+
+# A entire directory
+frida-fusion -f [app_id] -U --script-path /tmp/scripts
+```
+
+### Exposed JavaScript (frida) functions
+
+The Frida Fusion define/expose several functions to be used at frida scripts. Follows the typedef of these functions.
+
+```java
+# Send message/data to Frida-Fusion
+void    fusion_sendMessage(String level, String message);
+void    fusion_sendError(Error error);
+void    fusion_sendMessageWithTrace(String level, String message);
+void    fusion_sendKeyValueData(String module, Object items);
+
+# Print StackTrace
+void    fusion_printStackTrace();
+
+# Print all methods of class 'name'
+void    fusion_printMethods(String name);
+
+# Get value of a field inside an class instance
+Object fusion_getFieldValue(Object obj, String fieldName);
+
+# Wait until the class 'name' exists in memory to execute the callback function
+void    fusion_waitForClass(String name, CallbackFunction onReady)
+
+# Conversions
+String  fusion_stringToBase64(String message);
+String  fusion_bytesToBase64(byte[] byteArray);
+String  fusion_encodeHex(byte[] byteArray);
+```
+
+## Module engine
+
+You can check available modules with `frida-fusion --list-modules` command.
+
+```bash
+frida-fusion --list-modules
+
+ [ FRIDA ]—o—( FUSION )—o—[ MOBILE TESTS ] // v0.1.4
+     > hook your mobile tests with Frida
+
+
+Available modules
+  Module Name     : Description
+  Crypto          : Hook cryptography/hashing functions
+```
+
+### External modules
+
+You can develop or download community modules and load into frida-fusion.
+
+To pass to the Frida Fusion the external module path you can use the environment variable `FUSION_MODULES` with the full path of modules
+
+At linux:
+
+```bash
+export FUSION_MODULES=/tmp/modules
+
+# List all modules
+frida-fusion --list-modules
+
+# Using available module
+frida-fusion -f [app_id] -U --script-path mytest.js -m [module_name]
+```
+
+At windows:
+
+```bash
+$env:FUSION_MODULES = "C:\extra_mods"
+
+# List all modules
+frida-fusion --list-modules
+
+# Using available module
+frida-fusion -f [app_id] -U --script-path mytest.js -m [module_name]
+```
+
+### Community modules
+
+You can also use one of community developed modules
+
+```bash
+cd /opt/
+git clone https://github.com/helviojunior/frida-fusion-community-modules
+export FUSION_MODULES=/opt/frida-fusion-community-modules
+
+# List all modules
+frida-fusion --list-modules
+```
+
