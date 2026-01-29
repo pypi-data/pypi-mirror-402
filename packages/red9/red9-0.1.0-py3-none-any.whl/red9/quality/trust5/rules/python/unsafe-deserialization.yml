@@ -1,0 +1,43 @@
+# Unsafe Deserialization Rules
+id: pickle-load
+language: python
+severity: error
+message: |
+  pickle.load() can execute arbitrary code during deserialization.
+  Never unpickle data from untrusted sources.
+rule:
+  any:
+    - pattern: pickle.load($FILE)
+    - pattern: pickle.loads($DATA)
+note: |
+  Consider using JSON for data serialization:
+    import json
+    json.loads(data)
+
+---
+id: yaml-unsafe-load
+language: python
+severity: error
+message: |
+  yaml.load() without Loader can execute arbitrary code.
+  Use yaml.safe_load() instead.
+rule:
+  pattern: yaml.load($DATA)
+  not:
+    has:
+      pattern: yaml.load($DATA, Loader=$LOADER)
+note: |
+  Use safe_load():
+    yaml.safe_load(data)
+
+---
+id: marshal-load
+language: python
+severity: error
+message: |
+  marshal.load() can execute arbitrary code.
+  Avoid using marshal with untrusted data.
+rule:
+  any:
+    - pattern: marshal.load($FILE)
+    - pattern: marshal.loads($DATA)

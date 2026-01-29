@@ -1,0 +1,38 @@
+# Command Injection Detection Rules
+id: command-injection-os-system
+language: python
+severity: error
+message: |
+  os.system() is vulnerable to command injection.
+  Use subprocess with shell=False instead.
+rule:
+  pattern: os.system($CMD)
+note: |
+  Use subprocess.run with shell=False:
+    subprocess.run(["cmd", "arg"], shell=False)
+
+---
+id: command-injection-shell-true
+language: python
+severity: error
+message: |
+  subprocess with shell=True is vulnerable to command injection.
+  Use shell=False and pass arguments as a list.
+rule:
+  any:
+    - pattern: subprocess.run($CMD, shell=True)
+    - pattern: subprocess.call($CMD, shell=True)
+    - pattern: subprocess.Popen($CMD, shell=True)
+note: |
+  Use subprocess with shell=False:
+    subprocess.run(["cmd", "arg"], shell=False)
+
+---
+id: command-injection-os-popen
+language: python
+severity: error
+message: |
+  os.popen() is vulnerable to command injection.
+  Use subprocess with shell=False instead.
+rule:
+  pattern: os.popen($CMD)

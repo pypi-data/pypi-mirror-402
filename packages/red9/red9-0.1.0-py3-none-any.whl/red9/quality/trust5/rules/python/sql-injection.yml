@@ -1,0 +1,18 @@
+# SQL Injection Detection Rules
+id: sql-injection-execute
+language: python
+severity: error
+message: |
+  Potential SQL injection vulnerability.
+  Use parameterized queries instead of string concatenation.
+rule:
+  any:
+    - pattern: cursor.execute($SQL + $VAR)
+    - pattern: cursor.execute($SQL.format($$$ARGS))
+    - pattern: cursor.execute(f"$$$SQL")
+    - pattern: $DB.execute($SQL + $VAR)
+    - pattern: $DB.execute($SQL.format($$$ARGS))
+    - pattern: $DB.execute(f"$$$SQL")
+note: |
+  Use parameterized queries:
+    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
