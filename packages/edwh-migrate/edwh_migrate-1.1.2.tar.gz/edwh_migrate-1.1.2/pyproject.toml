@@ -1,0 +1,217 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "edwh-migrate"
+dynamic = ["version"]
+description = 'Helps migrating database schema changes using pydal. '
+readme = "README.md"
+requires-python = ">=3.10"
+license-expression = "MIT"
+keywords = ['pydal', 'postgresql', 'migrate', 'schema-change', 'database-migration']
+authors = [
+    { name = "Remco", email = "remco@educationwarehouse.nl" },
+    { name = "Robin", email = "robin@educationwarehouse.nl" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = [
+    "pydal>=20221110.1",
+    "plumbum",
+    "python-dotenv",
+    "configuraptor>=1.23",
+    "tabulate",
+    "legacy-cgi; python_version >= '3.13'"
+]
+
+[project.optional-dependencies]
+full = [
+    "redis",
+    "psycopg2-binary",
+]
+
+dev = [
+    "hatch",
+    "python-semantic-release<8",
+    "black",
+    "typedal",
+    "isort",
+    "pytest",
+    "pytest-cov",
+    "contextlib-chdir",
+    "testcontainers",
+    "SQLAlchemy-Utils", # for drop_database
+    # from full:
+    "redis",
+    "psycopg2-binary",
+]
+
+[template.plugins.default]
+src-layout = true
+
+[tool.setuptools.package-data]
+"edwh_migrate" = ["py.typed"]
+
+[project.scripts]
+migrate = "edwh_migrate.migrate:console_hook"
+
+[project.urls]
+Documentation = "https://github.com/educationwarehouse/migrate#readme"
+Issues = "https://github.com/educationwarehouse/migrate/issues"
+Source = "https://github.com/educationwarehouse/migrate"
+
+[tool.semantic_release]
+branch = "main"
+version_variable = "src/edwh_migrate/__about__.py:__version__"
+change_log = "CHANGELOG.md"
+upload_to_repository = false
+upload_to_release = false
+build_command = "hatch build -c"
+
+[tool.hatch.version]
+path = "src/edwh_migrate/__about__.py"
+
+[tool.hatch.envs.default]
+dependencies = [
+    "coverage[toml]>=6.5",
+    "pytest",
+]
+[tool.hatch.envs.default.scripts]
+test = "pytest {args:tests}"
+test-cov = "coverage run -m pytest {args:tests}"
+cov-report = [
+    "- coverage combine",
+    "coverage report",
+]
+cov = [
+    "test-cov",
+    "cov-report",
+]
+
+[[tool.hatch.envs.all.matrix]]
+python = ["3.7", "3.8", "3.9", "3.10", "3.11"]
+
+[tool.hatch.envs.lint]
+detached = true
+dependencies = [
+    "black>=23.1.0",
+    "mypy>=1.0.0",
+    "ruff>=0.0.243",
+]
+[tool.hatch.envs.lint.scripts]
+typing = "mypy --install-types --non-interactive {args:src/_ tests}"
+style = [
+    "ruff {args:.}",
+    "black --check --diff {args:.}",
+]
+fmt = [
+    "black {args:.}",
+    "ruff --fix {args:.}",
+    "style",
+]
+all = [
+    "style",
+    "typing",
+]
+
+[tool.black]
+target-version = ["py310"]
+line-length = 120
+
+[tool.mypy]
+ignore_missing_imports = true
+strict = true
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+extend-exclude = ["*.bak/", "venv*/"]
+
+[tool.ruff.lint]
+select = [
+    "F", # pyflake error
+    "E", # pycodestyle error
+    "W", # pycodestyle warning
+    "Q", # quotes
+    "A", # builtins
+    # "C4", # comprehensions - NO: doesn't allow dict()
+    # "RET", # return - NO: annoying
+    "SIM", # simplify
+    "ARG", # unused arguments
+    # "COM", # comma's - NO: annoying
+    # "PTH", # use pathlib - NO: annoying
+    "RUF", # ruff rules
+]
+unfixable = [
+    # Don't touch unused imports
+    "F401",
+]
+
+ignore = [
+    "RUF013", # implicit Optional
+    "E712", # == True (for pydal queries)
+]
+
+[tool.bandit]
+# bandit -c pyproject.toml -r .
+exclude_dirs = [".bak", "venv"]
+skips = [
+    "B108"  # hard coded /tmp/... files are fine for me tbh
+]
+[tool.isort]
+profile = "black"
+extend_skip_glob = ["*.bak/*"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests can use magic values, assertions, and relative imports
+"tests/**/*" = ["PLR2004", "S101", "TID252"]
+
+[tool.pytest.ini_options]
+pythonpath = [
+    "src",
+]
+
+[tool.pydocstyle]
+match-dir = '(?!venv)[^\.].*'
+add_select = [
+    "D213", # = Multi-line docstring summary should start at the second line
+    "D416", # = Google-style section name checks.
+    "D417", # = Missing argument descriptions in the docstring
+]
+add_ignore = [
+    "D200", # = One-line docstring should fit on one line with quotes
+    "D212", # = Multi-line docstring summary should start at the first line
+    "D401", # = Force imperative mood
+]
+
+[tool.su6]
+# every checker:
+directory = "src"
+# 'all' and 'fix':
+include = []
+exclude = []
+# 'all':
+stop-after-first-failure = false
+# pytest:
+coverage = 100
+badge = false
+# --format json indent
+json-indent = 4
+
+[tool.migrate]
+# example:
+create-flag-location = true
+migrate-uri = "sqlite:///tmp/edwh-migrate/migrate_example.sqlite"
+flag-location = "/tmp/edwh-migrate/migrate_flags"

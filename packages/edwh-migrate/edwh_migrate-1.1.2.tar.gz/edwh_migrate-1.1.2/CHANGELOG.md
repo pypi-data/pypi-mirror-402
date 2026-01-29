@@ -1,0 +1,285 @@
+# Changelog
+
+<!--next-version-placeholder-->
+
+## v1.1.2 (2026-01-19)
+
+### Fix
+
+* Set migrate=True only on `define_ewh_implemented_features`, so other tables are still blocked from migration ([`18189c8`](https://github.com/educationwarehouse/migrate/commit/18189c808ad973beb7dfcb1407687a64c1b73b0d))
+
+## v1.1.1 (2025-12-01)
+
+### Fix
+
+* Show proper (partial) traceback for import migration error ([`426e6b4`](https://github.com/educationwarehouse/migrate/commit/426e6b4d1c513677da19ffceb8f4150c67a7697e))
+
+### Documentation
+
+* Explained MIGRATIONS_FILE ([`fa1b221`](https://github.com/educationwarehouse/migrate/commit/fa1b2213e88a35d20a12396d62abe8a56832a09c))
+
+## v1.1.0 (2025-06-10)
+
+### Feature
+
+* Include cpu and wall time in `ran:` print for each migration ([`fbfab29`](https://github.com/educationwarehouse/migrate/commit/fbfab2911f44c5860267dc3040797fef1cfb2059))
+
+### Fix
+
+* `create-flag-location` also ensures parent directories exist ([`d3ea64b`](https://github.com/educationwarehouse/migrate/commit/d3ea64ba3cc854fc28b6422c73aa88d5fe44a893))
+
+## v1.0.2 (2025-04-10)
+
+### Fix
+
+* Ensure 'installed' is a boolean / count None as False ([`2005649`](https://github.com/educationwarehouse/migrate/commit/20056497a000dd675d118dbe6669274072f84e1a))
+
+## v1.0.1 (2025-04-10)
+
+### Fix
+
+* Properly list missing `requires` (keys in the database with value False weren't included in `missing` set) ([`01680b7`](https://github.com/educationwarehouse/migrate/commit/01680b75e460b5a59bd2ccb6e7600db4a33c09b8))
+
+## v1.0.0 (2025-03-21)
+
+### Feature
+
+* BREAKING CHANGE | improved cascading dependencies ([#5](https://github.com/educationwarehouse/migrate/issues/5)) ([`3369dcd`](https://github.com/educationwarehouse/migrate/commit/3369dcdbd42be37c330678ae6a8168864a48c30e))
+
+## v0.10.4 (2025-01-10)
+
+### Fix
+
+* Exit code should be 0 if lock file already exists. also, make `_console_hook` only return the exit code so it can be used internally elsewhere; make `console_hook` actually exit ([`16388b0`](https://github.com/educationwarehouse/migrate/commit/16388b063b5ce196f4bae3cabafc45917deb690d))
+
+## v0.10.3 (2025-01-09)
+
+### Fix
+
+* **cli:** Use proper exit code if a migration failed ([`3846c65`](https://github.com/educationwarehouse/migrate/commit/3846c6545a05558e7dd4f175187845398a4f9dae))
+* **test:** Pass current config to `schema_versioned_lock_file` ([`e82f68a`](https://github.com/educationwarehouse/migrate/commit/e82f68af4a89c82d44ea5b43655cf58291329dea))
+
+## v0.10.2 (2025-01-07)
+
+### Fix
+
+* 'since' should also include the currently active migration ([`60cec8f`](https://github.com/educationwarehouse/migrate/commit/60cec8f669792c6421de9afe0cbf2287a95f7ecc))
+
+### Documentation
+
+* Specify that 'until' exists ([`2bee9d9`](https://github.com/educationwarehouse/migrate/commit/2bee9d992b69142ab77a5840f3a55426042b91c5))
+
+## v0.10.1 (2025-01-07)
+
+### Fix
+
+* Include 'until' which is the inverse of 'since' ([`d502aa2`](https://github.com/educationwarehouse/migrate/commit/d502aa2da30a597a8052bfbecc3b7044cdf74d21))
+
+## v0.10.0 (2025-01-07)
+
+### Feature
+
+* Allow specifying a 'since' for subclasses of `ViewMigrationManager`, which indicates a migration that should have already run. ([`0cc6d29`](https://github.com/educationwarehouse/migrate/commit/0cc6d2961026fb10ffa3db693035aa7aa135d889))
+
+### Documentation
+
+* Explained ViewMigrationManager and the new `since` option ([`20a239f`](https://github.com/educationwarehouse/migrate/commit/20a239fc9ae8956d7c044de4109e63aebfc141ba))
+
+## v0.9.9 (2025-01-07)
+
+### Performance
+
+* Remove duplicate `import_migrations` call ([`a5fed03`](https://github.com/educationwarehouse/migrate/commit/a5fed03be66848ad7c5d556b3387c271143a86c1))
+
+## v0.9.8 (2025-01-07)
+
+### Fix
+
+* Don't crash, just warn, if `uses` is not explicitly set ([`a74b1a1`](https://github.com/educationwarehouse/migrate/commit/a74b1a1742a1a7e5433587a8890469c24fb1f684))
+
+## v0.9.7 (2025-01-07)
+
+
+
+## v0.9.7-beta.1 (2025-01-07)
+
+### Fix
+
+* Dependencies should be executed once instead of multiple times! ([`cb88c95`](https://github.com/educationwarehouse/migrate/commit/cb88c95a35345906ee33b522966c3da575d78594))
+* Make `uses` an abstract class property so subclasses have to explicitly specify it. ([`006b832`](https://github.com/educationwarehouse/migrate/commit/006b832fa9aba01624f32a0c48bb3bae5179b383))
+
+## v0.9.6 (2024-10-24)
+
+### Documentation
+
+* Added explanation about `ViewMigrationManager` ([`f044860`](https://github.com/educationwarehouse/migrate/commit/f04486019427b06c4acf6083f4c6a315791b0ad6))
+
+## v0.9.5 (2024-10-19)
+
+### Fix
+
+* Remove Bonne's debug message ([`e259c21`](https://github.com/educationwarehouse/migrate/commit/e259c2190e4628e67a207e741f65cf25228c386e))
+
+## v0.9.4 (2024-10-09)
+### Fix
+* Don't require psyopg2 to always be installed (allow sqlite-only) ([`120ba46`](https://github.com/educationwarehouse/migrate/commit/120ba4673405bbb4cbe811fa191766ea92ba3254))
+
+## v0.9.3 (2024-10-08)
+### Fix
+* Remove debug prints ([`8146987`](https://github.com/educationwarehouse/migrate/commit/814698720e3844efc2e44b09744da8f7d295688a))
+* Improvements in --list ([#4](https://github.com/educationwarehouse/migrate/issues/4)) ([`1eefb24`](https://github.com/educationwarehouse/migrate/commit/1eefb245fa896c5862a8c63feeebed8b5d5acffd))
+
+## v0.9.2 (2024-10-04)
+
+### Fix
+
+* Minor improvements in --list ([#3](https://github.com/educationwarehouse/migrate/issues/3)) ([`5a95ff3`](https://github.com/educationwarehouse/migrate/commit/5a95ff37b362a7abcdf182897847700434434b3f))
+
+## v0.9.1 (2024-10-03)
+
+### Fix
+
+* Debug prints ([`36d62ef`](https://github.com/educationwarehouse/migrate/commit/36d62efd2a0f328efad626765c23299697f6cf8d))
+
+## v0.9.0 (2024-10-03)
+
+### Feature
+
+* Added migration context manager for recreating views ([`91d782e`](https://github.com/educationwarehouse/migrate/commit/91d782e8b421e4a75941acd7978fa493de097165))
+* Issue #49 taiga edwh migrate geeft line number bij fout aan. ([`062ca59`](https://github.com/educationwarehouse/migrate/commit/062ca59b313cdfa4716082ed994e1f4791bd36fe))
+* Issue #49 taiga edwh migrate geeft line number bij fout aan. ([`f955ec1`](https://github.com/educationwarehouse/migrate/commit/f955ec1dfe2ae4c226ae682a37783d2bfd5e675c))
+
+### Fix
+
+* Use ViewManager properly ([`9905f15`](https://github.com/educationwarehouse/migrate/commit/9905f15cf9ea1b57710f8df4c9d8cc16c07f6c61))
+* Reverse dependency logic of `ViewMigrationManager` from 'used_by' to 'uses' so it works better for new views ([`f73b4f6`](https://github.com/educationwarehouse/migrate/commit/f73b4f6c2698e9bbbb1e00c49cf38954911b53ce))
+
+### Documentation
+
+* Improved typing and docs ([`9b9986a`](https://github.com/educationwarehouse/migrate/commit/9b9986a3ebf167c054146a911d3700a89bf25439))
+
+## v0.8.1 (2024-04-24)
+### Fix
+* Redis.from_url for better parsing + test valkey as drop-in redis replacement ([`6b842e8`](https://github.com/educationwarehouse/migrate/commit/6b842e81e43ec2874fefe29b7ee7d94115483ba1))
+* Support custom redis port + add test for it ([`228c72a`](https://github.com/educationwarehouse/migrate/commit/228c72afe689ed2b0845e33ee2d422f5851bb35d))
+
+## v0.8.0 (2024-03-21)
+
+
+
+## v0.8.0-beta.1 (2024-03-20)
+
+### Feature
+
+* **edwh_migrate:** Add list_migrations and mark_migration functions + fixes ([`a0be3da`](https://github.com/educationwarehouse/migrate/commit/a0be3daf3ef65f438f89a79a8182fcdb0268dce7))
+
+### Fix
+
+* Lock file was (illegally) created and not properly removed on some errors ([`0684c1e`](https://github.com/educationwarehouse/migrate/commit/0684c1eb5394dac2e712cfb485714ff29260a6a9))
+
+## v0.7.5 (2024-03-13)
+
+
+## v0.7.4 (2024-03-13)
+### Fix
+* Update tablefile path in migration script ([`8e6c7fd`](https://github.com/educationwarehouse/migrate/commit/8e6c7fd5ec48847408a026b6e38f2e5cc23ac6b4))
+
+## v0.7.3 (2024-03-13)
+### Fix
+* Convert SQL path to pathlib object ([`dc3de47`](https://github.com/educationwarehouse/migrate/commit/dc3de4749a2aef0f9fca7fdb1e69bc94e1216364))
+
+## v0.7.2 (2024-03-13)
+### Fix
+* Support multiple file extensions in database recovery ([`a01db29`](https://github.com/educationwarehouse/migrate/commit/a01db2932fdfe14a356482dcd543672cedd15572))
+
+## v0.7.1 (2023-12-21)
+### Fix
+* If the ewh_implemented_features .table file already existed, setup_db could crash ([`04d2149`](https://github.com/educationwarehouse/migrate/commit/04d214917fe41bfc3637075a18394b7e7561064f))
+
+## v0.7.0 (2023-12-15)
+
+
+## v0.7.0-beta.1 (2023-12-15)
+### Feature
+* Support typedal via USE_TYPEDAL=1 or toml ([`744430d`](https://github.com/educationwarehouse/migrate/commit/744430d4f9b829115a12d90e290ef731c449bdff))
+
+## v0.6.3 (2023-11-22)
+### Fix
+* Remove lock file on base exception since keyboardinterrupt also means the migration failed! ([`9fb8c3e`](https://github.com/educationwarehouse/migrate/commit/9fb8c3ec27812611913bd50c3558f4f08133616b))
+
+## v0.6.2 (2023-11-21)
+### Fix
+* Expose console_hook for external library usage ([`56ae0b6`](https://github.com/educationwarehouse/migrate/commit/56ae0b69f407847fa21e4754e2770d7c0ad3ca88))
+* Every function can now be passed an existing config. ([`efc4c41`](https://github.com/educationwarehouse/migrate/commit/efc4c41ed985fbea6722b6dea4b0ace776e20939))
+* You can now choose a migrations file in the config (toml or env) ([`2341fab`](https://github.com/educationwarehouse/migrate/commit/2341faba01cd5c8e77461e5c53e3df6ed59176a6))
+
+## v0.6.1 (2023-11-20)
+### Fix
+* Still load .env if pyproject.toml exists, so we can combine those configs ([`69c8e73`](https://github.com/educationwarehouse/migrate/commit/69c8e73a0fbcce01a14ba3f32c041c8c0db78270))
+
+## v0.6.0 (2023-11-14)
+### Feature
+* Improved config via configuraptor; allow chaging MIGRATE_TABLE from ewh_implemented_features ([`caadaed`](https://github.com/educationwarehouse/migrate/commit/caadaedaec90838255727d76cbbb8b3e1e91710c))
+* Optional `db_folder` from config and `db_uri` as alias for `migrate_uri` ([`3530cfc`](https://github.com/educationwarehouse/migrate/commit/3530cfcf1a08e155ff01a8869abda650bede3712))
+* Config: Better error handling by replacing `suppress` with normal try-catch (-> more informative tracebacks) ([`1dc044f`](https://github.com/educationwarehouse/migrate/commit/1dc044fd8c66389bb96a0ade69e62ea3fb924997))
+* `config` can now be imported from the package directly ([`c06ab11`](https://github.com/educationwarehouse/migrate/commit/c06ab11a179919d4ac12dd03ceb91ec428033595))
+* **schema:** Choose schema from config (name or False) ([`c877f36`](https://github.com/educationwarehouse/migrate/commit/c877f360bbf34ba5105b6834c80f54579c35cfce))
+* Custom flag directory + refactor console hooks to use list of args (after 0) ([`132de79`](https://github.com/educationwarehouse/migrate/commit/132de79caa79fc9f2ea276abf22e24083d65b6c4))
+* **mypy:** Improved type hints for @migration decorator ([`afa987a`](https://github.com/educationwarehouse/migrate/commit/afa987af1ca8cc9e7a4d65d047b0882f40999cec))
+
+### Fix
+* More pytests + coverage ([`b2eefd2`](https://github.com/educationwarehouse/migrate/commit/b2eefd22771e5569432652e5925a8ab312544e69))
+* **tests:** More test coverage and minor fix in backup restore function ([`41eb4bd`](https://github.com/educationwarehouse/migrate/commit/41eb4bd0117ecf1e3c26f49e6d5bb546372adc2d))
+* Tests should import from src so you don't have to keep installing the module to test it ([`8d5c886`](https://github.com/educationwarehouse/migrate/commit/8d5c886dae902fe2a9e7710631595243f4ec673e))
+
+### Documentation
+* Show example with pydal2sql to create CREATE TABLE for ewh_implemented_features ([`ac04306`](https://github.com/educationwarehouse/migrate/commit/ac0430604b6302f099ec541b2a7d5b7bb5b8ee1c))
+* Added example via docker-compose ([`9a8de23`](https://github.com/educationwarehouse/migrate/commit/9a8de23c0675beb09c4599104efa7f95552b586d))
+* Added new config keys and included usage example ([`13fdd6c`](https://github.com/educationwarehouse/migrate/commit/13fdd6c1aa12f3142d328424791d63dc9fc2590d))
+
+## v0.5.2 (2023-11-08)
+### Fix
+* **pgbouncer:** Set search path (schema) to public after restoring db ([`c70ccb0`](https://github.com/educationwarehouse/migrate/commit/c70ccb0de377b35037de79d32a3d6ccadbf870f2))
+
+## v0.5.1 (2023-08-02)
+### Fix
+* Solves the wrong object being sent as a set of arguments. psql should work ([`9743b3f`](https://github.com/educationwarehouse/migrate/commit/9743b3f4423b729a1bf739be0d2dc2052973bb1c))
+
+## v0.5.0 (2023-08-02)
+### Feature
+* Supports passwords in database uri's using uri scheme instead of -U -p arguments etc. psql is compatible with the `postgres://` uri scheme, so why bother? ([`80f09ce`](https://github.com/educationwarehouse/migrate/commit/80f09ce15369ee6756afedc2a4d44e176a1c95fb))
+
+## v0.4.4 (2023-08-02)
+### Fix
+* Fixing an issue with long_running, and rollback the transaction after an error on a non-existing table. ([`accfbe4`](https://github.com/educationwarehouse/migrate/commit/accfbe4fd3ee0c9ea6b9933025a33166a16d9105))
+
+## v0.4.3 (2023-05-15)
+### Fix
+* BaseExceptionGroup does not exist in 3.10 yet ([`3433a4f`](https://github.com/educationwarehouse/migrate/commit/3433a4fda0d6ebfb2a551d9f5c3feb4f51e6afc0))
+
+## v0.4.2 (2023-05-04)
+### Documentation
+* **migrate:** Changed package name from '-' to edwh-migrate and added extra's dev dependencies ([`ae3eef6`](https://github.com/educationwarehouse/migrate/commit/ae3eef6a1e2db47d03fcd60a57d768d79b7f4a32))
+
+## v0.4.1 (2023-05-04)
+### Fix
+* Better troubleshooting support for the sys.argv[1] argument ([`8a21505`](https://github.com/educationwarehouse/migrate/commit/8a21505307618a45d993b772f1ea40e0c4b3343f))
+
+## v0.4.0 (2023-05-04)
+### Feature
+* Support for argv[1] as a path to a python file, or to the folder where `migrations.py` is stored. ([`7d0aba6`](https://github.com/educationwarehouse/migrate/commit/7d0aba641907ca4100a10a3fba67e3286ab8f5c6))
+
+## v0.3.0 (2023-05-04)
+### Feature
+* Failed tests will sometimes be written to db; better support for sqlite; better unpacker code, better docs, more translation into english ([`7701670`](https://github.com/educationwarehouse/migrate/commit/7701670b8e4adc234a2ae8abeac8780adda65330))
+
+### Documentation
+* **env:** Environment variables documented ([`71950c2`](https://github.com/educationwarehouse/migrate/commit/71950c20d6dbed59892192b7344dafd109131e9f))
+
+## v0.2.0 (2023-04-22)
+### Feature
+* Sqlite3 is now a possible alternative; the schema lockfile mechanism is now optional. ([`8e1baa8`](https://github.com/educationwarehouse/migrate/commit/8e1baa8afe640234b36587fff2d2d6a0774fde63))
+
+## v0.1.0 (2023-04-22)
+### Feature
+* Initial release ([`29c4b05`](https://github.com/educationwarehouse/migrate/commit/29c4b0526dacf428d4665e357a0081c00f7372e8))
