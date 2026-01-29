@@ -1,0 +1,174 @@
+Metadata-Version: 2.4
+Name: rhofred
+Version: 0.3.0
+Summary: Data from fred
+Author-email: rhozhang <rhozhang@163.com>
+License-Expression: MIT
+Project-URL: Homepage, https://github.com/rhozhang/rhofred
+Project-URL: Issues, https://github.com/rhozhang/rhofred/issues
+Keywords: fred,data
+Classifier: Programming Language :: Python :: 3
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: polars
+Dynamic: license-file
+
+# Data from FRED
+
+## API Key
+
+Go to <https://research.stlouisfed.org/useraccount/login/secure> to create an account, apply an api key
+
+The api key is set using the `api_key` variable, a 32 character lower-cased alpha-numeric string.
+
+For the sake of convenience, I recommend you add this key to user environment variable. This package use variable name 'FREDKEY'
+
+For OSX or Linux, run the following command:
+
+```
+echo "export FREDKEY=<your_fred_key>" >> ~/.bashrc
+source ~/.bashrc
+```
+
+For Windows, run the following command:
+
+```
+setx FREDKEY "<your_fred_key>"
+```
+
+## Installation
+
+```
+pip install rhofred
+```
+
+To test if the package is installed correctly, run:
+
+```python
+import rhofred
+print(rhofred.__version__)
+```
+
+## Usage
+
+```python
+from freddata import FRED
+fred = FRED()
+```
+
+To get series id, recursively use 'catchildren()' method starting from 'id = 1' (default) and 'catseries()' method
+
+For example, to get series on 'treasury inflation-indexed securities':
+
+```python
+fred.catchildren()
+```
+
+Returns:
+
+```
+shape: (8, 3)
+┌───────┬─────────────────────────────────┬───────────┐
+│ id    ┆ name                            ┆ parent_id │
+│ ---   ┆ ---                             ┆ ---       │
+│ i64   ┆ str                             ┆ i64       │
+╞═══════╪═════════════════════════════════╪═══════════╡
+│ 32991 ┆ Money, Banking, & Finance       ┆ 0         │
+│ 10    ┆ Population, Employment, & Labo… ┆ 0         │
+│ 32992 ┆ National Accounts               ┆ 0         │
+│ 1     ┆ Production & Business Activity  ┆ 0         │
+│ 32455 ┆ Prices                          ┆ 0         │
+│ 32263 ┆ International Data              ┆ 0         │
+│ 3008  ┆ U.S. Regional Data              ┆ 0         │
+│ 33060 ┆ Academic Data                   ┆ 0         │
+└───────┴─────────────────────────────────┴───────────┘
+```
+
+I guess the series should in category 'Money, Banking, & Finance' (id = 32991)
+
+```python
+fred.catchildren(id = 32991)
+```
+
+This time, we get:
+
+```
+shape: (7, 4)
+┌───────┬───────────────────────────────┬───────────┬─────────────────────────────────┐
+│ id    ┆ name                          ┆ parent_id ┆ notes                           │
+│ ---   ┆ ---                           ┆ ---       ┆ ---                             │
+│ i64   ┆ str                           ┆ i64       ┆ str                             │
+╞═══════╪═══════════════════════════════╪═══════════╪═════════════════════════════════╡
+│ 22    ┆ Interest Rates                ┆ 32991     ┆ null                            │
+│ 15    ┆ Exchange Rates                ┆ 32991     ┆ null                            │
+│ 24    ┆ Monetary Data                 ┆ 32991     ┆ null                            │
+│ 46    ┆ Financial Indicators          ┆ 32991     ┆ null                            │
+│ 23    ┆ Banking                       ┆ 32991     ┆ null                            │
+│ 32360 ┆ Business Lending              ┆ 32991     ┆ null                            │
+│ 32145 ┆ Foreign Exchange Intervention ┆ 32991     ┆ In addition to the listed dail… │
+└───────┴───────────────────────────────┴───────────┴─────────────────────────────────┘
+```
+
+I guess the series should in the sub-category 'Interest Rates' (id = 22), and go on:
+
+```python
+fred.catchildren(id = 22)
+```
+
+This time, we get:
+
+```
+shape: (25, 3)
+┌───────┬─────────────────────────────────┬───────────┐
+│ id    ┆ name                            ┆ parent_id │
+│ ---   ┆ ---                             ┆ ---       │
+│ i64   ┆ str                             ┆ i64       │
+╞═══════╪═════════════════════════════════╪═══════════╡
+│ 34009 ┆ AMERIBOR Benchmark Rates        ┆ 22        │
+│ 33058 ┆ Automobile Loan Rates           ┆ 22        │
+│ 51    ┆ Bankers Acceptance Rate         ┆ 22        │
+│ 121   ┆ Certificates of Deposit         ┆ 22        │
+│ 120   ┆ Commercial Paper                ┆ 22        │
+│ …     ┆ …                               ┆ …         │
+│ 33491 ┆ Saving Accounts                 ┆ 22        │
+│ 34003 ┆ SONIA Rates                     ┆ 22        │
+│ 116   ┆ Treasury Bills                  ┆ 22        │
+│ 115   ┆ Treasury Constant Maturity      ┆ 22        │
+│ 82    ┆ Treasury Inflation-Indexed Sec… ┆ 22        │
+└───────┴─────────────────────────────────┴───────────┘
+```
+
+I find 'Treasury Inflation-Indexed Securities' (id = 82)
+
+Is this the leaf category? try:
+
+```python
+fred.catchildren(id = 82)
+```
+
+This time, we get nothing:
+
+```
+shape: (0, 0)
+┌┐
+╞╡
+└┘
+```
+
+Now I know sub-category with id equals 82 is the leaf category. Use method 'catseries()' instead:
+
+```python
+fred.catseries(82)
+```
+
+We get a 177 * 16 dataframe.
+
+I'm interested in 10-year inflation-indexed Treasury securities, which is the first series in the search result above (id = 'DFII10')
+
+I can get the historical data of this series now:
+
+```python
+tips10 = fred.getdata('DFII10')   # tips: Treasury Inflation Protected Securities
+```
