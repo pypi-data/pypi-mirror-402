@@ -1,0 +1,283 @@
+Metadata-Version: 2.4
+Name: rapfiles
+Version: 0.2.1
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Requires-Dist: pytest>=8.0 ; extra == 'test'
+Requires-Dist: pytest-asyncio>=1.2.0 ; extra == 'test'
+Requires-Dist: aiofiles>=25.0 ; extra == 'test'
+Provides-Extra: test
+Summary: True async filesystem I/O — no fake async, no GIL stalls.
+Keywords: async,filesystem,io,async-io
+Author: RAP Project
+License: MIT
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown; charset=UTF-8; variant=GFM
+
+# rapfiles
+
+**True async filesystem I/O — no fake async, no GIL stalls.**
+
+[![PyPI version](https://img.shields.io/pypi/v/rapfiles.svg)](https://pypi.org/project/rapfiles/)
+[![Downloads](https://pepy.tech/badge/rapfiles)](https://pepy.tech/project/rapfiles)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## Overview
+
+`rapfiles` provides true async filesystem I/O operations for Python, backed by Rust and Tokio. Unlike libraries that wrap blocking I/O in `async` syntax, `rapfiles` guarantees that all I/O work executes **outside the Python GIL**, ensuring event loops never stall under load.
+
+**Roadmap Goal**: Achieve drop-in replacement compatibility with `aiofiles`, enabling seamless migration with true async performance. See [docs/ROADMAP.md](https://github.com/eddiethedean/rapfiles/blob/main/docs/ROADMAP.md) for details.
+
+## Why `rap*`?
+
+Packages prefixed with **`rap`** stand for **Real Async Python**. Unlike many libraries that merely wrap blocking I/O in `async` syntax, `rap*` packages guarantee that all I/O work is executed **outside the Python GIL** using native runtimes (primarily Rust). This means event loops are never stalled by hidden thread pools, blocking syscalls, or cooperative yielding tricks. If a `rap*` API is `async`, it is *structurally non-blocking by design*, not by convention. The `rap` prefix is a contract: measurable concurrency, real parallelism, and verifiable async behavior under load.
+
+See the [rap-manifesto](https://github.com/eddiethedean/rap-manifesto) for philosophy and guarantees.
+
+## Features
+
+- ✅ **True async** file reads and writes
+- ✅ **Native Rust-backed** execution (Tokio)
+- ✅ **Zero Python thread pools**
+- ✅ **Event-loop-safe** concurrency under load
+- ✅ **GIL-independent** I/O operations
+- ✅ **Verified** by Fake Async Detector
+- ✅ **aiofiles compatibility** (drop-in replacement)
+
+### Feature Categories
+
+- **[File Operations](#usage)** - Read, write, append (text and binary)
+- **[File Handles](#file-handles)** - Async context managers (`async with`)
+- **[Directory Operations](https://github.com/eddiethedean/rapfiles/blob/main/docs/DIRECTORY_OPERATIONS.md)** - Create, remove, list, walk directories
+- **[File Metadata](https://github.com/eddiethedean/rapfiles/blob/main/docs/FILE_METADATA.md)** - Get file statistics, sizes, timestamps
+- **[File Manipulation](https://github.com/eddiethedean/rapfiles/blob/main/docs/FILE_MANIPULATION.md)** - Copy, move, rename, remove, links
+- **[Atomic Operations](https://github.com/eddiethedean/rapfiles/blob/main/docs/ATOMIC_OPERATIONS.md)** - Atomic writes and moves
+- **[File Locking](https://github.com/eddiethedean/rapfiles/blob/main/docs/FILE_LOCKING.md)** - Shared/exclusive advisory locks
+- **[Batch Operations](https://github.com/eddiethedean/rapfiles/blob/main/docs/BATCH_OPERATIONS.md)** - Concurrent read/write/copy of multiple files
+- **[Path Operations](https://github.com/eddiethedean/rapfiles/blob/main/docs/PATH_OPERATIONS.md)** - Synchronous path utilities (`rapfiles.ospath`)
+
+## Requirements
+
+- Python 3.8+ (including Python 3.13 and 3.14)
+- Rust 1.70+ (for building from source)
+
+## Installation
+
+```bash
+pip install rapfiles
+```
+
+### Building from Source
+
+```bash
+git clone https://github.com/eddiethedean/rapfiles.git
+cd rapfiles
+pip install maturin
+maturin develop
+```
+
+### Development Setup
+
+For development with testing support:
+
+```bash
+git clone https://github.com/eddiethedean/rapfiles.git
+cd rapfiles
+pip install -e ".[test]"
+```
+
+This installs the package in editable mode along with testing dependencies (`pytest`, `pytest-asyncio`, `aiofiles`).
+
+Run tests:
+
+```bash
+pytest
+```
+
+---
+
+## Usage
+
+### Basic File Operations
+
+```python
+import asyncio
+from rapfiles import read_file, write_file
+
+async def main():
+    # Write file asynchronously (true async, GIL-independent)
+    await write_file("example.txt", "Hello from rapfiles!")
+    
+    # Read file asynchronously (true async, GIL-independent)
+    content = await read_file("example.txt")
+    print(content)
+    # Output: Hello from rapfiles!
+    
+    # Write another file
+    await write_file("output.txt", content)
+
+asyncio.run(main())
+```
+
+### Binary Files
+
+```python
+import asyncio
+from rapfiles import read_file_bytes, write_file_bytes
+
+async def main():
+    # Write binary data
+    await write_file_bytes("image.png", image_data)
+    
+    # Read binary data
+    data = await read_file_bytes("image.png")
+
+asyncio.run(main())
+```
+
+### File Handles
+
+```python
+import asyncio
+from rapfiles import open
+
+async def main():
+    # Open file with async context manager
+    async with open("file.txt", "r") as f:
+        content = await f.read()
+        print(content)
+    
+    # Write mode
+    async with open("output.txt", "w") as f:
+        await f.write("Hello, world!")
+    
+    # Binary mode
+    async with open("image.png", "rb") as f:
+        data = await f.read()
+    
+    # Read lines
+    async with open("file.txt", "r") as f:
+        line = await f.readline()
+        lines = await f.readlines()
+
+asyncio.run(main())
+```
+
+### Concurrent File Operations
+
+```python
+import asyncio
+from rapfiles import read_file, write_file
+
+async def main():
+    # Process multiple files concurrently
+    tasks = [
+        write_file("file1.txt", "Content 1"),
+        write_file("file2.txt", "Content 2"),
+        write_file("file3.txt", "Content 3"),
+    ]
+    await asyncio.gather(*tasks)
+    
+    # Read all files concurrently
+    contents = await asyncio.gather(
+        read_file("file1.txt"),
+        read_file("file2.txt"),
+        read_file("file3.txt"),
+    )
+    print(contents)
+    # Output: ['Content 1', 'Content 2', 'Content 3']
+
+asyncio.run(main())
+```
+
+## Documentation
+
+Comprehensive documentation is available in the [`docs/`](https://github.com/eddiethedean/rapfiles/tree/main/docs) directory:
+
+### Feature Documentation
+- **[Directory Operations](https://github.com/eddiethedean/rapfiles/blob/main/docs/DIRECTORY_OPERATIONS.md)** - Creating, removing, listing, and walking directories
+- **[File Metadata](https://github.com/eddiethedean/rapfiles/blob/main/docs/FILE_METADATA.md)** - Getting file statistics, sizes, and timestamps
+- **[File Manipulation](https://github.com/eddiethedean/rapfiles/blob/main/docs/FILE_MANIPULATION.md)** - Copying, moving, renaming, removing, and linking files
+- **[Atomic Operations](https://github.com/eddiethedean/rapfiles/blob/main/docs/ATOMIC_OPERATIONS.md)** - Atomic file writes and moves for data integrity
+- **[File Locking](https://github.com/eddiethedean/rapfiles/blob/main/docs/FILE_LOCKING.md)** - Advisory file locks for coordinating access
+- **[Batch Operations](https://github.com/eddiethedean/rapfiles/blob/main/docs/BATCH_OPERATIONS.md)** - Concurrent processing of multiple files
+- **[Path Operations](https://github.com/eddiethedean/rapfiles/blob/main/docs/PATH_OPERATIONS.md)** - Synchronous path utilities (`rapfiles.ospath`)
+- **[API Reference](https://github.com/eddiethedean/rapfiles/blob/main/docs/API_REFERENCE.md)** - Complete API documentation
+
+### Project Documentation
+- **[Roadmap](https://github.com/eddiethedean/rapfiles/blob/main/docs/ROADMAP.md)** - Detailed development plans and feature roadmap
+- **[Build and Test](https://github.com/eddiethedean/rapfiles/blob/main/docs/BUILD_AND_TEST.md)** - Local development setup instructions
+- **[Release Notes](https://github.com/eddiethedean/rapfiles/blob/main/docs/PYPI_RELEASE_NOTES.md)** - Version history and changes
+- **[Changelog](https://github.com/eddiethedean/rapfiles/blob/main/CHANGELOG.md)** - Detailed changelog
+- **[Security](https://github.com/eddiethedean/rapfiles/blob/main/SECURITY.md)** - Security policy and vulnerability reporting
+
+## Benchmarks
+
+This package passes the [Fake Async Detector](https://github.com/eddiethedean/rap-bench). Benchmarks are available in the [rap-bench](https://github.com/eddiethedean/rap-bench) repository.
+
+Run the detector yourself:
+
+```bash
+pip install rap-bench
+rap-bench detect rapfiles
+```
+
+## Current Status (v0.2.0)
+
+**Phase 1 Complete ✅:**
+- ✅ File handle operations (`AsyncFile` class with `async with` support)
+- ✅ File operations: `read()`, `write()`, `readline()`, `readlines()`, `seek()`, `tell()`
+- ✅ Binary file operations: `read_file_bytes()`, `write_file_bytes()`
+- ✅ Append operations: `append_file()`
+- ✅ Directory operations: `create_dir()`, `create_dir_all()`, `remove_dir()`, `remove_dir_all()`, `list_dir()`
+- ✅ Path checking: `exists()`, `is_file()`, `is_dir()`
+- ✅ Directory traversal: `walk_dir()` for recursive directory walking
+- ✅ File metadata: `stat()`, `metadata()`, `FileMetadata` class
+- ✅ Path operations: `rapfiles.ospath` module (aiofiles.ospath compatible)
+- ✅ aiofiles compatibility: Drop-in replacement for basic `aiofiles` operations
+
+**Phase 2 Complete ✅:**
+- ✅ File manipulation: `copy_file()`, `move_file()`, `rename()`, `remove_file()`
+- ✅ Link operations: `hard_link()`, `symlink()`, `canonicalize()`
+- ✅ Atomic operations: `atomic_write_file()`, `atomic_write_file_bytes()`, `atomic_move_file()`
+- ✅ File locking: `lock_file()`, `lock_file_shared()` with `FileLock` class
+- ✅ Batch operations: `read_files()`, `write_files()`, `copy_files()` with concurrent execution
+- ✅ Comprehensive test suite: 188+ tests covering all Phase 1 and Phase 2 features
+- ✅ Type stubs: Complete `.pyi` files for IDE support
+- ✅ Code quality: Ruff formatted and linted, clippy checked
+
+**Known Limitations:**
+- `buffering`, `encoding`, `errors`, `newline`, `closefd`, `opener` parameters accepted for API compatibility but not yet fully implemented
+- No streaming operations for large files (planned for Phase 3)
+- No file watching capabilities (planned for future phases)
+- No advanced I/O patterns like zero-copy (planned for future phases)
+
+**Roadmap**: See [docs/ROADMAP.md](https://github.com/eddiethedean/rapfiles/blob/main/docs/ROADMAP.md) for planned improvements. Phase 1 (aiofiles compatibility) and Phase 2 (advanced operations) are complete. Future phases will add streaming operations and advanced optimizations.
+
+## Related Projects
+
+- [rap-manifesto](https://github.com/eddiethedean/rap-manifesto) - Philosophy and guarantees
+- [rap-bench](https://github.com/eddiethedean/rap-bench) - Fake Async Detector CLI
+- [rapsqlite](https://github.com/eddiethedean/rapsqlite) - True async SQLite
+- [rapcsv](https://github.com/eddiethedean/rapcsv) - Streaming async CSV
+
+## Contributing
+
+Contributions are welcome! Please see our [contributing guidelines](https://github.com/eddiethedean/rapfiles/blob/main/docs/CONTRIBUTING.md) (coming soon).
+
+## License
+
+MIT
+
+For detailed release notes, see [CHANGELOG.md](https://github.com/eddiethedean/rapfiles/blob/main/CHANGELOG.md).
+
