@@ -1,0 +1,46 @@
+{# SPDX-License-Identifier: GPL-3.0-or-later #}
+{% macro fulltype(schema) -%}
+{% set item = schema.type %}
+{% if 'list' in item.__class__.__name__ %}
+{% if "null" in item %}
+{% set _ = item.remove("null") %}
+{% endif %}{# "null" in item #}
+{% if item | length == 1 %}
+{% set item = item[0] %}
+{% endif %}{# length(item) == 1 #}
+{%- endif %}{# type(item) is list #}
+{% if item == "array" %}{{ fulltype(schema["items"]) }}[]{% else %}{{ item }}{% endif %}
+{%- endmacro -%}{# fulltype #}
+
+{%- macro highreq(item) -%}
+{% if item in component_schema.required %}***{% endif %}{{ item }}{% if item in component_schema.required %}***{% endif %}
+{%- endmacro -%}
+
+{%- macro componenttable(component_schema) -%}
+{% if component_schema.type == "object" %}
+
+| property | type | description | default |
+|----------|------|-------------|---------|
+{% for property, property_schema in component_schema.properties.items() %}
+{% if property_schema.oneOf %}
+| {{ highreq(property) }} | {% for item in property_schema.oneOf %}{{ ref_to_link(item["$ref"]) if item.type != "null" }}{% endfor %} | {% for item in property_schema.oneOf %}{{ (item.description | rep_nl) if item.type != "null" }}{% endfor %} | {{ (property_schema.default | lower_boolean) if property_schema.default else "-" }} |
+{% else %}
+| {{ highreq(property) }} | {% if property_schema.type %}{{ fulltype(property_schema) }}{% elif property_schema["$ref"] %}{{ ref_to_link(property_schema["$ref"]) }}{% endif %} | {{ property_schema.description | rep_nl }} | {{ (property_schema.default | lower_boolean) if property_schema.default else "-" }} |
+{% endif %}{# property_schema.oneOf #}
+{% endfor %}{# property, property_schema in component_schema.properties.items() #}
+{% else %}
+
+{{ component_schema.type }} {% if component_schema.enum %}{% for item in component_schema.enum %}"{{ item }}"{{ "|" if not loop.last }}{% endfor %}{% endif %}: {{ component_schema.description }}
+{% endif %}{# component_schema.type = "object" #}
+{%- endmacro %}{# componenttable #}
+
+{%- if component_schema.oneOf %}
+
+*One of:*
+{% for schema in component_schema.oneOf %}
+{{ componenttable(schema) }}
+{{ "*or:*" if not loop.last }}
+{% endfor %}{# schema in component_schema.oneOf #}
+{% else %}
+{{ componenttable(component_schema) }}
+{% endif %}{# component_schema.oneOf #}

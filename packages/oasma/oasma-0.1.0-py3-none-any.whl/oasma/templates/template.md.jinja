@@ -1,0 +1,49 @@
+{# SPDX-License-Identifier: GPL-3.0-or-later #}
+{% macro ref_to_link(ref) -%}
+[{{ ref.split("/")[3] }}](#{{ ref.split("/")[3].lower() }})
+{%- endmacro -%}
+
+# Info
+
+{{ api.info.title }} API ({{ api.info.version }})
+
+<sup>{{ api.info.license.identifier if api.info.license }}</sup>
+{% if api.info.summary %}
+
+> {{ api.info.summary }}
+{%- endif %}
+{% if api.info.description %}
+
+> {{ api.info.description }}
+{% endif %}
+
+---
+
+# Paths
+{% for path, schema in api.paths.items() %}
+
+{%- for method, schema in schema.items() %}
+## `{{ method.upper() }} {{ path }}`
+
+> {{ schema.summary }}
+
+{{ (schema.description | rep_nl) if schema.description }}
+
+### Responses
+
+{% include "response.md.jinja" %}
+
+{% endfor %}
+{% endfor %}
+
+---
+
+# Components
+
+{% for component, component_schema in api.components.schemas.items() %}
+
+## {{ component }}
+
+> {{ component_schema.description }}
+{% include "component.md.jinja" %}
+{% endfor %}

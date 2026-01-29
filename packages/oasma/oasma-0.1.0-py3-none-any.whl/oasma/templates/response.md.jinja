@@ -1,0 +1,14 @@
+{# SPDX-License-Identifier: GPL-3.0-or-later #}
+{% for response, res_schema in schema.responses.items() %}
+{% for type, type_schema in res_schema.content.items() %}
+{% for t, s in type_schema.schema.items() if not t == "items" %}
+- **{{ response }}**:
+{%- if t == "type" %}
+ {{ s }}{% if s == "array" %} *of {{ ref_to_link(type_schema.schema["items"]["$ref"]) }}*{% endif %} ({{ type }})
+{% elif t == "$ref" %}
+ {{ ref_to_link(s) }} ({{ type }}) {#<details>{% set comp = s.split("/")[3] %}<summary>{{ comp }}</summary>{% set component_schema = api.components.schemas[comp] %}{% include "component.md.jinja" %}</details>#}
+
+{% endif %}
+{% endfor %}{# t, s in type_schema.schema.items() #}
+{% endfor %}{# type, type_schema in res_schema.content.items() #}
+{% endfor %}{# for response, res_schema in schema.responses.items() #}
