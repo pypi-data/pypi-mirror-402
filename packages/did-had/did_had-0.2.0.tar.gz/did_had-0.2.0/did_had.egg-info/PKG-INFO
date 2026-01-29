@@ -1,0 +1,233 @@
+Metadata-Version: 2.4
+Name: did-had
+Version: 0.2.0
+Summary: Difference-in-Differences with Heterogeneous Adoption Design (HAD) estimator
+Author-email: Anzony Quispe <anzonyquispe@gmail.com>
+Maintainer-email: Anzony Quispe <anzonyquispe@gmail.com>
+License: MIT
+Project-URL: Homepage, https://github.com/anzonyquispe/did-had
+Project-URL: Documentation, https://github.com/anzonyquispe/did-had#readme
+Project-URL: Repository, https://github.com/anzonyquispe/did-had.git
+Project-URL: Issues, https://github.com/anzonyquispe/did-had/issues
+Keywords: difference-in-differences,causal inference,econometrics,heterogeneous treatment effects,panel data,did,had,nprobust,local polynomial regression
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Mathematics
+Classifier: Topic :: Scientific/Engineering :: Information Analysis
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: numpy>=1.20.0
+Requires-Dist: pandas>=1.3.0
+Requires-Dist: scipy>=1.7.0
+Requires-Dist: nprobust>=0.5.0
+Provides-Extra: plot
+Requires-Dist: matplotlib>=3.4.0; extra == "plot"
+Requires-Dist: seaborn>=0.11.0; extra == "plot"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: isort>=5.12.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+Provides-Extra: all
+Requires-Dist: matplotlib>=3.4.0; extra == "all"
+Requires-Dist: pytest>=7.0.0; extra == "all"
+Requires-Dist: pytest-cov>=4.0.0; extra == "all"
+Dynamic: license-file
+
+# did-had
+
+A Python implementation of the **Heterogeneous Adoption Design (HAD)** estimator for difference-in-differences analysis from [de Chaisemartin et al. (2025)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4284811).
+
+[![PyPI version](https://badge.fury.io/py/did-had.svg)](https://badge.fury.io/py/did-had)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## Overview
+
+The `did-had` package implements the HAD estimator for settings where:
+
+- All groups receive treatment but with **different intensities** (no pure control group)
+- Treatment adoption occurs at the **same time** for all groups, but doses vary
+- Some groups have treatment doses **close to zero**, serving as "quasi-untreated" groups
+
+This is a Python port of the official Stata package [`did_had`](https://github.com/chaisemartinPackages/did_had), producing **numerically identical results**.
+
+## Installation
+
+```bash
+pip install did-had
+```
+
+For plotting support:
+```bash
+pip install did-had[plot]
+```
+
+## Quick Start
+
+```python
+import pandas as pd
+from did_had import DidHad
+
+# Load your panel data
+df = pd.read_stata("tutorial_data.dta")
+
+# Create and fit the model
+model = DidHad(kernel="tri")
+results = model.fit(
+    df=df,
+    outcome="y",        # outcome variable
+    group="g",          # group identifier
+    time="t",           # time period
+    treatment="d",      # treatment dose
+    effects=5,          # post-treatment periods
+    placebo=4           # pre-treatment placebos
+)
+
+# View results
+print(results)
+
+# Get ATT
+print(f"Average Treatment Effect: {results.att():.4f}")
+
+# Save results
+model.save_results("results.csv", format="csv")
+```
+
+## Example Output
+
+```
+===========================================================================
+DID-HAD Estimation Results
+===========================================================================
+Number of groups: 1,000
+Number of periods: 10
+Adoption period (F): 6.0
+Kernel: tri
+Confidence level: 95%
+
+---------------------------------------------------------------------------
+                          Effect Estimates                      QUG* Test
+         --------------------------------------------------- ---------------
+          Estimate       SE     LB.CI     UB.CI     N      BW    N.BW        T    p.val
+Effect_1   4.28198  0.55814   2.71751   4.90538 1,000 0.36133    371  3.96182  0.20154
+Effect_2   3.59260  0.66675   2.02563   4.63925 1,000 0.27104    282  3.96182  0.20154
+Effect_3   4.25466  0.67544   2.71354   5.36123 1,000 0.31407    324  3.96182  0.20154
+...
+```
+
+## Features
+
+- **Exact replication** of Stata's `did_had` command
+- **Bias-corrected inference** using local polynomial regression (lprobust-style)
+- **Quasi-untreated group tests** to validate the estimation strategy
+- **Event-study plots** for visualization
+- **Multiple output formats**: CSV, Stata, Excel, pickle
+
+## API Reference
+
+### `DidHad` Class
+
+```python
+DidHad(kernel="epa", alpha=0.05, nnmatch=3)
+```
+
+**Parameters:**
+- `kernel`: Kernel function - `"epa"` (Epanechnikov), `"tri"` (triangular), `"uni"` (uniform), `"gau"` (Gaussian)
+- `alpha`: Significance level for confidence intervals (default: 0.05 for 95% CI)
+- `nnmatch`: Number of nearest neighbors for variance estimation
+
+### `fit()` Method
+
+```python
+results = model.fit(
+    df,                      # Panel DataFrame
+    outcome,                 # Outcome variable name
+    group,                   # Group identifier name
+    time,                    # Time period name
+    treatment,               # Treatment dose name
+    effects=1,               # Number of post-treatment periods
+    placebo=0,               # Number of pre-treatment placebos
+    dynamic=False,           # Use cumulative treatment dose
+    bandwidth=None,          # Global bandwidth (or Silverman if None)
+    bandwidth_effect=None,   # Effect-specific bandwidths (dict or scalar)
+    bandwidth_placebo=None   # Placebo-specific bandwidths (dict or scalar)
+)
+```
+
+### `DidHadResults` Object
+
+```python
+results.summary()           # Formatted summary string
+results.to_dataframe()      # Full results as DataFrame
+results.att()               # Average treatment effect on treated
+results.effects             # DataFrame of effect estimates
+results.placebos            # DataFrame of placebo estimates
+```
+
+### Plotting
+
+```python
+# Basic plot
+model.plot()
+
+# Customized plot
+model.plot(
+    figsize=(10, 6),
+    title="My Event Study",
+    xlabel="Periods since treatment",
+    ylabel="Treatment Effect",
+    show_ci=True
+)
+```
+
+### Saving Results
+
+```python
+model.save_results("results.csv", format="csv")
+model.save_results("results.dta", format="stata")
+model.save_results("results.xlsx", format="excel")
+model.save_results("results.pkl", format="pickle")
+```
+
+## Comparison with Stata
+
+This package produces **numerically identical** results to the official Stata `did_had` command when using the same bandwidths:
+
+| Estimate | Python | Stata | Match |
+|----------|--------|-------|-------|
+| Effect_1 | 4.28198 | 4.28198 | Yes |
+| Effect_2 | 3.59260 | 3.59260 | Yes |
+| Effect_3 | 4.25466 | 4.25466 | Yes |
+| ... | ... | ... | ... |
+
+## Requirements
+
+- Python >= 3.8
+- NumPy >= 1.20.0
+- Pandas >= 1.3.0
+- Matplotlib >= 3.4.0 (optional, for plotting)
+
+## References
+
+- de Chaisemartin, C., D'Haultfoeuille, X., Pasquier, F., & Vazquez-Bare, G. (2025). "Difference-in-Differences Estimators for Treatments Continuously Distributed at Every Period". [SSRN](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4284811)
+
+- Calonico, S., Cattaneo, M. D., & Farrell, M. H. (2019). "nprobust: Nonparametric Kernel-Based Estimation and Robust Bias-Corrected Inference". Journal of Statistical Software.
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.
+
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request on [GitHub](https://github.com/anzonyquispe/did-had).
