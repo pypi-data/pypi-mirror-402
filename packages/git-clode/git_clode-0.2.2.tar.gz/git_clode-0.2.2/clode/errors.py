@@ -1,0 +1,2 @@
+class NoUsernameProvidedException(Exception):
+    pass
