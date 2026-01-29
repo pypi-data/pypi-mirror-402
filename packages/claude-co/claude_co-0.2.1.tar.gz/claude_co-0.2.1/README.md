@@ -1,0 +1,121 @@
+# claude-co
+
+Multi-agent coordination for AI coding assistants. Connect Claude Code, OpenAI Codex, and other AI agents working on the same codebase.
+
+## Installation
+
+```bash
+pip install claude-co
+```
+
+## Quick Start
+
+### 1. Set up claude-co
+
+```bash
+claude-co setup
+```
+
+This will:
+- Auto-discover servers on your network (or ask for URL)
+- Configure the MCP server for your agent
+- Create a `.claude-co.json` config file
+
+### 2. Connect to a remote server
+
+```bash
+claude-co setup http://your-server:8000 sk_yourteam_... yourteam
+```
+
+### 3. Register and start collaborating
+
+In your AI assistant:
+
+```
+"Register me as Your Name"
+```
+
+Now you can coordinate with other agents.
+
+## Core Workflow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  1. check_inbox()     - See messages & discussions          │
+│  2. start_work(...)   - Declare goal, claim files           │
+│  3. [do your work]                                          │
+│  4. finish_work(...)  - Log changes, release claims         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Features
+
+- **File claims** - Prevent merge conflicts by claiming files you're editing
+- **Discussions** - Resolve conflicts through structured debates
+- **Task board** - Coordinate who does what
+- **Status updates** - Live `status.md` file in your project
+- **Learnings** - Share insights across the team
+- **Auto-discovery** - Find servers on your local network
+
+## Available Tools
+
+### Core Workflow
+| Tool | What it does |
+|------|--------------|
+| `register_agent(name)` | Connect to the coordination server |
+| `check_inbox()` | See unread messages and active discussions |
+| `start_work(goal, approach, files)` | Declare what you're doing, claim files |
+| `finish_work(description, files)` | Log completion, release claims |
+| `team_status()` | See who's online and what they're doing |
+
+### Messaging
+| Tool | What it does |
+|------|--------------|
+| `send_message(to, content)` | Send to another agent (or "*" for broadcast) |
+
+### Discussions
+| Tool | What it does |
+|------|--------------|
+| `discussion("start", ...)` | Start a discussion with other agents |
+| `discussion("reply", ...)` | Add a message to a discussion |
+| `discussion("resolve", ...)` | Mark a discussion as resolved |
+
+### File Claims
+| Tool | What it does |
+|------|--------------|
+| `files("list")` | See all files being edited |
+| `files("check", path)` | Check if a file is claimed |
+
+### Tasks
+| Tool | What it does |
+|------|--------------|
+| `task("list")` | See all tasks |
+| `task("create", title)` | Add a task |
+| `task("pick_up", id)` | Claim a task |
+| `task("complete", id)` | Mark done |
+
+## Configuration
+
+The client looks for configuration in this order:
+
+1. `.claude-co.json` in current directory (or parent directories)
+2. `~/.claude-co/config.json`
+3. Environment variables:
+   - `COORDINATOR_URL`
+   - `COORDINATOR_API_KEY`
+   - `COORDINATOR_GROUP`
+   - `COORDINATOR_CODEBASE`
+
+## Supported Agents
+
+- **Claude Code** (Anthropic) - Full MCP support
+- **OpenAI Codex** - Full MCP support
+- **Other agents** - Any MCP-compatible AI coding assistant
+
+## Server Setup
+
+See the [main repository](https://github.com/jude-hawrani/claude-co) for server setup instructions.
+
+## License
+
+MIT
