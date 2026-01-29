@@ -1,0 +1,42 @@
+--- spirv-tools/CMakeLists.txt.orig	2026-01-17 10:15:16.543821088 +0100
++++ spirv-tools/CMakeLists.txt	2026-01-17 10:15:30.385941910 +0100
+@@ -44,6 +44,8 @@
+ endif()
+ set(CMAKE_CXX_EXTENSIONS OFF)
+
++find_package(SPIRV-Headers REQUIRED CONFIG)
++set(SPIRV_HEADER_INCLUDE_DIR "${SPIRV-Headers_DIR}/../../../include")
+
+ option(ENABLE_RTTI "Enables RTTI" OFF)
+ option(SPIRV_ALLOW_TIMERS "Allow timers via clock_gettime on supported platforms" ON)
+--- spirv-tools/external/CMakeLists.txt.orig	2026-01-17 10:16:08.959279698 +0100
++++ spirv-tools/external/CMakeLists.txt	2026-01-17 10:16:49.608635391 +0100
+@@ -72,28 +72,6 @@
+   pop_variable(MI_BUILD_TESTS)
+ endif()
+
+-if (DEFINED SPIRV-Headers_SOURCE_DIR)
+-  # This allows flexible position of the SPIRV-Headers repo.
+-  set(SPIRV_HEADER_DIR ${SPIRV-Headers_SOURCE_DIR})
+-else()
+-  set(SPIRV_HEADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/spirv-headers)
+-endif()
+-
+-if (IS_DIRECTORY ${SPIRV_HEADER_DIR})
+-  # TODO(dneto): We should not be modifying the parent scope.
+-  set(SPIRV_HEADER_INCLUDE_DIR ${SPIRV_HEADER_DIR}/include PARENT_SCOPE)
+-
+-  # Add SPIRV-Headers as a sub-project if it isn't already defined.
+-  # Do this so enclosing projects can use SPIRV-Headers_SOURCE_DIR to find
+-  # headers to include.
+-  if (NOT DEFINED SPIRV-Headers_SOURCE_DIR)
+-    add_subdirectory(${SPIRV_HEADER_DIR})
+-  endif()
+-else()
+-  message(FATAL_ERROR
+-    "SPIRV-Headers was not found - please checkout a copy at external/spirv-headers.")
+-endif()
+-
+ if (NOT ${SPIRV_SKIP_TESTS})
+   # Find gmock if we can. If it's not already configured, then try finding
+   # it in external/googletest.
