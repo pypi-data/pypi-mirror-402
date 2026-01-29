@@ -1,0 +1,505 @@
+# Django Bulk DRF
+
+High-performance bulk operations for Django REST Framework with a clean, RESTful API design.
+
+**Note:** This package provides bulk operations through standard REST endpoints - no separate bulk endpoints needed. All collection-level operations are bulk by default with automatic detection of single vs. batch requests.
+
+## Installation
+
+```bash
+pip install django-bulk-drf
+```
+
+### Requirements
+
+- Python 3.11+
+- Django 4.1+ (for native upsert support)
+- Django REST Framework 3.14+
+
+## Quick Setup
+
+1. Add to your `INSTALLED_APPS`:
+```python
+INSTALLED_APPS = [
+    # ... your other apps
+    'rest_framework',
+    'django_bulk_drf',
+]
+```
+
+2. (Optional) Configure bulk operations in your Django settings:
+```python
+BULK_DRF = {
+    'DEFAULT_BATCH_SIZE': 1000,
+    'MAX_BATCH_SIZE': 5000,
+    'ATOMIC_OPERATIONS': True,
+    'ENABLE_M2M_HANDLING': True,
+    # ... other settings
+}
+```
+
+## Overview
+
+This package extends Django REST Framework with high-performance bulk operations that work through your existing REST endpoints. No URL changes required!
+
+### Key Features
+
+1. **Bulk by Default**: Collection endpoints handle both single and bulk operations automatically
+2. **Performance Optimized**: Single-query fetches, batch processing, query optimization
+3. **Transaction Safety**: Atomic operations with configurable failure strategies
+4. **Clean API Design**: No separate bulk endpoints - uses standard REST URLs
+5. **DRF Integration**: Works seamlessly with existing DRF patterns
+
+## Package Philosophy
+
+This package provides a modern approach to bulk operations:
+
+1. **Clean URLs**: Enhances existing endpoints rather than creating parallel ones
+2. **Performance First**: Optimized database operations for maximum speed
+3. **DRF Native**: Uses standard DRF patterns and integrates seamlessly
+4. **Production Ready**: Built-in monitoring, error handling, and transaction management
+
+## Usage
+
+### Basic Setup
+
+```python
+# serializers.py
+from django_bulk_drf import BulkModelSerializer
+
+class ProductSerializer(BulkModelSerializer):
+    class Meta:
+        model = Product
+        fields = ['id', 'sku', 'name', 'price', 'category']
+
+# views.py
+from django_bulk_drf import BulkModelViewSet
+
+class ProductViewSet(BulkModelViewSet):
+    """
+    ViewSet with bulk operations on collection endpoints.
+    
+    Collection endpoints (POST, PUT, PATCH, DELETE) handle bulk automatically.
+    Detail endpoints (/products/{id}/) work as standard DRF.
+    """
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+    unique_fields = ['sku']  # For upsert operations
+
+# urls.py
+from django_bulk_drf import BulkRouter
+from rest_framework.routers import DefaultRouter
+
+# Option 1: Use BulkRouter (Recommended for bulk operations)
+router = BulkRouter()
+router.register('products', ProductViewSet)
+
+# Option 2: Use standard DefaultRouter (only POST will work for bulk)
+# router = DefaultRouter()
+# router.register('products', ProductViewSet)
+
+urlpatterns = router.urls
+```
+
+**Important:** To enable PATCH, PUT, and DELETE on collection endpoints (`/products/`), you must use `BulkRouter` or `BulkSimpleRouter` instead of DRF's standard routers. The standard DRF routers only map these methods to detail endpoints (`/products/{id}/`).
+
+### Bulk Serializer Hooks
+
+Bulk requests use the list serializer and do not call the child serializer's `create()` or `update()`.  
+To customize bulk workflows, implement these optional hooks on your child serializer:
+
+```python
+class ProductSerializer(BulkModelSerializer):
+    def bulk_create(self, validated_data):
+        # Handle bulk create in a batched way
+        ...
+
+    def bulk_update(self, validated_data):
+        # Handle bulk update in a batched way
+        ...
+
+    def bulk_upsert(self, validated_data):
+        # Handle bulk upsert in a batched way
+        ...
+```
+
+If a hook is defined, it is used instead of the default bulk operation.  
+Return either a list of instances or a `BulkOperationResult`. When returning a
+`BulkOperationResult`, it will be used for response formatting (created/updated/failed/errors).
+
+**Performance note:** Hooks should avoid per-item database writes and prefer
+batched operations to prevent N+1 behavior.
+
+## API Design
+
+### URL Structure
+
+```
+Collection Endpoints (Bulk by Default):
+POST   /products/        → Bulk create (accepts [...] or {...})
+PUT    /products/        → Bulk update (requires unique_fields)  
+PATCH  /products/        → Bulk upsert (create or update)
+DELETE /products/        → Bulk delete (by unique_fields)
+
+Detail Endpoints (Standard DRF):
+GET    /products/{id}/   → Retrieve single
+PUT    /products/{id}/   → Update single
+PATCH  /products/{id}/   → Partial update single
+DELETE /products/{id}/   → Delete single
+```
+
+**Key Insight**: The presence of `self.kwargs.get(self.lookup_field)` determines single vs. bulk operation.
+
+### Request/Response Examples
+
+#### Bulk Create
+```bash
+# Single create (backward compatible)
+POST /products/
+{
+    "sku": "PROD-001",
+    "name": "Widget", 
+    "price": "19.99",
+    "category": 1
+}
+
+# Bulk create
+POST /products/
+[
+    {
+        "sku": "PROD-001",
+        "name": "Widget",
+        "price": "19.99", 
+        "category": 1
+    },
+    {
+        "sku": "PROD-002",
+        "name": "Gadget",
+        "price": "29.99",
+        "category": 1
+    }
+]
+
+# Response
+{
+    "created": 2,
+    "updated": 0,
+    "failed": 0,
+    "data": [...]
+}
+```
+
+#### Bulk Upsert
+```bash
+# Bulk upsert (create or update)
+PATCH /products/
+[
+    {
+        "sku": "PROD-001",  # Exists - will update
+        "name": "Updated Widget",
+        "price": "24.99"
+    },
+    {
+        "sku": "PROD-003",  # New - will create
+        "name": "New Product", 
+        "price": "39.99",
+        "category": 2
+    }
+]
+
+# Response
+{
+    "created": 1,
+    "updated": 1,
+    "failed": 0,
+    "data": [...]
+}
+```
+
+#### Bulk Delete
+```bash
+# Bulk delete by unique fields
+DELETE /products/
+[
+    {"sku": "PROD-001"},
+    {"sku": "PROD-002"},
+    {"id": 5}
+]
+
+# Response  
+{
+    "deleted": 3
+}
+```
+
+#### Single Operations (Backward Compatible)
+```bash
+# Single create still works
+POST /products/
+{
+    "sku": "PROD-004", 
+    "name": "Single Product",
+    "price": "49.99"
+}
+
+# Response (standard DRF format)
+{
+    "id": 4,
+    "sku": "PROD-004",
+    "name": "Single Product",
+    "price": "49.99"
+}
+```
+
+#### Consistent Response Format
+
+When `CONSISTENT_RESPONSE_FORMAT = True`, single operations return the same structure as bulk operations for easier client-side handling:
+
+```bash
+# With CONSISTENT_RESPONSE_FORMAT = True
+POST /products/
+{
+    "sku": "PROD-004",
+    "name": "Single Product",
+    "price": "49.99"
+}
+
+# Response (consistent with bulk format)
+{
+    "created": 1,
+    "updated": 0,
+    "failed": 0,
+    "data": [
+        {
+            "id": 4,
+            "sku": "PROD-004",
+            "name": "Single Product",
+            "price": "49.99"
+        }
+    ]
+}
+```
+
+This makes client code simpler since all responses follow the same `{"data": [...], "created": X, "updated": Y, "failed": Z}` pattern.
+
+## Configuration
+
+### Basic Settings
+
+```python
+# settings.py
+BULK_DRF = {
+    'DEFAULT_BATCH_SIZE': 1000,           # Records per database batch
+    'MAX_BATCH_SIZE': 5000,               # Maximum request size
+    'ATOMIC_OPERATIONS': True,            # Wrap operations in transactions
+    'ENABLE_M2M_HANDLING': True,          # Handle many-to-many relationships
+    'ALLOW_SINGULAR': True,               # Allow single-object requests
+    'PREFER_MINIMAL_RESPONSE': False,     # Return minimal response format
+    'CONSISTENT_RESPONSE_FORMAT': False,  # Use consistent response format for single operations
+    'PARTIAL_FAILURE_STRATEGY': 'ROLLBACK_ALL',  # How to handle partial failures
+    'ENABLE_PERFORMANCE_MONITORING': False,      # Track performance metrics
+    'AUTO_OPTIMIZE_QUERIES': True,        # Auto-optimize database queries
+}
+```
+
+### Per-ViewSet Configuration
+
+```python
+class ProductViewSet(BulkModelViewSet):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+    unique_fields = ['sku']              # Fields for upsert matching
+    batch_size = 500                     # Override default batch size
+    
+    def get_unique_fields(self):
+        """Dynamic unique fields based on request"""
+        if self.request.query_params.get('match_by') == 'name':
+            return ['name', 'category']
+        return self.unique_fields
+```
+
+## Advanced Features
+
+### Foreign Key Handling
+
+The package automatically handles FK relationships with support for:
+- **Integer PKs**: `{"category": 1}` → `{"category_id": 1}`
+- **Slug Fields**: `{"category": "electronics"}` → resolves slug to ID in batch
+
+### Many-to-Many Relationships
+
+M2M fields are automatically handled:
+```python
+# Request
+{
+    "name": "Product",
+    "tags": [1, 2, 3]  # M2M field
+}
+
+# Automatically creates Product and sets M2M relationships
+```
+
+### Error Handling
+
+#### Validation Errors
+```python
+# Request with errors
+POST /products/
+[
+    {"sku": "PROD-001", "name": "Valid Product"},
+    {"sku": "", "name": "Invalid Product"},  # Missing required field
+    {"sku": "PROD-003", "price": "invalid"}  # Invalid data type
+]
+
+# Response
+{
+    "created": 1,
+    "updated": 0,
+    "failed": 2,
+    "errors": {
+        "1": {"sku": ["This field may not be blank."]},
+        "2": {"price": ["A valid number is required."]}
+    }
+}
+```
+
+#### Partial Failures
+
+With `PARTIAL_FAILURE_STRATEGY = 'COMMIT_SUCCESSFUL'`:
+```python
+# Response when some items fail
+{
+    "created": 1,
+    "updated": 0,
+    "failed": 2,
+    "data": [...],  # Only successful items
+    "errors": {
+        "1": {"field": ["error"]},
+        "2": {"field": ["error"]}
+    }
+}
+```
+
+## Performance Characteristics
+
+### Bulk Create
+- **Single INSERT query** per batch (default 1000 records)
+- **Typical Speed**: 10,000 records/second
+- **Memory**: O(batch_size) instances in memory
+
+### Bulk Update/Upsert  
+- **Bulk Update**: Single SELECT query + single UPDATE query per batch
+  - Typical Speed: 7,000-8,000 records/second
+- **Bulk Upsert** (Native): Single native upsert query (no SELECT needed)
+  - Uses Django's `bulk_create` with `update_conflicts=True`
+  - Typical Speed: 10,000-12,000 records/second
+  - True database-level atomicity
+
+### Bulk Delete
+- **Single DELETE query** with OR conditions
+- **Typical Speed**: 15,000 records/second
+
+### Native Upsert Performance
+
+Bulk upsert operations use Django's native `bulk_create` with `update_conflicts=True` for maximum performance:
+
+**How It Works:**
+```python
+# Single database operation handles both creates and updates
+PATCH /products/
+[
+    {"sku": "PROD-001", "name": "Updated", "price": "24.99"},  # Exists - updates
+    {"sku": "PROD-003", "name": "New Product", "price": "39.99"}  # New - creates
+]
+
+# Response
+{
+    "created": 2,  # Native upsert doesn't distinguish created vs updated
+    "updated": 0,
+    "failed": 0,
+    "data": [...]
+}
+```
+
+**Benefits:**
+- **Single Database Query**: No SELECT needed - the database handles conflict detection
+- **True Atomicity**: Database-level atomic operation (no race conditions)
+- **Better Performance**: 10,000-12,000 records/second vs 7,000-8,000 for traditional update
+- **Simpler Code**: One code path, easier to maintain
+
+**Database Support:**
+- PostgreSQL (all versions)
+- SQLite 3.24+
+- MySQL 8.0.19+
+- Oracle (with limitations)
+
+### Performance Tips
+
+#### 1. Minimal Responses for Large Operations
+```python
+# Use Prefer header for large datasets
+headers = {'Prefer': 'return=minimal'}
+response = requests.post('/products/', json=large_dataset, headers=headers)
+
+# Response: {"created": 10000, "updated": 0, "failed": 0}
+```
+
+#### 2. Optimize Batch Sizes
+```python
+# For smaller records (few fields)
+BULK_DRF = {'DEFAULT_BATCH_SIZE': 2000}
+
+# For larger records (many fields, large text)  
+BULK_DRF = {'DEFAULT_BATCH_SIZE': 500}
+```
+
+#### 3. Database Indexing
+Ensure your `unique_fields` are properly indexed for optimal upsert performance.
+
+## Migration Guide
+
+### From Standard DRF
+```python
+# Before
+class ProductViewSet(viewsets.ModelViewSet):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+
+# After  
+class ProductViewSet(BulkModelViewSet):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+    unique_fields = ['sku']  # Add for upsert support
+```
+
+### From drf-bulk
+```python
+# Before (drf-bulk)
+class ProductViewSet(BulkModelViewSet):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+# API: POST /products/bulk/
+
+# After (django-bulk-drf)  
+class ProductViewSet(BulkModelViewSet):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+    unique_fields = ['sku']
+# API: POST /products/ (cleaner URLs)
+```
+
+## Limitations
+
+- **Django Version**: Requires Django 4.1+ for native upsert support
+- **Database Support**: PostgreSQL, MySQL 8.0.19+, SQLite 3.24+, Oracle (with limitations)
+- **Not Supported**: Nested serializers, file uploads in bulk, complex validations requiring per-object database queries
+- **Upsert Response**: Native upsert doesn't distinguish between created and updated records (all count as "created")
+- **Best For**: Simple to medium complexity models with standard field types
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License.
