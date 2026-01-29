@@ -1,0 +1,40 @@
+## Autonomous Business System
+
+### To run the demo:
+1. Install uv: https://github.com/astral-sh/uv
+2. Create a new uv project
+    ```
+    uv init autobus_test
+    ```
+3. Place your OpenAI API key in the file `.env` at the project directory. There should be one line in `.env`:
+    ```
+    OPENAI_API_KEY=<your OpenAI key>
+    ```
+4. Install autobus
+    ```
+    uv add autonomous-business
+    ```
+4. Create sample data. A sqlite database file 'db.sqlite' will be created in the sub-directory `database`.
+    ```
+    uv run -m autobus.demo.create_sample_data
+    ```
+5. Execute the 3 tasks. Task 1 and 2 can run in parallel. Task 3 depends on the outcomes of Tasks 1 and 2.</br>
+Each task comprises two steps:</br>
+   1. Invoke the AUTOBUS core AI agent to generate a Prolog program
+   2. Execute the generated Prolog program
+
+    Task 1:
+    ```
+    uv run -m autobus.demo.task_1
+    uv run -m autobus.util.run_prolog generated/task_1_logic.pl
+    ```
+    Task 2:
+    ```
+    uv run -m autobus.demo.task_2
+    uv run -m autobus.util.run_prolog generated/task_2_logic.pl
+    ```
+    Task 3:
+    ```
+    uv run -m autobus.demo.task_3
+    uv run -m autobus.util.run_prolog generated/task_3_logic.pl
+    ```
