@@ -1,0 +1,102 @@
+from trazelet.utils.logger_config import logger
+from pathlib import Path
+import json
+
+
+class TrazeletConfig:
+    def __init__(self):
+        self.tables_created = False
+        self._logger_level = "INFO"
+        self.CONFIG_DIR = Path.home() / ".trazelet"
+        self.CONFIG_FILE = self.CONFIG_DIR / "config.json"
+
+    def configure(self, db_config=None, **kwargs):
+        logger.info("Initializing Trazelet...")
+        logger.info("Setting Up user settings")
+
+        self.BUCKET_THRESHOLDS = [
+            25, 50, 100,
+            200, 300, 500,
+            750, 1000, 1500,
+            2000, 3000, 4000,
+            5000, float("inf"),
+        ]
+
+        max_workers = kwargs.get("max_workers", 1)
+        self.enabled = kwargs.get("enabled", True)
+        self.batch_size = kwargs.get("batch_size", 50)
+        self.flush_interval = kwargs.get("flush_interval", 5.0)
+        self.BUCKET_THRESHOLDS = kwargs.get("BUCKET_THRESHOLDS", self.BUCKET_THRESHOLDS)
+        logger_level = kwargs.get("logger_level", "INFO")
+
+        db = self.configure_db(db_config)
+        self.logger_level = logger_level  # Use property setter
+        self.db_type = db.db_type
+
+        if max_workers >= 1 and db.db_type == "postgres":
+            self.max_workers = max_workers
+        else:
+            self.max_workers = 1
+
+        user_settings = {
+            "max_workers": self.max_workers,
+            "trazelet_enabled": self.enabled,
+            "logger_level": logger_level,
+            "database_type": self.db_type,
+            "batch_size": self.batch_size,
+            "flush_interval": self.flush_interval,
+            "BUCKET_THRESHOLDS": [
+            25, 50, 100,
+            200, 300, 500,
+            750, 1000, 1500,
+            2000, 3000, 4000,
+            5000, float("inf"),
+            ],
+            "trazelet_tables_created": self.tables_created,
+        }
+
+        self.save_config(user_settings)
+
+        logger.info("Trazelet is configured and data are set.")
+
+    def configure_db(self, db_config):
+        from trazelet.db.config import setup_db
+        from trazelet.db.models import create_tables
+
+        db = setup_db(db_config=db_config if db_config else {})
+        self.engine = db.engine
+        self.SessionLocal = db.SessionLocal
+        logger.info("Database configuration Completed")
+        create_tables()
+
+        return db
+
+    def configure_logger(self, logger_level):
+        level_upper = str(logger_level).upper()
+
+        if level_upper in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
+            logger.setLevel(level_upper)
+            logger.info(f"Logger level updated to {level_upper}")
+        else:
+            logger.warning(
+                f"'{logger_level}' is not a valid log level. Keeping default [INFO]."
+            )
+
+    @property
+    def logger_level(self):
+        """Get the current logger level."""
+        return self._logger_level
+
+    @logger_level.setter
+    def logger_level(self, value):
+        """Set the logger level and update the actual logger."""
+        self._logger_level = value
+        self.configure_logger(value)
+
+    def save_config(self, config):
+        with open(self.CONFIG_FILE, "w") as f:
+            json.dump(config, f, indent=2)
+
+
+# One instance to be shared across the whole project
+settings = TrazeletConfig()
