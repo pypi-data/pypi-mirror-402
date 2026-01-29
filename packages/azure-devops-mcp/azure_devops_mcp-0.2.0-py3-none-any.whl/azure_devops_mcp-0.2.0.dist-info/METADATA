@@ -1,0 +1,301 @@
+Metadata-Version: 2.4
+Name: azure-devops-mcp
+Version: 0.2.0
+Summary: MCP server for Azure DevOps / TFS integration
+Project-URL: Homepage, https://github.com/winning/azure-devops-mcp
+Project-URL: Repository, https://github.com/winning/azure-devops-mcp
+Project-URL: Issues, https://github.com/winning/azure-devops-mcp/issues
+Author-email: pth <pth@winning.com.cn>
+License: MIT
+Keywords: azure-devops,claude,mcp,model-context-protocol,tfs
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Software Development
+Requires-Python: >=3.10
+Requires-Dist: aiohttp>=3.9.0
+Requires-Dist: mcp>=0.9.0
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: pyyaml>=6.0.0
+Description-Content-Type: text/markdown
+
+# Azure DevOps MCP Server
+
+一个用于连接 Azure DevOps / TFS 的 MCP (Model Context Protocol) 服务，支持查询和创建工作项。
+
+## 功能特性
+
+- **查询工作项**: 通过 ID、WIQL 查询语句或文本搜索获取工作项
+- **创建工作项**: 支持 Bug、Task、User Story 等多种工作项类型
+- **获取项目列表**: 列出组织中的所有项目
+- **获取工作项类型**: 查看项目中可用的工工作项类型
+
+## 安装
+
+### 方式一: 通过 pip 安装 (推荐用于分发)
+
+```bash
+pip install azure-devops-mcp
+```
+
+安装后，**必须配置环境变量**（见下方配置部分）。
+
+### 方式二: 从源码安装 (开发模式)
+
+```bash
+cd azure-devops-mcp
+pip install -e .
+```
+
+## 配置
+
+### 方式一: 使用配置文件 (仅适用于源码安装)
+
+编辑 `config.yaml` 文件:
+
+```yaml
+organization:
+  url: "https://dev.azure.com/your-organization"
+  project: "your-project-name"
+
+auth:
+  method: "pat"  # 或 "basic" 用于 TFS 用户名密码认证
+  pat: "your-personal-access-token"  # PAT 方式
+  # username: "your-username"  # Basic 方式
+  # password: "your-password"  # Basic 方式
+```
+
+### 方式二: 使用环境变量 (pip 安装必需)
+
+在 Claude Desktop 配置或系统环境中设置以下变量:
+
+**使用 PAT 认证 (推荐)**:
+```bash
+AZURE_DEVOPS_ORG_URL=https://dev.azure.com/your-organization
+AZURE_DEVOPS_PROJECT=your-project-name
+AZURE_DEVOPS_PAT=your-personal-access-token
+```
+
+**使用 Basic 认证 (TFS)**:
+```bash
+AZURE_DEVOPS_ORG_URL=https://your-tfs-server/tfs
+AZURE_DEVOPS_PROJECT=your-project-name
+TFS_USERNAME=your-username
+TFS_PASSWORD=your-password
+```
+
+## 使用方法
+
+### 在 Claude Desktop 中配置
+
+编辑 Claude Desktop 配置文件:
+
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
+
+**pip 安装方式** (推荐):
+```json
+{
+  "mcpServers": {
+    "azure-devops": {
+      "command": "azure-devops-mcp",
+      "env": {
+        "AZURE_DEVOPS_ORG_URL": "https://dev.azure.com/your-organization",
+        "AZURE_DEVOPS_PROJECT": "your-project-name",
+        "AZURE_DEVOPS_PAT": "your-personal-access-token"
+      }
+    }
+  }
+}
+```
+
+**源码安装方式**:
+```json
+{
+  "mcpServers": {
+    "azure-devops": {
+      "command": "python",
+      "args": ["/path/to/azure-devops-mcp/src/azure_devops_mcp/server.py"],
+      "env": {
+        "AZURE_DEVOPS_ORG_URL": "https://dev.azure.com/your-organization",
+        "AZURE_DEVOPS_PROJECT": "your-project-name",
+        "AZURE_DEVOPS_PAT": "your-personal-access-token"
+      }
+    }
+  }
+}
+```
+
+### 重启 Claude Desktop
+
+配置完成后，重启 Claude Desktop 以加载 MCP 服务。
+
+## 可用工具
+
+### 1. get_work_item
+获取单个工作项详情
+
+```
+输入: work_item_id (必需), project (可选)
+```
+
+### 2. get_work_items
+批量获取多个工作项
+
+```
+输入: work_item_ids (必需), fields (可选), project (可选)
+```
+
+### 3. query_work_items
+使用 WIQL 查询工作项
+
+```
+输入: wiql (必需), project (可选)
+
+示例 WIQL:
+SELECT [System.Id] FROM WorkItems
+WHERE [System.TeamProject] = @project
+AND [System.State] = 'Active'
+```
+
+### 4. create_work_item
+创建新工作项
+
+```
+输入: work_item_type (必需), title (必需),
+      description (可选), assigned_to (可选),
+      fields (可选), project (可选)
+```
+
+### 5. search_work_items
+搜索工作项
+
+```
+输入: search_text (必需), project (可选), top (可选)
+```
+
+### 6. get_projects
+获取所有项目列表
+
+### 7. get_work_item_types
+获取可用的工工作项类型
+
+```
+输入: project (可选)
+```
+
+## 使用示例
+
+### 查询工作项
+
+```
+帮我查询 ID 为 12345 的工作项详情
+```
+
+### 搜索工作项
+
+```
+搜索标题中包含 "登录" 的工作项
+```
+
+### 创建工作项
+
+```
+创建一个 Bug:
+标题: 用户登录时出现错误
+描述: 在用户登录页面输入密码后点击登录按钮，系统返回 500 错误
+指派给: zhangsan@example.com
+优先级: 1
+```
+
+### WIQL 查询
+
+```
+使用 WIQL 查询所有分配给我的高优先级 Bug
+```
+
+## 故障排除
+
+### MCP 服务器启动失败 (exit code 1)
+
+**错误**: `The MCP server exited unexpectedly with code 1`
+
+**原因**: 缺少必需的环境变量配置
+
+**解决方案**:
+1. 确认在 Claude Desktop 配置中设置了所有必需的环境变量:
+   - `AZURE_DEVOPS_ORG_URL`
+   - `AZURE_DEVOPS_PROJECT`
+   - `AZURE_DEVOPS_PAT` (或 `TFS_USERNAME`/`TFS_PASSWORD`)
+
+2. 检查环境变量值是否正确（没有多余的空格或引号）
+
+3. 如果仍然失败，可以在终端中直接运行命令查看详细错误:
+   ```bash
+   # pip 安装方式
+   azure-devops-mcp
+
+   # 源码安装方式
+   python /path/to/azure-devops-mcp/src/azure_devops_mcp/server.py
+   ```
+
+### 认证失败
+
+- 确认 PAT 没有过期
+- 确认 PAT 有足够的权限 (至少需要 "Work Items" 读写权限)
+- 检查 URL 是否正确 (包含组织名称)
+
+### 401 Unauthorized
+
+- 检查 PAT 是否有效
+- 确认 PAT 有访问指定项目的权限
+- 对于 TFS，确认用户名和密码正确
+
+### 找不到项目
+
+- 确认项目名称拼写正确
+- 确认你的账户有访问该项目的权限
+- 尝试使用 `get_projects` 工具列出所有可用项目
+
+## 开发
+
+### 项目结构
+
+```
+azure-devops-mcp/
+├── src/
+│   ├── __init__.py
+│   ├── server.py              # MCP 服务器主文件
+│   └── azure_devops_client.py # Azure DevOps API 客户端
+├── config.yaml                # 配置文件
+├── .env.example              # 环境变量示例
+├── requirements.txt          # Python 依赖
+├── pyproject.toml           # 项目配置
+└── README.md                # 本文件
+```
+
+### 运行测试
+
+```bash
+python src/server.py
+```
+
+## 许可证
+
+MIT License
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request!
+
+## 相关链接
+
+- [MCP 协议文档](https://modelcontextprotocol.io/)
+- [Azure DevOps REST API](https://learn.microsoft.com/en-us/rest/api/azure/devops/)
+- [Azure AD 应用注册](https://learn.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app)
