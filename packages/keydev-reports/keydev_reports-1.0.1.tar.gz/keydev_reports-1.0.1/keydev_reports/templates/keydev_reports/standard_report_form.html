@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% load static %}
+{% load verbose_name %}
+{% block select %}
+  {{ form.media.css }}
+<style>
+
+    #report_modal {
+    z-index: 1500!important; /* или другое значение, если требуется */
+}
+
+.modal-backdrop.show {
+    z-index: 1037!important; /* или другое значение, если требуется */
+}
+#modal-report {
+    background: rgba(0, 0, 0, 0.5);
+    }
+
+</style>
+{% endblock select %}
+{% block content %}
+  <!-- general form elements -->
+<form method="POST" action="{% url url_name %}" id="downloadForm">
+  {% csrf_token %}
+<div class="row">
+  <div class="col-9">
+      <div class="card card-secondary">
+        <div class="card-header">
+          <h3 class="card-title">{{ title }}</h3>
+        </div>
+        <!-- /.card-header -->
+        <!-- form start -->
+          <div class="card-body">
+            <div class="row">
+              {% for field_name in form %}
+                <div class="col">
+                    <label> {{ field_name.label }} </label>
+                        {{ field_name }}
+                </div>
+              {% endfor %}
+            </div>
+            <div class='container mt-3'>
+              <div class="row">
+                {% for field, name in fields.items %}
+                {% if forloop.counter0|divisibleby:3 %}
+              </div>
+              <div class="row">
+                <div class="col form-group mt-1 pl-5">
+                  <input class="form-check-input" type="checkbox" value="" id="{{ field }}" name="{{ field }}">
+                  <label class="form-check-label" for="{{ field }}">
+                    {{ name }}
+                  </label>
+                </div>
+              {% else %}
+                <div class="col form-group mt-1 pl-5">
+                  <input class="form-check-input" type="checkbox" value="" id="{{ field }}" name="{{ field }}">
+                  <label class="form-check-label" for="{{ field }}">
+                    {{ name }}
+                  </label>
+                </div>
+            {% endif %}
+            {% endfor %}
+            </div>
+          </div>
+          <!-- /.card-body -->
+
+          <div class="card-footer">
+            <button type="submit" class="btn btn-primary ml-auto">Сохранить</button>
+          </div>
+
+      </div>
+  </div>
+</div>
+</div>
+</form>
+
+
+<div class="modal fade" tabindex="-1" id="report_modal" style="">
+    <div class="modal-dialog">
+        <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">Загрузка отчета</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div id="report_modal_content" class="d-flex justify-content-center">
+
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="submit" class="btn btn-secondary" data-dismiss="modal">Закрыть</button>
+        </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+{{ form.media.js }}
+<script>
+$(document).ready(function () {
+    var task_id = null;
+
+    function checkStatus(taskId) {
+        $.getJSON(`${window.location.protocol}//${window.location.host}/reports/task/${taskId}`, function(data) {
+            if (data.status == "SUCCESS") {
+                if (data.error) {
+                    $('#report_modal_content').html(
+                        `<div class="overlay-wrapper">
+                            <div class="overlay">
+                            <p>Ошибка при формировании отчета</p>
+                            <p>${data.error}</p>
+                            </div>
+                        </div>`
+                    );
+                    return;
+                } else {
+                    console.log(data);
+                    $('#report_modal_content').html(
+                        `<div class="overlay-wrapper">
+                            <div class="overlay">
+                                <div class="text-bold pt-2">Отчет сформирован</div>
+                                <div class="text-bold pt-2">Скачать отчет:</div>
+                                <div class="text-bold pt-2">
+                                    ${data.files.map(function(file) {
+                                        return `<a href="${window.location.protocol}//${window.location.host}${file.url}">${file.name}</a>`;
+                                    }
+                                    ).join(' ')}
+                                </div>
+                            </div>
+                        </div>`
+                    );
+                }
+            } else if (data.status == "FAILURE") {
+                $('#report_modal_content').html(
+                    `<div class="overlay-wrapper">
+                        <div class="overlay">
+                        <p>Ошибка при формировании отчета</p>
+                        </div>
+                    </div>`
+                );
+            } else {
+                setTimeout(function() {
+                    checkStatus(taskId);
+                }, 500);
+            }
+        });
+    }
+
+    $('#downloadForm').submit(function (event) {
+        event.preventDefault();
+
+
+        var formData = $(this).serialize();
+        var postUrl = $(this).attr('action');
+
+        $.post({
+            url: postUrl,
+            data: formData,
+            beforeSend: function () {
+                $('#report_modal_content').html(
+                    `<div class="overlay-wrapper">
+                        <div class="overlay">
+                            <div><i class="fas fa-3x fa-sync-alt fa-spin"></i></div>
+                            <div class="text-bold pt-2">Загрузка...</div>
+                        </div>
+                    </div>`
+                );
+                if ($.fn.modal) {
+                    $('#report_modal').modal('show');
+                } else {
+                    jQuery.noConflict();
+                    $('#report_modal').modal('show');
+                }
+                // $('#report_modal').modal('show');
+            },
+            success: function (response) {
+                console.log('POST request successful');
+                console.log(response);
+                checkStatus(response.task_id)
+            },
+            error: function (error) {
+                console.log('Error in POST request');
+                console.log(error);
+                // Do not hide the modal here
+            },
+            complete: function () {
+            }
+        });
+    });
+});
+</script>
+{% endblock script %}
