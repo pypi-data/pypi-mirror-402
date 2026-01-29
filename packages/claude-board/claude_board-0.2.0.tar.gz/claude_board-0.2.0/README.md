@@ -1,0 +1,181 @@
+# Claude Board
+
+A permission approval console for Claude Code - approve or deny permission requests from your phone or (future) a physical hardware device.
+
+## Requirements
+
+> **Important**: Claude Board requires **Claude Code CLI in terminal** for full functionality.
+
+### Environment Compatibility
+
+| Environment | Permission Approval | TODO Tracking | Notes |
+|-------------|---------------------|---------------|-------|
+| Terminal (`claude` command) | ✅ Full support | ✅ Full support | Recommended |
+| VS Code Extension | ⚠️ Known bug | ✅ Works | See below |
+| Claude Desktop (CLI mode) | ⚠️ Known bug | ✅ Works | See below |
+| Claude Desktop (Chat interface) | ❌ Not supported | ❌ Not supported | Different architecture |
+
+### Known Issue: PermissionRequest Hook Bug
+
+**The `PermissionRequest` hook does not trigger in VS Code Extension and Claude Desktop's built-in CLI.** This is a known upstream bug in Claude Code:
+
+- [Issue #13203](https://github.com/anthropics/claude-code/issues/13203) - PermissionRequest hook does not trigger in VSCode extension
+- [Issue #17036](https://github.com/anthropics/claude-code/issues/17036) - VS Code extension does not trigger hooks during permission prompt
+- [Issue #13339](https://github.com/anthropics/claude-code/issues/13339) - VS Code Extension ignores hook `permissionDecision: "ask"`
+
+**Workaround**: Use Claude Code in terminal (`claude` command) for full permission approval functionality. TODO tracking works in all CLI environments.
+
+### Why doesn't Claude Desktop chat work at all?
+
+Claude Desktop's chat interface and Claude Code CLI are completely different products:
+
+- **Claude Code CLI** uses `~/.claude/settings.json` and supports **Hooks**
+- **Claude Desktop Chat** uses `claude_desktop_config.json` and supports **MCP Servers** only
+
+The chat interface has no "permission request" concept, so hooks cannot intercept anything.
+
+## Features
+
+- **Web UI**: Approve/deny requests from any device with a browser (phone, tablet, desktop)
+- **Real-time updates**: WebSocket-based instant notifications
+- **Sound & vibration**: Get alerted when permission is needed
+- **YOLO mode**: Auto-approve all requests with one click
+- **TODO tracking**: See Claude's task list in real-time
+- **Keyboard shortcuts**: Y/Enter to approve, N/Escape to deny
+
+## Installation
+
+### Using pip
+
+```bash
+pip install claude-board
+```
+
+### Using uv
+
+```bash
+uv tool install claude-board
+```
+
+### From source
+
+```bash
+git clone https://github.com/pescn/claude-board.git
+cd claude-board
+pip install -e .
+```
+
+## Quick Start
+
+### 1. Install hooks into Claude Code
+
+```bash
+claude-board install
+```
+
+This adds hooks to `~/.claude/settings.json`. Your existing hooks are preserved.
+
+### 2. Start the server
+
+```bash
+claude-board serve
+```
+
+### 3. Open the URL on your phone
+
+The server will display a URL like `http://192.168.x.x:8765` - open it on your phone.
+
+### 4. Restart Claude Code
+
+Claude Code needs to be restarted to load the new hooks.
+
+That's it! Now when Claude Code needs permission to run a command, you'll get a notification on your phone.
+
+## Commands
+
+```bash
+# Start the web server
+claude-board serve [--port 8765] [--open]
+
+# Install hooks (preserves existing hooks)
+claude-board install [--scope user|local]
+
+# Uninstall hooks
+claude-board uninstall [--scope user|local] [--all]
+
+# Check status
+claude-board status
+
+# View/modify configuration
+claude-board config [--port PORT] [--yolo/--no-yolo]
+
+# Show version
+claude-board --version
+```
+
+## Configuration
+
+### Environment Variables
+
+- `CLAUDE_BOARD_HOST`: Server host (default: `127.0.0.1`)
+- `CLAUDE_BOARD_PORT`: Server port (default: `8765`)
+
+### Safe Tools (Auto-Approved)
+
+These tools are automatically approved without sending to your phone:
+
+- `Glob`, `Grep` - File searching
+- `TodoWrite`, `TodoRead` - Task management
+- `Task` - Subagent tasks
+- `WebSearch`, `WebFetch` - Web operations
+- `Read` (within project directory)
+
+### Dangerous Tools (Require Approval)
+
+- `Bash` - Shell commands
+- `Write` - Creating/overwriting files
+- `Edit` - Modifying files
+
+## Roadmap
+
+### Phase 0 (Current): Web UI ✅
+
+Pure software solution with web-based approval.
+
+### Phase 1: Raspberry Pi (Planned)
+
+Physical console with:
+- Mechanical key switches (Approve, Deny, Retry, YOLO)
+- E-ink display for task status
+- Wired connection
+
+### Phase 2: Bluetooth (Planned)
+
+Wireless physical console with BLE connectivity.
+
+### Phase 3: ESP32 Standalone (Planned)
+
+Battery-powered portable device.
+
+## Development
+
+```bash
+# Clone and install in development mode
+git clone https://github.com/pescn/claude-board.git
+cd claude-board
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Start server in development
+claude-board serve --port 8765
+```
+
+## License
+
+MIT
+
+## Contributing
+
+Contributions are welcome! Please open an issue or pull request.
