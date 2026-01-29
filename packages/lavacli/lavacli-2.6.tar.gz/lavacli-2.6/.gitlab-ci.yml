@@ -1,0 +1,143 @@
+stages:
+- test
+- analyze
+- build
+- deploy
+
+#############
+# Templates #
+#############
+.analyze:
+  stage: analyze
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+  image: registry.gitlab.com/lava/ci-images/amd64/analyze
+
+.test:
+  stage: test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+  before_script:
+  - apt-get update -qq
+  - apt-get install --no-install-recommends -y make python3 python3-aiohttp python3-jinja2 python3-pytest python3-requests python3-ruamel.yaml python3-zmq python3-voluptuous
+  script:
+  - make test
+  artifacts:
+    reports:
+      junit:
+      - lavacli.xml
+
+#########
+# Tests #
+#########
+test-debian-11:
+  extends: .test
+  image: debian:bullseye
+test-debian-12:
+  extends: .test
+  image: debian:bookworm
+test-debian-13:
+  extends: .test
+  image: debian:trixie
+test-ubuntu-22.04:
+  extends: .test
+  image: ubuntu:22.04
+test-ubuntu-24.04:
+  extends: .test
+  image: ubuntu:24.04
+test-ubuntu-25.04:
+  extends: .test
+  image: ubuntu:25.04
+test-ubuntu-25.10:
+  extends: .test
+  image: ubuntu:25.10
+
+###########
+# Analyze #
+###########
+pylint:
+  extends: .analyze
+  script:
+  - make pylint
+
+black:
+  extends: .analyze
+  script:
+  - make black
+
+coverage:
+  extends: .analyze
+  image: debian:bullseye
+  before_script:
+  - apt-get update -qq
+  - apt-get install --no-install-recommends -y make python3 python3-aiohttp python3-jinja2 python3-pytest python3-pytest-cov python3-requests python3-ruamel.yaml python3-zmq python3-voluptuous
+  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
+  script:
+  - make coverage
+  #artifacts:
+  #  reports:
+  #    coverage_report:
+  #      coverage_format: cobertura
+  #      path: coverage.xml
+
+#########
+# Build #
+#########
+sdist:
+  stage: build
+  image: debian:bookworm
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+  before_script:
+  - apt-get update -qq
+  - apt-get install --no-install-recommends -y python3 python3-pytest-runner python3-setuptools
+  script:
+  - python3 setup.py sdist
+
+doc:
+  stage: build
+  image: debian:bookworm
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+  before_script:
+  - apt-get update -qq
+  - apt-get install --no-install-recommends -y make python3 python3-pytest-runner python3-setuptools python3-sphinx
+  script:
+  - make -C doc html
+  artifacts:
+    paths:
+    - doc/_build/html
+
+##########
+# Deploy #
+##########
+pages:
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_TAG
+  dependencies:
+    - doc
+  script:
+    - mv doc/_build/html public
+  artifacts:
+    paths:
+      - public
+
+publish-pages:
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_TAG
+  needs:
+    - pages
+  trigger: lava/lava-docs
+  variables:
+    PARENT_PROJECT_NAME: $CI_PROJECT_NAME
+    PARENT_PROJECT_REF: $CI_COMMIT_REF_NAME
