@@ -1,0 +1,170 @@
+# =============================================================================
+# Build System Configuration
+# =============================================================================
+[build-system]
+requires = ["setuptools>=77.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# =============================================================================
+# Project Metadata
+# =============================================================================
+[project]
+name = "aurel"
+version = "0.9.3"
+description = "A Python package for general relativity calculations."
+readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+
+authors = [
+    { name = "Robyn L Munoz", email = "r.l.munoz@sussex.ac.uk" }
+]
+
+keywords = [
+    "numerical relativity",
+    "general relativity",
+    "simulation",
+    "Python",
+    "tensor"
+]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent"
+]
+
+# Minimum Python version requirement
+# Note: If this changes, update the Python version shield in README.md
+requires-python = ">=3.11"
+
+# =============================================================================
+# Core Dependencies
+# =============================================================================
+dependencies = [
+    "numpy",        # Array operations and numerical computing
+    "matplotlib",   # Plotting and visualization
+    "sympy",        # Symbolic mathematics
+    "h5py",         # HDF5 file format support for Einstein Toolkit data
+    "scipy",        # Scientific computing (requires Python >= 3.11)
+    "ipython",      # Enhanced interactive Python shell
+    "tqdm",         # Progress bars for long computations
+    "jupyter",      # Jupyter notebook support
+    "ipykernel",    # Jupyter kernel for running notebooks
+    "pyyaml"        # YAML file parsing for configuration
+]
+
+# =============================================================================
+# Project URLs
+# =============================================================================
+[project.urls]
+Source = "https://github.com/robynlm/aurel"
+Documentation = "https://robynlm.github.io/aurel/"
+
+# =============================================================================
+# Optional Dependencies
+# =============================================================================
+[project.optional-dependencies]
+test = [
+    "ruff>=0.8.0",  # Linting and code formatting
+    "pytest",       # Testing framework
+    "pytest-cov"    # Code coverage plugin for pytest
+]
+
+docs = [
+    "sphinx>=8.0",          # Documentation generator
+    "sphinx-rtd-theme",     # Read the Docs theme
+    "sphinx-math-dollar",   # LaTeX math with dollar signs
+    "myst-nb",              # Jupyter notebook support in Sphinx
+    "myst-parser",          # Markdown support in Sphinx
+    "sphinx-design"         # UI components for Sphinx docs
+]
+
+# =============================================================================
+# Setuptools Configuration
+# =============================================================================
+[tool.setuptools.packages.find]
+where = ["src"]
+# Exclude Jupyter notebook checkpoints from package
+exclude = ["*.ipynb_checkpoints", "*.ipynb_checkpoints.*"]
+
+[tool.setuptools.package-data]
+"*" = ["!.ipynb_checkpoints/*"]
+"aurel.data" = ["*.yml"]
+
+[tool.setuptools]
+include-package-data = true
+
+# =============================================================================
+# Pytest Configuration
+# =============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--verbose"]
+
+# Custom test markers for organizing tests
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+
+# =============================================================================
+# Ruff Configuration (Linting and Formatting)
+# =============================================================================
+[tool.ruff]
+target-version = "py311"  # Target Python 3.11+ syntax
+line-length = 88          # Standard line length (Black-compatible)
+
+# -----------------------------------------------------------------------------
+# Linting Rules
+# -----------------------------------------------------------------------------
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors (PEP 8 violations)
+    "W",   # pycodestyle warnings (style warnings)
+    "F",   # pyflakes (logic errors, undefined names, unused imports)
+    "I",   # isort (import sorting and organization)
+    "N",   # pep8-naming (naming conventions)
+    "UP",  # pyupgrade (modernize Python syntax)
+    "B",   # flake8-bugbear (likely bugs and design problems)
+    "C4",  # flake8-comprehensions (better list/dict/set comprehensions)
+    "D",   # pydocstyle - docstring conventions
+]
+
+# Naming convention exceptions for physics/GR code
+# Physics uses uppercase letters for tensors, indices, and established conventions
+ignore = [
+    "N802",  # Function names (allow CamelCase for mathematical functions)
+    "N803",  # Argument names (allow single uppercase letters like K, T, R)
+    "N806",  # Variable names in functions (allow uppercase for tensors)
+    "N811",  # Constant imported as non-constant (module imports like LCDM)
+    "N813",  # Camelcase imported as lowercase
+    "N814",  # Camelcase imported as constant
+    "N816",  # Mixed case variable at module level
+    "N999",  # Invalid module name (solutions named after authors/acronyms)
+]
+
+# -----------------------------------------------------------------------------
+# Per-File Ignores
+# -----------------------------------------------------------------------------
+[tool.ruff.lint.per-file-ignores]
+# Allow star imports and unused imports in __init__.py for re-exporting
+"__init__.py" = ["F401", "F403"]
+
+# Notebooks are documentation/tutorials - allow long lines
+"docs/notebooks/*.ipynb" = ["E501"]
+
+# Core modules have property methods documented in data/*descriptions.yml
+"src/aurel/core.py" = ["D102"]
+"src/aurel/coresymbolic.py" = ["D102"]
+
+# -----------------------------------------------------------------------------
+# Docstring Convention
+# -----------------------------------------------------------------------------
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+# -----------------------------------------------------------------------------
+# Formatting Options
+# -----------------------------------------------------------------------------
+[tool.ruff.format]
+quote-style = "double"    # Use double quotes for strings
+indent-style = "space"    # Use spaces (not tabs) for indentation
