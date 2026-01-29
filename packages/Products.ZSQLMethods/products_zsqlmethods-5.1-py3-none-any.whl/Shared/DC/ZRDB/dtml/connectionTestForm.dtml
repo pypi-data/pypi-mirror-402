@@ -1,0 +1,175 @@
+<dtml-var manage_page_header>
+
+<dtml-with "_(management_view='Test')">
+  <dtml-var manage_tabs>
+</dtml-with>
+
+<main class="container-fluid">
+
+  <dtml-let num_rows="REQUEST.get('num_rows') or 20">
+
+    <p class="zmi-form-title m-0 font-weight-bold">
+      Test database connection
+      <a href="manage_main" title="Edit database connection" 
+        class="text-<dtml-if connected>success<dtml-else>warning</dtml-if>">
+        &dtml-title_or_id;
+      </a>
+    </p>
+
+    <dtml-if connected>
+
+      <p class="form-help">
+        You can write a test query and run it with this database connection 
+        using the form below. Click <em>submit query</em> to run the query.
+      </p>
+
+      <form action="manage_testForm" method="get" class="zmi-edit zmi-sql zmi-ace-brief">
+
+        <div class="form-group">
+          <textarea id="content" data-contenttype="sql"
+                    class="form-control zmi-zpt zmi-code col-sm-12"
+                    name="query:text" wrap="off" accesskey="e"
+                    tabindex="1" rows="10"
+                    ><dtml-if query>&dtml-query;</dtml-if></textarea>
+        </div>
+
+        <div class="form-group">
+          <div class="input-group mt-4">
+            <div class="input-group-prepend">
+              <div class="input-group-text">Rows per page</div>
+            </div>
+            <select name="num_rows" class="form-control">
+              <dtml-in "[10, 20, 50, 100, 500, 1000]">
+                <option <dtml-if "_.int(num_rows)==_['sequence-item']">selected</dtml-if>>
+                  <dtml-var sequence-item>
+                </option>
+              </dtml-in>
+            </select>
+          </div>
+        </div>
+
+        <div class="zmi-controls">
+          <input class="btn btn-primary" type="submit" name="QUERY_SUBMIT"
+                 tabindex="2" value="Submit Query" />
+        </div>
+
+      </form>
+
+      <dtml-if query>
+        <hr/>
+
+        <dtml-try>
+
+          <h2 class="zmi-form-title">Query results</h2>
+
+          <dtml-let res="manage_test(query)"
+                    res_size="_.len(res)">
+
+            <p id="query_results" class="zmi-form-title font-weight-bold">
+                <dtml-if "res_size == 0">
+                  <span class="badge badge-danger">0</span>
+                <dtml-else>
+                  <span class="badge badge-success">&dtml-res_size;</span>
+                </dtml-if>
+                Results matched this query
+            </p>
+
+            <dtml-in "res" size=num_rows start=query_start orphan=3>
+              <dtml-if sequence-start>
+                <nav class="zmi-find-results nav row mb-3"><div class="col-6">
+                  <dtml-if previous-sequence-size>
+                    <a class="btn btn-primary" href="&dtml-URL;&dtml-sequence-query;query_start=&dtml-previous-sequence-start-number;">
+                      <i class="fas fa-chevron-left mr-2"></i> Previous <dtml-var previous-sequence-size> results
+                    </a>
+                  </dtml-if previous-sequence-size>
+                  <dtml-if next-sequence-size>
+                    </div><div class="col-6 text-right">
+                    <a class="btn btn-primary" href="&dtml-URL;&dtml-sequence-query;query_start=&dtml-next-sequence-start-number;">
+                      Next <dtml-var next-sequence-size> results <i class="fas fa-chevron-right ml-2"></i>
+                    </a>
+                  </dtml-if next-sequence-size>
+                </div></nav>
+
+                <table class="table table-sm table-responsive table-striped table-hover table-bordered mb-3">
+                  <thead>
+                    <tr>
+                      <dtml-in "res.names()">
+                        <th>&dtml-sequence-item;</th>
+                      </dtml-in>
+                    </tr>
+                  </thead>
+
+              </dtml-if sequence-start>
+
+              <tr>
+                <dtml-let rec=sequence-item>
+                  <dtml-in "res.names()">
+                    <td><dtml-var "getattr(rec, _['sequence-item'])"></td>
+                  </dtml-in>
+                </dtml-let>
+              </tr>
+
+              <dtml-if sequence-end>
+                 </table>
+
+                <nav class="zmi-find-results nav row mb-3"><div class="col-6">
+                  <dtml-if previous-sequence-size>
+                    <a class="btn btn-primary" href="&dtml-URL;&dtml-sequence-query;query_start=&dtml-previous-sequence-start-number;">
+                      <i class="fas fa-chevron-left mr-2"></i> Previous <dtml-var previous-sequence-size> results
+                    </a>
+                  </dtml-if previous-sequence>
+                  <dtml-if next-sequence>
+                    </div><div class="col-6 text-right">
+                    <a class="btn btn-primary" href="&dtml-URL;&dtml-sequence-query;query_start=&dtml-next-sequence-start-number;">
+                      Next <dtml-var next-sequence-size> results <i class="fas fa-chevron-right ml-2"></i>
+                    </a>
+                  </dtml-if next-sequence>
+                </div></nav>
+              </dtml-if sequence-end>
+
+            <dtml-else>
+              There was no data matching this query.
+            </dtml-in>
+          </dtml-let>
+
+        <dtml-except>
+
+          <h2 class="zmi-form-title">Query results</h2>
+
+          <p class="form-help">The query failed with an error.</p>
+          <p class="form-help">
+            <ul>
+              <li><strong>Error type:</strong>
+                  <dtml-var error_type html_quote></li>
+              <li><strong>Message:</strong>
+                  <dtml-var error_value></li>
+            </ul>
+          </p>
+        </dtml-try>
+
+      </dtml-if>
+ 
+    <dtml-else>
+      <p class="form-help">
+        This database connection is currently closed. You must click on the 
+        <em>status</em> or <em>Properties</em> tab and open the connection
+        before you can test it.
+      </p>
+    </dtml-if>
+
+  </dtml-let>
+
+</main>
+
+<dtml-if "REQUEST.get('query_start', None)">
+  <script>
+    //<!--
+    document.addEventListener("DOMContentLoaded", function(event) {
+      el = document.getElementById("query_results");
+      el.scrollIntoView();
+    });
+    //-->
+  </script>
+</dtml-if>
+
+<dtml-var manage_page_footer>
