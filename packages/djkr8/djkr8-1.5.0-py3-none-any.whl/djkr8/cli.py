@@ -1,0 +1,420 @@
+"""Command-line interface for DJ playlist optimizer."""
+
+import argparse
+import json
+import logging
+import sys
+from datetime import datetime
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
+
+from djkr8 import (
+    HarmonicLevel,
+    PlaylistOptimizer,
+    Track,
+)
+from djkr8.rekordbox import HAS_PYREKORDBOX, RekordboxLoader, write_rekordbox_xml
+
+logger = logging.getLogger(__name__)
+
+
+def load_tracks_from_json(filepath: Path) -> list[Track]:
+    """Load tracks from JSON file."""
+    logger.debug(f"Loading tracks from {filepath}")
+    with open(filepath) as f:
+        data = json.load(f)
+
+    tracks_data = data.get("tracks", data)
+
+    if not isinstance(tracks_data, list):
+        raise ValueError("JSON must contain a 'tracks' array or be an array of tracks")
+
+    tracks = []
+    for item in tracks_data:
+        if not isinstance(item, dict):
+            raise ValueError(f"Each track must be a dictionary, got: {type(item)}")
+
+        required = ["id", "key", "bpm"]
+        missing = [f for f in required if f not in item]
+        if missing:
+            raise ValueError(f"Track missing required fields: {missing}")
+
+        tracks.append(
+            Track(
+                id=item["id"],
+                key=item["key"],
+                bpm=float(item["bpm"]),
+                energy=int(item.get("energy", 5)),
+                duration=float(item.get("duration", 0.0)),
+                path=item.get("path"),
+                title=item.get("title"),
+                artist=item.get("artist"),
+            )
+        )
+
+    logger.info(f"Loaded {len(tracks)} tracks from {filepath}")
+    return tracks
+
+
+def save_result_to_json(result, filepath: Path):
+    """Save optimization result to JSON file."""
+    logger.debug(f"Saving results to {filepath}")
+    output = {
+        "playlist": [{"id": t.id, "key": t.key, "bpm": t.bpm} for t in result.playlist],
+        "transitions": [
+            {
+                "from": t.from_track.id,
+                "to": t.to_track.id,
+                "is_harmonic": t.is_harmonic,
+                "bpm_difference": t.bpm_difference,
+            }
+            for t in result.transitions
+        ],
+        "statistics": {
+            "total_input_tracks": result.statistics.total_input_tracks,
+            "playlist_length": result.statistics.playlist_length,
+            "coverage_pct": round(result.statistics.coverage_pct, 2),
+            "harmonic_transitions": result.statistics.harmonic_transitions,
+            "non_harmonic_transitions": result.statistics.non_harmonic_transitions,
+            "harmonic_pct": round(result.statistics.harmonic_pct, 2),
+            "avg_bpm": round(result.statistics.avg_bpm, 2),
+            "bpm_range": [
+                result.statistics.bpm_range[0],
+                result.statistics.bpm_range[1],
+            ],
+        }
+        if result.statistics
+        else {},
+        "solver": {
+            "status": result.solver_status,
+            "time_seconds": round(result.solver_time_seconds, 3),
+        },
+    }
+
+    with open(filepath, "w") as f:
+        json.dump(output, f, indent=2)
+
+    logger.info(f"Results saved to {filepath}")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Optimize DJ playlists for harmonic mixing using OR-Tools",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s tracks.json
+  %(prog)s tracks.json --bpm-tolerance 8 --harmonic-level moderate
+  %(prog)s tracks.json --start track_001 --end track_005
+  %(prog)s tracks.json --must-include track_002 track_003 --length 5
+  %(prog)s tracks.json --output result.json --time-limit 30
+        """,
+    )
+
+    parser.add_argument(
+        "input",
+        type=Path,
+        nargs="?",
+        help="Input JSON file with tracks (format: {tracks: [{id, key, bpm}, ...]})",
+    )
+
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        help="Output JSON file for results (default: print to stdout). Use .xml extension for Rekordbox format.",
+    )
+
+    parser.add_argument(
+        "--bpm-tolerance",
+        type=float,
+        default=10.0,
+        metavar="N",
+        help="Maximum BPM difference for direct match (default: 10)",
+    )
+
+    parser.add_argument(
+        "--halftime/--no-halftime",
+        dest="allow_halftime",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable/disable halftime and doubletime BPM matching (default: enabled)",
+    )
+
+    parser.add_argument(
+        "--max-violations",
+        type=float,
+        default=0.10,
+        metavar="PCT",
+        help="Maximum percentage of non-harmonic transitions (default: 0.10 = 10%%)",
+    )
+
+    parser.add_argument(
+        "--harmonic-level",
+        type=str,
+        choices=["strict", "moderate", "relaxed"],
+        default="strict",
+        help="Harmonic compatibility level (default: strict)",
+    )
+
+    parser.add_argument(
+        "--time-limit",
+        type=float,
+        default=5.0,
+        metavar="SEC",
+        help="Solver time limit in seconds (default: 5.0)",
+    )
+
+    parser.add_argument(
+        "--max-duration",
+        type=float,
+        metavar="SEC",
+        help="Maximum total playlist duration in seconds",
+    )
+
+    parser.add_argument(
+        "--energy-weight",
+        type=float,
+        default=0.0,
+        metavar="W",
+        help="Weight for energy level optimization (default: 0.0)",
+    )
+
+    parser.add_argument(
+        "--allow-energy-drops",
+        action="store_true",
+        help="Allow energy level to drop between tracks (default: non-decreasing flow enforced)",
+    )
+
+    rb_group = parser.add_argument_group("Rekordbox Options")
+    rb_group.add_argument(
+        "--rekordbox",
+        action="store_true",
+        help="Use Rekordbox database as input source",
+    )
+    rb_group.add_argument(
+        "--playlist",
+        type=str,
+        help="Name of Rekordbox playlist to optimize",
+    )
+    rb_group.add_argument(
+        "--write-to-db",
+        action="store_true",
+        help="DANGER: Write optimized playlist directly to Rekordbox DB (Rekordbox must be closed!)",
+    )
+
+    # New arguments
+    parser.add_argument(
+        "--start",
+        type=str,
+        metavar="ID",
+        help="Track ID that must start the playlist",
+    )
+
+    parser.add_argument(
+        "--end",
+        type=str,
+        metavar="ID",
+        help="Track ID that must end the playlist",
+    )
+
+    parser.add_argument(
+        "--must-include",
+        type=str,
+        nargs="+",
+        metavar="ID",
+        help="List of track IDs that must be included (soft constraint)",
+    )
+
+    parser.add_argument(
+        "--length",
+        type=int,
+        metavar="N",
+        help="Target fixed playlist length (number of tracks)",
+    )
+
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="count",
+        default=0,
+        help="Increase verbosity (-v for INFO, -vv for DEBUG)",
+    )
+
+    try:
+        __version__ = version("djkr8")
+    except PackageNotFoundError:
+        __version__ = "0.0.0"
+
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+
+    args = parser.parse_args()
+
+    if args.verbose == 0:
+        log_level = logging.WARNING
+    elif args.verbose == 1:
+        log_level = logging.INFO
+    else:
+        log_level = logging.DEBUG
+
+    logging.basicConfig(
+        level=log_level,
+        format="%(levelname)s: %(message)s",
+    )
+
+    loader = None
+    if args.rekordbox or args.write_to_db:
+        if not HAS_PYREKORDBOX:
+            logger.error(
+                "pyrekordbox is not installed. Please install it with 'pip install pyrekordbox'"
+            )
+            print("Error: pyrekordbox is not installed.", file=sys.stderr)
+            return 1
+
+        try:
+            loader = RekordboxLoader()
+        except Exception as e:
+            logger.error(f"Failed to initialize Rekordbox loader: {e}")
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+
+    if args.rekordbox:
+        if not args.playlist:
+            print("Fetching playlists from Rekordbox database...")
+            try:
+                playlists = loader.list_playlists()
+                if not playlists:
+                    print("No playlists found.")
+                    return 0
+
+                print(f"\nAvailable Playlists ({len(playlists)}):")
+                print("-" * 50)
+                print(f"{'Name':<35} | {'Tracks':>6}")
+                print("-" * 50)
+                for pl in sorted(playlists, key=lambda x: x.name):
+                    print(f"{pl.name:<35} | {pl.count:>6}")
+                print("-" * 50)
+                print("\nUse --playlist 'Name' to optimize a specific playlist.")
+                return 0
+            except Exception as e:
+                logger.error(f"Failed to list playlists: {e}")
+                print(f"Error listing playlists: {e}", file=sys.stderr)
+                return 1
+
+        try:
+            tracks = loader.get_tracks(args.playlist)
+            print(f"Loaded {len(tracks)} tracks from playlist '{args.playlist}'")
+        except Exception as e:
+            logger.error(f"Failed to load playlist '{args.playlist}': {e}")
+            print(f"Error loading playlist: {e}", file=sys.stderr)
+            return 1
+
+    elif args.input:
+        try:
+            tracks = load_tracks_from_json(args.input)
+            print(f"Loaded {len(tracks)} tracks from {args.input}")
+        except Exception as e:
+            logger.error(f"Failed to load tracks: {e}")
+            print(f"Error loading tracks: {e}", file=sys.stderr)
+            return 1
+    else:
+        parser.error("Either input file or --rekordbox must be specified")
+
+    harmonic_level_map = {
+        "strict": HarmonicLevel.STRICT,
+        "moderate": HarmonicLevel.MODERATE,
+        "relaxed": HarmonicLevel.RELAXED,
+    }
+
+    optimizer = PlaylistOptimizer(
+        bpm_tolerance=args.bpm_tolerance,
+        allow_halftime_bpm=args.allow_halftime,
+        max_violation_pct=args.max_violations,
+        harmonic_level=harmonic_level_map[args.harmonic_level],
+        time_limit_seconds=args.time_limit,
+        max_playlist_duration=args.max_duration,
+        energy_weight=args.energy_weight,
+        enforce_energy_flow=not args.allow_energy_drops,
+    )
+
+    print("Optimizing playlist...")
+
+    # Pass new arguments to optimize
+    result = optimizer.optimize(
+        tracks,
+        start_track_id=args.start,
+        end_track_id=args.end,
+        must_include_ids=args.must_include,
+        target_length=args.length,
+    )
+
+    if not result.playlist:
+        print(f"No solution found. Solver status: {result.solver_status}", file=sys.stderr)
+        return 1
+
+    print(f"\n✓ Found playlist with {len(result.playlist)} tracks")
+    print(f"  Solver: {result.solver_status} ({result.solver_time_seconds:.2f}s)")
+
+    if result.statistics:
+        stats = result.statistics
+        print(f"  Coverage: {stats.coverage_pct:.1f}% of input tracks")
+        print(
+            f"  Harmonic: {stats.harmonic_transitions}/{stats.harmonic_transitions + stats.non_harmonic_transitions} transitions ({stats.harmonic_pct:.1f}%)"
+        )
+        print(
+            f"  BPM range: {stats.bpm_range[0]:.0f}-{stats.bpm_range[1]:.0f} (avg: {stats.avg_bpm:.1f})"
+        )
+        total_duration = sum(t.duration for t in result.playlist)
+        if total_duration > 0:
+            print(f"  Total Duration: {total_duration:.0f}s")
+        avg_energy = sum(t.energy for t in result.playlist) / len(result.playlist)
+        print(f"  Average Energy: {avg_energy:.1f}")
+
+    # Generate playlist name for DB or XML
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    source_name = args.playlist if args.rekordbox and args.playlist else "Optimized"
+    playlist_name = f"{source_name}_{timestamp}"
+
+    # Write to DB if requested
+    if args.write_to_db:
+        if not args.rekordbox:
+            print(
+                "\nWarning: --write-to-db used without --rekordbox. Only tracks with known Rekordbox IDs will be added."
+            )
+
+        print(f"\nWriting to Rekordbox database (playlist: {playlist_name})...")
+        print("WARNING: Ensure Rekordbox is CLOSED to avoid database corruption!")
+        try:
+            loader.write_playlist_to_db(result, playlist_name)
+            print("✓ Successfully wrote playlist to database")
+        except Exception as e:
+            logger.error(f"Failed to write to DB: {e}")
+            print(f"Error writing to database: {e}", file=sys.stderr)
+            return 1
+
+    # Output file handling
+    if args.output:
+        if args.output.suffix.lower() == ".xml":
+            try:
+                write_rekordbox_xml(result, source_name, args.output)
+                print(f"\nResults exported to Rekordbox XML: {args.output}")
+            except Exception as e:
+                logger.error(f"Failed to export to Rekordbox XML: {e}")
+                print(f"Error exporting to XML: {e}", file=sys.stderr)
+                return 1
+        else:
+            save_result_to_json(result, args.output)
+            print(f"\nResults saved to {args.output}")
+    elif not args.write_to_db:
+        print("\nPlaylist order:")
+        for i, track in enumerate(result.playlist, 1):
+            print(
+                f"  {i:2d}. {track.id:20s} {track.key:4s} {track.bpm:6.1f} BPM "
+                f"(Energy: {track.energy:2d}, Duration: {track.duration:4.0f}s)"
+            )
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
