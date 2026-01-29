@@ -1,0 +1,128 @@
+# direl-ts-tool-kit
+> A Toolbox for Time Series Analysis and Visualization
+
+A lightweight Python library developed to streamline common tasks in time series processing, including data preparation,
+visualization with a consistent aesthetic style, and handling irregular indices.
+
+## Key features and functions
+
+The library provides the following key functionalities, primarily centered around data preparation and plotting.
+
+### Data preparation and index management
+#### parse_datetime_index
+`parse_datetime_index(df_raw, date_column="date", format=None)`
+
+Parses a specified column into datetime objects and sets it as the DataFrame index.
+
+This function prepares raw data for time series analysis by ensuring the
+DataFrame is indexed by the correct datetime type.
+
+#### generate_dates
+`generate_dates(df_ts, freq="MS")`
+
+Generates a continuous DatetimeIndex covering the time span of the input DataFrame.
+
+The function determines the start and end dates from the existing DataFrame index
+and creates a new, regular date sequence based on the specified frequency.
+
+#### reindex_and_aggregate
+`reindex_and_aggregate(df_ts, column_name, freq="MS")`
+
+Re-indexes a time series DataFrame to a regular frequency, aggregates values,
+and introduces NaN for missing time steps.
+
+This function first identifies the time range from the original (potentially irregular)
+index, aggregates data if necessary (e.g., if multiple entries exist per time step),
+and then merges the data onto a complete date range, effectively filling gaps
+with NaN values.
+
+#### remove_outliers_by_threshold
+`remove_outliers_by_threshold(df_ts, column_name, lower_bound, upper_bound)`
+
+Replaces values in a specified column with NaN if they fall outside a defined range (outlier removal).
+
+This function identifies data points that are either below the lower
+bound or above the upper bound and treats them as missing data.
+
+
+### Visualization and styling
+
+#### plot_time_series
+`plot_time_series(df_ts, variable, units="", color="BLUE_LINES", time_unit="Year", rot=90, auto_format_label=True)`
+
+Plots a time series with custom styling and dual-level grid visibility.
+
+This function automatically sets major and minor time-based locators
+on the x-axis based on the specified time unit, and formats the y-axis
+to use scientific notation.
+
+
+#### plot_interpolation_analysis
+`plot_interpolation_analysis(df_original, variable, units="", method="polynomial", order=2, imputation_se=None, time_unit="Year", rot=90)`
+
+Performs interpolation on missing data (NaNs) in a specified column and
+plots the result, highlighting the imputed points with confidence intervals
+if the Imputation Standard Error (SE) is provided.
+
+
+#### save_figure
+`save_figure(fig, file_name, variable_name="", path="./")`
+
+Saves a Matplotlib figure in three common high-quality formats (PNG, PDF, SVG).
+
+The function creates a consistent file name structure:
+{path}/{file_name}_{variable_name}.{extension}.
+
+
+#### heat_map
+`heat_map(X, y, colors="Blues")`
+
+Generates a correlation heatmap plot for a set of features and a target variable.
+
+This function concatenates the feature DataFrame (X) and the target Series (y)
+to compute and visualize the full pairwise correlation matrix using Seaborn.
+
+
+#### pair_plot
+`pair_plot(X, y)`
+
+Generates a cornered pair plot (scatterplot matrix) to visualize relationships
+between features and the target variable.
+
+The function combines the feature DataFrame (X) and the target Series (y)
+and uses seaborn.pairplot to create a matrix of scatter plots and histograms.
+It focuses on the lower triangular part (corner=True) and includes a
+regression line for trend visualization.
+
+
+#### plot_histogram
+`plot_histogram(df, variable, units="", density=True, color="BLUE_BARS", bins=30)`
+
+Generates a histogram plot for a specified numerical variable.
+
+The plot visualizes the distribution of the data, with the Y-axis dynamically
+labeled as 'Density' or 'Count' based on the `density` parameter.
+
+
+#### plot_data_boxplot
+`plot_data_boxplot(df, variable=None, x_label="", y_label="", grid=False, notch=False)`
+
+Generates a boxplot visualization, either for all numerical columns in the
+DataFrame or for a single specified variable.
+
+The function applies consistent styling for the boxes, outliers, and median
+lines using predefined colors from 'paper_colors'.
+
+
+#### plot_periodogram
+
+`plot_periodogram(ts, detrend="linear", ax=None, fs=365.0, color="BLUE_LINES")`
+
+Plots the power spectrum (periodogram) of a time series to identify
+dominant frequencies (periodicity).
+
+
+# Examples
+- [Example 1](https://gitlab.com/direl/direl_tool_kit/-/blob/main/example/example_01.md?ref_type=heads)
+- [Example 2](https://gitlab.com/direl/direl_tool_kit/-/blob/main/example/example_02.md?ref_type=heads)
+
