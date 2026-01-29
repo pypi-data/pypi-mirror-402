@@ -1,0 +1,106 @@
+# TOPSIS-Daksh-102303322
+
+for: **UCS654**   submitted by: **Daksh Garg**  Roll no: **102303322**  Group: **3C24**
+
+topsis-daksh is a Python library for dealing with Multiple Criteria Decision Making (MCDM) problems by using Technique for Order of Preference by Similarity to Ideal Solution (TOPSIS).
+
+## Installation
+
+Use the package manager [pip](https://pip.pypa.io/en/stable/) to install topsis-daksh.
+
+```bash
+pip install topsis-daksh-102303322
+```
+
+## How TOPSIS Works
+
+The TOPSIS method evaluates each alternative by calculating:
+
+● The shortest distance from the ideal best solution
+
+● The farthest distance from the ideal worst solution
+
+Each alternative is then assigned:
+
+● A TOPSIS score
+
+● A rank, where rank 1 represents the best alternative
+
+## Usage
+
+Run the package using the command line interface (CLI). The syntax requires four arguments: the input data file, the weights, the impacts and the output file
+
+```bash
+topsis <InputDataFile> <Weights> <Impacts> <OutputFile>
+```
+
+## Example:
+
+```bash
+topsis sample.csv "1,1,1,1" "+,-,+,+" output.csv
+```
+
+## Important Notes on Syntax:
+
+● Weights: Comma-separated numbers (e.g., 1,1,1,1).
+
+● Impacts: Comma-separated signs (+ for beneficial criteria, - for non-beneficial criteria).
+
+● Quotes: It is recommended to enclose your weights and impacts in double quotes (" ") to prevent errors if your input contains spaces.
+
+## Getting Help: 
+
+To view the help message and quick usage guide, run:
+
+```bash
+topsis /h
+```
+
+## Example
+
+sample.csv
+
+A csv file showing data for different car models having varying features.
+
+| Model | Price (In lakhs) | Fuel Efficiency (Km/Lit) | Comfort | Looks |
+|---|---|---|---|---|
+| Car1 | 4 | 15 | Good | Average |
+| Car2 | 8 | 16 | Good | Good |
+| Car3 | 10 | 17 | Excellent | Excellent |
+| Car4 | 3.5 | 16 | Average | Average |
+
+Note: Categorical values have been converted to numerical scales (Good=4, Average=3, Excellent=5).
+
+weights vector = [ 0.25 , 0.25 , 0.25 , 0.25 ]
+
+impacts vector = [ - , + , + , + ]
+
+Note: Price is a cost (-) factor, while Efficiency, Comfort, and Looks are benefit (+) factors.
+
+## input:
+
+```bash
+topsis sample.csv "0.25,0.25,0.25,0.25" "-,+,+,+" output.csv
+```
+
+## output:
+
+```bash 
+Model  Price  Fuel Efficiency  Comfort  Looks  Topsis Score  Rank
+ Car1    4.0               15        4      3      0.602439     1
+ Car2    8.0               16        4      4      0.384213     4
+ Car3   10.0               17        5      5      0.436903     3
+ Car4    3.5               16        3      3      0.566388     2
+```
+
+## Other Notes
+
+● Input File Format: The input CSV must contain a header row. The first column is treated as the object/alternative name (e.g., Model Name, M1, M2) and will be preserved in the output but excluded from the mathematical calculations.
+
+● Numeric Data Only: Ensure that all columns from the 2nd column onwards contain strictly numeric values. Categorical values (e.g., "Good", "Medium") must be converted to numerical scales before running the script.
+
+● Consistency: The number of values in your weights and impacts parameters must match the number of criteria columns (total columns minus one).
+
+## Licence
+
+[MIT](https://choosealicense.com/licenses/mit/)
