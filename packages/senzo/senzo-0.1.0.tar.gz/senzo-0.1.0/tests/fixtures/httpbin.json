@@ -1,0 +1,297 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "httpbin",
+    "version": "1.0.0",
+    "description": "HTTP Request & Response Service for testing"
+  },
+  "servers": [
+    {"url": "https://httpbin.org"}
+  ],
+  "paths": {
+    "/get": {
+      "get": {
+        "operationId": "getRequest",
+        "summary": "Returns the GET request's data",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpMethodResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/post": {
+      "post": {
+        "operationId": "postRequest",
+        "summary": "Returns the POSTed data",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ip": {
+      "get": {
+        "operationId": "getOriginIp",
+        "summary": "Returns Origin IP",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IpResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user-agent": {
+      "get": {
+        "operationId": "getUserAgent",
+        "summary": "Returns the user agent",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserAgentResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/headers": {
+      "get": {
+        "operationId": "getHeaders",
+        "summary": "Returns the request headers",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeadersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status/{statusCode}": {
+      "get": {
+        "operationId": "getStatusCode",
+        "summary": "Returns the specified HTTP status code",
+        "parameters": [
+          {
+            "name": "statusCode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "A response with the requested status code"
+          }
+        }
+      }
+    },
+    "/delay/{n}": {
+      "get": {
+        "operationId": "getDelay",
+        "summary": "Delays responding for n seconds",
+        "parameters": [
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "description": "Response delay in seconds (max 10)",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpMethodResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bearer": {
+      "get": {
+        "operationId": "testBearerAuth",
+        "summary": "Tests Bearer authentication",
+        "security": [
+          {"bearerAuth": []}
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BearerResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HttpMethodResponse": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "origin": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": ["args", "headers", "origin", "url"]
+      },
+      "PostResponse": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "data": {
+            "type": "string"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "json": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "origin": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": ["args", "headers", "origin", "url"]
+      },
+      "IpResponse": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "type": "string",
+            "description": "The IP address"
+          }
+        },
+        "required": ["origin"]
+      },
+      "UserAgentResponse": {
+        "type": "object",
+        "properties": {
+          "user-agent": {
+            "type": "string"
+          }
+        },
+        "required": ["user-agent"]
+      },
+      "HeadersResponse": {
+        "type": "object",
+        "properties": {
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["headers"]
+      },
+      "BearerResponse": {
+        "type": "object",
+        "properties": {
+          "authenticated": {
+            "type": "boolean"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": ["authenticated", "token"]
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
