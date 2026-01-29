@@ -1,0 +1,188 @@
+# Java Language Configuration for SEF Agents
+
+language: java
+extensions: [".java"]
+parser: regex
+
+# Debt detection patterns
+debt_patterns:
+  todo_fixme:
+    description: "TODO/FIXME comments indicate incomplete work"
+    severity: medium
+    pattern: "//\\s*(TODO|FIXME|XXX|HACK|BUG)[\\s:]+(.+)"
+    suggestion: "Address the TODO or create a tracked issue"
+
+  empty_catch:
+    description: "Empty catch blocks swallow exceptions"
+    severity: high
+    pattern: "catch\\s*\\([^)]+\\)\\s*\\{\\s*\\}"
+    suggestion: "Log or handle the exception"
+
+  catch_exception:
+    description: "Catching generic Exception masks bugs and catches RuntimeExceptions"
+    severity: high
+    pattern: "catch\\s*\\(\\s*Exception\\s+"
+    suggestion: "Catch specific exceptions: IOException, SQLException, etc."
+
+  catch_throwable:
+    description: "Catching Throwable includes Errors"
+    severity: high
+    pattern: "catch\\s*\\(\\s*Throwable\\s+"
+    suggestion: "Catch Exception, not Throwable"
+
+  system_out:
+    description: "System.out bypasses logging, no levels/rotation/structured output"
+    severity: high
+    pattern: "System\\.(out|err)\\.(print|println)\\("
+    suggestion: "Use SLF4J: logger.info(), logger.error()"
+
+  printStackTrace:
+    description: "printStackTrace sends to stderr"
+    severity: medium
+    pattern: "\\.printStackTrace\\(\\)"
+    suggestion: "Use logger.error with exception"
+
+  raw_types:
+    description: "Raw types bypass generics type safety"
+    severity: medium
+    pattern: "\\b(List|Map|Set|Collection)\\s+\\w+\\s*="
+    suggestion: "Use parameterized types: List<String>"
+
+  string_concat_loop:
+    description: "String concatenation in loops is inefficient"
+    severity: medium
+    pattern: "for.*\\+.*String|while.*\\+.*String"
+    suggestion: "Use StringBuilder"
+
+  public_fields:
+    description: "Public fields break encapsulation"
+    severity: medium
+    pattern: "public\\s+(?!static|final|class|interface|enum)\\w+\\s+\\w+\\s*;"
+    suggestion: "Use private fields with getters/setters"
+
+  magic_numbers:
+    description: "Magic numbers violate DRY and hurt maintainability"
+    severity: medium
+    pattern: "(?<!\\d)[0-9]{2,}(?!\\d)"
+    suggestion: "Extract to named constants (e.g., private static final int MAX_RETRIES = 3)"
+
+  missing_javadoc:
+    description: "Public APIs must be documented for maintainability"
+    severity: medium
+    pattern: "public\\s+(?!class)\\w+.*\\{"
+    suggestion: "Add Javadoc with @param, @return, @throws"
+
+  # Code Quality Patterns
+  unused_import:
+    description: "Unused imports clutter code"
+    severity: low
+    pattern: "^import\\s+.*;"
+    suggestion: "Remove unused imports (IDE can auto-remove)"
+
+  null_pointer_risk:
+    description: "Potential null pointer dereference"
+    severity: high
+    pattern: "\\w+\\.\\w+\\(\\).*\\.\\w+|\\w+\\[.*\\]\\.\\w+"
+    suggestion: "Add null checks or use Optional"
+
+  missing_override:
+    description: "Method overrides without @Override annotation"
+    severity: medium
+    pattern: "public\\s+\\w+\\s+\\w+\\s*\\([^)]*\\)"
+    suggestion: "Add @Override annotation for clarity"
+
+  equals_without_hashcode:
+    description: "Class overrides equals() but not hashCode()"
+    severity: high
+    pattern: "public\\s+boolean\\s+equals"
+    suggestion: "Override hashCode() when overriding equals()"
+
+  final_mutable_collections:
+    description: "Final collections can still be modified"
+    severity: medium
+    pattern: "final\\s+(List|Map|Set|Collection)"
+    suggestion: "Use Collections.unmodifiableList() or ImmutableList"
+
+  string_concatenation:
+    description: "String concatenation in loops is inefficient"
+    severity: medium
+    pattern: "for\\s*\\(.*\\+.*String|while\\s*\\(.*\\+.*String"
+    suggestion: "Use StringBuilder for multiple concatenations"
+
+  magic_string:
+    description: "Magic strings should be constants"
+    severity: medium
+    pattern: "['\"][A-Z_]{3,}['\"]"
+    suggestion: "Extract to named constants"
+
+# Deprecated patterns
+deprecated_imports:
+  "java.util.Date": "Use java.time.LocalDate/LocalDateTime"
+  "java.util.Calendar": "Use java.time API"
+  "java.util.Vector": "Use ArrayList or CopyOnWriteArrayList"
+  "java.util.Hashtable": "Use HashMap or ConcurrentHashMap"
+  "java.util.Stack": "Use Deque (ArrayDeque)"
+  "java.util.StringTokenizer": "Use String.split or Scanner"
+  "sun.misc.BASE64": "Use java.util.Base64"
+
+# Naming conventions
+naming:
+  generic_names:
+    - data
+    - result
+    - temp
+    - obj
+    - val
+    - item
+    - list
+    - map
+    - str
+    - num
+    - flag
+    - x
+    - y
+    - z
+
+  conventions:
+    classes: PascalCase
+    interfaces: PascalCase
+    methods: camelCase
+    variables: camelCase
+    constants: UPPER_SNAKE_CASE
+    packages: lowercase
+
+# Quality thresholds (production-grade)
+thresholds:
+  complexity: 12          # Maintainable, testable code
+  function_length: 50     # Single responsibility
+  nesting_depth: 3        # Readable code
+  file_length: 400        # Encourages class extraction
+  comment_ratio: 0.3
+  class_ratio: 0.3
+
+# File exclusions
+exclusions:
+  # Skip entire analysis (autogenerated, vendor, coverage, hidden dirs, data files)
+  skip_analysis:
+    - "**/.git/**"
+    - "**/target/**"
+    - "**/build/**"
+    - "**/.gradle/**"
+    - "**/.mvn/**"
+    - "**/.*/**"  # Hidden directories
+    - "**/*.json"  # JSON files excluded from complexity checks
+    - "**/vendor/**"
+    - "**/vendors/**"
+    - "**/third-party/**"
+    - "**/third_party/**"
+
+# AI anti-patterns
+anti_patterns:
+  god_class:
+    description: "Class with too many responsibilities"
+    max_methods: 20
+    max_fields: 15
+
+  copy_paste:
+    description: "Duplicated code blocks"
+    min_block_size: 5

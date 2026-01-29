@@ -1,0 +1,104 @@
+# Angular Framework Configuration for SEF Agents
+# Extends: typescript.yaml
+
+framework: angular
+base_language: typescript
+
+# Angular-specific debt patterns
+debt_patterns:
+  subscribe_without_unsubscribe:
+    description: "Observable subscriptions should be unsubscribed"
+    severity: high
+    pattern: "\\.subscribe\\("
+    suggestion: "Use async pipe, takeUntil, or unsubscribe in ngOnDestroy"
+
+  any_in_template:
+    description: "Using $any() in templates bypasses type checking"
+    severity: high
+    pattern: "\\$any\\("
+    suggestion: "Fix the type error properly"
+
+  direct_dom_access:
+    description: "Direct DOM access bypasses Angular"
+    severity: high
+    pattern: "document\\.(getElementById|querySelector)"
+    suggestion: "Use ViewChild, Renderer2, or ElementRef"
+
+  missing_trackby:
+    description: "ngFor without trackBy causes performance issues"
+    severity: medium
+    pattern: "\\*ngFor(?!.*trackBy)"
+    suggestion: "Add trackBy function for lists"
+
+  component_too_large:
+    description: "Component has too much logic"
+    severity: medium
+    pattern: "@Component"
+    suggestion: "Split into smaller components or services"
+
+  hardcoded_strings:
+    description: "Hardcoded strings block internationalization and localization"
+    severity: medium
+    pattern: ">\\s*[A-Z][a-z]+.*<"
+    suggestion: "Use Angular i18n or ngx-translate"
+
+  deprecated_http:
+    description: "Using deprecated Http module"
+    severity: high
+    pattern: "import.*from\\s*['\"]@angular/http['\"]"
+    suggestion: "Use HttpClient from @angular/common/http"
+
+  rxjs_compat:
+    description: "Using rxjs-compat (legacy)"
+    severity: medium
+    pattern: "from\\s*['\"]rxjs-compat"
+    suggestion: "Migrate to modern rxjs imports"
+
+  manual_change_detection:
+    description: "Manual change detection often indicates design issues"
+    severity: medium
+    pattern: "ChangeDetectorRef|detectChanges\\(\\)"
+    suggestion: "Use OnPush strategy with async pipe for better performance"
+
+# Angular naming conventions
+naming:
+  generic_names:
+    - data
+    - result
+    - temp
+    - handler
+    - service
+    - component
+    - item
+    - val
+
+  conventions:
+    components: PascalCase + Component suffix
+    services: PascalCase + Service suffix
+    modules: PascalCase + Module suffix
+    directives: camelCase + Directive suffix
+    pipes: camelCase + Pipe suffix
+    files: kebab-case
+
+# Angular-specific thresholds (production-grade)
+thresholds:
+  complexity: 10          # Lower than backend - templates add complexity
+  function_length: 50     # Single responsibility
+  nesting_depth: 3        # Readable code
+  file_length: 300        # Encourages component extraction
+  component_methods: 7    # Components should be focused
+  injected_services: 4    # >4 deps = too many responsibilities
+
+# Angular anti-patterns
+anti_patterns:
+  fat_component:
+    description: "Component with too much business logic"
+    max_methods: 10
+
+  service_in_component:
+    description: "Business logic should be in services"
+    suggestion: "Move logic to injectable service"
+
+  memory_leak:
+    description: "Subscriptions not cleaned up"
+    suggestion: "Use takeUntil pattern or async pipe"

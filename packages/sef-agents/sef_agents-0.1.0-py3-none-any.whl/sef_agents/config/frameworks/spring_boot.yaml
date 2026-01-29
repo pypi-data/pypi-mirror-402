@@ -1,0 +1,117 @@
+# Spring Boot Framework Configuration for SEF Agents
+# Extends: java.yaml
+
+framework: spring_boot
+base_language: java
+
+# Spring Boot-specific debt patterns
+debt_patterns:
+  field_injection:
+    description: "Field injection hides dependencies, breaks immutability, makes testing hard"
+    severity: high
+    pattern: "@Autowired\\s+private"
+    suggestion: "Use constructor injection (Spring auto-wires single constructor)"
+
+  missing_transactional:
+    description: "Data modification without transaction risks partial writes"
+    severity: high
+    pattern: "@Service(?!.*@Transactional)"
+    suggestion: "Add @Transactional to service class or methods"
+
+  entity_in_controller:
+    description: "Exposing JPA entities in API responses"
+    severity: high
+    pattern: "@RestController.*@Entity|ResponseEntity<.*Entity>"
+    suggestion: "Use DTOs for API responses"
+
+  n_plus_one:
+    description: "Potential N+1 query problem"
+    severity: high
+    pattern: "@OneToMany(?!.*fetch.*EAGER|.*@BatchSize)"
+    suggestion: "Use @BatchSize, JOIN FETCH, or EntityGraph"
+
+  missing_validation:
+    description: "Unvalidated input is security risk and causes unclear errors"
+    severity: high
+    pattern: "@RequestBody(?!.*@Valid)"
+    suggestion: "Add @Valid annotation for request validation"
+
+  hardcoded_credentials:
+    description: "Credentials should be externalized"
+    severity: critical
+    pattern: "password\\s*=\\s*['\"][^'\"]+['\"]"
+    suggestion: "Use @Value or ConfigurationProperties"
+
+  missing_exception_handler:
+    description: "Controllers should have exception handling"
+    severity: medium
+    pattern: "@RestController(?!.*@ExceptionHandler|@ControllerAdvice)"
+    suggestion: "Add @ControllerAdvice for global exception handling"
+
+  deprecated_web_security:
+    description: "WebSecurityConfigurerAdapter is deprecated"
+    severity: high
+    pattern: "extends\\s+WebSecurityConfigurerAdapter"
+    suggestion: "Use SecurityFilterChain bean"
+
+  blocking_in_reactive:
+    description: "Blocking calls in reactive pipeline"
+    severity: high
+    pattern: "\\.block\\(\\)|Mono\\.just.*\\.subscribe"
+    suggestion: "Use reactive operators throughout"
+
+  circular_dependency:
+    description: "Circular dependency between beans"
+    severity: high
+    pattern: "@Lazy.*@Autowired|@Autowired.*@Lazy"
+    suggestion: "Refactor to remove circular dependency"
+
+  sql_injection:
+    description: "Potential SQL injection"
+    severity: critical
+    pattern: "createQuery\\(.*\\+|createNativeQuery\\(.*\\+"
+    suggestion: "Use parameterized queries or JPA Criteria"
+
+# Spring naming conventions
+naming:
+  generic_names:
+    - data
+    - result
+    - response
+    - request
+    - entity
+    - dto
+    - service
+    - repository
+
+  conventions:
+    controllers: PascalCase + Controller suffix
+    services: PascalCase + Service suffix
+    repositories: PascalCase + Repository suffix
+    entities: PascalCase
+    dtos: PascalCase + DTO/Request/Response suffix
+    config: PascalCase + Config suffix
+
+# Spring-specific thresholds (production-grade)
+thresholds:
+  complexity: 12          # Maintainable, testable code
+  function_length: 50     # Single responsibility
+  nesting_depth: 3        # Readable code
+  file_length: 300        # Single responsibility
+  controller_methods: 7   # REST resources should be focused
+  service_dependencies: 4 # >4 deps = too many responsibilities
+
+# Spring anti-patterns
+anti_patterns:
+  god_service:
+    description: "Service with too many responsibilities"
+    max_methods: 15
+    max_dependencies: 5
+
+  anemic_domain:
+    description: "Entities with only getters/setters"
+    suggestion: "Add domain logic to entities"
+
+  transaction_boundary:
+    description: "Transaction spanning multiple services"
+    suggestion: "Review transaction boundaries"
