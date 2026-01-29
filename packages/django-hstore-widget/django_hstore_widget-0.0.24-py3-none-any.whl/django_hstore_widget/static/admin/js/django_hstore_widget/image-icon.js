@@ -1,0 +1,1 @@
+import{I as o,d as r}from"./p-DEkVJ2lr.js";const s=o,p=r;export{s as ImageIcon,p as defineCustomElement}
