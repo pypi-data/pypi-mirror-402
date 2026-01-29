@@ -1,0 +1,219 @@
+2018-06-28
+----------
+
+
+
+2026-01-19
+----------
+
+Notes on moving to uv from (and running with uv) https://x.com/i/grok?conversation=2002198771770290596
+
+
+Moving to uv
+============
+
+    uv init
+    uv add -r requirements.txt
+    uv add --dev -r requirements_dev.txt
+    uv sync
+
+Running on uv
+=============
+
+    uv run python your_script.py
+    uv run pytest                      # If you have tests
+    uv run ruff check .                # If you added ruff as a dev tool
+
+
+Updating on uv
+==============
+
+    uv lock --upgrade     # Update all packages to latest compatible versions
+    uv sync               # Apply the updates to the environment
+
+    uv add --dev ruff mypy pytest
+    uv add requests
+    
+    uv run pip install ipython # for internal dev
+                               # no need to publish in .toml
+    
+bumping a version and pushing branch and pushing tags
+=====================================================
+  
+::  
+
+    uv version --bump patch/minor/major
+
+    git commit -m "Bump version to $(uv version --short)"
+    git tag "v$(uv version --short)"
+    git push origin <branch>
+    git push origin tag "v$(uv version --short)"
+
+Now publish
+===========
+
+::
+  
+    uv build
+    uv publish --token # token comes here
+
+
+
+Lists of files changing when uv is used
+=======================================
+
+files changed::
+
+    .github/workflows/tests.yml # for github actions
+    pyclearsky/__init__.py # version is got from pyproject.toml
+    docs/requirements.txt # needed for readthedocs
+    pyproject.toml # uv likes having everything here
+
+Once uv is set upthese files can be removed::
+
+    requirements.txt
+    requirements_dev.txt
+    setup.cfg
+    setup.py
+
+
+Webhooks from github to readthdocs
+==================================
+
+- login to readthedocs using github
+- copy webhooks and secret from readthedocs to github
+
+
+update doc strings
+
+2018-06-15
+----------
+- what next ?
+- graphics
+- should it be a separate package ?
+    - pydrawsunpath - does not trigger result in google search.
+
+
+2018-06-14
+----------
+- write a lon, lat converter for radians
+- maybe later
+
+
+2018-06-08
+----------
+- subclassing Observer failed due to complexity
+- try using decorators to do this
+- not using either of the above
+
+2018-05-31
+----------
+- sunrise and sunset functions
+- localnoon or transit function
+- list of thtimes to get sunpath
+- clip thetimes with sunrise, sunset (do <= or <)
+
+2018-05-28
+----------
+- put in copyright on all files  - DONE
+- add stephen to the contributors - DONE
+
+- ***** click is problematic on python3 - don't implement click ***
+- http://click.pocoo.org/5/python3/
+- incorporate click
+    - pywphem_sunpath thetime lon, lat, tz dst
+    - see http://click.pocoo.org/5/setuptools/ for cli.py to work for real
+    - https://dbader.org/blog/python-commandline-tools-with-click
+- ***** click is problematic on python3 - don't implement click ***
+
+remove all click stuff - DONE
+
+2018-05-26
+----------
+ins sunpos(), thetime should be in datetime type - DONE
+- complete docstrings - DONE
+- update Readme - DONE
+- test setup.py - DONE
+- release to pypi - DONE
+- Release the docs - DONE
+
+
+2018-04-24
+----------
+How to run twine
+
+= git commit
+- make clean
+- bumpversion patch # or minor or major
+    - document changes to HISTORY.rst before bumping
+
+Create some distributions in the normal way:
+
+    python setup.py sdist bdist_wheel
+
+Upload with twine to Test PyPI and verify things look right. Twine will automatically prompt for your username and password:
+
+    twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+    username: ...
+    password:
+
+Upload to PyPI:
+
+    twine upload dist/*
+
+make sure to set logins in ~/.pypirc
+see https://github.com/pypa/setuptools/issues/941
+
+update to readthedocs
+
+Done!
+
+2018-05-07
+----------
+To get API documentation do the following:
+- in lib\python2.7\site-packages
+- add a *.pth file with one line (ex: ppath.pth)
+- location of this package you are working on on this computer (do pwd)
+- /Users/santoshphilip/Documents/coolshadow/github/pyephem_sunpath
+
+set up for numpy documentation style
+- add 'sphinx.ext.napoleon' to Sphinx extension in docs/conf.py
+- now extensions look like this::
+    extensions = ['sphinx.ext.autodoc', 'sphinx.ext.viewcode',
+        'sphinx.ext.napoleon',
+    ]
+- examples of numpy docs: https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_numpy.html
+
+TODO :
+- release on readthedocs
+- release on pypi
+
+see for long lat or lat long:
+- https://en.wikipedia.org/wiki/ISO_6709
+- https://gis.stackexchange.com/questions/6037/latlon-or-lonlat-whats-the-right-way-to-display-coordinates-and-inputs
+- https://stackoverflow.com/questions/18636564/lat-long-or-long-lat
+
+Have a pure radians version - Where everything works the way radians does
+
+# First time
+python3 -m venv ~/venvs/py3pyephem_sunpath
+source ~/venvs/py3pyephem_sunpath/bin/activate
+
+# other times
+source ~/venvs/py3pyephem_sunpath/bin/activate
+
+
+more on UTC, timezones,
+https://www.e-education.psu.edu/eme810/node/530
+https://www.britannica.com/science/solar-time#ref144523
+
+2018-05-06
+----------
+- more info in README.rst - DOME
+- write sunposUTC() - DONE
+
+2018-05-05
+----------
+
+install ipython in virtualenv
+python2 -m pip install ipython
