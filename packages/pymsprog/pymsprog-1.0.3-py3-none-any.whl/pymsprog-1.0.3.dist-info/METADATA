@@ -1,0 +1,197 @@
+Metadata-Version: 2.3
+Name: pymsprog
+Version: 1.0.3
+Summary: 
+Author: noemi.montobbio
+Author-email: noemi.montobbio@gmail.com
+Requires-Python: >=3.9,<4.0
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Requires-Dist: numpy (>=1.26,<2.0)
+Requires-Dist: pandas (>=2.3.0,<3.0.0)
+Description-Content-Type: text/markdown
+
+
+<p align="left">
+  <img src="https://raw.githubusercontent.com/noemimontobbio/py-MSprog/main/docs/source/_static/logo_py.png" width="200"/>
+</p>
+
+[//]: # ("https://raw.githubusercontent.com/noemimontobbio/py-MSprog/main/docs/source/_static/logo_py.png")
+[//]: # ("docs/source/_static/logo_py.png")
+
+![Python Version](https://img.shields.io/badge/python-3.9%2B-blue.svg)
+
+[📖 **Documentation and TUTORIALS**](https://pymsprog.readthedocs.io)
+
+`pymsprog` is a Python package providing tools for exhaustive and reproducible
+analysis of disability course in multiple sclerosis (MS) from longitudinal data. 
+An [R version](https://github.com/noemimontobbio/msprog) of the library is available as well.
+
+Its core function, `MSprog()`, detects and characterises the evolution
+of an outcome measure (Expanded Disability Status Scale, EDSS; Nine-Hole Peg Test, NHPT;
+Timed 25-Foot Walk, T25FW; Symbol Digit Modalities Test, SDMT; or any custom outcome
+measure) for one or more subjects, based on repeated assessments through
+time and on the dates of acute episodes (if any).
+
+The package also provides a small toy dataset for testing and demonstration purposes.
+The dataset contains artificially generated Extended Disability Status Scale (EDSS) and 
+Symbol Digit Modalities Test (SDMT) longidutinal scores, visit dates, and relapse onset dates
+in a small cohort of example patients.
+
+**If you use this package in your work, please cite as follows:**<br />
+Montobbio N, Carmisciano L, Signori A, et al. 
+*Creating an automated tool for a consistent and repeatable evaluation of disability progression 
+in clinical studies for multiple sclerosis.* 
+Mult Scler. 2024;30(9):1185-1192. doi:10.1177/13524585241243157
+
+For any questions, requests for new features, or bug reporting, please
+contact: **noemi.montobbio@unige.it**. Any feedback is highly
+appreciated!
+
+## Installation
+
+You can install the latest release of `pymsprog`  with:
+```bash
+pip install pymsprog
+```
+Alternatively, the development version can be downloaded from 
+[GitHub](https://github.com/noemimontobbio/pymsprog).
+
+
+## Quickstart
+
+The `MSprog()` function detects disability events sequentially 
+by scanning the outcome values in chronological order. 
+
+Let's start by importing toy data and applying `MSprog()` to analyse EDSS course with 
+the default settings.
+
+```python
+from pymsprog import MSprog, load_toy_data
+
+# Load toy data
+toydata_visits, toydata_relapses = load_toy_data()
+
+toydata_visits.head()
+'''
+   id       date  EDSS  SDMT
+0   1 2021-09-23   4.5    50
+1   1 2021-11-03   4.5    50
+2   1 2022-01-19   4.5    51
+3   1 2022-04-27   4.5    57
+4   1 2022-07-12   5.5    55
+'''
+
+toydata_relapses.head()
+'''
+   id       date
+0   2 2021-06-12
+1   2 2022-10-25
+2   3 2022-12-01
+3   6  2022-12-18
+'''
+
+# Detect events
+summary, results = MSprog(toydata_visits,                          # insert data on visits
+                 relapse=toydata_relapses,                         # insert data on relapses
+                 subj_col='id', value_col='EDSS', date_col='date', # specify column names 
+                 outcome='edss')                                   # specify outcome type
+'''
+---
+Outcome: EDSS
+Confirmation over: 84 (-7, +730.5) days
+Baseline: fixed
+Relapse influence (baseline): [30, 0] days
+Relapse influence (event): [0, 0] days
+Relapse influence (confirmation): [30, 0] days
+Events detected: firstCDW
+        
+---
+Total subjects: 6
+---
+Subjects with disability worsening: 3 (PIRA: 2; RAW: 1)
+'''
+```
+
+Several qualitative and quantitative options for event detection are given as arguments that 
+can be set by the user and reported as a complement to the results to ensure reproducibility. 
+For example, instead of only detecting the first confirmed disability worsening (CDW) for 
+each subject, we can detect *all* disability events sequentially by moving the baseline after
+each event (`event='multiple', baseline='roving'`)`:
+
+```python
+summary, results = MSprog(toydata_visits,                          # insert data on visits
+                 relapse=toydata_relapses,                         # insert data on relapses
+                 subj_col='id', value_col='EDSS', date_col='date', # specify column names 
+                 outcome='edss',                                   # specify outcome type
+                 event='multiple', baseline='roving')              # modify default settings
+'''
+---
+Outcome: EDSS
+Confirmation over: 84 (-7, +730.5) days
+Baseline: roving
+Relapse influence (baseline): [30, 0] days
+Relapse influence (event): [0, 0] days
+Relapse influence (confirmation): [30, 0] days
+Events detected: multiple
+        
+---
+Total subjects: 6
+---
+Subjects with CDW: 4 (PIRA: 4; RAW: 1)
+Subjects with CDI: 2
+---
+CDW events: 5 (PIRA: 4; RAW: 1)
+CDI events: 2
+'''
+```
+
+The function prints out a concise report of the results, as well as 
+**the specific set of options used to obtain them**. 
+Complete results are stored in two `pandas.DataFrame` objects generated by the function call:
+
+1. A summary table providing the event count for each subject and event type:
+```python
+print(summary)
+'''
+  event_sequence  CDI  CDW  RAW  PIRA  undef_CDW
+1           PIRA    0    1    0     1          0
+2      RAW, PIRA    0    2    1     1          0
+3                   0    0    0     0          0
+4      CDI, PIRA    1    1    0     1          0
+5           PIRA    0    1    0     1          0
+6            CDI    1    0    0     0          0
+'''
+```
+
+where: `event_sequence` specifies the order of the events; 
+the other columns count the events of each type.
+    
+2. Extended info on each event for all subjects:
+```python
+print(results)
+'''
+   id  nevent event_type total_fu  time2event bl2event conf84 PIRA_conf84 sust_days sust_last
+0   1       1       PIRA      534         292    292.0      1           1       242         1
+1   2       1        RAW      730         198    198.0      1        None        84         0
+2   2       2       PIRA      730         539    257.0      1           1       191         1
+3   3       0       None      491         491     None   None        None      None      None
+4   4       1       impr      586          77     77.0      1        None        98         0
+5   4       2       PIRA      586         304    129.0      1           1       282         1
+6   5       1       PIRA      637         140    140.0      1           1       497         1
+7   6       1       impr      491         120    120.0      1        None       232         0
+'''
+```
+
+where: `nevent` is the cumulative event count for each subject; `event_type` characterises the event; 
+`total_fu` is the total follow-up period of the subject in days;
+`time2event` is the number of days from the beginning of the follow-up to the event 
+(coincides with length of follow-up if no event is detected); 
+`bl2event` is the number of days from the current baseline to the event; 
+`conf84` reports whether the event was confirmed over 84 days (12 weeks); 
+`sust_days` is the number of days for which the event was sustained; 
+`sust_last` reports whether the event was sustained until the last visit.
