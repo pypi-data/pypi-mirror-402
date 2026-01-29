@@ -1,0 +1,83 @@
+Metadata-Version: 2.3
+Name: pinexq-procon
+Version: 2.3.0
+Summary: Framework to create containers for DataCybernetic's PineXQ computing platform
+Author: Sebastian Höfer, Carsten Blank, Mathias Reichardt
+Author-email: Sebastian Höfer <hoefer@data-cybernetics.com>, Carsten Blank <blank@data-cybernetics.com>, Mathias Reichardt <reichardt@data-cybernetics.com>
+License: Copyright (C) data cybernetics ssc GmbH - All Rights Reserved
+         <contactus@data-cybernetics.com>, December 2023
+Requires-Dist: aio-pika==9.5.5
+Requires-Dist: click>=8.1.3
+Requires-Dist: docstring-parser==0.*
+Requires-Dist: httpx-caching>=0.1a4
+Requires-Dist: httpx==0.*
+Requires-Dist: pinexq-client>=1.0.0
+Requires-Dist: pydantic>=2.10.0
+Requires-Dist: pyjwt>=2.10.0
+Requires-Dist: rich>=13.3.2
+Requires-Dist: stamina>=24.2.0
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+
+# PineXQ ProCon Framework
+
+Computations in DC-Cloud are done by **Workers** running inside a **ProcessingContainer**, or short "ProCon", which is also the name of the framework.
+ProCon provides an unobtrusive wrapper around function definitions without introducing new semantics, allowing for a clean definition of the computational task, while handling all cloud-related communication and data-management transparently in the background.
+This removes the code and configuration required from the function implementation.
+
+### Installation
+
+To install the package use the `pip` command, to either install from a package feed:
+```
+pip install pinexq-procon
+```
+
+
+### Creating a container
+
+To publish a function in a container it has to be a method of a class inheriting from the `Step` class.
+
+```python
+from pinexq.procon.step import Step # import package
+
+class MyStepCollection(Step):  # define the container class
+    def calculate_square(self, x: float) -> float:  # define a step function
+        """Calculate the square of x
+
+        :param x: a float number
+        :returns: the square of x
+        """
+        return x ** 2
+
+    # More step functions can go in the same class    
+
+if __name__ == '__main__':  # add script guard
+    MyStepCollection()  # run the container - this will spawn the cli
+```
+
+It is mandatory to annotate the types of parameters and return value.
+Docstrings are optional, but highly recommended.
+
+The [documentation](doc/ProCon.md) has a detailed section about [implementing processing-steps](doc/Implementing-a-Step.md).
+
+
+### Running a Step-function locally
+
+The Python file with the container is itself a cli-tool. 
+You get a list of all available commands with the `--help` parameter.
+
+```
+python ./my_step_file.py --help
+```
+
+With the `run` option you can call a function in the container directly and the result is written to the console.
+
+```
+python ./my_step_file.py run --function calculate_square --parameters "{'x': 5}"
+25
+```
+
+You can find full list of available commands in the [cli documentation](doc/Using-Procon-From-Cli.md).
+All possible parameters and environment variables are listed [here](doc/Parameters.md).
+
+
