@@ -1,0 +1,1219 @@
+use anyhow::Result;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Instant;
+
+use crate::compress::{compress, is_compressed_extension, Compression};
+use crate::delta::{generate_delta_streaming, BlockChecksum as DeltaBlockChecksum};
+use crate::path::SyncPath;
+use crate::server::protocol::{
+    delta_block_size, Action, Decision, DeltaOp, FileListEntry, SymlinkEntry, DATA_FLAG_COMPRESSED,
+    DELTA_MIN_SIZE,
+};
+use crate::ssh::config::SshConfig;
+use crate::sync::live_progress::ProgressState;
+use crate::sync::scanner::{self, ScanOptions};
+use crate::sync::{
+    ChangeAction, DirectoryChange, DryRunDetails, FileChange, SymlinkChange, SyncStats,
+};
+use crate::transport::server::ServerSession;
+
+/// Minimum size for compression (1MB)
+const COMPRESS_MIN_SIZE: u64 = 1024 * 1024;
+
+/// Number of delta checksum requests to pipeline before reading responses
+const PIPELINE_DEPTH: usize = 8;
+
+/// Source entry with all info needed for transfer
+struct SourceEntry {
+    rel_path: String,
+    abs_path: Arc<PathBuf>,
+    size: u64,
+    mtime: i64,
+    mode: u32,
+    is_dir: bool,
+    is_symlink: bool,
+    symlink_target: Option<String>,
+}
+
+/// Sync from local source to remote destination using server protocol
+pub async fn sync_server_mode(
+    source: &Path,
+    dest: &SyncPath,
+    dry_run: bool,
+    progress: Option<Arc<ProgressState>>,
+) -> Result<SyncStats> {
+    sync_server_mode_with_config(source, dest, dry_run, progress, None).await
+}
+
+/// Sync from local source to remote destination using server protocol with optional SSH config
+pub async fn sync_server_mode_with_config(
+    source: &Path,
+    dest: &SyncPath,
+    dry_run: bool,
+    progress: Option<Arc<ProgressState>>,
+    ssh_config: Option<&SshConfig>,
+) -> Result<SyncStats> {
+    let start = Instant::now();
+
+    // Connect to server
+    let mut session = connect_with_config(dest, ssh_config).await?;
+    tracing::debug!("Connected to server (dry_run: {})", dry_run);
+
+    // Scan source
+    tracing::debug!("Scanning source...");
+    let source_entries = scan_source(source).await?;
+
+    // Separate entries by type
+    let mut directories: Vec<String> = Vec::new();
+    let mut files: Vec<SourceEntry> = Vec::new();
+    let mut symlinks: Vec<SourceEntry> = Vec::new();
+
+    for entry in source_entries {
+        if entry.is_dir {
+            directories.push(entry.rel_path);
+        } else if entry.is_symlink {
+            symlinks.push(entry);
+        } else {
+            files.push(entry);
+        }
+    }
+
+    // Build protocol entries (files only for FILE_LIST comparison)
+    let proto_entries: Vec<FileListEntry> = files
+        .iter()
+        .map(|e| FileListEntry {
+            path: e.rel_path.clone(),
+            size: e.size,
+            mtime: e.mtime,
+            mode: e.mode,
+            flags: 0,
+            symlink_target: None,
+        })
+        .collect();
+
+    let total_files = proto_entries.len();
+    let total_dirs = directories.len();
+    let total_symlinks = symlinks.len();
+
+    tracing::info!(
+        "Source: {} files, {} dirs, {} symlinks",
+        total_files,
+        total_dirs,
+        total_symlinks
+    );
+
+    // Initialize detailed dry-run tracking
+    let mut file_changes: Vec<FileChange> = Vec::new();
+    let mut dir_changes: Vec<DirectoryChange> = Vec::new();
+    let mut symlink_changes: Vec<SymlinkChange> = Vec::new();
+
+    // Step 1: Create directories (if any)
+    let mut dirs_created = 0u64;
+    if !directories.is_empty() {
+        if dry_run {
+            tracing::debug!("[DRY-RUN] Would create {} directories", directories.len());
+            dirs_created = directories.len() as u64;
+            // Track directory changes
+            for dir in &directories {
+                dir_changes.push(DirectoryChange {
+                    path: PathBuf::from(dir),
+                    action: ChangeAction::Create,
+                });
+            }
+        } else {
+            tracing::debug!("Creating {} directories...", directories.len());
+            session.send_mkdir_batch(directories).await?;
+            let ack = session.read_mkdir_ack().await?;
+            dirs_created = ack.created as u64;
+            if !ack.failed.is_empty() {
+                for (path, err) in &ack.failed {
+                    tracing::warn!("Failed to create dir {}: {}", path, err);
+                }
+            }
+        }
+    }
+
+    // Step 2: Send file list and get decisions
+    tracing::debug!("Sending file list ({} files)...", total_files);
+    session.send_file_list(proto_entries.clone()).await?;
+
+    tracing::debug!("Waiting for server decisions...");
+    let ack = session.read_ack().await?;
+
+    // Count files needing transfer
+    let files_to_transfer = ack
+        .decisions
+        .iter()
+        .filter(|d| matches!(d.action, Action::Create | Action::Update))
+        .count();
+    tracing::info!("{} files need transfer", files_to_transfer);
+
+    // Track skipped files for detailed dry-run
+    if dry_run {
+        for decision in &ack.decisions {
+            if decision.action == Action::Skip {
+                let entry = &files[decision.index as usize];
+                file_changes.push(FileChange {
+                    path: PathBuf::from(&entry.rel_path),
+                    action: ChangeAction::Skip,
+                    size: entry.size,
+                    transfer_bytes: 0,
+                    would_use_delta: false,
+                    would_compress: false,
+                    skip_reason: Some("Already up-to-date".to_string()),
+                });
+            }
+        }
+    }
+
+    // Step 3: Transfer files - separate creates and updates
+    let mut bytes_transferred = 0u64;
+    let mut files_created = 0u64;
+    let mut files_updated = 0u64;
+    let mut bytes_would_add = 0u64;
+    let mut bytes_would_change = 0u64;
+
+    // Categorize by action type
+    let creates: Vec<(u32, &SourceEntry)> = ack
+        .decisions
+        .iter()
+        .filter_map(|d| {
+            if d.action == Action::Create {
+                Some((d.index, &files[d.index as usize]))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    let updates: Vec<(u32, &SourceEntry)> = ack
+        .decisions
+        .iter()
+        .filter_map(|d| {
+            if d.action == Action::Update {
+                Some((d.index, &files[d.index as usize]))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    // Initialize progress tracking if provided
+    if let Some(ref progress) = progress {
+        let total_bytes: u64 = creates.iter().map(|(_, e)| e.size).sum::<u64>()
+            + updates.iter().map(|(_, e)| e.size).sum::<u64>();
+        let total_transfers = creates.len() + updates.len();
+        progress.set_totals(total_bytes, total_transfers);
+    }
+
+    // Step 3a: Handle CREATES with full file transfer (+ compression)
+    if !creates.is_empty() {
+        if dry_run {
+            tracing::debug!("[DRY-RUN] Would transfer {} new files", creates.len());
+            for (_, entry) in &creates {
+                files_created += 1;
+                bytes_would_add += entry.size;
+
+                // Track detailed file change
+                let would_compress =
+                    entry.size >= COMPRESS_MIN_SIZE && !is_compressed_extension(&entry.rel_path);
+                file_changes.push(FileChange {
+                    path: PathBuf::from(&entry.rel_path),
+                    action: ChangeAction::Create,
+                    size: entry.size,
+                    transfer_bytes: entry.size, // Full transfer for creates
+                    would_use_delta: false,
+                    would_compress,
+                    skip_reason: None,
+                });
+            }
+        } else {
+            tracing::debug!("Transferring {} new files...", creates.len());
+
+            let paths: Vec<(u32, Arc<PathBuf>, String, u64)> = creates
+                .iter()
+                .map(|(idx, e)| (*idx, e.abs_path.clone(), e.rel_path.clone(), e.size))
+                .collect();
+
+            // Read and optionally compress files
+            let files_data: Vec<(u32, Vec<u8>, u8)> = tokio::task::spawn_blocking(move || {
+                paths
+                    .into_iter()
+                    .filter_map(|(idx, path, rel_path, size)| {
+                        std::fs::read(&*path).ok().map(|data| {
+                            // Compress if file is large enough and not already compressed
+                            let (send_data, flags) = if size >= COMPRESS_MIN_SIZE
+                                && !is_compressed_extension(&rel_path)
+                            {
+                                match compress(&data, Compression::Zstd) {
+                                    Ok(compressed) if compressed.len() < data.len() => {
+                                        (compressed, DATA_FLAG_COMPRESSED)
+                                    }
+                                    _ => (data, 0),
+                                }
+                            } else {
+                                (data, 0)
+                            };
+                            (idx, send_data, flags)
+                        })
+                    })
+                    .collect()
+            })
+            .await?;
+
+            // Send all creates - track progress for each file
+            // We need to map idx back to original entry for progress tracking
+            let idx_to_entry: HashMap<u32, &SourceEntry> =
+                creates.iter().map(|(idx, e)| (*idx, *e)).collect();
+
+            for (idx, data, flags) in &files_data {
+                // Start transfer progress
+                if let Some(ref progress) = progress {
+                    if let Some(entry) = idx_to_entry.get(idx) {
+                        progress.start_transfer(PathBuf::from(&entry.rel_path));
+                    }
+                }
+
+                bytes_transferred += data.len() as u64;
+                session
+                    .send_file_data_with_flags(*idx, 0, *flags, data.clone())
+                    .await?;
+            }
+            session.flush().await?;
+
+            // Read confirmations
+            for (idx, _, _) in &files_data {
+                let done = session.read_file_done().await?;
+                if done.status != 0 {
+                    tracing::error!("Create failed: index {} status {}", done.index, done.status);
+                } else {
+                    files_created += 1;
+                    // Finish transfer progress
+                    if let Some(ref progress) = progress {
+                        if let Some(entry) = idx_to_entry.get(idx) {
+                            progress.finish_transfer(&PathBuf::from(&entry.rel_path), entry.size);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Step 3b: Handle UPDATES - use delta sync for large files
+    if !updates.is_empty() {
+        if dry_run {
+            tracing::debug!("[DRY-RUN] Would update {} files", updates.len());
+            for (_, entry) in &updates {
+                files_updated += 1;
+                bytes_would_change += entry.size;
+
+                // Track detailed file change
+                let would_use_delta = entry.size >= DELTA_MIN_SIZE;
+                let would_compress =
+                    entry.size >= COMPRESS_MIN_SIZE && !is_compressed_extension(&entry.rel_path);
+                // For dry-run, estimate transfer bytes (conservative: assume 50% for delta)
+                let transfer_bytes = if would_use_delta {
+                    entry.size / 2
+                } else {
+                    entry.size
+                };
+                file_changes.push(FileChange {
+                    path: PathBuf::from(&entry.rel_path),
+                    action: ChangeAction::Update,
+                    size: entry.size,
+                    transfer_bytes,
+                    would_use_delta,
+                    would_compress,
+                    skip_reason: None,
+                });
+            }
+        } else {
+            let (delta_candidates, full_updates): (Vec<_>, Vec<_>) =
+                updates.iter().partition(|(_, e)| e.size >= DELTA_MIN_SIZE);
+
+            // Process delta candidates with pipelined checksum requests
+            if !delta_candidates.is_empty() {
+                tracing::debug!(
+                    "Delta syncing {} large files (>{}KB) with pipeline depth {}...",
+                    delta_candidates.len(),
+                    DELTA_MIN_SIZE / 1024,
+                    PIPELINE_DEPTH
+                );
+
+                // Collect pending requests for batching
+                let mut pending: Vec<(u32, &SourceEntry, u32)> = Vec::with_capacity(PIPELINE_DEPTH);
+
+                for (idx, entry) in &delta_candidates {
+                    let file_idx = *idx;
+                    let block_size = delta_block_size(entry.size);
+
+                    // Send checksum request without waiting (no flush)
+                    session
+                        .send_checksum_req_no_flush(file_idx, block_size)
+                        .await?;
+                    pending.push((file_idx, *entry, block_size));
+
+                    // Process batch when full
+                    if pending.len() >= PIPELINE_DEPTH {
+                        session.flush().await?;
+                        let (updated, transferred) =
+                            process_delta_batch(&mut session, &pending, progress.as_ref()).await?;
+                        files_updated += updated;
+                        bytes_transferred += transferred;
+                        pending.clear();
+                    }
+                }
+
+                // Process remaining files
+                if !pending.is_empty() {
+                    session.flush().await?;
+                    let (updated, transferred) =
+                        process_delta_batch(&mut session, &pending, progress.as_ref()).await?;
+                    files_updated += updated;
+                    bytes_transferred += transferred;
+                }
+            }
+
+            // Process small file updates with full transfer
+            if !full_updates.is_empty() {
+                tracing::debug!(
+                    "Full transfer for {} small file updates...",
+                    full_updates.len()
+                );
+
+                let paths: Vec<(u32, Arc<PathBuf>, String, u64)> = full_updates
+                    .iter()
+                    .map(|(idx, e)| (*idx, e.abs_path.clone(), e.rel_path.clone(), e.size))
+                    .collect();
+
+                let files_data: Vec<(u32, Vec<u8>, u8)> = tokio::task::spawn_blocking(move || {
+                    paths
+                        .into_iter()
+                        .filter_map(|(idx, path, rel_path, size)| {
+                            std::fs::read(&*path).ok().map(|data| {
+                                let (send_data, flags) = if size >= COMPRESS_MIN_SIZE
+                                    && !is_compressed_extension(&rel_path)
+                                {
+                                    match compress(&data, Compression::Zstd) {
+                                        Ok(compressed) if compressed.len() < data.len() => {
+                                            (compressed, DATA_FLAG_COMPRESSED)
+                                        }
+                                        _ => (data, 0),
+                                    }
+                                } else {
+                                    (data, 0)
+                                };
+                                (idx, send_data, flags)
+                            })
+                        })
+                        .collect()
+                })
+                .await?;
+
+                // Map idx to entry for progress tracking
+                let idx_to_entry: HashMap<u32, &SourceEntry> =
+                    full_updates.iter().map(|(idx, e)| (*idx, *e)).collect();
+
+                for (idx, data, flags) in &files_data {
+                    // Start transfer progress
+                    if let Some(ref progress) = progress {
+                        if let Some(entry) = idx_to_entry.get(idx) {
+                            progress.start_transfer(PathBuf::from(&entry.rel_path));
+                        }
+                    }
+
+                    bytes_transferred += data.len() as u64;
+                    session
+                        .send_file_data_with_flags(*idx, 0, *flags, data.clone())
+                        .await?;
+                }
+                session.flush().await?;
+
+                for (idx, _, _) in &files_data {
+                    let done = session.read_file_done().await?;
+                    if done.status != 0 {
+                        tracing::error!(
+                            "Update failed: index {} status {}",
+                            done.index,
+                            done.status
+                        );
+                    } else {
+                        files_updated += 1;
+                        // Finish transfer progress
+                        if let Some(ref progress) = progress {
+                            if let Some(entry) = idx_to_entry.get(idx) {
+                                progress
+                                    .finish_transfer(&PathBuf::from(&entry.rel_path), entry.size);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Step 4: Create symlinks (if any)
+    let mut symlinks_created = 0u64;
+    if !symlinks.is_empty() {
+        if dry_run {
+            tracing::debug!("[DRY-RUN] Would create {} symlinks", symlinks.len());
+            symlinks_created = symlinks.len() as u64;
+            // Track symlink changes
+            for symlink in &symlinks {
+                if let Some(target) = &symlink.symlink_target {
+                    symlink_changes.push(SymlinkChange {
+                        path: PathBuf::from(&symlink.rel_path),
+                        action: ChangeAction::Create,
+                        target: target.clone(),
+                    });
+                }
+            }
+        } else {
+            tracing::debug!("Creating {} symlinks...", symlinks.len());
+
+            let symlink_entries: Vec<SymlinkEntry> = symlinks
+                .iter()
+                .filter_map(|e| {
+                    e.symlink_target.as_ref().map(|target| SymlinkEntry {
+                        path: e.rel_path.clone(),
+                        target: target.clone(),
+                    })
+                })
+                .collect();
+
+            if !symlink_entries.is_empty() {
+                session.send_symlink_batch(symlink_entries).await?;
+                let ack = session.read_symlink_ack().await?;
+                symlinks_created = ack.created as u64;
+                if !ack.failed.is_empty() {
+                    for (path, err) in &ack.failed {
+                        tracing::warn!("Failed to create symlink {}: {}", path, err);
+                    }
+                }
+            }
+        }
+    }
+
+    let duration = start.elapsed();
+    tracing::info!(
+        "Server sync complete: {} files ({} created, {} updated), {} dirs, {} symlinks in {:?}",
+        files_to_transfer,
+        files_created,
+        files_updated,
+        dirs_created,
+        symlinks_created,
+        duration
+    );
+
+    // Mark progress as finished
+    if let Some(ref progress) = progress {
+        progress.mark_finished();
+    }
+
+    // Build detailed dry-run info if in dry-run mode
+    let dry_run_details = if dry_run {
+        // Estimate network bytes (actual data transferred over network)
+        let estimated_network_bytes: u64 = file_changes.iter().map(|fc| fc.transfer_bytes).sum();
+
+        // Estimate duration based on average transfer speed (conservative: 10 MB/s)
+        let avg_speed_bytes_per_sec = 10 * 1024 * 1024;
+        let estimated_duration_secs = if estimated_network_bytes > 0 {
+            (estimated_network_bytes as f64 / avg_speed_bytes_per_sec as f64).max(0.1)
+        } else {
+            0.0
+        };
+
+        Some(DryRunDetails {
+            file_changes,
+            directory_changes: dir_changes,
+            symlink_changes,
+            filtered_files: Vec::new(), // TODO: Track filtered files
+            estimated_duration_secs,
+            estimated_network_bytes,
+        })
+    } else {
+        None
+    };
+
+    Ok(SyncStats {
+        files_scanned: total_files as u64,
+        files_created,
+        files_updated,
+        files_deleted: 0,
+        files_skipped: (total_files - files_to_transfer) as usize,
+        bytes_transferred,
+        duration,
+        errors: Vec::new(),
+        dirs_created,
+        symlinks_created,
+        bytes_would_add,
+        bytes_would_change,
+        bytes_would_delete: 0,
+        dry_run_details,
+        ..Default::default()
+    })
+}
+
+/// Connect to remote server
+async fn connect(dest: &SyncPath) -> Result<ServerSession> {
+    connect_with_config(dest, None).await
+}
+
+/// Connect to remote server with optional SSH config override
+async fn connect_with_config(
+    dest: &SyncPath,
+    ssh_config_override: Option<&SshConfig>,
+) -> Result<ServerSession> {
+    match dest {
+        SyncPath::Local { path, .. } => ServerSession::connect_local(path).await,
+        SyncPath::Remote {
+            host, user, path, ..
+        } => {
+            let mut config = if let Some(override_config) = ssh_config_override {
+                // Use provided config but update host and user from path
+                let mut c = override_config.clone();
+                c.hostname = host.clone();
+                c.user = user.clone().unwrap_or_else(|| whoami::username());
+                c
+            } else {
+                // Try to parse from SSH config file, fallback to defaults
+                crate::ssh::config::parse_ssh_config(host).unwrap_or_else(|_| {
+                    let mut c = SshConfig::new(host);
+                    c.user = user.clone().unwrap_or_else(|| whoami::username());
+                    c
+                })
+            };
+            ServerSession::connect_ssh(&config, path).await
+        }
+        _ => anyhow::bail!("Unsupported destination for server mode"),
+    }
+}
+
+/// Scan source directory and return entries
+async fn scan_source(source: &Path) -> Result<Vec<SourceEntry>> {
+    let scan_opts = ScanOptions::default();
+    let src = source.to_path_buf();
+
+    let entries = tokio::task::spawn_blocking(move || {
+        scanner::Scanner::new(&src).with_options(scan_opts).scan()
+    })
+    .await??;
+
+    let mut result = Vec::with_capacity(entries.len());
+
+    for entry in entries {
+        if let Ok(rel_path) = entry.path.strip_prefix(source) {
+            // Skip root directory
+            if rel_path.as_os_str().is_empty() {
+                continue;
+            }
+
+            if let Some(path_str) = rel_path.to_str() {
+                let mtime = entry
+                    .modified
+                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64;
+
+                let symlink_target = entry
+                    .symlink_target
+                    .as_ref()
+                    .and_then(|t| t.to_str().map(String::from));
+
+                result.push(SourceEntry {
+                    rel_path: path_str.to_string(),
+                    abs_path: entry.path.clone(),
+                    size: entry.size,
+                    mtime,
+                    mode: 0o644, // TODO: Get real mode from entry
+                    is_dir: entry.is_dir,
+                    is_symlink: entry.is_symlink,
+                    symlink_target,
+                });
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+/// Sync from remote source to local destination using server protocol (PULL mode)
+pub async fn sync_pull_server_mode(
+    source: &SyncPath,
+    dest: &Path,
+    dry_run: bool,
+    progress: Option<Arc<ProgressState>>,
+) -> Result<SyncStats> {
+    sync_pull_server_mode_with_config(source, dest, dry_run, progress, None).await
+}
+
+/// Sync from remote source to local destination using server protocol (PULL mode) with optional SSH config
+pub async fn sync_pull_server_mode_with_config(
+    source: &SyncPath,
+    dest: &Path,
+    dry_run: bool,
+    progress: Option<Arc<ProgressState>>,
+    ssh_config: Option<&SshConfig>,
+) -> Result<SyncStats> {
+    let start = Instant::now();
+
+    // Connect to server in PULL mode
+    let mut session = connect_pull_with_config(source, ssh_config).await?;
+    tracing::debug!("Connected to server (PULL mode, dry_run: {})", dry_run);
+
+    // Ensure local destination exists
+    if !dest.exists() {
+        std::fs::create_dir_all(dest)?;
+    }
+
+    // Scan local destination for comparison
+    let local_entries = scan_local_dest(dest).await?;
+    let local_map: std::collections::HashMap<String, (u64, i64)> = local_entries
+        .into_iter()
+        .map(|e| (e.rel_path, (e.size, e.mtime)))
+        .collect();
+
+    let mut files_created = 0u64;
+    let mut files_updated = 0u64;
+    let mut files_skipped = 0usize;
+    let mut bytes_transferred = 0u64;
+    let mut symlinks_created = 0u64;
+    let mut bytes_would_add = 0u64;
+    let mut bytes_would_change = 0u64;
+
+    // Detailed dry-run tracking
+    let mut file_changes: Vec<FileChange> = Vec::new();
+    let mut dir_changes: Vec<DirectoryChange> = Vec::new();
+    let symlink_changes: Vec<SymlinkChange> = Vec::new();
+
+    // Step 1: Receive and create directories
+    let mkdir_batch = session.read_mkdir_batch().await?;
+    tracing::debug!("Received {} directories", mkdir_batch.paths.len());
+    let mut dirs_created = 0u64;
+    let mut failed: Vec<(String, String)> = Vec::new();
+
+    if dry_run {
+        tracing::debug!(
+            "[DRY-RUN] Would create {} directories",
+            mkdir_batch.paths.len()
+        );
+        dirs_created = mkdir_batch.paths.len() as u64;
+        // Track directory changes
+        for dir in &mkdir_batch.paths {
+            dir_changes.push(DirectoryChange {
+                path: PathBuf::from(dir),
+                action: ChangeAction::Create,
+            });
+        }
+        // Still need to send ack for protocol
+        session
+            .send_mkdir_batch_ack(dirs_created as u32, failed.clone())
+            .await?;
+    } else {
+        for dir_path in &mkdir_batch.paths {
+            let full_path = dest.join(dir_path);
+            match std::fs::create_dir_all(&full_path) {
+                Ok(_) => dirs_created += 1,
+                Err(e) => failed.push((dir_path.clone(), e.to_string())),
+            }
+        }
+        session
+            .send_mkdir_batch_ack(dirs_created as u32, failed)
+            .await?;
+    }
+
+    // Step 2: Receive file list and send decisions
+    let file_list = session.read_file_list().await?;
+    tracing::debug!("Received {} files from server", file_list.entries.len());
+
+    let mut decisions: Vec<Decision> = Vec::with_capacity(file_list.entries.len());
+    let mut files_to_receive: Vec<(u32, String)> = Vec::new();
+
+    // Track what WOULD happen in dry-run using metadata (before making decisions)
+    if dry_run {
+        for entry in file_list.entries.iter() {
+            let action = if let Some((local_size, local_mtime)) = local_map.get(&entry.path) {
+                if *local_size == entry.size && *local_mtime >= entry.mtime {
+                    ChangeAction::Skip
+                } else {
+                    ChangeAction::Update
+                }
+            } else {
+                ChangeAction::Create
+            };
+
+            // Track using metadata only - no downloads!
+            match action {
+                ChangeAction::Create => {
+                    files_created += 1;
+                    bytes_would_add += entry.size;
+                    file_changes.push(FileChange {
+                        path: PathBuf::from(&entry.path),
+                        action: ChangeAction::Create,
+                        size: entry.size,
+                        transfer_bytes: entry.size,
+                        would_use_delta: false,
+                        would_compress: false,
+                        skip_reason: None,
+                    });
+                }
+                ChangeAction::Update => {
+                    files_updated += 1;
+                    bytes_would_change += entry.size;
+                    file_changes.push(FileChange {
+                        path: PathBuf::from(&entry.path),
+                        action: ChangeAction::Update,
+                        size: entry.size,
+                        transfer_bytes: entry.size,
+                        would_use_delta: false,
+                        would_compress: false,
+                        skip_reason: None,
+                    });
+                }
+                ChangeAction::Skip => {
+                    files_skipped += 1;
+                    file_changes.push(FileChange {
+                        path: PathBuf::from(&entry.path),
+                        action: ChangeAction::Skip,
+                        size: entry.size,
+                        transfer_bytes: 0,
+                        would_use_delta: false,
+                        would_compress: false,
+                        skip_reason: Some("Already up-to-date".to_string()),
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        // Tell server to skip everything (dry-run)
+        let skip_decisions: Vec<Decision> = (0..file_list.entries.len())
+            .map(|idx| Decision {
+                index: idx as u32,
+                action: Action::Skip,
+            })
+            .collect();
+        session.send_file_list_ack(skip_decisions).await?;
+    } else {
+        // Normal mode: make real decisions
+        for (idx, entry) in file_list.entries.iter().enumerate() {
+            let action = if let Some((local_size, local_mtime)) = local_map.get(&entry.path) {
+                // File exists locally - compare
+                if *local_size == entry.size && *local_mtime >= entry.mtime {
+                    Action::Skip
+                } else {
+                    Action::Update
+                }
+            } else {
+                Action::Create
+            };
+
+            if action != Action::Skip {
+                files_to_receive.push((idx as u32, entry.path.clone()));
+            } else {
+                files_skipped += 1;
+            }
+
+            decisions.push(Decision {
+                index: idx as u32,
+                action,
+            });
+        }
+
+        tracing::info!(
+            "{} files to receive, {} skipped",
+            files_to_receive.len(),
+            files_skipped
+        );
+
+        // Initialize progress tracking if provided
+        if let Some(ref progress) = progress {
+            // Calculate total bytes from files to receive
+            let total_bytes: u64 = files_to_receive
+                .iter()
+                .filter_map(|(idx, _)| file_list.entries.get(*idx as usize))
+                .map(|e| e.size)
+                .sum();
+            progress.set_totals(total_bytes, files_to_receive.len());
+        }
+
+        session.send_file_list_ack(decisions).await?;
+
+        // Step 3: Receive files (pipelined - receive all, then send all ACKs)
+        let mut files_received: Vec<(u32, u8)> = Vec::new(); // (idx, status)
+
+        for (idx, rel_path) in &files_to_receive {
+            // Start transfer progress
+            if let Some(ref progress) = progress {
+                progress.start_transfer(PathBuf::from(rel_path));
+            }
+            let file_data = match session.read_file_data().await? {
+                Some(data) => data,
+                None => break, // Server sent symlinks instead
+            };
+
+            let full_path = dest.join(rel_path);
+
+            // Ensure parent directory exists
+            if let Some(parent) = full_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+
+            // Write file
+            let file_size = file_data.data.len() as u64;
+            match std::fs::write(&full_path, &file_data.data) {
+                Ok(_) => {
+                    bytes_transferred += file_size;
+                    if local_map.contains_key(rel_path) {
+                        files_updated += 1;
+                    } else {
+                        files_created += 1;
+                    }
+                    // Finish transfer progress
+                    if let Some(ref progress) = progress {
+                        progress.finish_transfer(&PathBuf::from(rel_path), file_size);
+                    }
+                    files_received.push((*idx, 0)); // Status OK
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to write {}: {}", full_path.display(), e);
+                    files_received.push((*idx, 2)); // STATUS_WRITE_ERROR
+                }
+            }
+        }
+
+        // Send all FILE_DONE responses at once (pipelined)
+        for (idx, status) in &files_received {
+            session.send_file_done(*idx, *status).await?;
+        }
+    }
+
+    // Step 4: Receive and create symlinks (if any)
+    // Note: In dry-run mode, we've told server to skip everything, so no symlinks sent
+    if !dry_run
+        && (files_to_receive.is_empty()
+            || files_created + files_updated < files_to_receive.len() as u64)
+    {
+        // Try to read symlink batch (may have been signaled by read_file_data returning None)
+        match session.read_symlink_batch_body().await {
+            Ok(symlink_batch) => {
+                tracing::debug!("Received {} symlinks", symlink_batch.entries.len());
+                let mut created = 0u32;
+                let mut failed: Vec<(String, String)> = Vec::new();
+                for entry in &symlink_batch.entries {
+                    let link_path = dest.join(&entry.path);
+
+                    // Remove existing if present
+                    if link_path.exists() || link_path.symlink_metadata().is_ok() {
+                        let _ = std::fs::remove_file(&link_path);
+                    }
+
+                    // Ensure parent exists
+                    if let Some(parent) = link_path.parent() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::symlink;
+                        match symlink(&entry.target, &link_path) {
+                            Ok(_) => created += 1,
+                            Err(e) => failed.push((entry.path.clone(), e.to_string())),
+                        }
+                    }
+                    #[cfg(not(unix))]
+                    {
+                        failed.push((entry.path.clone(), "Symlinks not supported".to_string()));
+                    }
+                }
+                symlinks_created = created as u64;
+                session.send_symlink_batch_ack(created, failed).await?;
+            }
+            Err(_) => {
+                // No symlinks or EOF
+            }
+        }
+    }
+
+    let duration = start.elapsed();
+    tracing::info!(
+        "Pull sync complete: {} created, {} updated, {} skipped, {} bytes in {:?}",
+        files_created,
+        files_updated,
+        files_skipped,
+        bytes_transferred,
+        duration
+    );
+
+    // Mark progress as finished
+    if let Some(ref progress) = progress {
+        progress.mark_finished();
+    }
+
+    // Build detailed dry-run info if in dry-run mode
+    let dry_run_details = if dry_run {
+        // Estimate network bytes
+        let estimated_network_bytes: u64 = file_changes.iter().map(|fc| fc.transfer_bytes).sum();
+
+        // Estimate duration (conservative: 10 MB/s)
+        let avg_speed_bytes_per_sec = 10 * 1024 * 1024;
+        let estimated_duration_secs = if estimated_network_bytes > 0 {
+            (estimated_network_bytes as f64 / avg_speed_bytes_per_sec as f64).max(0.1)
+        } else {
+            0.0
+        };
+
+        Some(DryRunDetails {
+            file_changes,
+            directory_changes: dir_changes,
+            symlink_changes,
+            filtered_files: Vec::new(),
+            estimated_duration_secs,
+            estimated_network_bytes,
+        })
+    } else {
+        None
+    };
+
+    Ok(SyncStats {
+        files_scanned: file_list.entries.len() as u64,
+        files_created,
+        files_updated,
+        files_deleted: 0,
+        files_skipped,
+        bytes_transferred,
+        duration,
+        errors: Vec::new(),
+        dirs_created,
+        symlinks_created,
+        bytes_would_add,
+        bytes_would_change,
+        bytes_would_delete: 0,
+        dry_run_details,
+        ..Default::default()
+    })
+}
+
+/// Connect to remote server in PULL mode
+async fn connect_pull(source: &SyncPath) -> Result<ServerSession> {
+    connect_pull_with_config(source, None).await
+}
+
+async fn connect_pull_with_config(
+    source: &SyncPath,
+    ssh_config_override: Option<&SshConfig>,
+) -> Result<ServerSession> {
+    match source {
+        SyncPath::Local { path, .. } => ServerSession::connect_local_pull(path).await,
+        SyncPath::Remote {
+            host, user, path, ..
+        } => {
+            let config = if let Some(override_config) = ssh_config_override {
+                // Use provided config but update host and user from path
+                let mut c = override_config.clone();
+                c.hostname = host.clone();
+                c.user = user.clone().unwrap_or_else(|| whoami::username());
+                c
+            } else {
+                // Try to parse from SSH config file, fallback to defaults
+                crate::ssh::config::parse_ssh_config(host).unwrap_or_else(|_| {
+                    let mut c = SshConfig::new(host);
+                    c.user = user.clone().unwrap_or_else(|| whoami::username());
+                    c
+                })
+            };
+            ServerSession::connect_ssh_pull(&config, path).await
+        }
+        _ => anyhow::bail!("Unsupported source for pull mode"),
+    }
+}
+
+/// Scan local destination directory for comparison
+async fn scan_local_dest(dest: &Path) -> Result<Vec<SourceEntry>> {
+    if !dest.exists() {
+        return Ok(Vec::new());
+    }
+
+    let scan_opts = ScanOptions::default();
+    let dest_path = dest.to_path_buf();
+
+    let entries = tokio::task::spawn_blocking(move || {
+        scanner::Scanner::new(&dest_path)
+            .with_options(scan_opts)
+            .scan()
+    })
+    .await??;
+
+    let mut result = Vec::with_capacity(entries.len());
+
+    for entry in entries {
+        if let Ok(rel_path) = entry.path.strip_prefix(dest) {
+            if rel_path.as_os_str().is_empty() {
+                continue;
+            }
+
+            if let Some(path_str) = rel_path.to_str() {
+                let mtime = entry
+                    .modified
+                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64;
+
+                result.push(SourceEntry {
+                    rel_path: path_str.to_string(),
+                    abs_path: entry.path.clone(),
+                    size: entry.size,
+                    mtime,
+                    mode: 0o644,
+                    is_dir: entry.is_dir,
+                    is_symlink: entry.is_symlink,
+                    symlink_target: None,
+                });
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+/// Process a batch of delta sync candidates with full pipelining.
+/// - Reads all checksum responses
+/// - Computes all deltas in parallel
+/// - Sends all DELTA_DATA without waiting
+/// - Reads all FILE_DONE responses at the end
+///
+/// Returns (files_updated, bytes_transferred)
+async fn process_delta_batch(
+    session: &mut ServerSession,
+    pending: &[(u32, &SourceEntry, u32)],
+    progress: Option<&Arc<ProgressState>>,
+) -> Result<(u64, u64)> {
+    use crate::server::protocol::ChecksumResp;
+
+    let mut files_updated = 0u64;
+    let mut bytes_transferred = 0u64;
+
+    // Step 1: Read all checksum responses (may arrive out of order)
+    let mut responses: HashMap<u32, ChecksumResp> = HashMap::with_capacity(pending.len());
+    for _ in 0..pending.len() {
+        let resp = session.read_checksum_resp().await?;
+        responses.insert(resp.index, resp);
+    }
+
+    // Step 2: Compute all deltas in parallel
+    let delta_futures: Vec<_> = pending
+        .iter()
+        .map(|(file_idx, entry, block_size)| {
+            let resp = responses.get(file_idx).cloned();
+            let path = entry.abs_path.clone();
+            let bs = *block_size as usize;
+            let idx = *file_idx;
+
+            async move {
+                let resp = resp.ok_or_else(|| {
+                    anyhow::anyhow!("Missing checksum response for index {}", idx)
+                })?;
+
+                // Convert protocol checksums to delta checksums
+                let dest_checksums: Vec<DeltaBlockChecksum> = resp
+                    .checksums
+                    .iter()
+                    .enumerate()
+                    .map(|(i, c)| DeltaBlockChecksum {
+                        index: i as u64,
+                        offset: c.offset,
+                        size: c.size as usize,
+                        weak: c.weak,
+                        strong: c.strong,
+                    })
+                    .collect();
+
+                // Generate delta in blocking task
+                let delta = tokio::task::spawn_blocking(move || {
+                    generate_delta_streaming(&path, &dest_checksums, bs)
+                })
+                .await??;
+
+                // Convert to protocol delta ops
+                let mut ops: Vec<DeltaOp> = Vec::with_capacity(delta.ops.len());
+                let mut delta_bytes = 0u64;
+
+                for op in &delta.ops {
+                    match op {
+                        crate::delta::DeltaOp::Copy { offset, size } => {
+                            ops.push(DeltaOp::Copy {
+                                offset: *offset,
+                                size: *size as u32,
+                            });
+                        }
+                        crate::delta::DeltaOp::Data(data) => {
+                            delta_bytes += data.len() as u64;
+                            ops.push(DeltaOp::Data(data.clone()));
+                        }
+                    }
+                }
+
+                Ok::<_, anyhow::Error>((idx, ops, delta_bytes))
+            }
+        })
+        .collect();
+
+    let deltas: Vec<Result<(u32, Vec<DeltaOp>, u64)>> =
+        futures::future::join_all(delta_futures).await;
+
+    // Step 3: Send all DELTA_DATA without waiting for confirmations
+    let mut sent_indices: Vec<(u32, String, u64, u64)> = Vec::with_capacity(pending.len());
+    for (i, result) in deltas.into_iter().enumerate() {
+        let (idx, ops, delta_bytes) = result?;
+        let entry = pending[i].1;
+
+        // Start transfer progress
+        if let Some(progress) = progress {
+            progress.start_transfer(PathBuf::from(&entry.rel_path));
+        }
+
+        bytes_transferred += delta_bytes;
+        sent_indices.push((idx, entry.rel_path.clone(), delta_bytes, entry.size));
+
+        session.send_delta_data_no_flush(idx, 0, ops).await?;
+    }
+    session.flush().await?;
+
+    // Step 4: Read all FILE_DONE responses
+    for (idx, rel_path, delta_bytes, size) in sent_indices {
+        let done = session.read_file_done().await?;
+
+        if done.status != 0 {
+            tracing::error!(
+                "Delta update failed for {}: index {} status {}",
+                rel_path,
+                done.index,
+                done.status
+            );
+        } else {
+            files_updated += 1;
+            // Finish transfer progress
+            if let Some(progress) = progress {
+                progress.finish_transfer(&PathBuf::from(&rel_path), size);
+            }
+            tracing::debug!(
+                "Delta sync {}: sent {}KB (file is {}KB)",
+                rel_path,
+                delta_bytes / 1024,
+                size / 1024
+            );
+        }
+        // Verify index matches (server processes in order)
+        if done.index != idx {
+            tracing::warn!(
+                "FILE_DONE index mismatch: expected {}, got {}",
+                idx,
+                done.index
+            );
+        }
+    }
+
+    Ok((files_updated, bytes_transferred))
+}
