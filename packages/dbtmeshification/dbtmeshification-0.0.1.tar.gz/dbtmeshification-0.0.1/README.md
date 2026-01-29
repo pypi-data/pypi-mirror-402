@@ -1,0 +1,104 @@
+# dbtmeshification
+
+A Python package that enhances `dbt-core` projects with SQLMesh-inspired unit testing capabilities powered by `sqlglot` and `DuckDB`.
+
+## Features
+
+- **CTE-Level Testing**: Test individual CTEs within your dbt models, not just the final output
+- **Fast Local Execution**: Run tests in-memory using DuckDB - no data warehouse required
+- **Mock Data Support**: Define mock inputs inline in YAML spec files
+- **SQL Dialect Transpilation**: Automatically transpile from your dbt dialect to DuckDB
+- **Clean CLI**: Simple `mesh test` command integrates into your workflow
+
+## Installation
+
+```bash
+pip install dbtmeshification
+```
+
+## Quick Start
+
+1. **Ensure your dbt project is compiled**:
+   ```bash
+   cd your-dbt-project
+   dbt compile
+   ```
+
+2. **Create a specs directory** in your dbt project:
+   ```bash
+   mkdir specs
+   ```
+
+3. **Write a test spec** (e.g., `specs/my_model.yml`):
+   ```yaml
+   model: my_model
+
+   tests:
+     - name: "test_my_cte"
+       target: "my_cte_name"
+       mocks:
+         - name: "upstream_cte"
+           format: "inline"
+           content:
+             - {id: 1, value: "test"}
+             - {id: 2, value: "data"}
+       expect:
+         format: "inline"
+         content:
+           - {id: 1, result: "processed"}
+   ```
+
+4. **Run tests**:
+   ```bash
+   mesh test
+   ```
+
+## Usage
+
+```bash
+# Run all tests
+mesh test
+
+# Run tests for a specific model
+mesh test --model my_model
+
+# Specify dbt project directory
+mesh test --project-dir /path/to/dbt/project
+
+# Specify specs directory
+mesh test --specs-dir /path/to/specs
+
+# Use persistent DuckDB file
+mesh test --db-file test.db
+```
+
+## How It Works
+
+1. Reads your compiled dbt model SQL from `target/manifest.json`
+2. Parses the SQL to identify CTEs using `sqlglot`
+3. Loads mock data into DuckDB tables
+4. Rewrites queries to reference mock tables instead of upstream CTEs
+5. Executes tests in DuckDB and compares results
+
+## Requirements
+
+- Python >= 3.8
+- dbt-core
+- A compiled dbt project (`dbt compile` must be run first)
+
+## Development Status
+
+⚠️ **Alpha Release** - This is an early version. APIs may change.
+
+Current limitations:
+- Only inline mock data format supported
+- Simple equality-based result comparison
+- No support for dbt sources/refs mocking yet
+
+## License
+
+MIT
+
+## Contributing
+
+Issues and pull requests welcome at https://github.com/yourusername/dbtmeshification
