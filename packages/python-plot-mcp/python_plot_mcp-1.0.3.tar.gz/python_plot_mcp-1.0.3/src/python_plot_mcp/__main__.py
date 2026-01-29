@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+"""python-plot-mcp 命令行入口点
+
+支持 uvx 直接运行: uvx python-plot-mcp
+"""
+
+import asyncio
+from python_plot_mcp.server import main as _main
+
+
+def main() -> None:
+    """uvx 入口点"""
+    asyncio.run(_main())
+
+
+if __name__ == "__main__":
+    main()
