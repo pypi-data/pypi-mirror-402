@@ -1,0 +1,169 @@
+<nav class="navbar online fixed-top navbar-expand-lg py-0">
+
+  <!-- add logo/title -->
+  % if 'image' in dashboard_config:
+  <a class="navbar-brand mt-3 mt-lg-0" href="#"><img style="height:40px" src="{{ dashboard_config['image'] }}"></a>
+  % else:
+  <a class="navbar-brand title mt-2" href="#">{{ dashboard_config['title'] }}</a>
+  % end
+
+  <b-navbar-toggle target="nav_collapse">    
+    <span class="navbar-toggler-icon"></span>
+  </b-navbar-toggle>
+
+  <b-collapse is-nav id="nav_collapse">
+    <ul class="navbar-nav mr-auto">
+
+      <!-- add pages -->
+      % if 'pages' in dashboard_config:
+        % if current_page != 'index':
+        %   script_name = '../' + script_name
+        % end
+        % for page in dashboard_config['pages']:
+          % if page == 'index':
+          %   if script_name:
+          %     url = script_name if script_name[-1] != '/' else script_name[:-1]
+          %   else:
+          %     url = '/'
+          %   end
+          % else:
+          %   url = script_name + page
+          % end
+          <li><a class="nav-link mt-0" href="{{ url }}">{{ page_config[page]['title'] }}</a></li>
+        % end
+      % end
+
+      <!-- add tabs -->
+      % for tab in dashboard_config['tabs']:
+      <li><a class="nav-link mt-0" href="{{ tab['url'] }}">{{ tab['name'] }}</a></li>
+      % end
+
+    </ul>
+
+    <!-- lock/unlock -->
+    <span v-if="analysis" title="Unlock Grid Layout">
+      <b-button class="online ml-1 mr-1 border rounded border-secondary" size="sm" variant="light" :pressed.sync="analysis">
+        <i class="fas fa-lock"></i>
+      </b-button>
+    </span>
+    <span v-else title="Lock Grid Layout">
+      <b-button class="online ml-1 mr-1 border rounded border-secondary" size="sm" variant="light" :pressed.sync="analysis">
+        <i class="fas fa-unlock"></i>
+      </b-button>
+    </span>
+
+    <!-- plot menu -->
+    <span title="Available Plots">
+      <b-dropdown id="dropdown-left" size="sm" class="mx-1 border rounded border-secondary" variant="light">
+        <template slot="button-content">
+          <i class="fas fa-chart-line"></i>
+        </template>
+          % for i, plot in enumerate(plots):
+            <b-dropdown-item
+              class ="m-lg-2"
+              name="livecharts{{ plot['title'].replace(' ', '_').lower() }}"
+              href="#"
+              :checked={{ 'true' if plot['visible'] else 'false' }}
+              @click="addItem(plots[{{ i }}])"
+              >
+              {{ plot['title'] }}
+            </b-dropdown-item>
+          </li>
+          % end
+        </ul>
+      </b-dropdown>
+    </span>
+
+    <!-- time selection -->
+    <span title="Decrease Duration">
+      <b-button class="online mx-1 border rounded border-secondary" size="sm" variant="light" v-on:click="decreaseTime">
+        <i class="fas fa-angle-left"></i>
+      </b-button>
+    </span>
+    <div>
+      <b-form-select class="border rounded border-secondary" size="sm" v-model="form.lookback" :options="options"></b-form-select>
+    </div>
+    <span title="Increase Duration">
+      <b-button class="online mx-1 border rounded border-secondary" size="sm" variant="light" v-on:click="increaseTime">
+        <i class="fas fa-angle-right"></i>
+      </b-button>
+    </span>
+
+    <!-- online/historical options form -->
+    <b-nav-form id="nav-form" class="ml-1 mr-3">
+      <span title="Query Options">
+        <b-dropdown id="dropdown-form" class="border rounded border-secondary" size="sm" ref="dropdown" variant="light">
+          <template slot="button-content">
+            <i class="fas fa-history"></i>
+          </template>
+          <span v-if="form.type == 'online'" title="Online Options">
+            <b-form-group id="input-group-1" class="my-2 mx-2" label="Lookback [s]" label-for="dropdown-lookback">
+              <b-form-input
+                name="lookback"
+                id="dropdown-lookback"
+                size="sm"
+                class="my-2 mx-1 w-75"
+                v-model="form.lookback"
+                placeholder="lookback"
+              ></b-form-input>
+            </b-form-group>
+
+            <b-form-group id="input-group-2" class="my-2 mx-2" label="Delay [s]" label-for="dropdown-delay">
+              <b-form-input
+                name="delay"
+                id="dropdown-delay"
+                size="sm"
+                class="my-2 mx-1 w-75"
+                v-model="form.delay"
+                placeholder="delay"
+              ></b-form-input>
+            </b-form-group>
+          </span>
+          <span v-else title="Historical Options">
+            <b-form-group id="input-group-1" class="my-2 mx-2" label="GPS Start [s]" label-for="dropdown-start">
+              <b-form-input
+                name="start"
+                id="dropdown-start"
+                size="sm"
+                class="my-2 mx-1 w-75"
+                v-model="form.start"
+                placeholder="start time"
+              ></b-form-input>
+            </b-form-group>
+            <b-form-group id="input-group-2" class="my-2 mx-2" label="GPS End [s]" label-for="dropdown-end">
+              <b-form-input
+                name="end"
+                id="dropdown-end"
+                size="sm"
+                class="my-2 mx-1 w-75"
+                v-model="form.end"
+                placeholder="end time"
+              ></b-form-input>
+            </b-form-group>
+          </span>
+        </b-dropdown>
+      </span>
+
+      <!-- online/historical toggle -->
+      <b-form-group id="input-group-3" class="mx-1" label-for="type">
+        <b-form-radio-group
+          id="type"
+          size="sm"
+          v-model="form.type"
+          :options="timeOptions"
+          buttons
+          button-variant="light"
+          class="mx-1 border rounded border-secondary"
+        ></b-form-radio-group>
+      </b-form-group>
+
+
+      <b-button size="sm" class="online mr-4" variant="outline-success" type="submit">Go</b-button>
+
+    </b-form>
+
+    <!-- add clock to right edge -->
+    <a class="nav-clock" href="#"><div id="clock"></div></a>
+
+  </b-collapse>
+</nav>
