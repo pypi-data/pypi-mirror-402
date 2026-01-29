@@ -1,0 +1,318 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>IMAPClient Concepts &#8212; IMAPClient 2.3.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Advanced Usage" href="advanced.html" />
+    <link rel="prev" title="Installation" href="installation.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a></li>
+        <li class="right" >
+          <a href="advanced.html" title="Advanced Usage"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="installation.html" title="Installation"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">IMAPClient 2.3.1 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">IMAPClient Concepts</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="imapclient-concepts">
+<h1>IMAPClient Concepts<a class="headerlink" href="#imapclient-concepts" title="Permalink to this heading">¶</a></h1>
+<section id="message-identifiers">
+<h2>Message Identifiers<a class="headerlink" href="#message-identifiers" title="Permalink to this heading">¶</a></h2>
+<p>In the IMAP protocol, messages are identified using an integer. These
+message ids are specific to a given folder.</p>
+<p>There are two types of message identifiers in the IMAP protocol.</p>
+<p>One type is the message sequence number where the messages in a folder
+are numbered from 1 to N where N is the number of messages in the
+folder. These numbers don’t persist between sessions and may be
+reassigned after some operations such as an expunge.</p>
+<p>A more convenient approach is Unique Identifiers (UIDs). Unique
+Identifiers are integers assigned to each message by the IMAP server
+that will persist across sessions. They do not change when folders are
+expunged. Almost all IMAP servers support UIDs.</p>
+<p>Each call to the IMAP server can use either message sequence numbers
+or UIDs in the command arguments and return values. The client
+specifies to the server which type of identifier should be used. You
+can set whether IMAPClient should use UIDs or message sequence number
+via the <em>use_uid</em> argument passed when an IMAPClient instance is
+created and the <em>use_uid</em> attribute. The <em>use_uid</em> attribute can be
+used to change the message id type between calls to the
+server. IMAPClient uses UIDs by default.</p>
+<p>Any method that accepts message ids takes either a sequence containing
+message ids (eg. <code class="docutils literal notranslate"><span class="pre">[1,2,3]</span></code>), or a single message id integer, or a
+string representing sets and ranges of messages as supported by the
+IMAP protocol (e.g. <code class="docutils literal notranslate"><span class="pre">'50-65'</span></code>, <code class="docutils literal notranslate"><span class="pre">'2:*'</span></code> or <code class="docutils literal notranslate"><span class="pre">'2,4:7,9,12:*'</span></code>).</p>
+</section>
+<section id="message-flags">
+<h2>Message Flags<a class="headerlink" href="#message-flags" title="Permalink to this heading">¶</a></h2>
+<p>An IMAP server keeps zero or more flags for each message. These
+indicate certain properties of the message or can be used by IMAP
+clients to keep track of data related to a message.</p>
+<p>The IMAPClient package has constants for a number of commmonly used flags:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">DELETED</span> <span class="o">=</span> <span class="sa">br</span><span class="s1">&#39;\Deleted&#39;</span>
+<span class="n">SEEN</span> <span class="o">=</span> <span class="sa">br</span><span class="s1">&#39;\Seen&#39;</span>
+<span class="n">ANSWERED</span> <span class="o">=</span> <span class="sa">br</span><span class="s1">&#39;\Answered&#39;</span>
+<span class="n">FLAGGED</span> <span class="o">=</span> <span class="sa">br</span><span class="s1">&#39;\Flagged&#39;</span>
+<span class="n">DRAFT</span> <span class="o">=</span> <span class="sa">br</span><span class="s1">&#39;\Draft&#39;</span>
+<span class="n">RECENT</span> <span class="o">=</span> <span class="sa">br</span><span class="s1">&#39;\Recent&#39;</span>         <span class="c1"># This flag is read-only</span>
+</pre></div>
+</div>
+<p>Any method that accepts message flags takes either a sequence
+containing message flags (eg. <code class="docutils literal notranslate"><span class="pre">[DELETED,</span> <span class="pre">'foo',</span> <span class="pre">'Bar']</span></code>) or a single
+message flag (eg.  <code class="docutils literal notranslate"><span class="pre">'Foo'</span></code>).</p>
+</section>
+<section id="folder-name-encoding">
+<h2>Folder Name Encoding<a class="headerlink" href="#folder-name-encoding" title="Permalink to this heading">¶</a></h2>
+<p>Any method that takes a folder name will accept a standard string or a
+unicode string. Unicode strings will be transparently encoded using
+modified UTF-7 as specified by <span class="target" id="index-0"></span><a class="rfc reference external" href="https://datatracker.ietf.org/doc/html/rfc3501.html#section-5.1.3"><strong>RFC 3501#section-5.1.3</strong></a>.  This allows
+for arbitrary unicode characters (eg. non-English characters) to be
+used in folder names.</p>
+<p>The ampersand character (”&amp;”) has special meaning in IMAP folder
+names. IMAPClient automatically escapes and unescapes this character
+so that the caller doesn’t have to.</p>
+<p>Automatic folder name encoding and decoding can be enabled or disabled
+with the <em>folder_encode</em> attribute. It defaults to True.</p>
+<p>If <em>folder_encode</em> is True, all folder names returned by IMAPClient
+are always returned as unicode strings. If <em>folder_encode</em> is False,
+folder names are returned as str (Python 2) or bytes (Python 3).</p>
+</section>
+<section id="working-with-fetched-messages">
+<h2>Working With Fetched Messages<a class="headerlink" href="#working-with-fetched-messages" title="Permalink to this heading">¶</a></h2>
+<p>The IMAP protocol gives access to a limited amount of information about emails
+stored on the server. In depth analysis of a message usually requires
+downloading the full message and parsing its content.</p>
+<p>The <a class="reference external" href="https://docs.python.org/3/library/email.html">email</a> package of the
+Python standard library provides a reliable way to transform a raw email into
+a convenient object.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Download unread emails and parse them into standard EmailMessage objects</span>
+<span class="kn">import</span> <span class="nn">email</span>
+
+<span class="kn">from</span> <span class="nn">imapclient</span> <span class="kn">import</span> <span class="n">IMAPClient</span>
+
+<span class="n">HOST</span> <span class="o">=</span> <span class="s2">&quot;imap.host.com&quot;</span>
+<span class="n">USERNAME</span> <span class="o">=</span> <span class="s2">&quot;someuser&quot;</span>
+<span class="n">PASSWORD</span> <span class="o">=</span> <span class="s2">&quot;secret&quot;</span>
+
+<span class="k">with</span> <span class="n">IMAPClient</span><span class="p">(</span><span class="n">HOST</span><span class="p">)</span> <span class="k">as</span> <span class="n">server</span><span class="p">:</span>
+    <span class="n">server</span><span class="o">.</span><span class="n">login</span><span class="p">(</span><span class="n">USERNAME</span><span class="p">,</span> <span class="n">PASSWORD</span><span class="p">)</span>
+    <span class="n">server</span><span class="o">.</span><span class="n">select_folder</span><span class="p">(</span><span class="s2">&quot;INBOX&quot;</span><span class="p">,</span> <span class="n">readonly</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="n">messages</span> <span class="o">=</span> <span class="n">server</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s2">&quot;UNSEEN&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">uid</span><span class="p">,</span> <span class="n">message_data</span> <span class="ow">in</span> <span class="n">server</span><span class="o">.</span><span class="n">fetch</span><span class="p">(</span><span class="n">messages</span><span class="p">,</span> <span class="s2">&quot;RFC822&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">email_message</span> <span class="o">=</span> <span class="n">email</span><span class="o">.</span><span class="n">message_from_bytes</span><span class="p">(</span><span class="n">message_data</span><span class="p">[</span><span class="sa">b</span><span class="s2">&quot;RFC822&quot;</span><span class="p">])</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">uid</span><span class="p">,</span> <span class="n">email_message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;From&quot;</span><span class="p">),</span> <span class="n">email_message</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;Subject&quot;</span><span class="p">))</span>
+</pre></div>
+</div>
+</section>
+<section id="tls-ssl">
+<h2>TLS/SSL<a class="headerlink" href="#tls-ssl" title="Permalink to this heading">¶</a></h2>
+<p>IMAPClient uses sensible TLS parameter defaults for encrypted
+connections and also allows for a high level of control of TLS
+parameters if required. It uses the built-in <cite>ssl</cite> package,
+provided since Python 2.7.9 and 3.4.</p>
+<p>TLS parameters are controlled by passing a <code class="docutils literal notranslate"><span class="pre">ssl.SSLContext</span></code> when
+creating an IMAPClient instance (or to the <cite>starttls</cite> method when the
+STARTTLS is used). When <code class="docutils literal notranslate"><span class="pre">ssl=True</span></code> is used without passing a
+SSLContext, a default context is used. The default context avoids the
+use of known insecure ciphers and SSL protocol versions, with
+certificate verification and hostname verification turned on. The
+default context will use system installed certificate authority trust
+chains, if available.</p>
+<p>When constructing a custom context it is usually best to start with
+the default context, created by the <code class="docutils literal notranslate"><span class="pre">ssl</span></code> module, and modify it to
+suit your needs.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Users of Python 2.7.0 - 2.7.8 can use TLS but cannot configure
+the settings via an <code class="docutils literal notranslate"><span class="pre">ssl.SSLContext</span></code>. These Python versions are
+also not capable of proper certification verification. It is highly
+encouraged to upgrade to a more recent version of Python.</p>
+</div>
+<p>The following example shows how to to disable certification
+verification and certificate host name checks if required.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Establish an encrypted connection to a server without checking its</span>
+<span class="c1"># certificate. This setup is insecure, DO NOT USE to connect to servers</span>
+<span class="c1"># over the Internet.</span>
+
+<span class="kn">import</span> <span class="nn">ssl</span>
+
+<span class="kn">from</span> <span class="nn">imapclient</span> <span class="kn">import</span> <span class="n">IMAPClient</span>
+
+<span class="n">HOST</span> <span class="o">=</span> <span class="s2">&quot;imap.host.com&quot;</span>
+<span class="n">USERNAME</span> <span class="o">=</span> <span class="s2">&quot;someuser&quot;</span>
+<span class="n">PASSWORD</span> <span class="o">=</span> <span class="s2">&quot;secret&quot;</span>
+
+<span class="n">ssl_context</span> <span class="o">=</span> <span class="n">ssl</span><span class="o">.</span><span class="n">create_default_context</span><span class="p">()</span>
+
+<span class="c1"># don&#39;t check if certificate hostname doesn&#39;t match target hostname</span>
+<span class="n">ssl_context</span><span class="o">.</span><span class="n">check_hostname</span> <span class="o">=</span> <span class="kc">False</span>
+
+<span class="c1"># don&#39;t check if the certificate is trusted by a certificate authority</span>
+<span class="n">ssl_context</span><span class="o">.</span><span class="n">verify_mode</span> <span class="o">=</span> <span class="n">ssl</span><span class="o">.</span><span class="n">CERT_NONE</span>
+
+<span class="k">with</span> <span class="n">IMAPClient</span><span class="p">(</span><span class="n">HOST</span><span class="p">,</span> <span class="n">ssl_context</span><span class="o">=</span><span class="n">ssl_context</span><span class="p">)</span> <span class="k">as</span> <span class="n">server</span><span class="p">:</span>
+    <span class="n">server</span><span class="o">.</span><span class="n">login</span><span class="p">(</span><span class="n">USERNAME</span><span class="p">,</span> <span class="n">PASSWORD</span><span class="p">)</span>
+    <span class="c1"># ...do something...</span>
+</pre></div>
+</div>
+<p>The next example shows how to create a context that will use custom CA
+certificate. This is required to perform verification of a self-signed
+certificate used by the IMAP server.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Establish a secure connection to a server that does not have a certificate</span>
+<span class="c1"># signed by a trusted certificate authority (CA).</span>
+
+<span class="kn">import</span> <span class="nn">ssl</span>
+
+<span class="kn">from</span> <span class="nn">imapclient</span> <span class="kn">import</span> <span class="n">IMAPClient</span>
+
+<span class="n">HOST</span> <span class="o">=</span> <span class="s2">&quot;imap.host.com&quot;</span>
+<span class="n">USERNAME</span> <span class="o">=</span> <span class="s2">&quot;someuser&quot;</span>
+<span class="n">PASSWORD</span> <span class="o">=</span> <span class="s2">&quot;secret&quot;</span>
+
+<span class="n">ssl_context</span> <span class="o">=</span> <span class="n">ssl</span><span class="o">.</span><span class="n">create_default_context</span><span class="p">(</span><span class="n">cafile</span><span class="o">=</span><span class="s2">&quot;/path/to/cacert.pem&quot;</span><span class="p">)</span>
+
+<span class="k">with</span> <span class="n">IMAPClient</span><span class="p">(</span><span class="n">HOST</span><span class="p">,</span> <span class="n">ssl_context</span><span class="o">=</span><span class="n">ssl_context</span><span class="p">)</span> <span class="k">as</span> <span class="n">server</span><span class="p">:</span>
+    <span class="n">server</span><span class="o">.</span><span class="n">login</span><span class="p">(</span><span class="n">USERNAME</span><span class="p">,</span> <span class="n">PASSWORD</span><span class="p">)</span>
+    <span class="c1"># ...do something...</span>
+</pre></div>
+</div>
+<p>If your operating system comes with an outdated list of CA certificates you can
+use the <a class="reference external" href="https://pypi.python.org/pypi/certifi">certifi</a> package that provides
+an up-to-date set of trusted CAs:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">certifi</span>
+
+<span class="n">ssl_context</span> <span class="o">=</span> <span class="n">ssl</span><span class="o">.</span><span class="n">create_default_context</span><span class="p">(</span><span class="n">cafile</span><span class="o">=</span><span class="n">certifi</span><span class="o">.</span><span class="n">where</span><span class="p">())</span>
+</pre></div>
+</div>
+<p>If the server supports it, you can also authenticate using a client
+certificate:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">ssl</span>
+
+<span class="n">ssl_context</span> <span class="o">=</span> <span class="n">ssl</span><span class="o">.</span><span class="n">create_default_context</span><span class="p">()</span>
+<span class="n">ssl_context</span><span class="o">.</span><span class="n">load_cert_chain</span><span class="p">(</span><span class="s2">&quot;/path/to/client_certificate.crt&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The above examples show some of the most common TLS parameter
+customisations but there are many other tweaks are possible. Consult
+the Python 3 <a class="reference external" href="https://docs.python.org/3/library/ssl.html#module-ssl" title="(in Python v3.10)"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ssl</span></code></a> package documentation for further options.</p>
+</section>
+<section id="logging">
+<h2>Logging<a class="headerlink" href="#logging" title="Permalink to this heading">¶</a></h2>
+<p>IMAPClient logs debug lines using the standard Python <a class="reference external" href="https://docs.python.org/3/library/logging.html#module-logging" title="(in Python v3.10)"><code class="xref py py-mod docutils literal notranslate"><span class="pre">logging</span></code></a>
+module. Its logger prefix is <code class="docutils literal notranslate"><span class="pre">imapclient.</span></code>.</p>
+<p>One way to see debug messages from IMAPClient is to set up logging
+like this:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">logging</span>
+
+<span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span>
+    <span class="nb">format</span><span class="o">=</span><span class="s1">&#39;</span><span class="si">%(asctime)s</span><span class="s1"> - </span><span class="si">%(levelname)s</span><span class="s1">: </span><span class="si">%(message)s</span><span class="s1">&#39;</span><span class="p">,</span>
+    <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>For advanced usage, please refer to the documentation <code class="docutils literal notranslate"><span class="pre">logging</span></code>
+module.</p>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">IMAPClient Concepts</a><ul>
+<li><a class="reference internal" href="#message-identifiers">Message Identifiers</a></li>
+<li><a class="reference internal" href="#message-flags">Message Flags</a></li>
+<li><a class="reference internal" href="#folder-name-encoding">Folder Name Encoding</a></li>
+<li><a class="reference internal" href="#working-with-fetched-messages">Working With Fetched Messages</a></li>
+<li><a class="reference internal" href="#tls-ssl">TLS/SSL</a></li>
+<li><a class="reference internal" href="#logging">Logging</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="installation.html"
+                          title="previous chapter">Installation</a></p>
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="advanced.html"
+                          title="next chapter">Advanced Usage</a></p>
+  </div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/concepts.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a></li>
+        <li class="right" >
+          <a href="advanced.html" title="Advanced Usage"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="installation.html" title="Installation"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">IMAPClient 2.3.1 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">IMAPClient Concepts</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2014, Menno Smits.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.0.2.
+    </div>
+  </body>
+</html>

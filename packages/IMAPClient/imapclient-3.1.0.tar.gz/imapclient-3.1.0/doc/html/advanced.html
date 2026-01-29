@@ -1,0 +1,331 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>Advanced Usage &#8212; IMAPClient 2.3.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="IMAPClient Class" href="api.html" />
+    <link rel="prev" title="IMAPClient Concepts" href="concepts.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a></li>
+        <li class="right" >
+          <a href="api.html" title="IMAPClient Class"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="concepts.html" title="IMAPClient Concepts"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">IMAPClient 2.3.1 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Advanced Usage</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="advanced-usage">
+<h1>Advanced Usage<a class="headerlink" href="#advanced-usage" title="Permalink to this heading">¶</a></h1>
+<p>This document covers some more advanced features and tips for handling
+specific usages.</p>
+<section id="cleaning-up-connections">
+<h2>Cleaning Up Connections<a class="headerlink" href="#cleaning-up-connections" title="Permalink to this heading">¶</a></h2>
+<p>To communicate with the server, IMAPClient establishes a TCP connection. It is
+important for long-lived processes to always close connections at some
+point to avoid leaking memory and file descriptors. This is usually done with
+the <code class="docutils literal notranslate"><span class="pre">logout</span></code> method:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">imapclient</span>
+
+<span class="n">c</span> <span class="o">=</span> <span class="n">imapclient</span><span class="o">.</span><span class="n">IMAPClient</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="s2">&quot;imap.foo.org&quot;</span><span class="p">)</span>
+<span class="n">c</span><span class="o">.</span><span class="n">login</span><span class="p">(</span><span class="s2">&quot;bar@foo.org&quot;</span><span class="p">,</span> <span class="s2">&quot;passwd&quot;</span><span class="p">)</span>
+<span class="n">c</span><span class="o">.</span><span class="n">select_folder</span><span class="p">(</span><span class="s2">&quot;INBOX&quot;</span><span class="p">)</span>
+<span class="n">c</span><span class="o">.</span><span class="n">logout</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>However if an error is raised when selecting the folder, the connection may be
+left open.</p>
+<p>IMAPClient may be used as a context manager that automatically closes
+connections when they are not needed any more:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">imapclient</span>
+
+<span class="k">with</span> <span class="n">imapclient</span><span class="o">.</span><span class="n">IMAPClient</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="s2">&quot;imap.foo.org&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">c</span><span class="p">:</span>
+    <span class="n">c</span><span class="o">.</span><span class="n">login</span><span class="p">(</span><span class="s2">&quot;bar@foo.org&quot;</span><span class="p">,</span> <span class="s2">&quot;passwd&quot;</span><span class="p">)</span>
+    <span class="n">c</span><span class="o">.</span><span class="n">select_folder</span><span class="p">(</span><span class="s2">&quot;INBOX&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="watching-a-mailbox-using-idle">
+<h2>Watching a Mailbox Using IDLE<a class="headerlink" href="#watching-a-mailbox-using-idle" title="Permalink to this heading">¶</a></h2>
+<p>The IDLE extension allows an IMAP server to notify a client when something
+changes in a mailbox. It can be used as an alternative to polling to receive
+new messages.</p>
+<p>The concept is simple: the client connects to the server, selects a mailbox and
+enters the IDLE mode. At this point the server sends notifications whenever
+something happens in the selected mailbox until the client ends the IDLE mode
+by issuing a <code class="docutils literal notranslate"><span class="pre">DONE</span></code> command. This is explained in <span class="target" id="index-0"></span><a class="rfc reference external" href="https://datatracker.ietf.org/doc/html/rfc2177.html"><strong>RFC 2177</strong></a>.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Open a connection in IDLE mode and wait for notifications from the</span>
+<span class="c1"># server.</span>
+
+<span class="kn">from</span> <span class="nn">imapclient</span> <span class="kn">import</span> <span class="n">IMAPClient</span>
+
+<span class="n">HOST</span> <span class="o">=</span> <span class="s2">&quot;imap.host.com&quot;</span>
+<span class="n">USERNAME</span> <span class="o">=</span> <span class="s2">&quot;someuser&quot;</span>
+<span class="n">PASSWORD</span> <span class="o">=</span> <span class="s2">&quot;password&quot;</span>
+
+<span class="n">server</span> <span class="o">=</span> <span class="n">IMAPClient</span><span class="p">(</span><span class="n">HOST</span><span class="p">)</span>
+<span class="n">server</span><span class="o">.</span><span class="n">login</span><span class="p">(</span><span class="n">USERNAME</span><span class="p">,</span> <span class="n">PASSWORD</span><span class="p">)</span>
+<span class="n">server</span><span class="o">.</span><span class="n">select_folder</span><span class="p">(</span><span class="s2">&quot;INBOX&quot;</span><span class="p">)</span>
+
+<span class="c1"># Start IDLE mode</span>
+<span class="n">server</span><span class="o">.</span><span class="n">idle</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Connection is now in IDLE mode, send yourself an email or quit with ^c&quot;</span><span class="p">)</span>
+
+<span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="c1"># Wait for up to 30 seconds for an IDLE response</span>
+        <span class="n">responses</span> <span class="o">=</span> <span class="n">server</span><span class="o">.</span><span class="n">idle_check</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Server sent:&quot;</span><span class="p">,</span> <span class="n">responses</span> <span class="k">if</span> <span class="n">responses</span> <span class="k">else</span> <span class="s2">&quot;nothing&quot;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
+        <span class="k">break</span>
+
+<span class="n">server</span><span class="o">.</span><span class="n">idle_done</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">IDLE mode done&quot;</span><span class="p">)</span>
+<span class="n">server</span><span class="o">.</span><span class="n">logout</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Note that IMAPClient does not handle low-level socket errors that can happen
+when maintaining long-lived TCP connections. Users are advised to renew the
+IDLE command every 10 minutes to avoid the connection from being abruptly
+closed.</p>
+</section>
+<section id="interactive-sessions">
+<h2>Interactive Sessions<a class="headerlink" href="#interactive-sessions" title="Permalink to this heading">¶</a></h2>
+<p>When developing program using IMAPClient is it sometimes useful to
+have an interactive shell to play with. IMAPClient ships with a module
+that lets you fire up an interactive shell with an IMAPClient instance
+connected to an IMAP server.</p>
+<p>Start a session like this:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">imapclient</span><span class="o">.</span><span class="n">interact</span> <span class="o">-</span><span class="n">H</span> <span class="o">&lt;</span><span class="n">host</span><span class="o">&gt;</span> <span class="o">-</span><span class="n">u</span> <span class="o">&lt;</span><span class="n">user</span><span class="o">&gt;</span> <span class="o">...</span>
+</pre></div>
+</div>
+<p>Various options are available to specify the IMAP server details. See
+the help (–help) for more details. You’ll be prompted for a username
+and password if one isn’t provided on the command line.</p>
+<p>It is also possible to pass connection details as a configuration file
+like this:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">imapclient</span><span class="o">.</span><span class="n">interact</span> <span class="o">-</span><span class="n">f</span> <span class="o">&lt;</span><span class="n">config</span> <span class="n">file</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>See below for details of the <a class="reference internal" href="#conf-files"><span class="std std-ref">configuration file format</span></a>.</p>
+<p>If installed, IPython will be used as the embedded shell. Otherwise
+the basic built-in Python shell will be used.</p>
+<p>The connected IMAPClient instance is available as the variable
+“c”. Here’s an example session:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ python -m imapclient.interact -H &lt;host&gt; -u &lt;user&gt; ...
+Connecting...
+Connected.
+
+IMAPClient instance is &quot;c&quot;
+In [1]: c.select_folder(&#39;inbox&#39;)
+Out[1]:
+{b&#39;EXISTS&#39;: 2,
+ b&#39;FLAGS&#39;: (b&#39;\\Answered&#39;,
+     b&#39;\\Flagged&#39;,
+     b&#39;\\Deleted&#39;,
+     b&#39;\\Seen&#39;,
+     b&#39;\\Draft&#39;),
+ b&#39;PERMANENTFLAGS&#39;: (b&#39;\\Answered&#39;,
+     b&#39;\\Flagged&#39;,
+     b&#39;\\Deleted&#39;,
+     b&#39;\\Seen&#39;,
+     b&#39;\\Draft&#39;),
+ b&#39;READ-WRITE&#39;: True,
+ b&#39;RECENT&#39;: 0,
+ b&#39;UIDNEXT&#39;: 1339,
+ b&#39;UIDVALIDITY&#39;: 1239278212}
+
+In [2]: c.search()
+Out[2]: [1123, 1233]
+
+In [3]: c.logout()
+Out[3]: b&#39;Logging out&#39;
+</pre></div>
+</div>
+<section id="configuration-file-format">
+<span id="conf-files"></span><h3>Configuration File Format<a class="headerlink" href="#configuration-file-format" title="Permalink to this heading">¶</a></h3>
+<p>Both the IMAPClient interactive shell and the live tests take
+configuration files which specify how to to connect to an IMAP
+server. The configuration file format is the same for both.</p>
+<p>Configuration files use the INI format and must always have a section
+called <code class="docutils literal notranslate"><span class="pre">DEFAULT</span></code>. Here’s a simple example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="n">DEFAULT</span><span class="p">]</span>
+<span class="n">host</span> <span class="o">=</span> <span class="n">imap</span><span class="o">.</span><span class="n">mailserver</span><span class="o">.</span><span class="n">com</span>
+<span class="n">username</span> <span class="o">=</span> <span class="n">bob</span>
+<span class="n">password</span> <span class="o">=</span> <span class="n">sekret</span>
+<span class="n">ssl</span> <span class="o">=</span> <span class="kc">True</span>
+</pre></div>
+</div>
+<p>The supported options are:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Name</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>host</p></td>
+<td><p>string</p></td>
+<td><p>IMAP hostname to connect to.</p></td>
+</tr>
+<tr class="row-odd"><td><p>username</p></td>
+<td><p>string</p></td>
+<td><p>The username to authenticate as.</p></td>
+</tr>
+<tr class="row-even"><td><p>password</p></td>
+<td><p>string</p></td>
+<td><p>The password to use with <code class="docutils literal notranslate"><span class="pre">username</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>port</p></td>
+<td><p>int</p></td>
+<td><p>Server port to connect to. Defaults to 143 unless <code class="docutils literal notranslate"><span class="pre">ssl</span></code> is True.</p></td>
+</tr>
+<tr class="row-even"><td><p>ssl</p></td>
+<td><p>bool</p></td>
+<td><p>Use SSL/TLS to connect.</p></td>
+</tr>
+<tr class="row-odd"><td><p>starttls</p></td>
+<td><p>bool</p></td>
+<td><p>Use STARTTLS to connect.</p></td>
+</tr>
+<tr class="row-even"><td><p>ssl_check_hostname</p></td>
+<td><p>bool</p></td>
+<td><p>If true and SSL is in use, check that certificate matches the hostname (defaults to true)</p></td>
+</tr>
+<tr class="row-odd"><td><p>ssl_verify_cert</p></td>
+<td><p>bool</p></td>
+<td><p>If true and SSL is in use, check that the certifcate is valid (defaults to true).</p></td>
+</tr>
+<tr class="row-even"><td><p>ssl_ca_file</p></td>
+<td><p>string</p></td>
+<td><p>If SSL is true, use this to specify certificate authority certs to validate with.</p></td>
+</tr>
+<tr class="row-odd"><td><p>timeout</p></td>
+<td><p>int</p></td>
+<td><p>Time out I/O operations after this many seconds.</p></td>
+</tr>
+<tr class="row-even"><td><p>oauth2</p></td>
+<td><p>bool</p></td>
+<td><p>If true, use OAUTH2 to authenticate (<code class="docutils literal notranslate"><span class="pre">username</span></code> and <code class="docutils literal notranslate"><span class="pre">password</span></code> are ignored).</p></td>
+</tr>
+<tr class="row-odd"><td><p>oauth2_client_id</p></td>
+<td><p>string</p></td>
+<td><p>OAUTH2 client id.</p></td>
+</tr>
+<tr class="row-even"><td><p>oauth2_client_secret</p></td>
+<td><p>string</p></td>
+<td><p>OAUTH2 client secret.</p></td>
+</tr>
+<tr class="row-odd"><td><p>oauth2_refresh_token</p></td>
+<td><p>string</p></td>
+<td><p>OAUTH2 token for refreshing the secret.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Acceptable boolean values are “1”, “yes”, “true”, and “on”, for true;
+and “0”, “no”, “false”, and “off”, for false.</p>
+</section>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">Advanced Usage</a><ul>
+<li><a class="reference internal" href="#cleaning-up-connections">Cleaning Up Connections</a></li>
+<li><a class="reference internal" href="#watching-a-mailbox-using-idle">Watching a Mailbox Using IDLE</a></li>
+<li><a class="reference internal" href="#interactive-sessions">Interactive Sessions</a><ul>
+<li><a class="reference internal" href="#configuration-file-format">Configuration File Format</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  </div>
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="concepts.html"
+                          title="previous chapter">IMAPClient Concepts</a></p>
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="api.html"
+                          title="next chapter">IMAPClient Class</a></p>
+  </div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/advanced.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a></li>
+        <li class="right" >
+          <a href="api.html" title="IMAPClient Class"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="concepts.html" title="IMAPClient Concepts"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">IMAPClient 2.3.1 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Advanced Usage</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2014, Menno Smits.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.0.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,340 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>IMAPClient &#8212; IMAPClient 2.3.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Installation" href="installation.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a></li>
+        <li class="right" >
+          <a href="installation.html" title="Installation"
+             accesskey="N">next</a> |</li>
+        <li class="nav-item nav-item-0"><a href="#">IMAPClient 2.3.1 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">IMAPClient</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="imapclient">
+<h1>IMAPClient<a class="headerlink" href="#imapclient" title="Permalink to this heading">¶</a></h1>
+<dl class="field-list simple">
+<dt class="field-odd">Author<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="http://menno.io/">Menno Finlay-Smits</a></p>
+</dd>
+<dt class="field-even">Version<span class="colon">:</span></dt>
+<dd class="field-even"><p>2.3.1</p>
+</dd>
+<dt class="field-odd">Date<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Jul 09, 2022</p>
+</dd>
+<dt class="field-even">Homepage<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="http://imapclient.freshfoo.com">http://imapclient.freshfoo.com</a></p>
+</dd>
+<dt class="field-odd">Download<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="http://pypi.python.org/pypi/IMAPClient/">http://pypi.python.org/pypi/IMAPClient/</a></p>
+</dd>
+<dt class="field-even">Source code<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://github.com/mjs/imapclient">https://github.com/mjs/imapclient</a></p>
+</dd>
+<dt class="field-odd">Documentation<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="http://imapclient.readthedocs.io/">http://imapclient.readthedocs.io/</a></p>
+</dd>
+<dt class="field-even">License<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="http://en.wikipedia.org/wiki/BSD_licenses">New BSD License</a></p>
+</dd>
+<dt class="field-odd">Forum/Support<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://github.com/mjs/imapclient/discussions">https://github.com/mjs/imapclient/discussions</a></p>
+</dd>
+</dl>
+<section id="introduction">
+<h2>Introduction<a class="headerlink" href="#introduction" title="Permalink to this heading">¶</a></h2>
+<p>IMAPClient is an easy-to-use, Pythonic and complete IMAP client
+library.</p>
+<p>Although IMAPClient actually uses the imaplib module from the Python
+standard library under the hood, it provides a different API. Instead
+of requiring that the caller performs extra parsing work, return
+values are full parsed, readily usable and use sensible Python
+types. Exceptions are raised when problems occur (no error checking of
+return values is required).</p>
+<p>IMAPClient is straight forward it use, but it can be useful to have at
+least a general understanding of the IMAP protocol. <span class="target" id="index-0"></span><a class="rfc reference external" href="https://datatracker.ietf.org/doc/html/rfc3501.html"><strong>RFC 3501</strong></a>
+explains IMAP in detail. Other RFCs also apply to various extensions
+to the base protocol. These are referred to in the documentation below
+where relevant.</p>
+<p>Python versions 2.7 and 3.4 through 3.9 are officially supported.</p>
+</section>
+<section id="getting-started">
+<h2>Getting Started<a class="headerlink" href="#getting-started" title="Permalink to this heading">¶</a></h2>
+<p>Install IMAPClient:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ pip install imapclient
+</pre></div>
+</div>
+<p>See <a class="reference internal" href="installation.html#installation"><span class="std std-ref">Installation</span></a> for more details.</p>
+<p>The core of the IMAPClient API is the IMAPClient class. Instantiating
+this class, creates a connection to an IMAP account. Calling methods
+on the IMAPClient instance interacts with the server.</p>
+<p>The following example shows a simple interaction with an IMAP server.
+It displays the message ID, subject and date of the message for all
+messages in the INBOX folder.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">imapclient</span> <span class="kn">import</span> <span class="n">IMAPClient</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">server</span> <span class="o">=</span> <span class="n">IMAPClient</span><span class="p">(</span><span class="s1">&#39;imap.mailserver.com&#39;</span><span class="p">,</span> <span class="n">use_uid</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">server</span><span class="o">.</span><span class="n">login</span><span class="p">(</span><span class="s1">&#39;someuser&#39;</span><span class="p">,</span> <span class="s1">&#39;somepassword&#39;</span><span class="p">)</span>
+<span class="go">b&#39;[CAPABILITY IMAP4rev1 LITERAL+ SASL-IR [...] LIST-STATUS QUOTA] Logged in&#39;</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">select_info</span> <span class="o">=</span> <span class="n">server</span><span class="o">.</span><span class="n">select_folder</span><span class="p">(</span><span class="s1">&#39;INBOX&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%d</span><span class="s1"> messages in INBOX&#39;</span> <span class="o">%</span> <span class="n">select_info</span><span class="p">[</span><span class="sa">b</span><span class="s1">&#39;EXISTS&#39;</span><span class="p">])</span>
+<span class="go">34 messages in INBOX</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">messages</span> <span class="o">=</span> <span class="n">server</span><span class="o">.</span><span class="n">search</span><span class="p">([</span><span class="s1">&#39;FROM&#39;</span><span class="p">,</span> <span class="s1">&#39;best-friend@domain.com&#39;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%d</span><span class="s2"> messages from our best friend&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">messages</span><span class="p">))</span>
+<span class="go">5 messages from our best friend</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">msgid</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">server</span><span class="o">.</span><span class="n">fetch</span><span class="p">(</span><span class="n">messages</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;ENVELOPE&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">envelope</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="sa">b</span><span class="s1">&#39;ENVELOPE&#39;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;ID #</span><span class="si">%d</span><span class="s1">: &quot;</span><span class="si">%s</span><span class="s1">&quot; received </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">msgid</span><span class="p">,</span> <span class="n">envelope</span><span class="o">.</span><span class="n">subject</span><span class="o">.</span><span class="n">decode</span><span class="p">(),</span> <span class="n">envelope</span><span class="o">.</span><span class="n">date</span><span class="p">))</span>
+<span class="go">ID #62: &quot;Our holidays photos&quot; received 2017-07-20 21:47:42</span>
+<span class="go">ID #55: &quot;Re: did you book the hotel?&quot; received 2017-06-26 10:38:09</span>
+<span class="go">ID #53: &quot;Re: did you book the hotel?&quot; received 2017-06-25 22:02:58</span>
+<span class="go">ID #44: &quot;See that fun article about lobsters in Pacific ocean!&quot; received 2017-06-09 09:49:47</span>
+<span class="go">ID #46: &quot;Planning for our next vacations&quot; received 2017-05-12 10:29:30</span>
+
+<span class="gp">&gt;&gt;&gt; </span><span class="n">server</span><span class="o">.</span><span class="n">logout</span><span class="p">()</span>
+<span class="go">b&#39;Logging out&#39;</span>
+</pre></div>
+</div>
+</section>
+<section id="user-guide">
+<h2>User Guide<a class="headerlink" href="#user-guide" title="Permalink to this heading">¶</a></h2>
+<p>This section describes how IMAPClient works and gives some examples to
+help you start.</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#pip">Pip</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#from-source">From Source</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#other-versions">Other versions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html">IMAPClient Concepts</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="concepts.html#message-identifiers">Message Identifiers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="concepts.html#message-flags">Message Flags</a></li>
+<li class="toctree-l2"><a class="reference internal" href="concepts.html#folder-name-encoding">Folder Name Encoding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="concepts.html#working-with-fetched-messages">Working With Fetched Messages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="concepts.html#tls-ssl">TLS/SSL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="concepts.html#logging">Logging</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="advanced.html">Advanced Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="advanced.html#cleaning-up-connections">Cleaning Up Connections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="advanced.html#watching-a-mailbox-using-idle">Watching a Mailbox Using IDLE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="advanced.html#interactive-sessions">Interactive Sessions</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+<section id="api-reference">
+<h2>API Reference<a class="headerlink" href="#api-reference" title="Permalink to this heading">¶</a></h2>
+<p>This section describes public functions and classes of IMAPClient
+library.</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api.html">IMAPClient Class</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html#fetch-response-types">Fetch Response Types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html#exceptions">Exceptions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html#module-imapclient.testable_imapclient">Utilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html#module-imapclient.tls">TLS Support</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html#thread-safety">Thread Safety</a></li>
+</ul>
+</div>
+</section>
+<section id="contributor-guide">
+<h2>Contributor Guide<a class="headerlink" href="#contributor-guide" title="Permalink to this heading">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to IMAPClient</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#source-code">Source Code</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#unit-tests">Unit Tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="contributing.html#documentation">Documentation</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+<section id="external-documentation">
+<h2>External Documentation<a class="headerlink" href="#external-documentation" title="Permalink to this heading">¶</a></h2>
+<p>The <a class="reference external" href="http://www.imapwiki.org/">Unofficial IMAP Protocol Wiki</a> is
+very useful when writing IMAP related software and is highly
+recommended.</p>
+</section>
+<section id="authors">
+<h2>Authors<a class="headerlink" href="#authors" title="Permalink to this heading">¶</a></h2>
+<p>IMAPClient was created by Menno Finlay-Smits &lt;<a class="reference external" href="mailto:inbox&#37;&#52;&#48;menno&#46;io">inbox<span>&#64;</span>menno<span>&#46;</span>io</a>&gt;. The
+project is now maintained by Nicolas Le Manchet and Menno
+Finlay-Smits.</p>
+<p>Many thanks go to the following people for their help with this
+project:</p>
+<ul class="simple">
+<li><p>Maxime Lorant</p></li>
+<li><p>Mathieu Agopian</p></li>
+<li><p>Chris Arndt</p></li>
+<li><p>Jp Calderone</p></li>
+<li><p>John Louis del Rosario</p></li>
+<li><p>Dave Eckhardt</p></li>
+<li><p>Eben Freeman</p></li>
+<li><p>Helder Guerreiro</p></li>
+<li><p>Mark Hammond</p></li>
+<li><p>Johannes Heckel</p></li>
+<li><p>Thomas Jost</p></li>
+<li><p>Lukasz Mierzwa</p></li>
+<li><p>Naveen Nathan</p></li>
+<li><p>Brian Neal</p></li>
+<li><p>Phil Peterson</p></li>
+<li><p>Aviv Salem</p></li>
+<li><p>Andrew Scheller</p></li>
+<li><p>Thomas Steinacher</p></li>
+<li><p>Zac Witte</p></li>
+<li><p>Hans-Peter Jansen</p></li>
+<li><p>Carson Ip</p></li>
+<li><p>Jonny Hatch</p></li>
+<li><p>Jasper Spaans</p></li>
+<li><p>Fabio Manganiello</p></li>
+<li><p>Samir M</p></li>
+<li><p>Devin Bayer</p></li>
+<li><p>Mantas Mikulėnas</p></li>
+<li><p>zrose584</p></li>
+<li><p>Michał Górny</p></li>
+<li><p>François Deppierraz</p></li>
+<li><p>Jasper Spaans</p></li>
+<li><p>Boni Lindsley</p></li>
+<li><p>Tobias Kölling</p></li>
+<li><p>pinoatrome</p></li>
+<li><p>Shoaib Ahmed</p></li>
+</ul>
+</section>
+<section id="release-history">
+<h2>Release History<a class="headerlink" href="#release-history" title="Permalink to this heading">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="releases.html">Version 2.3.0</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-2-2-0">Version 2.2.0</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-2-1-0">Version 2.1.0</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-2-0">Version 2.0</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-1-1-0">Version 1.1.0</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-1-0-2">Version 1.0.2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-1-0-1">Version 1.0.1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-1-0-0">Version 1.0.0</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-13">Version 0.13</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-12">Version 0.12</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-11-1">Version 0.11.1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-11">Version 0.11</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-10-2">Version 0.10.2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-10-1">Version 0.10.1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-10">Version 0.10</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-9-2">Version 0.9.2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-9-1">Version 0.9.1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-9">Version 0.9</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-8-1">Version 0.8.1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-8">Version 0.8</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-7">Version 0.7</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-6-2">Version 0.6.2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-6-1">Version 0.6.1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-6">Version 0.6</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-5-2">Version 0.5.2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-5-1">Version 0.5.1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="releases.html#version-0-5">Version 0.5</a></li>
+</ul>
+</div>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="#">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">IMAPClient</a><ul>
+<li><a class="reference internal" href="#introduction">Introduction</a></li>
+<li><a class="reference internal" href="#getting-started">Getting Started</a></li>
+<li><a class="reference internal" href="#user-guide">User Guide</a></li>
+<li><a class="reference internal" href="#api-reference">API Reference</a></li>
+<li><a class="reference internal" href="#contributor-guide">Contributor Guide</a></li>
+<li><a class="reference internal" href="#external-documentation">External Documentation</a></li>
+<li><a class="reference internal" href="#authors">Authors</a></li>
+<li><a class="reference internal" href="#release-history">Release History</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="installation.html"
+                          title="next chapter">Installation</a></p>
+  </div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/index.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a></li>
+        <li class="right" >
+          <a href="installation.html" title="Installation"
+             >next</a> |</li>
+        <li class="nav-item nav-item-0"><a href="#">IMAPClient 2.3.1 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">IMAPClient</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2014, Menno Smits.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.0.2.
+    </div>
+  </body>
+</html>
