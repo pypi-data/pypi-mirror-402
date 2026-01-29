@@ -1,0 +1,251 @@
+# CroW-Kit (Crowdsourced Wrapper Generation Framework)
+
+**CroW-Kit** is a lightweight Python toolkit implementing the **CroW (Crowdsourced Wrapper Generation Framework)**. It allows users to interactively design, store, and execute web data wrappers for both tabular and non-tabular websites.
+
+This package provides independent wrapper generation, extraction, and maintenance functionality — ideal for researchers, developers, and data engineers working with web data.
+
+---
+
+## Installation
+
+Install directly from PyPI:
+
+```bash
+pip install crow-kit
+```
+
+---
+
+## Important: Dependencies & Requirements
+
+CroW-Kit relies on **Selenium** and **webdriver-manager** to control a live browser for interactive wrapper creation.
+
+* **Python dependencies:** Installed automatically when you run:
+
+  ```bash
+  pip install crow-kit
+  ```
+* **Browser Requirement:** You must have **Google Chrome** installed on your system.
+* **Permissions:** The package needs write permissions in its working directory to create a `crow_kit_data/wrappers/` folder for storing the JSON wrapper files.
+* **External Files:** The interactive wrapper generation depends on several JavaScript and CSS files (`st.action-panel.js`, `jquery-3.7.1.min.js`, etc.). These are included with the package. Ensure your environment allows these files to be loaded.
+
+---
+
+## Usage Overview
+
+1. **Generate a Wrapper:** Use `setTableWrapper` or `setGeneralWrapper`. A browser window will open, letting you click on the data you want to scrape. Your selections are saved as a JSON wrapper file.
+
+2. **Extract Data:** Use `getWrapperData` to automatically fetch data using the saved wrapper. This works headlessly and handles pagination if defined.
+
+---
+
+## Core Functions
+
+### 1. `setTableWrapper(url, wrapper_name='no_name')`
+
+Creates a table-based wrapper for `<table>` HTML structures.
+
+**Parameters:**
+
+* `url` (str): URL of the page containing the table
+* `wrapper_name` (str, optional): Prefix for the saved wrapper filename
+
+**Returns:**
+
+```python
+(success, wrapper_filename, error_code, error_type, error_message)
+```
+
+**Example:**
+
+```python
+from crow_kit import setTableWrapper
+
+success, wrapper_file, err_code, err_type, err_msg = setTableWrapper(
+    "https://example.com/table_page",
+    wrapper_name="sample_table"
+)
+
+if success:
+    print("Wrapper created:", wrapper_file)
+else:
+    print("Error:", err_type, err_msg)
+```
+
+**Interactive Steps:**
+
+1. Chrome opens the page URL
+2. Action panel prompts you to select the table to scrape
+3. If there’s pagination, you select the “Next Page” button
+4. Browser closes and JSON wrapper is saved
+
+---
+
+### 2. `setGeneralWrapper(url, wrapper_name='no_name', repeat='no')`
+
+Creates a wrapper for general (non-tabular) content such as articles, product cards, or repeating search results.
+
+**Parameters:**
+
+* `url` (str): Target webpage
+* `wrapper_name (str)`: Name prefix for the wrapper file
+* `repeat (str)`: `'yes'` if content repeats across pages, `'no'` otherwise
+
+**Returns:**
+
+```python
+(success, wrapper_filename, error_code, error_type, error_message)
+```
+
+**Example:**
+
+```python
+from crow_kit import setGeneralWrapper
+
+success, wrapper_file, _, _, _ = setGeneralWrapper(
+    "https://example.com/articles",
+    wrapper_name="article_wrapper",
+    repeat='yes'
+)
+```
+
+**Interactive Steps:**
+
+1. Chrome opens the page
+2. Click each data point (e.g., title, author) and assign a name
+3. Select “Next Page” if applicable
+4. Confirm, browser closes and JSON wrapper is saved
+
+---
+
+### 3. `getWrapperData(wrapper_name, maximum_data_count=100, url='')`
+
+Runs a saved wrapper to extract structured data headlessly.
+
+**Parameters:**
+
+* `wrapper_name (str)`: JSON wrapper filename
+* `maximum_data_count (int, optional)`: Maximum rows to extract
+* `url (str, optional)`: Override original URL
+
+**Returns:**
+
+```python
+(success, extracted_data)
+```
+
+**Example:**
+
+```python
+from crow_kit import getWrapperData
+
+success, data = getWrapperData(wrapper_file, maximum_data_count=50)
+
+if success:
+    for row in data:
+        print(row)
+```
+
+---
+
+### 4. `listWrappers()`
+
+Lists all locally saved wrappers.
+
+**Returns:**
+
+```python
+(success, wrapper_file_list)
+```
+
+**Example:**
+
+```python
+from crow_kit import listWrappers
+
+success, files = listWrappers()
+if success:
+    print("Available wrappers:", files)
+```
+
+---
+
+## Wrapper Storage
+
+Wrappers are stored in:
+
+```
+crow_kit_data/wrappers/
+```
+
+Each JSON wrapper contains:
+
+* Wrapper type (`table` or `general`)
+* Target URL
+* XPath selectors for data fields
+* XPath for “Next Page” button (if any)
+* Repetition pattern (`repeat`)
+
+---
+
+## Example Workflow
+
+```python
+from crow_kit import setGeneralWrapper, getWrapperData, listWrappers
+
+# Step 1: Create a general wrapper
+success_create, wrapper_file, _, _, _ = setGeneralWrapper(
+    "https://example.com/articles",
+    wrapper_name="article_wrapper",
+    repeat='yes'
+)
+
+if not success_create:
+    print("Failed to create wrapper.")
+    exit()
+
+# Step 2: List wrappers
+success_list, files = listWrappers()
+if success_list:
+    print("Available wrappers:", files)
+
+# Step 3: Extract data
+success_extract, extracted_data = getWrapperData(wrapper_file, maximum_data_count=100)
+
+if success_extract:
+    print(f"Extracted {len(extracted_data)} rows")
+    for row in extracted_data:
+        print(row)
+else:
+    print("Failed to extract data:", extracted_data)
+```
+
+---
+
+## Example Output
+
+**Tabular wrapper:**
+
+```python
+[
+    ["Name", "Age", "City"],
+    ["Alice", "30", "New York"],
+    ["Bob", "28", "Chicago"]
+]
+```
+
+**General wrapper:**
+
+```python
+[
+    ["Title", "Date", "Author"],
+    ["AI and Web Wrappers", "2025-10-20", "K. Naha"],
+    ["The Future of Data", "2025-10-19", "J. Doe"]
+]
+```
+
+---
+
+## License
+
+MIT License
