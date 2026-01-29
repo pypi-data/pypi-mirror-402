@@ -1,0 +1,7 @@
+"""
+rotalabs-audit - Reasoning chain capture for auditing
+
+https://rotalabs.ai
+"""
+
+__version__ = "0.0.1"
