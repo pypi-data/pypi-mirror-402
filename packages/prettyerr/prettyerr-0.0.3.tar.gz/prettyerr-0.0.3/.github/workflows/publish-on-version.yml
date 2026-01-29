@@ -1,0 +1,80 @@
+name: Publish On Version Update
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      force_publish:
+        description: Force publish even if version unchanged
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect version change
+        id: version
+        env:
+          FORCE_PUBLISH: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.force_publish == 'true' }}
+        run: |
+          set -euo pipefail
+          if [ "$FORCE_PUBLISH" = "true" ]; then
+            echo "Force publish requested via workflow dispatch."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          before="${{ github.event.before }}"
+          if [ "$before" = "0000000000000000000000000000000000000000" ]; then
+            before="$(git rev-list --max-parents=0 HEAD | head -n 1)"
+          fi
+          if git diff --quiet "$before" "${{ github.sha }}" -- pyproject.toml; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Python
+        if: steps.version.outputs.changed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        if: steps.version.outputs.changed == 'true'
+        uses: astral-sh/setup-uv@v4
+
+      - name: Show package version
+        if: steps.version.outputs.changed == 'true'
+        id: pkg
+        run: |
+          VERSION="$(uv version | awk '{print $2}')"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Detected prettyerr version: $VERSION"
+
+      - name: Build distribution
+        if: steps.version.outputs.changed == 'true'
+        run: |
+          rm -rf dist
+          uv build
+
+      - name: Publish to PyPI
+        if: steps.version.outputs.changed == 'true'
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          if [ -z "$UV_PUBLISH_TOKEN" ]; then
+            echo "PYPI_API_TOKEN secret is not set." >&2
+            exit 1
+          fi
+          uv publish --token "$UV_PUBLISH_TOKEN"
+
