@@ -1,0 +1,37 @@
+# Toolbox Continu Inzicht <img align="right" src="./docs/assets/logo.png" height="32" alt='logo'/>
+
+[![Run Pytest](https://github.com/continu-inzicht/toolbox-continu-inzicht/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/continu-inzicht/toolbox-continu-inzicht/actions/workflows/tests.yml)
+[![Render and Publish Docs](https://github.com/continu-inzicht/toolbox-continu-inzicht/actions/workflows/quarto-docs.yml/badge.svg)](https://github.com/continu-inzicht/toolbox-continu-inzicht/actions/workflows/quarto-docs.yml)
+[![Pre-commit](https://github.com/continu-inzicht/toolbox-continu-inzicht/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/continu-inzicht/toolbox-continu-inzicht/actions/workflows/pre-commit.yml)
+[![Upload Python Package](https://github.com/continu-inzicht/toolbox-continu-inzicht/actions/workflows/python-publish.yml/badge.svg)](https://github.com/continu-inzicht/toolbox-continu-inzicht/actions/workflows/python-publish.yml)
+[![PyPI](https://img.shields.io/pypi/v/toolbox-continu-inzicht)](https://pypi.org/project/toolbox-continu-inzicht)
+[![image](https://img.shields.io/badge/fair--software.eu-%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8B-yellow)](https://fair-software.eu)
+
+De Toolbox Continu Inzicht is een Python-toolbox voor waterkeringbeheerders om risico's in kaart te brengen. Bij het ontwikkelen van de toolbox is rekening gehouden met de volgende type interacties met de toolbox: het gebruiken van de toolbox en bijdragen aan de toolbox. Op de [wiki](https://continu-inzicht.github.io/toolbox-continu-inzicht/) is over beide informatie beschikbaar.
+
+## Gebruik van de toolbox
+
+De volledige toolbox kan geïnstalleerd worden met:
+
+```bash
+pip install toolbox-continu-inzicht[all]
+```
+
+Het gebruik van een conda environment wordt sterk aanbevolen, hiervoor kan je gebruik maken van het volgende commando:
+
+```bash
+conda env create --file=https://raw.githubusercontent.com/continu-inzicht/toolbox-continu-inzicht/refs/heads/main/src/requirements.yaml
+```
+
+Onder [Installeren](https://continu-inzicht.github.io/toolbox-continu-inzicht/install.html) op de wiki vindt je meer informatie.
+Zie [Modules](https://continu-inzicht.github.io/toolbox-continu-inzicht/modules.html) voor een beschrijving van de mogelijkheden van de bouwstenen van de Toolbox Continu Inzicht of bekijk het [voorbeeld](https://continu-inzicht.github.io/toolbox-continu-inzicht/examples/notebooks/proof_of_concept.html).
+
+## Afhankelijkheden
+
+Voor het berekenen van Fragility Curves worden twee packages gebruikt: [Pydra Core](https://github.com/HKV-products-services/pydra_core) voor GEKB en [Probabilistic piping](https://github.com/HKV-products-services/probabilistic_piping) voor STPH. Deze worden los ontwikkeld door HKV.
+
+## License
+
+Copyright (c) 2024 - 2025, HKV lijn in Water
+
+[GPL 3.0 or later](https://github.com/continu-inzicht/toolbox-continu-inzicht/blob/main/LICENSE)
