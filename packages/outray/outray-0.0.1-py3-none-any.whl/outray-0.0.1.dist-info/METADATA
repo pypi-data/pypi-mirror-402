@@ -1,0 +1,134 @@
+Metadata-Version: 2.4
+Name: outray
+Version: 0.0.1
+Summary: Python SDK for outray.dev tunneling service
+Project-URL: Homepage, https://github.com/Eghosa-Osayande/outray-python
+Project-URL: Issues, https://github.com/Eghosa-Osayande/outray-python/issues
+Author-email: Eghosa Osayande <osayandeeghosam@gmail.com>
+License-Expression: MIT
+License-File: LICENSE
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.10
+Requires-Dist: dotenv
+Requires-Dist: websockets
+Description-Content-Type: text/markdown
+
+````markdown
+# Outray
+
+`outray` is a Python library for creating **HTTP, TCP, and UDP tunnels** using (https://outray.dev/)[https://outray.dev/]. It allows you to forward local services to a remote endpoint easily.  
+
+Install via pip:
+
+```bash
+pip install outray
+````
+
+---
+
+## Features
+
+* HTTP tunnel proxy (`HttpListener`)
+* TCP tunnel proxy (`TCPListener`)
+* UDP tunnel proxy (`UDPListener`)
+* Forward a tunnel asynchronously or synchronously
+* Built-in error handling and logging
+
+---
+
+## Usage Example
+
+- Asynchronous
+```python
+import asyncio
+from outray import forward, http
+
+async def main():
+    listener = http("http://localhost:8080")
+    await forward(listener)
+
+asyncio.run(main())
+```
+
+- Synchronous
+```python
+import asyncio
+from outray import forward, http
+
+listener = http("http://localhost:8080")
+forward_sync(listener)
+```
+
+---
+
+## API
+
+### Creating a Listener
+
+#### TCP
+
+```python
+from outray import tcp
+
+listener = tcp(local_host="localhost", local_port=8090, remote_port=20710)
+```
+
+#### UDP
+
+```python
+from outray import udp
+
+listener = udp(local_host="localhost", local_port=9000, remote_port=30710)
+```
+
+#### HTTP
+
+```python
+from outray import http
+
+listener = http(url="http://localhost:8080", subdomain="my-subdomain")
+```
+
+---
+
+### Forwarding a Tunnel
+
+#### Asynchronous (`forward`)
+
+```python
+from outray import forward
+import asyncio
+
+asyncio.run(forward(listener))
+```
+
+* `forward(listener, ws_url=None, force_takeover=None, ping_interval=20, ping_timeout=20, api_key=None)`
+* Forwards the listener to the remote WebSocket tunnel.
+* Handles reconnects automatically.
+
+#### Synchronous (`forward_sync`)
+
+```python
+from outray import forward_sync
+
+forward_sync(listener)
+```
+
+* Same as `forward` but **runs in a blocking synchronous context**.
+* Useful for scripts that do not use `asyncio` natively.
+
+---
+
+### Logging
+
+`outray` uses the standard Python `logging` module. To see detailed tunnel events:
+
+```python
+import logging
+
+logger = logging.getLogger("outray")
+logger.setLevel(logging.DEBUG)
+```
+
