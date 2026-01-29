@@ -1,0 +1,1474 @@
+<!-- templates/ui_settings_tab.html - WebUI preferences tab -->
+<!-- CSS auto cache-busted by autoCacheBustCSS() on HTMX load -->
+<link rel="stylesheet" href="/static/css/form-sections.css" id="css-form-sections-ui">
+{% set ui_context = ui_settings | default({}) %}
+{% set defaults = ui_context.defaults | default({}) %}
+<script>
+if (!window.personalCredentialsComponent) {
+    window.personalCredentialsComponent = function() {
+        return {
+            credentialSource: null,
+            newToken: '',
+            savingCredential: false,
+            validatingCredential: false,
+            deletingCredential: false,
+            validationResult: null,
+
+            async loadCredentials() {
+                try {
+                    const response = await fetch('/api/users/me/credentials?provider=replicate');
+                    if (response.ok) {
+                        const creds = await response.json();
+                        const hasToken = creds.some(c => c.credential_name === 'api_token' && c.is_active);
+                        this.credentialSource = hasToken ? 'user' : null;
+                    }
+                    // Also check global fallback
+                    if (!this.credentialSource) {
+                        const validateResponse = await fetch('/api/users/me/credentials/validate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ provider: 'replicate', credential_name: 'api_token' }),
+                        });
+                        if (validateResponse.ok) {
+                            const result = await validateResponse.json();
+                            if (result.valid && result.token_source === 'global') {
+                                this.credentialSource = 'global';
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.debug('Failed to load credentials:', error);
+                }
+            },
+
+            async saveToken() {
+                if (!this.newToken) return;
+                this.savingCredential = true;
+                this.validationResult = null;
+                try {
+                    const response = await fetch('/api/users/me/credentials', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            provider: 'replicate',
+                            credential_name: 'api_token',
+                            value: this.newToken,
+                        }),
+                    });
+                    if (response.ok) {
+                        this.credentialSource = 'user';
+                        this.newToken = '';
+                        if (window.showToast) window.showToast('Token saved', 'success');
+                    } else {
+                        const data = await response.json();
+                        if (window.showToast) window.showToast(data.detail || 'Failed to save token', 'error');
+                    }
+                } catch (error) {
+                    console.error('Failed to save token:', error);
+                    if (window.showToast) window.showToast('Failed to save token', 'error');
+                } finally {
+                    this.savingCredential = false;
+                }
+            },
+
+            async validateToken() {
+                this.validatingCredential = true;
+                this.validationResult = null;
+                try {
+                    const response = await fetch('/api/users/me/credentials/validate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ provider: 'replicate', credential_name: 'api_token' }),
+                    });
+                    if (response.ok) {
+                        this.validationResult = await response.json();
+                    } else {
+                        this.validationResult = { valid: false, error: 'Validation request failed' };
+                    }
+                } catch (error) {
+                    this.validationResult = { valid: false, error: error.message || 'Network error' };
+                } finally {
+                    this.validatingCredential = false;
+                }
+            },
+
+            async deleteToken() {
+                if (!confirm('Remove your personal token? Cloud operations will use the global token if available.')) return;
+                this.deletingCredential = true;
+                try {
+                    const response = await fetch('/api/users/me/credentials/replicate/api_token', {
+                        method: 'DELETE',
+                    });
+                    if (response.ok) {
+                        this.credentialSource = null;
+                        this.validationResult = null;
+                        if (window.showToast) window.showToast('Token removed', 'success');
+                        await this.loadCredentials();
+                    } else {
+                        if (window.showToast) window.showToast('Failed to remove token', 'error');
+                    }
+                } catch (error) {
+                    console.error('Failed to delete token:', error);
+                    if (window.showToast) window.showToast('Failed to remove token', 'error');
+                } finally {
+                    this.deletingCredential = false;
+                }
+            },
+        };
+    };
+}
+if (!window.uiSettingsTabComponent) {
+    window.uiSettingsTabComponent = function(initialData) {
+        const initial = initialData || {};
+        return {
+            defaults: initial.defaults || {},
+            fallbacks: initial.fallbacks || {},
+            themeOptions: initial.themes || [],
+            eventIntervals: initial.event_interval_options || [5, 10, 15, 30, 60],
+            settings: {},
+            original: {},
+            saving: false,
+            successMessage: '',
+            errorMessage: '',
+            gpuInventory: {
+                loading: false,
+                error: '',
+                devices: [],
+                backend: null,
+                count: 0,
+                detected: false,
+                optimalProcesses: 1,
+            },
+            maintenance: {
+                busy: false,
+                message: '',
+                error: '',
+            },
+            authStatus: {
+                checked: false,
+                inUse: false,
+                userCount: 0,
+                hasProviders: false,
+            },
+            init() {
+                this.resetFromDefaults();
+                this.ensureGpuInventory();
+                this.checkAuthStatus();
+            },
+            async checkAuthStatus() {
+                try {
+                    const response = await fetch('/api/users/meta/auth-status');
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.authStatus.inUse = data.in_use || false;
+                        this.authStatus.userCount = data.user_count || 0;
+                        this.authStatus.hasProviders = data.has_external_providers || false;
+                    }
+                } catch (error) {
+                    console.debug('Auth status check failed:', error);
+                }
+                this.authStatus.checked = true;
+            },
+            get canDisableAdminTab() {
+                // Can only disable if auth is not in use
+                return !this.authStatus.inUse;
+            },
+            normalizeAccelerateSelection(rawValue) {
+                const fallback = {
+                    mode: 'auto',
+                    manual_count: null,
+                    device_ids: [],
+                    '--num_processes': null,
+                };
+                if (!rawValue) {
+                    return { ...fallback };
+                }
+                let payload = rawValue;
+                if (typeof rawValue === 'string') {
+                    const trimmed = rawValue.trim();
+                    if (!trimmed) {
+                        return { ...fallback };
+                    }
+                    try {
+                        payload = JSON.parse(trimmed);
+                    } catch (_) {
+                        const parsed = parseInt(trimmed, 10);
+                        if (Number.isFinite(parsed)) {
+                            return {
+                                mode: parsed > 1 ? 'manual' : 'disabled',
+                                manual_count: parsed,
+                                device_ids: [],
+                                '--num_processes': parsed,
+                            };
+                        }
+                        return { ...fallback };
+                    }
+                }
+                if (!payload || typeof payload !== 'object') {
+                    return { ...fallback };
+                }
+                const clone = { ...payload };
+                const rawDevices = Array.isArray(clone.device_ids) ? clone.device_ids : [];
+                const deviceIds = rawDevices
+                    .map((value) => {
+                        const parsed = parseInt(value, 10);
+                        return Number.isNaN(parsed) ? null : parsed;
+                    })
+                    .filter((value) => value !== null);
+                const manualCount = typeof clone.manual_count === 'number'
+                    ? clone.manual_count
+                    : parseInt(clone.manual_count, 10);
+                const numProcesses = typeof clone['--num_processes'] === 'number'
+                    ? clone['--num_processes']
+                    : parseInt(clone['--num_processes'], 10);
+                const validModes = ['auto', 'manual', 'disabled', 'hardware'];
+                let mode = typeof clone.mode === 'string' ? clone.mode.trim().toLowerCase() : undefined;
+                if (!validModes.includes(mode || '')) {
+                    if (deviceIds.length > 1) {
+                        mode = 'manual';
+                    } else if (Number.isFinite(numProcesses) && numProcesses > 1) {
+                        mode = 'manual';
+                    } else if (Number.isFinite(numProcesses) && numProcesses <= 1) {
+                        mode = 'disabled';
+                    } else {
+                        mode = 'auto';
+                    }
+                }
+                const normalizedMode = validModes.includes(mode || '') ? mode : 'auto';
+                return {
+                    mode: normalizedMode || 'auto',
+                    manual_count:
+                        normalizedMode === 'manual' && Number.isFinite(manualCount) && manualCount > 0
+                            ? manualCount
+                            : null,
+                    device_ids: deviceIds,
+                    '--num_processes':
+                        normalizedMode === 'hardware'
+                            ? null
+                            : Number.isFinite(numProcesses) && numProcesses > 0
+                                ? numProcesses
+                                : null,
+                };
+            },
+            prepareAccelerateState(rawValue) {
+                const normalized = this.normalizeAccelerateSelection(rawValue);
+                const deviceIds = Array.from(new Set(normalized.device_ids || []));
+                const fallbackProcesses = normalized['--num_processes']
+                    || normalized.manual_count
+                    || (deviceIds.length > 0 ? deviceIds.length : null)
+                    || this.gpuInventory.optimalProcesses
+                    || 1;
+                return {
+                    mode: normalized.mode || 'auto',
+                    manualCount: Math.max(1, parseInt(fallbackProcesses, 10) || 1),
+                    deviceIds,
+                };
+            },
+            normalizeDefaults(source) {
+                const data = source || {};
+                const coerceAutoPreserve = (value) => {
+                    if (value === undefined || value === null) {
+                        return true;
+                    }
+                    if (typeof value === 'boolean') {
+                        return value;
+                    }
+                    if (typeof value === 'string') {
+                        const normalized = value.trim().toLowerCase();
+                        if (!normalized) {
+                            return true;
+                        }
+                        return !['0', 'false', 'no', 'off'].includes(normalized);
+                    }
+                    if (typeof value === 'number' && Number.isFinite(value)) {
+                        return value !== 0;
+                    }
+                    return Boolean(value);
+                };
+                return {
+                    theme: (data.theme || 'dark').toLowerCase(),
+                    event_polling_interval: Number(data.event_polling_interval) || 5,
+                    event_stream_enabled: data.event_stream_enabled !== false,
+                    auto_preserve_defaults: coerceAutoPreserve(data.auto_preserve_defaults),
+                    show_documentation_links: coerceAutoPreserve(data.show_documentation_links),
+                    output_dir: (data.output_dir && data.output_dir !== 'Not configured') ? data.output_dir : '',
+                    configs_dir: data.configs_dir || '',
+                    accelerate: this.prepareAccelerateState(data.accelerate_overrides),
+                    cloud_tab_enabled: data.cloud_tab_enabled !== false,
+                    cloud_webhook_url: typeof data.cloud_webhook_url === 'string' ? data.cloud_webhook_url : '',
+                    cloud_data_consent: data.cloud_data_consent || 'ask',
+                    admin_tab_enabled: data.admin_tab_enabled !== false,
+                    git_mirror_enabled: data.git_mirror_enabled === true,
+                    git_auto_commit: data.git_auto_commit === true,
+                    git_require_clean: data.git_require_clean === true,
+                    git_include_untracked: data.git_include_untracked === true,
+                    git_push_on_snapshot: data.git_push_on_snapshot === true,
+                    git_remote: typeof data.git_remote === 'string' ? data.git_remote : '',
+                    git_branch: typeof data.git_branch === 'string' ? data.git_branch : '',
+                    sounds_enabled: data.sounds_enabled !== false,
+                    sounds_volume: typeof data.sounds_volume === 'number' ? data.sounds_volume : 50,
+                    sounds_success_enabled: data.sounds_success_enabled !== false,
+                    sounds_error_enabled: data.sounds_error_enabled !== false,
+                    sounds_warning_enabled: data.sounds_warning_enabled !== false,
+                    sounds_info_enabled: data.sounds_info_enabled !== false,
+                    sounds_retro_hover_enabled: data.sounds_retro_hover_enabled === true,
+                };
+            },
+            clone(value) {
+                return JSON.parse(JSON.stringify(value));
+            },
+            syncSoundManager() {
+                if (window.SoundManager) {
+                    window.SoundManager.updateSettings({
+                        sounds_enabled: this.settings.sounds_enabled,
+                        sounds_volume: this.settings.sounds_volume,
+                        sounds_success_enabled: this.settings.sounds_success_enabled,
+                        sounds_error_enabled: this.settings.sounds_error_enabled,
+                        sounds_warning_enabled: this.settings.sounds_warning_enabled,
+                        sounds_info_enabled: this.settings.sounds_info_enabled,
+                        sounds_retro_hover_enabled: this.settings.sounds_retro_hover_enabled,
+                    });
+                }
+            },
+            resetFromDefaults() {
+                const normalized = this.normalizeDefaults(this.defaults);
+                this.settings = this.clone(normalized);
+                this.original = this.clone(normalized);
+                this.successMessage = '';
+                this.errorMessage = '';
+                this.syncSoundManager();
+            },
+            syncDefaults(detail) {
+                const payload = detail && (detail.resolved_defaults || detail.defaults);
+                if (!payload) {
+                    return;
+                }
+                this.defaults = payload;
+                const normalized = this.normalizeDefaults(payload);
+                this.settings = this.clone(normalized);
+                this.original = this.clone(normalized);
+                this.successMessage = '';
+                this.errorMessage = '';
+                this.ensureGpuInventory();
+                this.syncSoundManager();
+            },
+            markDirty() {
+                this.successMessage = '';
+                this.errorMessage = '';
+            },
+            get hasChanges() {
+                return JSON.stringify(this.settings) !== JSON.stringify(this.original);
+            },
+            get defaultConfigsDir() {
+                return this.defaults.configs_dir || this.fallbacks.configs_dir || 'system default';
+            },
+            ensureGpuInventory() {
+                if (this.gpuInventory.loading || this.gpuInventory.devices.length || this.gpuInventory.detected) {
+                    return;
+                }
+                this.gpuInventory.loading = true;
+                this.gpuInventory.error = '';
+                fetch('/api/hardware/gpus')
+                    .then(async (response) => {
+                        if (!response.ok) {
+                            throw new Error(`GPU inventory request failed with status ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then((payload) => {
+                        const devices = Array.isArray(payload.devices) ? payload.devices : [];
+                        this.gpuInventory.devices = devices.map((device, index) => ({
+                            index: typeof device.index === 'number' ? device.index : index,
+                            id: device.id ?? device.index ?? index,
+                            name: device.name || `GPU ${typeof device.index === 'number' ? device.index : index}`,
+                            memory_gb: typeof device.memory_gb === 'number' ? device.memory_gb : null,
+                        }));
+                        this.gpuInventory.backend = payload.backend || null;
+                        this.gpuInventory.count = typeof payload.count === 'number'
+                            ? payload.count
+                            : this.gpuInventory.devices.length;
+                        this.gpuInventory.detected = Boolean(payload.detected && this.gpuInventory.devices.length > 0);
+                        let optimal = typeof payload.optimal_processes === 'number' ? payload.optimal_processes : null;
+                        if (!optimal || optimal < 1) {
+                            optimal = this.gpuInventory.devices.length || 1;
+                        }
+                        this.gpuInventory.optimalProcesses = optimal;
+                    })
+                    .catch((error) => {
+                        console.error('Failed to detect GPU inventory', error);
+                        this.gpuInventory.error = 'Unable to detect GPUs automatically. Configure processes manually if needed.';
+                        this.gpuInventory.devices = [];
+                        this.gpuInventory.backend = null;
+                        this.gpuInventory.count = 0;
+                        this.gpuInventory.detected = false;
+                        this.gpuInventory.optimalProcesses = 1;
+                    })
+                    .finally(() => {
+                        this.gpuInventory.loading = false;
+                    });
+            },
+            async parseErrorResponse(response) {
+                try {
+                    const payload = await response.json();
+                    if (payload && typeof payload === 'object') {
+                        return payload.detail || payload.message || null;
+                    }
+                } catch (_) {
+                    // ignore JSON parsing issues
+                }
+                return null;
+            },
+            async clearFsdpCache() {
+                if (this.maintenance.busy) {
+                    return;
+                }
+                this.maintenance.busy = true;
+                this.maintenance.message = '';
+                this.maintenance.error = '';
+                try {
+                    const response = await fetch('/api/system/maintenance/clear-fsdp-block-cache', {
+                        method: 'POST',
+                        headers: { 'Accept': 'application/json' },
+                    });
+                    if (!response.ok) {
+                        const detail = await this.parseErrorResponse(response);
+                        throw new Error(detail || 'Failed to clear FSDP detection cache.');
+                    }
+                    this.maintenance.message = 'Cleared FSDP detection cache.';
+                    if (window.showToast) {
+                        window.showToast('FSDP detection cache cleared.', 'success');
+                    }
+                } catch (error) {
+                    const message = error?.message || 'Failed to clear FSDP detection cache.';
+                    this.maintenance.error = message;
+                    if (window.showToast) {
+                        window.showToast(message, 'error');
+                    }
+                } finally {
+                    this.maintenance.busy = false;
+                }
+            },
+            async clearDeepSpeedCache() {
+                if (this.maintenance.busy) {
+                    return;
+                }
+                this.maintenance.busy = true;
+                this.maintenance.message = '';
+                this.maintenance.error = '';
+                try {
+                    const response = await fetch('/api/system/maintenance/clear-deepspeed-offload', {
+                        method: 'POST',
+                        headers: { 'Accept': 'application/json' },
+                    });
+                    if (!response.ok) {
+                        const detail = await this.parseErrorResponse(response);
+                        throw new Error(detail || 'Failed to clear DeepSpeed offload cache.');
+                    }
+                    const payload = await response.json();
+                    const clearedDirs = Array.isArray(payload.removed) ? payload.removed.length : 0;
+                    if (clearedDirs > 0) {
+                        this.maintenance.message = `Cleared ${clearedDirs} DeepSpeed offload director${clearedDirs === 1 ? 'y' : 'ies'}.`;
+                    } else {
+                        this.maintenance.message = 'No DeepSpeed offload directories were found to remove.';
+                    }
+                    if (window.showToast) {
+                        window.showToast(this.maintenance.message, 'success');
+                    }
+                } catch (error) {
+                    const message = error?.message || 'Failed to clear DeepSpeed offload cache.';
+                    this.maintenance.error = message;
+                    if (window.showToast) {
+                        window.showToast(message, 'error');
+                    }
+                } finally {
+                    this.maintenance.busy = false;
+                }
+            },
+            selectTheme(theme) {
+                this.settings.theme = theme;
+                this.markDirty();
+                if (typeof window.applyTheme === 'function') {
+                    window.applyTheme(theme);
+                }
+            },
+            async refreshThemes() {
+                try {
+                    const response = await fetch('/api/themes/refresh', { method: 'POST' });
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.themeOptions = data.themes || [];
+                    }
+                } catch (error) {
+                    console.error('Failed to refresh themes:', error);
+                }
+            },
+            toggleEventStream() {
+                this.settings.event_stream_enabled = !this.settings.event_stream_enabled;
+                this.markDirty();
+            },
+            updateInterval(value) {
+                const parsed = Number(value);
+                this.settings.event_polling_interval = Number.isFinite(parsed) && parsed > 0 ? parsed : 5;
+                this.markDirty();
+            },
+            updateOutputDir(value) {
+                this.settings.output_dir = value;
+                this.markDirty();
+            },
+            updateConfigsDir(value) {
+                this.settings.configs_dir = value;
+                this.markDirty();
+            },
+            setAccelerateMode(mode) {
+                this.settings.accelerate.mode = mode;
+                if (mode === 'disabled') {
+                    this.settings.accelerate.deviceIds = [];
+                    this.settings.accelerate.manualCount = 1;
+                } else if (mode === 'hardware') {
+                    this.settings.accelerate.deviceIds = [];
+                } else {
+                    this.ensureGpuInventory();
+                }
+                this.markDirty();
+            },
+            updateManualAccelerateCount(value) {
+                const parsed = parseInt(value, 10);
+                this.settings.accelerate.manualCount = Number.isFinite(parsed) && parsed > 0 ? parsed : this.settings.accelerate.manualCount;
+                this.markDirty();
+            },
+            toggleAccelerateDevice() {
+                if (this.settings.accelerate.mode === 'manual') {
+                    const selected = (this.settings.accelerate.deviceIds || []).length;
+                    if (selected > 0) {
+                        this.settings.accelerate.manualCount = selected;
+                    }
+                }
+                this.markDirty();
+            },
+            accelerateSummary() {
+                const accelerateState = this.settings.accelerate || { mode: 'auto', manualCount: 1, deviceIds: [] };
+                const mode = accelerateState.mode;
+                if (mode === 'manual' && accelerateState.deviceIds.length > 0) {
+                    return `Will launch ${accelerateState.deviceIds.length} process${accelerateState.deviceIds.length === 1 ? '' : 'es'} on selected GPUs.`;
+                }
+                if (mode === 'manual') {
+                    return `Will launch ${accelerateState.manualCount} process${accelerateState.manualCount === 1 ? '' : 'es'} by default.`;
+                }
+                if (mode === 'hardware') {
+                    return 'Hardware tab controls the Accelerate process count.';
+                }
+                if (mode === 'disabled') {
+                    return 'SimpleTuner will restrict Accelerate to a single GPU.';
+                }
+                const processes = this.gpuInventory.optimalProcesses || 1;
+                return `Auto mode launches ${processes} process${processes === 1 ? '' : 'es'} (one per detected GPU).`;
+            },
+            serializeAccelerateSettings() {
+                const state = this.settings.accelerate || {};
+                const mode = (state.mode || 'auto').toLowerCase();
+                const validModes = ['auto', 'manual', 'disabled', 'hardware'];
+                const normalizedMode = validModes.includes(mode) ? mode : 'auto';
+                const uniqueDeviceIds = Array.isArray(state.deviceIds)
+                    ? Array.from(new Set(
+                        state.deviceIds
+                            .map((value) => {
+                                const parsed = parseInt(value, 10);
+                                return Number.isNaN(parsed) ? null : parsed;
+                            })
+                            .filter((value) => value !== null),
+                    ))
+                    : [];
+                const manualCountParsed = parseInt(state.manualCount, 10);
+                const hasManualCount = Number.isFinite(manualCountParsed) && manualCountParsed > 0;
+                const manualCount = hasManualCount ? manualCountParsed : null;
+
+                if (normalizedMode === 'hardware') {
+                    return { mode: 'hardware' };
+                }
+
+                let numProcesses;
+                if (normalizedMode === 'disabled') {
+                    numProcesses = 1;
+                } else if (normalizedMode === 'auto') {
+                    numProcesses = this.gpuInventory.optimalProcesses || this.gpuInventory.count || manualCount || 1;
+                } else if (normalizedMode === 'manual') {
+                    if (uniqueDeviceIds.length > 0) {
+                        numProcesses = uniqueDeviceIds.length;
+                    } else if (manualCount) {
+                        numProcesses = manualCount;
+                    } else {
+                        this.errorMessage = 'Select at least one GPU or provide a process count.';
+                        return null;
+                    }
+                } else {
+                    numProcesses = this.gpuInventory.optimalProcesses || 1;
+                }
+
+                const normalizedProcesses = Math.max(1, parseInt(numProcesses, 10) || 1);
+                const payload = {
+                    mode: normalizedMode === 'manual' ? 'manual' : normalizedMode === 'disabled' ? 'disabled' : 'auto',
+                    '--num_processes': normalizedProcesses,
+                };
+                if (normalizedMode === 'manual' && uniqueDeviceIds.length > 0) {
+                    payload.device_ids = uniqueDeviceIds;
+                } else if (normalizedMode === 'manual' && manualCount) {
+                    payload.manual_count = Math.max(1, manualCount);
+                }
+                return payload;
+            },
+            async saveSettings() {
+                if (this.saving || !this.hasChanges) {
+                    return;
+                }
+                this.saving = true;
+                this.errorMessage = '';
+                this.successMessage = '';
+
+                const payload = {
+                    theme: this.settings.theme,
+                    event_polling_interval: this.settings.event_polling_interval,
+                    event_stream_enabled: this.settings.event_stream_enabled,
+                    auto_preserve_defaults: this.settings.auto_preserve_defaults,
+                    show_documentation_links: this.settings.show_documentation_links,
+                };
+
+                const trimmedConfigsDir = typeof this.settings.configs_dir === 'string' ? this.settings.configs_dir.trim() : '';
+                if (!trimmedConfigsDir) {
+                    this.errorMessage = 'Configuration library path is required.';
+                    this.saving = false;
+                    if (window.showToast) {
+                        window.showToast(this.errorMessage, 'error');
+                    }
+                    return;
+                }
+                payload.configs_dir = trimmedConfigsDir;
+
+                if (typeof this.settings.output_dir === 'string' && this.settings.output_dir.trim()) {
+                    payload.output_dir = this.settings.output_dir.trim();
+                }
+
+                const acceleratePayload = this.serializeAccelerateSettings();
+                if (!acceleratePayload) {
+                    this.saving = false;
+                    if (this.errorMessage && window.showToast) {
+                        window.showToast(this.errorMessage, 'error');
+                    }
+                    return;
+                }
+                payload.accelerate_overrides = acceleratePayload;
+
+                payload.cloud_tab_enabled = this.settings.cloud_tab_enabled;
+                payload.cloud_webhook_url = this.settings.cloud_webhook_url || null;
+                payload.cloud_data_consent = this.settings.cloud_data_consent || 'ask';
+                payload.admin_tab_enabled = this.settings.admin_tab_enabled;
+                payload.git_mirror_enabled = this.settings.git_mirror_enabled;
+                payload.git_auto_commit = this.settings.git_auto_commit;
+                payload.git_require_clean = this.settings.git_require_clean;
+                payload.git_include_untracked = this.settings.git_include_untracked;
+                payload.git_push_on_snapshot = this.settings.git_push_on_snapshot;
+                payload.git_remote = this.settings.git_remote || null;
+                payload.git_branch = this.settings.git_branch || null;
+
+                payload.sounds_enabled = this.settings.sounds_enabled;
+                payload.sounds_volume = this.settings.sounds_volume;
+                payload.sounds_success_enabled = this.settings.sounds_success_enabled;
+                payload.sounds_error_enabled = this.settings.sounds_error_enabled;
+                payload.sounds_warning_enabled = this.settings.sounds_warning_enabled;
+                payload.sounds_info_enabled = this.settings.sounds_info_enabled;
+                payload.sounds_retro_hover_enabled = this.settings.sounds_retro_hover_enabled;
+
+                try {
+                    const response = await fetch('/api/webui/defaults/update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    });
+
+                    if (!response.ok) {
+                        let message = 'Failed to save preferences';
+                        try {
+                            const detail = await response.json();
+                            if (detail && detail.detail) {
+                                message = detail.detail;
+                            }
+                        } catch (_) {}
+                        throw new Error(message);
+                    }
+
+                    const data = await response.json();
+                    if (data) {
+                        const defaultsPayload = data.resolved_defaults || data.defaults || {};
+                        this.fallbacks = data.fallbacks || this.fallbacks || {};
+                        this.defaults = defaultsPayload;
+                        const normalized = this.normalizeDefaults(defaultsPayload);
+                        this.settings = this.clone(normalized);
+                        this.original = this.clone(normalized);
+                        this.successMessage = 'Preferences saved.';
+                        if (typeof window.applyTheme === 'function') {
+                            window.applyTheme(this.settings.theme);
+                        }
+                        window.dispatchEvent(new CustomEvent('webui-defaults-updated', {
+                            detail: {
+                                defaults: data.defaults || {},
+                                resolved_defaults: defaultsPayload,
+                                source: 'ui-settings'
+                            }
+                        }));
+                        if (window.showToast) {
+                            window.showToast('UI preferences updated.', 'success');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to save UI preferences', error);
+                    this.errorMessage = error.message || 'Failed to save preferences.';
+                    if (window.showToast) {
+                        window.showToast(this.errorMessage, 'error');
+                    }
+                } finally {
+                    this.saving = false;
+                }
+            },
+            discardChanges() {
+                this.resetFromDefaults();
+            },
+        };
+    };
+}
+</script>
+
+<div class="tab-fragment"
+     id="ui-settings-tab-content"
+     data-tab-name="ui_settings"
+     x-data='uiSettingsTabComponent({{ ui_context | tojson | safe }})'
+     x-on:webui-defaults-updated.window="syncDefaults($event.detail)">
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-1"><i class="fas fa-sliders-h me-2"></i>WebUI Preferences</h5>
+            <p class="text-muted mb-0">Adjust the appearance and behaviour of the training studio interface.</p>
+        </div>
+        <div class="card-body">
+            <div class="row g-4">
+                <div class="col-xl-6">
+                    <div class="preference-card">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h6 class="mb-1">Theme</h6>
+                                <p class="text-muted small mb-0">Switch between available UI themes. Changes apply instantly.</p>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        @click="refreshThemes()"
+                                        title="Refresh theme list">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                                <span class="badge bg-secondary" x-text="settings.theme.toUpperCase()"></span>
+                            </div>
+                        </div>
+                        <div class="row g-3">
+                            <template x-for="option in themeOptions" :key="option.value">
+                                <div class="col-sm-6">
+                                    <button type="button"
+                                            class="theme-tile"
+                                            :class="{ 'active': settings.theme === option.value }"
+                                            @click="selectTheme(option.value)">
+                                        <div class="theme-tile-body">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div class="theme-title">
+                                                    <i class="fas fa-circle me-2"
+                                                       :class="settings.theme === option.value ? 'text-success' : 'text-muted'"></i>
+                                                    <span x-text="option.label"></span>
+                                                </div>
+                                                <span class="badge"
+                                                      :class="{
+                                                          'bg-secondary': option.source === 'builtin',
+                                                          'bg-info': option.source === 'pip',
+                                                          'bg-success': option.source === 'local'
+                                                      }"
+                                                      x-text="option.source === 'builtin' ? 'Built-in' :
+                                                              option.source === 'pip' ? 'Package' : 'Local'"
+                                                      style="font-size: 0.65rem;"></span>
+                                            </div>
+                                            <p class="text-muted small mb-0 mt-1" x-text="option.description || ''"></p>
+                                        </div>
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-6">
+                    <div class="preference-card">
+                        <h6 class="mb-3">Event Stream</h6>
+                        <div class="form-check form-switch form-switch-lg mb-3">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   id="ui-event-stream-toggle"
+                                   :checked="settings.event_stream_enabled"
+                                   @change="toggleEventStream()">
+                            <label class="form-check-label" for="ui-event-stream-toggle">
+                                Enable real-time event polling
+                            </label>
+                        </div>
+                        <label class="form-label" for="ui-event-interval">Update interval</label>
+                        <select id="ui-event-interval"
+                                class="form-select"
+                                x-model.number="settings.event_polling_interval"
+                                @change="updateInterval($event.target.value)">
+                            <template x-for="interval in eventIntervals" :key="interval">
+                                <option :value="interval" x-text="interval + ' seconds'"></option>
+                            </template>
+                        </select>
+                        <p class="text-muted small mt-2">
+                            When disabled, event updates only refresh when triggered manually. Longer intervals reduce background activity.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="col-xl-6">
+                    <div class="preference-card">
+                        <h6 class="mb-3">Configuration Saves</h6>
+                        <div class="form-check form-switch form-switch-lg mb-3">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   id="ui-auto-preserve-defaults"
+                                   x-model="settings.auto_preserve_defaults"
+                                   @change="markDirty()">
+                            <label class="form-check-label" for="ui-auto-preserve-defaults">
+                                Automatically preserve defaults when saving
+                            </label>
+                        </div>
+                        <p class="text-muted small mb-0">
+                            When enabled, configuration saves keep only values that differ from their defaults without asking each time.
+                            Disable this to review the save options before writing a config.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="col-xl-6">
+                    <div class="preference-card">
+                        <h6 class="mb-3">Documentation Links</h6>
+                        <div class="form-check form-switch form-switch-lg mb-3">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   id="ui-show-documentation-links"
+                                   x-model="settings.show_documentation_links"
+                                   @change="markDirty()">
+                            <label class="form-check-label" for="ui-show-documentation-links">
+                                Show documentation links in dataloader
+                            </label>
+                        </div>
+                        <p class="text-muted small mb-0">
+                            When enabled, external link icons appear next to dataloader form fields linking to documentation.
+                            Disable this if you prefer a cleaner interface without the link indicators.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="col-xl-6">
+                    <div class="preference-card">
+                        <h6 class="mb-3">Cloud Training</h6>
+                        <p class="text-muted small mb-2">
+                            <i class="fas fa-info-circle me-1"></i>
+                            <strong>Enabled by default.</strong> Uncheck to hide the Cloud tab from the sidebar.
+                        </p>
+                        <div class="form-check form-switch form-switch-lg mb-3">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   id="ui-cloud-tab-enabled"
+                                   x-model="settings.cloud_tab_enabled"
+                                   @change="markDirty()">
+                            <label class="form-check-label" for="ui-cloud-tab-enabled">
+                                Show Cloud tab in sidebar
+                            </label>
+                        </div>
+                        <div class="mb-3" x-show="settings.cloud_tab_enabled">
+                            <label class="form-label" for="ui-cloud-webhook-url">Webhook URL</label>
+                            <input type="url"
+                                   id="ui-cloud-webhook-url"
+                                   class="form-control"
+                                   placeholder="https://your-domain.com/api/cloud/webhook/replicate"
+                                   x-model="settings.cloud_webhook_url"
+                                   @input="markDirty()">
+                            <div class="form-text">
+                                Public URL for receiving Replicate training events (e.g., via ngrok or cloudflared).
+                            </div>
+                        </div>
+                        <div class="mb-3" x-show="settings.cloud_tab_enabled">
+                            <label class="form-label" for="ui-cloud-data-consent">Data Upload Consent</label>
+                            <select id="ui-cloud-data-consent"
+                                    class="form-select"
+                                    x-model="settings.cloud_data_consent"
+                                    @change="markDirty()">
+                                <option value="ask">Always Ask - Review data before each upload</option>
+                                <option value="allow">Always Allow - Auto-consent to uploads</option>
+                                <option value="deny">Never Upload - Disable cloud training (local only)</option>
+                            </select>
+                            <div class="form-text">
+                                Controls whether to ask for confirmation before uploading training data to cloud providers.
+                            </div>
+                        </div>
+                        <p class="text-muted small mb-0">
+                            When enabled, the Cloud tab provides access to Replicate cloud training and job management.
+                            Set <code>REPLICATE_API_TOKEN</code> environment variable to authenticate.
+                            <a href="{{ docs_url('experimental/cloud/README.md') }}" target="_blank" class="text-info ms-1"
+                               x-show="settings.show_documentation_links">
+                                <i class="fas fa-external-link-alt"></i> Docs
+                            </a>
+                        </p>
+                        <!-- Personal Cloud Credentials -->
+                        <div class="mt-3 pt-3 border-top border-secondary" x-show="settings.cloud_tab_enabled && authStatus.inUse"
+                             x-data="personalCredentialsComponent()" x-init="loadCredentials()">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0 small"><i class="fas fa-key me-2"></i>Personal API Token</h6>
+                                <span class="badge" :class="credentialSource === 'user' ? 'bg-success' : (credentialSource === 'global' ? 'bg-info' : 'bg-secondary')"
+                                      x-text="credentialSource === 'user' ? 'Using your token' : (credentialSource === 'global' ? 'Using global token' : 'Not configured')"></span>
+                            </div>
+                            <p class="text-muted small mb-2">
+                                Optionally provide your own Replicate API token. If set, it will be used instead of the global token.
+                            </p>
+                            <div class="input-group input-group-sm mb-2">
+                                <input type="password"
+                                       class="form-control form-control-sm"
+                                       placeholder="r8_xxxxxxxxxxxx"
+                                       x-model="newToken"
+                                       :disabled="savingCredential">
+                                <button class="btn btn-outline-primary"
+                                        type="button"
+                                        @click="saveToken()"
+                                        :disabled="!newToken || savingCredential">
+                                    <i class="fas" :class="savingCredential ? 'fa-spinner fa-spin' : 'fa-save'"></i>
+                                </button>
+                                <button class="btn btn-outline-info"
+                                        type="button"
+                                        @click="validateToken()"
+                                        :disabled="validatingCredential"
+                                        title="Validate current token">
+                                    <i class="fas" :class="validatingCredential ? 'fa-spinner fa-spin' : 'fa-check-circle'"></i>
+                                </button>
+                                <button class="btn btn-outline-danger"
+                                        type="button"
+                                        @click="deleteToken()"
+                                        :disabled="credentialSource !== 'user' || deletingCredential"
+                                        title="Remove your token (use global instead)">
+                                    <i class="fas" :class="deletingCredential ? 'fa-spinner fa-spin' : 'fa-trash'"></i>
+                                </button>
+                            </div>
+                            <template x-if="validationResult">
+                                <div class="small"
+                                     :class="validationResult.valid ? 'text-success' : 'text-danger'">
+                                    <i class="fas" :class="validationResult.valid ? 'fa-check-circle' : 'fa-times-circle'"></i>
+                                    <span x-text="validationResult.valid ? 'Valid (' + validationResult.username + ')' : validationResult.error"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-6">
+                    <div class="preference-card">
+                        <h6 class="mb-3">User Management</h6>
+                        <p class="text-muted small mb-2">
+                            <i class="fas fa-info-circle me-1"></i>
+                            <strong>Enabled by default.</strong> When auth is configured, only admins see this tab.
+                        </p>
+                        <div class="form-check form-switch form-switch-lg mb-3">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   id="ui-admin-tab-enabled"
+                                   x-model="settings.admin_tab_enabled"
+                                   :disabled="!canDisableAdminTab"
+                                   @change="markDirty()">
+                            <label class="form-check-label" for="ui-admin-tab-enabled">
+                                Show Administration tab in sidebar
+                            </label>
+                        </div>
+                        <template x-if="authStatus.inUse">
+                            <div class="alert alert-info py-2 small mb-3">
+                                <i class="fas fa-lock me-1"></i>
+                                <span x-text="'Authentication is active (' + authStatus.userCount + ' user' + (authStatus.userCount === 1 ? '' : 's') + (authStatus.hasProviders ? ', external providers configured' : '') + '). The Administration tab is automatically shown to admin users and cannot be fully hidden.'"></span>
+                            </div>
+                        </template>
+                        <template x-if="!authStatus.inUse">
+                            <p class="text-muted small mb-0">
+                                <i class="fas fa-user me-1"></i>
+                                No authentication configured. The Administration tab is visible to all users in single-user mode.
+                                Configure users in the Administration tab to enable access control.
+                            </p>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="col-xl-6">
+                    <div class="preference-card">
+                        <h6 class="mb-3">Git Mirror</h6>
+                        <div class="form-check form-switch form-switch-lg mb-2">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   id="ui-git-mirror-enabled"
+                                   x-model="settings.git_mirror_enabled"
+                                   @change="markDirty()">
+                            <label class="form-check-label" for="ui-git-mirror-enabled">
+                                Enable Git Mirror tab
+                            </label>
+                        </div>
+                        <div class="form-check form-switch form-switch-lg mb-2">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   id="ui-git-auto-commit"
+                                   x-model="settings.git_auto_commit"
+                                   @change="markDirty()">
+                            <label class="form-check-label" for="ui-git-auto-commit">
+                                Auto-commit on save
+                            </label>
+                        </div>
+                        <div class="form-check form-switch form-switch-lg mb-2">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   id="ui-git-require-clean"
+                                   x-model="settings.git_require_clean"
+                                   @change="markDirty()">
+                            <label class="form-check-label" for="ui-git-require-clean">
+                                Require clean tree before saving
+                            </label>
+                        </div>
+                        <div class="form-check form-switch form-switch-lg mb-2">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   id="ui-git-include-untracked"
+                                   x-model="settings.git_include_untracked"
+                                   @change="markDirty()">
+                            <label class="form-check-label" for="ui-git-include-untracked">
+                                Include untracked files when snapshotting
+                            </label>
+                        </div>
+                        <div class="form-check form-switch form-switch-lg mb-3">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   id="ui-git-push-on-snapshot"
+                                   x-model="settings.git_push_on_snapshot"
+                                   @change="markDirty()">
+                            <label class="form-check-label" for="ui-git-push-on-snapshot">
+                                Push after snapshot
+                            </label>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-sm-6">
+                                <label class="form-label">Remote URL</label>
+                                <input type="text"
+                                       class="form-control"
+                                       placeholder="https://example.com/repo.git"
+                                       x-model="settings.git_remote"
+                                       @input="markDirty()">
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label">Default branch</label>
+                                <input type="text"
+                                       class="form-control"
+                                       placeholder="main"
+                                       x-model="settings.git_branch"
+                                       @input="markDirty()">
+                            </div>
+                        </div>
+                        <p class="text-muted small mt-2 mb-0">
+                            Git preferences apply to the configs directory. Enable the tab to expose the Git Mirror controls.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="col-xl-6">
+                    <div class="preference-card">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h6 class="mb-1"><i class="fas fa-volume-up me-2"></i>UI Sounds</h6>
+                                <p class="text-muted small mb-0">Audio feedback for notifications and events.</p>
+                            </div>
+                            <div class="form-check form-switch form-switch-lg">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       id="ui-sounds-enabled"
+                                       x-model="settings.sounds_enabled"
+                                       @change="markDirty(); if (window.SoundManager) { window.SoundManager.setEnabled(settings.sounds_enabled); }">
+                            </div>
+                        </div>
+                        <div x-show="settings.sounds_enabled">
+                            <label class="form-label" for="ui-sounds-volume">Volume</label>
+                            <div class="d-flex align-items-center gap-3 mb-3">
+                                <i class="fas fa-volume-off text-muted"></i>
+                                <input type="range"
+                                       id="ui-sounds-volume"
+                                       class="form-range flex-grow-1"
+                                       min="0"
+                                       max="100"
+                                       step="5"
+                                       x-model.number="settings.sounds_volume"
+                                       @input="markDirty(); if (window.SoundManager) { window.SoundManager.setVolume(settings.sounds_volume); }"
+                                       @change="if (window.SoundManager) { window.SoundManager.testSound('info'); }">
+                                <i class="fas fa-volume-up text-muted"></i>
+                                <span class="badge bg-secondary" x-text="settings.sounds_volume + '%'" style="min-width: 3rem;"></span>
+                            </div>
+                            <div class="fw-semibold small mb-2">Notification Categories</div>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input"
+                                               type="checkbox"
+                                               id="ui-sounds-success"
+                                               x-model="settings.sounds_success_enabled"
+                                               @change="markDirty(); if (window.SoundManager) { window.SoundManager.setCategoryEnabled('success', settings.sounds_success_enabled); }">
+                                        <label class="form-check-label" for="ui-sounds-success">
+                                            <i class="fas fa-check-circle text-success me-1"></i> Success
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input"
+                                               type="checkbox"
+                                               id="ui-sounds-error"
+                                               x-model="settings.sounds_error_enabled"
+                                               @change="markDirty(); if (window.SoundManager) { window.SoundManager.setCategoryEnabled('error', settings.sounds_error_enabled); }">
+                                        <label class="form-check-label" for="ui-sounds-error">
+                                            <i class="fas fa-times-circle text-danger me-1"></i> Error
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input"
+                                               type="checkbox"
+                                               id="ui-sounds-warning"
+                                               x-model="settings.sounds_warning_enabled"
+                                               @change="markDirty(); if (window.SoundManager) { window.SoundManager.setCategoryEnabled('warning', settings.sounds_warning_enabled); }">
+                                        <label class="form-check-label" for="ui-sounds-warning">
+                                            <i class="fas fa-exclamation-triangle text-warning me-1"></i> Warning
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input"
+                                               type="checkbox"
+                                               id="ui-sounds-info"
+                                               x-model="settings.sounds_info_enabled"
+                                               @change="markDirty(); if (window.SoundManager) { window.SoundManager.setCategoryEnabled('info', settings.sounds_info_enabled); }">
+                                        <label class="form-check-label" for="ui-sounds-info">
+                                            <i class="fas fa-info-circle text-info me-1"></i> Info
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="button"
+                                    class="btn btn-outline-secondary btn-sm mt-3"
+                                    @click="if (window.SoundManager) { window.SoundManager.testSound('success'); }">
+                                <i class="fas fa-play me-1"></i> Test Sound
+                            </button>
+                            <hr class="my-3 opacity-25">
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       id="ui-sounds-retro-hover"
+                                       x-model="settings.sounds_retro_hover_enabled"
+                                       @change="markDirty(); if (window.SoundManager) { window.SoundManager.setRetroHoverEnabled(settings.sounds_retro_hover_enabled); }">
+                                <label class="form-check-label" for="ui-sounds-retro-hover">
+                                    <i class="fas fa-compact-disc text-info me-1"></i> Retro hover sounds
+                                    <span class="ms-1">🥚</span>
+                                </label>
+                            </div>
+                            <p class="text-muted small mt-1 mb-0">
+                                <i class="fas fa-history me-1"></i>
+                                Play Norton SystemWorks 2006 sounds when hovering over menu items.
+                                For millennials and Gen X'ers who remember.
+                            </p>
+                        </div>
+                        <p class="text-muted small mt-3 mb-0" x-show="!settings.sounds_enabled">
+                            Enable sounds to receive audio feedback when notifications appear.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <div class="preference-card">
+                        <h6 class="mb-3">WebUI Paths</h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="ui-output-dir">Output directory</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-folder"></i></span>
+                                    <input type="text"
+                                           id="ui-output-dir"
+                                           class="form-control"
+                                           placeholder="/path/to/output"
+                                           x-model="settings.output_dir"
+                                           @input="updateOutputDir($event.target.value)">
+                                </div>
+                                <p class="text-muted small mt-2">
+                                    Used as the base path when the project configuration references relative output locations.
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="ui-configs-dir">Configuration library</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-archive"></i></span>
+                                    <input type="text"
+                                           id="ui-configs-dir"
+                                           class="form-control"
+                                           placeholder="/path/to/config"
+                                           x-model="settings.configs_dir"
+                                           @input="updateConfigsDir($event.target.value)">
+                                </div>
+                                <p class="text-muted small mt-2 mb-0">
+                                    Defines where configuration folders are created and loaded. Leave blank to continue using
+                                    <span class="fw-semibold" x-text="defaultConfigsDir"></span>.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <div class="preference-card" x-init="ensureGpuInventory()">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h6 class="mb-1">Accelerate Defaults</h6>
+                                <p class="text-muted small mb-0">Control how Accelerate launches training jobs when no explicit config file is supplied.</p>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="radio"
+                                       id="ui-accelerate-mode-disabled"
+                                       value="disabled"
+                                       name="ui-accelerate-mode"
+                                       :checked="settings.accelerate.mode === 'disabled'"
+                                       @change="setAccelerateMode('disabled')">
+                                <label class="form-check-label" for="ui-accelerate-mode-disabled">
+                                    Single GPU only
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="radio"
+                                       id="ui-accelerate-mode-auto"
+                                       value="auto"
+                                       name="ui-accelerate-mode"
+                                       :checked="settings.accelerate.mode === 'auto'"
+                                       @change="setAccelerateMode('auto')">
+                                <label class="form-check-label" for="ui-accelerate-mode-auto">
+                                    Auto-detect available GPUs
+                                    <span class="text-muted" x-show="gpuInventory.devices.length">&mdash; launches <span x-text="gpuInventory.optimalProcesses"></span> process<span x-text="gpuInventory.optimalProcesses === 1 ? '' : 'es'"></span></span>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="radio"
+                                       id="ui-accelerate-mode-manual"
+                                       value="manual"
+                                       name="ui-accelerate-mode"
+                                       :checked="settings.accelerate.mode === 'manual'"
+                                       @change="setAccelerateMode('manual')">
+                                <label class="form-check-label" for="ui-accelerate-mode-manual">
+                                    Choose GPUs manually
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="radio"
+                                       id="ui-accelerate-mode-hardware"
+                                       value="hardware"
+                                       name="ui-accelerate-mode"
+                                       :checked="settings.accelerate.mode === 'hardware'"
+                                       @change="setAccelerateMode('hardware')">
+                                <label class="form-check-label" for="ui-accelerate-mode-hardware">
+                                    Use num_processes from Hardware tab
+                                    <span class="text-muted d-block small">Trainer Hardware > Accelerate settings control the launch count.</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <template x-if="gpuInventory.loading">
+                            <div class="alert alert-info py-2">Detecting GPUs…</div>
+                        </template>
+                        <template x-if="!gpuInventory.loading && gpuInventory.error">
+                            <div class="alert alert-warning py-2" x-text="gpuInventory.error"></div>
+                        </template>
+
+                        <template x-if="!gpuInventory.loading && gpuInventory.devices.length">
+                            <div class="gpu-device-list mt-3">
+                                <div class="fw-semibold mb-2">Detected GPUs</div>
+                                <div class="list-group">
+                                    <template x-for="device in gpuInventory.devices" :key="device.index">
+                                        <label class="list-group-item d-flex align-items-center justify-content-between">
+                                            <div>
+                                                <span class="fw-medium" x-text="device.name"></span>
+                                                <span class="text-muted ms-2" x-show="device.memory_gb" x-text="device.memory_gb + ' GB'"></span>
+                                            </div>
+                                            <input type="checkbox"
+                                                   class="form-check-input"
+                                                   x-model.number="settings.accelerate.deviceIds"
+                                                   :value="device.index"
+                                                   :disabled="settings.accelerate.mode !== 'manual'"
+                                                   @change="toggleAccelerateDevice()">
+                                        </label>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+
+                        <div class="mt-3" x-show="settings.accelerate.mode === 'manual' && !gpuInventory.devices.length">
+                            <label class="form-label" for="ui-accelerate-manual-count">Processes to launch</label>
+                            <input type="number"
+                                   min="1"
+                                   id="ui-accelerate-manual-count"
+                                   class="form-control"
+                                   x-model.number="settings.accelerate.manualCount"
+                                   @input="updateManualAccelerateCount($event.target.value)">
+                            <div class="form-text">Set to the number of GPUs or processes to run.</div>
+                        </div>
+
+                        <div class="mt-3 text-muted" x-text="accelerateSummary()"></div>
+                    </div>
+                </div>
+
+                <div class="col-xl-6">
+                    <div class="preference-card">
+                        <h6 class="mb-3">Cache Maintenance</h6>
+                        <p class="text-muted small">
+                            Clear cached metadata generated by FSDP2 block detection or DeepSpeed offload runs.
+                        </p>
+                        <div class="d-grid gap-2 mb-3">
+                            <button type="button"
+                                    class="btn btn-outline-secondary btn-sm"
+                                    :disabled="maintenance.busy"
+                                    @click="clearFsdpCache()">
+                                <i class="fas fa-broom me-1"></i> Clear FSDP Detection Cache
+                            </button>
+                            <button type="button"
+                                    class="btn btn-outline-secondary btn-sm"
+                                    :disabled="maintenance.busy"
+                                    @click="clearDeepSpeedCache()">
+                                <i class="fas fa-broom me-1"></i> Clear DeepSpeed Offload Cache
+                            </button>
+                        </div>
+                        <template x-if="maintenance.message">
+                            <div class="alert alert-success py-2" x-text="maintenance.message"></div>
+                        </template>
+                        <template x-if="maintenance.error">
+                            <div class="alert alert-danger py-2" x-text="maintenance.error"></div>
+                        </template>
+                        <template x-if="!maintenance.message && !maintenance.error">
+                            <p class="text-muted small mb-0">
+                                DeepSpeed clearing removes <code>zero_stage_*</code> folders inside the configured offload directory.
+                            </p>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card-footer d-flex justify-content-between align-items-center">
+            <div>
+                <span class="text-success small" x-show="successMessage" x-text="successMessage"></span>
+                <span class="text-danger small" x-show="errorMessage" x-text="errorMessage"></span>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button"
+                        class="btn btn-outline-secondary btn-sm"
+                        :disabled="saving || !hasChanges"
+                        @click="discardChanges()">
+                    <i class="fas fa-undo me-1"></i>Discard Changes
+                </button>
+                <button type="button"
+                        class="btn btn-primary btn-sm"
+                        :disabled="saving || !hasChanges"
+                        @click="saveSettings()">
+                    <i class="fas fa-save me-1" :class="{ 'fa-spin': saving }"></i>
+                    <span x-text="saving ? 'Saving…' : 'Save Preferences'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.preference-card {
+    padding: 1.25rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0.75rem;
+    background-color: rgba(15, 23, 42, 0.35);
+    backdrop-filter: blur(6px);
+    min-height: 100%;
+}
+
+.theme-tile {
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.75rem;
+    padding: 0;
+    background: rgba(15, 23, 42, 0.3);
+    color: #e2e8f0;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.theme-tile:hover {
+    transform: translateY(-2px);
+    border-color: rgba(129, 140, 248, 0.6);
+    box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25);
+}
+
+.theme-tile.active {
+    border-color: rgba(129, 140, 248, 0.95);
+    box-shadow: 0 12px 28px rgba(99, 102, 241, 0.35);
+}
+
+.theme-tile-body {
+    padding: 1rem 1.1rem;
+    text-align: left;
+}
+
+.theme-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 0.35rem;
+}
+
+.form-switch.form-switch-lg .form-check-input {
+    height: 1.5rem;
+    width: 3rem;
+}
+
+.form-switch.form-switch-lg .form-check-label {
+    margin-left: 0.5rem;
+    font-weight: 500;
+}
+
+#ui-settings-tab-content input.form-control,
+#ui-settings-tab-content select.form-select {
+    background-color: rgba(15, 23, 42, 0.6);
+    border-color: rgba(148, 163, 184, 0.25);
+    color: #e2e8f0;
+}
+
+#ui-settings-tab-content input.form-control:focus,
+#ui-settings-tab-content select.form-select:focus {
+    border-color: rgba(129, 140, 248, 0.7);
+    box-shadow: 0 0 0 0.25rem rgba(129, 140, 248, 0.15);
+}
+
+.gpu-device-list .list-group-item {
+    background: rgba(15, 23, 42, 0.45);
+    color: #e2e8f0;
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+.gpu-device-list .list-group-item:hover {
+    background: rgba(129, 140, 248, 0.12);
+}
+
+.gpu-device-list .form-check-input {
+    width: 1.1rem;
+    height: 1.1rem;
+}
+</style>
