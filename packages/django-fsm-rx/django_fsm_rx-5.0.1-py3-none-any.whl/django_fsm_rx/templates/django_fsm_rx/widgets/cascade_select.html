@@ -1,0 +1,33 @@
+{% load static %}{% comment %}
+FSM Cascade Select Widget - Renders cascading dropdowns for hierarchical status codes.
+{% endcomment %}
+<div class="fsm-cascade-widget{% if widget.attrs.class %} {{ widget.attrs.class }}{% endif %}"
+     data-hierarchy="{{ widget.hierarchy_json }}"
+     data-separator="{{ widget.separator }}"
+     data-levels="{{ widget.levels }}"
+     {% for key, value in widget.attrs.items %}{% if key != 'class' %}{{ key }}="{{ value }}" {% endif %}{% endfor %}>
+
+    <input type="hidden"
+           name="{{ widget.hidden_name }}"
+           id="id_{{ widget.hidden_name }}"
+           value="{{ widget.current_value }}">
+
+    {% for level in widget.level_data %}
+    {% if not forloop.first %}
+    <div class="fsm-cascade-arrow" aria-hidden="true"></div>
+    {% endif %}
+
+    <div class="fsm-cascade-level">
+        <label for="id_{{ level.field_name }}">{{ level.label }}</label>
+        <select name="{{ level.field_name }}"
+                id="id_{{ level.field_name }}"
+                data-level="{{ level.index }}"
+                {% if not level.choices %}disabled{% endif %}>
+            <option value="">-- Select --</option>
+            {% for value, label in level.choices %}
+            <option value="{{ value }}"{% if value == level.selected %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endfor %}
+</div>
