@@ -1,0 +1,126 @@
+import polars as pl
+
+from typing import Optional, List
+
+from proalgotrader_core.indicators.indicator import Indicator
+
+
+class SqueezePro(Indicator):
+    """
+    Squeeze Pro Indicator.
+
+    Identifies periods of low volatility (squeeze) followed by expansion.
+
+    Returns struct with (squeeze, histogram, momentum).
+
+    Parameters
+    - bb_period (int, default: 20): Bollinger Bands period
+    - bb_mult (float, default: 2.0): Bollinger Bands multiplier
+    - kc_period (int, default: 20): Keltner Channels period
+    - kc_mult (float, default: 1.5): Keltner Channels multiplier
+    - atr_period (int, default: 20): ATR period
+    - high_column (str, default: "high"): high price column
+    - low_column (str, default: "low"): low price column
+    - close_column (str, default: "close"): close price column
+    - output_columns (list[str] | None): optional; must contain exactly 3 names.
+
+    Output/Response
+    - `data` contains `current_candle` plus 3 SqueezePro columns.
+    - Output column names: `[<squeeze>, <histogram>, <momentum>]`.
+    """
+
+    def __init__(
+        self,
+        bb_period: int = 20,
+        bb_mult: float = 2.0,
+        kc_period: int = 20,
+        kc_mult: float = 1.5,
+        atr_period: int = 20,
+        high_column: str = "high",
+        low_column: str = "low",
+        close_column: str = "close",
+        output_columns: Optional[List[str]] = None,
+    ) -> None:
+        super().__init__()
+        self.bb_period = bb_period
+        self.bb_mult = bb_mult
+        self.kc_period = kc_period
+        self.kc_mult = kc_mult
+        self.atr_period = atr_period
+        self.high_column = high_column
+        self.low_column = low_column
+        self.close_column = close_column
+        self.output_columns_list = output_columns or [
+            "squeeze",
+            "histogram",
+            "momentum",
+        ]
+
+    def build(self) -> pl.Expr:
+        high = pl.col(self.high_column)
+        low = pl.col(self.low_column)
+        close = pl.col(self.close_column)
+
+        # Bollinger Bands
+        bb_middle = close.rolling_mean(self.bb_period)
+        bb_std = close.rolling_std(self.bb_period)
+        bb_lower = bb_middle - (bb_std * self.bb_mult)
+
+        # Keltner Channels
+        hl = high - low
+        hc = (high - close.shift(1)).abs()
+        lc = (low - close.shift(1)).abs()
+        tr = pl.max_horizontal(hl, hc, lc)
+        atr_val = tr.ewm_mean(alpha=1.0 / self.atr_period)
+
+        alpha = 2.0 / (self.kc_period + 1)
+        kc_middle = close.ewm_mean(alpha=alpha)
+        kc_lower = kc_middle - (atr_val * self.kc_mult)
+
+        # Squeeze detection (BB inside KC = squeeze)
+        squeeze = pl.when(bb_lower >= kc_lower).then(1).otherwise(0)
+
+        # Momentum (linear regression of close)
+        momentum = close.diff().rolling_mean(5)
+
+        # Histogram
+        histogram = pl.when(momentum > 0).then(momentum).otherwise(0) - pl.when(
+            momentum < 0
+        ).then(momentum.abs()).otherwise(0)
+
+        return pl.struct(
+            squeeze=squeeze,
+            histogram=histogram,
+            momentum=momentum,
+        )
+
+    def _exprs(self) -> List[pl.Expr]:
+        struct_expr = self.build()
+        return [
+            struct_expr.struct.field("squeeze").alias(self.output_columns_list[0]),
+            struct_expr.struct.field("histogram").alias(self.output_columns_list[1]),
+            struct_expr.struct.field("momentum").alias(self.output_columns_list[2]),
+        ]
+
+    def output_columns(self) -> List[str]:
+        return self.output_columns_list
+
+    def required_columns(self) -> List[str]:
+        return [self.high_column, self.low_column, self.close_column]
+
+    def validate_output_columns(self) -> None:
+        if self._requested_output_columns is not None:
+            if len(self._requested_output_columns) != 3:
+                raise ValueError("SqueezePro expects exactly 3 output column names")
+            if not all(
+                isinstance(name, str) and name
+                for name in self._requested_output_columns
+            ):
+                raise ValueError("All output column names must be non-empty strings")
+            self.output_columns_list = self._requested_output_columns
+
+    def window_size(self) -> int:
+        return max(self.bb_period, self.kc_period)
+
+    def warmup_size(self) -> int:
+        return self.window_size() * 3
