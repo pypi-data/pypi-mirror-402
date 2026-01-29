@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install uv
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Install dependencies
+      run: |
+        uv sync --extra dev
+
+    - name: Run unit tests
+      run: |
+        uv run pytest tests/test_terminal.py tests/test_api.py tests/test_screen_buffer.py tests/test_raw_mode.py tests/test_e2e.py -v
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y vim htop
+
+    - name: Install Playwright dependencies
+      run: |
+        sudo apt-get install -y libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1
+        uv run playwright install chromium
+
+    - name: Run CLI tests
+      run: |
+        uv run pytest tests/test_cli.py tests/test_cli_subcommands.py -v
+
+    - name: Run application integration tests
+      run: |
+        uv run pytest tests/test_vim.py tests/test_htop.py tests/test_htop_screen.py tests/test_ink_integration.py -v
+
+    - name: Run CLI e2e tests
+      run: |
+        uv run pytest tests/test_cli_e2e_vim.py tests/test_cli_e2e_htop.py -v
+
+    - name: Run frontend e2e tests
+      run: |
+        uv run pytest tests/test_frontend_e2e.py -v
+
+    - name: Run Playwright web tests
+      run: |
+        uv run pytest tests/test_web_playwright.py -v
+
+    - name: Upload Playwright screenshots
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-screenshots
+        path: test_screenshots/
+        if-no-files-found: ignore
+
+    # Note: Claude CLI tests are skipped in CI as they require Claude CLI
+    # installation and authentication. Skipped tests:
+    # - tests/test_claude.py
+    # - tests/test_cli_e2e_claude.py
+    # Run them locally with: uv run pytest tests/test_claude.py tests/test_cli_e2e_claude.py -v
