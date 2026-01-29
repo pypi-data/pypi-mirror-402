@@ -1,0 +1,628 @@
+#!/usr/bin/env python3
+"""
+agent-android - Android ADB 自动化 CLI 工具（对标 agent-browser）
+
+为 AI Agents 提供基于 ADB 的 Android 设备自动化能力
+"""
+
+import sys
+import json
+import argparse
+import logging
+from pathlib import Path
+from typing import Optional, Dict, Any
+
+# 添加项目路径
+sys.path.insert(0, str(Path(__file__).parent))
+
+from core.android import AndroidDeviceManager, create_android_device
+from core.adb_config import ADBConfig
+from core.multi_device import MultiDeviceManager, create_multi_device_manager
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(message)s'  # CLI 模式下简化日志格式
+)
+logger = logging.getLogger(__name__)
+
+
+class AgentAndroid:
+    """agent-android CLI 主类"""
+
+    def __init__(self, session: str = "default", json_output: bool = False):
+        """
+        初始化 agent-android
+
+        Args:
+            session: 会话名称
+            json_output: 是否输出 JSON 格式
+        """
+        self.session = session
+        self.json_output = json_output
+        self.config = ADBConfig()
+        self.device: Optional[AndroidDeviceManager] = None
+        self.multi_device: Optional[MultiDeviceManager] = None  # 多设备管理器
+        self._refs: Dict[str, Dict[str, Any]] = {}  # 存储元素引用
+        self._ref_counter = 0
+
+    def _get_device(self) -> AndroidDeviceManager:
+        """获取设备实例"""
+        if self.device is None or not self.device._connected:
+            self.device = create_android_device()
+        return self.device
+
+    def _get_multi_device(self) -> MultiDeviceManager:
+        """获取多设备管理器实例"""
+        if self.multi_device is None:
+            self.multi_device = create_multi_device_manager()
+        return self.multi_device
+
+    def _output(self, success: bool, data: Any = None, error: str = None):
+        """
+        输出结果
+
+        Args:
+            success: 是否成功
+            data: 数据
+            error: 错误信息
+        """
+        if self.json_output:
+            result = {"success": success}
+            if data is not None:
+                result["data"] = data
+            if error:
+                result["error"] = error
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            if success:
+                if data is not None:
+                    if isinstance(data, str):
+                        print(data)
+                    elif isinstance(data, dict) or isinstance(data, list):
+                        print(json.dumps(data, ensure_ascii=False, indent=2))
+                    else:
+                        print(data)
+            else:
+                if error:
+                    print(f"错误: {error}", file=sys.stderr)
+                sys.exit(1)
+
+    def cmd_devices(self, args):
+        """列出所有设备"""
+        devices = AndroidDeviceManager().list_devices()
+        self._output(True, devices)
+
+    def cmd_connect(self, args):
+        """连接到设备"""
+        try:
+            device = create_android_device(args.serial)
+            device_info = {
+                "device_id": device.device_id,
+                "device_info": device.device_info
+            }
+            self.device = device
+            self._output(True, device_info, f"已连接到设备: {device.device_id}")
+        except Exception as e:
+            self._output(False, error=str(e))
+
+    def cmd_disconnect(self, args):
+        """断开设备连接"""
+        if self.device:
+            self.device.close()
+            self.device = None
+        self._output(True, "设备已断开")
+
+    def cmd_tap(self, args):
+        """点击屏幕或元素"""
+        device = self._get_device()
+
+        # 判断是坐标还是元素引用
+        if args.selector.startswith('@'):
+            # 使用元素引用
+            ref = args.selector[1:]
+            if ref not in self._refs:
+                self._output(False, error=f"未找到引用: @{ref}")
+                return
+
+            element = self._refs[ref]
+            x, y = element['center']['x'], element['center']['y']
+            success = device.tap(x, y)
+            self._output(success, f"已点击元素 @{ref}" if success else None)
+        else:
+            # 使用坐标
+            try:
+                if ',' in args.selector:
+                    x, y = map(int, args.selector.split(','))
+                    success = device.tap(x, y)
+                    self._output(success, f"已点击坐标 ({x}, {y})" if success else None)
+                else:
+                    self._output(False, error="坐标格式应为: x,y")
+            except ValueError:
+                self._output(False, error="无效的坐标")
+
+    def cmd_swipe(self, args):
+        """滑动屏幕"""
+        device = self._get_device()
+        try:
+            x1, y1 = map(int, args.start.split(','))
+            x2, y2 = map(int, args.end.split(','))
+            duration = args.duration if args.duration else None
+
+            success = device.swipe(x1, y1, x2, y2, duration)
+            self._output(success, f"已滑动从 ({x1},{y1}) 到 ({x2},{y2})" if success else None)
+        except Exception as e:
+            self._output(False, error=str(e))
+
+    def cmd_input(self, args):
+        """输入文本"""
+        device = self._get_device()
+        success = device.input_text(args.text)
+        self._output(success, f"已输入文本: {args.text}" if success else None)
+
+    def cmd_press(self, args):
+        """按下按键"""
+        device = self._get_device()
+        key_map = {
+            'home': 3,
+            'back': 4,
+            'enter': 66,
+            'menu': 82,
+        }
+
+        keycode = key_map.get(args.key.lower())
+        if keycode is None:
+            try:
+                keycode = int(args.key)
+            except ValueError:
+                self._output(False, error=f"无效的按键: {args.key}")
+                return
+
+        success = device.press_key(keycode)
+        self._output(success, f"已按下按键: {args.key}" if success else None)
+
+    def cmd_screenshot(self, args):
+        """截图"""
+        device = self._get_device()
+        path = args.path if args.path else f"{self.config.screenshot_dir}/screenshot_{int(time.time())}.png"
+        import time
+        success = device.screenshot(path)
+        self._output(success, path if success else None)
+
+    def cmd_start_app(self, args):
+        """启动应用"""
+        device = self._get_device()
+        success = device.start_app(args.package, args.activity)
+        self._output(success, f"应用已启动: {args.package}" if success else None)
+
+    def cmd_stop_app(self, args):
+        """停止应用"""
+        device = self._get_device()
+        success = device.stop_app(args.package)
+        self._output(success, f"应用已停止: {args.package}" if success else None)
+
+    def cmd_snapshot(self, args):
+        """
+        获取 UI 快照（带元素引用）
+
+        这是 agent-android 的核心功能，类似 agent-browser 的 snapshot
+        """
+        device = self._get_device()
+        ui_dump = device.get_ui_dump(force_refresh=True)
+
+        if ui_dump is None:
+            self._output(False, error="无法获取 UI dump")
+            return
+
+        # 重置引用计数
+        self._refs = {}
+        self._ref_counter = 0
+
+        # 生成快照和引用
+        snapshot_lines = []
+        self._process_ui_node(ui_dump, snapshot_lines, depth=0, interactive_only=args.interactive)
+
+        snapshot_text = '\n'.join(snapshot_lines)
+
+        if self.json_output:
+            self._output(True, {
+                "snapshot": snapshot_text,
+                "refs": self._refs
+            })
+        else:
+            print(snapshot_text)
+            print(f"\n使用了 {len(self._refs)} 个元素引用")
+
+    def _process_ui_node(self, node, lines, depth, interactive_only=False):
+        """
+        处理 UI 节点，生成快照和引用
+
+        Args:
+            node: XML 节点
+            lines: 输出行列表
+            depth: 当前深度
+            interactive_only: 是否只显示交互元素
+        """
+        # 获取设备实例
+        device = self._get_device()
+        element = device._parse_element_info(node)
+
+        # 过滤条件
+        text = element.get('text', '')
+        resource_id = element.get('resource_id', '')
+        clickable = element.get('clickable', False)
+        checkable = element.get('checkable', False)
+        class_name = element.get('class', '').split('.')[-1]
+
+        # 跳过不可交互的元素（如果启用了 interactive_only）
+        if interactive_only and not (clickable or checkable or text or resource_id):
+            # 递归处理子节点
+            for child in node:
+                self._process_ui_node(child, lines, depth + 1, interactive_only)
+            return
+
+        # 跳过空元素
+        if not text and not resource_id and not clickable and not checkable:
+            # 递归处理子节点
+            for child in node:
+                self._process_ui_node(child, lines, depth + 1, interactive_only)
+            return
+
+        # 生成分配引用
+        if clickable or checkable or text:
+            self._ref_counter += 1
+            ref = f"e{self._ref_counter}"
+            self._refs[ref] = element
+
+            # 生成快照行
+            indent = "  " * depth
+            attrs = []
+
+            if text:
+                attrs.append(f'"{text}"')
+            if resource_id:
+                attrs.append(f"[id={resource_id}]")
+            if clickable:
+                attrs.append("[clickable]")
+            if checkable:
+                attrs.append("[checkable]")
+
+            line = f"{indent}- {class_name} {' '.join(attrs)} [ref={ref}]"
+            lines.append(line)
+
+        # 递归处理子节点
+        for child in node:
+            self._process_ui_node(child, lines, depth + 1, interactive_only)
+
+    def cmd_get(self, args):
+        """获取元素属性"""
+        if args.selector.startswith('@'):
+            ref = args.selector[1:]
+            if ref not in self._refs:
+                self._output(False, error=f"未找到引用: @{ref}")
+                return
+
+            element = self._refs[ref]
+
+            if args.attr == 'text':
+                self._output(True, element.get('text', ''))
+            elif args.attr == 'id':
+                self._output(True, element.get('resource_id', ''))
+            elif args.attr == 'bounds':
+                self._output(True, element.get('bounds', ''))
+            elif args.attr == 'center':
+                self._output(True, element.get('center', {}))
+            else:
+                self._output(False, error=f"不支持的属性: {args.attr}")
+        else:
+            self._output(False, error="请使用元素引用 (例如: @e1)")
+
+    def cmd_dump(self, args):
+        """导出 UI dump 到文件"""
+        device = self._get_device()
+        ui_dump = device.get_ui_dump(force_refresh=True)
+
+        if ui_dump:
+            import xml.etree.ElementTree as ET
+            path = args.path if args.path else self.config.local_dump_file
+            ET.ElementTree(ui_dump).write(path, encoding='utf-8', xml_declaration=True)
+            self._output(True, f"UI dump 已保存到: {path}")
+        else:
+            self._output(False, error="无法获取 UI dump")
+
+    # ========== 智能等待命令 ==========
+
+    def cmd_wait_for(self, args):
+        """等待元素出现"""
+        device = self._get_device()
+
+        locator = {
+            "strategy": args.strategy,
+            "value": args.value
+        }
+
+        timeout = args.timeout if hasattr(args, 'timeout') and args.timeout else None
+        element = device.wait_for_element(locator, timeout=timeout)
+
+        if element:
+            self._output(True, {
+                "found": True,
+                "element": element
+            }, f"✓ 元素已出现: {args.strategy}={args.value}")
+        else:
+            self._output(False, error=f"✗ 等待超时: {args.strategy}={args.value}")
+
+    def cmd_wait_for_text(self, args):
+        """等待文本出现"""
+        device = self._get_device()
+
+        timeout = args.timeout if hasattr(args, 'timeout') and args.timeout else None
+        element = device.wait_for_text(args.text, exact_match=args.exact, timeout=timeout)
+
+        if element:
+            self._output(True, {
+                "found": True,
+                "element": element
+            }, f"✓ 文本已出现: {args.text}")
+        else:
+            self._output(False, error=f"✗ 等待超时: {args.text}")
+
+    def cmd_wait_for_app(self, args):
+        """等待应用启动"""
+        device = self._get_device()
+
+        timeout = args.timeout if hasattr(args, 'timeout') and args.timeout else None
+        success = device.wait_for_app(args.package, timeout=timeout)
+
+        if success:
+            self._output(True, {"started": True}, f"✓ 应用已启动: {args.package}")
+        else:
+            self._output(False, error=f"✗ 等待超时: {args.package}")
+
+    # ========== 多设备命令 ==========
+
+    def cmd_multi_connect(self, args):
+        """连接所有可用设备"""
+        multi_device = self._get_multi_device()
+        max_devices = args.max if hasattr(args, 'max') and args.max else None
+        count = multi_device.connect_all(max_devices=max_devices)
+
+        result = {
+            "connected": count,
+            "devices": multi_device.list_devices()
+        }
+        self._output(True, result, f"已连接 {count} 个设备")
+
+    def cmd_multi_list(self, args):
+        """列出所有已连接的设备"""
+        multi_device = self._get_multi_device()
+
+        # Auto-connect if no devices connected
+        if not multi_device.devices:
+            print("No devices connected, connecting to all available devices...")
+            multi_device.connect_all()
+
+        devices = multi_device.list_devices()
+
+        self._output(True, devices)
+
+    def cmd_multi_screenshot(self, args):
+        """对所有设备截图"""
+        multi_device = self._get_multi_device()
+
+        # Auto-connect if no devices connected
+        if not multi_device.devices:
+            print("No devices connected, connecting to all available devices...")
+            multi_device.connect_all()
+
+        path_template = args.path if args.path else "screenshots/multi_{device_id}.png"
+
+        results = multi_device.parallel_screenshot(path_template)
+
+        success_count = sum(1 for v in results.values() if v)
+        total_count = len(results)
+
+        self._output(True, results, f"截图完成: {success_count}/{total_count} 成功")
+
+    def cmd_multi_tap(self, args):
+        """在所有设备上点击"""
+        multi_device = self._get_multi_device()
+
+        # Auto-connect if no devices connected
+        if not multi_device.devices:
+            print("No devices connected, connecting to all available devices...")
+            multi_device.connect_all()
+
+        try:
+            x = int(args.x)
+            y = int(args.y)
+        except ValueError:
+            self._output(False, error="坐标必须为整数")
+            return
+
+        results = multi_device.parallel_tap(x, y)
+
+        success_count = sum(1 for v in results.values() if v)
+        total_count = len(results)
+
+        self._output(True, results, f"点击完成: {success_count}/{total_count} 成功")
+
+    def cmd_multi_start_app(self, args):
+        """在所有设备上启动应用"""
+        multi_device = self._get_multi_device()
+
+        # Auto-connect if no devices connected
+        if not multi_device.devices:
+            print("No devices connected, connecting to all available devices...")
+            multi_device.connect_all()
+
+        activity = args.activity if hasattr(args, 'activity') and args.activity else None
+
+        results = multi_device.parallel_start_app(args.package, activity=activity)
+
+        success_count = sum(1 for v in results.values() if v)
+        total_count = len(results)
+
+        self._output(True, results, f"应用启动完成: {success_count}/{total_count} 成功")
+
+    def cmd_multi_disconnect(self, args):
+        """断开所有设备连接"""
+        multi_device = self._get_multi_device()
+        multi_device.disconnect_all()
+        self._output(True, "所有设备已断开")
+
+
+def main():
+    """主函数"""
+    parser = argparse.ArgumentParser(
+        description='agent-android - Android ADB 自动化 CLI 工具',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  # 单设备操作
+  agent-android devices                          # 列出所有设备
+  agent-android connect                          # 连接到设备
+  agent-android snapshot -i                      # 获取 UI 快照（仅交互元素）
+  agent-android tap @e1                          # 点击元素引用
+  agent-android tap 100,200                      # 点击坐标
+  agent-android swipe 100,200 300,400            # 滑动屏幕
+  agent-android input "Hello World"              # 输入文本
+  agent-android press home                       # 按下 Home 键
+  agent-android screenshot screen.png            # 截图
+  agent-android start_app com.example.app        # 启动应用
+  agent-android stop_app com.example.app         # 停止应用
+  agent-android get text @e1                     # 获取元素文本
+
+  # 智能等待
+  agent-android wait-for id com.app:id/button   # 等待元素出现
+  agent-android wait-for text "登录" --timeout 10000  # 等待文本（10秒超时）
+  agent-android wait-for-text "欢迎"             # 等待文本出现
+  agent-android wait-for-text "欢迎" --exact     # 精确匹配文本
+  agent-android wait-for-app com.example.app     # 等待应用启动
+
+  # 多设备操作
+  agent-android multi-connect                    # 连接所有可用设备
+  agent-android multi-connect --max 3            # 最多连接 3 个设备
+  agent-android multi-list                       # 列出已连接的设备
+  agent-android multi-screenshot                 # 对所有设备截图
+  agent-android multi-screenshot shots/{device_id}.png  # 自定义保存路径
+  agent-android multi-tap 100 200                # 在所有设备上点击
+  agent-android multi-start-app com.example.app  # 在所有设备上启动应用
+  agent-android multi-disconnect                 # 断开所有设备连接
+        """
+    )
+
+    # 全局参数
+    parser.add_argument('--session', '-s', default='default', help='会话名称')
+    parser.add_argument('--json', action='store_true', help='JSON 输出格式')
+    parser.add_argument('--debug', action='store_true', help='调试输出')
+
+    # 子命令
+    subparsers = parser.add_subparsers(dest='command', help='可用命令')
+
+    # 设备管理
+    subparsers.add_parser('devices', help='列出所有设备')
+    subparsers.add_parser('connect', help='连接到设备').add_argument('--serial', help='设备序列号')
+    subparsers.add_parser('disconnect', help='断开设备连接')
+
+    # 触控操作
+    tap_parser = subparsers.add_parser('tap', help='点击屏幕或元素')
+    tap_parser.add_argument('selector', help='元素引用 (@e1) 或坐标 (x,y)')
+
+    swipe_parser = subparsers.add_parser('swipe', help='滑动屏幕')
+    swipe_parser.add_argument('start', help='起始坐标 (x1,y1)')
+    swipe_parser.add_argument('end', help='结束坐标 (x2,y2)')
+    swipe_parser.add_argument('--duration', '-d', type=int, help='滑动持续时间（毫秒）')
+
+    # 输入操作
+    input_parser = subparsers.add_parser('input', help='输入文本')
+    input_parser.add_argument('text', help='要输入的文本')
+
+    press_parser = subparsers.add_parser('press', help='按下按键')
+    press_parser.add_argument('key', help='按键名称 (home/back/enter/menu) 或按键代码')
+
+    # 截图和快照
+    screenshot_parser = subparsers.add_parser('screenshot', help='截图')
+    screenshot_parser.add_argument('path', nargs='?', help='保存路径')
+
+    snapshot_parser = subparsers.add_parser('snapshot', help='获取 UI 快照（带元素引用）')
+    snapshot_parser.add_argument('-i', '--interactive', action='store_true', help='仅显示交互元素')
+
+    # 应用管理
+    start_app_parser = subparsers.add_parser('start_app', help='启动应用')
+    start_app_parser.add_argument('package', help='应用包名')
+    start_app_parser.add_argument('--activity', '-a', help='应用 Activity')
+
+    stop_app_parser = subparsers.add_parser('stop_app', help='停止应用')
+    stop_app_parser.add_argument('package', help='应用包名')
+
+    # 获取元素属性
+    get_parser = subparsers.add_parser('get', help='获取元素属性')
+    get_parser.add_argument('attr', choices=['text', 'id', 'bounds', 'center'], help='属性名称')
+    get_parser.add_argument('selector', help='元素引用 (@e1)')
+
+    # 导出 UI dump
+    dump_parser = subparsers.add_parser('dump', help='导出 UI dump 到文件')
+    dump_parser.add_argument('path', nargs='?', help='保存路径')
+
+    # 智能等待命令
+    wait_for_parser = subparsers.add_parser('wait-for', help='等待元素出现')
+    wait_for_parser.add_argument('strategy', choices=['id', 'text', 'class', 'content-desc', 'text_contains'], help='定位策略')
+    wait_for_parser.add_argument('value', help='定位值')
+    wait_for_parser.add_argument('--timeout', '-t', type=int, help='超时时间（毫秒）')
+
+    wait_for_text_parser = subparsers.add_parser('wait-for-text', help='等待文本出现')
+    wait_for_text_parser.add_argument('text', help='要等待的文本')
+    wait_for_text_parser.add_argument('--exact', '-e', action='store_true', help='精确匹配')
+    wait_for_text_parser.add_argument('--timeout', '-t', type=int, help='超时时间（毫秒）')
+
+    wait_for_app_parser = subparsers.add_parser('wait-for-app', help='等待应用启动')
+    wait_for_app_parser.add_argument('package', help='应用包名')
+    wait_for_app_parser.add_argument('--timeout', '-t', type=int, help='超时时间（毫秒）')
+
+    # 多设备命令
+    multi_connect_parser = subparsers.add_parser('multi-connect', help='连接所有可用设备')
+    multi_connect_parser.add_argument('--max', '-m', type=int, help='最大连接设备数')
+
+    subparsers.add_parser('multi-list', help='列出所有已连接的设备')
+
+    multi_screenshot_parser = subparsers.add_parser('multi-screenshot', help='对所有设备截图')
+    multi_screenshot_parser.add_argument('path', nargs='?', help='保存路径模板 (例如: screenshots/{device_id}.png)')
+
+    multi_tap_parser = subparsers.add_parser('multi-tap', help='在所有设备上点击')
+    multi_tap_parser.add_argument('x', help='X 坐标')
+    multi_tap_parser.add_argument('y', help='Y 坐标')
+
+    multi_start_app_parser = subparsers.add_parser('multi-start-app', help='在所有设备上启动应用')
+    multi_start_app_parser.add_argument('package', help='应用包名')
+    multi_start_app_parser.add_argument('--activity', '-a', help='应用 Activity')
+
+    subparsers.add_parser('multi-disconnect', help='断开所有设备连接')
+
+    # 解析参数
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+
+    # 设置日志级别
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    # 创建 agent-android 实例
+    agent = AgentAndroid(session=args.session, json_output=args.json)
+
+    # 执行命令
+    # 将命令名中的连字符转换为下划线
+    command_name = args.command.replace('-', '_')
+    command_method = getattr(agent, f'cmd_{command_name}', None)
+    if command_method:
+        command_method(args)
+    else:
+        print(f"未知命令: {args.command}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()
