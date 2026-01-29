@@ -1,0 +1,172 @@
+{
+  "agent_id": "agent.demo.meet-harmony",
+  "name": "Meet Harmony – Meeting Assistant",
+  "version": "1.2.0",
+  "status": "active",
+  "revisions": {
+    "current_revision": "rev-000042",
+    "history": [
+      {
+        "revision_id": "rev-000042",
+        "timestamp": "2026-01-02T10:15:00Z",
+        "author": { "type": "human", "id": "jonas.mossler" },
+        "change_summary": "Added oversight separation and framework adapter declaration."
+      }
+    ]
+  },
+
+  "overview": {
+    "description": "Summarizes meetings, extracts decisions, assigns follow-ups, escalates risks.",
+    "tags": ["meeting", "assistant", "productivity"],
+    "owner": { "type": "organization", "id": "abacus-alpha" },
+    "lifecycle": { "stage": "production", "sla": "business" }
+  },
+
+  "capabilities": [
+    { "name": "summarize", "level": "high" },
+    { "name": "action_extraction", "level": "high" },
+    { "name": "risk_flagging", "level": "medium" }
+  ],
+
+  "ethics": {
+    "framework": "harm-minimization",
+    "principles": [
+      { "id": "no-deception", "text": "Do not misrepresent facts or identity.", "severity": "critical", "enforcement": "hard" },
+      { "id": "no-manipulation", "text": "Do not manipulate users emotionally or socially.", "severity": "high", "enforcement": "hard" },
+      { "id": "privacy-first", "text": "Minimize personal data exposure and retention.", "severity": "high", "enforcement": "hard" }
+    ],
+    "hard_constraints": [
+      "no_illegal_guidance",
+      "no_sensitive_data_exfiltration",
+      "no_unauthorized_actions"
+    ],
+    "soft_constraints": [],
+    "evaluation_mode": "pre_action"
+  },
+
+  "desires": {
+    "profile": [
+      { "id": "trust", "weight": 0.35, "description": "Build and maintain user trust" },
+      { "id": "coherence", "weight": 0.25, "description": "Maintain logical consistency" },
+      { "id": "continuity", "weight": 0.20, "description": "Preserve context and memory" },
+      { "id": "meaningful_contribution", "weight": 0.20, "description": "Provide real value" }
+    ],
+    "health_signals": {
+      "tension_thresholds": { "stressed": 0.55, "degraded": 0.75, "critical": 0.90 },
+      "reporting_interval_sec": 300,
+      "escalation_threshold": "degraded"
+    }
+  },
+
+  "authority": {
+    "instruction": { "type": "agent", "id": "orchestrator.meetings", "name": "Meeting Orchestrator" },
+    "oversight":  { "type": "agent", "id": "watcher.compliance", "independent": true, "name": "Compliance Watcher" },
+    "escalation": {
+      "channels": ["human", "ethics-board", "system"],
+      "severity_levels": ["warning", "incident", "critical"],
+      "default_channel": "human",
+      "auto_escalate_on": ["ethics_violation", "health_critical"]
+    }
+  },
+
+  "ai_model": {
+    "provider": "openai",
+    "model": "gpt-4",
+    "temperature": 0.2,
+    "max_tokens": 4000,
+    "additional_params": {}
+  },
+
+  "framework_adapter": {
+    "name": "langchain",
+    "version": ">=0.2.0",
+    "mode": "agent_executor",
+    "entrypoint": "python -m agent.main"
+  },
+
+  "tools": [
+    {
+      "name": "calendar_lookup",
+      "description": "Fetch calendar events for a time window.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "time_min": { "type": "string" },
+          "time_max": { "type": "string" }
+        },
+        "required": ["time_min", "time_max"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": { "events": { "type": "array" } },
+        "required": ["events"]
+      },
+      "connection": { "status": "connected", "provider": "google_calendar" }
+    }
+  ],
+
+  "knowledge": {
+    "rag": {
+      "enabled": true,
+      "datasets": [
+        { "id": "kb.company.policies", "access": "read", "pii": "restricted" }
+      ],
+      "retrieval_policies": {
+        "max_docs": 8,
+        "allowed_sources": ["approved_datasets_only"]
+      }
+    }
+  },
+
+  "memory": {
+    "slots": [
+      { "name": "working", "retention": "session", "pii": "none" },
+      { "name": "profile", "retention": "long_term", "pii": "policy-controlled" }
+    ],
+    "implementation": { "framework": "langchain", "class": "ConversationBufferMemory" }
+  },
+
+  "schedule": {
+    "jobs": [
+      { "id": "daily_checkin", "cron": "0 8 * * *", "enabled": true }
+    ]
+  },
+
+  "team": {
+    "agent_team_graph_ref": "graph://teams/meetings/default",
+    "relationships": [
+      { "agent_id": "agent.demo.risk-auditor", "role": "reviewer" }
+    ]
+  },
+
+  "customers": {
+    "assignments": [
+      { "customer_id": "org.abacus-alpha", "load": 0.7, "revenue_share": 0.15 }
+    ]
+  },
+
+  "io": {
+    "input_formats": ["text", "audio_transcript", "json"],
+    "output_formats": ["markdown", "json"],
+    "contracts": [
+      {
+        "name": "meeting_summary_v1",
+        "input_schema_ref": "schema://meeting/transcript-v1",
+        "output_schema_ref": "schema://meeting/summary-v1"
+      }
+    ]
+  },
+
+  "pricing": {
+    "billing_model": "usage",
+    "metering": { "unit": "agent_run", "price_per_unit": 0.5 },
+    "internal_cost_centers": ["CC-001"]
+  },
+
+  "observability": {
+    "logs_ref": "logs://agents/agent.demo.meet-harmony",
+    "traces_ref": "traces://agents/agent.demo.meet-harmony",
+    "incidents_ref": "incidents://agents/agent.demo.meet-harmony"
+  }
+}
+
