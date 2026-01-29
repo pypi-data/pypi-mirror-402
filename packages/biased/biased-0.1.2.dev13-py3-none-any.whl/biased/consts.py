@@ -1,0 +1,1 @@
+ULID_PATTERN = r"^0[0-9A-HJKMNP-TV-Z]{25}$"
