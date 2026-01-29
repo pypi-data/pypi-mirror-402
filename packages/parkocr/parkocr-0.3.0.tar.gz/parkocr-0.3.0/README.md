@@ -1,0 +1,227 @@
+# ParkOCR
+
+ParkOCR is a Python library for automatic license plate recognition using **YOLOv8** for detection and **OCR** for text recognition.
+It is designed to work with RTSP streams (e.g., IP cameras), webcams, or video files.
+
+## ✨ Features
+
+- YOLOv8 for plate localization (supports `n`, `s`, `m`, `l`, `x` models).
+- Multiple OCR backends (EasyOCR or RapidOCR).
+- **Two installation options**: lite (~90MB) or full (~950MB).
+- ROI filtering: only detect plates inside a defined region.
+- Headless mode (no window display).
+- Prevents freezing on the same consecutive plate.
+- Optional FIFO output for inter-process communication.
+- Screenshot saving:
+  - `screenshot=None`: disabled
+  - `screenshot="full"`: saves full frame
+  - `screenshot="roi"`: saves only the region of interest
+- **Performance optimizations** (v0.2.0+):
+  - Async processing with threading (non-blocking detection)
+  - Camera buffer clearing (reduces latency)
+  - Frame downscaling for faster inference
+  - Performance monitoring and logging
+
+## 📦 Installation
+
+ParkOCR requires **Python 3.12+**.
+
+### Lite Version (Recommended for CPU)
+
+Lightweight installation using ONNX Runtime (~90MB total):
+
+```bash
+pip install parkocr[lite]
+```
+
+Best for:
+- Systems without GPU
+- Low-resource environments
+- Docker containers
+- Edge devices
+
+### Full Version
+
+Complete installation using PyTorch (~950MB total):
+
+```bash
+pip install parkocr[full]
+```
+
+Best for:
+- Systems with GPU
+- Maximum accuracy requirements
+- Development and experimentation
+
+### Check Installed Backend
+
+```python
+from parkocr import get_available_backend
+print(get_available_backend())  # 'lite', 'full', or 'none'
+```
+
+## ✅ Requirements
+
+- Python 3.12 or higher
+- OpenCV (installed automatically)
+- **Lite**: ONNX Runtime + RapidOCR
+- **Full**: PyTorch + EasyOCR + Ultralytics
+
+## 🚀 Usage
+
+### Basic example
+
+```python
+from parkocr.detector import Detector
+
+detector = Detector(
+    rtsp_url="rtsp://user:password@192.168.0.100:554/onvif1",
+    model_size=0,  # 0=nano, 1=small, 2=medium, 3=large, 4=xlarge
+    headless=True,
+    screenshot="roi",  # options: None, "full", "roi"
+)
+
+detector.run()
+```
+
+### With FIFO output
+
+```python
+detector = Detector(
+    rtsp_url="rtsp://user:password@192.168.0.100:554/onvif1",
+    fifo_output="/tmp/plates_fifo",
+    headless=True
+)
+detector.run()
+```
+
+Now another process can read detected plates from `/tmp/plates_fifo`.
+
+### With callback
+
+```python
+def on_plate(plate):
+    print("Detected plate:", plate)
+
+detector = Detector(
+    rtsp_url="rtsp://user:password@192.168.0.100:554/onvif1",
+    on_detect=on_plate,
+    headless=True
+)
+detector.run()
+```
+
+## 🚀 Performance Optimization
+
+### CPU-Only Systems (No GPU)
+
+For systems without dedicated GPUs, use these settings for optimal performance:
+
+```python
+detector = Detector(
+    rtsp_url="rtsp://camera_url",
+    model_size=0,               # Use nano model (fastest)
+    inference_scale=0.4,        # Downscale to 40% (faster inference)
+    buffer_clear_frames=3,      # Clear 3 frames from buffer
+    process_interval_s=0.5,     # Process every 0.5s
+    headless=True,              # Disable display for production
+    enable_performance_logging=True  # Monitor bottlenecks
+)
+```
+
+**Expected Performance on CPU:**
+- Intel i5-10400 / Ryzen 5 3600: ~500-800ms per detection
+- Intel i7-12700 / Ryzen 7 5800X: ~300-500ms per detection
+
+### Systems with GPU
+
+For GPU-enabled systems, you can use higher quality settings:
+
+```python
+detector = Detector(
+    rtsp_url="rtsp://camera_url",
+    model_size=2,               # Medium model (better accuracy)
+    inference_scale=1.0,        # Full resolution
+    buffer_clear_frames=1,      # Minimal buffer clearing
+    process_interval_s=0.3,     # Faster processing
+)
+```
+
+**Note:** GPU support will be added in a future version. Current version (0.2.0) is CPU-optimized.
+
+### Performance Tips
+
+1. **Reduce `inference_scale`**: Lower values (0.3-0.5) significantly speed up YOLO at minimal accuracy cost
+2. **Use smaller model**: `model_size=0` (nano) is 3-5x faster than larger models
+3. **Increase `process_interval_s`**: If you don't need real-time processing, increase to 1.0-2.0s
+4. **Enable `buffer_clear_frames`**: Reduces latency by skipping old frames (2-4 recommended)
+5. **Use `headless=True`**: Disabling display saves CPU cycles
+6. **Optimize ROI**: Smaller ROI = less area to process
+7. **Enable logging**: Use `enable_performance_logging=True` to identify bottlenecks
+
+### Common Issues
+
+**Symptom:** High CPU usage, system freezes
+**Solution:** Reduce `inference_scale` to 0.3-0.4, use `model_size=0`, increase `process_interval_s`
+
+**Symptom:** Detection lag (detecting plates that already passed)
+**Solution:** Increase `buffer_clear_frames` to 3-5
+
+**Symptom:** Missing some plates
+**Solution:** Decrease `process_interval_s`, reduce `buffer_clear_frames`, or increase `inference_scale`
+
+## ⚙️ Parameters
+
+### Core Parameters
+
+- **rtsp_url (str)**: RTSP stream, file path, or webcam index.
+- **model_size (int)**: 0=`n`, 1=`s`, 2=`m`, 3=`l`, 4=`x`. Larger = more accurate, slower.
+- **conf_thresh (float)**: YOLO detection confidence threshold (default: 0.5).
+- **roi (tuple[int, int, int, int] | None)**: Region of interest (x1, y1, x2, y2). Defaults to central ROI.
+- **headless (bool)**: Disable display windows and overlays (default: False).
+- **window_size (tuple[int, int])**: Window size for display (default: 1280x720).
+
+### Processing Parameters
+
+- **process_interval_s (float)**: Seconds between detection cycles (default: 1.0).
+- **freeze_seconds (float)**: How long to display detection result, non-blocking (default: 0.5).
+- **ocr_langs (list[str])**: OCR languages for EasyOCR (default: ["en"]).
+- **min_ocr_conf (float)**: Minimum OCR confidence (default: 0.30).
+
+### Output Parameters
+
+- **on_detect (callable)**: Callback called with detected plate text.
+- **fifo_output (str | None)**: Path to FIFO file to send plates.
+- **screenshot (str | None)**: `None`, `"full"`, or `"roi"`.
+
+### Performance Parameters (v0.2.0+)
+
+- **inference_scale (float)**: Scale factor for frame downscaling before YOLO (0.0-1.0, default: 0.5).
+  Lower values = faster inference but less accurate. Recommended: 0.3-0.5 for CPU, 1.0 for GPU.
+
+- **buffer_clear_frames (int)**: Number of frames to skip from camera buffer before processing (default: 2).
+  Helps reduce latency caused by buffered frames. Recommended: 2-4 for most setups.
+
+- **enable_performance_logging (bool)**: Enable detailed timing logs for each detection stage (default: False).
+  Useful for identifying performance bottlenecks.
+
+### Backend Parameters (v0.3.0+)
+
+- **backend (str | None)**: Force specific backend ('lite' or 'full').
+  If None, auto-detects based on installed packages. Use this to explicitly select
+  a backend when both are installed.
+
+## 📂 Project structure
+
+```
+parkocr/
+├── __init__.py
+├── detector.py     # Main Detector class
+├── backends.py     # Backend abstraction (ONNX/PyTorch)
+README.md
+pyproject.toml
+```
+
+## 📝 License
+
+MIT © 2025 João Luiz Thomazetti
