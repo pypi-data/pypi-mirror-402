@@ -1,0 +1,154 @@
+[project]
+name = "claude-board"
+dynamic = ["version"]
+description = "Physical console for Claude Code - approve/deny permissions from your phone or hardware device"
+readme = "README.md"
+license = { text = "AGPL-3.0-or-later" }
+authors = [
+    { name = "pescn" }
+]
+keywords = ["claude", "claude-code", "console", "permissions", "approval"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: Utilities",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "qrcode>=8.2",
+]
+
+[project.optional-dependencies]
+# Future: Bluetooth support
+ble = [
+    "bleak>=0.21.0",
+]
+# Development dependencies
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "httpx>=0.25.0",
+]
+
+[project.scripts]
+claude-board = "claude_board.cli:cli"
+
+[project.urls]
+Homepage = "https://github.com/pescn/claude-board"
+Documentation = "https://github.com/pescn/claude-board#readme"
+Repository = "https://github.com/pescn/claude-board"
+Issues = "https://github.com/pescn/claude-board/issues"
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/claude_board/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/claude_board"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/claude_board/**/*",
+    "README.md",
+    "LICENSE",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ty.environment]
+# Type checking configuration for ty (red-knot)
+python-version = "3.10"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.pyright]
+pythonVersion = "3.10"
+typeCheckingMode = "strict"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ANN",    # flake8-annotations
+    "S",      # flake8-bandit
+    "BLE",    # flake8-blind-except
+    "FBT",    # flake8-boolean-trap
+    "A",      # flake8-builtins
+    "COM",    # flake8-commas
+    "DTZ",    # flake8-datetimez
+    "T10",    # flake8-debugger
+    "EXE",    # flake8-executable
+    "ISC",    # flake8-implicit-str-concat
+    "ICN",    # flake8-import-conventions
+    "G",      # flake8-logging-format
+    "INP",    # flake8-no-pep420
+    "PIE",    # flake8-pie
+    "T20",    # flake8-print
+    "PYI",    # flake8-pyi
+    "PT",     # flake8-pytest-style
+    "Q",      # flake8-quotes
+    "RSE",    # flake8-raise
+    "RET",    # flake8-return
+    "SLF",    # flake8-self
+    "SIM",    # flake8-simplify
+    "TID",    # flake8-tidy-imports
+    "TCH",    # flake8-type-checking
+    "ARG",    # flake8-unused-arguments
+    "PTH",    # flake8-use-pathlib
+    "ERA",    # eradicate
+    "PL",     # Pylint
+    "TRY",    # tryceratops
+    "RUF",    # Ruff-specific rules
+]
+ignore = [
+    "ANN101",  # Missing type annotation for self
+    "ANN102",  # Missing type annotation for cls
+    "ANN401",  # Dynamically typed expressions (Any)
+    "S101",    # Use of assert
+    "T201",    # Print found (needed for hooks)
+    "COM812",  # Missing trailing comma (conflicts with formatter)
+    "ISC001",  # Single line implicit string concatenation (conflicts with formatter)
+    "PLR0913", # Too many arguments
+    "TRY003",  # Avoid specifying long messages outside exception class
+]
+
+[tool.ruff.lint.per-file-ignores]
+"src/claude_board/hooks/*.py" = ["T201"]  # Allow print in hooks
+"tests/*.py" = ["S101", "ANN"]  # Allow assert and relaxed annotations in tests
