@@ -1,0 +1,201 @@
+Metadata-Version: 2.4
+Name: omnicontext
+Version: 1.0.0
+Summary: Universal LLM context portability - take your AI conversations anywhere
+Author: OmniContext Contributors
+License: MIT
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Description-Content-Type: text/markdown
+Requires-Dist: click>=8.1.0
+Requires-Dist: rich>=13.0.0
+Requires-Dist: requests>=2.31.0
+Requires-Dist: pydantic>=2.0.0
+
+# OmniContext �
+
+> **Your AI conversations belong to you, not your provider.**
+
+**OmniContext** is the universal standard for AI memory portability. It allows you to freely move your chat history, context, and learned preferences between ChatGPT, Claude, Gemini, Grok, and local tools like Cursor.
+
+![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
+![Version: 1.0.0](https://img.shields.io/badge/Version-1.0.0-green.svg)
+![Status: Production Ready](https://img.shields.io/badge/Status-Production_Ready-brightgreen.svg)
+![Privacy: Local First](https://img.shields.io/badge/Privacy-Local_First-blueviolet.svg)
+
+---
+
+## 🌟 Why OmniContext?
+
+- **Zero Lock-in**: Don't lose your coding history just because you switched models.
+- **Unified Memory**: Search across all your different AI tools in one place.
+- **Smart Migration**: Summarize weeks of work into a single context prompt for a new agent.
+- **Privacy First**: Everything runs on your machine. No cloud sync. No tracking.
+
+---
+
+## 📦 Installation
+
+### Via Pip (Recommended)
+```bash
+pip install omnicontext
+omni --help
+```
+
+### Run Locally (Development)
+```bash
+git clone https://github.com/uejsh/omnicontext
+cd omnicontext
+pip install -e .
+```
+
+---
+
+## 🚀 Quick Start Guide
+
+### 1. Import Your History
+Load data from your varied sources. OmniContext normalizes them into a universal format.
+
+```bash
+# Import from a file
+omni import chatgpt ./conversations.json
+omni import claude ./claude_export.zip
+
+# Auto-detect local context
+omni import cursor    # Imports from Cursor IDE
+omni import claude-code # Imports from Claude Code CLI
+```
+
+### 2. Find What Matters
+Filter your massive history down to the relevant context.
+
+```bash
+# Search for specific concepts
+omni search "react hooks"
+
+# Select conversations for export
+omni select --search "react"
+omni select --after 2026-01-01
+```
+
+### 3. Move Context
+Export your selected memory to use elsewhere.
+
+```bash
+# 📋 Copy for pasting into a new LLM (Optimized!)
+omni export prompt | clip
+
+# 💾 Save full backup to file
+omni export markdown -o backup.md
+```
+
+---
+
+## 🛠️ CLI Reference
+
+### `omni import <source> [path]`
+Ingest data from an external provider.
+
+| Source | Instructions |
+| :--- | :--- |
+| `chatgpt` | **Settings** → **Data Controls** → **Export Data**. Wait for email. Download ZIP. Extract `conversations.json`. |
+| `claude` | **Profile** → **Settings** → **Data Control** → **Export Data**. Wait for email. Use the ZIP file directly. |
+| `gemini` | **Google Takeout**. Select only "Gemini". Download ZIP. Use the ZIP file directly. |
+| `grok` | **X Settings** → **Account** → **Download Archive**. Use the `twitter-...zip` directly. |
+| `cursor` | *Automatic*. Reads from `%APPDATA%/Cursor/User/globalStorage/state.vscdb`. |
+| `claude-code` | *Automatic*. Reads from `~/.claude/`. |
+
+### `omni list` / `omni search`
+Browse your database.
+- `omni list`: Show all conversations (ID, Date, Title).
+- `omni list --source chatgpt`: Filter by platform.
+- `omni list --selected`: Show only what you have currently picked.
+- `omni search "query"`: Full-text search with highlighting.
+
+### `omni select`
+Build your working set of conversations. (These are persistent until you clear them).
+- `omni select --all`: Select everything (Careful!).
+- `omni select --search "foo"`: Select all matches.
+- `omni select --clean`: **Reset/Clear** your selection.
+- `omni select id1 id2`: Select specific IDs from the list.
+
+### `omni export <format>`
+Output your selected conversations.
+- **Formats**:
+    - `markdown`: Readable text. Best for reading or archiving code.
+    - `prompt`: Optimized XML format (`<context>...`) with message truncation (500 chars). Best for pasting into AI.
+    - `json`: Raw data dump.
+- **Flags**:
+    - `-o, --output <file>`: Write results to file instead of screen.
+    - `-t, --max-tokens <n>`: (Prompt only) Hard limit on output size.
+
+### `omni ask "<question>"` (New! ✨)
+Use RAG (Retrieval Augmented Generation) to query your own history. Creates a temporary agent with your selected history as its memory.
+- **Requires Config**: You must set an API key first.
+- **Example**: `omni ask "What was the solution to the Redis bug I had last week?"`
+
+### `omni summarize`
+Uses AI to analyze your history and extract key learnings and user preferences.
+- Useful for creating a "Memory File" to give to new agents.
+
+### `omni config`
+Manage your AI settings.
+```bash
+omni config set api-key sk-proj-123456...   # OpenAI or Anthropic Key
+omni config set provider openai              # or 'anthropic'
+omni config set model gpt-4o                 # Custom model selection
+```
+
+---
+
+## 💡 Advanced Workflows
+
+### The "Project Migration" Protocol
+Moving a specific coding project from ChatGPT to Claude?
+1. `omni select --clean` (Start fresh)
+2. `omni select --search "ProjectName"` (Find relevant chats)
+3. `omni export prompt | clip` (Copy context)
+4. Paste into Claude: *"Here is the context of what we've done so far..."*
+
+### The "Personal Wiki" Protocol
+Treat your AI history as a knowledge base.
+1. `omni select --all`
+2. `omni ask "Summarize my political views based on my chat history"`
+3. `omni ask "List all the Python libraries I have used"`
+
+### The "Digital Hoarder" Protocol
+Archive everything locally forever.
+1. Import from all 5 sources.
+2. `omni select --all`
+3. `omni export json -o full_backup_2026.json`
+
+---
+
+## 🔒 Security & Privacy
+
+OmniContext is **Local-First Software**.
+- **Database**: All data resides in a SQLite file at `~/.omni.db` or `%USERPROFILE%/.omni.db`.
+- **Egress**: No data leaves your machine unless you explicitly run `omni ask` or `omni summarize`, which sends *only the selected context* to your configured API provider (OpenAI/Anthropic).
+- **Keys**: API keys are stored in the local database.
+
+---
+
+## ❓ Troubleshooting
+
+**"Error: Claude Code directory not found"**
+- Ensure you have actually run `claude` (the CLI) on this machine. If you only use the web version, use `omni import claude` with a zip export instead.
+
+**"Imported 0 conversations"**
+- Check if you are pointing to the correct file.
+- For ChatGPT: Must be `conversations.json`.
+- For Google: Must be the specific `Takeout` zip or extracted folder.
+
+**"Output is too large for clipboard"**
+- Use file output: `omni export prompt -o context.txt`
+
+---
+
+## 📄 License
+
+MIT © 2026 OmniContext Contributors
