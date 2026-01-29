@@ -1,0 +1,225 @@
+package vtx:api@1.2.6;
+
+interface vtx-sql {
+    variant db-value {
+        text(string),
+        integer(s64),
+        real(f64),
+        null-val,
+    }
+
+    execute: func(
+        statement: string,
+        params: list<db-value>,
+    ) -> result<u64, string>;
+
+    query-json: func(
+        statement: string,
+        params: list<db-value>,
+    ) -> result<string, string>;
+}
+
+interface vtx-vfs {
+    resource buffer {
+        size: func() -> u64;
+
+        read: func(
+            offset: u64,
+            max-bytes: u64,
+        ) -> list<u8>;
+
+        write: func(
+            data: list<u8>,
+        ) -> u64;
+    }
+
+    record vtx-object-meta {
+        uri: string,
+        size: u64,
+        last-modified: option<s64>,
+        etag: option<string>,
+    }
+
+    create-memory-buffer: func(
+        data: list<u8>,
+    ) -> buffer;
+
+    open-uri: func(
+        uri: string,
+    ) -> result<buffer, string>;
+
+    head: func(
+        uri: string,
+    ) -> result<vtx-object-meta, string>;
+
+    list-objects: func(
+        prefix-uri: string,
+    ) -> result<list<vtx-object-meta>, string>;
+
+    read-range: func(
+        uri: string,
+        offset: u64,
+        len: u64,
+    ) -> result<list<u8>, string>;
+}
+
+interface vtx-auth-types {
+    record user-context {
+        user-id: string,
+        username: string,
+        groups: list<string>,
+        metadata: string,
+    }
+
+    record current-user {
+        user-id: string,
+        username: string,
+        groups: list<string>,
+    }
+}
+
+interface vtx-types {
+    use vtx-vfs.{buffer};
+    use vtx-auth-types.{user-context};
+
+    record http-request {
+        method: string,
+        path: string,
+        query: string,
+    }
+
+    record http-response {
+        status: u16,
+        body: option<buffer>,
+    }
+
+    record http-client-request {
+        method: string,
+        url: string,
+        headers: list<tuple<string, string>>,
+        body: option<buffer>,
+    }
+
+    record http-client-response {
+        status: u16,
+        headers: list<tuple<string, string>>,
+        body: option<buffer>,
+    }
+
+    record http-allow-rule {
+        scheme: string,
+        host: string,
+        port: option<u16>,
+        path: option<string>,
+        methods: option<list<string>>,
+        allow-headers: option<list<string>>,
+        max-request-bytes: option<u64>,
+        max-response-bytes: option<u64>,
+        follow-redirects: option<bool>,
+        redirect-policy: option<string>,
+    }
+
+    record capabilities {
+        subscriptions: list<string>,
+        permissions: list<string>,
+        http: option<list<http-allow-rule>>,
+    }
+
+    record manifest {
+        id: string,
+        name: string,
+        version: string,
+        description: string,
+        entrypoint: string,
+    }
+}
+
+interface vtx-ffmpeg {
+    use vtx-vfs.{buffer};
+
+    record ffmpeg-option {
+        key: string,
+        value: option<string>,
+    }
+
+    record transcode-profile {
+        profile: string,
+        input-id: string,
+        options: list<ffmpeg-option>,
+    }
+
+    execute: func(
+        params: transcode-profile,
+    ) -> result<buffer, string>;
+}
+
+interface vtx-events {
+    record event-context {
+        user-id: option<string>,
+        username: option<string>,
+        request-id: option<string>,
+    }
+
+    record vtx-event {
+        id: string,
+        topic: string,
+        source: string,
+        payload: string,
+        context: event-context,
+        occurred-at: u64,
+    }
+}
+
+interface vtx-context {
+    use vtx-auth-types.{current-user};
+
+    get-current-user: func() -> option<current-user>;
+}
+
+interface vtx-event-bus {
+    publish-event: func(
+        topic: string,
+        payload: string,
+    ) -> result<_, string>;
+}
+
+interface vtx-http-client {
+    use vtx-types.{http-client-request, http-client-response};
+
+    request: func(
+        req: http-client-request,
+    ) -> result<http-client-response, string>;
+}
+
+world plugin {
+    use vtx-types.{capabilities, http-request, http-response, manifest};
+    use vtx-auth-types.{user-context};
+    use vtx-events.{vtx-event};
+
+    import vtx-vfs;
+    import vtx-sql;
+    import vtx-ffmpeg;
+    import vtx-context;
+    import vtx-event-bus;
+    import vtx-http-client;
+
+    export handle: func(
+        req: http-request,
+    ) -> http-response;
+
+    export handle-event: func(
+        event: vtx-event,
+    ) -> result<_, string>;
+
+    export get-migrations: func() -> list<string>;
+
+    export get-manifest: func() -> manifest;
+
+    export get-resources: func() -> list<string>;
+
+    export get-capabilities: func() -> capabilities;
+
+    export authenticate: func(
+        headers: list<tuple<string, string>>,
+    ) -> result<user-context, u16>;
+}
