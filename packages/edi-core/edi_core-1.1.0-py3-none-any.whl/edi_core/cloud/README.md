@@ -1,0 +1,1 @@
+https://help.aliyun.com/zh/oss/developer-reference/get-started-with-oss-sdk-for-python-v2?spm=a2c4g.11186623.help-menu-31815.d_5_2_2_0_0.31152f8dIqy5FD
