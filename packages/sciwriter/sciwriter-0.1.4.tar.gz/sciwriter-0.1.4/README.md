@@ -1,0 +1,306 @@
+<!-- ---
+!-- Timestamp: 2026-01-18 05:06:16
+!-- Author: ywatanabe
+!-- File: /home/ywatanabe/proj/sciwriter/README.md
+!-- --- -->
+
+# SciWriter
+
+LaTeX manuscript compilation with CLI and MCP server integration.
+
+[![CI](https://github.com/ywatanabe1989/sciwriter/actions/workflows/ci.yml/badge.svg)](https://github.com/ywatanabe1989/sciwriter/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+
+## Quick Start
+
+<details open>
+<summary><strong>Shell Scripts (Recommended)</strong></summary>
+
+```bash
+git clone https://github.com/ywatanabe1989/sciwriter.git my-paper
+cd my-paper
+./scripts/shell/compile_manuscript.sh
+```
+
+</details>
+
+<details>
+<summary><strong>Python CLI</strong></summary>
+
+```bash
+pip install sciwriter
+sciwriter compile ./my-paper              # Compile manuscript
+sciwriter compile ./my-paper -t suppl     # Compile supplementary
+sciwriter status ./my-paper               # Check dependencies
+```
+
+</details>
+
+<details>
+<summary><strong>MCP Server</strong></summary>
+
+Add to Claude Desktop config (`~/.config/claude/claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "sciwriter": {
+      "command": "python",
+      "args": ["-m", "sciwriter.mcp_server"]
+    }
+  }
+}
+```
+
+Tools: `compile`, `status`, `clean`, `get_project_info`
+
+</details>
+
+---
+
+## Features
+
+<details>
+<summary><strong>Features</strong></summary>
+
+- **Templates** - Manuscript, supplementary material, and revision letter
+- **Modular LaTeX** - Section-separated .tex files
+- **MCP Server** - Claude Desktop integration
+- **Media Support** - Figures, tables, and citations
+- **Citation Management** - Multi-file .bib with auto-merge
+- **Citation Styles** - 20+ journal formats (Nature, IEEE, APA, etc.)
+- **Auto Counts** - Words and media per section
+- **Diff Visualization** - Track changes between versions
+- **Git Friendly** - Auto-archive with version history
+
+</details>
+
+---
+
+## Installation
+
+<details>
+<summary><strong>Python Package</strong></summary>
+
+```bash
+pip install sciwriter
+```
+
+</details>
+
+<details>
+<summary><strong>Ubuntu/Debian</strong></summary>
+
+```bash
+sudo apt-get install texlive-latex-extra latexdiff parallel imagemagick ghostscript
+```
+
+</details>
+
+<details>
+<summary><strong>macOS</strong></summary>
+
+```bash
+brew install texlive latexdiff parallel imagemagick ghostscript
+```
+
+</details>
+
+<details>
+<summary><strong>HPC / Containers</strong></summary>
+
+```bash
+# Module system
+module load texlive latexdiff parallel
+
+# Docker
+docker run -v $(pwd):/work scitex-writer
+
+# Singularity/Apptainer
+singularity run scitex-writer.sif
+```
+
+</details>
+
+---
+
+## Project Structure
+
+<details>
+<summary><strong>Directory Layout</strong></summary>
+
+```
+my-paper/
+├── 00_shared/              # Shared resources (bibliography, styles)
+│   ├── bib_files/          # Multiple .bib files (auto-merged)
+│   └── latex_styles/       # Common LaTeX configurations
+├── 01_manuscript/          # Main manuscript
+│   ├── contents/           # Modular content sections
+│   │   ├── abstract.tex
+│   │   ├── introduction.tex
+│   │   ├── methods.tex
+│   │   ├── results.tex
+│   │   ├── discussion.tex
+│   │   ├── figures/        # Figure captions + media
+│   │   └── tables/         # Table captions + CSV data
+│   ├── archive/            # Version history (auto-generated)
+│   ├── manuscript.tex      # Compiled LaTeX
+│   └── manuscript.pdf      # Output PDF
+├── 02_supplementary/       # Supplementary materials
+├── 03_revision/            # Revision response letter
+└── scripts/shell/          # Compilation scripts
+```
+
+</details>
+
+---
+
+## PDF Compilation
+
+<details>
+<summary><strong>Basic Commands</strong></summary>
+
+```bash
+./scripts/shell/compile_manuscript.sh          # Manuscript
+./scripts/shell/compile_supplementary.sh       # Supplementary
+./scripts/shell/compile_revision.sh            # Revision letter
+```
+
+</details>
+
+<details>
+<summary><strong>Performance Options</strong></summary>
+
+```bash
+./scripts/shell/compile_manuscript.sh --draft      # Fast single-pass
+./scripts/shell/compile_manuscript.sh --no-figs    # Skip figures
+./scripts/shell/compile_manuscript.sh --no-tables  # Skip tables
+./scripts/shell/compile_manuscript.sh --no-diff    # Skip diff generation
+```
+
+</details>
+
+<details>
+<summary><strong>Engine Selection</strong></summary>
+
+```bash
+./scripts/shell/compile_manuscript.sh --engine tectonic  # Fastest
+./scripts/shell/compile_manuscript.sh --engine latexmk   # Standard
+./scripts/shell/compile_manuscript.sh --engine 3pass     # Most compatible
+```
+
+</details>
+
+<details>
+<summary><strong>Development Mode</strong></summary>
+
+```bash
+./scripts/shell/compile_manuscript.sh --watch  # Hot-reload on file changes
+./scripts/shell/compile_manuscript.sh --clean  # Remove cache
+```
+
+</details>
+
+---
+
+## Content Management
+
+<details>
+<summary><strong>Bibliography</strong></summary>
+
+Organize references in multiple `.bib` files - they auto-merge with deduplication:
+
+```bash
+00_shared/bib_files/
+├── methods_refs.bib      # Method-related references
+├── field_background.bib  # Background literature
+└── my_papers.bib         # Your own publications
+```
+
+**Citation Styles** (set in `config/config_manuscript.yaml`):
+- `unsrtnat` - numbered, order of citation
+- `plainnat` - numbered, alphabetical
+- `apalike` - author-year, APA style
+- `IEEEtran` - IEEE format
+- `naturemag` - Nature style
+
+</details>
+
+<details>
+<summary><strong>Figures</strong></summary>
+
+1. Place media files in `01_manuscript/contents/figures/caption_and_media/`:
+   ```
+   01_example_figure.png
+   01_example_figure.tex  # Caption file
+   ```
+
+2. Caption file format (`01_example_figure.tex`):
+   ```latex
+   %% Figure caption
+   \caption{Your figure caption here. Explain panels (A, B, C) if applicable.}
+   \label{fig:example_figure_01}
+   ```
+
+3. Supported formats: PNG, JPEG, PDF, SVG, TIFF, Mermaid (.mmd)
+
+</details>
+
+<details>
+<summary><strong>Tables</strong></summary>
+
+1. Place CSV + caption in `01_manuscript/contents/tables/caption_and_media/`:
+   ```
+   01_example_table.csv
+   01_example_table.tex  # Caption file
+   ```
+
+2. CSV auto-converts to LaTeX table format
+
+3. Caption file format (`01_example_table.tex`):
+   ```latex
+   %% Table caption
+   \caption{Your table caption. Define abbreviations used.}
+   \label{tab:example_table_01}
+   ```
+
+</details>
+
+---
+
+## Documentation
+
+<details>
+<summary><strong>Guides</strong></summary>
+
+| Guide | Description |
+|-------|-------------|
+| [Installation](docs/01_GUIDE_INSTALLATION.md) | Setup for all environments |
+| [Quick Start](docs/01_GUIDE_QUICK_START.md) | Common workflows |
+| [Content Creation](docs/01_GUIDE_CONTENT_CREATION.md) | Writing manuscripts |
+| [Bibliography](docs/01_GUIDE_BIBLIOGRAPHY.md) | Reference management |
+| [Architecture](docs/02_ARCHITECTURE_IMPLEMENTATION.md) | Technical details |
+
+</details>
+
+<details>
+<summary><strong>AI Prompts</strong></summary>
+
+Writing assistance prompts in [docs/prompts/](docs/prompts/):
+- `abstract.md` - Abstract writing guidelines
+- `introduction.md` - Introduction structure
+- `methods.md` - Methods section format
+- `discussion.md` - Discussion framework
+- `proofreed.md` - Proofreading checklist
+
+</details>
+
+---
+
+<p align="center">
+  <a href="https://scitex.ai" target="_blank"><img src="docs/scitex-icon-navy-inverted.png" alt="SciTeX" width="40"/></a>
+  <br>
+  AGPL-3.0 · ywatanabe@scitex.ai
+</p>
+
+<!-- EOF -->
