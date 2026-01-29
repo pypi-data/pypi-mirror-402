@@ -1,0 +1,1 @@
+# wellf3Scientific package by the Wellfrei research group.## Install```bashpip install wellf3
