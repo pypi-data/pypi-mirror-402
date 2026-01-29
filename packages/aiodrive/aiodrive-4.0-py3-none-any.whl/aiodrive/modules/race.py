@@ -1,0 +1,91 @@
+import asyncio
+from collections.abc import Awaitable, Iterable
+from typing import Literal, overload
+
+from ..internal.future import ensure_future
+from .gather import gather
+
+
+@overload
+async def race[T1](
+  awaitable1: Awaitable[T1],
+  /,
+) -> tuple[Literal[0], T1]:
+  ...
+
+@overload
+async def race[T1, T2](
+  awaitable1: Awaitable[T1],
+  awaitable2: Awaitable[T2],
+  /,
+) -> tuple[Literal[0], T1] | tuple[Literal[1], T2]:
+  ...
+
+@overload
+async def race[T1, T2, T3](
+  awaitable1: Awaitable[T1],
+  awaitable2: Awaitable[T2],
+  awaitable3: Awaitable[T3],
+  /,
+) -> tuple[Literal[0], T1] | tuple[Literal[1], T2] | tuple[Literal[2], T3]:
+  ...
+
+@overload
+async def race[T](*awaitables: Awaitable[T]) -> tuple[int, T]:
+  ...
+
+@overload
+async def race[T](awaitables: Iterable[Awaitable[T]], /) -> tuple[int, T]:
+  ...
+
+async def race(*awaitables: Awaitable | Iterable[Awaitable]):
+  """
+  Wait for the fastest of a given set of awaitables.
+
+  Parameters
+  ----------
+  awaitables
+    The awaitables to wait for, as multiple arguments or as an iterable.
+
+  Returns
+  -------
+  tuple[int, Any]
+    A tuple containing the index of the first completed awaitable and its
+    result.
+
+  Raises
+  ------
+  BaseExceptionGroup
+    If an awaitable raises an exception.
+  """
+
+  if awaitables and not isinstance(awaitables[0], Awaitable):
+    assert len(awaitables) == 1
+    effective_awaitables = tuple(awaitables[0])
+  else:
+    effective_awaitables: tuple[Awaitable, ...] = awaitables # type: ignore
+
+  assert len(effective_awaitables) >= 1
+  tasks = [ensure_future(awaitable) for awaitable in effective_awaitables]
+
+  try:
+    done_tasks, pending_tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+  except asyncio.CancelledError:
+    for task in tasks:
+      task.cancel()
+
+    await gather(tasks, sensitive=False)
+    raise
+
+  winning_task = next(iter(done_tasks))
+
+  for task in pending_tasks:
+    task.cancel()
+
+  await gather(pending_tasks, sensitive=False)
+  return tasks.index(winning_task), winning_task.result()
+
+
+__all__ = [
+  'race',
+]
