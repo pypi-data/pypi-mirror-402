@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request: ~
+
+env:
+  FORCE_COLOR: 1
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    env:
+        MISE_IDIOMATIC_VERSION_FILE_ENABLE_TOOLS: python
+    steps:
+    - uses: actions/checkout@v6
+    - uses: jdx/mise-action@v3
+    - name: Install pip dependencies
+      run: uv sync
+    - uses: actions/cache@v5
+      with:
+        path: ~/.cache/pre-commit/
+        key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+    - name: Run pre-commit
+      run: pre-commit run --all-files --show-diff-on-failure
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        python-version: ['3.14', '3.13', '3.12', '3.11', '3.10']
+    steps:
+    - uses: actions/checkout@v6
+    - uses: jdx/mise-action@v3
+    - name: Project python version
+      id: project-python-version
+      run: echo "python-version=$(cat .python-version)" >> $GITHUB_OUTPUT
+    - name: Install python
+      run: |
+        mise install python@${{ matrix.python-version }}
+    - name: Install pip dependencies
+      run: uv sync
+    - name: Run tests
+      run: uv run pytest --cov --junitxml=junit.xml -o junit_family=legacy --cov-branch --cov-report=xml
+    - name: Upload coverage reports to Codecov
+      if: ${{ !cancelled() && matrix.python-version == steps.project-python-version.outputs.python-version }}
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}

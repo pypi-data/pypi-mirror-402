@@ -1,0 +1,28 @@
+name: Publish
+
+on:
+  release:
+    types: [published]
+
+env:
+  MISE_IDIOMATIC_VERSION_FILE_ENABLE_TOOLS: python
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/p/cert-host-scraper
+    permissions:
+      id-token: write
+    steps:
+    - uses: actions/checkout@v6
+    - uses: jdx/mise-action@v3
+    - name: Install pip dependencies
+      run: uv sync
+    - name: Package
+      run: |
+          uv version ${{ github.event.release.tag_name }}
+          uv build
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@v1.13.0
