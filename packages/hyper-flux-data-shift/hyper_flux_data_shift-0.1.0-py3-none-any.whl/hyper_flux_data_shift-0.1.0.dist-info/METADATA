@@ -1,0 +1,145 @@
+Metadata-Version: 2.4
+Name: hyper-flux-data-shift
+Version: 0.1.0
+Summary: Dataset versioning and migration framework for ML data
+License-File: LICENSE
+Author: DataShift Team
+Author-email: team@datashift.ai
+Requires-Python: >=3.10
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Provides-Extra: all
+Provides-Extra: parquet
+Provides-Extra: torch
+Requires-Dist: fastparquet (>=2023.1.0) ; extra == "parquet" or extra == "all"
+Requires-Dist: pandas (>=2.0.0)
+Requires-Dist: pyarrow (>=10.0.0) ; extra == "parquet" or extra == "all"
+Requires-Dist: torch (>=2.0.0) ; extra == "torch" or extra == "all"
+Description-Content-Type: text/markdown
+
+# DataShift
+
+**DataShift** is a dataset versioning and migration framework designed for Machine Learning workflows. Think of it as "Git for Data", allowing you to track changes, compare versions, and manage dataset lifecycles with ease.
+
+## Key Features
+
+- **Dataset Versioning**: Snapshot datasets (CSV, Parquet) and track their evolution over time.
+- **Diffing**: Compare two versions of a dataset to see added/removed rows and schema changes.
+- **Drift Detection**: Guardrails to check for data drift between versions (e.g., row count changes, null distribution).
+- **Tags & Channels**: specific versions with tags (e.g., `#latest`) or moving channels (e.g., `:prod`).
+- **Python API & CLI**: Flexible usage through a command-line interface or directly within your Python code.
+- **Experiment Tracking**: Link datasets to experiments for reproducibility.
+
+## Installation
+
+### From Source
+
+```bash
+pip install .
+```
+
+### With Optional Dependencies
+
+For PyTorch integration:
+```bash
+pip install .[torch]
+```
+
+For Parquet support:
+```bash
+pip install .[parquet]
+```
+
+For everything (including dev tools):
+```bash
+pip install .[all]
+```
+
+### For Development
+
+```bash
+pip install -e .[dev]
+```
+
+## Quick Start
+
+### CLI Usage
+
+1. **Initialize DataShift** in your project directory:
+   ```bash
+   datashift init
+   ```
+
+2. **Snapshot a Dataset**:
+   ```bash
+   # Create a version of your customers data
+   datashift snapshot ./data/customers.csv --name customers
+   ```
+
+3. **List Datasets**:
+   ```bash
+   datashift list
+   ```
+
+4. **Show Dataset Details**:
+   ```bash
+   datashift show customers
+   ```
+
+5. **Compare Versions**:
+   ```bash
+   # Compare version 1 and version 2
+   datashift diff customers@v1 customers@v2
+   ```
+
+6. **Checkout a Version**:
+   ```bash
+   # Restore a specific version to a file
+   datashift checkout customers@v1 ./restored_customers.csv
+   ```
+
+7. **Drift Check (Guardrails)**:
+   ```bash
+   # Check if the new version deviates too much from the baseline
+   datashift check customers@v2 --baseline customers@v1 --max-row-change 0.1
+   ```
+
+### Python API Usage
+
+```python
+import pandas as pd
+from datashift import snapshot_dataset, load, diff_datasets, format_diff_summary
+
+# 1. Snapshot a dataset
+result = snapshot_dataset(dataset_name="metrics", source_path="metrics.csv")
+print(f"Created version: {result.version}")
+
+# 2. Load a specific version into a DataFrame
+df = load("metrics#latest")
+print(df.head())
+
+# 3. Diff two versions
+diff = diff_datasets("metrics@v1", "metrics@v2")
+print(format_diff_summary(diff))
+```
+
+## Development
+
+1. Clone the repository.
+2. Install dependencies:
+   ```bash
+   pip install -e .[dev]
+   ```
+3. Run tests:
+   ```bash
+   pytest
+   ```
+
+## License
+
+MIT License
+
