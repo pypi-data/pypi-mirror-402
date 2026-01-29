@@ -1,0 +1,220 @@
+# AM4 Prices ✈️
+
+A sleek Terminal UI (TUI) client for displaying current and upcoming Fuel/CO2 prices in Airline Manager 4.
+
+[![CI](https://github.com/barcister/am4-helper-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/barcister/am4-helper-cli/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/am4-prices)](https://pypi.org/project/am4-prices/)
+[![Python Version](https://img.shields.io/pypi/pyversions/am4-prices)](https://pypi.org/project/am4-prices/)
+[![License](https://img.shields.io/github/license/barcister/am4-helper-cli)](https://github.com/barcister/am4-helper-cli/blob/main/LICENSE)
+
+## Features
+
+- 🎨 **Beautiful TUI** - Rich terminal interface with color-coded prices
+- 📊 **Real-time Data** - Fetches current fuel and CO2 prices from AM4 Helper database
+- 📈 **Price Forecasting** - Shows upcoming prices for the next 5 hours
+- ⚡ **Watch Mode** - Auto-refresh prices at custom intervals
+- 🎯 **Smart Indicators** - Color-coded prices based on optimal buying ranges
+- 🔧 **Configurable** - Support for custom API endpoints and day selection
+- 🚀 **Raycast Integration** - Use directly from Raycast on macOS (see [raycast/README.md](raycast/README.md))
+
+## Installation
+
+### Homebrew (macOS/Linux)
+
+```bash
+# Install directly from formula URL
+brew install https://raw.githubusercontent.com/barcister/am4-helper-cli/main/Formula/am4-prices.rb
+```
+
+Or with tap (requires separate homebrew-am4-helper-cli repository):
+```bash
+brew tap barcister/am4-helper-cli
+brew install am4-prices
+```
+
+### pip
+
+```bash
+pip install am4-prices
+```
+
+### pipx (Recommended)
+
+```bash
+pipx install am4-prices
+```
+
+### Raycast (macOS)
+
+Use AM4 Prices directly from Raycast with two options:
+
+**Option 1: Script Commands** (Quick & Simple)
+```bash
+# After installing the CLI, copy scripts to Raycast
+cp raycast/*.sh ~/Library/Application\ Support/Raycast/Scripts/
+```
+
+**Option 2: Full Extension** (Rich UI & Features)
+```bash
+cd raycast-extension
+npm install && npm run build
+# Then add to Raycast via Settings → Extensions
+```
+
+See **[RAYCAST.md](RAYCAST.md)** for detailed comparison and setup guides.
+
+### From Source
+
+```bash
+git clone https://github.com/barcister/am4-helper-cli.git
+cd am4-helper-cli
+pip install .
+```
+
+## Usage
+
+### Show Current Prices
+
+Display current and upcoming prices:
+
+```bash
+am4-prices show
+```
+
+### Show Prices for Specific Day
+
+```bash
+am4-prices show --day 15
+```
+
+### Watch Mode (Auto-refresh)
+
+Watch prices with automatic refresh every 60 seconds:
+
+```bash
+am4-prices watch
+```
+
+Custom refresh interval (in seconds):
+
+```bash
+am4-prices watch --interval 30
+```
+
+### Custom API URL
+
+Use a custom data source:
+
+```bash
+am4-prices show --url https://example.com/prices.json
+```
+
+## ⏰ Important: Timezone Handling
+
+All price timestamps in AM4 are in **UTC** (indicated by the 'Z' suffix). The CLI automatically:
+- Uses UTC time to match current prices
+- Displays all times in UTC format
+- Correctly handles upcoming prices regardless of your local timezone
+
+**Example:** If you're in EST (UTC-5) at 10:00 AM local time, the CLI shows prices for 15:00 UTC (3:00 PM UTC), which is the correct current time in the game.
+
+No configuration needed - it just works! ✨
+
+## Price Guide
+
+The TUI uses color coding to help you identify good buying opportunities:
+
+### Fuel Prices
+- 🟢 **Green** (Good): < $550
+- 🟡 **Yellow** (OK): $550-800
+- 🔴 **Red** (High): > $800
+
+### CO2 Prices
+- 🟢 **Green** (Good): < $130
+- 🟡 **Yellow** (OK): $130-150
+- 🔴 **Red** (High): > $150
+
+## Screenshots
+
+![AM4 Prices TUI](screenshots/main.png)
+
+## Development
+
+### Setup Development Environment
+
+```bash
+# Clone repository
+git clone https://github.com/barcister/am4-helper-cli.git
+cd am4-helper-cli
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -e ".[dev]"
+```
+
+### Run Tests
+
+```bash
+pytest
+```
+
+### Code Formatting
+
+```bash
+ruff format .
+ruff check --fix .
+```
+
+### Type Checking
+
+```bash
+mypy src/am4_prices
+```
+
+## Data Source
+
+Price data is sourced from the [AM4 Helper](https://github.com/theheuman/am4-helper) project, which maintains a comprehensive database of historical and forecasted fuel/CO2 prices for Airline Manager 4.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes using [Conventional Commits](https://www.conventionalcommits.org/)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- [AM4 Helper](https://github.com/theheuman/am4-helper) - Data source
+- [Rich](https://github.com/Textualize/rich) - Terminal UI framework
+- [Typer](https://github.com/tiangolo/typer) - CLI framework
+
+## Related Projects
+
+- [AM4 Helper](https://am4-helper.web.app/) - Web-based AM4 tools
+- [AM4 Bot](https://github.com/cathaypacific8747/am4) - Discord bot for AM4
+
+## Support
+
+If you encounter any issues or have questions:
+
+- 🐛 [Report a bug](https://github.com/barcister/am4-helper-cli/issues)
+- 💡 [Request a feature](https://github.com/barcister/am4-helper-cli/issues)
+- 📖 [Read the docs](https://github.com/barcister/am4-helper-cli/wiki)
+
+## Sources
+
+- [AM4 Helper](https://github.com/theheuman/am4-helper)
+- [AM4Help API](https://api.am4help.com/)
+- [AM4 Bot by cathaypacific8747](https://github.com/cathaypacific8747/am4)
+- [AM4-Fuel-Forecast](https://github.com/Ben-Benston/AM4-Fuel-Forecast)
+- [Web API Documentation](https://cathaypacific8747.github.io/am4/api/web-api/)
