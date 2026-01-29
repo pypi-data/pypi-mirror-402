@@ -1,0 +1,129 @@
+Metadata-Version: 2.4
+Name: lazyhooks
+Version: 0.2.3
+Summary: A lightweight, resilient webhook sender and receiver.
+Author-email: Stacktactician <mmmoyosore09@gmail.com>
+License: MIT
+Project-URL: Homepage, https://github.com/StackTactician/LazyHooks
+Keywords: webhooks,asyncio,persistence,networking
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Internet :: WWW/HTTP
+Classifier: Framework :: AsyncIO
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: aiohttp>=3.8.0
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-asyncio; extra == "dev"
+Requires-Dist: mypy; extra == "dev"
+Requires-Dist: redis; extra == "dev"
+Provides-Extra: redis
+Requires-Dist: redis>=4.2.0; extra == "redis"
+Provides-Extra: prometheus
+Requires-Dist: prometheus-client; extra == "prometheus"
+Provides-Extra: sentry
+Requires-Dist: sentry-sdk; extra == "sentry"
+Provides-Extra: structlog
+Requires-Dist: structlog; extra == "structlog"
+Provides-Extra: testing
+Requires-Dist: responses; extra == "testing"
+Provides-Extra: full
+Requires-Dist: redis>=4.2.0; extra == "full"
+Requires-Dist: prometheus-client; extra == "full"
+Requires-Dist: sentry-sdk; extra == "full"
+Requires-Dist: structlog; extra == "full"
+Requires-Dist: responses; extra == "full"
+Dynamic: license-file
+
+# LazyHooks
+<div align="center">
+  <img src="https://raw.githubusercontent.com/StackTactician/LazyHooks/main/assets/logo.png" alt="LazyHooks Logo" width="200">
+</div>
+
+A lightweight, standalone Python package for sending and receiving webhooks with optional persistence.
+
+
+## Features
+
+- **Simple API**: Send webhooks with minimal boilerplate.
+- **Async First**: Built on `asyncio` and `aiohttp` for high performance.
+- **Secure**: HMAC-SHA256 signing with **Timestamp Replay Protection**.
+- **Reliable**: Optional `SQLite` storage to persist and retry failed webhooks.
+
+## Security
+
+LazyHooks prioritizes security by design:
+
+- **Replay Protection**: All webhooks include a timestamp. Requests older than 5 minutes are rejected.
+- **HMAC-SHA256**: Signatures verify both the **body and the timestamp** (`timestamp.body`) to prevent tampering.
+- **Constant-Time Verification**: Prevents timing attacks.
+- **SQL Injection Safe**: Parameterized queries.
+
+> **headers**: 
+> - `X-Lh-Timestamp`: Unix timestamp of the request.
+> - `X-Lh-Signature`: `v1=...` (HMAC of `timestamp.body`)
+
+## Documentation
+
+### Beginner Tutorials (Start Here!)
+1. **[What are Webhooks?](docs/tutorials/01_what_are_webhooks.md)**: The basics explained simply.
+2. **[Installation](docs/tutorials/02_installation.md)**: Quick setup guide.
+3. **[Your First Webhook](docs/tutorials/03_your_first_webhook.md)**: Send "Hello World" in 2 minutes.
+4. **[Receiving Webhooks](docs/tutorials/04_receiving_webhooks.md)**: Listen for events securely.
+5. **[Testing with Tunnels](docs/tutorials/05_testing_with_tunnels.md)**: Go live with ngrok.
+
+### Core Documentation
+
+- **[Getting Started](docs/getting_started.md)**: Installation and quick examples.
+- **[Sending Webhooks](docs/sending_webhooks.md)**: Sending usage.
+- **[Receiving Webhooks](docs/receiving_webhooks.md)**: Receiver usage.
+- **[Storage & Retries](docs/storage_and_retries.md)**: Persistence and reliability.
+- **[Security](docs/security.md)**: Security details.
+- **[Comparisons](docs/comparisons.md)**: Alternatives analysis.
+- **[API Reference](docs/api_reference.md)**: API docs.
+
+## Quick Example
+
+### Sending
+
+```python
+import asyncio
+from lazyhooks import WebhookSender
+
+async def main():
+    sender = WebhookSender(signing_secret="super-secret")
+    await sender.send("https://example.com/webhook", {"event": "hello"})
+
+asyncio.run(main())
+```
+
+### Receiving
+
+```python
+from lazyhooks import verify_signature
+
+def handle_webhook(request):
+    timestamp = request.headers.get("X-Lh-Timestamp")
+    signature = request.headers.get("X-Lh-Signature")
+    body = request.body
+    
+    if verify_signature(body, signature, "super-secret", timestamp):
+        return "OK", 200
+    else:
+        return "Invalid Signature or Timestamp", 401
+```
+
+## Links
+
+- **PyPI**: [https://pypi.org/project/lazyhooks](https://pypi.org/project/lazyhooks)
+- **Issues**: [https://github.com/StackTactician/LazyHooks/issues](https://github.com/StackTactician/LazyHooks/issues)
+- **Documentation**: See the GitHub repo for full docs, advanced usage, and examples.
