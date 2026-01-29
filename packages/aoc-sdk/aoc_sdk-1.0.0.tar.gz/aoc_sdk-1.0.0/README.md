@@ -1,0 +1,160 @@
+# Aoc Python SDK
+
+Aoc python sdk, require Python 2.7 or 3.4+
+
+- [source code](https://github.com/arcfraofficial/aoc-python-sdk)
+- [release](https://github.com/arcfraofficial/aoc-python-sdk/releases)
+
+## Installation
+
+- ### install from whl
+
+  ```shell
+  pip install aoc_sdk-1.0.0-py2.py3-none-any.whl
+  ```
+
+- ### install from tar.gz
+
+  ```shell
+  tar xvzf aoc-sdk-1.0.0.tar.gz
+  cd aoc-sdk-1.0.0
+  python setup.py install
+  ```
+
+- ### install from source code
+
+  ```
+  git clone https://github.com/arcfraofficial/aoc-python-sdk.git
+  cd aoc-python-sdk
+  python setup.py install
+  ```
+
+- ### install from source code by pip
+
+  ```shell
+  pip install git+https://github.com/arcfraofficial/aoc-python-sdk.git
+  ```
+
+- ### install from pypi
+  ```shell
+  pip install aoc-sdk
+  ```
+
+## Usage
+
+### Create instance
+
+#### Create `ApiClient` instance
+
+```python
+from aoc.configuration import Configuration
+from aoc import ApiClient
+
+configuration = Configuration(host="http://aoc.arcfra.com/v2/api")
+client = ApiClient(configuration)
+```
+
+> If using self-signed certificate, update configuration to skip ssl check
+
+```python
+configuration = Configuration(host="http://aoc.arcfra.com/v2/api")
+configuration.verify_ssl = False
+client = ApiClient(configuration)
+```
+
+#### Create relatd Api instance
+
+> Create related Api instance depends on usage, for example, to use vm related operation, create a `VmApi`。
+
+```python
+from aoc.api.vm_api import VmApi
+vm_api = VmApi(client)
+```
+
+### Authentication
+
+> a `login` function is provided in `utils` package and can use to authenticate an api_client
+
+```python
+from aoc.utils import wait_tasks, login
+conf = Configuration(host="http://aoc.arcfra.com/v2/api")
+api_client = ApiClient(conf)
+login(api_client, "your_username", "your_password")
+```
+
+> or directly update api_key field of Configuration, token can be retrieved from `login` api from `UserApi`
+
+```python
+from aoc.api.user_api import UserApi
+from aoc.models import UserSource
+
+user_api = UserApi(client)
+login_res = user_api.login({
+    "username": "your_username",
+    "password": "your_password",
+    "source": UserSource.LOCAL
+})
+
+configuration.api_key["Authorization"] = login_res.data.token
+```
+
+### Sending Request
+
+#### List elements
+
+```python
+vms = vm_api.get_vms({
+  "where": {
+    "id": "vm_id"
+  },
+  "first":1,
+})
+```
+
+#### Mutation and async task
+
+> Mostly mutation will response as async task earlier to avoid request hanging when executing long-running operation.
+
+```python
+start_res = vm_api.start_vm({
+  "where": {
+    "id": "stopped_vm_id"
+  },
+})
+'''
+start_res = {
+    task_id: <task_id>
+    data: {
+        ...
+    }
+}
+'''
+```
+
+> A utils named function `wait_tasks` is export from utils package
+
+```python
+from aoc.utils import wait_tasks
+try:
+ wait_tasks([res.task_id for res in start_res], api_client)
+except ApiException as e:
+ # handling exception
+
+# handling response
+```
+
+##### async request
+> Directly call api funtion will block process until response, to make request async, add kwargs async_req=True
+> Then function will return an `ApplyResult` and can use get function to retrieve response
+
+```python
+vms = vm_api.get_vms(
+  {
+    "where": {
+      "id": "vm_id"
+    }
+  },
+  async_req=True
+)
+print(vms.get()[0].name)
+```
