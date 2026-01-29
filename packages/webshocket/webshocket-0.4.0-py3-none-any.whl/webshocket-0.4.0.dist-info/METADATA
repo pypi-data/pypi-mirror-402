@@ -1,0 +1,179 @@
+Metadata-Version: 2.4
+Name: webshocket
+Version: 0.4.0
+Summary: An enhanced module to provide a robust, socket-like abstraction for WebSockets
+License: MIT License
+        
+        Copyright (c) 2025 Floydous
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+        
+Project-URL: Homepage, https://github.com/floydous/webshocket
+Project-URL: Bug Tracker, https://github.com/floydous/webshocket/issues
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Framework :: AsyncIO
+Classifier: Topic :: Internet :: WWW/HTTP
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: msgspec>=0.18.6
+Requires-Dist: websockets>=13.1
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-asyncio; extra == "dev"
+Requires-Dist: ruff; extra == "dev"
+Requires-Dist: poethepoet; extra == "dev"
+Requires-Dist: build; extra == "dev"
+Requires-Dist: sphinx; extra == "dev"
+Requires-Dist: furo; extra == "dev"
+Requires-Dist: sphinx-autodoc-typehints; extra == "dev"
+Dynamic: license-file
+
+[![docs](https://readthedocs.org/projects/web-shocket/badge/?style=flat)](https://web-shocket.readthedocs.io/)
+[![Build Status](https://github.com/floydous/webshocket/actions/workflows/tests.yml/badge.svg)](https://github.com/floydous/webshocket/actions/workflows/tests.yml)
+[![PyPI Downloads](https://pepy.tech/badge/webshocket)](https://pepy.tech/project/webshocket)
+[![PyPI version](https://img.shields.io/pypi/v/webshocket)](https://pypi.org/project/webshocket/)
+[![License](https://img.shields.io/badge/License-MIT-blue)](https://opensource.org/license/mit)
+[![Code style: ruff](https://img.shields.io/badge/code_style-ruff-dafd5e)](https://github.com/astral-sh/ruff)
+
+> [!WARNING]
+> Webshocket is still unfinished and is not ready for proper-project use. It is advised to not expect any stability from this project until it reaches a stable release (>=v0.5.0)
+
+# Webshocket
+
+Webshocket is a lightweight Python framework for building WebSocket RPC applications with per-client state and channel routing, built on the [WebSocket](https://github.com/python-websockets/websockets) library.
+
+# Usage
+
+### Calling RPC Methods
+```python
+class Handler(webshocket.WebSocketHandler):
+    @webshocket.rpc_method(alias_name="add")
+    async def add(self, _: webshocket.ClientConnection, a: int, b: int):
+        return a + b
+
+
+async def main():
+    server = webshocket.WebSocketServer("127.0.0.1", 5000, clientHandler=Handler)
+    await server.start()
+
+    async with webshocket.WebSocketClient("ws://127.0.0.1:5000") as client:
+        response_packet = await client.send_rpc("add", 1, 2)
+```
+```python
+        print(response_packet.data)  # 3
+```
+```python
+    await server.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Managing Client State
+```python
+class Handler(webshocket.WebSocketHandler):
+    @webshocket.rpc_method()
+    async def register(self, connection: webshocket.ClientConnection, favorite_color: str) -> None:
+        connection.favorite_color = favorite_color
+
+    @webshocket.rpc_method(alias_name="my-favorite-color")
+    async def tell(self, connection: webshocket.ClientConnection) -> str:
+        return connection.session_state["favorite_color"]
+
+
+async def main():
+    server = webshocket.WebSocketServer("127.0.0.1", 5000, clientHandler=Handler)
+    await server.start()
+
+    async with webshocket.WebSocketClient("ws://127.0.0.1:5000") as client:
+        await client.send_rpc("register", "blue")
+
+        response = await client.send_rpc("my-favorite-color")
+```
+```python
+        print(response.data)  # blue
+```
+```python
+    await server.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Working With Channels
+```python
+class Handler(webshocket.WebSocketHandler):
+    @webshocket.rpc_method()  # Alias name automatically set to the method name if `alias_name` is not provided
+    async def subscribe_to(self, connection: webshocket.ClientConnection, channel: str):
+        connection.subscribe(channel)
+
+
+async def main():
+    server = webshocket.WebSocketServer("127.0.0.1", 5000, clientHandler=Handler)
+    await server.start()
+
+    SportsSubscriber = await webshocket.WebSocketClient("ws://127.0.0.1:5000").connect()
+    NewsSubscriber = await webshocket.WebSocketClient("ws://127.0.0.1:5000").connect()
+
+    try:
+        await SportsSubscriber.send_rpc("subscribe_to", "sports")
+        await NewsSubscriber.send_rpc("subscribe_to", "news")
+        await asyncio.sleep(1)
+
+        await server.publish("sports", "Sports News!")
+        await server.publish("news", "News update!")
+        await asyncio.sleep(1)
+
+```
+```python
+        print((await SportsSubscriber.recv()).data)  # Sports News!
+        print((await NewsSubscriber.recv()).data)  # News update!
+```
+```python
+    finally:
+        await SportsSubscriber.close()
+        await NewsSubscriber.close()
+
+    await server.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+# Contributing
+
+Contributions are welcome! Please feel free to open an issue or submit a pull request on our GitHub repository.
+
+# License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
