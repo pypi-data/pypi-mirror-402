@@ -1,0 +1,301 @@
+Metadata-Version: 2.4
+Name: enzu
+Version: 0.1.1
+Summary: AI delegation orchestration. Tasks as budgeted jobs, not conversations.
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: openai>=1.0.0
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: pypdf>=4.0.0
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: httpx>=0.25.0
+Requires-Dist: logfire>=4.19.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Requires-Dist: ruff>=0.4.0; extra == "dev"
+Requires-Dist: mypy>=1.10.0; extra == "dev"
+Provides-Extra: telemetry
+Requires-Dist: logfire; extra == "telemetry"
+Provides-Extra: server
+Requires-Dist: fastapi>=0.111.0; extra == "server"
+Requires-Dist: uvicorn[standard]>=0.30.0; extra == "server"
+Provides-Extra: all
+Requires-Dist: enzu[dev]; extra == "all"
+Requires-Dist: enzu[telemetry]; extra == "all"
+Requires-Dist: enzu[server]; extra == "all"
+
+# enzu
+
+AI delegation orchestration. Tasks as budgeted jobs, not conversations.
+
+## Install
+
+```
+pip install -e .
+```
+
+## Basic usage
+
+Single CLI, JSON in and JSON out:
+
+```
+cat task.json | enzu --provider openrouter --model "$OPENROUTER_MODEL"
+```
+
+Minimal `task.json`:
+
+```
+{
+  "task": {
+    "task_id": "example-task",
+    "input_text": "Summarize this text.",
+    "model": "openrouter/auto",
+    "budget": { "max_output_tokens": 200 },
+    "success_criteria": { "required_substrings": ["Summary"] }
+  },
+  "provider": "openrouter"
+}
+```
+
+RLM mode with a context file:
+
+```
+cat rlm_task.json | enzu --provider openrouter --mode rlm --context-file path/to/context.txt
+```
+
+RLM keeps the prompt in the REPL environment (`context`) so the model inspects it programmatically.
+
+Automode (filesystem tools, local-only within a root):
+
+```
+enzu --mode automode --provider ollama --model "llama3" --fs-root "$HOME/Desktop" --task "Clean the desktop into folders"
+```
+
+More examples: `examples/enzu.md`
+
+## Modes (CLI)
+
+- `chat` (default): single-shot generation, no context required.
+- `rlm`: iterative goal-oriented execution, requires `context`/`data` or `--context-file`.
+- `automode`: CLI-only, requires `--fs-root` and binds filesystem tools to that root.
+
+## Sandbox safety
+
+RLM/automode execute Python in-process with restricted builtins and code checks. This is not a security boundary. Do not run untrusted code without external isolation (container, VM, or separate host).
+
+## Client quickstart
+
+Environment variables (from code):
+
+- `OPENROUTER_API_KEY` (OpenRouter)
+- `OPENROUTER_REFERER` and `OPENROUTER_APP_NAME` (optional OpenRouter headers)
+- `OPENAI_API_KEY`, `OPENAI_ORG`, `OPENAI_PROJECT` (OpenAI)
+- `${PROVIDER}_API_KEY` for other providers (e.g., `GROQ_API_KEY`)
+- `EXA_API_KEY` to enable search tools in RLM mode
+- Local providers: `ollama` (http://localhost:11434/v1), `lmstudio` (http://localhost:1234/v1)
+
+Minimal CLI task (budget and checks defaulted by the CLI):
+
+```json
+{
+  "task": {
+    "task_id": "example-task",
+    "input_text": "Summarize this text.",
+    "model": "openrouter/auto"
+  },
+  "provider": "openrouter"
+}
+```
+
+RLM mode with context:
+
+```bash
+cat rlm_task.json | enzu --provider openrouter --mode rlm --context-file path/to/context.txt
+```
+
+## Telemetry
+
+Logfire spans are enabled by default when Logfire is installed. Disable with `ENZU_LOGFIRE=0`.
+Silence console output with `ENZU_LOGFIRE_CONSOLE=0`. Enable token-stream logs with `ENZU_LOGFIRE_STREAM=1`.
+
+## Python API
+
+```
+from enzu import run
+
+text = run(
+    "Summarize this text.",
+    provider="openrouter",
+    model="openrouter/auto",
+)
+```
+
+Return the full report when you need details:
+
+```
+from enzu import run
+
+report = run(
+    "Summarize this text.",
+    provider="openrouter",
+    model="openrouter/auto",
+    return_report=True,
+)
+```
+
+Advanced usage with explicit task specs:
+
+```
+from enzu import Budget, SuccessCriteria, TaskSpec, run
+
+task = TaskSpec(
+    task_id="example",
+    input_text="Summarize this text.",
+    model="openrouter/auto",
+    budget=Budget(max_output_tokens=200),
+    success_criteria=SuccessCriteria(required_substrings=["Summary"]),
+)
+report = run(task, provider="openrouter", return_report=True)
+```
+
+`run()` also accepts the same JSON shape as the CLI:
+
+```
+from enzu import run
+
+payload = {
+  "task": {
+    "task_id": "example",
+    "input_text": "Summarize this text.",
+    "model": "openrouter/auto",
+    "budget": { "max_output_tokens": 200 },
+    "success_criteria": { "required_substrings": ["Summary"] }
+  },
+  "provider": "openrouter"
+}
+report = run(payload, return_report=True)
+```
+
+### Mode selection (Python)
+
+`run()` accepts `mode="auto"` (default), `mode="chat"`, or `mode="rlm"`. Auto mode selects RLM when any of:
+- `data` provided (including empty string)
+- `cost` or `seconds` provided
+- `goal` provided
+- prompt + data size exceeds ~256k chars (~64k tokens)
+Otherwise auto mode selects chat.
+
+Force a mode explicitly:
+
+```
+from enzu import run
+
+run("Write a haiku.", model="openrouter/auto", mode="chat")
+run("Investigate root cause.", model="openrouter/auto", mode="rlm", data=logs)
+```
+
+### Session API
+
+Sessions keep conversation history and prepend it to `data` on each call.
+
+```
+from enzu import Session, SessionBudgetExceeded
+
+session = Session(
+    model="openrouter/auto",
+    provider="openrouter",
+    max_cost_usd=5.00,
+    max_tokens=20000,
+)
+
+try:
+    answer = session.run("Find the bug.", data=logs, cost=1.00)
+    follow_up = session.run("Fix it.")
+except SessionBudgetExceeded as exc:
+    print(exc)
+
+session.save("debug_session.json")
+session = Session.load("debug_session.json")
+```
+
+Notes:
+- History is capped by `history_max_chars` (default 10,000).
+- History is passed via `data`, so auto mode resolves to RLM once history exists.
+- Use `raise_cost_cap()` / `raise_token_cap()` to increase session caps.
+- Use `clear()` to reset history.
+
+## API contract and schemas
+
+- Canonical contract: `API_CONTRACT.md`
+- Background orchestration guide: `docs/BACKGROUND_ORCHESTRATION.md`
+- Python API reference: `docs/PYTHON_API_REFERENCE.md`
+- File-based examples: `docs/FILE_BASED_CHATBOT.md`, `docs/FILE_BASED_RESEARCHER.md`
+- JSON schemas: `docs/schema/` (generated by `scripts/export_schema.py`, includes `bundle.json`)
+- CLI schema output: `enzu --print-schema`
+- Deployment and model guide: `docs/INTEGRATION_GUIDE.md`
+- Deployment quickstart: `docs/DEPLOYMENT_QUICKSTART.md`
+
+## RLM Features: Optimal Implementation
+
+This implementation follows the **optimal design** from the [PrimeIntellect RLM paper](https://arxiv.org/html/2512.24601v1):
+By default, `RLMEngine` uses the paper-aligned prompt; set `prompt_style="extended"` for extra guardrails and tool guidance.
+
+### Parallel Sub-LLM Calls with `llm_batch()`
+
+The RLM sandbox provides **both** `llm_query()` and `llm_batch()` for calling sub-LLMs:
+
+- **`llm_query(prompt)`** - Sequential single call for one-off queries
+- **`llm_batch(prompts)`** - Parallel batch execution for multiple independent queries
+
+**Performance benefit**: `llm_batch()` runs queries concurrently using `asyncio.gather()`, reducing latency by N× where N is the number of queries.
+
+```python
+# ❌ Slow: Sequential calls
+results = [llm_query(f"Classify: {item}") for item in items]  # N× latency
+
+# ✅ Fast: Parallel batch
+prompts = [f"Classify: {item}" for item in items]
+results = llm_batch(prompts)  # max(latency), not sum(latency)
+```
+
+With `prompt_style="extended"`, the system prompt guides models to use `llm_batch()` for multiple independent queries.
+
+### Dynamic Package Installation with `pip_install()`
+
+Enable dynamic pip package installation for maximum flexibility:
+
+```python
+from enzu.rlm.engine import RLMEngine
+
+engine = RLMEngine(enable_pip=True, prompt_style="extended")
+```
+
+When enabled, the RLM can install any PyPI package on demand:
+
+```python
+# Inside RLM sandbox:
+pip_install("numpy", "pandas", "scipy")
+import numpy as np
+import pandas as pd
+
+# Standard library always available (no install needed)
+import re, math, json, datetime
+```
+
+**Security note**: `enable_pip=False` by default. Only enable for trusted use cases, as it allows arbitrary package installation.
+
+### Architecture Alignment with Paper
+
+This implementation provides:
+
+1. ✅ **Python REPL** - Full Python sandbox with persistent namespace
+2. ✅ **Recursive sub-LLM calls** - Both sequential and parallel execution
+3. ✅ **Context as external variable** - prompt stored in `context`
+4. ✅ **Dynamic imports** - When `enable_pip=True`, matches paper's capability
+5. ✅ **Answer management** - `FINAL()` and `FINAL_VAR()` for iterative refinement
+6. ✅ **Async optimization** - Implements paper's recommended parallel sub-calls
+
+## Tests
+
+- `tests/README.md`
