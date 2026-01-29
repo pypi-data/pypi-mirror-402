@@ -1,0 +1,659 @@
+{% extends "base.html" %} {% block title %}Chat - AgentOS{% endblock %} {% block
+content %}
+<div x-data="chatApp()" x-init="init()" class="chat-container">
+  <!-- Chat Header -->
+  <div class="chat-header">
+    <div class="flex items-center gap-3">
+      <h2 class="text-xl font-bold text-gray-100">💬 Agentic Chat</h2>
+      <span class="badge-agentic">⚡ MCP Tools Enabled</span>
+    </div>
+
+    <!-- Settings -->
+    <div class="flex items-center gap-3">
+      <select x-model="provider" class="form-select">
+        {% for p in providers %}
+        <option value="{{ p }}">{{ p }}</option>
+        {% endfor %}
+      </select>
+
+      <input
+        x-model="model"
+        type="text"
+        placeholder="Model (optional)"
+        class="form-input"
+        style="max-width: 150px"
+      />
+
+      <input
+        x-model="temperature"
+        type="number"
+        min="0"
+        max="2"
+        step="0.1"
+        class="form-input"
+        style="max-width: 80px"
+        title="Temperature"
+      />
+
+      <button @click="clearChat()" class="btn btn-secondary">🗑️ Clear</button>
+    </div>
+  </div>
+
+  <!-- Messages Area -->
+  <div class="chat-messages" x-ref="messagesContainer">
+    <template x-if="messages.length === 0">
+      <div class="chat-empty">
+        <div class="text-4xl mb-3">🤖</div>
+        <p class="text-gray-400 text-lg">Agentic Chat with MCP</p>
+        <p class="text-gray-500 text-sm mt-2">
+          Ask me to perform tasks - I use MCP tools!
+        </p>
+        <p class="text-gray-600 text-xs mt-1">
+          Examples: "create a hello.py file", "read README.md", "list files in
+          current directory"
+        </p>
+      </div>
+    </template>
+
+    <template x-for="(msg, index) in messages" :key="index">
+      <div :class="getMessageClass(msg.role)">
+        <div class="chat-message-header">
+          <span
+            class="chat-message-role"
+            x-text="getRoleLabel(msg.role)"
+          ></span>
+          <span
+            class="chat-message-time"
+            x-text="formatTime(msg.timestamp)"
+          ></span>
+        </div>
+        <div
+          class="chat-message-content"
+          x-html="formatMessage(msg.content)"
+        ></div>
+
+        <!-- Show MCP tool calls (new style) -->
+        <template
+          x-if="msg.role === 'assistant' && msg.mcp_calls && msg.mcp_calls.length > 0 && !msg.executed"
+        >
+          <div class="mcp-actions">
+            <div class="mcp-plan-header">📋 Execution Plan</div>
+            <template x-for="(call, callIdx) in msg.mcp_calls" :key="callIdx">
+              <div class="mcp-call-item">
+                <span
+                  class="mcp-call-number"
+                  x-text="(callIdx + 1) + '.'"
+                ></span>
+                <span
+                  class="mcp-call-tool"
+                  x-text="getToolDisplayName(call.tool)"
+                ></span>
+                <span
+                  class="mcp-call-desc"
+                  x-text="getToolDescription(call)"
+                ></span>
+              </div>
+            </template>
+            <button
+              @click="executeMcpCalls(msg.mcp_calls, index)"
+              class="btn btn-execute-mcp"
+              :disabled="isExecuting"
+            >
+              ▶️ Execute All
+            </button>
+          </div>
+        </template>
+
+        <!-- Show legacy shell commands (fallback) -->
+        <template
+          x-if="msg.role === 'assistant' && msg.commands && msg.commands.length > 0 && !msg.mcp_calls?.length && !msg.executed"
+        >
+          <div class="command-actions">
+            <template x-for="(cmd, cmdIdx) in msg.commands" :key="cmdIdx">
+              <div class="command-item">
+                <code class="command-code" x-text="cmd"></code>
+                <button
+                  @click="executeCommand(cmd, index)"
+                  class="btn btn-execute"
+                  :disabled="isExecuting"
+                >
+                  ▶️ Execute
+                </button>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    <!-- MCP execution results -->
+    <template x-for="(result, idx) in mcpResults" :key="'mcp-' + idx">
+      <div
+        class="mcp-result-panel"
+        :class="result.result.success ? 'mcp-success' : 'mcp-error'"
+      >
+        <div class="mcp-result-header">
+          <span
+            x-text="result.result.success ? '✓' : '✗'"
+            :class="result.result.success ? 'text-green-400' : 'text-red-400'"
+          ></span>
+          <span
+            class="mcp-result-tool"
+            x-text="getToolDisplayName(result.tool)"
+          ></span>
+          <span
+            class="mcp-result-desc"
+            x-text="getToolDescription(result)"
+          ></span>
+        </div>
+        <pre class="mcp-result-content" x-text="formatMcpOutput(result)"></pre>
+      </div>
+    </template>
+
+    <template x-if="isThinking">
+      <div class="chat-message-assistant">
+        <div class="chat-message-header">
+          <span class="chat-message-role">🤖 Assistant</span>
+        </div>
+        <div class="chat-message-content">
+          <div class="thinking-indicator">
+            <span>Thinking</span>
+            <span class="thinking-dots">
+              <span>.</span><span>.</span><span>.</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <template x-if="isExecuting">
+      <div class="chat-message-system">
+        <div class="chat-message-header">
+          <span class="chat-message-role">⚙️ Executing MCP Tools</span>
+        </div>
+        <div class="chat-message-content">
+          <div class="thinking-indicator">
+            <span>Running</span>
+            <span class="thinking-dots">
+              <span>.</span><span>.</span><span>.</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- Input Area -->
+  <div class="chat-input-container">
+    <form @submit.prevent="sendMessage()" class="chat-input-form">
+      <textarea
+        x-model="inputMessage"
+        @keydown.enter.prevent="if(!$event.shiftKey) sendMessage()"
+        placeholder="Ask me to do something... (e.g., 'create a file hello.py with print hello')"
+        class="chat-input"
+        rows="3"
+        :disabled="isThinking || isExecuting"
+      ></textarea>
+      <button
+        type="submit"
+        class="btn btn-primary"
+        :disabled="isThinking || isExecuting || !inputMessage.trim()"
+      >
+        <span x-show="!isThinking">Send 🚀</span>
+        <span x-show="isThinking">Sending...</span>
+      </button>
+    </form>
+    <div x-show="error" class="chat-error" x-text="error"></div>
+  </div>
+</div>
+
+<style>
+  /* MCP-specific styles */
+  .mcp-actions {
+    margin-top: 12px;
+    padding: 12px;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 8px;
+  }
+  .mcp-plan-header {
+    font-weight: 600;
+    color: #60a5fa;
+    margin-bottom: 8px;
+  }
+  .mcp-call-item {
+    padding: 4px 0;
+    font-family: monospace;
+    font-size: 0.9em;
+  }
+  .mcp-call-number {
+    color: #6b7280;
+    margin-right: 8px;
+  }
+  .mcp-call-tool {
+    color: #22d3d1;
+    font-weight: 600;
+  }
+  .mcp-call-desc {
+    color: #9ca3af;
+    margin-left: 8px;
+  }
+  .btn-execute-mcp {
+    margin-top: 12px;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .btn-execute-mcp:hover {
+    opacity: 0.9;
+  }
+  .btn-execute-mcp:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .mcp-result-panel {
+    margin: 8px 0;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid;
+  }
+  .mcp-success {
+    border-color: #22c55e;
+    background: rgba(34, 197, 94, 0.1);
+  }
+  .mcp-error {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+  }
+  .mcp-result-header {
+    padding: 8px 12px;
+    font-family: monospace;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mcp-result-tool {
+    color: #22d3d1;
+    font-weight: 600;
+  }
+  .mcp-result-desc {
+    color: #9ca3af;
+  }
+  .mcp-result-content {
+    padding: 8px 12px;
+    margin: 0;
+    font-size: 0.85em;
+    background: rgba(0, 0, 0, 0.2);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+</style>
+
+<script>
+  function chatApp() {
+    // Tool display name mapping (same as CLI)
+    const TOOL_DISPLAY_NAMES = {
+      read_file: "ReadFile",
+      write_file: "WriteFile",
+      replace: "Edit",
+      list_directory: "ListDir",
+      glob: "Glob",
+      search_file_content: "Search",
+      run_shell_command: "Shell",
+      web_fetch: "WebFetch",
+      google_web_search: "WebSearch",
+      save_memory: "SaveMemory",
+      get_memory: "GetMemory",
+      write_todos: "WriteTodos",
+      read_todos: "ReadTodos",
+      delegate_to_agent: "Delegate",
+    };
+
+    return {
+      messages: [],
+      inputMessage: "",
+      provider: "github",
+      model: "",
+      temperature: 0.7,
+      isThinking: false,
+      isExecuting: false,
+      error: "",
+      mcpResults: [],
+
+      init() {
+        this.loadHistory();
+      },
+
+      getToolDisplayName(tool) {
+        return TOOL_DISPLAY_NAMES[tool] || tool;
+      },
+
+      getToolDescription(call) {
+        const tool = call.tool;
+        const args = call.args || {};
+
+        if (tool === "write_file") return `Writing to ${args.path || "file"}`;
+        if (tool === "read_file") return `Reading ${args.path || "file"}`;
+        if (tool === "replace") return `Editing ${args.path || "file"}`;
+        if (tool === "list_directory") return `Listing ${args.path || "."}`;
+        if (tool === "glob") return `Finding ${args.pattern || "*"}`;
+        if (tool === "search_file_content")
+          return `Searching for "${(args.pattern || "").substring(0, 20)}"`;
+        if (tool === "run_shell_command")
+          return `${(args.command || "").substring(0, 40)}`;
+        if (tool === "web_fetch") return `Fetching ${args.url || "URL"}`;
+        if (tool === "google_web_search")
+          return `Searching "${(args.query || "").substring(0, 20)}"`;
+        if (tool === "save_memory") return `Saving ${args.key || "key"}`;
+        if (tool === "get_memory") return `Getting ${args.key || "key"}`;
+        if (tool === "delegate_to_agent")
+          return `To ${args.agent_name || "agent"}`;
+        return "";
+      },
+
+      formatMcpOutput(result) {
+        const res = result.result || {};
+        if (!res.success) {
+          return `Error: ${res.error || res.output || "Unknown error"}`;
+        }
+
+        const output = res.output;
+        if (output === null || output === undefined) return "(completed)";
+
+        // Handle file write
+        if (result.tool === "write_file") {
+          const content = result.args?.content || "";
+          const lines = content.split("\n").slice(0, 15);
+          const numbered = lines.map((l, i) => `${i + 1} ${l}`).join("\n");
+          if (content.split("\n").length > 15)
+            return numbered + "\n... (truncated)";
+          return numbered;
+        }
+
+        // Handle other outputs
+        const str =
+          typeof output === "string" ? output : JSON.stringify(output, null, 2);
+        if (str.length > 500)
+          return str.substring(0, 500) + "\n... (truncated)";
+        return str;
+      },
+
+      async loadHistory() {
+        try {
+          const response = await fetch("/api/chat/history");
+          const data = await response.json();
+          this.messages = data.history || [];
+          this.$nextTick(() => this.scrollToBottom());
+        } catch (err) {
+          console.error("Failed to load history:", err);
+        }
+      },
+
+      async sendMessage() {
+        if (!this.inputMessage.trim() || this.isThinking) return;
+
+        const message = this.inputMessage.trim();
+        this.inputMessage = "";
+        this.error = "";
+        this.mcpResults = []; // Clear previous results
+
+        // Add user message
+        this.messages.push({
+          role: "user",
+          content: message,
+          timestamp: new Date().toISOString(),
+        });
+
+        this.isThinking = true;
+        this.$nextTick(() => this.scrollToBottom());
+
+        try {
+          const response = await fetch("/api/chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              message: message,
+              provider: this.provider,
+              model: this.model,
+              temperature: this.temperature,
+            }),
+          });
+
+          const data = await response.json();
+
+          if (data.error) {
+            this.error = data.error;
+            this.messages.pop();
+          } else {
+            // Add assistant response with MCP calls or commands
+            this.messages.push({
+              role: "assistant",
+              content: data.response,
+              timestamp: new Date().toISOString(),
+              commands: data.commands || [],
+              mcp_calls: data.mcp_calls || [],
+            });
+          }
+        } catch (err) {
+          this.error = "Failed to send message: " + err.message;
+          this.messages.pop();
+        } finally {
+          this.isThinking = false;
+          this.$nextTick(() => this.scrollToBottom());
+        }
+      },
+
+      async executeMcpCalls(mcpCalls, msgIndex) {
+        this.isExecuting = true;
+        this.mcpResults = [];
+        this.summaryAnswer = null;
+        this.$nextTick(() => this.scrollToBottom());
+
+        // Get the original question from the user message before this assistant message
+        let originalQuestion = "";
+        if (msgIndex > 0) {
+          for (let i = msgIndex - 1; i >= 0; i--) {
+            if (this.messages[i].role === "user") {
+              originalQuestion = this.messages[i].content;
+              break;
+            }
+          }
+        }
+
+        try {
+          const response = await fetch("/api/chat/execute-mcp", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ mcp_calls: mcpCalls }),
+          });
+
+          const data = await response.json();
+
+          // Mark the message as executed
+          if (msgIndex >= 0 && msgIndex < this.messages.length) {
+            this.messages[msgIndex].executed = true;
+          }
+
+          if (data.error) {
+            this.error = data.error;
+          } else {
+            // Show results
+            this.mcpResults = data.results || [];
+
+            // Check if we have informational tool results that need summarizing
+            const infoTools = [
+              "google_web_search",
+              "web_fetch",
+              "read_file",
+              "list_directory",
+              "glob",
+              "search_file_content",
+              "get_memory",
+              "read_todos",
+            ];
+            const hasInfoResults = this.mcpResults.some(
+              (r) => infoTools.includes(r.tool) && r.result?.success
+            );
+
+            // Auto-summarize if we have info results and an original question
+            if (hasInfoResults && originalQuestion) {
+              await this.getSummaryAnswer(originalQuestion, this.mcpResults);
+            }
+          }
+        } catch (err) {
+          if (msgIndex >= 0 && msgIndex < this.messages.length) {
+            this.messages[msgIndex].executed = true;
+          }
+          this.error = "Failed to execute MCP calls: " + err.message;
+        } finally {
+          this.isExecuting = false;
+          this.$nextTick(() => this.scrollToBottom());
+        }
+      },
+
+      async getSummaryAnswer(question, results) {
+        try {
+          const response = await fetch("/api/chat/summarize", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              question: question,
+              results: results,
+              provider: this.provider,
+              model: this.model,
+              temperature: this.temperature,
+            }),
+          });
+
+          const data = await response.json();
+
+          if (data.success && data.answer) {
+            // Add the summarized answer as a new assistant message
+            this.messages.push({
+              role: "assistant",
+              content: data.answer,
+              timestamp: new Date().toISOString(),
+              isSummary: true,
+            });
+            this.$nextTick(() => this.scrollToBottom());
+          }
+        } catch (err) {
+          console.error("Failed to get summary:", err);
+        }
+      },
+
+      async executeCommand(command, msgIndex) {
+        this.isExecuting = true;
+        this.$nextTick(() => this.scrollToBottom());
+
+        try {
+          const response = await fetch("/api/chat/execute", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ command: command }),
+          });
+
+          const data = await response.json();
+
+          // Mark the message as executed so button disappears
+          if (msgIndex >= 0 && msgIndex < this.messages.length) {
+            this.messages[msgIndex].executed = true;
+          }
+
+          // Add execution result as a system message
+          this.messages.push({
+            role: "system",
+            content: `**Executed:** \`${command}\`\n**Result:** ${
+              data.success ? "✅ Success" : "❌ Failed"
+            }\n\`\`\`\n${data.output || data.error || "(no output)"}\n\`\`\``,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (err) {
+          // Mark as executed even on error
+          if (msgIndex >= 0 && msgIndex < this.messages.length) {
+            this.messages[msgIndex].executed = true;
+          }
+          // Add error as system message
+          this.messages.push({
+            role: "system",
+            content: `**Executed:** \`${command}\`\n**Result:** ❌ Failed\n\`\`\`\n${err.message}\n\`\`\``,
+            timestamp: new Date().toISOString(),
+          });
+        } finally {
+          this.isExecuting = false;
+          this.$nextTick(() => this.scrollToBottom());
+        }
+      },
+
+      async clearChat() {
+        if (!confirm("Clear all messages?")) return;
+
+        try {
+          await fetch("/api/chat/clear", { method: "POST" });
+          this.messages = [];
+          this.error = "";
+        } catch (err) {
+          this.error = "Failed to clear chat: " + err.message;
+        }
+      },
+
+      scrollToBottom() {
+        this.$refs.messagesContainer.scrollTop =
+          this.$refs.messagesContainer.scrollHeight;
+      },
+
+      formatTime(timestamp) {
+        const date = new Date(timestamp);
+        return date.toLocaleTimeString();
+      },
+
+      getMessageClass(role) {
+        if (role === "user") return "chat-message-user";
+        if (role === "system") return "chat-message-system";
+        return "chat-message-assistant";
+      },
+
+      getRoleLabel(role) {
+        if (role === "user") return "👤 You";
+        if (role === "system") return "⚙️ System";
+        return "🤖 Assistant";
+      },
+
+      formatMessage(content) {
+        let formatted = content
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\n/g, "<br>")
+          .replace(/`([^`]+)`/g, "<code>$1</code>")
+          .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+          .replace(/\*([^*]+)\*/g, "<em>$1</em>");
+
+        // Format code blocks
+        formatted = formatted.replace(
+          /```(\w+)?<br>([\s\S]*?)```/g,
+          function (match, lang, code) {
+            return "<pre><code>" + code + "</code></pre>";
+          }
+        );
+
+        return formatted;
+      },
+    };
+  }
+</script>
+{% endblock %}
