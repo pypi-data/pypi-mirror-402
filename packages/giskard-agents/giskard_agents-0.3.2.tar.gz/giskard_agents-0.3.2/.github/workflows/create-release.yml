@@ -1,0 +1,86 @@
+name: Create Release
+
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Tag to be created, in the form X.Y.Z"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: read
+  pull-requests: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Check if the user is a member of the Giskard-AI organization
+      - name: Check if organization member
+        uses: JamesSingleton/is-organization-member@311430b0670cdec4036e721029b78018236a0b74 # 1.1.0
+        id: is_organization_member
+        with:
+          organization: Giskard-AI
+          username: ${{ github.actor }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Interrupt job if user is not a member of Giskard-AI organization
+        if: ${{ steps.is_organization_member.outputs.result == 'false' }}
+        shell: bash
+        run: |
+          echo "Job failed due to user not being a member of Giskard-AI organization and the 'safe for build' label not being set on the PR"
+          exit 1
+
+      - name: Validate version format
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          if [[ ! "$VERSION_INPUT" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version format. Use X.Y.Z"
+            exit 1
+          fi
+      # Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          fetch-tags: true
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Write release version env vars
+      - name: Write release version env vars
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          VERSION_NAME="v${VERSION_INPUT}"
+          VERSION_NUMBER="${VERSION_NAME:1}"
+          echo "VERSION_NUMBER=${VERSION_NUMBER}" >> $GITHUB_ENV
+          echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
+
+      # Install uv
+      - name: Install uv
+        uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7 
+
+      # Install toml-cli
+      - name: Install toml-cli
+        run: uv tool install toml-cli
+
+      # Update project version
+      - name: Update project version
+        run: toml set --toml-path pyproject.toml project.version "${{ env.VERSION_NUMBER }}"
+
+      - name: Commit changes and create PR
+        uses: peter-evans/create-pull-request@98357b18bf14b5342f975ff684046ec3b2a07725 # v8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: release/${{ env.VERSION_NAME }}
+          commit-message: "Release ${{ env.VERSION_NAME }}: Bump version to ${{ env.VERSION_NUMBER }}"
+          title: "Release ${{ env.VERSION_NAME }}"
+          body: |
+            This PR bumps the version to `${{ env.VERSION_NUMBER }}` for release.
+          labels: release
+          draft: false
