@@ -1,0 +1,228 @@
+# strands-ccxt
+
+Universal CCXT tool for [Strands Agents](https://github.com/strands-agents/sdk-python) - trade on 100+ cryptocurrency exchanges.
+
+## Installation
+
+```bash
+pip install strands-ccxt
+
+# With WebSocket support (ccxt.pro)
+pip install strands-ccxt[pro]
+```
+
+## Quick Start
+
+```python
+from strands import Agent
+from strands_ccxt import use_ccxt
+
+agent = Agent(tools=[use_ccxt])
+
+# Fetch BTC price
+agent("What's the current BTC/USDT price on Bybit?")
+
+# Compare prices across exchanges
+agent("Compare BTC/USDT orderbooks on Binance, Bybit, and OKX")
+```
+
+## Configuration
+
+Set credentials via environment variables:
+
+```bash
+# Generic (works for any exchange)
+export CCXT_EXCHANGE=bybit
+export CCXT_API_KEY=your_api_key
+export CCXT_SECRET=your_secret
+
+# Or exchange-specific
+export BYBIT_API_KEY=your_api_key
+export BYBIT_API_SECRET=your_secret
+
+# Optional
+export CCXT_DEFAULT_TYPE=swap    # spot, swap, future
+export CCXT_SANDBOX=true         # Enable testnet
+export CCXT_TIMEOUT=30000        # Request timeout (ms)
+```
+
+## Actions
+
+### Discovery
+
+| Action | Description |
+|--------|-------------|
+| `list_exchanges` | List all 100+ supported exchanges |
+| `describe` | Get exchange capabilities and info |
+| `list_methods` | List available API methods |
+| `load_markets` | Load trading pairs/symbols |
+
+### Market Data
+
+| Action | Description |
+|--------|-------------|
+| `fetch_ticker` | Get ticker for a symbol |
+| `fetch_tickers` | Get all tickers |
+| `fetch_orderbook` | Get order book |
+| `fetch_ohlcv` | Get OHLCV candles |
+| `fetch_trades` | Get recent trades |
+
+### Trading
+
+| Action | Description |
+|--------|-------------|
+| `create_order` | Create buy/sell order |
+| `cancel_order` | Cancel an order |
+| `fetch_order` | Get order details |
+| `fetch_orders` | Get all orders |
+| `fetch_open_orders` | Get open orders |
+| `fetch_closed_orders` | Get closed orders |
+
+### Account
+
+| Action | Description |
+|--------|-------------|
+| `fetch_balance` | Get account balance |
+| `fetch_positions` | Get open positions |
+| `fetch_my_trades` | Get trade history |
+
+### Multi-Exchange
+
+| Action | Description |
+|--------|-------------|
+| `multi_orderbook` | Compare orderbooks across exchanges |
+
+### WebSocket (requires `[pro]`)
+
+| Action | Description |
+|--------|-------------|
+| `watch_ticker` | Stream ticker updates |
+| `watch_orderbook` | Stream orderbook updates |
+| `watch_trades` | Stream trade updates |
+| `watch_ohlcv` | Stream OHLCV updates |
+
+### Generic
+
+| Action | Description |
+|--------|-------------|
+| `call` | Call any exchange method directly |
+
+## Examples
+
+### Fetch Ticker
+
+```python
+use_ccxt(
+    action="fetch_ticker",
+    exchange="bybit",
+    symbol="BTC/USDT"
+)
+```
+
+### Fetch OHLCV Candles
+
+```python
+use_ccxt(
+    action="fetch_ohlcv",
+    symbol="BTC/USDT",
+    timeframe="1h",
+    limit=100
+)
+```
+
+### Create Order
+
+```python
+use_ccxt(
+    action="create_order",
+    symbol="BTC/USDT",
+    side="buy",
+    order_type="limit",
+    amount=0.001,
+    price=50000
+)
+```
+
+### Compare Orderbooks
+
+```python
+use_ccxt(
+    action="multi_orderbook",
+    exchanges='["binance", "bybit", "okx"]',
+    symbol="BTC/USDT"
+)
+```
+
+### Stream via WebSocket
+
+```python
+use_ccxt(
+    action="watch_ticker",
+    symbol="BTC/USDT",
+    max_messages=10,
+    max_seconds=30
+)
+```
+
+### Call Any Method
+
+```python
+use_ccxt(
+    action="call",
+    method="fetch_funding_rate",
+    args='["BTC/USDT:USDT"]'
+)
+```
+
+## Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `action` | str | Operation to perform (required) |
+| `exchange` | str | Exchange ID (e.g., "bybit") |
+| `symbol` | str | Trading pair (e.g., "BTC/USDT") |
+| `method` | str | Method name for `call` action |
+| `args` | str | JSON array of positional arguments |
+| `kwargs` | str | JSON object of keyword arguments |
+| `config` | str | JSON object for exchange config |
+| `side` | str | Order side: "buy" or "sell" |
+| `order_type` | str | Order type: "market", "limit" |
+| `amount` | float | Order quantity |
+| `price` | float | Order price (limit orders) |
+| `order_id` | str | Order ID for cancel/fetch |
+| `exchanges` | str | JSON array of exchange IDs |
+| `timeframe` | str | OHLCV timeframe (default: "1m") |
+| `limit` | int | Number of results (default: 100) |
+| `max_messages` | int | WebSocket message limit (default: 5) |
+| `max_seconds` | int | WebSocket time limit (default: 15) |
+
+## Supported Exchanges
+
+100+ exchanges including:
+
+- Binance, Binance US, Binance Futures
+- Bybit (spot, derivatives)
+- OKX (OKEx)
+- Coinbase, Coinbase Pro
+- Kraken, Kraken Futures
+- KuCoin, KuCoin Futures
+- Gate.io
+- Bitget
+- MEXC
+- HTX (Huobi)
+- Bitfinex
+- Gemini
+- Bitstamp
+- And many more...
+
+Use `use_ccxt(action="list_exchanges")` for the full list.
+
+## Security
+
+- API credentials are never logged or returned in responses
+- Sensitive data is automatically redacted from output
+- Supports exchange sandbox/testnet modes
+
+## License
+
+Apache-2.0
