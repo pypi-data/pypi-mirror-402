@@ -1,0 +1,73 @@
+name: Bump Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - custom
+        default: 'patch'
+      custom_version:
+        description: 'Custom version (only used if bump_type is "custom")'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install bump2version
+        run: pip install bump2version
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version
+        run: |
+          if [ "${{ inputs.bump_type }}" = "custom" ]; then
+            if [ -z "${{ inputs.custom_version }}" ]; then
+              echo "Error: Custom version not provided"
+              exit 1
+            fi
+            current_version=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+            sed -i "s/version = \"$current_version\"/version = \"${{ inputs.custom_version }}\"/" pyproject.toml
+            git add pyproject.toml
+            git commit -m "Bump version to ${{ inputs.custom_version }}"
+            echo "NEW_VERSION=${{ inputs.custom_version }}" >> $GITHUB_ENV
+          else
+            bump2version ${{ inputs.bump_type }} --current-version $(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/') --config-file /dev/null --no-tag --no-commit pyproject.toml
+            new_version=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+            git add pyproject.toml
+            git commit -m "Bump version to $new_version (${{ inputs.bump_type }})"
+            echo "NEW_VERSION=$new_version" >> $GITHUB_ENV
+          fi
+
+      - name: Push changes
+        run: git push
+
+      - name: Output new version
+        run: |
+          echo "Version bumped successfully!"
+          echo "New version: ${{ env.NEW_VERSION }}"
+          echo "::notice::Version updated to ${{ env.NEW_VERSION }}"

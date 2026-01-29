@@ -1,0 +1,49 @@
+name: Email Tests (Requires Postmark Credentials)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Check Postmark credentials
+        env:
+          POSTMARK_API_TOKEN: ${{ secrets.POSTMARK_API_TOKEN }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+        run: |
+          if [ -z "$POSTMARK_API_TOKEN" ]; then
+            echo "Error: POSTMARK_API_TOKEN is not set in repository secrets"
+            echo "This workflow requires Postmark credentials to run email tests"
+            echo "Please add POSTMARK_API_TOKEN and SENDER_EMAIL to repository secrets"
+            exit 1
+          fi
+          if [ -z "$SENDER_EMAIL" ]; then
+            echo "Error: SENDER_EMAIL is not set in repository secrets"
+            exit 1
+          fi
+          echo "Postmark credentials are properly configured"
+
+      - name: Run email sending tests
+        env:
+          POSTMARK_API_TOKEN: ${{ secrets.POSTMARK_API_TOKEN }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+        run: uv run pytest tests/ -v -m "flow"
+
+      - name: Run async email sending tests
+        env:
+          POSTMARK_API_TOKEN: ${{ secrets.POSTMARK_API_TOKEN }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+        run: uv run pytest tests/test_tacomail_async.py -v -m "flow"
