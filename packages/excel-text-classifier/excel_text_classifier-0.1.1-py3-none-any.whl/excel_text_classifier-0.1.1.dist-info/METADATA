@@ -1,0 +1,506 @@
+Metadata-Version: 2.4
+Name: excel-text-classifier
+Version: 0.1.1
+Summary: Excel multi-label text classifier with JSON/YAML/Excel rule configs and priority/exclusive rules.
+Author-email: Chandler <275737875@qq.com>
+License: MIT
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: pandas>=1.5
+Requires-Dist: typer>=0.9
+Requires-Dist: openpyxl>=3.1
+Requires-Dist: PyYAML>=6
+Provides-Extra: rich
+Requires-Dist: rich>=13; extra == "rich"
+
+## 快速开始
+
+### 1. 安装
+
+- **环境要求**
+  - Python 3.9+
+  - 支持 `.xlsx` 的 Excel 文件
+
+- **从 PyPI 安装（推荐）**
+  - 基础安装（不带终端美化）：
+    ```bash
+    pip install excel-text-classifier
+    ```
+  - 推荐安装（带 rich 终端美化：彩色输出、进度条、表格）：
+    ```bash
+    pip install "excel-text-classifier[rich]"
+    ```
+
+- **查看命令行帮助**
+  ```bash
+  text-classifier --help
+  # 或
+  python -m text_classifier --help
+  ```
+
+### 2. 最小配置示例
+
+假设有文件 `data.xlsx`，表头中有一列叫 `comment`，想打两个标签：`投诉` 和 `表扬`。
+
+#### 2.1 JSON 配置（推荐起步）
+
+新建 `rules.json`：
+
+```json
+{
+  "filter_list": {
+    "投诉": ["投诉", "差评", "不满意"],
+    "表扬": ["好评", "非常满意"]
+  }
+}
+```
+
+含义：
+
+- 文本包含任意“投诉 / 差评 / 不满意” → 打标签 `投诉`
+- 文本包含任意“好评 / 非常满意” → 打标签 `表扬`
+
+#### 2.2 YAML 配置（同样含义）
+
+新建 `rules.yaml`：
+
+```yaml
+filter_list:
+  投诉:
+    - 投诉
+    - 差评
+    - 不满意
+  表扬:
+    - 好评
+    - 非常满意
+```
+
+#### 2.3 Excel 配置（给运营同学用）
+
+新建 `rules.xlsx`，第一行是表头：
+
+| label | keyword | priority | exclusive |
+|-------|---------|----------|-----------|
+| 投诉  | 投诉    | 100      | FALSE     |
+| 投诉  | 差评    |          |           |
+| 投诉  | 不满意  |          |           |
+| 表扬  | 好评    | 100      | FALSE     |
+| 表扬  | 非常满意|          |           |
+
+> `priority` 可选（越小优先级越高），`exclusive` 可选（是否排他标签）。
+
+### 3. 命令行快速使用
+
+#### 3.1 最常见命令（分类并生成新文件）
+
+```bash
+text-classifier \
+  -i data.xlsx \
+  -t comment \
+  -c rules.json
+```
+
+- **输入文件**：`data.xlsx`
+- **文本列**：`comment`
+- **配置文件**：`rules.json`
+- **输出文件**：自动生成 `data_classified.xlsx`，新增列 `classification_tags`
+
+#### 3.2 指定输出文件名和列名
+
+```bash
+text-classifier \
+  -i data.xlsx \
+  -t comment \
+  -c rules.yaml \
+  --sheet-name Sheet1 \
+  -o data_with_tags.xlsx \
+  --output-column tags
+```
+
+#### 3.3 只看分类统计（不写回 Excel）
+
+```bash
+text-classifier \
+  -i data.xlsx \
+  -t comment \
+  -c rules.yaml \
+  --dry-run
+```
+
+- 输出总行数、已分类行数、未分类行数及百分比  
+- 安装了 rich 时是彩色表格，否则为普通文本
+
+### 4. Python 代码中快速调用
+
+#### 4.1 整个 Excel 文件分类
+
+```python
+from text_classifier import classify_excel
+
+output_path = classify_excel(
+    input_file="data.xlsx",
+    config_file="rules.yaml",      # 或 rules.json / rules.xlsx
+    text_column="comment",
+    sheet_name="Sheet1",           # 可省略，默认第一个 sheet
+    output_file=None,              # None -> data_classified.xlsx
+    output_column="classification_tags",
+    case_sensitive=False,
+)
+
+print("结果写入：", output_path)
+```
+
+#### 4.2 在 pandas 中直接使用
+
+```python
+import pandas as pd
+from text_classifier import load_rules, classify_series
+
+df = pd.read_excel("data.xlsx")
+rules = load_rules("rules.yaml")
+
+df["tags"] = classify_series(df["comment"], rules)
+df.to_excel("data_with_tags.xlsx", index=False)
+```
+
+#### 4.3 一条复杂规则示例（记住这个就够）
+
+```json
+{
+  "rules": [
+    {
+      "label": "黑名单",
+      "priority": 10,
+      "exclusive": true,
+      "any": ["违法", "诈骗"]
+    },
+    {
+      "label": "严重投诉",
+      "priority": 20,
+      "exclusive": false,
+      "any": ["投诉", "差评"],
+      "all": ["退款"],
+      "exclude": ["已处理"]
+    }
+  ]
+}
+```
+
+- **priority**：数值越小优先级越高  
+- **exclusive**：命中后中断后续规则  
+- `any` / `all` / `exclude`：分别表示 OR / AND / NOT 条件
+
+---
+
+## 一、项目概述
+
+- 开发一个 **Python 文本分类工具**，同时支持：
+  - **命令行工具（CLI）** 调用
+  - **Python 模块函数** 调用
+- 核心能力：
+  - 从 Excel 指定列读取文本
+  - 根据外部配置（JSON / YAML / Excel）进行多标签匹配
+  - 支持 **规则优先级、排他性标签、组合条件（AND/OR/NOT）**
+  - 将标签写回 Excel 新列，并提供统计与终端可视化输出（rich）
+
+适用人群：
+
+- **运营 / 产品 / 数据分析**：批量给评论、工单、反馈打标签
+- **数据工程 / 开发**：嵌入到 ETL、清洗和特征工程流程中
+
+---
+
+## 二、核心功能说明
+
+### 2.1 Excel 文件读取
+
+- 支持 `.xlsx` 文件
+- 参数：
+  - `--sheet-name`：工作表名称（默认第一个 sheet）
+  - `--text-column`：文本列名（必填，可选支持列索引）
+- 自动处理：
+  - 跳过空单元格，标签输出为空字符串 `""`
+
+### 2.2 多标签分类逻辑
+
+- 每条文本可以命中 **多个标签**
+- 基础匹配：
+  - 默认不区分大小写（全部转小写匹配）
+  - 文本包含任意关键词即命中该标签（OR）
+- 去重与排序：
+  - 同一行同一标签最多出现一次
+  - 最终标签集合去重，并按字母顺序排序，用逗号分隔  
+    例如：`投诉,黑名单`
+
+---
+
+## 三、复杂规则机制
+
+### 3.1 规则优先级（priority）
+
+- 每条规则可设置 `priority`（整数，默认 100）
+- 规则执行顺序：按 `priority` 从小到大
+- 用途：
+  - 先执行高优先级规则（例如黑名单、屏蔽类）
+
+### 3.2 排他性标签（exclusive）
+
+- `exclusive: true/false`（默认 false）
+- 语义（当前版本）：
+  - 当某条 `exclusive = true` 的规则命中后：
+    - 保留该规则及之前已命中的标签
+    - **不再执行之后的低优先级规则**
+
+### 3.3 组合条件：any / all / exclude
+
+每条规则支持三个列表字段：
+
+- `any`：文本包含任意一个则满足（OR）
+- `all`：文本必须包含列表中所有词（AND）
+- `exclude`：文本中出现任意一个则不命中（NOT）
+
+匹配条件可理解为：
+
+\[
+\text{match} =
+(\text{all 条件满足或 all 为空}) \land
+(\text{any 条件满足或 any 为空}) \land
+(\text{exclude 条件全部不出现})
+\]
+
+示例：
+
+- “同时包含 A 和 B”：
+
+  ```json
+  { "label": "AB", "all": ["A", "B"] }
+  ```
+
+- “包含 A 或 B，且不能包含 C”：
+
+  ```json
+  { "label": "A_or_B_not_C", "any": ["A", "B"], "exclude": ["C"] }
+  ```
+
+---
+
+## 四、配置文件说明
+
+内部统一用规则列表表示：
+
+```python
+[
+    {
+        "label": "标签名",
+        "priority": 100,
+        "exclusive": False,
+        "any": ["关键词1", "关键词2"],
+        "all": ["必须出现1", "必须出现2"],
+        "exclude": ["排除关键词"]
+    },
+    ...
+]
+```
+
+### 4.1 JSON 配置
+
+#### 4.1.1 基础模式：filter_list
+
+```json
+{
+  "filter_list": {
+    "分类名称1": ["关键词1", "关键词2", "关键词3"],
+    "分类名称2": ["关键词A", "关键词B"]
+  }
+}
+```
+
+与规则等价为：
+
+- `label = 分类名称1`, `any = ["关键词1", "关键词2", "关键词3"]`
+- `label = 分类名称2`, `any = ["关键词A", "关键词B"]`
+
+#### 4.1.2 高级模式：rules 列表
+
+```json
+{
+  "rules": [
+    {
+      "label": "高优先级标签",
+      "priority": 10,
+      "exclusive": true,
+      "any": ["A", "B"],
+      "all": ["必须出现1", "必须出现2"],
+      "exclude": ["排除关键词"]
+    },
+    {
+      "label": "普通标签",
+      "any": ["C", "D"]
+    }
+  ]
+}
+```
+
+说明：
+
+- `label`：标签名（必填）
+- `priority`：优先级，int，默认 100，越小越高
+- `exclusive`：是否排他，默认 false
+- `any` / `all` / `exclude`：字符串数组，可为空
+
+**可以同时存在 `filter_list` 和 `rules`，系统会合并。**
+
+### 4.2 YAML 配置
+
+结构与 JSON 一致，仅语法不同：
+
+```yaml
+filter_list:
+  分类名称1:
+    - 关键词1
+    - 关键词2
+
+rules:
+  - label: 高优先级标签
+    priority: 10
+    exclusive: true
+    any: ["A", "B"]
+    all: ["必须出现1", "必须出现2"]
+    exclude: ["排除关键词"]
+```
+
+### 4.3 Excel 配置（基础 OR 模式）
+
+- 文件：`.xlsx`
+- 默认读取第一个 sheet
+- 必需列：`label`, `keyword`
+- 可选列：`priority`, `exclusive`
+
+示例：
+
+| label       | keyword  | priority | exclusive |
+|------------|----------|----------|-----------|
+| 分类名称1  | 关键词1  | 100      | FALSE     |
+| 分类名称1  | 关键词2  |          |           |
+| 分类名称2  | 关键词A  | 90       | TRUE      |
+
+转换规则：
+
+- 同一 `label` 的多行 `keyword` → 合并为一条规则的 `any` 列表
+- `priority`：取该标签第一行非空的值，转为整数
+- `exclusive`：支持布尔或常见字符串（true/false/yes/no/1/0）
+- 复杂 `all` / `exclude` 目前仅支持在 JSON/YAML 中配置
+
+### 4.4 配置加载与验证
+
+- `--config / -c` 指定配置文件路径
+- 若未指定 `--config-format`，根据扩展名自动识别：
+  - `.json` → JSON
+  - `.yaml` / `.yml` → YAML
+  - `.xlsx` → Excel
+- 验证内容包括：
+  - 文件存在性
+  - JSON/YAML 语法是否合法
+  - `filter_list` 是否为字典，值为字符串数组
+  - `rules` 是否为列表，每项必须有 `label`，其他字段类型正确
+  - Excel 是否包含 `label`、`keyword` 两个必需列
+
+---
+
+## 五、命令行使用（CLI）详解
+
+### 5.1 参数总览
+
+- **必选参数**
+  - `--input-file, -i`：输入 Excel 文件路径
+  - `--text-column, -t`：要分类的文本列名
+  - `--config, -c`：规则配置文件路径（JSON/YAML/Excel）
+
+- **可选参数**
+  - `--sheet-name`：工作表名称，默认第一个 sheet
+  - `--output-file, -o`：输出 Excel 文件路径，默认 `原文件名_classified.xlsx`
+  - `--output-column`：标签列名，默认 `classification_tags`
+  - `--config-format`：`json` / `yaml` / `excel`，一般可省略
+  - `--case-sensitive`：是否大小写敏感，默认 False
+  - `--dry-run`：只统计，不写回 Excel
+
+### 5.2 rich 美化与降级
+
+- 若已安装 `rich`（例如通过 `[rich]` 额外依赖）：
+  - dry-run 时统计数据以表格形式展示
+  - 非 dry-run 时显示分类进度条
+  - 信息和错误采用彩色输出
+- 未安装 `rich`：
+  - 自动降级为普通文本输出，不影响主要功能
+
+---
+
+## 六、Python 模块 API
+
+包导出主要函数：
+
+- `load_rules(path, config_format=None)`
+- `classify_text(text, rules, case_sensitive=False)`
+- `classify_series(texts, rules, case_sensitive=False)`
+- `classify_excel(...)`
+
+简要说明（常用）：
+
+- **`load_rules`**：加载 JSON/YAML/Excel 规则文件，返回规则列表
+- **`classify_text`**：对单条字符串返回标签字符串
+- **`classify_series`**：对 `pd.Series` 逐条分类，返回标签 `Series`
+- **`classify_excel`**：对整个 Excel 文件分类，并写回新文件
+
+---
+
+## 七、统计、可视化与日志
+
+- **统计**
+  - 总行数
+  - 已分类 / 未分类行数及百分比
+  - dry-run 时在终端展示
+
+- **可视化（rich）**
+  - 安装 rich：进度条 + 表格 + 彩色输出
+  - 未安装：自动降级为普通 `print` / `typer.echo`
+
+- **日志**
+  - 使用标准库 `logging`
+  - 记录：
+    - CLI 调用参数
+    - 运行过程中的信息与错误
+  - 默认输出到控制台，若需要写入文件，可在外部自行配置 `logging.basicConfig(filename=...)`
+
+---
+
+## 八、错误处理与常见问题（简要）
+
+- **文件不存在**：`FileNotFoundError`，提示具体路径
+- **列名不存在**：抛出 `KeyError`，并列出可用列名
+- **JSON/YAML 格式错误**：提示解析错误位置
+- **配置结构错误**：指出具体字段（如 `rules[i].label` 缺失或类型错误）
+- **Excel 配置缺少必需列**：缺 `label` 或 `keyword` 会提示
+- **常见排查建议**：
+  - 确认当前工作目录正确
+  - 使用 JSON/YAML 校验工具检查格式
+  - Excel 表头避免合并单元格，并与参数一致
+
+---
+
+## 九、技术栈与模块结构（简要）
+
+- **技术栈**
+  - `pandas` + `openpyxl`：Excel 读写
+  - `typer`：命令行框架
+  - `json` / `PyYAML`：配置解析
+  - `rich`（可选）：终端美化
+  - `logging`：日志记录
+
+- **模块划分**
+  - `io_excel`：Excel 读写封装
+  - `config_loader`：JSON/YAML/Excel 配置加载与验证
+  - `rules`：规则数据结构与匹配逻辑
+  - `classifier`：文本分类核心逻辑（单条 / Series / Excel）
+  - `cli`：命令行入口
+  - `__init__` / `__main__`：对外 API 与 `python -m text_classifier` 支持
+
