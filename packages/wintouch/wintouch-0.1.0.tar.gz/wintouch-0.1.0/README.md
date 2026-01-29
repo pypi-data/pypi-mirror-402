@@ -1,0 +1,440 @@
+# wintouch
+
+[![PyPI version](https://badge.fury.io/py/wintouch.svg)](https://badge.fury.io/py/wintouch)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Windows](https://img.shields.io/badge/platform-Windows%208+-lightgrey.svg)](https://www.microsoft.com/windows)
+
+Windows Touch Injection API for Python.
+
+A Python C extension providing direct access to the Windows Touch Injection API
+(`InitializeTouchInjection`, `InjectTouchInput`) for simulating touch input events
+on Windows 8 and later systems.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [API Reference](#api-reference)
+- [Examples](#examples)
+- [Troubleshooting](#troubleshooting)
+- [Documentation](#documentation)
+- [License](#license)
+
+## Overview
+
+**wintouch** provides Python bindings to the Windows Touch Injection API, enabling
+programmatic simulation of touch input for:
+
+- **Automated UI Testing**: Test touch-enabled applications without physical hardware
+- **Accessibility Tools**: Create software that generates touch input for users
+- **Demo/Presentation Software**: Simulate touch interactions for demonstrations
+- **Touch Gesture Development**: Prototype and test multi-touch gestures
+
+### Key Features
+
+- Direct access to Windows Touch Injection API via C extension
+- Support for up to 10 simultaneous touch contacts
+- Full control over touch properties (pressure, orientation, contact area)
+- Visual feedback control (default, indirect, or none)
+- Comprehensive diagnostic capabilities
+- Cross-platform import safety (stubs provided for non-Windows systems)
+
+### Limitations
+
+- **Windows 8+ Required**: Touch injection API not available on earlier Windows versions
+- **Touch Hardware Required**: Touch injection requires a touch digitizer - it does not work on systems without touch hardware
+- **Single Process**: Only one process can have touch injection initialized at a time
+- **Permissions**: May require elevated privileges depending on system configuration
+
+## Requirements
+
+### Runtime Requirements
+
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| Operating System | Windows 8+ | Windows 10/11 recommended |
+| Python | 3.8+ | Tested on 3.8-3.14 |
+
+### Build Requirements (from source)
+
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| C Compiler | MSVC 14+ or MinGW-w64 | Visual Studio 2015+ recommended |
+| Python Headers | Matching Python version | Included with Python installer |
+| Windows SDK | 8.0+ | For Windows API headers |
+
+## Installation
+
+### From PyPI (Recommended)
+
+```bash
+pip install wintouch
+```
+
+### From Source
+
+```bash
+git clone https://github.com/phdye/wintouch
+cd wintouch
+pip install .
+```
+
+### Development Installation
+
+```bash
+git clone https://github.com/phdye/wintouch
+cd wintouch
+pip install -e ".[dev]"
+```
+
+### Verification
+
+```python
+import wintouch
+
+# Check if touch injection is available
+print(f"Available: {wintouch.is_available()}")
+
+# Run comprehensive diagnostics
+if wintouch.is_available():
+    diag = wintouch.diagnose()
+    print(f"Diagnosis: {diag['diagnosis']}")
+```
+
+## Quick Start
+
+### Basic Touch Sequence
+
+```python
+import wintouch
+import time
+
+# Initialize touch injection
+wintouch.initialize(max_contacts=2)
+
+# Touch down at (500, 300)
+wintouch.inject([{
+    "x": 500,
+    "y": 300,
+    "flags": wintouch.FLAGS_DOWN
+}])
+
+time.sleep(0.1)
+
+# Move to (500, 400)
+wintouch.inject([{
+    "x": 500,
+    "y": 400,
+    "flags": wintouch.FLAGS_UPDATE
+}])
+
+time.sleep(0.1)
+
+# Touch up
+wintouch.inject([{
+    "x": 500,
+    "y": 400,
+    "flags": wintouch.FLAGS_UP
+}])
+```
+
+### Touch Tap
+
+```python
+import wintouch
+
+wintouch.initialize()
+
+# Single tap at coordinates
+def tap(x, y):
+    wintouch.inject([{"x": x, "y": y, "flags": wintouch.FLAGS_DOWN}])
+    wintouch.inject([{"x": x, "y": y, "flags": wintouch.FLAGS_UP}])
+
+tap(500, 300)
+```
+
+## API Reference
+
+For complete API documentation, see [doc/api/INDEX.md](doc/api/INDEX.md).
+
+### Functions
+
+| Function | Description |
+|----------|-------------|
+| [`initialize()`](doc/api/initialize.md) | Initialize touch injection |
+| [`inject()`](doc/api/inject.md) | Inject touch input events |
+| [`is_available()`](doc/api/is_available.md) | Check API availability |
+| [`is_initialized()`](doc/api/is_initialized.md) | Check initialization state |
+| [`get_max_contacts()`](doc/api/get_max_contacts.md) | Get configured max contacts |
+| [`diagnose()`](doc/api/diagnose.md) | Comprehensive capability diagnosis |
+
+### Constants
+
+| Category | Constants |
+|----------|-----------|
+| [Convenience Flags](doc/api/constants.md#convenience-flags) | `FLAGS_DOWN`, `FLAGS_UPDATE`, `FLAGS_UP` |
+| [Pointer Flags](doc/api/constants.md#pointer-flags) | `POINTER_FLAG_*` |
+| [Touch Flags](doc/api/constants.md#touch-flags) | `TOUCH_FLAG_*` |
+| [Touch Masks](doc/api/constants.md#touch-masks) | `TOUCH_MASK_*` |
+| [Feedback Modes](doc/api/constants.md#feedback-modes) | `FEEDBACK_*` |
+
+### Quick Reference
+
+```python
+# Initialize with defaults
+wintouch.initialize()
+
+# Initialize with options
+wintouch.initialize(max_contacts=5, feedback_mode=wintouch.FEEDBACK_NONE)
+
+# Single touch
+wintouch.inject([{"x": 100, "y": 200, "flags": wintouch.FLAGS_DOWN}])
+
+# Multi-touch
+wintouch.inject([
+    {"x": 100, "y": 200, "pointer_id": 0, "flags": wintouch.FLAGS_DOWN},
+    {"x": 300, "y": 200, "pointer_id": 1, "flags": wintouch.FLAGS_DOWN},
+])
+
+# Touch with pressure and orientation
+wintouch.inject([{
+    "x": 100,
+    "y": 200,
+    "flags": wintouch.FLAGS_DOWN,
+    "pressure": 16000,      # 0-32000 range
+    "orientation": 45,      # degrees (0-359)
+    "contact_width": 10,    # pixels
+    "contact_height": 10,   # pixels
+}])
+```
+
+## Examples
+
+### Swipe Gesture
+
+```python
+import wintouch
+import time
+
+def swipe(start_x, start_y, end_x, end_y, steps=20, duration=0.3):
+    """Perform a swipe gesture from start to end coordinates."""
+    wintouch.initialize()
+
+    # Touch down
+    wintouch.inject([{"x": start_x, "y": start_y, "flags": wintouch.FLAGS_DOWN}])
+
+    # Interpolate movement
+    step_delay = duration / steps
+    for i in range(1, steps + 1):
+        t = i / steps
+        x = int(start_x + (end_x - start_x) * t)
+        y = int(start_y + (end_y - start_y) * t)
+        wintouch.inject([{"x": x, "y": y, "flags": wintouch.FLAGS_UPDATE}])
+        time.sleep(step_delay)
+
+    # Touch up
+    wintouch.inject([{"x": end_x, "y": end_y, "flags": wintouch.FLAGS_UP}])
+
+# Swipe right
+swipe(200, 500, 600, 500)
+```
+
+### Pinch Gesture
+
+```python
+import wintouch
+import time
+
+def pinch(center_x, center_y, start_distance, end_distance, steps=15):
+    """Perform a pinch gesture (zoom in/out)."""
+    wintouch.initialize(max_contacts=2)
+
+    # Calculate initial positions
+    half_start = start_distance // 2
+
+    # Touch down with both fingers
+    wintouch.inject([
+        {"x": center_x - half_start, "y": center_y, "pointer_id": 0, "flags": wintouch.FLAGS_DOWN},
+        {"x": center_x + half_start, "y": center_y, "pointer_id": 1, "flags": wintouch.FLAGS_DOWN},
+    ])
+
+    # Move fingers
+    for i in range(1, steps + 1):
+        t = i / steps
+        half_dist = int(half_start + (end_distance // 2 - half_start) * t)
+        wintouch.inject([
+            {"x": center_x - half_dist, "y": center_y, "pointer_id": 0, "flags": wintouch.FLAGS_UPDATE},
+            {"x": center_x + half_dist, "y": center_y, "pointer_id": 1, "flags": wintouch.FLAGS_UPDATE},
+        ])
+        time.sleep(0.02)
+
+    # Touch up
+    half_end = end_distance // 2
+    wintouch.inject([
+        {"x": center_x - half_end, "y": center_y, "pointer_id": 0, "flags": wintouch.FLAGS_UP},
+        {"x": center_x + half_end, "y": center_y, "pointer_id": 1, "flags": wintouch.FLAGS_UP},
+    ])
+
+# Pinch in (zoom out)
+pinch(500, 400, start_distance=200, end_distance=50)
+
+# Pinch out (zoom in)
+pinch(500, 400, start_distance=50, end_distance=200)
+```
+
+### Rotation Gesture
+
+```python
+import wintouch
+import time
+import math
+
+def rotate(center_x, center_y, radius, start_angle, end_angle, steps=30):
+    """Perform a two-finger rotation gesture."""
+    wintouch.initialize(max_contacts=2)
+
+    def get_points(angle):
+        rad = math.radians(angle)
+        x1 = int(center_x + radius * math.cos(rad))
+        y1 = int(center_y + radius * math.sin(rad))
+        x2 = int(center_x + radius * math.cos(rad + math.pi))
+        y2 = int(center_y + radius * math.sin(rad + math.pi))
+        return (x1, y1), (x2, y2)
+
+    # Touch down
+    p1, p2 = get_points(start_angle)
+    wintouch.inject([
+        {"x": p1[0], "y": p1[1], "pointer_id": 0, "flags": wintouch.FLAGS_DOWN},
+        {"x": p2[0], "y": p2[1], "pointer_id": 1, "flags": wintouch.FLAGS_DOWN},
+    ])
+
+    # Rotate
+    for i in range(1, steps + 1):
+        t = i / steps
+        angle = start_angle + (end_angle - start_angle) * t
+        p1, p2 = get_points(angle)
+        wintouch.inject([
+            {"x": p1[0], "y": p1[1], "pointer_id": 0, "flags": wintouch.FLAGS_UPDATE},
+            {"x": p2[0], "y": p2[1], "pointer_id": 1, "flags": wintouch.FLAGS_UPDATE},
+        ])
+        time.sleep(0.02)
+
+    # Touch up
+    p1, p2 = get_points(end_angle)
+    wintouch.inject([
+        {"x": p1[0], "y": p1[1], "pointer_id": 0, "flags": wintouch.FLAGS_UP},
+        {"x": p2[0], "y": p2[1], "pointer_id": 1, "flags": wintouch.FLAGS_UP},
+    ])
+
+# Rotate 90 degrees clockwise
+rotate(500, 400, radius=100, start_angle=0, end_angle=90)
+```
+
+## Troubleshooting
+
+### Diagnostic Tool
+
+Run the built-in diagnostic function to identify issues:
+
+```python
+import wintouch
+
+if wintouch.is_available():
+    diag = wintouch.diagnose()
+    for key, value in diag.items():
+        print(f"{key}: {value}")
+else:
+    print("Touch injection API not available (requires Windows 8+)")
+```
+
+### Common Issues
+
+#### ERROR_ACCESS_DENIED (5)
+
+**Symptom**: `OSError: InjectTouchInput failed (error 5)`
+
+**Causes and Solutions**:
+1. **Run as Administrator**: Touch injection may require elevated privileges
+2. **Another process owns touch injection**: Only one process can initialize at a time
+3. **Security software blocking**: Some security software blocks input injection
+
+#### ERROR_INVALID_PARAMETER (87)
+
+**Symptom**: `OSError: InjectTouchInput failed (error 87)`
+
+**Important**: Error 87 means invalid parameters, NOT a permission issue. If you're getting
+error 87 even with Administrator rights, the problem is the touch data, not permissions.
+
+**Causes and Solutions**:
+1. **No touch hardware**: Some systems may require touch digitizer hardware (see caveat below)
+2. **Coordinates outside screen bounds**: Touch coordinates must be within actual screen resolution
+3. **Custom pointer flags**: Using flags other than the built-in `FLAGS_DOWN`/`FLAGS_UPDATE`/`FLAGS_UP`
+   can cause failures - stick to the convenience flags
+4. **Touch subsystem not ready**: Restart the tablet input service
+
+#### Touch Hardware Required
+
+**Touch injection requires touch hardware.** The Windows Touch Injection API does not
+work on systems without a touch digitizer. This is a Windows limitation.
+
+If developing on non-touch machines:
+1. Test on actual touch hardware
+2. Use a VM with virtual touch device support
+3. Use `diagnose()` to verify capability before deployment
+
+#### Things That DON'T Block Touch Injection
+
+The following do NOT prevent touch injection from working:
+- Hyper-V enabled
+- VBS/HVCI (Virtualization Based Security) enabled
+
+#### Touch Injection Not Available
+
+**Symptom**: `is_available()` returns `False`
+
+**Causes**:
+1. Windows version is older than Windows 8
+2. Touch injection API functions not found in user32.dll
+
+### Error Reference
+
+| Error Code | Name | Common Cause |
+|------------|------|--------------|
+| 5 | ERROR_ACCESS_DENIED | Permission denied, run as administrator |
+| 87 | ERROR_INVALID_PARAMETER | Invalid data or no touch hardware |
+| 1168 | ERROR_NOT_FOUND | Touch injection not initialized |
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [README.md](README.md) | This file - overview and quick start |
+| [doc/DEVELOPER.md](doc/DEVELOPER.md) | Architecture and internals |
+| [doc/CONTRIBUTING.md](doc/CONTRIBUTING.md) | Contribution guidelines |
+| [doc/api/INDEX.md](doc/api/INDEX.md) | Complete API reference |
+
+### API Documentation
+
+Man-page style documentation is available for each function:
+
+- [doc/api/initialize.md](doc/api/initialize.md)
+- [doc/api/inject.md](doc/api/inject.md)
+- [doc/api/is_available.md](doc/api/is_available.md)
+- [doc/api/is_initialized.md](doc/api/is_initialized.md)
+- [doc/api/get_max_contacts.md](doc/api/get_max_contacts.md)
+- [doc/api/diagnose.md](doc/api/diagnose.md)
+- [doc/api/constants.md](doc/api/constants.md)
+
+## See Also
+
+- [touchturtle](https://github.com/mintty/touchturtle) - High-level turtle-like interface built on wintouch
+- [Windows Touch Injection API](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-injecttouchinput) - Microsoft documentation
+- [POINTER_TOUCH_INFO](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-pointer_touch_info) - Touch contact structure
+- [Touch Injection Sample](https://learn.microsoft.com/en-us/archive/technet-wiki/6460.windows-8-simulating-touch-input-using-touch-injection-api) - Microsoft sample code
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
