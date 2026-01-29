@@ -1,0 +1,80 @@
+Metadata-Version: 2.4
+Name: az-envs
+Version: 0.1.2
+Summary: Create .env files from Azure Key Vault secrets
+Author: Dillon Johnson
+License: MIT
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: azure-identity>=1.15.0
+Requires-Dist: azure-keyvault-secrets>=4.7.0
+Requires-Dist: azure-mgmt-keyvault>=10.0.0
+Requires-Dist: click>=8.0.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+
+# az-envs
+
+Create `.env` files from Azure Key Vault secrets using your local Azure CLI credentials.
+
+## Installation
+
+```bash
+pip install az-envs
+```
+
+Or from source:
+
+```bash
+pip install git+https://github.com/dillonjohnson/az-envs.git
+```
+
+## Prerequisites
+
+1. Azure CLI installed and logged in:
+   ```bash
+   az login
+   ```
+
+2. Appropriate permissions to read secrets from the target Key Vault(s)
+
+## Usage
+
+### Generate .env from a Key Vault
+
+```bash
+az-envs generate <vault-name> -o .env
+```
+
+Options:
+- `-o, --output` - Output file path (default: `.env`)
+- `--prefix` - Only include secrets with this prefix
+- `--no-normalize` - Keep original secret names (don't convert to `ENV_VAR` format)
+- `--no-header` - Don't include a header comment
+
+### List Key Vaults in a resource group
+
+```bash
+az-envs list <resource-group> -s <subscription-id>
+```
+
+## Secret Name Conversion
+
+By default, Key Vault secret names are converted to standard environment variable format:
+- `my-secret-name` becomes `MY_SECRET_NAME`
+
+Use `--no-normalize` to keep the original names.
+
+## Examples
+
+```bash
+# Generate .env from a vault named "myapp-secrets"
+az-envs generate myapp-secrets
+
+# Generate only secrets starting with "DB-"
+az-envs generate myapp-secrets --prefix DB-
+
+# List all vaults in a resource group
+az-envs list my-resource-group -s 12345678-1234-1234-1234-123456789012
+```
