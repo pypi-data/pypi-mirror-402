@@ -1,0 +1,59 @@
+# Multi-stage build for MindRoom Platform Backend
+FROM ghcr.io/astral-sh/uv:latest AS uv
+
+# Tools stage with kubectl and helm for provisioning
+FROM public.ecr.aws/docker/library/python:3.13-slim AS tools
+# Install provisioning tools (kubectl and helm)
+RUN apt-get update && apt-get install -y curl \
+    && curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+    && chmod +x kubectl \
+    && curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Builder stage with uv for dependencies
+FROM public.ecr.aws/docker/library/python:3.13-slim AS builder
+# Copy uv from the uv image
+COPY --from=uv /uv /uvx /bin/
+
+WORKDIR /app
+
+# Copy project files (build context is saas-platform/)
+COPY saas-platform/platform-backend/pyproject.toml saas-platform/platform-backend/uv.lock /app/
+
+# Install dependencies
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-install-project --no-dev
+
+# Copy source code
+COPY saas-platform/platform-backend/src /app/src
+
+# Install the project itself
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-dev
+
+# Final production stage
+FROM public.ecr.aws/docker/library/python:3.13-slim AS final
+# Copy uv for runtime
+COPY --from=uv /uv /uvx /bin/
+
+WORKDIR /app
+
+# Copy provisioning tools from tools stage
+COPY --from=tools /kubectl /usr/local/bin/kubectl
+COPY --from=tools /usr/local/bin/helm /usr/local/bin/helm
+
+# Copy the app with venv from builder
+COPY --from=builder /app /app
+
+# Copy additional files needed by platform-backend
+COPY saas-platform/pricing-config.yaml /app/pricing-config.yaml
+# Copy the Helm chart (includes default-config.yaml)
+COPY cluster/k8s/instance /app/k8s/instance/
+
+EXPOSE 8000
+
+# Ensure virtualenv binaries are on PATH
+ENV PATH="/app/.venv/bin:${PATH}"
+
+# Run the app without network dependency (use pre-synced venv)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
