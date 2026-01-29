@@ -1,0 +1,101 @@
+{% load static %}
+{% load django_vite %}
+{#
+   Base HTML template for LightWave domains.
+
+   This provides the common <head> and <body> structure.
+   Domains should extend this and override blocks as needed.
+
+   Context variables (from lightwave_navigation context processor):
+   - brand_theme: Brand color theme (blue, blue-dark, indigo, violet)
+     Applied as class="theme-{brand_theme}" and data-brand="{brand_theme}" on <html>
+
+   Blocks available:
+   - html_class: Additional classes for <html>
+   - meta: Meta tags (title, description, OG tags)
+   - page_title: Just the <title> content
+   - favicon: Favicon links
+   - stylesheets: CSS files
+   - page_head: Additional head content
+   - body_class: Classes for <body>
+   - body_wrapper: Everything inside <body>
+   - top_nav: Navigation header
+   - messages: Flash messages
+   - body: Main content
+   - footer: Footer section
+   - page_js: JavaScript at end of body
+#}
+<!DOCTYPE html>
+<html lang="en" class="theme-{{ brand_theme|default:'blue' }} {% block html_class %}{% endblock %}" data-brand="{{ brand_theme|default:'blue' }}">
+<head>
+    <script>
+      // Apply dark mode immediately based on system preference (before CSS loads)
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark');
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    </script>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+{% block meta %}
+    <title>{% block page_title %}{{ lightwave_config.brand.name|default:"LightWave" }}{% endblock %}</title>
+    {% if lightwave_config.brand.description %}
+    <meta name="description" content="{{ lightwave_config.brand.description }}">
+    {% endif %}
+{% endblock meta %}
+
+{% block favicon %}
+    {# Override in domain templates to provide favicon #}
+{% endblock favicon %}
+
+{% block stylesheets %}
+    <link rel="stylesheet" href="{% vite_asset_url 'assets/styles/site-base.css' %}">
+    <link rel="stylesheet" href="{% vite_asset_url 'assets/styles/site-tailwind.css' %}">
+{% endblock stylesheets %}
+
+    {% vite_hmr_client %}
+
+{% block page_head %}
+{% endblock page_head %}
+</head>
+<body class="{% block body_class %}bg-white dark:bg-gray-900{% endblock %}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+{% block body_wrapper %}
+
+{% block top_nav %}
+    {% include "lightwave/islands/header.html" %}
+{% endblock top_nav %}
+
+{% block messages %}
+{% endblock messages %}
+
+{% block body %}
+{% endblock body %}
+
+{% block footer %}
+    {% include "lightwave/islands/footer.html" %}
+{% endblock footer %}
+
+{% endblock body_wrapper %}
+
+<script>
+    // Dark mode follows system preference automatically
+    function syncDarkMode() {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (prefersDark) {
+        document.documentElement.classList.add('dark');
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    }
+    // Watch for system theme changes
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncDarkMode);
+</script>
+
+{% block page_js %}
+{% endblock page_js %}
+</body>
+</html>
