@@ -1,0 +1,541 @@
+import os
+import glob
+import json
+import pandas as pd
+import numpy as np
+from typing import Callable, Optional, Dict, Any, List
+
+
+def default_filter(df: pd.DataFrame) -> pd.DataFrame:
+    """Identity filter; user can override with any acausal/causal filter."""
+    return df
+
+
+class Experiment:
+    """
+    Represents a single experiment with timeseries data and metadata.
+    
+    Uses lazy loading - CSV data and JSON metadata are only loaded when first accessed.
+    Provides methods for filtering, resampling, time-based cutting, and data export.
+    """
+    
+    def __init__(self, csv_path: str, meta_path: str):
+        """
+        Initialize an experiment by storing paths (lazy loading).
+        
+        Args:
+            csv_path: Path to the CSV file containing timeseries data.
+            meta_path: Path to the JSON file containing experiment metadata.
+        """
+        self.csv_path = csv_path
+        self.meta_path = meta_path
+        self._data = None
+        self._meta = None
+
+    @property
+    def data(self) -> pd.DataFrame:
+        """
+        Lazy load and return the experiment data.
+        
+        Returns:
+            DataFrame with '_time' column as index if it exists.
+        """
+        if self._data is None:
+            self._data = self._load_csv(self.csv_path)
+        return self._data
+    
+    @data.setter
+    def data(self, value: pd.DataFrame):
+        """Set the data directly (used by operations that create new experiments)."""
+        self._data = value
+    
+    @property
+    def meta(self) -> Dict[str, Any]:
+        """
+        Lazy load and return the experiment metadata.
+        
+        Returns:
+            Dictionary containing metadata.
+        """
+        if self._meta is None:
+            self._meta = self._load_meta(self.meta_path)
+        return self._meta
+    
+    @meta.setter
+    def meta(self, value: Dict[str, Any]):
+        """Set the metadata directly (used by operations that create new experiments)."""
+        self._meta = value
+
+    @staticmethod
+    def _load_csv(path: str) -> pd.DataFrame:
+        """
+        Load CSV file and set time column as index if present.
+        
+        Args:
+            path: Path to the CSV file.
+            
+        Returns:
+            DataFrame with '_time' column as index if it exists.
+        """
+        df = pd.read_csv(path)
+        if "_time" in df.columns:
+            df = df.set_index("_time")
+        return df
+
+    @staticmethod
+    def _load_meta(path: str) -> Dict[str, Any]:
+        """
+        Load experiment metadata from JSON file.
+        
+        Args:
+            path: Path to the JSON metadata file.
+            
+        Returns:
+            Dictionary containing metadata.
+        """
+        with open(path, "r") as f:
+            return json.load(f)
+
+    def apply_filter(self, filter_fn: Callable[[pd.DataFrame], pd.DataFrame]):
+        """
+        Apply a filter function to the experiment data.
+        
+        Args:
+            filter_fn: Function that takes a DataFrame and returns a filtered DataFrame.
+                      Can be acausal (e.g., butterworth filtfilt) or causal.
+                      
+        Returns:
+            New Experiment instance with filtered data.
+        """
+        new = Experiment.__new__(Experiment)
+        new.csv_path = self.csv_path
+        new.meta_path = self.meta_path
+        new._meta = self._meta  # Share metadata reference if already loaded
+        new._data = filter_fn(self.data.copy(deep=True))
+        return new
+
+    def resample(self, dt: float):
+        """
+        Resample timeseries data to a new time step.
+        
+        Args:
+            dt: New time step in seconds.
+            
+        Returns:
+            New Experiment instance with resampled data using nearest neighbor interpolation.
+            
+        Note:
+            Assumes the DataFrame index represents time in seconds.
+        """
+        new_index = np.arange(self.data.index[0],
+                              self.data.index[-1],
+                              dt)
+        df_resampled = self.data.reindex(
+            new_index,
+            method="nearest"
+        )
+        new = Experiment.__new__(Experiment)
+        new.csv_path = self.csv_path
+        new.meta_path = self.meta_path
+        new._meta = self._meta  # Share metadata reference if already loaded
+        new._data = df_resampled
+        return new
+
+
+    def cut_time(self, start: float = 0.0, end: float = 0.0):
+        """
+        Trim data by removing time from the beginning and end.
+        
+        Args:
+            start: Number of seconds to remove from the beginning.
+            end: Number of seconds to remove from the end.
+            
+        Returns:
+            New Experiment instance with trimmed data.
+        """
+        t0 = self.data.index[0] + start
+        t1 = self.data.index[-1] - end
+        df = self.data[(self.data.index >= t0) & (self.data.index <= t1)]
+
+        new = Experiment.__new__(Experiment)
+        new.csv_path = self.csv_path
+        new.meta_path = self.meta_path
+        new._meta = self._meta  # Share metadata reference if already loaded
+        new._data = df
+        return new
+
+    def cut_by_condition(
+        self,
+        start_condition: Optional[Callable[[pd.DataFrame], pd.Series]] = None,
+        end_condition: Optional[Callable[[pd.DataFrame], pd.Series]] = None,
+    ):
+        """
+        Trim data based on boolean conditions on the data.
+        
+        Args:
+            start_condition: Function that takes a DataFrame and returns a boolean Series.
+                           Data before the first True value is removed.
+            end_condition: Function that takes a DataFrame and returns a boolean Series.
+                          Data is kept until all remaining samples satisfy the condition.
+                          
+        Returns:
+            New Experiment instance with conditionally trimmed data.
+            
+        Example:
+            exp.cut_by_condition(
+                start_condition=lambda df: df['torque'].abs() > 0.1,
+                end_condition=lambda df: df['velocity'].abs() < 0.01
+            )
+        """
+        df = self.data
+
+        if start_condition is not None:
+            cond = start_condition(df)
+            if cond.any():
+                t_start = df.index[cond.argmax()]
+                df = df[df.index >= t_start]
+
+        if end_condition is not None:
+            cond = end_condition(df)
+            end_idx = None
+            for i in range(len(df)):
+                if cond.iloc[i:].all():
+                    end_idx = i
+                    break
+            if end_idx is not None:
+                t_end = df.index[end_idx]
+                df = df[df.index <= t_end]
+
+        new = Experiment.__new__(Experiment)
+        new.csv_path = self.csv_path
+        new.meta_path = self.meta_path
+        new._meta = self._meta  # Share metadata reference if already loaded
+        new._data = df
+        return new
+
+    def filter_by_metadata(self, **conditions):
+        """
+        Filter experiment based on metadata conditions.
+        
+        Args:
+            **conditions: Key-value pairs that must match in the metadata.
+            
+        Returns:
+            Self if all conditions are satisfied, None otherwise.
+            
+        Example:
+            exp.filter_by_metadata(experiment_status="success", robot="wheelbot-beta-2")
+        """
+        ok = all(self.meta.get(k) == v for k, v in conditions.items())
+        return self if ok else None
+
+    def to_numpy(self, fields):
+        """
+        Export specific fields to a numpy array.
+        
+        Args:
+            fields: List of field names to export. Can include 'time' or '_time'
+                   to export the time index as a column.
+                   
+        Returns:
+            Numpy array of shape (T, D) where T is the number of timesteps and
+            D is the number of fields.
+            
+        Raises:
+            KeyError: If any requested field is not found in the data.
+        """
+        df = self.data
+        
+        time_fields = ['_time', 'time']
+        regular_fields = []
+        arrays = []
+        
+        for f in fields:
+            if f in time_fields:
+                arrays.append(df.index.to_numpy().reshape(-1, 1))
+            else:
+                regular_fields.append(f)
+        
+        missing = [f for f in regular_fields if f not in df.columns]
+        if missing:
+            raise KeyError(f"Fields not found in experiment: {missing}")
+        
+        if regular_fields:
+            arrays.append(df[regular_fields].to_numpy())
+        
+        return np.concatenate(arrays, axis=1) if arrays else np.empty((len(df), 0))
+
+class ExperimentGroup:
+    """
+    Container for multiple experiments of the same type.
+    
+    Provides methods to apply operations across all experiments in the group,
+    such as filtering, mapping functions, and data export.
+    """
+    
+    def __init__(self, name: str, experiments: List[Experiment]):
+        """
+        Initialize an experiment group.
+        
+        Args:
+            name: Name of the experiment group.
+            experiments: List of Experiment instances.
+        """
+        self.name = name
+        self.experiments = experiments
+
+    def __getitem__(self, idx):
+        """
+        Get experiment by index.
+        
+        Args:
+            idx: Index of the experiment.
+            
+        Returns:
+            Experiment at the specified index.
+        """
+        return self.experiments[idx]
+
+    def __len__(self):
+        """
+        Get number of experiments in the group.
+        
+        Returns:
+            Number of experiments.
+        """
+        return len(self.experiments)
+
+    def map(self, fn):
+        """
+        Apply a function to all experiments in the group.
+        
+        Args:
+            fn: Function that takes an Experiment and returns an Experiment or None.
+                Experiments returning None are excluded from the result.
+                
+        Returns:
+            New ExperimentGroup with processed experiments, or a list of numpy arrays
+            if all processed results are arrays.
+        """
+        processed = []
+        for exp in self.experiments:
+            new_exp = fn(exp)
+            if new_exp is not None:
+                processed.append(new_exp)
+        if processed and all(isinstance(exp, np.ndarray) for exp in processed):
+            return processed
+        return ExperimentGroup(self.name, processed)
+
+    def to_numpy(self, fields):
+        """
+        Export all experiments to a single concatenated numpy array.
+        
+        Args:
+            fields: List of field names to export from each experiment.
+            
+        Returns:
+            Numpy array of shape (T_total, D) where T_total is the sum of all
+            timesteps across experiments and D is the number of fields.
+        """
+        arrays = [exp.to_numpy(fields) for exp in self.experiments]
+        return np.concatenate(arrays, axis=0)
+
+class Dataset:
+    """
+    Container for multiple experiment groups organized by directory structure.
+    
+    Automatically discovers and loads experiment groups from subdirectories in the
+    root folder. Each subdirectory becomes an ExperimentGroup containing all
+    experiments (CSV + metadata pairs) found within.
+    """
+    
+    def __init__(self, root: str):
+        """
+        Load dataset from a root directory.
+        
+        Args:
+            root: Path to the root directory containing experiment group folders.
+                 Each subdirectory should contain CSV files with matching .meta files.
+                 
+        Attributes:
+            groups: Dictionary mapping group names to ExperimentGroup instances.
+        """
+        self.root = root
+        self.groups = self._load_groups()
+
+    def _load_groups(self) -> Dict[str, ExperimentGroup]:
+        """
+        Discover and load all experiment groups from subdirectories.
+        
+        Returns:
+            Dictionary mapping group directory names to ExperimentGroup instances.
+            Only includes groups with at least one valid experiment.
+        """
+        groups: Dict[str, ExperimentGroup] = {}
+
+        for group_dir in sorted(os.listdir(self.root)):
+            full_path = os.path.join(self.root, group_dir)
+            if not os.path.isdir(full_path):
+                continue
+
+            csvs = sorted(glob.glob(os.path.join(full_path, "*.csv")))
+            experiments: List[Experiment] = []
+
+            for csv_path in csvs:
+                prefix, _ = os.path.splitext(csv_path)
+                meta_path = prefix + ".meta"
+                if os.path.exists(meta_path):
+                    experiments.append(Experiment(csv_path, meta_path))
+
+            if experiments:
+                groups[group_dir] = ExperimentGroup(group_dir, experiments)
+
+        return groups
+
+    def load_group(self, group_name: str) -> ExperimentGroup:
+        """
+        Get an experiment group by name.
+        
+        Args:
+            group_name: Name of the group (subdirectory name).
+            
+        Returns:
+            ExperimentGroup instance.
+            
+        Raises:
+            KeyError: If the group name is not found.
+        """
+        return self.groups[group_name]
+    
+    def map(self, fn):
+        """
+        Apply a function to all experiments across all groups in the dataset.
+        
+        Args:
+            fn: Function that takes an Experiment and returns an Experiment or None.
+                Experiments returning None are excluded from the result.
+                
+        Returns:
+            New Dataset instance with processed groups. Empty groups are removed.
+        """
+        new_ds = Dataset.__new__(Dataset)
+        new_ds.root = self.root
+        new_ds.groups = {}
+
+        for name, group in self.groups.items():
+            processed_group = group.map(fn)
+            if len(processed_group) > 0:
+                new_ds.groups[name] = processed_group
+
+        return new_ds
+
+
+def to_prediction_dataset(
+    ds: Dataset | ExperimentGroup | Experiment,
+    fields_states: List[str],
+    fields_actions: List[str],
+    fields_observations: List[str] = [],
+    N_future: int = 1,
+    N_past: int=1,
+    skip_N: int = 1
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Convert experiments to trajectory snippet prediction dataset format.
+    
+    Creates overlapping trajectory snippets from time-series data for multi-step prediction.
+    Each snippet contains N_past historical states, N_past+N_future-1 actions, and N_future
+    future states. The skip_N parameter controls the stride between consecutive snippets.
+    
+    Args:
+        ds: Dataset, ExperimentGroup, or single Experiment to convert.
+        fields_states: List of field names representing the state variables.
+        fields_actions: List of field names representing the action variables.
+        fields_observations: List of field names representing the observations variables.
+        N_future: Number of future timesteps to predict (default: 1).
+        N_past: Number of past timesteps to include as context (default: 1).
+        skip_N: Stride between consecutive snippets in timesteps (default: 1).
+                When skip_N < N_future+N_past, snippets will overlap.
+        
+    Returns:
+        Tuple of (states, actions, next_states) as numpy arrays where:
+        - states: Historical states (shape: [D, N_past, len(fields_states)])
+        - actions: Action sequence (shape: [D, N_past+N_future-1, len(fields_actions)])
+        - next_states: Future states to predict (shape: [D, N_future, len(fields_states)])
+        
+        where D is the total number of trajectory snippets across all experiments.
+    """
+    
+    def exp_to_N_step_prediction(exp: Experiment):
+        exp_states_np = exp.to_numpy(fields_states)
+        exp_actions_np = exp.to_numpy(fields_actions)
+        if fields_observations:
+            exp_observations_np = exp.to_numpy(fields_observations)
+        num_sections = (exp_actions_np.shape[0]-N_future-N_past)//skip_N
+        
+        # Return None if experiment is too short to produce any snippets
+        if num_sections <= 0:
+            return None, None, None, None
+        
+        states = []
+        next_states = []
+        actions = []
+        observations = []
+        for i in range(num_sections):
+            start = i*skip_N
+            states.append(exp_states_np[start:start+N_past])
+            if fields_observations:
+                observations.append(exp_observations_np[start:start+N_past])
+            next_states.append(exp_states_np[start+N_past:start+N_past+N_future])
+            actions.append(exp_actions_np[start:start+N_past+N_future-1])
+        
+        return np.array(states), np.array(actions), np.array(next_states), np.array(observations)
+    
+    if isinstance(ds, Experiment):
+        states, actions, next_states = exp_to_N_step_prediction(ds)
+        return states, actions, next_states
+    elif isinstance(ds, ExperimentGroup):
+        all_states, all_actions, all_next_states, all_observations = [], [], [], []
+        for exp in ds.experiments:
+            states, actions, next_states, observation = exp_to_N_step_prediction(exp)
+            # Skip experiments that are too short
+            if states is not None:
+                all_states.append(states)
+                all_actions.append(actions)
+                all_next_states.append(next_states)
+                if fields_observations:
+                    all_observations.append(observation)
+        
+        # Handle case where no valid experiments exist
+        if len(all_states) == 0:
+            return np.array([]), np.array([]), np.array([]), np.array([])
+        
+        return (
+            np.concatenate(all_states, axis=0),
+            np.concatenate(all_actions, axis=0),
+            np.concatenate(all_next_states, axis=0),
+            np.concatenate(all_observations, axis=0) if all_observations else np.array([])
+        )
+    elif isinstance(ds, Dataset):
+        all_states, all_actions, all_next_states, all_observations = [], [], [], []
+        for group in ds.groups.values():
+            for exp in group.experiments:
+                states, actions, next_states, observation = exp_to_N_step_prediction(exp)
+                # Skip experiments that are too short
+                if states is not None:
+                    all_states.append(states)
+                    all_actions.append(actions)
+                    all_next_states.append(next_states)
+                    if fields_observations:
+                        all_observations.append(observation)
+        
+        # Handle case where no valid experiments exist
+        if len(all_states) == 0:
+            return np.array([]), np.array([]), np.array([]), np.array([])
+        
+        return (
+            np.concatenate(all_states, axis=0),
+            np.concatenate(all_actions, axis=0),
+            np.concatenate(all_next_states, axis=0),
+            np.concatenate(all_observations, axis=0) if all_observations else np.array([])
+        )
+    raise ValueError("Input must be Experiment, ExperimentGroup, or Dataset")
