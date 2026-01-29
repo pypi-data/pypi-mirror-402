@@ -1,0 +1,66 @@
+process_count: 1
+timeout: 0.1
+
+input:
+  autorule_input:
+    type: dummy_input
+    documents: []
+
+output:
+  dummy_output:
+    type: dummy_output
+
+pipeline:
+  - labelername:
+      type: labeler
+      schema: tests/testdata/auto_tests/labeler/schema.json
+      include_parent_labels: True
+      rules:
+        - tests/testdata/auto_tests/labeler/rules
+  - dissector:
+      type: dissector
+      rules:
+        - tests/testdata/auto_tests/dissector/rules
+  - dropper:
+      type: dropper
+      rules:
+        - tests/testdata/auto_tests/dropper/rules
+        - filter: "test_dropper"
+          dropper:
+            drop:
+              - drop_me
+            description: "..."
+  - pre_detector:
+      type: pre_detector
+      rules:
+        - tests/testdata/auto_tests/pre_detector/rules
+      outputs:
+        - dummy_output: sre
+  - pseudonymizer:
+      type: pseudonymizer
+      pubkey_analyst: tests/testdata/auto_tests/pseudonymizer/example_analyst_pub.pem
+      pubkey_depseudo: tests/testdata/auto_tests/pseudonymizer/example_depseudo_pub.pem
+      regex_mapping: tests/testdata/auto_tests/pseudonymizer/regex_mapping.yml
+      hash_salt: a_secret_tasty_ingredient
+      outputs:
+        - dummy_output: pseudonyms
+      rules:
+        - tests/testdata/auto_tests/pseudonymizer/rules
+      max_cached_pseudonyms: 1000000
+  - templatereplacername:
+      type: template_replacer
+      rules:
+        - tests/testdata/auto_tests/template_replacer/rules
+      template: tests/testdata/unit/template_replacer/replacer_template.yml
+      pattern:
+        delimiter: ","
+        fields:
+          - field.name.a
+          - field.name.b
+        allowed_delimiter_field: field.name.b
+        target_field: target.field
+  - clusterername:
+      type: clusterer
+      rules:
+        - tests/testdata/auto_tests/clusterer/rules
+      output_field_name: target_field

@@ -1,0 +1,203 @@
+[build-system]
+requires = [
+  "setuptools>=68.0.0",
+  "setuptools-scm>=8.0",
+  "wheel",
+  "setuptools-rust",
+]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "logprep" = "logprep" }
+packages = ["logprep"]
+
+[tool.setuptools_scm]
+fallback_version = "0.0.0"
+
+[[tool.setuptools-rust.ext-modules]]
+# Private Rust extension module to be nested into the Python package
+target = "rust" # The last part of the name (e.g. "_lib") has to match lib.name in Cargo.toml,
+# but you can add a prefix to nest it inside of a Python package.
+path = "Cargo.toml" # Default value, can be omitted
+binding = "PyO3"    # Default value, can be omitted
+
+[project]
+name = "logprep"
+description = "Logprep allows to collect, process and forward log messages from various data sources."
+requires-python = ">=3.11"
+readme = "README.md"
+dynamic = ["version"]
+license = { file = "LICENSE" }
+classifiers = [
+  "Development Status :: 3 - Alpha",
+
+  "Intended Audience :: Information Technology",
+
+  "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)",
+
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+
+  "Operating System :: POSIX :: Linux",
+
+  "Topic :: Security",
+  "Topic :: System :: Logging",
+]
+keywords = [
+  "kafka",
+  "etl",
+  "sre",
+  "preprocessing",
+  "opensearch",
+  "soar",
+  "logdata",
+]
+dependencies = [
+  "aiohttp>=3.9.2",                # CVE-2024-23334
+  "attrs",
+  "certifi>=2023.7.22",            # CVE-2023-37920
+  "confluent-kafka>2",
+  "filelock",
+  "geoip2",
+  "jsonref",
+  "luqum",
+  "more-itertools==8.10.0",
+  "numpy>=1.26.0",
+  "opensearch-py",
+  "prometheus_client",
+  "protobuf>=3.20.2",
+  "pycryptodome",
+  "pyparsing",
+  "scikit-learn>=1.2.0",
+  "scipy>=1.9.2",
+  "joblib",
+  "pyyaml",
+  "requests>=2.31.0",
+  "ruamel.yaml",
+  "schedule",
+  "urllib3>=1.26.17",              # CVE-2023-43804
+  "uvicorn",
+  "deepdiff",
+  "msgspec",
+  "boto3",
+  "pydantic",
+  "click",
+  "pandas",
+  "tabulate",
+  "falcon>=3.1.3",
+  "uvloop",
+  "httptools",
+]
+
+[project.optional-dependencies]
+
+dev = [
+  "black>=26.0.0",
+  "httpx",
+  "isort",
+  "pylint",
+  "pytest",
+  "pytest-cov",
+  "responses",
+  "jinja2",
+  "maturin",
+  "cibuildwheel",
+  "asgiref",
+  "pytest-asyncio",
+  "pre-commit",
+  "mypy>=1.18.2",
+  "psutil",
+  "types-requests",
+  "types-psutil",
+  "types-PyYaml",
+]
+
+doc = [
+  "sphinx>=8.2.0",
+  "sphinx_rtd_theme",
+  "sphinxcontrib.datatemplates",
+  "sphinxcontrib-mermaid",
+  "sphinx-copybutton",
+  "nbsphinx>=0.9",
+  "ipython>=8.7",
+  "openpyxl",
+]
+
+[project.urls]
+Homepage = "https://github.com/fkie-cad/Logprep"
+Documentation = "https://logprep.readthedocs.io/en/latest/"
+Repository = "https://github.com/fkie-cad/Logprep"
+Issues = "https://github.com/fkie-cad/Logprep/issues"
+Changelog = "https://github.com/fkie-cad/Logprep/blob/main/CHANGELOG.md"
+
+[project.scripts]
+logprep = "logprep.run_logprep:cli"
+logprep-ng = "logprep.run_ng:cli"
+
+[tool.black]
+line-length = 100
+target-version = ['py311', 'py312', 'py313', 'py314']
+extend-exclude = '''
+# A regex preceded with ^/ will apply only to files and directories
+# in the root of the project.
+(
+  __version__\.py
+)
+'''
+
+[tool.isort]
+profile = "black"
+
+[tool.cibuildwheel]
+build = "cp311-* cp312-* cp313-* cp314-*"
+skip = "*pp* *i686-unknown-linux-musl*"
+
+[tool.cibuildwheel.linux]
+archs = "x86_64 i686 aarch64"
+before-build = "curl -sSf https://sh.rustup.rs | sh -s -- -y"
+environment = 'PATH=$HOME/.cargo/bin:$PATH'
+
+[tool.pylint.MAIN]
+ignore = ".venv"
+fail-under = 9.5
+
+[tool.pylint.FORMAT]
+max-line-length=100
+
+[tool.pylint.BASIC]
+no-docstring-rgx="^test_|^.*TestCase|^_|^Test"
+
+[tool.pylint."MESAGES CONTROL"]
+disable="too-few-public-methods,unsupported-membership-test"
+
+[tool.pylint.DESIGN]
+min-public-methods=1
+max-public-methods=40
+max-attributes=12
+
+[tool.pylint.CLASSES]
+
+# List of method names used to declare (i.e. assign) instance attributes.
+defining-attr-methods="__init__,__new__,setup"
+
+[tool.mypy]
+# use imported type information but don't report issues if not a file under check
+follow_imports = "silent"
+exclude = "tests/.*"
+
+# Evidently looking at dev Packages, they are installed, mypy doesnt seem to think so
+[[tool.mypy.overrides]]
+module = ["requests.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["joblib.*", "boto3.*", "botocore.*"]
+follow_untyped_imports = true
+
+[[tool.mypy.overrides]]
+module = ["confluent_kafka.*"]
+ignore_missing_imports = true
