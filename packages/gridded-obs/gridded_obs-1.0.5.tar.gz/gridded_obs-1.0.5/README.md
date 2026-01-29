@@ -1,0 +1,157 @@
+gridded_obs a package for the verification of gridded observations
+
+- Any quantity, does not care about units
+- Easy to add readers
+
+- Contingency scores
+- Lmin from Fraction Skill Score
+- Correlation coefficient
+
+Like other verification packages, Obtaining score figures with gridded_obs is a two-step process. 
+    1. Compute atomic scores for each forecast that will be verified
+    2. Aggregate scores for a given period, lead time, start hour, etc. 
+
+## Getting the code
+
+To get gridded_obs, simply clone this repository.
+
+## Add gridded_obs to your working conda environment
+    
+1. Activate a conda environment with a Python installation. 
+
+   If you don't already have one, you can build one with:
+   ``` bash
+   conda create -n gridded_obs_test_environment python cartopy numpy matplotlib dask scipy
+   ```
+   Here, `gridded_obs_test_environment` is the name of the environment we are creating. 
+   You can chose any other name. 
+
+2. Install gridded_obs and domcmc 
+
+   ``` bash 
+   pip install gridded_obs domcmc 
+   ```
+
+   If you are not using "standard" files used at the CMC in Dorval, you can omit to install domcmc. 
+
+   ALTERNATIVELY, 
+
+   If you want make modifications to gridded_obs, you can install the editable package.
+
+   Install dependencies manually:
+   ``` bash 
+   conda install dask domutils domcmc -c dja001
+   ```
+   Install an editable version of gridded_obs:
+   ``` bash 
+   pip install --editable /path/to/gridded_obs/package
+   ```
+
+
+##  1- Compute atomic scores
+
+Atomic scores can be computed from an interactive session on a compute node.
+
+1. Start by requesting a compute node on one of the PPPs
+
+   ```
+   qsub -I -lselect=1:ncpus=80:mem=185gb,place=scatter:excl -lwalltime=6:0:0
+   ```
+
+2. Activate the conda environment that allows to run gridded_obs
+
+   First get access to `conda` with
+   ```
+   eval "$(/fs/ssm/main/opt/intelcomp/master/inteloneapi_2022.1.2_multi/oneapi/intelpython/python3.9/bin/conda shell.bash hook)"
+
+   ``` 
+   Ignore the error: `-bash: syntax error near unexpected token '('`, I don't know why it shows up and things still work...
+
+   Then activate your gridded_obs environment
+   ```
+   conda activate gridded_obs_test_environment
+   ```
+   If this works, you should see `(gridded_obs_test_environment)` at the beginning of your shell prompt. 
+
+3. Make a local copy of the launch script that you will be using
+
+   ```
+   cp .../gridded_obs/scripts/launch_verification.sh ./your_launch_script.sh
+   ```
+   The script name is not important but its helpful to relate it to a given project 
+   so that the verification can be reproduced later if needed. 
+
+
+4. Edit `your_launch_script.sh` for the experiments and date range that you want to compare. 
+   Most default option should be good as a start.
+
+5. Compute scores
+
+   ```
+   ./your_launch_script.sh
+   ```
+   Say you verify precipitation every 10 minutes for 12 hours = 96 lead times in total. 
+   You can expect the verification to take approx one minute. 
+
+
+6. View images
+
+   The images have been generated in the output directory specified by the `figure_dir` option
+   in the launch script. 
+   I like to use firefox to look at them in my `public_html`. 
+
+
+
+
+
+##  2- Aggregate scores and generate images
+
+Aggregating scores and making figures is easy and takes no time. 
+
+1. Make a local copy of the launch script that you will be using
+
+   ``` bash
+   cp .../gridded_obs/scripts/launch_aggregate.sh ./your_aggregate_script.sh
+   ```
+   and edit it for the experiments, period and scores that you want to plot. 
+
+2. Run it in your conda environment
+
+   ``` bash
+   ./your_aggregate_script.sh
+   ```
+   
+   The figures will be in a directory listing all experiments being verified. 
+
+
+
+
+
+## Use multiple compute nodes to accelerate computation of scores
+
+If you are verifying a large number of forecasts, computing sores can take a while. 
+To accelerate this, we can trow more resources at the problem. 
+
+Open an interactive session with 10 compute nodes:
+``` bash
+qsub -I -lselect=80:ncpus=10:mpiprocs=10:mem=23gb,place=scatter:excl -lwalltime=6:0:0
+# activate your conda env with dask
+conda activate gridded_obs_test_environment
+```
+
+Start a dask cluster that will use the 10 nodes. This can take a little while.
+``` bash
+. ssmuse-sh -x main/opt/intelcomp/master/inteloneapi-mpi_2022.1.2_all
+. ssmuse-sh -d /home/mde000/ssm/maestro-dask-cluster/0.6
+start_dask_cluster
+```
+
+Compute scores 10x faster than before
+``` bash
+./your_launch_script.sh
+```
+
+Stop cluster when you are done using it
+``` bash
+stop_dask_cluster
+```
