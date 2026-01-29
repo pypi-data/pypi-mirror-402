@@ -1,0 +1,248 @@
+import sys, os, shutil, copy
+from tools import Configuration, opj, copy_if_newer
+from waflib.Configure import conf
+
+
+cfg = Configuration()
+cfg.finish_setup()
+
+
+#-------------------------------------------------------------------------------
+# Configuration command
+#-------------------------------------------------------------------------------
+
+def options(opt):
+    if not cfg.IS_NT:
+        opt.load('compiler_c compiler_cxx')
+
+def configure(conf):
+    if cfg.IS_NT:
+        conf.options.msvc_prerelease = False
+        conf.load('msvc')
+    else:
+        conf.load('compiler_c compiler_cxx')
+    conf.load('python')
+    conf.check_python_version(minver = (3,5,0))
+    if cfg.IS_NT:
+        conf.check_python_headers_pyext_msvc()
+    else:
+        conf.check_python_headers(features = 'pyext')
+    conf.env.INCLUDES_WXPY = [cfg.SIPINC, 'src']
+    if cfg.IS_NT:
+        includes = [opj(cfg.ROOT_DIR, cfg.SIPINC),
+                    opj(cfg.ROOT_DIR, 'src'),
+                    opj(cfg.ROOT_DIR, cfg.WXDIR, 'lib', cfg.VCDLL, 'mswu'),
+                    opj(cfg.ROOT_DIR, cfg.WXDIR, 'include')]
+        defines  = ['WIN32', '__WXMSW__', 'WXUSINGDLL=1',
+                    'ISOLATION_AWARE_ENABLED']
+        libdirs  = [opj(cfg.ROOT_DIR, cfg.WXDIR, 'lib', cfg.VCDLL)]
+        libs     = ['wxbase' + cfg.WXDLLVER, 'wxbase' + cfg.WXDLLVER + '_net',
+                    cfg.make_lib_name('core')[0]]
+        cflags   = ['/UNDEBUG', '/GR', '/EHsc']
+        conf.env.INCLUDES_WX = includes
+        conf.env.DEFINES_WX  = defines
+        conf.env.LIBPATH_WX  = libdirs
+        conf.env.LIB_WX      = libs
+        conf.env.CFLAGS_WX   = cflags
+        conf.env.CXXFLAGS_WX = cflags
+        conf.env.LIBFLAGS_WX = None
+        _copy_env_group(conf.env, '_WX', '_WXADV')
+        conf.env.LIB_WXADV += cfg.make_lib_name('adv')
+        _copy_env_group(conf.env, '_WX', '_WXSTC')
+        conf.env.LIB_WXSTC += cfg.make_lib_name('stc')
+        _copy_env_group(conf.env, '_WX', '_WXHTML')
+        conf.env.LIB_WXHTML += cfg.make_lib_name('html')
+        _copy_env_group(conf.env, '_WX', '_WXGL')
+        conf.env.LIB_WXGL += cfg.make_lib_name('gl')
+        _copy_env_group(conf.env, '_WX', '_WXWEBVIEW')
+        conf.env.LIB_WXWEBVIEW += cfg.make_lib_name('webview')
+        _copy_env_group(conf.env, '_WX', '_WXXML')
+        conf.env.LIB_WXXML += cfg.make_lib_name('xml', True)
+        _copy_env_group(conf.env, '_WX', '_WXXRC')
+        conf.env.LIB_WXXRC += cfg.make_lib_name('xrc')
+        _copy_env_group(conf.env, '_WX', '_WXRICHTEXT')
+        conf.env.LIB_WXRICHTEXT += cfg.make_lib_name('richtext')
+        conf.env.LIB_WXRICHTEXT += cfg.make_lib_name('adv')
+        _copy_env_group(conf.env, '_WX', '_WXMEDIA')
+        conf.env.LIB_WXMEDIA += cfg.make_lib_name('media')
+        _copy_env_group(conf.env, '_WX', '_WXRIBBON')
+        conf.env.LIB_WXRIBBON += cfg.make_lib_name('ribbon')
+        _copy_env_group(conf.env, '_WX', '_WXPROPGRID')
+        conf.env.LIB_WXPROPGRID += cfg.make_lib_name('propgrid')
+        _copy_env_group(conf.env, '_WX', '_WXAUI')
+        conf.env.LIB_WXAUI += cfg.make_lib_name('aui')
+    else:
+        wx_setup_h = cfg.find_wx_setup_h()
+        lflags = cfg.get_wx_config_value('--libs')
+        MONOLITHIC = lflags.find('_xrc') == -1
+        rpath      = ' --no-rpath'
+        conf.check_cfg(path = cfg.WX_CONFIG, package = '',
+                       args = '--cxxflags --libs core,net' + rpath,
+                       uselib_store = 'WX', mandatory = True,
+                       msg = 'Finding libs for WX')
+        conf.check_cfg(path = cfg.WX_CONFIG, package = '',
+                       args = '--cxxflags --libs adv,core,net' + rpath,
+                       uselib_store = 'WXADV', mandatory = True,
+                       msg = 'Finding libs for WXADV')
+        libname = '' if MONOLITHIC else 'stc,'
+        conf.check_cfg(path = cfg.WX_CONFIG, package = '',
+                       args = '--cxxflags --libs %score,net' % libname + rpath,
+                       uselib_store = 'WXSTC', mandatory = True,
+                       msg = 'Finding libs for WXSTC')
+        conf.check_cfg(path = cfg.WX_CONFIG, package = '',
+                       args = '--cxxflags --libs html,core,net' + rpath,
+                       uselib_store = 'WXHTML', mandatory = True,
+                       msg = 'Finding libs for WXHTML')
+        if cfg.check_setup(wx_setup_h, 'wxUSE_GLCANVAS'):
+            gl_libs = '--libs gl,core,net'
+        else:
+            gl_libs = '--libs core,net'
+        conf.check_cfg(path = cfg.WX_CONFIG, package = '',
+                       args = '--cxxflags ' + gl_libs + rpath,
+                       uselib_store = 'WXGL', mandatory = True,
+                       msg = 'Finding libs for WXGL')
+        if cfg.check_setup(wx_setup_h, 'wxUSE_WEBVIEW'):
+            wv_libs = '--libs webview,core,net'
+        else:
+            wv_libs = '--libs core,net'
+        conf.check_cfg(path = cfg.WX_CONFIG, package = '',
+                       args = '--cxxflags ' + wv_libs + rpath,
+                       uselib_store = 'WXWEBVIEW', mandatory = True,
+                       msg = 'Finding libs for WXWEBVIEW')
+        conf.check_cfg(path = cfg.WX_CONFIG, package = '',
+                       args = '--cxxflags --libs xml,core,net' + rpath,
+                       uselib_store = 'WXXML', mandatory = True,
+                       msg = 'Finding libs for WXXML')
+        conf.check_cfg(path = cfg.WX_CONFIG, package = '',
+                       args = '--cxxflags --libs xrc,xml,core,net' + rpath,
+                       uselib_store = 'WXXRC', mandatory = True,
+                       msg = 'Finding libs for WXXRC')
+        libname = '' if MONOLITHIC else 'richtext,'
+        conf.check_cfg(path = cfg.WX_CONFIG, package = '',
+                       args = '--cxxflags --libs %score,net' % libname + rpath,
+                       uselib_store = 'WXRICHTEXT', mandatory = True,
+                       msg = 'Finding libs for WXRICHTEXT')
+        if cfg.check_setup(wx_setup_h, 'wxUSE_MEDIACTRL'):
+            mc_libs = '--libs media,core,net'
+        else:
+            mc_libs = '--libs core,net'
+        conf.check_cfg(path = cfg.WX_CONFIG, package = '',
+                       args = '--cxxflags ' + mc_libs + rpath,
+                       uselib_store = 'WXMEDIA', mandatory = True,
+                       msg = 'Finding libs for WXMEDIA')
+        conf.check_cfg(path = cfg.WX_CONFIG, package = '',
+                       args = '--cxxflags --libs ribbon,core,net' + rpath,
+                       uselib_store = 'WXRIBBON', mandatory = True,
+                       msg = 'Finding libs for WXRIBBON')
+        conf.check_cfg(path = cfg.WX_CONFIG, package = '',
+                       args = '--cxxflags --libs propgrid,core' + rpath,
+                       uselib_store = 'WXPROPGRID', mandatory = True,
+                       msg = 'Finding libs for WXPROPGRID')
+        conf.check_cfg(path = cfg.WX_CONFIG, package = '',
+                       args = '--cxxflags --libs aui,core' + rpath,
+                       uselib_store = 'WXAUI', mandatory = True,
+                       msg = 'Finding libs for WXAUI')
+        flags = ['-UNDEBUG', '-g']
+        if cfg.get_wx_config_value('--query-toolkit') == 'gtk2':
+            gtkflags = os.popen('pkg-config gtk+-2.0 --cflags').read()[:-1]
+        else:
+            gtkflags = os.popen('pkg-config gtk+-3.0 --cflags').read()[:-1]
+        conf.env.CFLAGS_WXPY   = flags
+        conf.env.CXXFLAGS_WXPY = flags
+        conf.env.CFLAGS_WX     = gtkflags.split()
+        conf.env.CXXFLAGS_WX   = gtkflags.split()
+        conf.env.DEFINES_PYEXT = []
+        conf.env.LIBPATH_PYEXT = []
+        conf.env.LIB_PYEXT     = []
+
+@conf
+def check_python_headers_pyext_msvc(conf):
+    env = conf.env
+    compile_options = ['/nologo', '/Ox', '/W3', '/GL', '/DNDEBUG', '/MD']
+    ldflags_shared  = ['/nologo', '/INCREMENTAL:NO', '/LTCG', '/DLL',
+                       '/MANIFESTUAC:NO']
+    base_prefix = sys.base_prefix
+    env['pyext_PATTERN']   = '%s' + cfg.EXT_SUFFIX
+    env['LIBPATH_PYEXT']   = [opj(base_prefix, 'libs')]
+    env['INCLUDES_PYEXT']  = [opj(base_prefix, 'include')]
+    env['CFLAGS_PYEXT']    = compile_options
+    env['CXXFLAGS_PYEXT']  = compile_options
+    env['LINKFLAGS_PYEXT'] = ldflags_shared
+
+
+#-------------------------------------------------------------------------------
+# Build command
+#-------------------------------------------------------------------------------
+
+def build(bld):
+    sys.path[0:0] = [os.path.abspath('.')]
+    bld.env['RPATH_PYEXT'] = ''
+    make_build_rule(bld, '_core',     'WX')
+    make_build_rule(bld, '_adv',      'WXADV')
+    make_build_rule(bld, '_dataview', 'WXADV')
+    make_build_rule(bld, '_grid',     'WXADV')
+    make_build_rule(bld, '_stc',      'WXSTC')
+    make_build_rule(bld, '_html',     'WXHTML')
+    make_build_rule(bld, '_glcanvas', 'WXGL')
+    make_build_rule(bld, '_html2',    'WXWEBVIEW')
+    make_build_rule(bld, '_xml',      'WXXML')
+    make_build_rule(bld, '_xrc',      'WXXRC')
+    make_build_rule(bld, '_richtext', 'WXHTML WXRICHTEXT')
+    make_build_rule(bld, '_media',    'WXMEDIA')
+    make_build_rule(bld, '_ribbon',   'WXRIBBON')
+    make_build_rule(bld, '_propgrid', 'WXPROPGRID')
+    make_build_rule(bld, '_aui',      'WXAUI')
+    if cfg.IS_NT:
+        make_build_rule(bld, '_msw', 'WX')
+
+
+#-------------------------------------------------------------------------------
+# Helpers
+#-------------------------------------------------------------------------------
+
+def make_ext_copy_rule(bld, name):
+    src = bld.env.pyext_PATTERN % name
+    bld(rule = copy_file_to_pkg, source = src, after = name)
+
+def copy_file_to_pkg(task):
+    src = task.inputs[0].abspath()
+    tgt = opj(cfg.PKGDIR, os.path.basename(src))
+    copy_if_newer(src, tgt, verbose = True)
+    return 0
+
+def simple_copy(task):
+    src = task.inputs[0].abspath()
+    tgt = task.outputs[0].abspath()
+    print('{} --> {}'.format(src, tgt))
+    shutil.copy(src, tgt)
+    return 0
+
+def _copy_env_group(env, src_postfix, dest_postfix):
+    for key in env.keys():
+        if key.endswith(src_postfix):
+            new_key = key[:-len(src_postfix)] + dest_postfix
+            env[new_key] = copy.copy(env[key])
+
+def get_sip_cpp_files(name):
+    key_name = 'sources'
+    lines = iter(open(opj(cfg.SIPOUT, name + '.sbf'), 'rb').read().decode().
+                 split('\n'))
+    key_line = False
+    line = next(lines, None)
+    while line is not None and not key_line:
+        key, value = line.split('=')
+        key_line = key.strip() == key_name
+        line = next(lines, None)
+    return sorted([opj(cfg.SIPOUT, v) for v in value.strip().split()])
+
+def make_build_rule(bld, module_name, lib_flags):
+    rc = []
+    if cfg.IS_NT:
+        rc_name = module_name + '.rc'
+        bld(rule = simple_copy, source = 'src/wxc.rc', target = rc_name)
+        rc = [rc_name]
+    bld(features = 'c cxx cxxshlib pyext',
+        target   = module_name,
+        source   = get_sip_cpp_files(module_name) + rc,
+        uselib   = '{} {} WXPY'.format(module_name, lib_flags))
+    make_ext_copy_rule(bld, module_name)

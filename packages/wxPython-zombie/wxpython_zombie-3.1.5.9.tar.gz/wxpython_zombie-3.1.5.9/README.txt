@@ -1,0 +1,71 @@
+**wxPython-zombie** eventually matured to version 3.1.5 of wxWidgets. No more
+development, only bug fixes are done, a lot so far. **wxPython-zombie** will
+provide the 64-bit binary extension package (build with Visual Studio 2022) for
+MS Windows 10/11 and the source package to build for Linux. This is a release for
+Python 3.14.
+
+**wxPython-zombie** is forked from commit `64e5d86`__ of wxPython Project Phoenix
+on 30 Jan 2021. The included wxWidgets is from the on 14 Apr 2021 released
+`wxWidgets 3.1.5`__ . The latest version of the meta build system Waf is used,
+released on 13 Nov 2025, `waf 2.1.9`__. Also the latest version of, a Python
+bindings generator for C/C++ libraries, SIP is used, released on 20 Dec 2025,
+`sip 6.15.1`__. The source distribution format that is now used, is specified
+in `PEP 517`__. The binary distribution format (wheel) that is used, is specified
+in `PEP 427`__. The Windows wheel was built with `Build Tools for Visual Studio
+2022`__, configured for the *Windows SDK (10.0.26100) for Windows 11* and
+the *MSVC v143 - VS 2022 C++ x64/x86 build tools*. The binary distribution no
+longer ships with the Microsoft\ :sup:`©` C Runtime Library msvcp140.dll. If
+Microsoft Visual C++ v14 Redistributable (x64) is not installed on your
+machine, install it (you will need administrator rights).
+
+From the console::
+
+    > winget install Microsoft.VCRedist.2015+.x64
+
+__ https://github.com/wxWidgets/Phoenix/tree/64e5d863f7833f10df6a0fbcf3221a730562224b
+__ https://github.com/wxWidgets/wxWidgets/releases/download/v3.1.5/wxWidgets-3.1.5.7z
+__ https://waf.io/waf-2.1.9
+__ https://pypi.org/project/sip/
+__ https://www.python.org/dev/peps/pep-0517
+__ https://www.python.org/dev/peps/pep-0427
+__ https://aka.ms/vs/17/release/vs_BuildTools.exe
+
+You must not install **wxPython** and **wxPython-zombie** in the same environment,
+both packages use the package directory ``wx``.
+
+The build and installation on Linux was tested on Arch Linux, with just the
+minimal explicit installed packages or groups linux, base, base-devel, webkit2gtk,
+glu, sdl2 and pyenv. With pyenv, Python 3.14.2 was installed and used. The build
+will take about 15 to 40 minutes, depending on your system. To see the verbose
+progress of the build process, use the verbose option in pip.
+
+The demo package of **wxPython-zombie** is included in the distribution.
+
+
+Installation on MS Windows 10/11
+--------------------------------
+Using pip::
+
+    > pip install wxpython-zombie
+
+
+Build and installation on Arch Linux
+------------------------------------
+Using pip as normal user::
+
+    $ pip install wxpython-zombie
+
+
+or
+
+::
+
+    $ pip install -v wxpython-zombie
+
+
+Start the demo
+--------------
+From the console::
+
+    > wxpython-demo
+
