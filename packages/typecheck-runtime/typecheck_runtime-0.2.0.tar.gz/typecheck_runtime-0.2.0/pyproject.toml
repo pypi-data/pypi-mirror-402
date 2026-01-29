@@ -1,0 +1,72 @@
+[build-system]
+requires = ["hatchling>=1.25", "hatch-vcs>=0.4"]
+build-backend = "hatchling.build"
+
+[project]
+name = "typecheck-runtime"
+dynamic = ["version"]
+description = "Tiny runtime checker for typing annotations (dict[str,str], list[T], unions, literals) with an Option-like API."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Lukas Svoboda" }]
+keywords = ["typing", "runtime", "typecheck", "validation"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Typing :: Typed",
+  "License :: OSI Approved :: MIT License",
+]
+
+[project.urls]
+Homepage = "https://github.com/schizza/py-typecheck"
+Repository = "https://github.com/schizza/py-typecheck"
+Issues = "https://github.com/schizza/py-typecheck/issues"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/py_typecheck"]
+
+[tool.hatch.envs.default]
+dependencies = ["pytest>=8", "pytest-cov>=5", "basedpyright>=1.20", "ruff>=0.6"]
+features = []
+
+[tool.hatch.envs.default.scripts]
+test = [
+    "python -m pip install -e .",
+    "pytest -q"]
+cov = "pytest -q --cov=py_typecheck --cov-report=term-missing --cov-report=xml"
+typecheck = "basedpyright"
+lint = "ruff check ."
+fmt = "ruff format ."
+all = ["ruff format .", "ruff check .", "basedpyright", "pytest -q"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["py_typecheck"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.basedpyright]
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false
+pythonVersion = "3.10"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
