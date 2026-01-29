@@ -1,0 +1,129 @@
+# admissibility-kernel
+
+Python bindings for the Admissibility Kernel - deterministic context slicing with cryptographic verification for conversation DAGs.
+
+## Installation
+
+```bash
+pip install admissibility-kernel
+```
+
+## Quick Start
+
+```python
+from admissibility_kernel import (
+    AdmissibilityKernel,
+    Role,
+    Phase,
+    EdgeType,
+)
+
+# Create a kernel instance
+kernel = AdmissibilityKernel(
+    hmac_secret=b"my_secret_key_32bytes_minimum!!!",
+    max_nodes=100,
+    max_radius=5,
+)
+
+# Add turns to the graph
+kernel.add_turn(
+    turn_id="550e8400-e29b-41d4-a716-446655440001",
+    session_id="session_1",
+    role=Role.User,
+    phase=Phase.Exploration,
+    salience=0.8,
+)
+
+kernel.add_turn(
+    turn_id="550e8400-e29b-41d4-a716-446655440002",
+    session_id="session_1",
+    role=Role.Assistant,
+    phase=Phase.Consolidation,
+    salience=0.9,
+)
+
+# Add edges
+kernel.add_edge(
+    parent_id="550e8400-e29b-41d4-a716-446655440001",
+    child_id="550e8400-e29b-41d4-a716-446655440002",
+    edge_type=EdgeType.Reply,
+)
+
+# Get a context slice
+slice_export = kernel.slice("550e8400-e29b-41d4-a716-446655440002")
+
+print(f"Slice ID: {slice_export.slice_id}")
+print(f"Contains {slice_export.num_turns} turns")
+print(f"Turn IDs: {slice_export.turn_ids}")
+
+# Verify the slice
+is_valid = kernel.verify(slice_export)
+print(f"Token valid: {is_valid}")
+```
+
+## Low-Level API
+
+For more control, use the individual components:
+
+```python
+from admissibility_kernel import (
+    InMemoryGraphStore,
+    ContextSlicer,
+    SlicePolicy,
+    TurnSnapshot,
+    Edge,
+    TokenVerifier,
+    Role,
+    Phase,
+    EdgeType,
+)
+
+# Create store and add data
+store = InMemoryGraphStore()
+
+turn = TurnSnapshot(
+    turn_id="550e8400-e29b-41d4-a716-446655440001",
+    session_id="session_1",
+    role=Role.User,
+    phase=Phase.Consolidation,
+    salience=0.8,
+    depth=1,
+    sibling_index=0,
+    homogeneity=0.5,
+    temporal=0.5,
+    complexity=1.0,
+    created_at=1000,
+)
+store.add_turn(turn)
+
+# Configure policy
+policy = SlicePolicy(
+    max_nodes=256,
+    max_radius=10,
+    salience_weight=0.3,
+    distance_decay=0.9,
+)
+
+# Create slicer with HMAC secret
+secret = b"my_secret_key_32bytes_minimum!!!"
+slicer = ContextSlicer(store, policy, list(secret))
+
+# Get slice
+slice_export = slicer.slice("550e8400-e29b-41d4-a716-446655440001")
+
+# Verify with TokenVerifier
+verifier = TokenVerifier(list(secret))
+is_valid = verifier.verify(slice_export)
+```
+
+## Features
+
+- **Deterministic slicing**: Same input always produces identical output
+- **HMAC-signed tokens**: Cryptographic verification of slice integrity
+- **Priority-queue BFS**: Novel algorithm for context boundary expansion
+- **Phase-aware scoring**: Synthesis > Consolidation > Exploration weighting
+- **High performance**: Rust core with Python bindings
+
+## License
+
+MIT
