@@ -1,0 +1,40 @@
+from setuptools import setup, find_packages
+
+setup(
+    name="luminescent",  # Your package name
+    version="3.1.4",  # Your package version
+    description="GPU-accelerated fully differentiable FDTD for photonics and RF",
+    author="Paul Shen",
+    author_email="pxshen@alumni.stanford.edu",
+    packages=find_packages(),  # Automatically find your package(s)
+    install_requires=[
+        "gdsfactory",
+        # "pymeshfix",
+        "electromagneticpython",
+        "sortedcontainers",
+        "scikit-rf",
+        "opencv-python",
+        "femwell",
+        "rasterio",
+        "rtree",
+        "gmsh",
+        "manifold3d",
+        "pymeshlab",
+        "pyvista",
+        'google-cloud-storage',
+        'requests',
+        'ImageIO',
+    ],
+)
+# mv ~/anaconda3 ~/anaconda30
+# cd ~/lumi/luminescent
+# python3 -m build
+# twine upload dist/*
+
+# python -m twine upload --repository testpypi dist/*
+
+# pip install gdsfactory pillow pymeshfix electromagneticpython sortedcontainers scikit-rf
+#
+
+# python3 -m venv venv
+# python3 -m pip install gdsfactory electromagneticpython sortedcontainers scikit-rf opencv-python femwell rasterio rtree gmsh manifold3d pymeshlab pyvista --break-system-packages
