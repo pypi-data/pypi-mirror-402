@@ -1,0 +1,240 @@
+Metadata-Version: 2.4
+Name: valet-agent
+Version: 2026.1.18
+Summary: DeviceValet Linux Agent - Fleet management daemon for Linux desktops, servers, and IoT devices
+Project-URL: Homepage, https://github.com/supported-systems/devicevalet
+Project-URL: Documentation, https://docs.devicevalet.io
+Project-URL: Repository, https://github.com/supported-systems/devicevalet
+Project-URL: Issues, https://github.com/supported-systems/devicevalet/issues
+Project-URL: Changelog, https://github.com/supported-systems/devicevalet/blob/main/agent-linux/CHANGELOG.md
+Author-email: Ryan Malloy <ryan@supported.systems>
+Maintainer-email: Ryan Malloy <ryan@supported.systems>
+License: MIT
+License-File: LICENSE
+Keywords: agent,device-management,endpoint-management,fleet,iot,linux,mdm,monitoring,telemetry
+Classifier: Development Status :: 4 - Beta
+Classifier: Environment :: Console
+Classifier: Environment :: No Input/Output (Daemon)
+Classifier: Intended Audience :: Information Technology
+Classifier: Intended Audience :: System Administrators
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: POSIX :: Linux
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: System :: Hardware
+Classifier: Topic :: System :: Monitoring
+Classifier: Topic :: System :: Systems Administration
+Classifier: Typing :: Typed
+Requires-Python: >=3.10
+Requires-Dist: httpx>=0.28.0
+Requires-Dist: paho-mqtt>=2.1.0
+Requires-Dist: psutil>=6.0.0
+Requires-Dist: pydantic-settings>=2.7.0
+Requires-Dist: pydantic>=2.10.0
+Provides-Extra: dev
+Requires-Dist: mypy>=1.14.0; extra == 'dev'
+Requires-Dist: pytest-cov>=6.0.0; extra == 'dev'
+Requires-Dist: pytest>=8.0.0; extra == 'dev'
+Requires-Dist: ruff>=0.9.0; extra == 'dev'
+Description-Content-Type: text/markdown
+
+# DeviceValet Linux Agent
+
+[![PyPI version](https://badge.fury.io/py/valet-agent.svg)](https://badge.fury.io/py/valet-agent)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+Fleet management daemon for Linux desktops, servers, and IoT devices. Part of the [DeviceValet](https://github.com/supported-systems/devicevalet) ecosystem.
+
+## Features
+
+- **Device Enrollment** — One-command enrollment via token
+- **System Telemetry** — CPU, memory, disk, GPU, thermals, network
+- **WiFi Geolocation** — Location via BeaconDB (privacy-respecting)
+- **Real-time Commands** — MQTT-based instant command execution
+- **Package & Service Inventory** — Track installed software
+- **Systemd Integration** — Runs as a background service
+
+## Quick Start
+
+### Install from PyPI
+
+```bash
+# Install with pipx (recommended)
+pipx install valet-agent
+
+# Or with pip
+pip install valet-agent
+
+# Or with uv
+uv tool install valet-agent
+```
+
+### Enroll Your Device
+
+```bash
+# Get an enrollment token from your DeviceValet dashboard, then:
+sudo valet-agent enroll --server https://valet.example.com --token YOUR_TOKEN
+
+# Start the agent
+sudo valet-agent run
+```
+
+### Install as System Service
+
+```bash
+# Copy the systemd unit file
+sudo cp valet-agent.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now valet-agent
+
+# Check status
+sudo systemctl status valet-agent
+sudo journalctl -u valet-agent -f
+```
+
+## CLI Commands
+
+```bash
+valet-agent --help              # Show all commands
+
+# Enrollment
+valet-agent enroll              # Enroll device with server
+  --server URL                  # Server URL (required)
+  --token TOKEN                 # Enrollment token (required)
+  --mqtt-url URL                # Override MQTT broker URL
+
+# Agent Operations
+valet-agent run                 # Start the agent daemon
+  --config-dir PATH             # Config directory (default: /etc/valet-agent)
+  --once                        # Single check-in then exit
+
+# Diagnostics
+valet-agent status              # Show enrollment & connection status
+valet-agent info                # Display detailed hardware info
+  --json                        # Output as JSON
+  --packages                    # Include installed packages
+  --services                    # Include running services
+```
+
+## Configuration
+
+After enrollment, configuration is stored in `/etc/valet-agent/agent.env`:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VALET_SERVER_URL` | DeviceValet server URL | Set during enrollment |
+| `VALET_AUTH_TOKEN` | Device authentication token | Set during enrollment |
+| `VALET_DEVICE_ID` | Unique device identifier | Set during enrollment |
+| `VALET_CHECKIN_INTERVAL_SECONDS` | Telemetry interval | 300 |
+| `VALET_REPORT_LOCATION` | Report WiFi-based location | true |
+| `VALET_REPORT_PACKAGES` | Include package inventory | true |
+| `VALET_REPORT_SERVICES` | Include running services | true |
+| `VALET_MQTT_ENABLED` | Enable real-time commands | true |
+| `VALET_BEACONDB_ENABLED` | Use BeaconDB for location | true |
+| `VALET_BEACONDB_CONTRIBUTE` | Contribute to BeaconDB | true |
+
+## Remote Commands
+
+The agent responds to commands sent via MQTT:
+
+| Command | Description |
+|---------|-------------|
+| `lock` | Lock the screen (requires display session) |
+| `ring` | Play sound to locate device |
+| `message` | Display desktop notification |
+| `reboot` | Schedule system reboot |
+| `shutdown` | Schedule system shutdown |
+| `run_script` | Execute approved scripts |
+| `install_package` | Install system package (apt/pacman) |
+
+## Docker Deployment
+
+For containerized environments or server monitoring:
+
+```yaml
+services:
+  valet-agent:
+    image: ghcr.io/supported-systems/valet-agent:latest
+    environment:
+      VALET_SERVER_URL: https://valet.example.com
+      VALET_AUTH_TOKEN: ${DEVICE_TOKEN}
+    restart: unless-stopped
+    volumes:
+      # Required for hardware identification
+      - /etc/machine-id:/etc/machine-id:ro
+      - /sys/class/dmi/id:/sys/class/dmi/id:ro
+      # Optional: for full system metrics
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+```
+
+## Supported Distributions
+
+| Distribution | Package Manager | Notes |
+|--------------|-----------------|-------|
+| Arch Linux | pacman | Full support |
+| Debian 11+ | apt/dpkg | Full support |
+| Ubuntu 22.04+ | apt/dpkg | Full support |
+| Fedora 38+ | dnf | Full support |
+| RHEL/Rocky 9+ | dnf | Full support |
+| Alpine | apk | Container-only |
+
+Requires Python 3.10+ and systemd for service management.
+
+## Development
+
+```bash
+# Clone the repository
+git clone https://github.com/supported-systems/devicevalet.git
+cd devicevalet/agent-linux
+
+# Install with dev dependencies
+uv pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Type checking
+mypy src/valet_agent
+
+# Linting
+ruff check src/
+ruff format src/
+```
+
+## Telemetry Data
+
+The agent collects and reports:
+
+- **Hardware**: Manufacturer, model, serial number
+- **System**: OS version, kernel, uptime, hostname
+- **Resources**: CPU usage, memory, disk space
+- **Network**: IP address, MAC address, connection type
+- **Extended** (in `platform_data`):
+  - CPU model, cores, frequency, cache
+  - GPU info (name, driver, VRAM)
+  - Thermal sensors
+  - Installed packages
+  - Running systemd services
+
+## Privacy
+
+- No data is sent to third parties
+- WiFi geolocation uses [BeaconDB](https://beacondb.net/) (opt-in contribution)
+- All communication is over HTTPS/WSS
+- Device tokens are stored with 0600 permissions
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Links
+
+- [Documentation](https://docs.devicevalet.io)
+- [GitHub Repository](https://github.com/supported-systems/devicevalet)
+- [Issue Tracker](https://github.com/supported-systems/devicevalet/issues)
+- [Changelog](https://github.com/supported-systems/devicevalet/blob/main/agent-linux/CHANGELOG.md)
