@@ -1,0 +1,516 @@
+{% comment %}
+Main Tom Select template.
+
+Context Variables:
+- widget: Contains configuration, plugin settings, URLs, selected items, etc.
+
+Blocks:
+- block select_element: Override to change the way the <select> is included.
+- block tomselect_init: Override to alter the TomSelect initialization logic, including event handlers, fetch calls, and callback methods.
+- block tomselect_plugins: Insert or override plugin-related JS configuration.
+- block tomselect_url_setup: Define the originalFirstUrl function for constructing the initial URL.
+- block tomselect_config: Define the main TomSelect configuration object.
+- block tomselect_render: Define the render object for customizing the appearance of options, items, and other elements.
+- block tomselect_extra_js: Add custom JS at the end of initialization.
+
+Overriding Example:
+To override only the plugin configuration, you might create:
+`django_tomselect/tomselect.html`:
+
+    {% block tomselect_plugins %}
+        // Your custom plugin code here
+    {% endblock tomselect_plugins %}
+
+This will append your changes to the default configuration.
+
+To completely replace initialization logic, you could:
+
+    {% block tomselect_init %}
+        // Your entirely custom initialization code here
+    {% endblock tomselect_init %}
+
+This will replace the original code block if you use `{% block ... %}{% endblock ... %}` without super.
+
+You can also extend and call `{{ block.super }}` to augment existing logic.
+{% endcomment %}
+
+{% load i18n %}
+
+{% block select_element %}
+    {% include "django_tomselect/render/select.html" with widget=widget %}
+{% endblock select_element %}
+
+{% block tomselect_global_setup %}
+{% endblock tomselect_global_setup %}
+
+<script>
+    {% block tomselect_init %}
+        (function() {
+            const elementId = '{% if "id" in widget.attrs.keys and widget.attrs.id %}{{ widget.attrs.id|escapejs }}{% else %}{{ widget.name|escapejs }}{% endif %}';
+            const element = document.getElementById(elementId);
+            if (!element) return;
+
+            // Create a unique reset variable name based on the element ID
+            const resetVarName = 'wasReset_' + elementId.replace(/-/g, '_');
+            window[resetVarName] = false;
+
+            // Used for resetting the TomSelect contents when a query is zeroed
+            let previousQuery = '';
+
+            function logCallback(data) {
+                console.log("%c Received callback data:", "color:red;", data);
+            }
+
+            // Helper function to reset TomSelect state
+            function resetTomSelectState(tomSelect, originalFirstUrl) {
+                if (!tomSelect) return;
+
+                tomSelect.clearOptions();
+                tomSelect.clearCache();
+                tomSelect.settings.pagination = {};
+
+                if (tomSelect.dropdown_content) {
+                    tomSelect.dropdown_content.scrollTop = 0;
+                }
+
+                tomSelect.settings.firstUrl = originalFirstUrl;
+                tomSelect.settings.setNextUrl = originalFirstUrl;
+                tomSelect.clearPagination();
+
+                // Mark the widget as reset BEFORE calling load so shouldLoad can check it
+                window[resetVarName] = true;
+                tomSelect.load('', logCallback);
+            }
+
+            // Helper function to add a URL parameter
+            function addUrlParam(url, paramName, paramValue) {
+                return `${url}&${paramName}=${encodeURIComponent(paramValue)}`;
+            }
+
+            {% block tomselect_url_setup %}
+                // URL parameter constants
+                const SEARCH_PARAM = '{{ widget.search_param|escapejs }}';
+                const FILTER_PARAM = '{{ widget.filter_param|escapejs }}';
+                const EXCLUDE_PARAM = '{{ widget.exclude_param|escapejs }}';
+                const PAGE_PARAM = '{{ widget.page_param|escapejs }}';
+
+                // Extract form prefix from widget name (e.g., "formset-0-field" -> "formset-0-") for formsets where field IDs include a prefix
+                const widgetName = '{{ widget.name|escapejs }}';
+                const lastDashIndex = widgetName.lastIndexOf('-');
+                const formPrefix = lastDashIndex !== -1 ? widgetName.slice(0, lastDashIndex + 1) : '';
+
+                // Store filter/exclude field configuration for URL building
+                // Used by originalFirstUrl to construct the correct URL
+                const filterConfig = {
+                    {% if "filters" in widget.keys %}
+                        filters: [
+                            {% for filter in widget.filters %}
+                                { source: '{{ filter.source|escapejs }}', lookup: '{{ filter.lookup|escapejs }}', sourceType: '{{ filter.source_type|escapejs }}' }{% if not forloop.last %},{% endif %}
+                            {% endfor %}
+                        ],
+                    {% elif "dependent_field" in widget.keys %}
+                        dependentField: '{{ widget.dependent_field|escapejs }}',
+                        dependentFieldLookup: '{{ widget.dependent_field_lookup|escapejs }}',
+                    {% endif %}
+                    {% if "excludes" in widget.keys %}
+                        excludes: [
+                            {% for exclude in widget.excludes %}
+                                { source: '{{ exclude.source|escapejs }}', lookup: '{{ exclude.lookup|escapejs }}', sourceType: '{{ exclude.source_type|escapejs }}' }{% if not forloop.last %},{% endif %}
+                            {% endfor %}
+                        ],
+                    {% elif "exclude_field" in widget.keys %}
+                        excludeField: '{{ widget.exclude_field|escapejs }}',
+                        excludeFieldLookup: '{{ widget.exclude_field_lookup|escapejs }}',
+                    {% endif %}
+                    autocompleteUrl: '{{ widget.autocomplete_url|escapejs }}',
+                    autocompleteParams: '{% if 'autocomplete_params' in widget.keys and not widget.autocomplete_params == "" %}{{ widget.autocomplete_params|escapejs }}{% endif %}'
+                };
+
+                // Factory function to create originalFirstUrl using provided prefix so it can be updated when cloning for new formset rows
+                function createFirstUrlFunction(prefix, filterCfg) {
+                    return function(query) {
+                        var url = filterCfg.autocompleteUrl + '?' + SEARCH_PARAM + '=' + encodeURIComponent(query);
+                        if (filterCfg.autocompleteParams) {
+                            url += '&' + filterCfg.autocompleteParams;
+                        }
+
+                        // Handle multiple filters
+                        if (filterCfg.filters) {
+                            filterCfg.filters.forEach(function(filter) {
+                                if (filter.sourceType === 'field') {
+                                    const filterField = document.getElementById('id_' + prefix + filter.source);
+                                    const filterValue = filterField ? filterField.value : '';
+                                    if (filterValue) {
+                                        url = addUrlParam(url, FILTER_PARAM, `'${filter.source}__${filter.lookup}=${filterValue}'`);
+                                    }
+                                } else {
+                                    // Constant filter - always applied
+                                    url = addUrlParam(url, FILTER_PARAM, `'__const__${filter.lookup}=${filter.source}'`);
+                                }
+                            });
+                        } else if (filterCfg.dependentField) {
+                            // Legacy filter support
+                            const dependentField = document.getElementById('id_' + prefix + filterCfg.dependentField);
+                            const dependentValue = dependentField ? dependentField.value : '';
+                            url = addUrlParam(url, FILTER_PARAM, `'${filterCfg.dependentField}__${filterCfg.dependentFieldLookup}=${dependentValue}'`);
+                        }
+
+                        // Handle multiple excludes
+                        if (filterCfg.excludes) {
+                            filterCfg.excludes.forEach(function(exclude) {
+                                if (exclude.sourceType === 'field') {
+                                    const excludeField = document.getElementById('id_' + prefix + exclude.source);
+                                    const excludeValue = excludeField ? excludeField.value : '';
+                                    if (excludeValue) {
+                                        url = addUrlParam(url, EXCLUDE_PARAM, `'${exclude.source}__${exclude.lookup}=${excludeValue}'`);
+                                    }
+                                } else {
+                                    // Constant exclude - always applied
+                                    url = addUrlParam(url, EXCLUDE_PARAM, `'__const__${exclude.lookup}=${exclude.source}'`);
+                                }
+                            });
+                        } else if (filterCfg.excludeField) {
+                            // Legacy exclude support
+                            const excludeField = document.getElementById('id_' + prefix + filterCfg.excludeField);
+                            const excludeValue = excludeField ? excludeField.value : '';
+                            url = addUrlParam(url, EXCLUDE_PARAM, `'${filterCfg.excludeField}__${filterCfg.excludeFieldLookup}=${excludeValue}'`);
+                        }
+
+                        return url;
+                    };
+                }
+
+                // Create the originalFirstUrl function using the factory
+                var originalFirstUrl = createFirstUrlFunction(formPrefix, filterConfig);
+            {% endblock tomselect_url_setup %}
+
+            {% block tomselect_config %}
+                const config = {
+                    valueField: '{{ widget.value_field|escapejs }}',
+                    labelField: '{{ widget.label_field|escapejs }}',
+                    searchField: [],
+                    highlight: {{ widget.highlight|yesno:"true,false" }},
+                    openOnFocus: {{ widget.open_on_focus|yesno:"true,false" }},
+                    hideSelected: {{ widget.hide_selected|yesno:"true,false" }},
+                    maxOptions: {% if widget.max_options %}{{ widget.max_options }}{% else %}null{% endif %},
+                    preload: {% if widget.preload == "focus" %}'focus'{% elif widget.preload %}true{% else %}false{% endif %},
+                    maxItems: {% if not widget.is_multiple %}1{% else %}{% if widget.max_items %}{{ widget.max_items }}{% else %}null{% endif %}{% endif %},
+                    showValueField: {% if 'dropdown_header' in widget.plugins.keys and widget.plugins.dropdown_header.show_value_field %}true{% else %}false{% endif %},
+                    create: {% if 'create' in widget.keys and widget.create %}true{% else %}false{% endif %},
+                    resetVarName: resetVarName,
+                    originalFirstUrl: originalFirstUrl,
+                    formPrefix: formPrefix,
+                    filterConfig: filterConfig,
+                    createFirstUrlFunction: createFirstUrlFunction,
+                    {% if "filters" in widget.keys %}
+                        filterFields: [{% for filter in widget.filters %}{% if filter.source_type == "field" %}'id_' + formPrefix + '{{ filter.source|escapejs }}'{% if not forloop.last %}, {% endif %}{% endif %}{% endfor %}],
+                    {% elif "dependent_field" in widget.keys %}
+                        dependentField: 'id_' + formPrefix + '{{ widget.dependent_field|escapejs }}',
+                    {% endif %}
+                    {% if "excludes" in widget.keys %}
+                        excludeFields: [{% for exclude in widget.excludes %}{% if exclude.source_type == "field" %}'id_' + formPrefix + '{{ exclude.source|escapejs }}'{% if not forloop.last %}, {% endif %}{% endif %}{% endfor %}],
+                    {% elif "exclude_field" in widget.keys %}
+                        excludeField: 'id_' + formPrefix + '{{ widget.exclude_field|escapejs }}',
+                    {% endif %}
+
+                    {% block tomselect_plugins %}
+                        plugins: {
+                            {% if 'checkbox_options' in widget.plugins.keys and widget.plugins.checkbox_options %}
+                                checkbox_options: true,
+                            {% endif %}
+
+                            {% if 'clear_button' in widget.plugins.keys %}
+                                clear_button: {
+                                    title: '{{ widget.plugins.clear_button.title|escapejs }}',
+                                    className: '{{ widget.plugins.clear_button.class_name|escapejs }}'
+                                },
+                            {% endif %}
+
+                            {% if 'dropdown_header' in widget.plugins.keys %}
+                                dropdown_header:{
+                                    title: '{% if widget.plugins.dropdown_header.title %}{{ widget.plugins.dropdown_header.title|escapejs }}{% else %}Select an option{% endif %}',
+                                    headerClass: '{{ widget.plugins.dropdown_header.header_class|escapejs }}',
+                                    {% include "django_tomselect/render/dropdown_header.html" with widget=widget %}
+                                },
+                            {% endif %}
+
+                            {% if 'dropdown_footer' in widget.plugins.keys %}
+                                dropdown_footer:{
+                                    title: '{% if widget.plugins.dropdown_footer.title %}{{ widget.plugins.dropdown_footer.title|escapejs }}{% else %}Select an option{% endif %}',
+                                    footerClass: '{{ widget.plugins.dropdown_footer.footer_class|escapejs }}',
+                                    {% include "django_tomselect/render/dropdown_footer.html" with widget=widget %}
+                                },
+                            {% endif %}
+
+                            {% if 'dropdown_input' in widget.plugins.keys and widget.plugins.dropdown_input %}
+                                dropdown_input: true,
+                            {% endif %}
+
+                            {% if 'remove_button' in widget.plugins.keys %}
+                                remove_button: {
+                                    title: '{{ widget.plugins.remove_button.title|escapejs }}',
+                                    label: '{{ widget.plugins.remove_button.label|escapejs }}',
+                                    className: '{{ widget.plugins.remove_button.class_name|escapejs }}'
+                                },
+                            {% endif %}
+
+                            virtual_scroll: true
+                        },
+                    {% endblock tomselect_plugins %}
+
+                    onInitialize: function() {
+                        {% if widget.value %}
+                            // Prepare all options in a single batch
+                            const allOptions = {};
+                            const allItems = [];
+
+                            {% for option in widget.selected_options %}
+                                allOptions['{{ option.value|escapejs }}'] = {
+                                    '{{ widget.value_field|escapejs }}': '{{ option.value|escapejs }}',
+                                    '{{ widget.label_field|escapejs }}': '{{ option.label|escapejs }}',
+                                    {% if "create_url" in option.keys %}create_url: '{{ option.create_url|escapejs }}',{% endif %}
+                                    {% if "detail_url" in option.keys %}detail_url: '{{ option.detail_url|escapejs }}',{% endif %}
+                                    {% if "update_url" in option.keys %}update_url: '{{ option.update_url|escapejs }}',{% endif %}
+                                    {% if "delete_url" in option.keys %}delete_url: '{{ option.delete_url|escapejs }}',{% endif %}
+                                };
+                                allItems.push('{{ option.value|escapejs }}');
+                            {% endfor %}
+
+                            // Add all options at once
+                            this.addOptions(allOptions);
+
+                            // Use TomSelect's built-in setValue with silent=true
+                            this.setValue(allItems, true);
+                        {% endif %}
+                    },
+
+                    onBlur: function() {
+                        const tomSelect = element.tomselect;
+                        resetTomSelectState(tomSelect, originalFirstUrl);
+
+                        // Continue with the default tomselect blur functionality
+                        if (document.hasFocus() === false)
+                            return;
+                        var self = this;
+                        if (!self.isFocused)
+                            return;
+                        self.isFocused = false;
+                        self.ignoreFocus = false;
+                        var deactivate = () => {
+                            self.close();
+                            self.setActiveItem();
+                            self.setCaret(self.items.length);
+                        };
+                        deactivate();
+                    },
+
+                    onDropdownOpen: function() {
+                        // Update ARIA expanded state for accessibility
+                        element.setAttribute('aria-expanded', 'true');
+                    },
+
+                    onDropdownClose: function() {
+                        // Update ARIA expanded state for accessibility
+                        element.setAttribute('aria-expanded', 'false');
+                    },
+
+                    shouldLoad: function(query){
+                        var shouldLoadValue;
+                        var isEmptyQuery = !query.trim() || query === undefined;
+
+                        // Allow empty query to load when resetting to initial state
+                        if (window[resetVarName] === true && isEmptyQuery) {
+                            shouldLoadValue = true;
+                        } else if (this.settings.page && isEmptyQuery) {
+                            shouldLoadValue = true;
+                        } else {
+                            shouldLoadValue = query.length >= {{ widget.minimum_query_length }};
+                        }
+
+                        if (previousQuery.length > 0 && isEmptyQuery) {
+                            const tomSelect = element.tomselect;
+                            resetTomSelectState(tomSelect, originalFirstUrl);
+                        }
+
+                        previousQuery = query;
+                        return shouldLoadValue;
+                    },
+
+                    firstUrl: originalFirstUrl,
+
+                    getUrl: function(query) {
+                        var url = this.settings.pagination[query] || this.settings.firstUrl(query);
+                        return url;
+                    },
+
+                    load: function(query, callback) {
+                        var self = this;
+                        var url = this.getUrl(query);
+                        if (window[resetVarName] === true) {
+                            url = originalFirstUrl(query);
+                        }
+
+                        var currentPage = 1;
+
+                        // Helper function to check if all items are already selected and load more if needed
+                        const checkAndLoadMore = function(json, originalCallback, collectedResults = []) {
+                            // Store the pagination info for virtual scrolling regardless of selection status
+                            if (json.has_more && json.next_page) {
+                                let baseUrl = url.replace(new RegExp('&' + PAGE_PARAM + '=\\d+', 'g'), '');
+                                if (!self.settings.pagination) {
+                                    self.settings.pagination = {};
+                                }
+
+                                // Update the pagination URL for this query
+                                self.settings.pagination[query] = baseUrl + '&' + PAGE_PARAM + '=' + json.next_page;
+                            } else {
+                                // No more results - clear pagination for this query
+                                if (self.settings.pagination && query in self.settings.pagination) {
+                                    delete self.settings.pagination[query];
+                                }
+                            }
+
+                            // If no results at all, return empty array
+                            if (!json.results || json.results.length === 0) {
+                                return originalCallback(collectedResults);
+                            }
+
+                            // Filter out already selected items
+                            const newResults = json.results.filter(item =>
+                                !self.items.includes(String(item[self.settings.valueField])));
+
+                            // Add new unselected results to our collection
+                            collectedResults = collectedResults.concat(newResults);
+
+                            // Set the current page
+                            currentPage = json.page;
+
+                            // Check if all items in the response were already selected and we need more
+                            const allSelected = newResults.length === 0;
+                            const needMoreItems = collectedResults.length < 20; // Ensure we have a minimum set of items to show
+
+                            // Use the pagination metadata to determine if we should continue auto-loading
+                            if ((allSelected || needMoreItems) && json.has_more && json.next_page && json.page < json.total_pages) {
+                                // All items are already selected, and there are more pages
+                                const nextPageUrl = self.settings.pagination[query]; // Use the stored URL
+
+                                // Fetch the next page
+                                fetch(nextPageUrl)
+                                    .then(response => response.json())
+                                    .then(nextJson => checkAndLoadMore(nextJson, originalCallback, collectedResults))
+                                    .catch(error => {
+                                        console.error("Error loading next page:", error);
+                                        originalCallback(collectedResults);
+                                    });
+                            } else {
+                                // Either we found enough unselected items, reached the end, or total pages
+                                originalCallback(collectedResults);
+                            }
+                        };
+
+                        // Main fetch call with timeout to prevent hanging requests
+                        const FETCH_TIMEOUT_MS = 30000;  // 30 second timeout
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+                        fetch(url, { signal: controller.signal })
+                            .then(response => {
+                                clearTimeout(timeoutId);
+                                return response.json();
+                            })
+                            .then(json => {
+                                // Temporarily disable scroll behavior for performance
+                                const _scrollToOption = this.scrollToOption;
+                                this.scrollToOption = () => {};
+
+                                // Start the check-and-load process
+                                checkAndLoadMore(json, result => {
+                                    // Set next url BEFORE callback to ensure refreshOptions sees correct pagination state
+                                    // This fixes the "No more results" showing instead of "Loading more results" issue
+                                    if (self.settings.pagination && self.settings.pagination[query]) {
+                                        this.setNextUrl(query, self.settings.pagination[query]);
+                                    }
+
+                                    // If window[resetVarName] is true, we need to reset the page and set back to false
+                                    if (window[resetVarName] === true) {
+                                        window[resetVarName] = false;
+                                        url = url.replace(new RegExp('&' + PAGE_PARAM + '=\\d+', 'g'), '');
+                                        this.setNextUrl(query, url + '&' + PAGE_PARAM + '=1');
+                                    }
+
+                                    callback(result);
+
+                                    // Restore scrollToOption after the callback
+                                    this.scrollToOption = _scrollToOption;
+                                }, []);
+                            })
+                            .catch(error => {
+                                clearTimeout(timeoutId);
+                                const isTimeout = error.name === 'AbortError';
+                                const errorMessage = isTimeout
+                                    ? '{% translate "Request timed out. Please try again." %}'
+                                    : '{% translate "Failed to load options. Please try again." %}';
+                                console.error(`Error loading data: '${error}' with url: ${url}`);
+                                // Show error message to user in the dropdown
+                                if (self.dropdown_content) {
+                                    self.dropdown_content.innerHTML = `
+                                        <div class="ts-dropdown-message ts-error-message" style="padding: 10px; color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; margin: 5px;">
+                                            <span>${errorMessage}</span>
+                                        </div>
+                                    `;
+                                }
+                                callback([]);
+                            });
+                    },
+
+                    {% block tomselect_render %}
+                        render: {
+                            {% include "django_tomselect/render/item.html" with widget=widget %}
+                            {% include "django_tomselect/render/option.html" with widget=widget %}
+                            {% include "django_tomselect/render/loading.html" with widget=widget %}
+                            {% include "django_tomselect/render/loading_more.html" with widget=widget %}
+                            {% include "django_tomselect/render/no_more_results.html" with widget=widget %}
+                            {% include "django_tomselect/render/no_results.html" with widget=widget %}
+                            {% include "django_tomselect/render/not_loading.html" with widget=widget %}
+                            {% include "django_tomselect/render/optgroup_header.html" with widget=widget %}
+                            {% include "django_tomselect/render/optgroup.html" with widget=widget %}
+                            {% if 'create' in widget.keys and widget.create %}
+                                {% include "django_tomselect/render/option_create.html" with widget=widget %}
+                            {% endif %}
+                        }
+                    {% endblock tomselect_render %}
+
+                };
+            {% endblock tomselect_config %}
+
+            {% if 'render' in widget.attrs.keys and widget.attrs.render %}
+                element.addEventListener('option_add', function() {
+                    // Ensure all selected data is preserved
+                    this.items.forEach(item => {
+                        this.options[item].selected = true;
+                    });
+                });
+
+                element.addEventListener('load', function(data) {
+                    // Ensure all loaded data is preserved
+                    data.forEach(item => {
+                        this.options[item.id] = item;
+                    });
+                });
+            {% endif %}
+
+            // Mark the select as a TomSelect widget
+            element.setAttribute('data-tomselect', 'true');
+
+            {% if not widget.use_htmx %}
+                document.addEventListener('DOMContentLoaded', () => {
+                    window.djangoTomSelect.initialize(element, config);
+                });
+            {% else %}
+                window.djangoTomSelect.initialize(element, config);
+            {% endif %}
+        })();
+    {% endblock tomselect_init %}
+
+    {% block tomselect_extra_js %}{% endblock tomselect_extra_js %}
+</script>
