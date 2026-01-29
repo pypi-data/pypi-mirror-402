@@ -1,0 +1,235 @@
+# VideoGen Advisor
+
+A unified MCP server for video generation that intelligently routes requests to either HeyGen (for avatar/presenter videos) or Google Veo (for creative/cinematic content).
+
+## Features
+
+- **Intelligent Routing**: Automatically selects the best service based on prompt content
+- **HeyGen Integration**: Avatar-based videos, custom voices, templates
+- **Google Veo Integration**: Cinematic content, image-to-video, creative visuals
+- **Unified Interface**: Single `generate_video` tool with automatic service selection
+- **Full Control**: Direct access to service-specific tools when needed
+
+## Installation
+
+```bash
+pip install m2ai-mcp-videogen-advisor
+```
+
+## Configuration
+
+Set your API keys as environment variables:
+
+```bash
+export HEYGEN_API_KEY=your_heygen_api_key_here
+export GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+## Claude Desktop Configuration
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "videogen": {
+      "command": "videogen-advisor",
+      "env": {
+        "HEYGEN_API_KEY": "your_heygen_key",
+        "GEMINI_API_KEY": "your_gemini_key"
+      }
+    }
+  }
+}
+```
+
+Or run directly with Python:
+
+```json
+{
+  "mcpServers": {
+    "videogen": {
+      "command": "python",
+      "args": ["-m", "videogen_mcp.server"],
+      "env": {
+        "HEYGEN_API_KEY": "your_heygen_key",
+        "GEMINI_API_KEY": "your_gemini_key"
+      }
+    }
+  }
+}
+```
+
+## Available Tools
+
+### Unified Interface (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `generate_video` | Generate video with intelligent routing to HeyGen or Veo |
+| `get_video_status` | Check job status (works for both services) |
+| `download_video` | Get download URL for completed video |
+
+### HeyGen-Specific (6 tools)
+
+| Tool | Description |
+|------|-------------|
+| `list_avatars` | List available avatars (stock + custom) |
+| `list_voices` | List available voices for avatar videos |
+| `create_avatar_video` | Create video with specific avatar/voice |
+| `list_templates` | List available video templates |
+| `get_template_details` | Get template variables and details |
+| `generate_from_template` | Generate video from template |
+
+### Veo-Specific (2 tools)
+
+| Tool | Description |
+|------|-------------|
+| `generate_creative_video` | Generate cinematic video with full Veo controls |
+| `generate_video_from_image` | Animate a static image into video |
+
+## Usage Examples
+
+### Automatic Routing
+
+```
+"Create a video where someone presents our Q4 results"
+→ Routes to HeyGen (presenter/speaking content)
+
+"Cinematic aerial shot of mountains at sunset"
+→ Routes to Veo (creative/visual content)
+```
+
+### Explicit Service Selection
+
+```python
+# Force HeyGen
+generate_video(
+    prompt="Create any video",
+    service_hint="heygen"
+)
+
+# Force Veo
+generate_video(
+    prompt="A tutorial video",
+    service_hint="veo"
+)
+```
+
+### HeyGen Avatar Video
+
+```python
+# 1. List avatars and voices
+avatars = list_avatars(filter_gender="female")
+voices = list_voices(filter_language="en")
+
+# 2. Create video
+job = create_avatar_video(
+    script="Hello! Welcome to our company.",
+    avatar_id="Angela-inblackskirt-20220820",
+    voice_id="1bd001e7e50f421d891986aad5158bc8",
+    background={"type": "color", "value": "#0066CC"},
+    aspect_ratio="16:9"
+)
+
+# 3. Poll for completion
+status = get_video_status(job_id=job["job_id"], service="heygen")
+
+# 4. Download when complete
+result = download_video(job_id=job["job_id"], service="heygen")
+```
+
+### Veo Creative Video
+
+```python
+# Generate cinematic content
+job = generate_creative_video(
+    prompt="A slow dolly shot through a neon-lit Tokyo alley at night, rain reflections, cinematic color grading",
+    negative_prompt="blurry, low quality, text overlays",
+    aspect_ratio="16:9",
+    duration=8,
+    model="veo-3.1-generate-preview"
+)
+
+# Poll and download
+status = get_video_status(job_id=job["job_id"], service="veo")
+result = download_video(job_id=job["job_id"], service="veo")
+```
+
+### Image to Video
+
+```python
+# Animate a still image
+job = generate_video_from_image(
+    image_url="https://example.com/product-photo.jpg",
+    prompt="Slow zoom in with subtle product rotation",
+    duration=6
+)
+```
+
+## Routing Logic
+
+The `generate_video` tool uses keyword detection to route requests:
+
+**HeyGen triggers** (avatar/presenter content):
+- speak, present, explain, tutorial, avatar, host, narrator
+- talking, announce, introduce, walk through, demo, spokesperson
+
+**Veo triggers** (creative/cinematic content):
+- cinematic, scene, visual, b-roll, animation, shot, footage
+- landscape, abstract, artistic, dramatic, aerial, timelapse
+
+Ambiguous prompts default to Veo unless avatar/presenter language is detected.
+
+## Video Wait Times
+
+- **HeyGen**: 1-5 minutes (varies by content length)
+- **Veo**: 2-10 minutes (varies by complexity)
+
+Poll `get_video_status` until status is `completed` or `failed`.
+
+## Error Handling
+
+All tools return structured error objects:
+
+```json
+{
+  "error": true,
+  "code": "QUOTA_EXCEEDED",
+  "message": "API credits exhausted. Check your account."
+}
+```
+
+Common error codes:
+- `AUTH_FAILED` - Invalid API key
+- `QUOTA_EXCEEDED` - API credits exhausted
+- `INVALID_AVATAR` / `INVALID_VOICE` - ID not found
+- `CONTENT_BLOCKED` - Safety filter triggered
+- `VIDEO_NOT_READY` - Generation still in progress
+- `JOB_NOT_FOUND` - Invalid job ID
+
+## Development
+
+```bash
+# Run tests
+pytest
+
+# Run tests with coverage
+pytest --cov=videogen_mcp
+
+# Type checking
+mypy src/
+
+# Linting
+ruff check src/ tests/
+```
+
+## License
+
+MIT License
+
+## Credits
+
+- [HeyGen API](https://docs.heygen.com/reference)
+- [Google Veo API](https://ai.google.dev/gemini-api/docs/video)
+- Generated by GRIMLOCK MCP Factory
