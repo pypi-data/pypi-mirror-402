@@ -1,0 +1,75 @@
+name: Build with Nuitka
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        include:
+          - os: windows-latest
+            ext: .exe
+            filename: windows_x64
+            extra: ""
+          - os: ubuntu-latest
+            ext: ""
+            filename: linux_x64
+            extra: ""
+          - os: macos-latest
+            ext: ""
+            filename: macos_x64
+            extra: ""
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install toml imageio nuitka
+          pip install .
+
+      - name: Build with Nuitka
+        shell: bash
+        continue-on-error: true
+        run: |
+          Y=$(python -c "import datetime; print(datetime.datetime.now().year)")
+          playwright install firefox
+          BROWSER_JSON=$(python -c "import cloudscraper, os; print(os.path.join(os.path.dirname(cloudscraper.__file__), 'user_agent', 'browsers.json'))")
+          python -m nuitka --onefile --assume-yes-for-downloads --playwright-include-browser=all --include-package=wii_roms_tool \
+          --include-data-files=$BROWSER_JSON=cloudscraper/user_agent/browsers.json \
+          --output-filename=Wii-Rom-Downloader-${{ matrix.filename }}${{ matrix.ext }} \
+          --company-name="Tmaster055" \
+          --product-name="Wii-Rom-Downloader" \
+          --file-version=1.0 \
+          --product-version=1.0 \
+          --file-description="A tool to download and correctly name roms for your wii" \
+          --copyright="Copyright (c) 2024-$Y Tmaster055" \
+          ${{ matrix.extra }} \
+          wii_roms_tool/src/main.py
+
+      - uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: Wii-Rom-Downloader-${{ matrix.filename }}
+          path: Wii-Rom-Downloader-${{ matrix.filename }}${{ matrix.ext }}
+
+      - name: Upload Nuitka build to GitHub Release
+        uses: softprops/action-gh-release@v2
+        continue-on-error: true
+        with:
+          files: Wii-Rom-Downloader-${{ matrix.filename }}${{ matrix.ext }}
