@@ -1,0 +1,19 @@
+image: "harbor.local.clusters/bp/vllm/bp-vllm:v0.8.5-with-north-ckpt-0.0.4-flashinfer024"
+cmd:
+  - VLLM_USE_V1='0'
+  - VLLM_ENABLE_UPDATE_WEIGHTS='1'
+  - UCXPY_CONNECT_TIMEOUT=3600
+  - UCX_TLS=rc
+  - UCXPY_NON_BLOCKING_MODE=1
+  - UCX_NET_DEVICES=mlx5_bond_0:1
+  - UCXPY_IFNAME=bond0
+  - VLLM_ATTENTION_BACKEND=FLASHINFER
+  - vllm
+  - serve
+  - '{{MODEL_PATH}}'
+  - --trust-remote-code
+  - --tensor-parallel-size={{GPUS_PER_POD}}
+  - --pipeline-parallel-size={{PODS_PER_JOB}}
+  - --served-model-name={{SERVED_MODEL_NAME}}
+livenessPath: "/health"
+readinessPath: "/health"
