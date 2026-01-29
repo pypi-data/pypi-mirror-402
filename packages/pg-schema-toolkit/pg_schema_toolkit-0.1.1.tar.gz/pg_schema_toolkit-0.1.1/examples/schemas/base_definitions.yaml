@@ -1,0 +1,123 @@
+# ============================================
+# Base Schema Definitions
+# ============================================
+# This file contains reusable column patterns, field types,
+# and table templates for PostgreSQL schema definitions.
+
+# ============================================
+# COLUMN PATTERNS (reusable column groups)
+# ============================================
+column_patterns:
+  # Standard audit fields
+  audit:
+    - name: id
+      type: BIGSERIAL
+      constraints: PRIMARY KEY
+    - name: created_at
+      type: TIMESTAMP WITH TIME ZONE
+      default: CURRENT_TIMESTAMP
+    - name: created_by
+      type: TEXT
+    - name: modified_at
+      type: TIMESTAMP WITH TIME ZONE
+    - name: modified_by
+      type: TEXT
+    - name: deleted_at
+      type: TIMESTAMP WITH TIME ZONE
+    - name: deleted_by
+      type: TEXT
+
+# ============================================
+# FIELD TYPES (reusable field definitions)
+# ============================================
+field_types:
+  slug:
+    type: TEXT
+    constraints: UNIQUE NOT NULL
+    create_index: true
+
+  email:
+    type: TEXT
+    constraints: UNIQUE NOT NULL
+    create_index: true
+
+  name:
+    type: TEXT
+    constraints: NOT NULL
+
+  description:
+    type: TEXT
+
+  is_active:
+    type: BOOLEAN
+    default: true
+
+  price:
+    type: NUMERIC(10,2)
+
+  jsonb_data:
+    type: JSONB
+    default: "'{}'::jsonb"
+
+# ============================================
+# AUDIT TABLE CONFIGURATION
+# ============================================
+audit_config:
+  # Naming conventions
+  audit_table_suffix: "_audr"
+  audit_function_prefix: "audit_"
+  audit_trigger_suffix: "_trigger"
+
+  # Behavior
+  preserve_dropped_columns: true
+  audit_table_indexes: true
+
+  # Metadata columns added to audit tables
+  audit_metadata_columns:
+    - name: audit_id
+      type: BIGSERIAL
+      constraints: PRIMARY KEY
+      description: "Unique audit record ID"
+
+    - name: audit_timestamp
+      type: TIMESTAMP WITH TIME ZONE
+      default: CURRENT_TIMESTAMP
+      description: "When the change occurred"
+
+    - name: audit_user
+      type: TEXT
+      default: CURRENT_USER
+      description: "Database user who made the change"
+
+    - name: audit_operation
+      type: TEXT
+      constraints: CHECK (audit_operation IN ('INSERT', 'UPDATE', 'DELETE'))
+      description: "Type of operation"
+
+    - name: audit_row_id
+      type: BIGINT
+      constraints: NOT NULL
+      description: "ID of the row in the main table"
+
+  # Standard indexes on audit tables
+  standard_audit_indexes:
+    - columns: [audit_row_id]
+      description: "Find all changes for a specific row"
+    - columns: [audit_timestamp]
+      description: "Time-based queries"
+    - columns: [audit_operation]
+      description: "Filter by operation type"
+    - columns: [audit_user]
+      description: "Find changes by user"
+
+# ============================================
+# TABLE TEMPLATES
+# ============================================
+table_templates:
+  # Standard table with audit fields
+  audited_table:
+    include_audit_fields: true
+    generate_audit_table: true
+    standard_indexes:
+      - columns: [deleted_at]
+        where: "deleted_at IS NULL"
