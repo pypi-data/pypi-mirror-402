@@ -1,0 +1,15 @@
+# Changelog
+
+## Unreleased (rust-lib@v1.0.3)
+
+- added a new function `get_schwa_status_for_script` to get the schwa deletion characteristic of the script provided.
+- added
+  - `get_use_native_numerals`
+  - `get_include_inherent_vowel`
+  - `get_normalized_script`
+
+## rust-lib@v1.0.2
+
+- _New Mappings_ for Romanized
+- ऋ -> ṛ
+- ढ़ ड़ -> r̤ha r̤a
