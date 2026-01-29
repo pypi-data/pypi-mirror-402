@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+#
+#  __init__.py
+"""
+Methods for GunShotMatch analysis.
+"""
+#
+#  Copyright © 2020-2023 Dominic Davis-Foster <dominic@davis-foster.co.uk>
+#
+#  Permission is hereby granted, free of charge, to any person obtaining a copy
+#  of this software and associated documentation files (the "Software"), to deal
+#  in the Software without restriction, including without limitation the rights
+#  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+#  copies of the Software, and to permit persons to whom the Software is
+#  furnished to do so, subject to the following conditions:
+#
+#  The above copyright notice and this permission notice shall be included in all
+#  copies or substantial portions of the Software.
+#
+#  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+#  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+#  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+#  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+#  DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+#  OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+#  OR OTHER DEALINGS IN THE SOFTWARE.
+#
+
+# stdlib
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
+
+# 3rd party
+import attr
+import tomli_w
+from dom_toml.config import Config, subtable_field
+from dom_toml.config.fields import Boolean, Integer, Number, String
+
+# this package
+from libgunshotmatch.method._fields import (
+		convert_crop_mass_range,
+		convert_rt_range,
+		convert_sg_window,
+		default_base_peak_filter
+		)
+from libgunshotmatch.utils import _fix_init_annotations, _to_list
+
+__all__ = (
+		"Method",
+		"IntensityMatrixMethod",
+		"PeakDetectionMethod",
+		"PeakFilterMethod",
+		"AlignmentMethod",
+		"ConsolidateMethod",
+		"SavitzkyGolayMethod",
+		)
+
+
+@_fix_init_annotations
+@attr.define
+class SavitzkyGolayMethod(Config):
+	"""
+	Method parameters for the Savitzky-Golay filter.
+
+	.. versionadded:: 0.3.0
+	"""
+
+	#: Whether to perform Savitzky-Golay smoothing.
+	enable: bool = Boolean.field(default=True)
+
+	window: Union[str, int] = attr.field(default=7, converter=convert_sg_window)
+	"""
+	The window size for the Savitzky-Golay filter.
+
+	Either a number of scans or a must be the form ``'<NUMBER>s'`` or ``'<NUMBER>m'``,
+	specifying a time in seconds or minutes, respectively.
+	"""
+
+	#: The degree of the fitting polynomial for the Savitzky-Golay filter.
+	degree: int = Integer.field(default=2)
+
+
+def _convert_sg_method(method: Union[bool, "SavitzkyGolayMethod", Dict[str, Any]]) -> "SavitzkyGolayMethod":
+	if isinstance(method, bool):
+		return SavitzkyGolayMethod()
+	elif isinstance(method, SavitzkyGolayMethod):
+		return method
+	else:
+		return SavitzkyGolayMethod(**method)
+
+
+@_fix_init_annotations
+@attr.define
+class IntensityMatrixMethod(Config):
+	"""
+	Method used for constructing an intensity matrix from a datafile.
+	"""
+
+	#: The range of masses to which the GC-MS data should be limited to.
+	crop_mass_range: Optional[Tuple[int, int]] = attr.field(default=(50, 500), converter=convert_crop_mass_range)
+
+	# Whether to perform Savitzky-Golay smoothing.
+	#: Settings for Savitzky-Golay smoothing.
+	savitzky_golay: SavitzkyGolayMethod = attr.field(
+			default=SavitzkyGolayMethod(),
+			converter=_convert_sg_method,
+			)
+
+	#: Whether to perform Tophat baseline correction.
+	tophat: bool = Boolean.field(default=True)
+
+	#: The structure size for Tophat baseline correction.
+	tophat_structure_size: str = String.field(default="1.5m")
+
+
+@_fix_init_annotations
+@attr.define
+class PeakDetectionMethod(Config):
+	"""
+	Method used for Biller-Biemann peak detection.
+	"""
+
+	#: Number of scans over which to consider a maxima to be a peak.
+	points: int = Integer.field(default=10)
+
+	#: Number of scans to combine in a single peak from to compensate for spectra skewing.
+	scans: int = Integer.field(default=1)
+
+
+@_fix_init_annotations
+@attr.define
+class PeakFilterMethod(Config):
+	"""
+	Method used for peak filtering.
+	"""
+
+	#: Whether to perform automatic noise filtering of the peak list.
+	noise_filter: bool = Boolean.field(default=True)
+
+	#: The minimum number of ions that must have intensities above the noise floor, otherwise the peak is excluded.
+	noise_threshold: int = Integer.field(default=2)
+
+	# TODO: non-integer binned data
+	#: Peaks whose base peak is at one of the listed masses (m/z) are excluded.
+	base_peak_filter: Set[int] = attr.field(
+			default=attr.Factory(default_base_peak_filter),
+			converter=set,
+			validator=attr.validators.instance_of(set),
+			)
+
+	#: Optional retention time range (in minutes) to filter the peak list to.
+	rt_range: Optional[Tuple[float, float]] = attr.field(default=None, converter=convert_rt_range)
+
+
+@_fix_init_annotations
+@attr.define
+class AlignmentMethod(Config):
+	"""
+	Method used for peak alignment.
+	"""
+
+	#: Retention time tolerance parameter for pairwise alignments.
+	rt_modulation: float = Number.field(default=2.5)
+
+	#: Gap parameter for pairwise alignments.
+	gap_penalty: float = Number.field(default=0.3)
+
+	min_peaks: int = Integer.field(default=1)
+	"""
+	Minimum number of peaks required for the alignment position to survive filtering.
+
+	If set to ``-1`` the number of repeats in the project are used.
+	"""
+
+	#: Number of peaks (starting with the largest) to include in the output.
+	top_n_peaks: int = Integer.field(default=80)
+
+	#: Minimum area of peaks to include in the output.
+	min_peak_area: float = Number.field(default=0.0)
+
+
+@_fix_init_annotations
+@attr.define
+class ConsolidateMethod(Config):
+	"""
+	Method used for consolidation (finding most likely identity for aligned peaks).
+
+	:param min_appearances: Number of times the hit must appear across the individual aligned peaks.
+		Consolidated peaks where the most common hit appears fewer times than this will be excluded.
+		If set to ``-1`` the number of instances of the peak in the project are used.
+
+	.. versionchanged:: 0.2.0  Added the ``min_appearances`` argument.
+	"""
+
+	name_filter: List[str] = attr.field(converter=_to_list, default=attr.Factory(list))
+	"""
+	List of glob-style matches for compound names.
+
+	Consolidated peaks matching any of these will be excluded.
+	"""
+
+	min_match_factor: int = Integer.field(default=600)
+	"""
+	Minimum average match factor.
+
+	Consolidated peaks with an average match factor below this will be excluded.
+	"""
+
+	min_appearances: int = Integer.field(default=-1)
+	"""
+	Number of times the hit must appear across the individual aligned peaks.
+
+	Consolidated peaks where the most common hit appears fewer times than this will be excluded.
+
+	If set to ``-1`` the number of instances of the peak in the project are used.
+
+	.. versionadded:: 0.2.0
+	"""
+
+
+# target_range = 4.0,37.0
+
+
+@_fix_init_annotations
+@attr.define
+class Method(Config):
+	"""
+	Overall GunShotMatch method.
+
+	.. latex:vspace:: 4mm
+	"""
+
+	#: Method used for constructing an intensity matrix from a datafile.
+	intensity_matrix: IntensityMatrixMethod = subtable_field(IntensityMatrixMethod)
+
+	#: Method used for Biller-Biemann peak detection.
+	peak_detection: PeakDetectionMethod = subtable_field(PeakDetectionMethod)
+
+	#: Method used for peak filtering.
+	peak_filter: PeakFilterMethod = subtable_field(PeakFilterMethod)
+
+	#: Method used for peak alignment.
+	alignment: AlignmentMethod = subtable_field(AlignmentMethod)
+
+	#: Method used for consolidation (finding most likely identity for aligned peaks).
+	consolidate: ConsolidateMethod = subtable_field(ConsolidateMethod)
+
+	def to_toml(self) -> str:
+		"""
+		Convert a :class:`~.Method` to a TOML string.
+		"""
+
+		return tomli_w.dumps({"method": self.to_dict()})
