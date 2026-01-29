@@ -1,0 +1,130 @@
+Metadata-Version: 2.4
+Name: auto-trainer-api
+Version: 0.9.8
+Summary: API for interfacing with the core acquisition process via platform and language agnostic message queues.
+License: AGPL-3.0-only
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.8
+Requires-Dist: pyhumps==3.8.0
+Requires-Dist: pyzmq==26.4
+Provides-Extra: telemetry
+Requires-Dist: opentelemetry-api; extra == 'telemetry'
+Requires-Dist: opentelemetry-sdk; extra == 'telemetry'
+Provides-Extra: test
+Requires-Dist: pytest==8.2.0; extra == 'test'
+Description-Content-Type: text/markdown
+
+# Autotrainer API: Python Integration
+
+The python `auto-trainer-api` module is intended to provide an efficient means to emit information that
+is needed for local or remote management of applications running locally on the device and to receive commands from
+those sources.
+
+The exposed API is intended to be agnostic to the underlying transport layer.  The current implementation uses
+ZeroMQ.  The reasons for this decision include:
+* Relatively low overhead for the acquisition application
+* Does not require either side to manage connections and know when the other side is available or changes availability
+* Does not require an additional process or service to maintain a persistent message queue (e.g., RabbitMQ)
+  * Persistent data is managed elsewhere
+
+## Client Integration
+There are two points of integration available for clients to support the remote interface.  The first allows publishing
+"events" for state and property changes that occur in the client.  The second is a "command" interface for the client
+to receive command requests from remote sources.
+
+Both interfaces are provided through an instance of the `RpcService` protocol.  An instance can be obtained via
+`create_api_service(...)` which constructs the specific concrete implementation.  After creation, the service must
+be explicitly started (`start(...)`) and can be stopped (`stop(...)`).  Once stopped, an instance can not be
+restarted.  If a connection should be reestablished after stopping an instance, a new instance should be created and
+started.
+
+### Events
+Events are supported through the `send_dict(topic: ApiTopic, message: dict)` method on the `RpcService` instance.
+
+The first argument is the appropriate `ApiTopic` value for the event.  The most common for clients to support are
+* `ApiTopic.EVENT` - the topic for most events representing general activity in the about or high-level state changes
+* `ApiTopic.EMERGENCY` - a dedicated topic for emergency-related events such as emergency-stop/resume, alarm changes, etc. [1]
+* `ApiTopic.PROPERTY_CHANGE` - lower-level property changes on specific objects of interest
+* `ApiTopic.COMMAND_RESULT` - command responses for non-immediate commands (see Commands section)
+
+The second argument is a dictionary whose contents depend on the topic.  All elements must serializable to JSON.
+
+#### ApiTopic.EVENT
+The dictionary contains the following entries:
+* `kind` - an `ApiEventKind` value
+* `when` - a wall-clock value of time
+* `index` - monotonically increasing timestamp w/units if nanoseconds
+* `context` - an object whose contents depend on the `ApiEventKind`; may be None for some event kinds
+
+#### ApiTopic.EMERGENCY
+Still under development.
+
+#### ApiTopic.PROPERTY_CHANGE
+Still under development.
+
+#### ApiTopic.COMMAND_RESULT
+An instance of `ApiCommandRequestResponse`.
+
+[1] Currently these are supported as special cases of `ApiTopic.EVENT`.  At some point these should be transitioned to
+the dedicated topic.
+
+### Commands
+Commands from external sources are supported by registering a `CommandRequestDelegate` with the `RpcService` instance.
+The delegate receives an instance of `ApiCommandRequest` and must return an instance of `ApiCommandRequestResponse`.
+
+The primary property of the `ApiCommandRequest` is `command` which is an `ApiCommand` value.  Depending on the command,
+there may also be a dictionary in the `data` property with arguments or other information relevant to the command.
+The `nonce` property can be ignored if the command is handled synchronously.  For commands that send an
+`ApiTopic.COMMAND_RESULT` event after completion (see below), the nonce must be stored to associate with that event
+(along with the `command` value).
+
+The returned `ApiCommandRequestResponse` object contains one require field
+* `result` - a value of `ApiCommandReqeustResult`
+
+There are also three optional fields
+* `data` - an optional object with results from the command beyond success/failure (often will be None)
+* `error_code` an integer error code value if the command is not successful or can't be initiated
+* `error_message` an integer error code value if the command is not successful or can't be initiated
+
+The expected contents of the `data` property are defined by the command, but is typically `None`.
+
+The `error_code` property should be a non-zero value if there is an error code to report.
+
+There are two fields on the ApiCommandRequestResponse object that are ignored as part of the returned object from
+the command delegate: `command` and `nonce`.  See _Asynchronous Commands_ for when these fields are required.
+
+
+#### Asynchronous Commands
+The command delegate is expected to return "immediately" (low millisecond type of time frame).  If the command is not
+deterministically fast, it is expected to immediately return an `ApiCommandRequestResponse` with a `result` value of 
+`ApiCommandReqeustResult.PENDING_WITH_NOTIFICATION`.
+
+Once the action associated with the command is complete, the client should send an Event (previous section), with a
+topic of `ApiTopic.COMMAND_RESULT`.  The `message` argument of the `send_dict` method should be another instance of
+`ApiCommandRequestResponse`.  The `command` and `nonce` properties of the response object should be set to the values
+received in the `ApiCommandRequest` (the client is responsible for storing these values until needed).  Note that
+those two properties are ignored for synchronous command handling, but required for asynchronous responses.
+
+## Tools
+
+### Client Application
+`scripts/client_application.py` starts an interactive process that enables the `RpcService` as a "real" autotrainer
+application would.  It generates heartbeat events, can publish other events from the command line, and responds to
+commands.  This is primarily useful for testing remote applictions/services without running the main autotrainer
+acquisition application.
+
+### Remote Console
+`scripts/remote_console.py` starts an interactive process that connects to an `RpcService` instance in the same manner
+full remote management services would.  Currently, it only supports sending a small subset of the predefined 
+`ApiCommand` values, but may be expanded to show events and send additional commands.
+
+## Publishing
+`python -m build`
+
+`python -m twine upload dist/*` (requires PyPi API token)
+
+## Installation
+The package is published to the PyPi package index and can be installed with standard pip commands.
+
+`pip install auto-trainer-api`
