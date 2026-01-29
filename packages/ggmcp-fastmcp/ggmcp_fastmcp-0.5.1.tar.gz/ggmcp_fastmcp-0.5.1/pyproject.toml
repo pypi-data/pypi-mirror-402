@@ -1,0 +1,146 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ggmcp-fastmcp"
+version = "0.5.1"
+description = "MCP server for GitGuardian"
+authors = [
+    { name = "GitGuardian", email = "support@gitguardian.com" },
+]
+maintainers = [
+    { name = "GitGuardian", email = "support@gitguardian.com" },
+]
+keywords = [
+    "cli",
+    "devsecops",
+    "security-tools",
+    "gitguardian",
+    "mcp"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Natural Language :: English",
+    "Environment :: Console",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Topic :: Security",
+]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "developer-mcp-server",
+    "secops-mcp-server",
+    "mcp>=1.23.0",  # CVE-2025-66416 / GHSA-9h52-p55h-vw2f: DNS rebinding vulnerability
+]
+
+[project.urls]
+Homepage = "https://github.com/fastmcp-me/ggmcp#readme"
+Repository = "https://github.com/fastmcp-me/ggmcp.git"
+Issues = "https://github.com/fastmcp-me/ggmcp/issues"
+[dependency-groups]
+dev = [
+    "mypy>=1.0.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "ruff>=0.8.0",
+    "vcrpy>=6.0.0",
+    "pyyaml>=6.0.0",
+]
+
+[project.scripts]
+developer-mcp-server = "developer_mcp_server.run:run_mcp_server"
+secops-mcp-server = "secops_mcp_server.run:run_mcp_server"
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+"gg-api-core" = { workspace = true }
+"developer-mcp-server" = { workspace = true }
+"secops-mcp-server" = { workspace = true }
+
+[tool.ruff]
+line-length = 120
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    "scripts",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint]
+exclude = ["__init__.py"]
+select = ["E", "F", "I", "W"]
+ignore = ["E501", "E741", "F402", "F823", "W293"]
+
+
+[tool.ruff.format]
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "asyncio", # mark a test as an asynchronous test
+    "vcr_test", # mark a test as using VCR cassettes (disables auto-mocking)
+]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = false  # Start lenient, can be enabled later
+check_untyped_defs = true
+no_implicit_optional = true
+strict_optional = true
+ignore_missing_imports = true  # For packages without type stubs
+show_error_codes = true
+pretty = true
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+tag_format = "v$version"
+update_changelog_on_bump = true
+gpg_sign = true
+version_files = [
+    "pyproject.toml:version",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ggmcp"]

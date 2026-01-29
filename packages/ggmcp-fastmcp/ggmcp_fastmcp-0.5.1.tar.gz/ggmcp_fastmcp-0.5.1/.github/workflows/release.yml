@@ -1,0 +1,209 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: mcp-server
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-push-docker:
+    runs-on: ubuntu-latest
+    name: Build and Push Docker Image
+    if: github.event_name == 'push' && (github.ref_type == 'tag' || github.ref == 'refs/heads/main')
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix={{branch}}-
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            PYTHON_VERSION=3.13
+
+  publish-to-pypi:
+    runs-on: ubuntu-latest
+    name: Publish to PyPI
+    if: false && github.event_name == 'push' && github.ref_type == 'tag'
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+      contents: read
+    environment:
+      name: pypi
+      url: https://test.pypi.org/project/ggmcp/
+    concurrency:
+      group: publish-pypi-${{ github.ref_name }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Build package
+        run: |
+          echo "Building ggmcp package..."
+          uv build
+          echo "Build artifacts:"
+          ls -lh dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: dist/
+          print-hash: true
+
+      - name: Create summary
+        run: |
+          echo "## ✅ PyPI Publication Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Package published to: https://test.pypi.org/project/ggmcp/" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Install with:" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "pip install --index-url https://test.pypi.org/simple/ ggmcp" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  publish-to-mcp-registry:
+    runs-on: ubuntu-latest
+    name: Publish to MCP Registry
+    needs: [ publish-to-pypi ]
+    if: |
+      false &&
+      always() &&
+      github.event_name == 'push' &&
+      github.ref_type == 'tag' &&
+      (needs.publish-to-pypi.result == 'success' || needs.publish-to-pypi.result == 'skipped')
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verify server.json
+        run: |
+          echo "Validating server.json..."
+          if [ ! -f "server.json" ]; then
+            echo "❌ Error: server.json not found"
+            exit 1
+          fi
+
+          if ! python3 -m json.tool server.json > /dev/null; then
+            echo "❌ Error: server.json is not valid JSON"
+            exit 1
+          fi
+
+          echo "✅ server.json is valid"
+
+      - name: Install mcp-publisher
+        run: |
+          echo "Installing mcp-publisher..."
+          PUBLISHER_VERSION=$(curl -sL https://api.github.com/repos/modelcontextprotocol/mcp-publisher/releases/latest | jq -r '.tag_name' | sed 's/^v//')
+
+          if [ -z "$PUBLISHER_VERSION" ] || [ "$PUBLISHER_VERSION" = "null" ]; then
+            echo "❌ Error: Failed to fetch latest mcp-publisher version"
+            exit 1
+          fi
+
+          DOWNLOAD_URL="https://github.com/modelcontextprotocol/mcp-publisher/releases/download/v${PUBLISHER_VERSION}/mcp-publisher-linux-amd64"
+          if ! wget -q "$DOWNLOAD_URL" -O mcp-publisher; then
+            echo "❌ Error: Failed to download mcp-publisher"
+            exit 1
+          fi
+
+          chmod +x mcp-publisher
+          ./mcp-publisher --version
+          echo "✅ Successfully installed mcp-publisher v${PUBLISHER_VERSION}"
+
+      - name: Publish to MCP Registry
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Publishing to MCP Registry..."
+          ./mcp-publisher publish --non-interactive
+          echo "✅ Successfully published to MCP Registry"
+
+      - name: Create summary
+        run: |
+          echo "## ✅ MCP Registry Publication Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Server registered in: https://github.com/modelcontextprotocol/registry" >> $GITHUB_STEP_SUMMARY
+
+  create-github-release:
+    runs-on: ubuntu-latest
+    name: Create GitHub Release
+    needs: [ build-and-push-docker, publish-to-pypi ]
+    if: |
+      always() &&
+      github.event_name == 'push' &&
+      github.ref_type == 'tag' &&
+      (needs.build-and-push-docker.result == 'success' || needs.build-and-push-docker.result == 'skipped') &&
+      (needs.publish-to-pypi.result == 'success' || needs.publish-to-pypi.result == 'skipped')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          generate_release_notes: true
+          make_latest: true
