@@ -1,0 +1,39 @@
+vms: # параметры виртуальных машин (можно иметь несколько)
+  agent-ubuntu: # имя виртуальной машины
+    cpu: 2      # количество vCPU
+    ram: 4G     # объём оперативной памяти
+    disk: 20G   # размер диска
+    proxychains: "" # укажите адрес прокси (scheme://host:port) — agsekit сам создаст временный proxychains.conf и обернёт команды Multipass
+    cloud-init: {} # здесь можно разместить стандартный конфиг cloud-init, но он не обязателен
+    port-forwarding: # проброс портов через multipass shell при запуске агента и установке
+      - type: remote
+        host-addr: 127.0.0.1:80
+        vm-addr: 127.0.0.1:8080
+      - type: local
+        host-addr: 0.0.0.0:15432
+        vm-addr: 127.0.0.1:5432
+      - type: socks5
+        vm-addr: 127.0.0.1:8088
+    install: # комплекты ПО, которые будут установлены в ВМ при create-vm/create-vms
+      - python        # pyenv + последняя стабильная версия Python
+      - nodejs:20     # nvm + Node.js версии 20
+      - rust          # rustup + toolchain
+mounts:
+  - source: /host/path/project            # путь к исходной папке на хосте
+    target: /home/ubuntu/project          # точка монтирования внутри ВМ; если не указана, будет /home/ubuntu/<имя_папки_source>
+    backup: /host/backups/project         # каталог для бэкапов; если не указан, будет backups-<имя_папки> рядом с source
+    interval: 5                           # интервал бэкапа в минутах; по умолчанию 5
+    max_backups: 100                      # сколько снапшотов хранить; по умолчанию 100
+    backup_clean_method: tail             # метод очистки (tail или thin); по умолчанию tail
+    vm: agent-ubuntu # имя VM, если не указан - берётся первая VM из конфигурации
+agents:
+  qwen: # имя агента, можно добавить столько, сколько нужно
+    type: qwen # тип агента: qwen (используется бинарник qwen), codex, codex-glibc (бинарник codex-glibc) или claude-code
+    env: # произвольные переменные окружения, которые будут переданы агенту
+      OPENAI_API_KEY: "my_local_key"
+      OPENAI_BASE_URL: "https://127.0.0.1:11556/v1"
+      OPENAI_MODEL: "Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8"
+    default-args: # аргументы, которые будут переданы агенту при запуске, если пользователь не указал их сам
+      - "--openai-api-key=my_local_key"
+      - "--openai-base-url=https://127.0.0.1:11556/v1"
+    vm: qwen-ubuntu # ВМ по умолчанию для запуска агента; если не указана, используется ВМ из монтирования или первая в списке
