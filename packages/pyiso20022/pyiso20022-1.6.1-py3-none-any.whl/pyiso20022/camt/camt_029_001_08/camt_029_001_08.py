@@ -1,0 +1,4530 @@
+from dataclasses import dataclass, field
+from decimal import Decimal
+from enum import Enum
+from typing import Optional
+
+from xsdata.models.datatype import XmlDate, XmlDateTime
+
+__NAMESPACE__ = "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08"
+
+
+@dataclass
+class AccountSchemeName1Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class ActiveCurrencyAndAmount:
+    value: Optional[Decimal] = field(
+        default=None,
+        metadata={
+            "required": True,
+            "min_inclusive": Decimal("0"),
+            "total_digits": 18,
+            "fraction_digits": 5,
+        },
+    )
+    ccy: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Ccy",
+            "type": "Attribute",
+            "required": True,
+            "pattern": r"[A-Z]{3,3}",
+        },
+    )
+
+
+@dataclass
+class ActiveOrHistoricCurrencyAndAmount:
+    value: Optional[Decimal] = field(
+        default=None,
+        metadata={
+            "required": True,
+            "min_inclusive": Decimal("0"),
+            "total_digits": 18,
+            "fraction_digits": 5,
+        },
+    )
+    ccy: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Ccy",
+            "type": "Attribute",
+            "required": True,
+            "pattern": r"[A-Z]{3,3}",
+        },
+    )
+
+
+class AddressType2Code(Enum):
+    ADDR = "ADDR"
+    PBOX = "PBOX"
+    HOME = "HOME"
+    BIZZ = "BIZZ"
+    MLTO = "MLTO"
+    DLVY = "DLVY"
+
+
+class CancellationIndividualStatus1Code(Enum):
+    RJCR = "RJCR"
+    ACCR = "ACCR"
+    PDCR = "PDCR"
+
+
+@dataclass
+class CancellationStatusReason3Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class CashAccountType2Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class CategoryPurpose1Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+class ChargeBearerType1Code(Enum):
+    DEBT = "DEBT"
+    CRED = "CRED"
+    SHAR = "SHAR"
+    SLEV = "SLEV"
+
+
+@dataclass
+class ClaimNonReceiptRejectReason1Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+class ClearingChannel2Code(Enum):
+    RTGS = "RTGS"
+    RTNS = "RTNS"
+    MPNS = "MPNS"
+    BOOK = "BOOK"
+
+
+@dataclass
+class ClearingSystemIdentification2Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 5,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class ClearingSystemIdentification3Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 3,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class CompensationReason1Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class CorrectiveGroupInformation1:
+    msg_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "MsgId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    msg_nm_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "MsgNmId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    cre_dt_tm: Optional[XmlDateTime] = field(
+        default=None,
+        metadata={
+            "name": "CreDtTm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+class CreditDebitCode(Enum):
+    CRDT = "CRDT"
+    DBIT = "DBIT"
+
+
+@dataclass
+class DateAndDateTime2Choice:
+    dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "Dt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    dt_tm: Optional[XmlDateTime] = field(
+        default=None,
+        metadata={
+            "name": "DtTm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class DateAndPlaceOfBirth1:
+    birth_dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "BirthDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    prvc_of_birth: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "PrvcOfBirth",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    city_of_birth: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "CityOfBirth",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    ctry_of_birth: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "CtryOfBirth",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "pattern": r"[A-Z]{2,2}",
+        },
+    )
+
+
+@dataclass
+class DatePeriod2:
+    fr_dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "FrDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    to_dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "ToDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+
+
+@dataclass
+class DiscountAmountType1Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class DocumentLineType1Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+class DocumentType3Code(Enum):
+    RADM = "RADM"
+    RPIN = "RPIN"
+    FXDR = "FXDR"
+    DISP = "DISP"
+    PUOR = "PUOR"
+    SCOR = "SCOR"
+
+
+class DocumentType6Code(Enum):
+    MSIN = "MSIN"
+    CNFA = "CNFA"
+    DNFA = "DNFA"
+    CINV = "CINV"
+    CREN = "CREN"
+    DEBN = "DEBN"
+    HIRI = "HIRI"
+    SBIN = "SBIN"
+    CMCN = "CMCN"
+    SOAC = "SOAC"
+    DISP = "DISP"
+    BOLD = "BOLD"
+    VCHR = "VCHR"
+    AROI = "AROI"
+    TSUT = "TSUT"
+    PUOR = "PUOR"
+
+
+@dataclass
+class FinancialIdentificationSchemeName1Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+class Frequency6Code(Enum):
+    YEAR = "YEAR"
+    MNTH = "MNTH"
+    QURT = "QURT"
+    MIAN = "MIAN"
+    WEEK = "WEEK"
+    DAIL = "DAIL"
+    ADHO = "ADHO"
+    INDA = "INDA"
+    FRTN = "FRTN"
+
+
+@dataclass
+class GarnishmentType1Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class GenericIdentification3:
+    id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Id",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    issr: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Issr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+class GroupCancellationStatus1Code(Enum):
+    PACR = "PACR"
+    RJCR = "RJCR"
+    ACCR = "ACCR"
+    PDCR = "PDCR"
+
+
+@dataclass
+class LocalInstrument2Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class MandateSetupReason1Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 70,
+        },
+    )
+
+
+@dataclass
+class ModificationStatusReason1Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+class NamePrefix1Code(Enum):
+    DOCT = "DOCT"
+    MIST = "MIST"
+    MISS = "MISS"
+    MADM = "MADM"
+
+
+@dataclass
+class OrganisationIdentificationSchemeName1Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class OriginalGroupInformation29:
+    orgnl_msg_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlMsgId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    orgnl_msg_nm_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlMsgNmId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    orgnl_cre_dt_tm: Optional[XmlDateTime] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlCreDtTm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+class PaymentMethod4Code(Enum):
+    CHK = "CHK"
+    TRF = "TRF"
+    DD = "DD"
+    TRA = "TRA"
+
+
+@dataclass
+class PersonIdentificationSchemeName1Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+class Priority2Code(Enum):
+    HIGH = "HIGH"
+    NORM = "NORM"
+
+
+@dataclass
+class Purpose2Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+class SequenceType3Code(Enum):
+    FRST = "FRST"
+    RCUR = "RCUR"
+    FNAL = "FNAL"
+    OOFF = "OOFF"
+    RPRE = "RPRE"
+
+
+@dataclass
+class ServiceLevel8Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+class SettlementMethod1Code(Enum):
+    INDA = "INDA"
+    INGA = "INGA"
+    COVE = "COVE"
+    CLRG = "CLRG"
+
+
+@dataclass
+class SupplementaryDataEnvelope1:
+    any_element: Optional[object] = field(
+        default=None,
+        metadata={
+            "type": "Wildcard",
+            "namespace": "##any",
+        },
+    )
+
+
+@dataclass
+class TaxAmountType1Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class TaxAuthorisation1:
+    titl: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Titl",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    nm: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Nm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 140,
+        },
+    )
+
+
+@dataclass
+class TaxParty1:
+    tax_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "TaxId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    regn_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "RegnId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    tax_tp: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "TaxTp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+class TaxRecordPeriod1Code(Enum):
+    MM01 = "MM01"
+    MM02 = "MM02"
+    MM03 = "MM03"
+    MM04 = "MM04"
+    MM05 = "MM05"
+    MM06 = "MM06"
+    MM07 = "MM07"
+    MM08 = "MM08"
+    MM09 = "MM09"
+    MM10 = "MM10"
+    MM11 = "MM11"
+    MM12 = "MM12"
+    QTR1 = "QTR1"
+    QTR2 = "QTR2"
+    QTR3 = "QTR3"
+    QTR4 = "QTR4"
+    HLF1 = "HLF1"
+    HLF2 = "HLF2"
+
+
+class TransactionIndividualStatus1Code(Enum):
+    ACTC = "ACTC"
+    RJCT = "RJCT"
+    PDNG = "PDNG"
+    ACCP = "ACCP"
+    ACSP = "ACSP"
+    ACSC = "ACSC"
+    ACCR = "ACCR"
+    ACWC = "ACWC"
+
+
+@dataclass
+class ChargeType3Choice:
+    cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    prtry: Optional[GenericIdentification3] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class ClearingSystemMemberIdentification2:
+    clr_sys_id: Optional[ClearingSystemIdentification2Choice] = field(
+        default=None,
+        metadata={
+            "name": "ClrSysId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    mmb_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "MmbId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class ContactDetails2:
+    nm_prfx: Optional[NamePrefix1Code] = field(
+        default=None,
+        metadata={
+            "name": "NmPrfx",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    nm: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Nm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 140,
+        },
+    )
+    phne_nb: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "PhneNb",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "pattern": r"\+[0-9]{1,3}-[0-9()+\-]{1,30}",
+        },
+    )
+    mob_nb: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "MobNb",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "pattern": r"\+[0-9]{1,3}-[0-9()+\-]{1,30}",
+        },
+    )
+    fax_nb: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "FaxNb",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "pattern": r"\+[0-9]{1,3}-[0-9()+\-]{1,30}",
+        },
+    )
+    email_adr: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "EmailAdr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 2048,
+        },
+    )
+    othr: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Othr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class CorrectiveInterbankTransaction1:
+    grp_hdr: Optional[CorrectiveGroupInformation1] = field(
+        default=None,
+        metadata={
+            "name": "GrpHdr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    instr_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "InstrId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    end_to_end_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "EndToEndId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    tx_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "TxId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    intr_bk_sttlm_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "IntrBkSttlmAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    intr_bk_sttlm_dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "IntrBkSttlmDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+
+
+@dataclass
+class CorrectivePaymentInitiation3:
+    grp_hdr: Optional[CorrectiveGroupInformation1] = field(
+        default=None,
+        metadata={
+            "name": "GrpHdr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    pmt_inf_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "PmtInfId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    instr_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "InstrId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    end_to_end_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "EndToEndId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    instd_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "InstdAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    reqd_exctn_dt: Optional[DateAndDateTime2Choice] = field(
+        default=None,
+        metadata={
+            "name": "ReqdExctnDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    reqd_colltn_dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "ReqdColltnDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class CreditorReferenceType1Choice:
+    cd: Optional[DocumentType3Code] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class DiscountAmountAndType1:
+    tp: Optional[DiscountAmountType1Choice] = field(
+        default=None,
+        metadata={
+            "name": "Tp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "Amt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+
+
+@dataclass
+class DocumentAdjustment1:
+    amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "Amt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    cdt_dbt_ind: Optional[CreditDebitCode] = field(
+        default=None,
+        metadata={
+            "name": "CdtDbtInd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    rsn: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Rsn",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    addtl_inf: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "AddtlInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 140,
+        },
+    )
+
+
+@dataclass
+class DocumentLineType1:
+    cd_or_prtry: Optional[DocumentLineType1Choice] = field(
+        default=None,
+        metadata={
+            "name": "CdOrPrtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    issr: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Issr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class EquivalentAmount2:
+    amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "Amt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    ccy_of_trf: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "CcyOfTrf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "pattern": r"[A-Z]{3,3}",
+        },
+    )
+
+
+@dataclass
+class FrequencyAndMoment1:
+    tp: Optional[Frequency6Code] = field(
+        default=None,
+        metadata={
+            "name": "Tp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    pt_in_tm: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "PtInTm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "pattern": r"[0-9]{2}",
+        },
+    )
+
+
+@dataclass
+class FrequencyPeriod1:
+    tp: Optional[Frequency6Code] = field(
+        default=None,
+        metadata={
+            "name": "Tp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    cnt_per_prd: Optional[Decimal] = field(
+        default=None,
+        metadata={
+            "name": "CntPerPrd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "total_digits": 18,
+            "fraction_digits": 17,
+        },
+    )
+
+
+@dataclass
+class GarnishmentType1:
+    cd_or_prtry: Optional[GarnishmentType1Choice] = field(
+        default=None,
+        metadata={
+            "name": "CdOrPrtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    issr: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Issr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class GenericAccountIdentification1:
+    id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Id",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "min_length": 1,
+            "max_length": 34,
+        },
+    )
+    schme_nm: Optional[AccountSchemeName1Choice] = field(
+        default=None,
+        metadata={
+            "name": "SchmeNm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    issr: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Issr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class GenericFinancialIdentification1:
+    id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Id",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    schme_nm: Optional[FinancialIdentificationSchemeName1Choice] = field(
+        default=None,
+        metadata={
+            "name": "SchmeNm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    issr: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Issr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class GenericOrganisationIdentification1:
+    id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Id",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    schme_nm: Optional[OrganisationIdentificationSchemeName1Choice] = field(
+        default=None,
+        metadata={
+            "name": "SchmeNm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    issr: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Issr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class GenericPersonIdentification1:
+    id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Id",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    schme_nm: Optional[PersonIdentificationSchemeName1Choice] = field(
+        default=None,
+        metadata={
+            "name": "SchmeNm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    issr: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Issr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class NumberOfCancellationsPerStatus1:
+    dtld_nb_of_txs: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "DtldNbOfTxs",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "pattern": r"[0-9]{1,15}",
+        },
+    )
+    dtld_sts: Optional[CancellationIndividualStatus1Code] = field(
+        default=None,
+        metadata={
+            "name": "DtldSts",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    dtld_ctrl_sum: Optional[Decimal] = field(
+        default=None,
+        metadata={
+            "name": "DtldCtrlSum",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "total_digits": 18,
+            "fraction_digits": 17,
+        },
+    )
+
+
+@dataclass
+class NumberOfTransactionsPerStatus1:
+    dtld_nb_of_txs: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "DtldNbOfTxs",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "pattern": r"[0-9]{1,15}",
+        },
+    )
+    dtld_sts: Optional[TransactionIndividualStatus1Code] = field(
+        default=None,
+        metadata={
+            "name": "DtldSts",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    dtld_ctrl_sum: Optional[Decimal] = field(
+        default=None,
+        metadata={
+            "name": "DtldCtrlSum",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "total_digits": 18,
+            "fraction_digits": 17,
+        },
+    )
+
+
+@dataclass
+class PaymentTypeInformation25:
+    instr_prty: Optional[Priority2Code] = field(
+        default=None,
+        metadata={
+            "name": "InstrPrty",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    clr_chanl: Optional[ClearingChannel2Code] = field(
+        default=None,
+        metadata={
+            "name": "ClrChanl",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    svc_lvl: Optional[ServiceLevel8Choice] = field(
+        default=None,
+        metadata={
+            "name": "SvcLvl",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    lcl_instrm: Optional[LocalInstrument2Choice] = field(
+        default=None,
+        metadata={
+            "name": "LclInstrm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    seq_tp: Optional[SequenceType3Code] = field(
+        default=None,
+        metadata={
+            "name": "SeqTp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    ctgy_purp: Optional[CategoryPurpose1Choice] = field(
+        default=None,
+        metadata={
+            "name": "CtgyPurp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class PostalAddress6:
+    adr_tp: Optional[AddressType2Code] = field(
+        default=None,
+        metadata={
+            "name": "AdrTp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    dept: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Dept",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 70,
+        },
+    )
+    sub_dept: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "SubDept",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 70,
+        },
+    )
+    strt_nm: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "StrtNm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 70,
+        },
+    )
+    bldg_nb: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "BldgNb",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 16,
+        },
+    )
+    pst_cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "PstCd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 16,
+        },
+    )
+    twn_nm: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "TwnNm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    ctry_sub_dvsn: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "CtrySubDvsn",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    ctry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Ctry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "pattern": r"[A-Z]{2,2}",
+        },
+    )
+    adr_line: list[str] = field(
+        default_factory=list,
+        metadata={
+            "name": "AdrLine",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "max_occurs": 7,
+            "min_length": 1,
+            "max_length": 70,
+        },
+    )
+
+
+@dataclass
+class ReferredDocumentType3Choice:
+    cd: Optional[DocumentType6Code] = field(
+        default=None,
+        metadata={
+            "name": "Cd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    prtry: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Prtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class SupplementaryData1:
+    plc_and_nm: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "PlcAndNm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 350,
+        },
+    )
+    envlp: Optional[SupplementaryDataEnvelope1] = field(
+        default=None,
+        metadata={
+            "name": "Envlp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+
+
+@dataclass
+class TaxAmountAndType1:
+    tp: Optional[TaxAmountType1Choice] = field(
+        default=None,
+        metadata={
+            "name": "Tp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "Amt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+
+
+@dataclass
+class TaxCharges2:
+    id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Id",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    rate: Optional[Decimal] = field(
+        default=None,
+        metadata={
+            "name": "Rate",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "total_digits": 11,
+            "fraction_digits": 10,
+        },
+    )
+    amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "Amt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class TaxParty2:
+    tax_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "TaxId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    regn_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "RegnId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    tax_tp: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "TaxTp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    authstn: Optional[TaxAuthorisation1] = field(
+        default=None,
+        metadata={
+            "name": "Authstn",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class TaxPeriod2:
+    yr: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "Yr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    tp: Optional[TaxRecordPeriod1Code] = field(
+        default=None,
+        metadata={
+            "name": "Tp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    fr_to_dt: Optional[DatePeriod2] = field(
+        default=None,
+        metadata={
+            "name": "FrToDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class AccountIdentification4Choice:
+    iban: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "IBAN",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "pattern": r"[A-Z]{2,2}[0-9]{2,2}[a-zA-Z0-9]{1,30}",
+        },
+    )
+    othr: Optional[GenericAccountIdentification1] = field(
+        default=None,
+        metadata={
+            "name": "Othr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class AmountType4Choice:
+    instd_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "InstdAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    eqvt_amt: Optional[EquivalentAmount2] = field(
+        default=None,
+        metadata={
+            "name": "EqvtAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class BranchData2:
+    id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Id",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    nm: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Nm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 140,
+        },
+    )
+    pstl_adr: Optional[PostalAddress6] = field(
+        default=None,
+        metadata={
+            "name": "PstlAdr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class CorrectiveTransaction3Choice:
+    initn: Optional[CorrectivePaymentInitiation3] = field(
+        default=None,
+        metadata={
+            "name": "Initn",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    intr_bk: Optional[CorrectiveInterbankTransaction1] = field(
+        default=None,
+        metadata={
+            "name": "IntrBk",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class CreditorReferenceType2:
+    cd_or_prtry: Optional[CreditorReferenceType1Choice] = field(
+        default=None,
+        metadata={
+            "name": "CdOrPrtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    issr: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Issr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class DocumentLineIdentification1:
+    tp: Optional[DocumentLineType1] = field(
+        default=None,
+        metadata={
+            "name": "Tp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    nb: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Nb",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    rltd_dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "RltdDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class FinancialInstitutionIdentification8:
+    bicfi: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "BICFI",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "pattern": r"[A-Z]{6,6}[A-Z2-9][A-NP-Z0-9]([A-Z0-9]{3,3}){0,1}",
+        },
+    )
+    clr_sys_mmb_id: Optional[ClearingSystemMemberIdentification2] = field(
+        default=None,
+        metadata={
+            "name": "ClrSysMmbId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    nm: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Nm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 140,
+        },
+    )
+    pstl_adr: Optional[PostalAddress6] = field(
+        default=None,
+        metadata={
+            "name": "PstlAdr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    othr: Optional[GenericFinancialIdentification1] = field(
+        default=None,
+        metadata={
+            "name": "Othr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class Frequency36Choice:
+    tp: Optional[Frequency6Code] = field(
+        default=None,
+        metadata={
+            "name": "Tp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    prd: Optional[FrequencyPeriod1] = field(
+        default=None,
+        metadata={
+            "name": "Prd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    pt_in_tm: Optional[FrequencyAndMoment1] = field(
+        default=None,
+        metadata={
+            "name": "PtInTm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class OrganisationIdentification8:
+    any_bic: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "AnyBIC",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "pattern": r"[A-Z]{6,6}[A-Z2-9][A-NP-Z0-9]([A-Z0-9]{3,3}){0,1}",
+        },
+    )
+    othr: list[GenericOrganisationIdentification1] = field(
+        default_factory=list,
+        metadata={
+            "name": "Othr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class PersonIdentification13:
+    dt_and_plc_of_birth: Optional[DateAndPlaceOfBirth1] = field(
+        default=None,
+        metadata={
+            "name": "DtAndPlcOfBirth",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    othr: list[GenericPersonIdentification1] = field(
+        default_factory=list,
+        metadata={
+            "name": "Othr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class ReferredDocumentType4:
+    cd_or_prtry: Optional[ReferredDocumentType3Choice] = field(
+        default=None,
+        metadata={
+            "name": "CdOrPrtry",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    issr: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Issr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class RemittanceAmount2:
+    due_pybl_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "DuePyblAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    dscnt_apld_amt: list[DiscountAmountAndType1] = field(
+        default_factory=list,
+        metadata={
+            "name": "DscntApldAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    cdt_note_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "CdtNoteAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    tax_amt: list[TaxAmountAndType1] = field(
+        default_factory=list,
+        metadata={
+            "name": "TaxAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    adjstmnt_amt_and_rsn: list[DocumentAdjustment1] = field(
+        default_factory=list,
+        metadata={
+            "name": "AdjstmntAmtAndRsn",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    rmtd_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "RmtdAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class RemittanceAmount3:
+    due_pybl_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "DuePyblAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    dscnt_apld_amt: list[DiscountAmountAndType1] = field(
+        default_factory=list,
+        metadata={
+            "name": "DscntApldAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    cdt_note_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "CdtNoteAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    tax_amt: list[TaxAmountAndType1] = field(
+        default_factory=list,
+        metadata={
+            "name": "TaxAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    adjstmnt_amt_and_rsn: list[DocumentAdjustment1] = field(
+        default_factory=list,
+        metadata={
+            "name": "AdjstmntAmtAndRsn",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    rmtd_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "RmtdAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class TaxRecordDetails2:
+    prd: Optional[TaxPeriod2] = field(
+        default=None,
+        metadata={
+            "name": "Prd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "Amt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+
+
+@dataclass
+class BranchAndFinancialInstitutionIdentification5:
+    fin_instn_id: Optional[FinancialInstitutionIdentification8] = field(
+        default=None,
+        metadata={
+            "name": "FinInstnId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    brnch_id: Optional[BranchData2] = field(
+        default=None,
+        metadata={
+            "name": "BrnchId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class CashAccount24:
+    id: Optional[AccountIdentification4Choice] = field(
+        default=None,
+        metadata={
+            "name": "Id",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    tp: Optional[CashAccountType2Choice] = field(
+        default=None,
+        metadata={
+            "name": "Tp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    ccy: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Ccy",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "pattern": r"[A-Z]{3,3}",
+        },
+    )
+    nm: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Nm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 70,
+        },
+    )
+
+
+@dataclass
+class CreditorReferenceInformation2:
+    tp: Optional[CreditorReferenceType2] = field(
+        default=None,
+        metadata={
+            "name": "Tp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    ref: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Ref",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+
+
+@dataclass
+class DocumentLineInformation1:
+    id: list[DocumentLineIdentification1] = field(
+        default_factory=list,
+        metadata={
+            "name": "Id",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_occurs": 1,
+        },
+    )
+    desc: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Desc",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 2048,
+        },
+    )
+    amt: Optional[RemittanceAmount3] = field(
+        default=None,
+        metadata={
+            "name": "Amt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class Party34Choice:
+    org_id: Optional[OrganisationIdentification8] = field(
+        default=None,
+        metadata={
+            "name": "OrgId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    prvt_id: Optional[PersonIdentification13] = field(
+        default=None,
+        metadata={
+            "name": "PrvtId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class TaxAmount2:
+    rate: Optional[Decimal] = field(
+        default=None,
+        metadata={
+            "name": "Rate",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "total_digits": 11,
+            "fraction_digits": 10,
+        },
+    )
+    taxbl_base_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "TaxblBaseAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    ttl_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "TtlAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    dtls: list[TaxRecordDetails2] = field(
+        default_factory=list,
+        metadata={
+            "name": "Dtls",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class Charges2:
+    amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "Amt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    agt: Optional[BranchAndFinancialInstitutionIdentification5] = field(
+        default=None,
+        metadata={
+            "name": "Agt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+
+
+@dataclass
+class ChargesRecord1:
+    amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "Amt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    cdt_dbt_ind: Optional[CreditDebitCode] = field(
+        default=None,
+        metadata={
+            "name": "CdtDbtInd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    tp: Optional[ChargeType3Choice] = field(
+        default=None,
+        metadata={
+            "name": "Tp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    rate: Optional[Decimal] = field(
+        default=None,
+        metadata={
+            "name": "Rate",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "total_digits": 11,
+            "fraction_digits": 10,
+        },
+    )
+    br: Optional[ChargeBearerType1Code] = field(
+        default=None,
+        metadata={
+            "name": "Br",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    agt: Optional[BranchAndFinancialInstitutionIdentification5] = field(
+        default=None,
+        metadata={
+            "name": "Agt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    tax: Optional[TaxCharges2] = field(
+        default=None,
+        metadata={
+            "name": "Tax",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class ClaimNonReceipt1:
+    dt_prcd: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "DtPrcd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    orgnl_nxt_agt: Optional[BranchAndFinancialInstitutionIdentification5] = (
+        field(
+            default=None,
+            metadata={
+                "name": "OrgnlNxtAgt",
+                "type": "Element",
+                "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+                "required": True,
+            },
+        )
+    )
+
+
+@dataclass
+class Compensation1:
+    amt: Optional[ActiveCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "Amt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    dbtr_agt: Optional[BranchAndFinancialInstitutionIdentification5] = field(
+        default=None,
+        metadata={
+            "name": "DbtrAgt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    cdtr_agt: Optional[BranchAndFinancialInstitutionIdentification5] = field(
+        default=None,
+        metadata={
+            "name": "CdtrAgt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    rsn: Optional[CompensationReason1Choice] = field(
+        default=None,
+        metadata={
+            "name": "Rsn",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+
+
+@dataclass
+class PartyIdentification125:
+    nm: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Nm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 140,
+        },
+    )
+    pstl_adr: Optional[PostalAddress6] = field(
+        default=None,
+        metadata={
+            "name": "PstlAdr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    id: Optional[Party34Choice] = field(
+        default=None,
+        metadata={
+            "name": "Id",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    ctry_of_res: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "CtryOfRes",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "pattern": r"[A-Z]{2,2}",
+        },
+    )
+    ctct_dtls: Optional[ContactDetails2] = field(
+        default=None,
+        metadata={
+            "name": "CtctDtls",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class ReferredDocumentInformation7:
+    tp: Optional[ReferredDocumentType4] = field(
+        default=None,
+        metadata={
+            "name": "Tp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    nb: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Nb",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    rltd_dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "RltdDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    line_dtls: list[DocumentLineInformation1] = field(
+        default_factory=list,
+        metadata={
+            "name": "LineDtls",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class SettlementInstruction4:
+    sttlm_mtd: Optional[SettlementMethod1Code] = field(
+        default=None,
+        metadata={
+            "name": "SttlmMtd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    sttlm_acct: Optional[CashAccount24] = field(
+        default=None,
+        metadata={
+            "name": "SttlmAcct",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    clr_sys: Optional[ClearingSystemIdentification3Choice] = field(
+        default=None,
+        metadata={
+            "name": "ClrSys",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    instg_rmbrsmnt_agt: Optional[
+        BranchAndFinancialInstitutionIdentification5
+    ] = field(
+        default=None,
+        metadata={
+            "name": "InstgRmbrsmntAgt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    instg_rmbrsmnt_agt_acct: Optional[CashAccount24] = field(
+        default=None,
+        metadata={
+            "name": "InstgRmbrsmntAgtAcct",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    instd_rmbrsmnt_agt: Optional[
+        BranchAndFinancialInstitutionIdentification5
+    ] = field(
+        default=None,
+        metadata={
+            "name": "InstdRmbrsmntAgt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    instd_rmbrsmnt_agt_acct: Optional[CashAccount24] = field(
+        default=None,
+        metadata={
+            "name": "InstdRmbrsmntAgtAcct",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    thrd_rmbrsmnt_agt: Optional[
+        BranchAndFinancialInstitutionIdentification5
+    ] = field(
+        default=None,
+        metadata={
+            "name": "ThrdRmbrsmntAgt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    thrd_rmbrsmnt_agt_acct: Optional[CashAccount24] = field(
+        default=None,
+        metadata={
+            "name": "ThrdRmbrsmntAgtAcct",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class TaxRecord2:
+    tp: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Tp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    ctgy: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Ctgy",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    ctgy_dtls: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "CtgyDtls",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    dbtr_sts: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "DbtrSts",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    cert_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "CertId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    frms_cd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "FrmsCd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    prd: Optional[TaxPeriod2] = field(
+        default=None,
+        metadata={
+            "name": "Prd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    tax_amt: Optional[TaxAmount2] = field(
+        default=None,
+        metadata={
+            "name": "TaxAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    addtl_inf: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "AddtlInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 140,
+        },
+    )
+
+
+@dataclass
+class AmendmentInformationDetails12:
+    orgnl_mndt_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlMndtId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    orgnl_cdtr_schme_id: Optional[PartyIdentification125] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlCdtrSchmeId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_cdtr_agt: Optional[BranchAndFinancialInstitutionIdentification5] = (
+        field(
+            default=None,
+            metadata={
+                "name": "OrgnlCdtrAgt",
+                "type": "Element",
+                "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            },
+        )
+    )
+    orgnl_cdtr_agt_acct: Optional[CashAccount24] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlCdtrAgtAcct",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_dbtr: Optional[PartyIdentification125] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlDbtr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_dbtr_acct: Optional[CashAccount24] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlDbtrAcct",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_dbtr_agt: Optional[BranchAndFinancialInstitutionIdentification5] = (
+        field(
+            default=None,
+            metadata={
+                "name": "OrgnlDbtrAgt",
+                "type": "Element",
+                "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            },
+        )
+    )
+    orgnl_dbtr_agt_acct: Optional[CashAccount24] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlDbtrAgtAcct",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_fnl_colltn_dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlFnlColltnDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_frqcy: Optional[Frequency36Choice] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlFrqcy",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_rsn: Optional[MandateSetupReason1Choice] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlRsn",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_trckg_days: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlTrckgDays",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "pattern": r"[0-9]{2}",
+        },
+    )
+
+
+@dataclass
+class CancellationStatusReason3:
+    orgtr: Optional[PartyIdentification125] = field(
+        default=None,
+        metadata={
+            "name": "Orgtr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    rsn: Optional[CancellationStatusReason3Choice] = field(
+        default=None,
+        metadata={
+            "name": "Rsn",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    addtl_inf: list[str] = field(
+        default_factory=list,
+        metadata={
+            "name": "AddtlInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 105,
+        },
+    )
+
+
+@dataclass
+class Charges3:
+    ttl_chrgs_and_tax_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "TtlChrgsAndTaxAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    rcrd: list[ChargesRecord1] = field(
+        default_factory=list,
+        metadata={
+            "name": "Rcrd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class ClaimNonReceipt1Choice:
+    accptd: Optional[ClaimNonReceipt1] = field(
+        default=None,
+        metadata={
+            "name": "Accptd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    rjctd: Optional[ClaimNonReceiptRejectReason1Choice] = field(
+        default=None,
+        metadata={
+            "name": "Rjctd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class Garnishment2:
+    tp: Optional[GarnishmentType1] = field(
+        default=None,
+        metadata={
+            "name": "Tp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    grnshee: Optional[PartyIdentification125] = field(
+        default=None,
+        metadata={
+            "name": "Grnshee",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    grnshmt_admstr: Optional[PartyIdentification125] = field(
+        default=None,
+        metadata={
+            "name": "GrnshmtAdmstr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    ref_nb: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "RefNb",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 140,
+        },
+    )
+    dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "Dt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    rmtd_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "RmtdAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    fmly_mdcl_insrnc_ind: Optional[bool] = field(
+        default=None,
+        metadata={
+            "name": "FmlyMdclInsrncInd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    mplyee_termntn_ind: Optional[bool] = field(
+        default=None,
+        metadata={
+            "name": "MplyeeTermntnInd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class ModificationStatusReason1:
+    orgtr: Optional[PartyIdentification125] = field(
+        default=None,
+        metadata={
+            "name": "Orgtr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    rsn: Optional[ModificationStatusReason1Choice] = field(
+        default=None,
+        metadata={
+            "name": "Rsn",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    addtl_inf: list[str] = field(
+        default_factory=list,
+        metadata={
+            "name": "AddtlInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 105,
+        },
+    )
+
+
+@dataclass
+class Party35Choice:
+    pty: Optional[PartyIdentification125] = field(
+        default=None,
+        metadata={
+            "name": "Pty",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    agt: Optional[BranchAndFinancialInstitutionIdentification5] = field(
+        default=None,
+        metadata={
+            "name": "Agt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class ResolutionInformation2:
+    intr_bk_sttlm_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "IntrBkSttlmAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    intr_bk_sttlm_dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "IntrBkSttlmDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    clr_chanl: Optional[ClearingChannel2Code] = field(
+        default=None,
+        metadata={
+            "name": "ClrChanl",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    compstn: Optional[Compensation1] = field(
+        default=None,
+        metadata={
+            "name": "Compstn",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    chrgs: list[Charges2] = field(
+        default_factory=list,
+        metadata={
+            "name": "Chrgs",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class TaxInformation7:
+    cdtr: Optional[TaxParty1] = field(
+        default=None,
+        metadata={
+            "name": "Cdtr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    dbtr: Optional[TaxParty2] = field(
+        default=None,
+        metadata={
+            "name": "Dbtr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    ultmt_dbtr: Optional[TaxParty2] = field(
+        default=None,
+        metadata={
+            "name": "UltmtDbtr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    admstn_zone: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "AdmstnZone",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    ref_nb: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "RefNb",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 140,
+        },
+    )
+    mtd: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Mtd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    ttl_taxbl_base_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "TtlTaxblBaseAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    ttl_tax_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "TtlTaxAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "Dt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    seq_nb: Optional[Decimal] = field(
+        default=None,
+        metadata={
+            "name": "SeqNb",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "total_digits": 18,
+            "fraction_digits": 0,
+        },
+    )
+    rcrd: list[TaxRecord2] = field(
+        default_factory=list,
+        metadata={
+            "name": "Rcrd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class Case4:
+    id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Id",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    cretr: Optional[Party35Choice] = field(
+        default=None,
+        metadata={
+            "name": "Cretr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    reop_case_indctn: Optional[bool] = field(
+        default=None,
+        metadata={
+            "name": "ReopCaseIndctn",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class CaseAssignment4:
+    id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Id",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    assgnr: Optional[Party35Choice] = field(
+        default=None,
+        metadata={
+            "name": "Assgnr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    assgne: Optional[Party35Choice] = field(
+        default=None,
+        metadata={
+            "name": "Assgne",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    cre_dt_tm: Optional[XmlDateTime] = field(
+        default=None,
+        metadata={
+            "name": "CreDtTm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+
+
+@dataclass
+class MandateRelatedInformation12:
+    mndt_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "MndtId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    dt_of_sgntr: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "DtOfSgntr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    amdmnt_ind: Optional[bool] = field(
+        default=None,
+        metadata={
+            "name": "AmdmntInd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    amdmnt_inf_dtls: Optional[AmendmentInformationDetails12] = field(
+        default=None,
+        metadata={
+            "name": "AmdmntInfDtls",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    elctrnc_sgntr: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "ElctrncSgntr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 1025,
+        },
+    )
+    frst_colltn_dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "FrstColltnDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    fnl_colltn_dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "FnlColltnDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    frqcy: Optional[Frequency36Choice] = field(
+        default=None,
+        metadata={
+            "name": "Frqcy",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    rsn: Optional[MandateSetupReason1Choice] = field(
+        default=None,
+        metadata={
+            "name": "Rsn",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    trckg_days: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "TrckgDays",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "pattern": r"[0-9]{2}",
+        },
+    )
+
+
+@dataclass
+class StatementResolutionEntry3:
+    orgnl_grp_inf: Optional[OriginalGroupInformation29] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlGrpInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_stmt_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlStmtId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    acct_svcr_ref: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "AcctSvcrRef",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    crrctd_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "CrrctdAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    chrgs: list[Charges3] = field(
+        default_factory=list,
+        metadata={
+            "name": "Chrgs",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    purp: Optional[Purpose2Choice] = field(
+        default=None,
+        metadata={
+            "name": "Purp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class StructuredRemittanceInformation15:
+    rfrd_doc_inf: list[ReferredDocumentInformation7] = field(
+        default_factory=list,
+        metadata={
+            "name": "RfrdDocInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    rfrd_doc_amt: Optional[RemittanceAmount2] = field(
+        default=None,
+        metadata={
+            "name": "RfrdDocAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    cdtr_ref_inf: Optional[CreditorReferenceInformation2] = field(
+        default=None,
+        metadata={
+            "name": "CdtrRefInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    invcr: Optional[PartyIdentification125] = field(
+        default=None,
+        metadata={
+            "name": "Invcr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    invcee: Optional[PartyIdentification125] = field(
+        default=None,
+        metadata={
+            "name": "Invcee",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    tax_rmt: Optional[TaxInformation7] = field(
+        default=None,
+        metadata={
+            "name": "TaxRmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    grnshmt_rmt: Optional[Garnishment2] = field(
+        default=None,
+        metadata={
+            "name": "GrnshmtRmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    addtl_rmt_inf: list[str] = field(
+        default_factory=list,
+        metadata={
+            "name": "AddtlRmtInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "max_occurs": 3,
+            "min_length": 1,
+            "max_length": 140,
+        },
+    )
+
+
+@dataclass
+class InvestigationStatus4Choice:
+    conf: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "Conf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 4,
+        },
+    )
+    rjctd_mod: list[ModificationStatusReason1Choice] = field(
+        default_factory=list,
+        metadata={
+            "name": "RjctdMod",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    dplct_of: Optional[Case4] = field(
+        default=None,
+        metadata={
+            "name": "DplctOf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    assgnmt_cxl_conf: Optional[bool] = field(
+        default=None,
+        metadata={
+            "name": "AssgnmtCxlConf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class OriginalGroupHeader9:
+    orgnl_grp_cxl_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlGrpCxlId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    rslvd_case: Optional[Case4] = field(
+        default=None,
+        metadata={
+            "name": "RslvdCase",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_msg_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlMsgId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    orgnl_msg_nm_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlMsgNmId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    orgnl_cre_dt_tm: Optional[XmlDateTime] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlCreDtTm",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_nb_of_txs: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlNbOfTxs",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "pattern": r"[0-9]{1,15}",
+        },
+    )
+    orgnl_ctrl_sum: Optional[Decimal] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlCtrlSum",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "total_digits": 18,
+            "fraction_digits": 17,
+        },
+    )
+    grp_cxl_sts: Optional[GroupCancellationStatus1Code] = field(
+        default=None,
+        metadata={
+            "name": "GrpCxlSts",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    cxl_sts_rsn_inf: list[CancellationStatusReason3] = field(
+        default_factory=list,
+        metadata={
+            "name": "CxlStsRsnInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    nb_of_txs_per_cxl_sts: list[NumberOfTransactionsPerStatus1] = field(
+        default_factory=list,
+        metadata={
+            "name": "NbOfTxsPerCxlSts",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class RemittanceInformation15:
+    ustrd: list[str] = field(
+        default_factory=list,
+        metadata={
+            "name": "Ustrd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 140,
+        },
+    )
+    strd: list[StructuredRemittanceInformation15] = field(
+        default_factory=list,
+        metadata={
+            "name": "Strd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class OriginalTransactionReference27:
+    intr_bk_sttlm_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "IntrBkSttlmAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    amt: Optional[AmountType4Choice] = field(
+        default=None,
+        metadata={
+            "name": "Amt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    intr_bk_sttlm_dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "IntrBkSttlmDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    reqd_colltn_dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "ReqdColltnDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    reqd_exctn_dt: Optional[DateAndDateTime2Choice] = field(
+        default=None,
+        metadata={
+            "name": "ReqdExctnDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    cdtr_schme_id: Optional[PartyIdentification125] = field(
+        default=None,
+        metadata={
+            "name": "CdtrSchmeId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    sttlm_inf: Optional[SettlementInstruction4] = field(
+        default=None,
+        metadata={
+            "name": "SttlmInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    pmt_tp_inf: Optional[PaymentTypeInformation25] = field(
+        default=None,
+        metadata={
+            "name": "PmtTpInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    pmt_mtd: Optional[PaymentMethod4Code] = field(
+        default=None,
+        metadata={
+            "name": "PmtMtd",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    mndt_rltd_inf: Optional[MandateRelatedInformation12] = field(
+        default=None,
+        metadata={
+            "name": "MndtRltdInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    rmt_inf: Optional[RemittanceInformation15] = field(
+        default=None,
+        metadata={
+            "name": "RmtInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    ultmt_dbtr: Optional[Party35Choice] = field(
+        default=None,
+        metadata={
+            "name": "UltmtDbtr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    dbtr: Optional[Party35Choice] = field(
+        default=None,
+        metadata={
+            "name": "Dbtr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    dbtr_acct: Optional[CashAccount24] = field(
+        default=None,
+        metadata={
+            "name": "DbtrAcct",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    dbtr_agt: Optional[BranchAndFinancialInstitutionIdentification5] = field(
+        default=None,
+        metadata={
+            "name": "DbtrAgt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    dbtr_agt_acct: Optional[CashAccount24] = field(
+        default=None,
+        metadata={
+            "name": "DbtrAgtAcct",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    cdtr_agt: Optional[BranchAndFinancialInstitutionIdentification5] = field(
+        default=None,
+        metadata={
+            "name": "CdtrAgt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    cdtr_agt_acct: Optional[CashAccount24] = field(
+        default=None,
+        metadata={
+            "name": "CdtrAgtAcct",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    cdtr: Optional[Party35Choice] = field(
+        default=None,
+        metadata={
+            "name": "Cdtr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    cdtr_acct: Optional[CashAccount24] = field(
+        default=None,
+        metadata={
+            "name": "CdtrAcct",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    ultmt_cdtr: Optional[Party35Choice] = field(
+        default=None,
+        metadata={
+            "name": "UltmtCdtr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    purp: Optional[Purpose2Choice] = field(
+        default=None,
+        metadata={
+            "name": "Purp",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class PaymentTransaction84:
+    cxl_sts_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "CxlStsId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    rslvd_case: Optional[Case4] = field(
+        default=None,
+        metadata={
+            "name": "RslvdCase",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_instr_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlInstrId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    orgnl_end_to_end_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlEndToEndId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    tx_cxl_sts: Optional[CancellationIndividualStatus1Code] = field(
+        default=None,
+        metadata={
+            "name": "TxCxlSts",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    cxl_sts_rsn_inf: list[CancellationStatusReason3] = field(
+        default_factory=list,
+        metadata={
+            "name": "CxlStsRsnInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_instd_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlInstdAmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_reqd_exctn_dt: Optional[DateAndDateTime2Choice] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlReqdExctnDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_reqd_colltn_dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlReqdColltnDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_tx_ref: Optional[OriginalTransactionReference27] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlTxRef",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class PaymentTransaction85:
+    cxl_sts_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "CxlStsId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    rslvd_case: Optional[Case4] = field(
+        default=None,
+        metadata={
+            "name": "RslvdCase",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_grp_inf: Optional[OriginalGroupInformation29] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlGrpInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_instr_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlInstrId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    orgnl_end_to_end_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlEndToEndId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    orgnl_tx_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlTxId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    orgnl_clr_sys_ref: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlClrSysRef",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    tx_cxl_sts: Optional[CancellationIndividualStatus1Code] = field(
+        default=None,
+        metadata={
+            "name": "TxCxlSts",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    cxl_sts_rsn_inf: list[CancellationStatusReason3] = field(
+        default_factory=list,
+        metadata={
+            "name": "CxlStsRsnInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    rsltn_rltd_inf: Optional[ResolutionInformation2] = field(
+        default=None,
+        metadata={
+            "name": "RsltnRltdInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_intr_bk_sttlm_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = (
+        field(
+            default=None,
+            metadata={
+                "name": "OrgnlIntrBkSttlmAmt",
+                "type": "Element",
+                "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            },
+        )
+    )
+    orgnl_intr_bk_sttlm_dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlIntrBkSttlmDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    assgnr: Optional[Party35Choice] = field(
+        default=None,
+        metadata={
+            "name": "Assgnr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    assgne: Optional[Party35Choice] = field(
+        default=None,
+        metadata={
+            "name": "Assgne",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_tx_ref: Optional[OriginalTransactionReference27] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlTxRef",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class PaymentTransaction90:
+    mod_sts_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "ModStsId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    rslvd_case: Optional[Case4] = field(
+        default=None,
+        metadata={
+            "name": "RslvdCase",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_grp_inf: Optional[OriginalGroupInformation29] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlGrpInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    orgnl_pmt_inf_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlPmtInfId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    orgnl_instr_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlInstrId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    orgnl_end_to_end_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlEndToEndId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    orgnl_tx_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlTxId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    orgnl_clr_sys_ref: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlClrSysRef",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    mod_sts_rsn_inf: list[ModificationStatusReason1] = field(
+        default_factory=list,
+        metadata={
+            "name": "ModStsRsnInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    rsltn_rltd_inf: Optional[ResolutionInformation2] = field(
+        default=None,
+        metadata={
+            "name": "RsltnRltdInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_intr_bk_sttlm_amt: Optional[ActiveOrHistoricCurrencyAndAmount] = (
+        field(
+            default=None,
+            metadata={
+                "name": "OrgnlIntrBkSttlmAmt",
+                "type": "Element",
+                "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            },
+        )
+    )
+    orgnl_intr_bk_sttlm_dt: Optional[XmlDate] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlIntrBkSttlmDt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    assgnr: Optional[Party35Choice] = field(
+        default=None,
+        metadata={
+            "name": "Assgnr",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    assgne: Optional[Party35Choice] = field(
+        default=None,
+        metadata={
+            "name": "Assgne",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_tx_ref: Optional[OriginalTransactionReference27] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlTxRef",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class OriginalPaymentInstruction26:
+    orgnl_pmt_inf_cxl_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlPmtInfCxlId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    rslvd_case: Optional[Case4] = field(
+        default=None,
+        metadata={
+            "name": "RslvdCase",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_pmt_inf_id: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlPmtInfId",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+            "min_length": 1,
+            "max_length": 35,
+        },
+    )
+    orgnl_grp_inf: Optional[OriginalGroupInformation29] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlGrpInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_nb_of_txs: Optional[str] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlNbOfTxs",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "pattern": r"[0-9]{1,15}",
+        },
+    )
+    orgnl_ctrl_sum: Optional[Decimal] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlCtrlSum",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "total_digits": 18,
+            "fraction_digits": 17,
+        },
+    )
+    pmt_inf_cxl_sts: Optional[GroupCancellationStatus1Code] = field(
+        default=None,
+        metadata={
+            "name": "PmtInfCxlSts",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    cxl_sts_rsn_inf: list[CancellationStatusReason3] = field(
+        default_factory=list,
+        metadata={
+            "name": "CxlStsRsnInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    nb_of_txs_per_cxl_sts: list[NumberOfCancellationsPerStatus1] = field(
+        default_factory=list,
+        metadata={
+            "name": "NbOfTxsPerCxlSts",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    tx_inf_and_sts: list[PaymentTransaction84] = field(
+        default_factory=list,
+        metadata={
+            "name": "TxInfAndSts",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class UnderlyingTransaction19:
+    orgnl_grp_inf_and_sts: Optional[OriginalGroupHeader9] = field(
+        default=None,
+        metadata={
+            "name": "OrgnlGrpInfAndSts",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    orgnl_pmt_inf_and_sts: list[OriginalPaymentInstruction26] = field(
+        default_factory=list,
+        metadata={
+            "name": "OrgnlPmtInfAndSts",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    tx_inf_and_sts: list[PaymentTransaction85] = field(
+        default_factory=list,
+        metadata={
+            "name": "TxInfAndSts",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class ResolutionOfInvestigationV08:
+    assgnmt: Optional[CaseAssignment4] = field(
+        default=None,
+        metadata={
+            "name": "Assgnmt",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    rslvd_case: Optional[Case4] = field(
+        default=None,
+        metadata={
+            "name": "RslvdCase",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    sts: Optional[InvestigationStatus4Choice] = field(
+        default=None,
+        metadata={
+            "name": "Sts",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+            "required": True,
+        },
+    )
+    cxl_dtls: list[UnderlyingTransaction19] = field(
+        default_factory=list,
+        metadata={
+            "name": "CxlDtls",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    mod_dtls: Optional[PaymentTransaction90] = field(
+        default=None,
+        metadata={
+            "name": "ModDtls",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    clm_non_rct_dtls: Optional[ClaimNonReceipt1Choice] = field(
+        default=None,
+        metadata={
+            "name": "ClmNonRctDtls",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    stmt_dtls: Optional[StatementResolutionEntry3] = field(
+        default=None,
+        metadata={
+            "name": "StmtDtls",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    crrctn_tx: Optional[CorrectiveTransaction3Choice] = field(
+        default=None,
+        metadata={
+            "name": "CrrctnTx",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    rsltn_rltd_inf: Optional[ResolutionInformation2] = field(
+        default=None,
+        metadata={
+            "name": "RsltnRltdInf",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+    splmtry_data: list[SupplementaryData1] = field(
+        default_factory=list,
+        metadata={
+            "name": "SplmtryData",
+            "type": "Element",
+            "namespace": "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08",
+        },
+    )
+
+
+@dataclass
+class Document:
+    class Meta:
+        namespace = "urn:iso:std:iso:20022:tech:xsd:camt.029.001.08"
+
+    rsltn_of_invstgtn: Optional[ResolutionOfInvestigationV08] = field(
+        default=None,
+        metadata={
+            "name": "RsltnOfInvstgtn",
+            "type": "Element",
+            "required": True,
+        },
+    )
