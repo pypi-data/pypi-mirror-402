@@ -1,0 +1,110 @@
+[project]
+name = "htmy"
+dynamic = []
+description = "Async, pure-Python server-side rendering engine."
+authors = [
+    { name = "Peter Volf", email = "do.volfp@gmail.com" },
+]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "anyio>=4.7.0,<5",
+    "async-lru>=2.0.5,<3",
+    "markdown>=3.8,<4",
+]
+version = "0.10.2"
+
+[project.optional-dependencies]
+lxml = [
+    "lxml>=6.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "fastapi>=0.116.0",
+    "fasthx>=3.0.0",
+    "mkdocstrings[python]>=0.30.0",
+    "mypy>=1.19.0,<2",
+    "poethepoet>=0.38.0",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-random-order>=1.2.0",
+    "ruff>=0.14.8,<0.15",
+    "types-markdown>=3.8.0.20250809,<4",
+    "typing-extensions>=4.12.2,<5",
+    "types-lxml>=2025.3.30",
+    "zensical>=0.0.11",
+]
+
+[build-system]
+requires = [
+    "pdm-backend",
+]
+build-backend = "pdm.backend"
+
+[tool.mypy]
+strict = true
+show_error_codes = true
+
+[tool.pdm.build]
+excludes = [
+    "tests/",
+    "examples/",
+]
+
+[tool.pdm.version]
+source = "file"
+path = "htmy/__init__.py"
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+addopts = "--random-order"
+
+[tool.ruff]
+line-length = 108
+exclude = [
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "dist",
+    "docs",
+]
+
+[tool.ruff.lint]
+select = [
+    "B",
+    "C",
+    "E",
+    "F",
+    "I",
+    "S",
+    "W",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*" = [
+    "S101",
+]
+
+[tool.poe.tasks]
+format = "ruff format --check ."
+format-fix = "ruff format ."
+lint = "ruff check ."
+lint-fix = "ruff . --fix"
+mypy = "mypy ."
+test = "python -m pytest tests"
+serve-docs = "zensical serve"
+
+[tool.poe.tasks.check]
+sequence = [
+    "format",
+    "lint",
+    "mypy",
+]
+ignore_fail = "return_non_zero"
