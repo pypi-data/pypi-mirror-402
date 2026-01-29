@@ -1,0 +1,69 @@
+[package]
+name = "veloxloop"
+version = "0.1.0"
+edition = "2024"
+description = "A modern, high-performance asyncio event loop implementation written from scratch in Rust"
+authors = ["Dang Van Nghiem <martin@smartsolution.id.vn>"]
+license = "BSD-3-Clause"
+readme = "README.md"
+keywords = ["asyncio", "event-loop", "rust", "pyo3", "async"]
+
+[lib]
+name = "_veloxloop"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.27.2", features = ["extension-module", "generate-import-lib", "experimental-async"] }
+mimalloc = { version = "0.1.48", optional = true }
+thiserror = "2.0.17"
+parking_lot = "0.12"
+socket2 = "0.6.1"
+tokio = { version = "1", features = ["rt", "rt-multi-thread"] }
+libc = "0.2"
+rustls = { version = "0.23", default-features = false, features = ["ring", "tls12", "std"] }
+rustls-pemfile = "2.0"
+webpki-roots = "1.0.4"
+rustls-native-certs = "0.8"
+memchr = "2.7"
+rustc-hash = "2"
+bytes = "1.11.0"
+bitflags = "2.10.0"
+
+# Work-stealing scheduler and lock-free data structures
+crossbeam = "0.8"
+crossbeam-deque = "0.8"
+crossbeam-channel = "0.5"
+crossbeam-utils = "0.8"
+
+# Lock-free concurrent data structures
+dashmap = "6"
+
+# High-precision timing for hierarchical timing wheel
+quanta = "0.12"
+slab = "0.4"
+
+# io-uring for Linux (replaces polling crate for best performance)
+[target.'cfg(target_os = "linux")'.dependencies]
+io-uring = { version = "0.7" } 
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winsock2", "ws2def", "ws2tcpip"] }
+
+[target.'cfg(not(any(target_env = "musl", target_os = "freebsd", target_os = "openbsd", target_os = "windows")))'.dependencies]
+tikv-jemallocator = { version = "0.6.1", default-features = false, features = ["disable_initial_exec_tls"] }
+
+[build-dependencies]
+pyo3-build-config = "0.27.2"
+
+[features]
+default = []
+mimalloc = ["dep:mimalloc"]
+
+[profile.release]
+codegen-units = 1
+debug = false
+incremental = false
+lto = "fat"
+opt-level = 3
+panic = "abort"
+strip = "debuginfo"
