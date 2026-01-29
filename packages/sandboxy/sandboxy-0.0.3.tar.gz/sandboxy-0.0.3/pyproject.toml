@@ -1,0 +1,170 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sandboxy"
+version = "0.0.3"
+description = "Open-source agent simulation and benchmarking platform"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.12"
+authors = [{ name = "Sandboxy Team" }]
+keywords = ["ai", "agents", "simulation", "benchmarking", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "pyyaml>=6.0",
+    "click>=8.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "python-dotenv>=1.0.0",
+    "simpleeval>=1.0.0", # Safe expression evaluation
+    # LLM providers
+    "openai>=1.0",
+    "anthropic>=0.18.0",
+    "httpx>=0.27.0",
+    # MCP (Model Context Protocol) support
+    "mcp>=1.0.0",
+    # FastAPI + WebSocket support
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "websockets>=12.0",
+    "sse-starlette>=1.6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-xdist>=3.5.0",
+    "pytest-timeout>=2.2.0",
+    "pytest-mock>=3.12.0",
+    "respx>=0.21.0",
+    "ruff>=0.1",
+]
+
+[project.scripts]
+sandboxy = "sandboxy.cli.main:main"
+sandboxy-server = "sandboxy.api.app:run_server"
+
+[project.urls]
+Homepage = "https://github.com/sandboxy-ai/sandboxy"
+Repository = "https://github.com/sandboxy-ai/sandboxy"
+
+[tool.hatch.build.targets.wheel]
+packages = ["sandboxy"]
+artifacts = ["sandboxy/ui/dist/**"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "F", # pyflakes
+    # pycodestyle
+    "W", # warnings
+    "E", # errors
+
+    "C90", # mccabe
+    "B",   # bugbear
+    "S",   # flake8-bandit
+
+    "C4",  # flake8-comprehensions
+    "D",   # pydocstyle
+    "EM",  # flake8-errmsg
+    "I",   # isort
+    "PT",  # pytest
+    "Q",   # flake8-quotes
+    "RET", # flake8-return
+    "SIM", # flake8-simplify
+    "UP",  # pyupgrade
+]
+ignore = [
+    "D105",   # missing docstring in magic method
+    "E501",   # line too long
+    "S101",   # use of assert detected
+    "EM101",  # exception string literals (acceptable for clear error messages)
+    "EM102",  # exception f-string literals
+    "B008",   # function call in default argument
+    "C901",   # too complex
+    "RET504", # unnecessary assignment before return (sometimes clearer)
+    "SIM102", # nested if statements (sometimes clearer)
+    "SIM108", # ternary operator (sometimes less readable)
+    "SIM117", # nested with statements (async context managers)
+    "S112",   # try-except-continue (sometimes intentional)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["D", "S311"]
+# E402: module level import not at top - intentional for logging/dotenv setup before imports
+"sandboxy/api/app.py" = ["E402", "S104"]  # S104: binding to all interfaces (dev server)
+"sandboxy/cli/main.py" = ["E402"]
+"sandboxy/config.py" = ["S104"]  # binding to all interfaces (dev server config)
+"sandboxy/providers/openrouter.py" = ["E402"]
+"sandboxy/scenarios/unified.py" = ["E402"]
+"sandboxy/core/runner.py" = ["E402", "S307"]
+"sandboxy/core/async_runner.py" = ["E402", "S307"]
+"sandboxy/core/mdl_parser.py" = ["E402", "S307"]
+# D107: missing docstring in __init__ - not always needed for simple inits
+"sandboxy/**/*.py" = ["D107"]
+# S307: eval usage with safety measures (safe_builtins, simpleeval)
+"sandboxy/tools/yaml_tools.py" = ["S307"]
+"sandboxy/core/safe_eval.py" = ["S307"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "e2e: marks tests as end-to-end tests",
+    "requires_api_key: marks tests requiring real API keys",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]
+addopts = ["-v", "--strict-markers", "--tb=short"]
+
+[tool.coverage.run]
+source = ["sandboxy"]
+branch = true
+omit = ["sandboxy/ui/*", "sandboxy/cli/*", "*/__pycache__/*", "*/tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+show_missing = true
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-xdist>=3.5.0",
+    "pytest-timeout>=2.2.0",
+    "pytest-mock>=3.12.0",
+    "respx>=0.21.0",
+    "ruff>=0.1",
+]
