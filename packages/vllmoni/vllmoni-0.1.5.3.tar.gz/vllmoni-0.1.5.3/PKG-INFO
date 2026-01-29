@@ -1,0 +1,300 @@
+Metadata-Version: 2.4
+Name: vllmoni
+Version: 0.1.5.3
+Summary: A CLI tool for monitoring and managing VLLM inference servers in Docker containers
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: docker>=7.1.0
+Requires-Dist: dotenv>=0.9.9
+Requires-Dist: fastapi>=0.116.0
+Requires-Dist: hydra-core>=1.3.2
+Requires-Dist: pyyaml>=6.0.0
+Requires-Dist: requests>=2.31.0
+Requires-Dist: sqlalchemy>=2.0.41
+Requires-Dist: toml>=0.10.2
+Requires-Dist: typer>=0.16.0
+Requires-Dist: uvicorn>=0.35.0
+Requires-Dist: pre-commit>=3.4.0
+Provides-Extra: test
+Requires-Dist: pytest>=8.0.0; extra == "test"
+Requires-Dist: pytest-cov>=4.1.0; extra == "test"
+Requires-Dist: pytest-mock>=3.12.0; extra == "test"
+Dynamic: license-file
+
+# VLLMoni
+
+VLLMoni is a command-line tool for monitoring and managing vllm inference servers running in Docker containers. It provides real-time GPU usage tracking, model management, and container lifecycle control.
+
+
+![Coverage](https://img.shields.io/codecov/c/github/<USERNAME>/<REPO>?style=flat-square)
+
+## Features
+
+- **Model Management**: Easily run and stop VLLM models in Docker containers
+- **GPU Monitoring**: Track GPU memory usage and utilization in real-time
+- **Container Control**: Start, stop, and monitor Docker containers running VLLM servers
+- **Database Integration**: Persistent storage of model and container information using SQLite
+- **CLI Interface**: Simple command-line interface with rich table outputs
+- **Configuration**: Flexible configuration using Hydra for different models and settings
+
+## Installation
+
+### Prerequisites
+
+- Python 3.12
+- Docker
+- NVIDIA GPU (optional, for GPU acceleration)
+- NVIDIA Container Toolkit (for GPU support)
+
+### Quick Install (Recommended)
+
+Install VLLMoni system-wide using curl:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/uhh-hcds/vllmonitor/main/install.sh | bash
+```
+
+This will:
+- Install vllmoni via pip
+- Create a user configuration directory at `~/.vllmoni/`
+- Set up custom model configuration support
+- Add vllmoni to your PATH
+
+After installation, reload your shell:
+```bash
+source ~/.bashrc  # or ~/.zshrc for zsh users
+```
+
+### Custom Model Configurations
+
+After installation, you can add custom model configurations in `~/.vllmoni/conf/model/`:
+
+1. Create a new YAML file, e.g., `~/.vllmoni/conf/model/my_model.yaml`:
+   ```yaml
+   model_name: "your-org/your-model-name"
+   model_name_short: "my-model"
+   gpu_memory_utilization: 0.5
+   temperature: 0
+   max_tokens: 1000
+   max_model_len: 40000
+   tensor_parallel_size: 1
+   ```
+
+2. Use it with:
+   ```bash
+   vllmoni run model=my_model
+   ```
+
+You can override the config path with the `VLLMONI_CONFIG_PATH` environment variable:
+```bash
+export VLLMONI_CONFIG_PATH=/path/to/your/config
+```
+
+### Uninstall
+
+To uninstall VLLMoni:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/uhh-hcds/vllmonitor/main/uninstall.sh | bash
+```
+
+### Install from Source
+
+```bash
+git clone <repository-url>
+cd vllmonitor
+pip install -e .
+```
+
+## Quick Start
+
+1. **Initialize the database**:
+   ```bash
+   vllmoni init
+   ```
+
+2. **Run a model**:
+   ```bash
+   vllmoni run model=a100_80gb_pcie/llama_3_1
+   ```
+
+3. **List running models**:
+   ```bash
+   vllmoni ls
+   ```
+
+4. **Monitor with live updates**:
+   ```bash
+   vllmoni ls --interval 2
+   ```
+
+## Usage
+
+### Commands
+
+- `vllmoni init [--override]`: Initialize the database
+- `vllmoni ls [--full] [--interval SECONDS]`: List all registered models
+- `vllmoni run [OVERRIDES] [--follow]`: Run a VLLM model in a Docker container
+- `vllmoni stop <ID>`: Stop a specific model container
+- `vllmoni stop-all`: Stop all running model containers
+- `vllmoni logs <ID>`: View logs for a specific model
+
+### Configuration
+
+Models are configured using YAML files in the `conf/model/` directory. The configs are organized by GPU type:
+
+- `conf/model/a100_80gb_pcie/` - Configurations for A100 80GB PCIe GPUs
+- `conf/model/h100_nvl/` - Configurations for H100 NVL GPUs
+- `conf/model/a40/` - Configurations for A40 GPUs
+- `conf/model/rtx_a6000/` - Configurations for RTX A6000 GPUs
+
+Each model config includes:
+
+- Model name and HuggingFace path
+- GPU memory utilization
+- Generation parameters (temperature, max_tokens, etc.)
+- Quantization settings
+
+Example model config (`conf/model/a100_80gb_pcie/llama_3_1.yaml`):
+
+```yaml
+model_name: "meta-llama/Meta-Llama-3.1-8B-Instruct"
+model_name_short: "llama3.1-8B-Instruct"
+gpu_memory_utilization: 0.5
+temperature: 0
+max_tokens: 1000
+max_model_len: 40000
+tensor_parallel_size: 1
+```
+
+Override settings at runtime:
+
+```bash
+vllmoni run model=a100_80gb_pcie/llama_3_1 port=8006 devices=0,1
+vllmoni run model=h100_nvl/llama_3_1 port=8007 devices=0
+vllmoni run model=a40/gemma9b port=8008 devices=1
+```
+
+## Architecture
+
+- **CLI**: Typer-based command-line interface
+- **Database**: SQLAlchemy with SQLite backend
+- **Configuration**: Hydra for flexible config management
+- **Container Management**: Docker Python SDK
+- **Monitoring**: Real-time GPU stats via nvidia-smi
+- **Logging**: Structured logging with Rich console output
+
+## Development
+
+### Project Structure
+
+```
+src/
+├── cli/           # Command-line interface
+├── app/           # Database models and repository
+├── container/     # Docker container management
+├── utils/         # Utilities (logging, settings)
+└── tests/         # Unit tests
+
+conf/
+├── defaults.yaml  # Default configuration
+└── model/         # Model-specific configs
+```
+
+### Running Tests
+
+The project includes a comprehensive test suite covering all CLI commands, database operations, and container management.
+
+#### Install Test Dependencies
+
+```bash
+pip install -e ".[test]"
+```
+
+#### Run All Tests
+
+```bash
+pytest tests/
+```
+
+#### Run Tests with Coverage
+
+```bash
+pytest tests/ --cov=src --cov-report=term-missing --cov-report=html
+```
+
+#### Run Specific Test Files
+
+```bash
+# Test CLI commands
+pytest tests/test_cli.py -v
+
+# Test database operations
+pytest tests/test_db.py -v
+
+# Test repository operations
+pytest tests/test_repository.py -v
+
+# Test container commands
+pytest tests/test_container_cmd.py -v
+```
+
+### Test Coverage
+
+The test suite includes:
+
+- **CLI Command Tests**: All commands (init, ls, run, stop, stop-all, logs)
+- **Database Tests**: Database initialization and session management
+- **Repository Tests**: CRUD operations on model entries
+- **Container Tests**: Docker command generation and container lifecycle
+- **Model Tests**: Data model creation and validation
+
+Current coverage: ~77%
+
+### Continuous Integration
+
+Tests are automatically run on every push and pull request via GitHub Actions. The workflow:
+
+- Runs tests on Python 3.12 and 3.13
+- Generates coverage reports
+- Uploads coverage to Codecov (if configured)
+
+See `.github/workflows/tests.yml` for the full CI configuration.
+
+### Building
+
+```bash
+python -m build
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- [VLLM](https://github.com/vllm-project/vllm) - Efficient LLM inference
+- [Hydra](https://github.com/facebookresearch/hydra) - Configuration management
+- [Typer](https://github.com/tiangolo/typer) - CLI framework
+- [Rich](https://github.com/Textualize/rich) - Terminal formatting
+
+## Publishing to PyPI
+
+To publish a new version of VLLMoni to PyPI, follow these steps:
+1. Build the package with uv:
+    ```bash
+    uv build
+    ```
+2. Publish the package using your UV_PUBLISH_TOKEN:
+    ```bash
+    export $(grep -v '^#' .env | xargs) | uv publish --token $UV_PUBLISH_TOKEN  
+    ```

@@ -1,0 +1,88 @@
+[project]
+name = "vllmoni"
+version = "0.1.5.3"
+description = "A CLI tool for monitoring and managing VLLM inference servers in Docker containers"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "docker>=7.1.0",
+    "dotenv>=0.9.9",
+    "fastapi>=0.116.0",
+    "hydra-core>=1.3.2",
+    "pyyaml>=6.0.0",
+    "requests>=2.31.0",
+    "sqlalchemy>=2.0.41",
+    "toml>=0.10.2",
+    "typer>=0.16.0",
+    "uvicorn>=0.35.0",
+    "pre-commit>=3.4.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0.0", "pytest-cov>=4.1.0", "pytest-mock>=3.12.0"]
+
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["*"]
+
+[project.scripts]
+vllmoni = "vllmoni.cli.cli:app"
+
+[tool.pytest.ini_options]
+testpaths = ["src/tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --strict-markers --tb=short --cov=vllmoni --cov-report=term-missing --cov-report=html --cov-report=xml"
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "slow: Slow running tests",
+]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+
+[tool.isort]
+profile = "black"
+
+[tool.ruff]
+line-length = 120
+lint.select = ["E", "F", "W", "I", "D", "A", "N", "B", "SIM", "C4", "TID"]
+lint.ignore = [
+    "E741", # Ambiguous variable name
+    "D213", # Multi-line docstring summary should start at the second line
+    "D105", # Missing docstring in magic method
+    "D107", # Missing docstring in __init__
+    "D203", # 1 blank line required before class docstring
+    "D401", # First line should be in imperative mood; try rephrasing
+    "D407", # Missing dashed underline after section
+    "D406", # Section name should end with a newline
+    "D106", # Missing docstring in public nested class
+    "B006", # Do not use mutable data structures for argument defaults
+    "B008", # Do not perform function calls in argument defaults
+    "B905", # `zip()` without an explicit `strict=` parameter
+    "D100", # Missing docstring in public module
+    "D101", # Missing docstring in public class
+    "D102", # Missing docstring in public method
+    "D103", # Missing docstring in public function
+    "D400", # First line should be capitalized
+]
+exclude = ["docs"]
+
+[tool.ruff.format]
+exclude = ["*.ipynb"]
+
+[tool.ruff.lint.per-file-ignores]
+"test_*.py" = ["D", "E402"]
+"__init__.py" = ["D"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+
+[tool.vllmoni]
+db_path = "sqlite:////tmp/vllmoni/sqlite3.db"
