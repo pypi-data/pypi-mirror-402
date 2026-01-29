@@ -1,0 +1,22 @@
+NAG_MESSAGES = [
+    {"title": "Distraction Detected", "body": "Get back to work!"},
+    {"title": "Focus Lost", "body": "Your code misses you."},
+    {"title": "Tab Overload", "body": "Close it. You know which one."},
+    {"title": "Wandering Again?", "body": "The IDE is waiting."},
+    {"title": "Break's Over", "body": "Time to ship something."},
+    {"title": "Scrolling Detected", "body": "That won't debug itself."},
+    {"title": "Reality Check", "body": "This isn't coding."},
+    {"title": "Busted", "body": "Back to the terminal."},
+    {"title": "Still Here?", "body": "Your deadline isn't moving."},
+    {"title": "Hey Developer", "body": "Remember that feature?"},
+    {"title": "Focus Alert", "body": "Choose your code."},
+    {"title": "Procrastination Mode", "body": "Switch to production mode."},
+    {"title": "Time Thief Detected", "body": "Reclaim your focus."},
+    {"title": "Gentle Reminder", "body": "You have work to do."},
+    {"title": "Lost in the Void?", "body": "Climb back out."},
+    {"title": "Snap Out of It", "body": "Code won't write itself."},
+    {"title": "Digital Drift", "body": "Navigate back to work."},
+    {"title": "Mission Abort", "body": "Return to your editor."},
+    {"title": "Context Switch", "body": "Back to what matters."},
+    {"title": "Accountability Ping", "body": "Do the thing."}
+]
