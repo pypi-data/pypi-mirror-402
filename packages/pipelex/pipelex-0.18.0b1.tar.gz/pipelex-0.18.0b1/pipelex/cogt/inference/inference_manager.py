@@ -1,0 +1,124 @@
+from typing_extensions import override
+
+from pipelex import log
+from pipelex.cogt.extract.extract_worker_abstract import ExtractWorkerAbstract
+from pipelex.cogt.extract.extract_worker_factory import ExtractWorkerFactory
+from pipelex.cogt.img_gen.img_gen_worker_abstract import ImgGenWorkerAbstract
+from pipelex.cogt.img_gen.img_gen_worker_factory import ImgGenWorkerFactory
+from pipelex.cogt.inference.inference_manager_protocol import InferenceManagerProtocol
+from pipelex.cogt.llm.llm_worker_abstract import LLMWorkerAbstract
+from pipelex.cogt.llm.llm_worker_factory import LLMWorkerFactory
+from pipelex.cogt.llm.llm_worker_internal_abstract import LLMWorkerInternalAbstract
+from pipelex.hub import get_models_manager, get_report_delegate
+
+
+class InferenceManager(InferenceManagerProtocol):
+    def __init__(self):
+        self.llm_workers: dict[str, LLMWorkerAbstract] = {}
+        self.img_gen_workers: dict[str, ImgGenWorkerAbstract] = {}
+        self.extract_workers: dict[str, ExtractWorkerAbstract] = {}
+
+    @override
+    def teardown(self):
+        for llm_worker in self.llm_workers.values():
+            llm_worker.teardown()
+        self.llm_workers = {}
+        for img_gen_worker in self.img_gen_workers.values():
+            img_gen_worker.teardown()
+        self.img_gen_workers = {}
+        for extract_worker in self.extract_workers.values():
+            extract_worker.teardown()
+        self.extract_workers = {}
+        log.verbose("InferenceManager teardown done")
+
+    def print_workers(self):
+        log.verbose("LLM Workers:")
+        for handle, llm_worker in self.llm_workers.items():
+            log.verbose(f"  {handle}:")
+            log.verbose(llm_worker.desc)
+        log.verbose("Image Workers:")
+        for handle, img_gen_worker_async in self.img_gen_workers.items():
+            log.verbose(f"  {handle}:")
+            log.verbose(img_gen_worker_async.desc)
+        log.verbose("OCR Workers:")
+        for handle, extract_worker_async in self.extract_workers.items():
+            log.verbose(f"  {handle}:")
+            log.verbose(extract_worker_async.desc)
+
+    ####################################################################################################
+    # Setup LLM Workers
+    ####################################################################################################
+
+    def _setup_one_internal_llm_worker(
+        self,
+        llm_handle: str,
+    ) -> LLMWorkerInternalAbstract:
+        inference_model = get_models_manager().get_inference_model(model_handle=llm_handle)
+        llm_worker = LLMWorkerFactory.make_llm_worker(
+            inference_model=inference_model,
+            reporting_delegate=get_report_delegate(),
+        )
+        self.llm_workers[llm_handle] = llm_worker
+        return llm_worker
+
+    @override
+    def get_llm_worker(self, llm_handle: str) -> LLMWorkerAbstract:
+        llm_worker = self.llm_workers.get(llm_handle)
+        if llm_worker is None:
+            llm_worker = self._setup_one_internal_llm_worker(llm_handle=llm_handle)
+        return llm_worker
+
+    @override
+    def set_llm_worker_from_external_plugin(
+        self,
+        llm_handle: str,
+        llm_worker_class: type[LLMWorkerAbstract],
+        should_warn_if_already_registered: bool = True,
+    ):
+        if llm_handle in self.llm_workers and should_warn_if_already_registered:
+            log.warning(f"LLM worker for '{llm_handle}' already registered, skipping")
+        self.llm_workers[llm_handle] = llm_worker_class(reporting_delegate=get_report_delegate())
+
+    ####################################################################################################
+    # Manage ImageGen Workers
+    ####################################################################################################
+
+    def _setup_one_img_gen_worker(self, img_gen_handle: str) -> ImgGenWorkerAbstract:
+        inference_model = get_models_manager().get_inference_model(model_handle=img_gen_handle)
+        log.verbose(f"Setting up Image Generation Worker for '{img_gen_handle}'")
+        img_gen_worker = ImgGenWorkerFactory.make_img_gen_worker(
+            inference_model=inference_model,
+            reporting_delegate=get_report_delegate(),
+        )
+        self.img_gen_workers[img_gen_handle] = img_gen_worker
+        return img_gen_worker
+
+    @override
+    def get_img_gen_worker(self, img_gen_handle: str) -> ImgGenWorkerAbstract:
+        img_gen_worker = self.img_gen_workers.get(img_gen_handle)
+        if img_gen_worker is None:
+            img_gen_worker = self._setup_one_img_gen_worker(img_gen_handle=img_gen_handle)
+        return img_gen_worker
+
+    ####################################################################################################
+    # Manage Extract Workers
+    ####################################################################################################
+
+    def _setup_one_extract_worker(
+        self,
+        extract_handle: str,
+    ) -> ExtractWorkerAbstract:
+        inference_model = get_models_manager().get_inference_model(model_handle=extract_handle)
+        extract_worker = ExtractWorkerFactory.make_extract_worker(
+            inference_model=inference_model,
+            reporting_delegate=get_report_delegate(),
+        )
+        self.extract_workers[extract_handle] = extract_worker
+        return extract_worker
+
+    @override
+    def get_extract_worker(self, extract_handle: str) -> ExtractWorkerAbstract:
+        extract_worker = self.extract_workers.get(extract_handle)
+        if extract_worker is None:
+            extract_worker = self._setup_one_extract_worker(extract_handle=extract_handle)
+        return extract_worker
