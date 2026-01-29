@@ -1,0 +1,122 @@
+import bluesky.preprocessors as bpp
+from bluesky import plan_stubs as bps
+from bluesky.utils import MsgGenerator
+from dodal.common import inject
+from dodal.devices.i24.commissioning_jungfrau import CommissioningJungfrau
+from ophyd_async.fastcs.jungfrau import (
+    AcquisitionType,
+    GainMode,
+    create_jungfrau_internal_triggering_info,
+    create_jungfrau_pedestal_triggering_info,
+)
+from pydantic import PositiveInt
+
+from mx_bluesky.beamlines.i24.jungfrau_commissioning.plan_stubs.plan_utils import (
+    fly_jungfrau,
+)
+from mx_bluesky.common.utils.log import LOGGER
+
+PEDESTAL_DARKS_RUN = "PEDESTAL DARKS RUN"
+STANDARD_DARKS_RUN = "STANDARD DARKS RUN"
+
+
+def do_pedestal_darks(
+    exp_time_s: float = 0.001,
+    pedestal_frames: PositiveInt = 20,
+    pedestal_loops: PositiveInt = 200,
+    filename: str = "pedestal_darks",
+    jungfrau: CommissioningJungfrau = inject("jungfrau"),
+) -> MsgGenerator:
+    """Acquire darks in pedestal mode, using dynamic gain mode. This calibrates the offsets
+    for the jungfrau, and must be performed before acquiring real data in dynamic gain mode.
+
+    When Bluesky triggers the detector in pedestal mode, with pedestal frames F and pedestal loops L,
+    the acquisition is managed at the driver level to:
+    1. Acquire F-1 frames in dynamic gain mode
+    2. Acquire 1 frame in ForceSwitchG1 gain mode
+    3. Repeat steps 1-2 L times
+    4. Do the first three steps a second time, except use ForceSwitchG2 instead of ForceSwitchG1
+    during step 2.
+
+    A pedestal scan should be acquired when detector configuration and environmental conditions change, but due to small
+    in instabilities in beamline conditions, it is recommended to run a pedestal scan on roughly an hourly basis.
+
+    Args:
+        exp_time_s: Length of detector exposure for each frame.
+        pedestal_frames: Number of frames acquired per pedestal loop.
+        pedestal_loops: Number of times to acquire a set of pedestal_frames
+        filename: Name of output file
+        jungfrau: Jungfrau device
+    """
+
+    @bpp.set_run_key_decorator(PEDESTAL_DARKS_RUN)
+    @bpp.run_decorator(
+        md={
+            "subplan_name": PEDESTAL_DARKS_RUN,
+            "detector_file_template": filename,
+        }
+    )
+    @bpp.stage_decorator([jungfrau])
+    def _do_decorated_plan():
+        trigger_info = create_jungfrau_pedestal_triggering_info(
+            exp_time_s, pedestal_frames, pedestal_loops
+        )
+        LOGGER.info(
+            "Jungfrau will be triggered in pedestal mode and in dynamic gain mode"
+        )
+        yield from bps.mv(
+            jungfrau.drv.acquisition_type,
+            AcquisitionType.PEDESTAL,
+        )
+        yield from fly_jungfrau(
+            jungfrau,
+            trigger_info,
+            GainMode.DYNAMIC,
+            wait=True,
+            log_on_percentage_prefix="Jungfrau pedestal dynamic gain mode darks triggers received",
+        )
+
+    yield from _do_decorated_plan()
+
+
+def do_non_pedestal_darks(
+    gain_mode: GainMode,
+    exp_time_s: float = 0.001,
+    total_triggers: PositiveInt = 1000,
+    filename: str = "darks",
+    jungfrau: CommissioningJungfrau = inject("jungfrau"),
+) -> MsgGenerator:
+    """Internally take a set of images at a given gain mode.
+
+    Non-pedestal darks are useful for detector panel cross-checks and for calculating masks.
+
+    Args:
+        gain_mode: Which gain mode to put the Jungfrau into before starting the acquisition.
+        exp_time_s: Length of detector exposure for each trigger.
+        total_triggers: Total triggers for the dark scan.
+        jungfrau: Jungfrau device
+        filename: Name of output file
+    """
+
+    @bpp.set_run_key_decorator(STANDARD_DARKS_RUN)
+    @bpp.run_decorator(
+        md={
+            "subplan_name": STANDARD_DARKS_RUN,
+            "detector_file_template": filename,
+        }
+    )
+    @bpp.stage_decorator([jungfrau])
+    def _do_decorated_plan():
+        trigger_info = create_jungfrau_internal_triggering_info(
+            total_triggers, exp_time_s
+        )
+
+        yield from fly_jungfrau(
+            jungfrau,
+            trigger_info,
+            gain_mode,
+            wait=True,
+            log_on_percentage_prefix=f"Jungfrau {gain_mode} gain mode darks triggers received",
+        )
+
+    yield from _do_decorated_plan()
