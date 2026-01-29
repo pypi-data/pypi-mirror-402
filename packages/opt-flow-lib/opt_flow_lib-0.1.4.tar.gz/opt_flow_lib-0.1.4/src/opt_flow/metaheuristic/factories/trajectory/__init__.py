@@ -1,0 +1,7 @@
+from opt_flow.metaheuristic.factories.trajectory.simple_trajectory_factory import SimpleTrajectoryFactory 
+from opt_flow.metaheuristic.factories.trajectory.multiple_trajectory_factory import MultipleTrajectoryFactory
+from opt_flow.metaheuristic.factories.trajectory.randomized_multiple_trajectory_factory import RandomizedMultipleTrajectoryFactory
+from opt_flow.metaheuristic.factories.trajectory.adaptative_factory import AdaptativeFactory
+from opt_flow.metaheuristic.factories.trajectory.adaptative_ucb_factory import AdaptativeUCBFactory
+
+__all__ = ["SimpleTrajectoryFactory", "MultipleTrajectoryFactory", "RandomizedMultipleTrajectoryFactory", "AdaptativeFactory", "AdaptativeUCBFactory"]
