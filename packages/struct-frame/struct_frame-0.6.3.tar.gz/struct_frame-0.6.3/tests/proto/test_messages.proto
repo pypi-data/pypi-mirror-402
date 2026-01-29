@@ -1,0 +1,214 @@
+// Combined test messages for struct-frame code generation framework
+// This file consolidates all test message definitions for testing
+//
+// Note: NestedMessage (from original nested_messages.proto) is intentionally
+// excluded because the JavaScript code generator has a bug with nested struct
+// references. The test suite only uses SerializationTestMessage for cross-language
+// testing, so this exclusion doesn't affect test coverage.
+package serialization_test;
+
+// ============================================================================
+// Enums
+// ============================================================================
+
+enum Priority {
+  LOW = 0;
+  MEDIUM = 1;
+  HIGH = 2;
+  CRITICAL = 3;
+}
+
+enum Status {
+  INACTIVE = 0;
+  ACTIVE = 1;
+  ERROR = 2;
+  MAINTENANCE = 3;
+}
+
+enum MsgSeverity {
+  SEV_MSG = 0;
+  SEV_ERROR = 1;
+  SEV_WARN = 2;
+  SEV_INFO = 3;
+  SEV_DEBUG = 4;
+}
+
+// ============================================================================
+// Basic Types Test Message (msgid: 201)
+// ============================================================================
+
+// Test all basic data types
+message BasicTypesMessage {
+  option msgid = 201;
+  
+  // Integer types
+  int8 small_int = 1;
+  int16 medium_int = 2;
+  int32 regular_int = 3;
+  int64 large_int = 4;
+  
+  // Unsigned integer types
+  uint8 small_uint = 5;
+  uint16 medium_uint = 6;
+  uint32 regular_uint = 7;
+  uint64 large_uint = 8;
+  
+  // Floating point types
+  float single_precision = 9;
+  double double_precision = 10;
+  
+  // Boolean type
+  bool flag = 11;
+  
+  // Fixed string
+  string device_id = 12 [size=32];
+  
+  // Variable string
+  string description = 13 [max_size=128];
+}
+
+// ============================================================================
+// Comprehensive Arrays Test (msgid: 203)
+// ============================================================================
+
+message Sensor {
+  uint8 id = 1;
+  float value = 2;
+  Status status = 3;
+  string name = 4 [size=16];
+}
+
+message ComprehensiveArrayMessage {
+  option msgid = 203;
+  
+  // Fixed arrays of primitives
+  repeated int32 fixed_ints = 1 [size=3];
+  repeated float fixed_floats = 2 [size=2];
+  repeated bool fixed_bools = 3 [size=4];
+  
+  // Bounded arrays of primitives  
+  repeated uint16 bounded_uints = 4 [max_size=3];
+  repeated double bounded_doubles = 5 [max_size=2];
+  
+  // Fixed string arrays (smaller strings and fewer of them)
+  repeated string fixed_strings = 6 [size=2, element_size=8];
+  
+  // Bounded string arrays (smaller)
+  repeated string bounded_strings = 7 [max_size=2, element_size=12];
+  
+  // Enum arrays
+  repeated Status fixed_statuses = 8 [size=2];
+  repeated Status bounded_statuses = 9 [max_size=2];
+  
+  // Nested message arrays (reduced)
+  repeated Sensor fixed_sensors = 10 [size=1];
+  repeated Sensor bounded_sensors = 11 [max_size=1];
+}
+
+// ============================================================================
+// Serialization Test Message (msgid: 204)
+// ============================================================================
+
+// A simple message for cross-language serialization testing
+message SerializationTestMessage {
+  option msgid = 204;
+  
+  uint32 magic_number = 1;
+  string test_string = 2 [max_size=64];
+  float test_float = 3;
+  bool test_bool = 4;
+  repeated int32 test_array = 5 [max_size=5];
+}
+
+// ============================================================================
+// Union Message Test (msgid: 205)
+// ============================================================================
+
+// A message demonstrating union-like behavior using oneof
+// Since ComprehensiveArrayMessage and SerializationTestMessage both have
+// message IDs, the generator will automatically add a discriminator field
+message UnionTestMessage {
+  option msgid = 205;
+  
+  // oneof payload (auto-discriminator will be added for message ID)
+  oneof payload {
+    ComprehensiveArrayMessage array_payload = 1;
+    SerializationTestMessage test_payload = 2;
+  }
+}
+
+// ============================================================================
+// Variable Length Message Tests (msgid: 206-208)
+// These messages use option variable = true for variable-length encoding
+// ============================================================================
+
+// Variable message with single bounded array (msgid: 206)
+message VariableSingleArray {
+  option msgid = 206;
+  option variable = true;
+  
+  uint32 message_id = 1;
+  repeated uint8 payload = 2 [max_size=200];  // Up to 200 bytes, only sends used
+  uint16 checksum = 3;
+}
+
+// Variable message with multiple bounded arrays (msgid: 207)
+message VariableMultipleArrays {
+  option msgid = 207;
+  option variable = true;
+  
+  uint8 type = 1;
+  repeated int32 readings = 2 [max_size=50];   // Up to 200 bytes of int32 data
+  repeated float values = 3 [max_size=25];     // Up to 100 bytes of float data
+  string label = 4 [max_size=64];              // Up to 64 chars variable string
+}
+
+// Variable message with mixed fixed and variable fields (msgid: 208)
+message VariableMixedFields {
+  option msgid = 208;
+  option variable = true;
+  
+  uint32 fixed_id = 1;               // Fixed field
+  float fixed_value = 2;             // Fixed field
+  string fixed_name = 3 [size=16];   // Fixed string
+  repeated uint16 variable_data = 4 [max_size=100];  // Variable array
+  string variable_desc = 5 [max_size=128];           // Variable string
+}
+
+// ============================================================================
+// Truncation Test Messages (msgid: 209-210)
+// These messages are identical except one has variable=true to test truncation
+// ============================================================================
+
+// Non-variable message with large array (msgid: 209)
+message TruncationTestNonVariable {
+  option msgid = 209;
+  
+  uint32 sequence_id = 1;
+  repeated uint8 data_array = 2 [max_size=200];  // Up to 200 bytes
+  uint16 footer = 3;
+}
+
+// Variable message with large array (msgid: 210)
+message TruncationTestVariable {
+  option msgid = 210;
+  option variable = true;
+  
+  uint32 sequence_id = 1;
+  repeated uint8 data_array = 2 [max_size=200];  // Up to 200 bytes
+  uint16 footer = 3;
+}
+
+// ============================================================================
+// Variable Message Test (msgid: 211)
+// ============================================================================
+
+// Variable message with two variable string fields
+message Message {
+  option msgid = 211;
+  option variable = true;
+  
+  MsgSeverity severity = 1;
+  string module = 2 [max_size=16];
+  string msg = 3 [max_size=255];
+}
