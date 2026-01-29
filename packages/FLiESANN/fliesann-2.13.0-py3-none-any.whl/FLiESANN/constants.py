@@ -1,0 +1,19 @@
+from os.path import join, abspath, dirname
+
+DEFAULT_WORKING_DIRECTORY = "."
+DEFAULT_FLIES_INTERMEDIATE = "FLiES_intermediate"
+
+GEOS5FP_DIRECTORY = "~/data/GEOS5FP_download"
+
+MODEL_FILENAME = join(abspath(dirname(__file__)), "FLiESANN.h5")
+ZERO_COT_CORRECTION = False
+SPLIT_ATYPES_CTYPES = True
+
+DEFAULT_PREVIEW_QUALITY = 20
+DEFAULT_INCLUDE_PREVIEW = True
+DEFAULT_RESAMPLING = "lanczos"
+DEFAULT_SAVE_INTERMEDIATE = True
+DEFAULT_SHOW_DISTRIBUTION = True
+DEFAULT_DYNAMIC_ATYPE_CTYPE = False
+
+GEOS5FP_INPUTS = ["COT", "AOT", "vapor_gccm", "ozone_cm", "PAR_albedo", "NIR_albedo"]
