@@ -1,0 +1,393 @@
+# HyperX Python SDK
+
+The official Python SDK for [HyperX](https://hyperxdb.dev) - the knowledge layer for AI that outgrows vector search.
+
+HyperX is a hypergraph database designed for AI/ML applications. Unlike vector databases that only find similar items, HyperX enables **multi-hop reasoning** across complex relationships - the kind of inference that RAG applications actually need.
+
+## Installation
+
+```bash
+pip install hyperxdb
+```
+
+**Requirements:** Python 3.10+
+
+## Quick Start
+
+```python
+from hyperx import HyperX
+
+# Initialize the client
+db = HyperX(api_key="hx_sk_live_abc123...")
+
+# Create entities (nodes in the hypergraph)
+react = db.entities.create(name="React", entity_type="framework")
+hooks = db.entities.create(name="Hooks", entity_type="concept")
+
+# Create hyperedges (n-ary relationships)
+edge = db.hyperedges.create(
+    description="React provides Hooks for state management",
+    members=[
+        {"entity_id": react.id, "role": "subject"},
+        {"entity_id": hooks.id, "role": "object"},
+    ]
+)
+
+# Find multi-hop paths (the hero feature!)
+paths = db.paths.find(
+    from_entity="e:useState",
+    to_entity="e:redux",
+    max_hops=4
+)
+
+for path in paths:
+    print(f"Path cost: {path.cost}, Hops: {len(path.hyperedges)}")
+```
+
+## Async Support
+
+For async/await patterns, use `AsyncHyperX`:
+
+```python
+from hyperx import AsyncHyperX
+
+async def main():
+    async with AsyncHyperX(api_key="hx_sk_live_abc123...") as db:
+        entity = await db.entities.create(name="React", entity_type="concept")
+        paths = await db.paths.find(from_entity="e:...", to_entity="e:...")
+```
+
+## API Reference
+
+### Client Initialization
+
+```python
+from hyperx import HyperX, AsyncHyperX
+
+# Sync client
+db = HyperX(
+    api_key="hx_sk_live_abc123...",           # Required: your API key
+    base_url="https://api.hyperxdb.dev",  # Optional: defaults to this
+    timeout=30.0,                  # Optional: request timeout in seconds
+)
+
+# Async client (same parameters)
+db = AsyncHyperX(api_key="hx_sk_live_abc123...")
+
+# Both support context managers
+with HyperX(api_key="hx_sk_live_abc123...") as db:
+    ...
+
+async with AsyncHyperX(api_key="hx_sk_live_abc123...") as db:
+    ...
+```
+
+### Entities
+
+Entities are nodes in the hypergraph - the "things" in your knowledge base.
+
+```python
+# Create an entity
+entity = db.entities.create(
+    name="React Hooks",           # Required: human-readable name
+    entity_type="concept",        # Required: type classification
+    attributes={"version": "18"}, # Optional: key-value attributes
+    embedding=[0.1, 0.2, ...],    # Optional: vector embedding
+)
+
+# Get an entity by ID
+entity = db.entities.get("e:uuid...")
+
+# Update an entity
+entity = db.entities.update(
+    "e:uuid...",
+    name="New Name",
+    attributes={"updated": True}
+)
+
+# List entities with pagination
+entities = db.entities.list(limit=100, offset=0)
+
+# Delete an entity
+db.entities.delete("e:uuid...")
+```
+
+### Hyperedges
+
+Hyperedges are n-ary relationships connecting multiple entities with semantic roles.
+
+```python
+from hyperx import MemberInput
+
+# Create a hyperedge with dict syntax
+edge = db.hyperedges.create(
+    description="React provides Hooks for state management",
+    members=[
+        {"entity_id": "e:react", "role": "subject"},
+        {"entity_id": "e:hooks", "role": "object"},
+        {"entity_id": "e:state", "role": "context"},
+    ],
+    attributes={"source": "documentation"},
+)
+
+# Or use the MemberInput helper
+edge = db.hyperedges.create(
+    description="React provides Hooks",
+    members=[
+        MemberInput("e:react", "subject"),
+        MemberInput("e:hooks", "object"),
+    ]
+)
+
+# Get a hyperedge
+edge = db.hyperedges.get("h:uuid...")
+
+# List hyperedges
+edges = db.hyperedges.list(limit=100, offset=0)
+
+# Update a hyperedge
+edge = db.hyperedges.update(
+    "h:uuid...",
+    description="Updated description",
+)
+
+# Delete a hyperedge
+db.hyperedges.delete("h:uuid...")
+```
+
+### Paths (Hero Feature)
+
+The paths API enables **multi-hop reasoning** - finding how concepts connect through chains of relationships. This is what sets HyperX apart from vector databases.
+
+```python
+# Find paths between two entities
+paths = db.paths.find(
+    from_entity="e:useState",     # Starting entity
+    to_entity="e:redux",          # Target entity
+    max_hops=4,                   # Maximum hyperedge hops (default: 4)
+    intersection_size=1,          # Min bridge entities between edges (default: 1)
+    k_paths=3,                    # Number of paths to return (default: 3)
+)
+
+# Each path contains:
+for path in paths:
+    print(f"Hyperedges: {path.hyperedges}")  # List of hyperedge IDs
+    print(f"Bridges: {path.bridges}")         # Bridge entities between edges
+    print(f"Cost: {path.cost}")               # Path cost (lower = better)
+```
+
+**Why this matters:** Vector search finds "React is similar to Vue". Path finding discovers "useState connects to Redux through React's state management pattern, which inspired Redux's design." That's the difference between similarity and understanding.
+
+### Search
+
+HyperX supports hybrid search combining vector similarity and text matching.
+
+```python
+# Hybrid search (recommended)
+results = db.search("react state management", limit=10)
+
+# Access results
+for entity in results.entities:
+    print(entity.name)
+for edge in results.hyperedges:
+    print(edge.description)
+
+# Vector-only search
+results = db.search.vector(embedding=[0.1, 0.2, ...], limit=10)
+
+# Text-only search (BM25)
+results = db.search.text("react hooks tutorial", limit=10)
+```
+
+## Error Handling
+
+The SDK provides typed exceptions for different error cases:
+
+```python
+from hyperx import (
+    HyperXError,          # Base exception
+    AuthenticationError,  # Invalid or missing API key
+    NotFoundError,        # Resource not found
+    ValidationError,      # Request validation failed
+    RateLimitError,       # Rate limit exceeded
+    ServerError,          # Server error (5xx)
+)
+
+try:
+    entity = db.entities.get("e:nonexistent")
+except NotFoundError:
+    print("Entity not found")
+except AuthenticationError:
+    print("Invalid API key")
+except HyperXError as e:
+    print(f"HyperX error: {e.message}")
+```
+
+## Models
+
+The SDK uses Pydantic models for type safety:
+
+```python
+from hyperx import Entity, Hyperedge, HyperedgeMember, PathResult, SearchResult
+
+# Entity fields
+entity.id           # str: "e:uuid..."
+entity.name         # str
+entity.entity_type  # str
+entity.attributes   # dict[str, Any]
+entity.confidence   # float
+entity.created_at   # datetime
+entity.updated_at   # datetime
+
+# Hyperedge fields
+edge.id             # str: "h:uuid..."
+edge.description    # str
+edge.members        # list[HyperedgeMember]
+edge.attributes     # dict[str, Any]
+edge.confidence     # float
+edge.created_at     # datetime
+edge.updated_at     # datetime
+
+# HyperedgeMember fields
+member.entity_id    # str
+member.role         # str
+
+# PathResult fields
+path.hyperedges     # list[str]: ordered hyperedge IDs
+path.bridges        # list[list[str]]: bridge entities
+path.cost           # float: path cost
+
+# SearchResult fields
+results.entities    # list[Entity]
+results.hyperedges  # list[Hyperedge]
+```
+
+## Examples
+
+### Building a Knowledge Graph
+
+```python
+from hyperx import HyperX
+
+db = HyperX(api_key="hx_sk_live_abc123...")
+
+# Create entities for a tech knowledge graph
+python = db.entities.create(name="Python", entity_type="language")
+django = db.entities.create(name="Django", entity_type="framework")
+flask = db.entities.create(name="Flask", entity_type="framework")
+web = db.entities.create(name="Web Development", entity_type="concept")
+
+# Create relationships
+db.hyperedges.create(
+    description="Django is built with Python",
+    members=[
+        {"entity_id": django.id, "role": "subject"},
+        {"entity_id": python.id, "role": "language"},
+    ]
+)
+
+db.hyperedges.create(
+    description="Flask is a Python microframework",
+    members=[
+        {"entity_id": flask.id, "role": "subject"},
+        {"entity_id": python.id, "role": "language"},
+    ]
+)
+
+db.hyperedges.create(
+    description="Django enables web development",
+    members=[
+        {"entity_id": django.id, "role": "tool"},
+        {"entity_id": web.id, "role": "domain"},
+    ]
+)
+```
+
+### Find Reasoning Paths
+
+```python
+# Find how concepts connect through relationships
+paths = db.paths.find(
+    from_entity="e:useState",
+    to_entity="e:redux",
+    max_hops=4,
+    k_paths=3
+)
+
+for path in paths:
+    print(f"Path cost: {path.cost}")
+    print(f"  Hyperedges: {' -> '.join(path.hyperedges)}")
+    print(f"  Bridges: {path.bridges}")
+```
+
+This is HyperX's key differentiator from vector databases - multi-hop reasoning paths that explain *how* concepts relate, not just that they're similar.
+
+### Multi-Hop Reasoning for RAG
+
+```python
+# When your LLM asks "How does Flask relate to web development?"
+paths = db.paths.find(
+    from_entity=flask.id,
+    to_entity=web.id,
+    max_hops=3
+)
+
+# Build context from the path
+context = []
+for path in paths:
+    for edge_id in path.hyperedges:
+        edge = db.hyperedges.get(edge_id)
+        context.append(edge.description)
+
+# Result: "Flask is a Python microframework" -> "Django is built with Python"
+#         -> "Django enables web development"
+# Your LLM now understands the indirect connection!
+```
+
+### Async Batch Operations
+
+```python
+import asyncio
+from hyperx import AsyncHyperX
+
+async def create_entities(db: AsyncHyperX, names: list[str]):
+    tasks = [
+        db.entities.create(name=name, entity_type="concept")
+        for name in names
+    ]
+    return await asyncio.gather(*tasks)
+
+async def main():
+    async with AsyncHyperX(api_key="hx_sk_live_abc123...") as db:
+        entities = await create_entities(db, ["React", "Vue", "Angular"])
+        print(f"Created {len(entities)} entities")
+
+asyncio.run(main())
+```
+
+## Development
+
+```bash
+# Install dev dependencies
+pip install hyperx[dev]
+
+# Run tests
+pytest
+
+# Type checking
+mypy src/hyperx
+
+# Linting
+ruff check src/hyperx
+```
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Links
+
+- **Website:** [hyperxdb.dev](https://hyperxdb.dev)
+- **Documentation:** [hyperxdb.dev/docs](https://hyperxdb.dev/docs)
+- **GitHub:** [github.com/hyperxdb/hyperx-python](https://github.com/hyperxdb/hyperx-python)
+- **Issues:** [github.com/hyperxdb/hyperx-python/issues](https://github.com/hyperxdb/hyperx-python/issues)
