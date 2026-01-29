@@ -1,0 +1,149 @@
+Metadata-Version: 2.4
+Name: diffused-cli
+Version: 0.3.0
+Summary: A vulnerability scan diffing command-line tool for container images and SBOMs
+Project-URL: documentation, https://github.com/konflux-ci/diffused/tree/main/docs
+Project-URL: repository, https://github.com/konflux-ci/diffused
+Project-URL: homepage, https://github.com/konflux-ci/diffused
+Author: Willian Rampazzo
+Author-email: willianr@redhat.com
+License-Expression: Apache-2.0
+Keywords: container,scanning,security,vulnerability
+Classifier: Development Status :: 3 - Alpha
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: System Administrators
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Security
+Classifier: Topic :: System :: Systems Administration
+Requires-Python: <4.0,>=3.9
+Requires-Dist: click
+Requires-Dist: diffused-lib
+Requires-Dist: rich
+Provides-Extra: black
+Requires-Dist: black; extra == 'black'
+Provides-Extra: dev
+Requires-Dist: diffused[black]; extra == 'dev'
+Requires-Dist: diffused[flake8]; extra == 'dev'
+Requires-Dist: diffused[isort]; extra == 'dev'
+Requires-Dist: diffused[mypy]; extra == 'dev'
+Requires-Dist: diffused[pytest]; extra == 'dev'
+Requires-Dist: tox; extra == 'dev'
+Provides-Extra: flake8
+Requires-Dist: flake8; extra == 'flake8'
+Provides-Extra: isort
+Requires-Dist: isort; extra == 'isort'
+Provides-Extra: mypy
+Requires-Dist: mypy; extra == 'mypy'
+Provides-Extra: pytest
+Requires-Dist: pytest; extra == 'pytest'
+Requires-Dist: pytest-cov; extra == 'pytest'
+Description-Content-Type: text/markdown
+
+# Diffused CLI
+
+Command-line interface for the Diffused vulnerability scanning and diffing library. This tool provides an easy-to-use interface for comparing container images and SBOMs (Software Bill of Materials) to track security improvements and regressions.
+
+## Features
+
+- 🔍 **Container Image Comparison**: Compare vulnerabilities between different container image versions
+- 📊 **SBOM Diffing**: Direct comparison of SPDX-JSON formatted SBOMs (Trivy only)
+- 📄 **Multiple Output Formats**: Support for both rich text and JSON output
+- 🎨 **Rich Terminal Output**: Beautiful, colored output for better readability
+
+## Installation
+
+### Prerequisites
+
+1. **Install the scanner**:
+    1. **Trivy**: Follow the [official Trivy installation guide](https://aquasecurity.github.io/trivy/latest/getting-started/installation/)
+    2. **RHACS**: Follow the [official roxctl installation guide](https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_security_for_kubernetes/4.8/html/roxctl_cli/index)
+2. **Python Environment**: Ensure Python 3.9+ is installed
+
+### From Source
+
+```bash
+# Install the library
+pip install -e ./diffused
+
+# Install the CLI
+pip install -e ./diffusedcli
+```
+
+### From PyPI
+
+```bash
+pip install diffusedcli
+```
+
+## Usage
+
+### Compare Container Images
+
+```bash
+# Basic vulnerability diff between two container images
+diffused image-diff -p ubuntu:20.04 -n ubuntu:22.04
+
+# Use ACS scanner
+diffused --scanner acs image-diff -p nginx:1.20 -n nginx:1.21
+
+# Save output to JSON file
+diffused image-diff -p app:v1.0 -n app:v2.0 --output json --file report.json
+```
+
+### Compare SBOMs
+
+```bash
+# Compare two SBOM files
+diffused sbom-diff -p previous.json -n current.json
+
+# Get detailed vulnerability information
+diffused sbom-diff -p old-sbom.json -n new-sbom.json --all-info
+
+# Export to file with rich formatting
+diffused sbom-diff -p v1-sbom.json -n v2-sbom.json --file vulnerability-report.txt
+```
+
+## CLI Commands and Options
+
+For more information on commands and options, use the `--help` option.
+
+### Commands
+
+| Command | Description |
+|--------|-------|
+| `image-diff` | Show the vulnerability diff between two container images |
+| `sbom-diff` | Show the vulnerability diff between two SBOMs |
+
+### Global Options
+
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--scanner` | `-s` | Scanner to use (`acs`, `trivy`) | `trivy` |
+| `--output` | `-o` | Output format (`rich`, `json`) | `rich` |
+| `--file` | `-f` | Output file (use `-` for stdout) | `-` |
+| `--help` | `-h` | Show help message | - |
+
+### image-diff Options
+
+| Option | Short | Description | Required |
+|--------|-------|-------------|----------|
+| `--previous-image` | `-p` | Previous container image URL | Yes |
+| `--next-image` | `-n` | Next container image URL | Yes |
+| `--output` | `-o` | Output format (`rich`, `json`) | `rich` |
+| `--file` | `-f` | Output file (use `-` for stdout) | `-` |
+
+### sbom-diff Options
+
+| Option | Short | Description | Required |
+|--------|-------|-------------|----------|
+| `--previous-sbom` | `-p` | Previous SBOM file path | Yes |
+| `--next-sbom` | `-n` | Next SBOM file path | Yes |
+| `--all-info` | `-a` | Show detailed vulnerability information (SBOM only) | `False` |
+| `--output` | `-o` | Output format (`rich`, `json`) | `rich` |
+| `--file` | `-f` | Output file (use `-` for stdout) | `-` |
