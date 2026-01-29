@@ -1,0 +1,137 @@
+name: Basic usage
+
+on:
+  push:
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+  pull_request:
+  schedule:
+    # Weekly, at 5:30 AM on Saturday (somewhat randomly chosen).
+    - cron: '30 5 * * 6'
+  workflow_dispatch:
+
+jobs:
+  # Check that project-clang-format.py works (and the C/C++ files are formatted).
+  lint:
+    runs-on: ubuntu-latest
+    name: Linting
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Run clang-format
+        run: ./tools/project-clang-format.py
+
+  # Check that the most basic use-case works on different OSs.
+  os:
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04, windows-2022, windows-2025, macos-14, macos-15, macos-26]
+        include:
+          - boost-version: 1.78.0
+    runs-on: '${{ matrix.os }}'
+    name: 'Image: ${{ matrix.os }}'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+      - name: Cache Boost
+        uses: actions/cache@v5
+        with:
+          path: boost_*.tar.gz
+          key: 'boost_${{ matrix.boost-version }}'
+      - name: Build Boost
+        run: |
+          python -m project.boost.download --cache . '${{ matrix.boost-version }}' boost/
+          python -m project.boost.build -- boost/ --with-filesystem
+      - name: Build example project
+        run: |
+          $src_dir = Join-Path examples boost
+          python -m project.build --boost boost/ --install install/ -- $src_dir build/
+      - name: Run example project
+        run: ./.ci/run_foo.ps1 (Join-Path (Get-Location).Path install bin foo)
+
+  # Check that the most basic use-case works w/ different Python versions.
+  python-versions:
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
+        include:
+          - os: ubuntu-latest
+          - boost-version: 1.78.0
+    runs-on: '${{ matrix.os }}'
+    name: 'Python ${{ matrix.python-version }}'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '${{ matrix.python-version }}'
+      - name: Cache Boost
+        uses: actions/cache@v5
+        with:
+          path: boost_*.tar.gz
+          key: 'boost_${{ matrix.boost-version }}'
+      - name: 'Install package & dependencies'
+        run: pip install -q -e .
+      - name: Check that scripts are runnable
+        run: |
+          boost-download --version
+          boost-build --version
+          project-build --version
+      - name: Build Boost
+        run: |
+          boost-download --cache . '${{ matrix.boost-version }}' boost/
+          boost-build -- boost/ --with-filesystem
+      - name: Build example project
+        run: |
+          $src_dir = Join-Path examples boost
+          project-build --boost boost/ --install install/ -- $src_dir build/
+      - name: Run example project
+        run: ./.ci/run_foo.ps1 (Join-Path (Get-Location).Path install bin foo)
+
+  # Build a Python package and upload to PyPI.
+  publish:
+    # TODO: figure out how to add a dependency on the *toolsets workflows.
+    needs: [lint, os, python-versions]
+    runs-on: ubuntu-latest
+    name: Publish
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+      - name: Verify package can be installed
+        run: pip install -q .
+      - name: Install package builder
+        run: pip install -q --upgrade build
+      - name: Build package
+        run: python -m build
+      - name: Publish as artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: dist
+          path: dist
+          if-no-files-found: error
+      - name: Publish to PyPI
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: '${{ secrets.PYPI_API_TOKEN }}'

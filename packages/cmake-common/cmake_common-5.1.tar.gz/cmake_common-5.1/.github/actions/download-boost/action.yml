@@ -1,0 +1,46 @@
+name: Download Boost
+description: Download & unpack Boost
+inputs:
+  boost-version:
+    description: Boost version
+    required: true
+  no-retry:
+    description: Don't retry downloads
+    required: false
+    default: 0
+runs:
+  using: composite
+  steps:
+    - run: echo 'BOOST_VERSION=${{ inputs.boost-version }}' >> $env:GITHUB_ENV
+      shell: pwsh
+    - run: |
+        $parent_dir = Split-Path $env:GITHUB_WORKSPACE
+        $cache_dir = Join-Path $parent_dir 'boost'
+        echo "BOOST_CACHE_DIR=$cache_dir" >> $env:GITHUB_ENV
+      shell: pwsh
+    - run: |
+        $dir_name = "boost_$($env:BOOST_VERSION.Replace('.', '_'))"
+        $dir = Join-Path $env:BOOST_CACHE_DIR $dir_name
+        echo "BOOST_DIR=$dir" >> $env:GITHUB_ENV
+      shell: pwsh
+    - run: |
+        echo ''
+        echo '----------------------------------------------------------------'
+        echo "BOOST_VERSION:   $env:BOOST_VERSION"
+        echo "BOOST_CACHE_DIR: $env:BOOST_CACHE_DIR"
+        echo "BOOST_DIR:       $env:BOOST_DIR"
+        echo '----------------------------------------------------------------'
+        New-Item $env:BOOST_CACHE_DIR -Force -Type Directory | Out-Null
+
+        $python = 'python'
+        $cache_dir = $env:BOOST_CACHE_DIR
+
+        $no_retry = '${{ inputs.no-retry }}' -eq '1'
+
+        $args = @()
+        if ($no_retry) {
+            $args += '--no-retry'
+        }
+
+        & $python -m project.boost.download --cache $cache_dir $args -- $env:BOOST_VERSION
+      shell: pwsh
