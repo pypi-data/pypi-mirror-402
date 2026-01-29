@@ -1,0 +1,176 @@
+"""Module with various conversion functions."""
+
+__all__ = [
+    "int_to_obd_dtc", "obd_dtc_to_int",
+    "bytes_to_hex", "bytes_to_int", "int_to_bytes",
+    "get_signed_value_decoding_formula", "get_signed_value_encoding_formula",
+]
+
+import re
+from typing import Callable, Optional
+
+from .common_types import RawBytesAlias, validate_raw_bytes
+from .constants import BITS_TO_DTC_CHARACTER_MAPPING, DTC_CHARACTERS_MAPPING, MAX_DTC_VALUE, MIN_DTC_VALUE
+from .custom_exceptions import InconsistencyError
+from .enums import Endianness
+
+OBD_DTC_RE = re.compile(r"^([PCBU])([0-3])([0-9A-F]{3})-([0-9A-F]{2})$", re.IGNORECASE)
+"""Regular expression for DTC in OBD format."""
+
+
+def bytes_to_hex(bytes_list: RawBytesAlias) -> str:
+    """
+    Convert a list of bytes to hex string.
+
+    :param bytes_list: List of bytes to convert.
+
+    :return: String with provided list of bytes presented as hexadecimal values.
+    """
+    validate_raw_bytes(bytes_list)
+    bytes_str = ", ".join(f"0x{byte_value:02X}" for byte_value in bytes_list)
+    return f"({bytes_str})"
+
+
+def bytes_to_int(bytes_list: RawBytesAlias, endianness: Endianness = Endianness.BIG_ENDIAN) -> int:
+    """
+    Convert a list of bytes to integer value.
+
+    :param bytes_list: List of bytes to convert.
+    :param endianness: Order of bytes to use.
+
+    :return: The integer value represented by provided list of bytes.
+    """
+    validate_raw_bytes(bytes_list, allow_empty=True)
+    if len(bytes_list) == 0:
+        return 0
+    return int.from_bytes(bytes=bytes_list, byteorder=Endianness.validate_member(endianness).value)
+
+
+def int_to_bytes(int_value: int,
+                 size: Optional[int] = None,
+                 endianness: Endianness = Endianness.BIG_ENDIAN) -> bytes:
+    """
+    Convert integer value to a list of bytes.
+
+    :param int_value: Integer value to convert.
+    :param size: Number of bytes in the output. Use None to use the smallest possible number of bytes.
+    :param endianness: Order of bytes to use.
+
+    :raise TypeError: At least one provided value has invalid type.
+    :raise ValueError: At least one provided value is out of range.
+    :raise InconsistencyError: Provided value of `size` is too small to contain entire `int_value`.
+
+    :return: The value of bytes list that represents the provided integer value.
+    """
+    if not isinstance(int_value, int):
+        raise TypeError(f"Provided `int_value` is not int type. Actual type: {type(int_value)}")
+    if int_value < 0:
+        raise ValueError(f"Provided `int_value` is negative and it cannot be converted. Actual value: {int_value}")
+    if size is not None:
+        if not isinstance(size, int):
+            raise TypeError(f"Provided `size` is not int type. Actual type: {type(size)}")
+        if size < 0:
+            raise ValueError(f"Provided `size` is smaller than zero. Actual value: {size}")
+    endianness = Endianness.validate_member(endianness)
+    if size == 0 and int_value == 0:
+        return bytes()
+    bytes_number = max(1, (int_value.bit_length() + 7) // 8)
+    size = bytes_number if size is None else size
+    if size < bytes_number:
+        raise InconsistencyError("Provided value of `size` is too small to contain all bytes of int_value. "
+                                 f"Actual values: int_value={int_value}, size={size}")
+    return int_value.to_bytes(length=size, byteorder=endianness.value)
+
+
+def obd_dtc_to_int(obd_dtc: str) -> int:
+    """
+    Convert text with DTC in OBD format into integer value (DTC in UDS format).
+
+    :param obd_dtc: Text with DTC in OBD format.
+
+    :raise TypeError: Provided value is not str type.
+    :raise ValueError: Provided value is not DTC in OBD format.
+
+    :return: Integer value representation of this DTC in UDS format.
+    """
+    if not isinstance(obd_dtc, str):
+        raise TypeError("Provided value is not str type.")
+    match = OBD_DTC_RE.fullmatch(obd_dtc.upper())
+    if not match:
+        raise ValueError(f"Provided value is not a DTC in OBD format. Example: 'U0F1E-2D'. Actual value: {obd_dtc!r}")
+    group_char, specification_number, fault_specification, fault_symptom = match.groups()
+    return ((DTC_CHARACTERS_MAPPING[group_char] << 22)
+            + (int(specification_number, 16) << 20)
+            + (int(fault_specification, 16) << 8)
+            + int(fault_symptom, 16))
+
+
+def int_to_obd_dtc(dtc: int) -> str:
+    """
+    Encode integer value (DTC in UDS format) into text with DTC in OBD format.
+
+    :param dtc: Integer with DTC in UDS format.
+
+    :raise TypeError: Provided value is not int type.
+    :raise ValueError: Provided value is not DTC in OBD format.
+
+    :return: Text value representation of this DTC in OBD format.
+    """
+    if not isinstance(dtc, int):
+        raise TypeError("Provided value is not int type.")
+    if not MIN_DTC_VALUE <= dtc <= MAX_DTC_VALUE:
+        raise ValueError("Provided value is not a DTC in UDS format.")
+    return f"{BITS_TO_DTC_CHARACTER_MAPPING[dtc >> 22]}{(dtc & 0x3FFF00) >> 8:04X}-{dtc & 0xFF:02X}"
+
+
+def get_signed_value_decoding_formula(bit_length: int) -> Callable[[int], int]:
+    """
+    Get formula for decoding signed integer value.
+
+    :param bit_length: Number of bits used for signed integer value.
+
+    :raise TypeError: Provided value is not int type.
+    :raise ValueError: Provided value is out of range.
+
+    :return: Formula for decoding singed integer value from unsigned integer value.
+    """
+    if not isinstance(bit_length, int):
+        raise TypeError("Provided `bit_length` value is not int type.")
+    if bit_length < 2:
+        raise ValueError(f"Provided `bit_length` is too small for store signed integer value: {bit_length}.")
+
+    def decode_signed_value(value: int) -> int:
+        max_value = (1 << bit_length) - 1
+        msb_value = 1 << (bit_length - 1)
+        if not 0 <= value <= max_value:
+            raise ValueError(f"Provided value is out of range (0 <= value <= {max_value}): {value}.")
+        return (- (value & msb_value)) + (value & (max_value ^ msb_value))
+    return decode_signed_value
+
+
+def get_signed_value_encoding_formula(bit_length: int) -> Callable[[int], int]:
+    """
+    Get formula for encoding signed integer value.
+
+    :param bit_length: Number of bits used for signed integer value.
+
+    :raise TypeError: Provided value is not int type.
+    :raise ValueError: Provided value is out of range.
+
+    :return: Formula for encoding singed integer value into unsinged integer value.
+    """
+    if not isinstance(bit_length, int):
+        raise TypeError("Provided `bit_length` value is not int type.")
+    if bit_length < 2:
+        raise ValueError(f"Provided `bit_length` is too small for store signed integer value: {bit_length}.")
+
+    def encode_signed_value(value: int) -> int:
+        msb_value = 1 << (bit_length - 1)
+        min_value = - msb_value
+        max_value = msb_value - 1
+        if not min_value <= value <= max_value:
+            raise ValueError(f"Provided value is out of range ({min_value} <= value <= {max_value}): {value}.")
+        if value >= 0:
+            return value
+        return 2 * msb_value + value
+    return encode_signed_value
