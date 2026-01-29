@@ -1,0 +1,181 @@
+import os
+import sys
+
+import scorep.instrumenter
+import scorep.subsystem
+import scorep.helper
+from scorep.helper import get_scorep_version, print_err
+
+
+def _err_exit(msg):
+    print_err("scorep: " + msg)
+    sys.exit(1)
+
+
+def print_help():
+    print("""\
+Usage: python -m scorep [options] [--] <script> [args]
+
+Score-P Python instrumentation wrapper. The following options control how the program is instrumented and executed. Any unknown option are passed directly to 'scorep-config'.
+
+  --help                   Show this help message and exit.
+  --keep-files             Keep temporary files after execution.
+  --verbose, -v            Enable verbose output for debugging and tracing.
+  --nopython               Disable instrumentation of Python code.
+                           Instrumentation can still be enabled later from within the application's source code.
+  --noinstrumenter         Same as --nopython.
+  --instrumenter-type=<type>
+                           Specify custom instrumenter type (e.g., cProfile).
+  --instrumenter-file=<file>
+                           Path to a Python script that is executed before the application.
+                           Allows instrumentation of specific modules and functions without modifying their source code.
+  --                       Stop parsing Score-P options; interpret all following arguments verbatim as the program with its arguments.
+
+Other options starting with '-' are passed directly to 'scorep-config'.
+To view all available Score-P configuration options, run: scorep-config --help
+
+Example:
+  scorep --mpi --thread=pthread -- ./your_script.py --arg1 --arg2
+
+Note:
+  If using --noinstrumenter, Score-P will not trace Python code, but it may still collect MPI or threading events
+    if configured.
+  You can enable Python instrumentation manually from within your application's source code,
+     e.g., by calling 'scorep.instrumenter.enable()'.
+""")  # noqa: E501
+
+
+def scorep_main(argv=None):
+    if argv is None:
+        argv = sys.argv
+
+    scorep_config = []
+    prog_argv = []
+    parse_scorep_commands = True
+
+    show_help = False
+    keep_files = False
+    verbose = False
+    no_instrumenter = False
+
+    if scorep.instrumenter.has_c_instrumenter():
+        instrumenter_type = "cProfile"
+    else:
+        instrumenter_type = "profile"
+    instrumenter_file = None
+
+    for elem in argv[1:]:
+        if parse_scorep_commands:
+            if elem == "--":
+                parse_scorep_commands = False
+            if elem == "--help":
+                show_help = True
+                break
+            elif elem == "--mpi":
+                print_err(f"scorep: Warning: The option '{elem}' is deprecated "
+                          "and will be removed in future.")
+                scorep_config.append("--mpp=mpi")
+            elif elem == "--keep-files":
+                keep_files = True
+            elif elem == "--verbose" or elem == '-v':
+                verbose = True
+            elif elem == "--nopython":
+                no_instrumenter = True
+            elif elem == "--noinstrumenter":
+                no_instrumenter = True
+            elif elem in ["--io=runtime:posix", "--io=posix"] and get_scorep_version() >= 9.0:
+                print_err(f"scorep: Warning: The option '{elem}' is deprecated.")
+                if "SCOREP_IO_POSIX" in os.environ:
+                    print_err("        Will not overwrite existing value for environment variable "
+                              f"'SCOREP_IO_POSIX={os.environ['SCOREP_IO_POSIX']}'.")
+                else:
+                    print_err("        The environment variable 'SCOREP_IO_POSIX=true' is set and will be used.")
+                    os.environ["SCOREP_IO_POSIX"] = "true"
+            elif "--instrumenter-type" in elem:
+                param = elem.split("=")
+                instrumenter_type = param[1]
+            elif "--instrumenter-file" in elem:
+                param = elem.split("=")
+                instrumenter_file = param[1]
+            elif elem[0] == "-":
+                scorep_config.append(elem)
+            else:
+                prog_argv.append(elem)
+                parse_scorep_commands = False
+        else:
+            prog_argv.append(elem)
+
+    # fast exit on "--help"
+    if show_help:
+        print_help()
+        sys.exit(0)
+    if len(prog_argv) == 0:
+        _err_exit("Did not find a script to run")
+
+    if os.environ.get("SCOREP_PYTHON_BINDINGS_INITIALISED") != "true":
+        scorep.subsystem.init_environment(scorep_config, keep_files, verbose)
+        os.environ["SCOREP_PYTHON_BINDINGS_INITIALISED"] = "true"
+        """
+        python -m starts the module as skript. i.e. sys.argv will loke like:
+        ['/home/gocht/Dokumente/code/scorep_python/scorep.py', '--mpi', 'mpi_test.py']
+
+        To restart python we need to remove this line, and add `python -m scorep ...` again
+        """
+        new_args = [sys.executable, "-m", "scorep"]
+        for elem in sys.argv:
+            if "scorep/__main__.py" in elem:
+                continue
+            else:
+                new_args.append(elem)
+
+        os.execve(sys.executable, new_args, os.environ)
+    else:
+        scorep.subsystem.reset_preload()
+
+    # everything is ready
+    sys.argv = prog_argv
+    progname = prog_argv[0]
+    sys.path[0] = os.path.split(progname)[0]
+
+    tracer = scorep.instrumenter.get_instrumenter(not no_instrumenter,
+                                                  instrumenter_type)
+
+    if instrumenter_file:
+        with open(instrumenter_file) as f:
+            exec(f.read())
+
+    try:
+        with open(progname) as fp:
+            code = compile(fp.read(), progname, 'exec')
+        # try to emulate __main__ namespace as much as possible
+        globs = {
+            '__file__': progname,
+            '__name__': '__main__',
+            '__package__': None,
+            '__cached__': None,
+        }
+
+        tracer.run(code, globs, globs)
+    except OSError as err:
+        _err_exit("Cannot run file %r because: %s" % (sys.argv[0], err))
+    finally:
+        scorep.subsystem.clean_up(keep_files)
+
+
+def main(argv=None):
+    import traceback
+    call_stack = traceback.extract_stack()
+    call_stack_array = traceback.format_list(call_stack)
+    call_stack_string = ""
+    for elem in call_stack_array[:-1]:
+        call_stack_string += elem
+    _err_exit(
+        "Someone called scorep.__main__.main(argv).\n"
+        "This is not supposed to happen, but might be triggered, "
+        "if your application calls \"sys.modules['__main__'].main\".\n"
+        "This python stacktrace might be helpfull to find the reason:\n%s" %
+        call_stack_string)
+
+
+if __name__ == '__main__':
+    scorep_main()
