@@ -1,0 +1,312 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run (build but do not publish)'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install and test
+        run: |
+          uv pip install --system -e ".[dev]"
+          pytest tests/ -x -q
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install build tools
+        run: |
+          pip install build
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            # Extract version from tag (v1.0.0 -> 1.0.0)
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update versions in all files
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Update pyproject.toml version
+          sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
+
+          # Update server.json version
+          jq --arg v "$VERSION" '.version = $v | .packages[0].version = $v' server.json > server.tmp.json
+          mv server.tmp.json server.json
+
+          # Update manifest.json version (for MCPB)
+          jq --arg v "$VERSION" '.version = $v' manifest.json > manifest.tmp.json
+          mv manifest.tmp.json manifest.json
+
+          echo "Updated versions to $VERSION"
+          grep "^version" pyproject.toml
+          jq '.version' server.json
+          jq '.version' manifest.json
+
+      # Build 1: Python package for PyPI
+      - name: Build Python package
+        run: |
+          python -m build
+          ls -la dist/
+
+      - name: Upload Python package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package
+          path: dist/
+          retention-days: 90
+
+      # Build 2: MCPB bundle for Claude Desktop discoverability
+      - name: Update manifest for PyPI source
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          # Update mcp_config to use PyPI package (simpler than git+)
+          jq --arg v "$VERSION" '
+            .server.mcp_config.args = ["massive-context-mcp"]
+          ' manifest.json > manifest.tmp.json
+          mv manifest.tmp.json manifest.json
+          echo "Updated manifest.json for PyPI:"
+          cat manifest.json | jq '.server.mcp_config'
+
+      - name: Pack MCPB bundle
+        id: pack
+        run: |
+          npx @anthropic-ai/mcpb pack
+          MCPB_FILE=$(ls *.mcpb 2>/dev/null | head -1)
+          echo "filename=$MCPB_FILE" >> $GITHUB_OUTPUT
+          echo "Created: $MCPB_FILE"
+
+      - name: Verify MCPB bundle
+        run: |
+          MCPB_FILE=$(ls *.mcpb 2>/dev/null | head -1)
+          if [ -n "$MCPB_FILE" ]; then
+            echo "Bundle contents:"
+            unzip -l "$MCPB_FILE"
+            echo "Manifest:"
+            unzip -p "$MCPB_FILE" manifest.json | jq .
+          else
+            echo "ERROR: No .mcpb file created"
+            exit 1
+          fi
+
+      - name: Upload MCPB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcpb-bundle
+          path: "*.mcpb"
+          retention-days: 90
+
+  # Publish to PyPI FIRST (source of truth for versions)
+  publish-pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
+    permissions:
+      id-token: write  # Required for PyPI Trusted Publishing
+    environment:
+      name: pypi
+      url: https://pypi.org/project/massive-context-mcp/
+    steps:
+      - name: Download Python package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # No token needed - uses Trusted Publishing via OIDC
+
+  # Create GitHub Release with BOTH artifacts
+  release:
+    needs: [build, publish-pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Python package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package
+          path: dist/
+
+      - name: Download MCPB artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mcpb-bundle
+          path: mcpb/
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+            echo "tag=v${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "Massive Context MCP v${{ steps.version.outputs.version }}"
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+          files: |
+            dist/*
+            mcpb/*.mcpb
+          body: |
+            ## Massive Context MCP v${{ steps.version.outputs.version }}
+
+            ### Installation Options
+
+            #### Option 1: Claude Desktop (One-Click Install)
+
+            Download `massive-context-mcp-${{ steps.version.outputs.version }}.mcpb` and double-click to install.
+
+            Or install directly from URL:
+            ```
+            https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/massive-context-mcp-${{ steps.version.outputs.version }}.mcpb
+            ```
+
+            #### Option 2: Via uvx (Claude Code, CLI)
+
+            ```bash
+            uvx massive-context-mcp
+            ```
+
+            #### Option 3: Via pip
+
+            ```bash
+            pip install massive-context-mcp
+            # With Claude SDK support:
+            pip install massive-context-mcp[claude]
+            ```
+
+            #### Option 4: Manual Config
+
+            Add to `claude_desktop_config.json`:
+
+            ```json
+            {
+              "mcpServers": {
+                "massive-context": {
+                  "command": "uvx",
+                  "args": ["massive-context-mcp"],
+                  "env": {
+                    "RLM_DATA_DIR": "~/.rlm-data",
+                    "OLLAMA_URL": "http://localhost:11434"
+                  }
+                }
+              }
+            }
+            ```
+
+            ### What's Included
+
+            - **16 MCP tools** for massive context handling (10M+ tokens)
+            - **Ollama integration** for free local inference
+            - **Auto-provider detection** - uses Ollama when available, falls back to Claude SDK
+            - **macOS setup tools** - automated Ollama installation (Homebrew or direct download)
+
+            ### Changes
+
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+
+  # Publish to MCP Registry (for discoverability in Claude Desktop)
+  publish-registry:
+    needs: [release, publish-pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # Required for OIDC authentication
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update server.json version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          jq --arg v "$VERSION" '.version = $v | .packages[0].version = $v' server.json > server.tmp.json
+          mv server.tmp.json server.json
+          echo "Updated server.json:"
+          cat server.json | jq '{version, packages}'
+
+      - name: Install mcp-publisher
+        run: |
+          # Try npm first (more reliable)
+          npm install -g @anthropic-ai/mcp-publisher 2>/dev/null || {
+            # Fallback: download binary with explicit version
+            VERSION="1.2.0"
+            curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/v${VERSION}/mcp-publisher_${VERSION}_linux_amd64.tar.gz" -o mcp-publisher.tar.gz
+            tar xzf mcp-publisher.tar.gz
+            chmod +x mcp-publisher
+            sudo mv mcp-publisher /usr/local/bin/
+          }
+          which mcp-publisher && mcp-publisher --version || echo "mcp-publisher installed via fallback"
+
+      - name: Authenticate with GitHub OIDC
+        run: |
+          mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        run: |
+          echo "Publishing to MCP Registry..."
+          mcp-publisher publish
+          echo "✅ Published to MCP Registry"
