@@ -1,0 +1,154 @@
+# xair CLI
+
+Command-line interface for controlling Behringer XAir and Midas MR digital mixers over OSC.
+
+## Features
+
+- **Mixer Control** - Adjust faders, mutes, pans, EQ, dynamics, and sends
+- **Multi-Channel Operations** - Control ranges (`1-4`), lists (`1,3,5`), or all channels at once
+- **Scene Management** - Load, save, and list mixer scenes
+- **Network Discovery** - Find mixers on your local network
+- **Batch Commands** - Execute scripts of mixer commands
+- **Flexible Output** - Human-readable, JSON, or plain key=value formats
+- **Shell Completion** - Bash, Zsh, and Fish completion scripts
+
+## Supported Mixers
+
+- Behringer XR18, XR16, XR12
+- Midas MR18
+- Behringer X32
+
+## Installation
+
+From PyPI (package name: `dc-xair-cli`, CLI: `xair`):
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install dc-xair-cli
+```
+
+From source (repo root):
+
+```bash
+./setup.sh
+```
+
+Or manually:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e "./xair-cli"
+```
+
+## Quick Start
+
+```bash
+# Discover mixers on the network
+xair discover
+
+# Show mixer info
+xair --ip 192.168.1.50 info
+
+# Control channels
+xair --ip 192.168.1.50 ch 1 fader -6
+xair --ip 192.168.1.50 ch 1-4 mute on
+
+# Load a scene
+xair --ip 192.168.1.50 scene load 1
+```
+
+See [QUICKSTART.md](QUICKSTART.md) for more examples.
+
+## Configuration
+
+Create a config file to avoid passing `--ip` every time:
+
+```bash
+xair config init
+```
+
+Edit `~/.config/xair/config.toml`:
+
+```toml
+[connection]
+ip = "192.168.1.50"
+model = "XR18"
+```
+
+Or set environment variables:
+
+```bash
+export XAIR_IP="192.168.1.50"
+export XAIR_MODEL="XR18"
+```
+
+## Commands
+
+| Command      | Description                        |
+| ------------ | ---------------------------------- |
+| `info`       | Show mixer model, IP, and firmware |
+| `discover`   | Find mixers on the network         |
+| `status`     | Show channel overview              |
+| `ch`         | Control input channels             |
+| `bus`        | Control output buses               |
+| `lr`         | Control main L/R output            |
+| `dca`        | Control DCA groups                 |
+| `fx`         | Control FX slots                   |
+| `rtn`        | Control FX returns                 |
+| `scene`      | Manage scenes (load/save/list)     |
+| `raw`        | Send raw OSC commands              |
+| `meters`     | Show channel levels                |
+| `batch`      | Execute commands from file         |
+| `config`     | Manage configuration               |
+| `completion` | Generate shell completions         |
+
+## Channel Properties
+
+| Property  | Description                 | Range         |
+| --------- | --------------------------- | ------------- |
+| `fader`   | Level in dB                 | -90 to +10    |
+| `mute`    | Mute state                  | on/off/toggle |
+| `name`    | Channel name                | string        |
+| `gain`    | Preamp gain (channels only) | 0-60 dB       |
+| `phantom` | 48V phantom power           | on/off        |
+| `pan`     | Pan position                | -100 to +100  |
+| `eq`      | EQ enable                   | on/off        |
+| `gate`    | Gate enable                 | on/off        |
+| `comp`    | Compressor enable           | on/off        |
+| `send.N`  | Send level to bus N         | -90 to +10 dB |
+
+## Relative Adjustments
+
+Use `+` or `--` for relative fader changes:
+
+```bash
+xair ch 1 fader +3      # Increase by 3 dB
+xair ch 1 fader --6     # Decrease by 6 dB (double dash)
+```
+
+## Output Formats
+
+```bash
+xair ch 1 fader              # Human readable
+xair --json ch 1 fader       # JSON output
+xair --plain ch 1 fader      # key=value pairs
+```
+
+## Shell Completion
+
+```bash
+# Bash
+xair completion bash >> ~/.bashrc
+
+# Zsh
+xair completion zsh >> ~/.zshrc
+
+# Fish
+xair completion fish > ~/.config/fish/completions/xair.fish
+```
+
+## License
+
+MIT
