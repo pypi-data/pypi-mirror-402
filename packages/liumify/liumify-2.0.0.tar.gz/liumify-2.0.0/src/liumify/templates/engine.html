@@ -1,0 +1,151 @@
+<!-- (c) 2026 Liumi Corporation. All Rights Reserved. Private & Proprietary. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ app_title }} | Liumify HD</title>
+    <!-- Liumi Proprietary Style Engine -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; background-color: #000; overflow: hidden; font-family: 'Helvetica Neue', sans-serif; }
+        #render-target { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; pointer-events: none; padding: 2rem; display: flex; flex-direction: column; gap: 1rem; }
+        .interactive { pointer-events: auto; }
+        
+        /* Liumi Signature Glassmorphism */
+        .liumi-glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+    </style>
+</head>
+<body>
+    <div id="render-target"></div>
+    <div id="ui-layer"></div>
+
+    <!-- Liumify HD Rendering Core (Vendor Bundles) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        /**
+         * Liumify Client-Side Controller
+         * Handles the "Proprietary Fluid Visual Engine" Logic.
+         */
+        
+        // --- Engine Initialization ---
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x000000, 0.03); // Deep space black
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 2, 5);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.toneMapping = THREE.ReinhardToneMapping;
+        document.getElementById('render-target').appendChild(renderer.domElement);
+
+        // --- Lighting System (HD) ---
+        const ambiLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambiLight);
+        
+        const spotLight = new THREE.SpotLight(0xffffff, 1);
+        spotLight.position.set(5, 10, 5);
+        spotLight.castShadow = true;
+        scene.add(spotLight);
+
+        // --- WebSocket Bridge ---
+        const ws = new WebSocket(`ws://${window.location.host}/ws/link`);
+        
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === "INIT_SCENE") {
+                buildScene(data.payload.scene);
+            }
+        };
+
+        // --- Render Logic ---
+        function buildScene(components) {
+            const uiLayer = document.getElementById('ui-layer');
+            
+            components.forEach(comp => {
+                // 3D Handling
+                if (comp.type.startsWith('hd_')) {
+                    let mesh;
+                    const matProps = comp.props.material || { color: '#ffffff', roughness: 0.5 };
+                    const material = new THREE.MeshStandardMaterial({
+                        color: matProps.color,
+                        roughness: matProps.roughness,
+                        metalness: 0.8
+                    });
+
+                    if (comp.type === 'hd_sphere') {
+                        const geo = new THREE.SphereGeometry(comp.props.radius, 64, 64);
+                        mesh = new THREE.Mesh(geo, material);
+                    } else if (comp.type === 'hd_cube') {
+                        const geo = new THREE.BoxGeometry(comp.props.size, comp.props.size, comp.props.size);
+                        mesh = new THREE.Mesh(geo, material);
+                    } else if (comp.type === 'hd_plane') {
+                        const geo = new THREE.PlaneGeometry(comp.props.width, comp.props.depth);
+                        mesh = new THREE.Mesh(geo, material);
+                        mesh.rotation.x = -Math.PI / 2;
+                    }
+
+                    if (mesh) {
+                        mesh.position.set(comp.props.position.x, comp.props.position.y, comp.props.position.z);
+                        scene.add(mesh);
+                        
+                        // Internal Animation Tag
+                        if(comp.type === 'hd_sphere' || comp.type === 'hd_cube') {
+                            mesh.userData = { rotate: true };
+                        }
+                    }
+                }
+
+                // 2D UI Handling
+                if (comp.type.startsWith('ui_')) {
+                    const el = document.createElement('div');
+                    el.className = "interactive liumi-glass p-6 rounded-xl max-w-sm text-white transition transform hover:scale-105 duration-300";
+                    
+                    if (comp.type === 'ui_glass_card') {
+                        el.innerHTML = `
+                            <h2 class="text-xl font-bold mb-2 text-yellow-500">${comp.props.title}</h2>
+                            <p class="text-gray-300 font-light leading-relaxed">${comp.props.body}</p>
+                        `;
+                    } else if (comp.type === 'ui_action_btn') {
+                        el.className = "interactive bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 px-6 rounded-lg max-w-xs text-center cursor-pointer shadow-lg";
+                        el.innerText = comp.props.label;
+                    }
+                    uiLayer.appendChild(el);
+                }
+            });
+        }
+
+        // --- Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            scene.traverse((obj) => {
+                if (obj.userData.rotate) {
+                    obj.rotation.y += 0.005;
+                    obj.rotation.x += 0.002;
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // --- Resize Handler ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
