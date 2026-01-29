@@ -1,0 +1,348 @@
+# -*- mode: makefile-gmake -*-
+
+# If $(PETSC_ARCH) is empty, this defines it and SLEPC_DIR
+include ./$(PETSC_ARCH)/lib/slepc/conf/slepcvariables
+include ./lib/slepc/conf/slepc_variables
+
+OBJDIR := $(PETSC_ARCH)/obj
+LIBDIR := $(PETSC_ARCH)/lib
+
+pkgs  := sys eps svd pep nep mfn lme
+spkgs := sys,eps,svd,pep,nep,mfn,lme
+
+# $(call SONAME_FUNCTION,libfoo,abiversion)
+SONAME_FUNCTION ?= $(1).$(SL_LINKER_SUFFIX).$(2)
+# $(call SONAME_SFX_FUNCTION,libfoo,abiversion)
+SONAME_SFX_FUNCTION ?= $(1)$(LIB_NAME_SUFFIX).$(SL_LINKER_SUFFIX).$(2)
+# $(call SL_LINKER_FUNCTION,libfoo,abiversion,libversion)
+SL_LINKER_FUNCTION ?= -shared -Wl,-soname,$(call SONAME_FUNCTION,$(notdir $(1)),$(2))
+
+SLEPC_VERSION_MAJOR := $(shell awk '/define SLEPC_VERSION_MAJOR/{print $$3;}' ./include/slepcversion.h)
+SLEPC_VERSION_MINOR := $(shell awk '/define SLEPC_VERSION_MINOR/{print $$3;}' ./include/slepcversion.h)
+SLEPC_VERSION_SUBMINOR := $(shell awk '/define SLEPC_VERSION_SUBMINOR/{print $$3;}' ./include/slepcversion.h)
+SLEPC_VERSION_RELEASE := $(shell awk '/define SLEPC_VERSION_RELEASE/{print $$3;}' ./include/slepcversion.h)
+
+libslepc_abi_version := $(SLEPC_VERSION_MAJOR).$(if $(filter $(SLEPC_VERSION_RELEASE), 0 -2 -3 -4 -5),0)$(SLEPC_VERSION_MINOR)
+libslepc_lib_version := $(libslepc_abi_version).$(SLEPC_VERSION_SUBMINOR)
+soname_function = $(call SONAME_SFX_FUNCTION,$(1),$(libslepc_abi_version))
+libname_function = $(call SONAME_SFX_FUNCTION,$(1),$(libslepc_lib_version))
+absbasename_all = $(basename $(basename $(basename $(basename $(abspath $(1))))))# arch/lib/libpetsc.so.3.8.0 -> /path/to/arch/lib/libpetsc
+sl_linker_args = $(call SL_LINKER_FUNCTION,$(call absbasename_all,$@),$(libslepc_abi_version),$(libslepc_lib_version))
+
+libslepc_shared  := $(LIBDIR)/libslepc${LIB_NAME_SUFFIX}.$(SL_LINKER_SUFFIX)
+libslepc_soname  := $(call soname_function,$(LIBDIR)/libslepc)
+libslepc_libname := $(call libname_function,$(LIBDIR)/libslepc)
+libslepc_static  := $(LIBDIR)/libslepc${LIB_NAME_SUFFIX}.$(AR_LIB_SUFFIX)
+libslepcpkgs_shared  := $(foreach pkg, $(pkgs), $(LIBDIR)/libslepc$(pkg)${LIB_NAME_SUFFIX}.$(SL_LINKER_SUFFIX))
+libslepcpkgs_soname  := $(foreach pkg, $(pkgs), $(call soname_function,$(LIBDIR)/libslepc$(pkg)))
+libslepcpkgs_libname := $(foreach pkg, $(pkgs), $(call libname_function,$(LIBDIR)/libslepc$(pkg)))
+libslepcpkgs_static  := $(foreach pkg, $(pkgs), $(LIBDIR)/libslepc$(pkg)${LIB_NAME_SUFFIX}.$(AR_LIB_SUFFIX))
+
+ifeq ($(PETSC_WITH_EXTERNAL_LIB),)
+  libslepcall_shared  := $(libslepcpkgs_shared)
+  libslepcall_soname  := $(libslepcpkgs_soname)
+  libslepcall_libname := $(libslepcpkgs_libname)
+  libslepcall_static  := $(libslepcpkgs_static)
+else
+  libslepcall_shared  := $(libslepc_shared)
+  libslepcall_soname  := $(libslepc_soname)
+  libslepcall_libname := $(libslepc_libname)
+  libslepcall_static  := $(libslepc_static)
+endif
+libslepcall := $(if $(filter-out no,$(BUILDSHAREDLIB)),$(libslepcall_shared),$(libslepcall_static))
+
+generated      := $(PETSC_ARCH)/lib/slepc/conf/files
+
+slepc_libs : $(libslepcall)
+
+.PHONY: slepc_libs
+
+.SECONDEXPANSION:               # to expand $$(@D)/.DIR
+
+# Test framework includes rules and variables relevant to both build and test
+include ./gmakefile.test        # This must be below the slepc_libs target because it includes rules
+
+$(generated) : $(slepcconf) $(slepcvariables) $(PETSCCONFIGDIR)/gmakegen.py
+	$(PYTHON) $(PETSCCONFIGDIR)/gmakegen.py --petsc-arch=$(PETSC_ARCH_DIR) --pkg-dir=$(SLEPC_DIR) --pkg-name=slepc --pkg-pkgs=$(spkgs) --pkg-arch=$(PETSC_ARCH)
+
+# Skip including generated files (which triggers rebuilding them) when we're just going to clean anyway.
+ifneq ($(filter-out help clean distclean check info gmakeinfo checkbadSource deletefortranbindings fortranbindings alletags lint_slepc cleantest allgtest% get%,$(MAKECMDGOALS:clean%=clean)),)
+include $(generated)
+endif
+
+# implies shared libraries with MS compilers
+ifeq ($(PETSC_DLL_EXPORTS),1)
+$(OBJDIR)/%.o : CCPPFLAGS+=-Dslepc_EXPORTS
+$(OBJDIR)/%.o : CXXCPPFLAGS+=-Dslepc_EXPORTS
+$(OBJDIR)/%.o : CUDACPPFLAGS+=-Dslepc_EXPORTS
+endif
+
+langs := F F90 cxx c
+ifneq ($(CUDAC),)
+langs += cu
+endif
+ifneq ($(HIPC),)
+langs += hip.cpp
+endif
+ifneq ($(SYCLC),)
+langs += sycl.cxx
+endif
+ifneq ($(KOKKOS_LIB),)
+langs += kokkos.cxx
+endif
+
+concatlang = $(foreach lang, $(langs), $(srcs-$(1).$(lang):%.$(lang)=$(OBJDIR)/%.o))
+srcs.o := $(foreach pkg, $(pkgs), $(call concatlang,$(pkg)))
+srcs.tidy := $(foreach pkg, $(pkgs), $(srcs-$(pkg).c:%.c=$(OBJDIR)/%.tidy))
+concatlangsrc = $(foreach lang, $(langs), $(srcs-$(1).$(lang)))
+csrc := $(foreach pkg, $(pkgs),  $(srcs-$(pkg).c))
+showcsrc:
+	-@echo $(csrc)
+
+define SHARED_RECIPE_DLL
+  @$(RM) $@ dllcmd.${PETSC_ARCH}
+  @cygpath -w $^ > dllcmd.${PETSC_ARCH}
+  $(call quiet,CLINKER) $(sl_linker_args) -o $@ @dllcmd.${PETSC_ARCH} $(SLEPC_EXTERNAL_LIB) $(filter-out $(SLEPC_EXTERNAL_LIB),$(PETSC_SNES_LIB))
+  @$(RM) dllcmd.${PETSC_ARCH}
+endef
+
+define SHARED_RECIPE_ATFILE
+  $(file > $@.args,$^)
+  $(call quiet,CLINKER) $(sl_linker_args) -o $@ @$@.args $(SLEPC_EXTERNAL_LIB) $(filter-out $(SLEPC_EXTERNAL_LIB),$(PETSC_SNES_LIB))
+  @$(RM) $@.args
+endef
+
+define SHARED_RECIPE_DEFAULT
+  $(call quiet,CLINKER) $(sl_linker_args) -o $@ $^ $(SLEPC_EXTERNAL_LIB) $(filter-out $(SLEPC_EXTERNAL_LIB),$(PETSC_SNES_LIB))
+endef
+
+GMAKE4 = $(if $(findstring 3.99,$(firstword $(sort 3.99 $(MAKE_VERSION)))),1,)
+SHARED_RECIPE = $(if $(findstring -LD,$(SL_LINKER_FUNCTION)),$(SHARED_RECIPE_DLL),$(if $(PCC_AT_FILE),$(if $(GMAKE4),$(SHARED_RECIPE_ATFILE),$(SHARED_RECIPE_DEFAULT)),$(SHARED_RECIPE_DEFAULT)))
+
+# with-single-library=1 (default)
+$(libslepc_libname) : $(srcs.o) | $$(@D)/.DIR
+	$(SHARED_RECIPE)
+ifneq ($(DSYMUTIL),true)
+	$(call quiet,DSYMUTIL) $@
+endif
+
+$(libslepc_static) : obj := $(srcs.o)
+
+define ARCHIVE_RECIPE_WIN32FE_LIB
+  @$(RM) $@ $@.args
+  @cygpath -w $^ > $@.args
+  $(call quiet,AR) $(AR_FLAGS) $@ @$@.args
+  @$(RM) $@.args
+endef
+
+define ARCHIVE_RECIPE_ARGFILE
+  @$(RM) $@
+  $(file > $@.args,$^)
+  $(call quiet,AR) $(AR_FLAGS) $@ @$@.args
+  @$(RM) $@.args
+  $(call quiet,RANLIB) $@
+endef
+
+define ARCHIVE_RECIPE_DEFAULT
+  @$(RM) $@
+  $(call quiet,AR) $(AR_FLAGS) $@ $^
+  $(call quiet,RANLIB) $@
+endef
+
+%$(LIB_NAME_SUFFIX).$(AR_LIB_SUFFIX) : $$(obj) | $$(@D)/.DIR
+	$(if $(findstring win32fe_lib,$(AR)),$(ARCHIVE_RECIPE_WIN32FE_LIB),$(if $(findstring yes,$(AR_ARGFILE)),$(if $(GMAKE4),$(ARCHIVE_RECIPE_ARGFILE),$(ARCHIVE_RECIPE_DEFAULT)),$(ARCHIVE_RECIPE_DEFAULT)))
+
+# with-single-library=0
+libpkg = $(foreach pkg, $1, $(LIBDIR)/libslepc$(pkg)${LIB_NAME_SUFFIX}.$(SL_LINKER_SUFFIX))
+define pkg_template
+  $(LIBDIR)/libslepc$(1)${LIB_NAME_SUFFIX}.$(AR_LIB_SUFFIX)  : $(call concatlang,$(1))
+  $(call libname_function,$(LIBDIR)/libslepc$(1)) : $(call concatlang,$(1))
+endef
+$(foreach pkg,$(pkgs),$(eval $(call pkg_template,$(pkg))))
+$(call libname_function,$(LIBDIR)/libslepclme) : libdep := $(call libpkg,sys)
+$(call libname_function,$(LIBDIR)/libslepceps) : libdep := $(call libpkg,lme sys)
+$(call libname_function,$(LIBDIR)/libslepcsvd) : libdep := $(call libpkg,eps sys)
+$(call libname_function,$(LIBDIR)/libslepcpep) : libdep := $(call libpkg,eps sys)
+$(call libname_function,$(LIBDIR)/libslepcnep) : libdep := $(call libpkg,pep eps sys)
+$(call libname_function,$(LIBDIR)/libslepcmfn) : libdep := $(call libpkg,sys)
+
+# The package libraries technically depend on each other (not just in an order-only way), but only
+# ABI changes like new or removed symbols requires relinking the dependent libraries.  ABI should
+# only occur when a header is changed, which would trigger recompilation and relinking anyway.
+# RELINK=1 causes dependent libraries to be relinked anyway.
+ifeq ($(RELINK),1)
+  libdep_true = $$(libdep)
+  libdep_order =
+else
+  libdep_true =
+  libdep_order = $$(libdep)
+endif
+$(libslepcpkgs_libname) : $(libdep_true) | $(libdep_order) $$(@D)/.DIR
+	$(SHARED_RECIPE)
+ifneq ($(DSYMUTIL),true)
+	$(call quiet,DSYMUTIL) $@
+endif
+
+%$(LIB_NAME_SUFFIX).$(SL_LINKER_SUFFIX) : $(call libname_function,%) | $(call soname_function,%)
+	@ln -sf $(notdir $<) $@
+
+$(call soname_function,%) : $(call libname_function,%)
+	@ln -sf $(notdir $<) $@
+
+.PRECIOUS: $(call soname_function,%)
+
+$(OBJDIR)/%.o : %.sycl.cxx | $$(@D)/.DIR
+	$(PETSC_COMPILE.sycl.cxx) $(abspath $<) -o $@
+
+$(OBJDIR)/src/%.o : src/%.c | $$(@D)/.DIR
+	$(PETSC_COMPILE.c) $(abspath $<) -o $@
+
+$(OBJDIR)/ftn/%.o : $(PETSC_ARCH)/ftn/%.c | $$(@D)/.DIR
+	$(PETSC_COMPILE.c) $(abspath $<) -o $@
+
+$(OBJDIR)/%.o : %.kokkos.cxx | $$(@D)/.DIR
+	$(PETSC_COMPILE.kokkos.cxx) $(abspath $<) -o $@
+
+$(OBJDIR)/src/%.o : src/%.cxx | $$(@D)/.DIR
+	$(PETSC_COMPILE.cxx) $(abspath $<) -o $@
+
+$(OBJDIR)/ftn/%.o : $(PETSC_ARCH)/ftn/%.cxx | $$(@D)/.DIR
+	$(PETSC_COMPILE.cxx) $(abspath $<) -o $@
+
+$(OBJDIR)/%.o : %.hip.cpp | $$(@D)/.DIR
+	$(PETSC_COMPILE.hip.cpp) $(abspath $<) -o $@
+
+$(OBJDIR)/%.o : %.cu | $$(@D)/.DIR
+	$(PETSC_COMPILE.cu) $(abspath $<) -o $@ # Compile first so that if there is an error, it comes from a normal compile
+	@$(PETSC_GENDEPS.cu) $(abspath $<) -o $(@:%.o=%.d) # Generate the dependencies for later
+
+FCMOD = cd
+$(OBJDIR)/%.o : %.F | $$(@D)/.DIR
+ifeq ($(FC_MODULE_OUTPUT_FLAG),)
+	$(call quiet,FCMOD) $(MODDIR) && $(FC) -c $(FC_FLAGS) $(FFLAGS) $(FCPPFLAGS) $(FC_DEPFLAGS) $(abspath $<) -o $(abspath $@)
+else
+	$(PETSC_COMPILE.F) $(abspath $<) -o $@ $(FC_MODULE_OUTPUT_FLAG)$(MODDIR)
+endif
+	-@$(GFORTRAN_DEP_CLEANUP)
+
+$(OBJDIR)/%.o : %.F90 | $$(@D)/.DIR
+ifeq ($(FC_MODULE_OUTPUT_FLAG),)
+	$(call quiet,FCMOD) $(MODDIR) && $(FC) -c $(FC_FLAGS) $(FFLAGS) $(FCPPFLAGS) $(FC_DEPFLAGS) $(abspath $<) -o $(abspath $@)
+else
+	$(PETSC_COMPILE.F) $(abspath $<) -o $@ $(FC_MODULE_OUTPUT_FLAG)$(MODDIR)
+endif
+	-@$(GFORTRAN_DEP_CLEANUP)
+
+# Only works with ./configure --with-mpi=0 since clang-tidy cannot find MPI include files (love MPI compiler wrappers, the worse thing to come from MPI)
+$(OBJDIR)/%.tidy : %.c | $$(@D)/.DIR
+	@clang-tidy --checks='clang-diagnostic-*,-clang-analyzer-*,-clang-analyzer-security.insecureAPI.rand,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,clang-analyzer-deadcode.DeadStores,bugprone-too-small-loop-variable'  $(abspath $<) -- ${CCPPFLAGS}
+
+clang-tidy: $(srcs.tidy)
+
+# Hack: manual dependencies on object files
+$(OBJDIR)/src/sys/classes/bv/ftn-mod/slepcbvmod.o : $(OBJDIR)/src/sys/ftn-mod/slepcsysmod.o
+$(OBJDIR)/src/sys/classes/fn/ftn-mod/slepcfnmod.o : $(OBJDIR)/src/sys/ftn-mod/slepcsysmod.o
+$(OBJDIR)/src/sys/classes/rg/ftn-mod/slepcrgmod.o : $(OBJDIR)/src/sys/ftn-mod/slepcsysmod.o
+$(OBJDIR)/src/sys/classes/ds/ftn-mod/slepcdsmod.o : $(OBJDIR)/src/sys/classes/fn/ftn-mod/slepcfnmod.o $(OBJDIR)/src/sys/classes/rg/ftn-mod/slepcrgmod.o
+$(OBJDIR)/src/sys/classes/st/ftn-mod/slepcstmod.o : $(OBJDIR)/src/sys/classes/bv/ftn-mod/slepcbvmod.o
+$(OBJDIR)/src/mfn/ftn-mod/slepcmfnmod.o   : $(OBJDIR)/src/sys/classes/bv/ftn-mod/slepcbvmod.o $(OBJDIR)/src/sys/classes/fn/ftn-mod/slepcfnmod.o
+$(OBJDIR)/src/lme/ftn-mod/slepclmemod.o   : $(OBJDIR)/src/sys/classes/bv/ftn-mod/slepcbvmod.o
+$(OBJDIR)/src/eps/ftn-mod/slepcepsmod.o   : $(OBJDIR)/src/sys/classes/bv/ftn-mod/slepcbvmod.o $(OBJDIR)/src/sys/classes/fn/ftn-mod/slepcfnmod.o $(OBJDIR)/src/sys/classes/ds/ftn-mod/slepcdsmod.o $(OBJDIR)/src/sys/classes/rg/ftn-mod/slepcrgmod.o $(OBJDIR)/src/sys/classes/st/ftn-mod/slepcstmod.o $(OBJDIR)/src/lme/ftn-mod/slepclmemod.o
+$(OBJDIR)/src/pep/ftn-mod/slepcpepmod.o   : $(OBJDIR)/src/eps/ftn-mod/slepcepsmod.o
+$(OBJDIR)/src/nep/ftn-mod/slepcnepmod.o   : $(OBJDIR)/src/pep/ftn-mod/slepcpepmod.o $(OBJDIR)/src/mfn/ftn-mod/slepcmfnmod.o
+$(OBJDIR)/src/svd/ftn-mod/slepcsvdmod.o   : $(OBJDIR)/src/eps/ftn-mod/slepcepsmod.o
+
+# all sources should get recompiled when slepcvariables changes (i.e when configure is rerun or when slepcvariables is manually edited.)
+$(srcs.o) : $(slepcvariables)
+
+.PHONY: clean all print clang-tidy
+
+clean:
+	${RM} -r $(OBJDIR) $(LIBDIR)/libslepc* $(MODDIR)/slepc*.mod $(MPIUNI_MOD) $(generated)
+
+# make print VAR=the-variable
+print:
+	$(info $($(VAR)))
+	@true
+
+
+allobj.d := $(srcs.o:%.o=%.d)
+# Tell make that allobj.d are all up to date.  Without this, the include
+# below has quadratic complexity, taking more than one second for a
+# do-nothing build of PETSc (much worse for larger projects)
+$(allobj.d) : ;
+
+gmakegetlinklibs_slepc:
+	-@echo ${SLEPC_LIB}
+
+gmakegetincludedirs_slepc:
+	-@echo ${SLEPC_CC_INCLUDES}
+
+gmakeinfo:
+	-@echo "=========================================="
+	-@echo Starting make run on `hostname` at `date +'%a, %d %b %Y %H:%M:%S %z'`
+	-@echo Machine characteristics: `uname -a`
+	-@echo "-----------------------------------------"
+	-@echo "Using SLEPc directory: ${SLEPC_DIR}"
+	-@echo "Using PETSc directory: ${PETSC_DIR}"
+	-@echo "Using PETSc arch: ${PETSC_ARCH}"
+	-@echo "-----------------------------------------"
+	-@grep "define SLEPC_VERSION" ${SLEPC_DIR}/include/slepcversion.h | ${SED} "s/........//" | head -n 7
+	-@echo "-----------------------------------------"
+	-@echo "Using SLEPc configure options: ${SLEPC_CONFIGURE_OPTIONS}"
+	-@echo "Using SLEPc configuration flags:"
+	-@grep "#define " ${SLEPCCONF_H} | tail -n +2
+	-@echo "-----------------------------------------"
+	-@grep "define PETSC_VERSION" ${PETSC_DIR}/include/petscversion.h | ${SED} "s/........//" | head -n 7
+	-@echo "-----------------------------------------"
+	-@echo "Using PETSc configure options: ${CONFIGURE_OPTIONS}"
+	-@echo "Using PETSc configuration flags:"
+	-@grep "#define " ${PETSCCONF_H} | tail -n +2
+	-@echo "-----------------------------------------"
+	-@echo "Using C/C++ include paths: ${SLEPC_CC_INCLUDES}"
+	-@echo "Using C compile: ${PETSC_CCOMPILE_SINGLE}"
+	-@if [  "${MPICC_SHOW}" != "" ]; then \
+             printf  "mpicc -show: %b\n" "${MPICC_SHOW}";\
+          fi; \
+        printf  "C compiler version: %b\n" "${C_VERSION}"; \
+        if [ "${CXX}" != "" ]; then \
+        echo "Using C++ compile: ${PETSC_CXXCOMPILE_SINGLE}";\
+        if [ "${MPICXX_SHOW}" != "" ]; then \
+               printf "mpicxx -show: %b\n" "${MPICXX_SHOW}"; \
+            fi;\
+            printf  "C++ compiler version: %b\n" "${Cxx_VERSION}"; \
+          fi
+	-@if [ "${FC}" != "" ]; then \
+	   echo "Using Fortran include/module paths: ${SLEPC_FC_INCLUDES}";\
+	   echo "Using Fortran compile: ${PETSC_FCOMPILE_SINGLE}";\
+           if [ "${MPIFC_SHOW}" != "" ]; then \
+             printf "mpif90 -show: %b\n" "${MPIFC_SHOW}"; \
+           fi; \
+             printf  "Fortran compiler version: %b\n" "${FC_VERSION}"; \
+         fi
+	-@if [ "${CUDAC}" != "" ]; then \
+	   echo "Using CUDA compile: ${PETSC_CUCOMPILE_SINGLE}";\
+         fi
+	-@if [ "${HIPC}" != "" ]; then \
+	   echo "Using HIP compile: ${PETSC_HIPCOMPILE_SINGLE}";\
+         fi
+	-@if [ "${CLANGUAGE}" = "CXX" ]; then \
+           echo "Using C++ compiler to compile PETSc";\
+        fi
+	-@echo "-----------------------------------------"
+	-@echo "Using C/C++ linker: ${PCC_LINKER}"
+	-@echo "Using C/C++ flags: ${PCC_LINKER_FLAGS}"
+	-@if [ "${FC}" != "" ]; then \
+	   echo "Using Fortran linker: ${FC_LINKER}";\
+	   echo "Using Fortran flags: ${FC_LINKER_FLAGS}";\
+         fi
+	-@echo "-----------------------------------------"
+	-@echo "Using libraries: ${SLEPC_LIB}"
+	-@echo "------------------------------------------"
+	-@echo "Using mpiexec: ${MPIEXEC}"
+	-@echo "------------------------------------------"
+	-@echo "Using MAKE: ${MAKE}"
+	-@echo "Default MAKEFLAGS: MAKE_NP:${MAKE_NP} MAKE_LOAD:${MAKE_LOAD} MAKEFLAGS:${MAKEFLAGS}"
+	-@echo "=========================================="
+
+-include $(allobj.d)

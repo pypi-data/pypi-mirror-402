@@ -1,0 +1,55 @@
+# -*- mode: makefile -*-
+
+# This makefile is based on PETSc's Makefile.user.
+#
+# The following variable must either be a path to petsc.pc or just "petsc" if petsc.pc
+# has been installed to a system location or can be found in PKG_CONFIG_PATH. And the
+# same for slepc.pc.
+petsc.pc := $(PETSC_DIR)/$(PETSC_ARCH)/lib/pkgconfig/petsc.pc
+slepc.pc := $(SLEPC_DIR)/$(PETSC_ARCH)/lib/pkgconfig/slepc.pc
+
+# Additional libraries that support pkg-config can be added to the list of PACKAGES below.
+PACKAGES := $(slepc.pc)
+
+CC := $(shell pkg-config --variable=ccompiler $(petsc.pc))
+CXX := $(shell pkg-config --variable=cxxcompiler $(petsc.pc))
+FC := $(shell pkg-config --variable=fcompiler $(petsc.pc))
+CFLAGS_OTHER := $(shell pkg-config --cflags-only-other $(petsc.pc))
+CFLAGS := $(shell pkg-config --variable=cflags_extra $(petsc.pc)) $(CFLAGS_OTHER)
+CXXFLAGS := $(shell pkg-config --variable=cxxflags_extra $(petsc.pc)) $(CFLAGS_OTHER)
+FFLAGS := $(shell pkg-config --variable=fflags_extra $(petsc.pc))
+CPPFLAGS := $(shell pkg-config --cflags-only-I $(PACKAGES))
+LDFLAGS := $(shell pkg-config --libs-only-L --libs-only-other $(PACKAGES))
+LDFLAGS += $(patsubst -L%, $(shell pkg-config --variable=ldflag_rpath $(petsc.pc))%,$(shell pkg-config --libs-only-L $(PACKAGES)))
+LDLIBS := $(shell pkg-config --libs-only-l $(PACKAGES)) -lm
+CUDAC := $(shell pkg-config --variable=cudacompiler $(petsc.pc))
+CUDAC_FLAGS := $(shell pkg-config --variable=cudaflags_extra $(petsc.pc))
+CUDA_LIB := $(shell pkg-config --variable=cudalib $(petsc.pc))
+CUDA_INCLUDE := $(shell pkg-config --variable=cudainclude $(petsc.pc))
+
+print:
+	@echo CC=$(CC)
+	@echo CXX=$(CXX)
+	@echo FC=$(FC)
+	@echo CFLAGS=$(CFLAGS)
+	@echo CXXFLAGS=$(CXXFLAGS)
+	@echo FFLAGS=$(FFLAGS)
+	@echo CPPFLAGS=$(CPPFLAGS)
+	@echo LDFLAGS=$(LDFLAGS)
+	@echo LDLIBS=$(LDLIBS)
+	@echo CUDAC=$(CUDAC)
+	@echo CUDAC_FLAGS=$(CUDAC_FLAGS)
+	@echo CUDA_LIB=$(CUDA_LIB)
+	@echo CUDA_INCLUDE=$(CUDA_INCLUDE)
+
+% : %.F90
+	$(LINK.F) -o $@ $^ $(LDLIBS)
+%.o: %.F90
+	$(COMPILE.F) $(OUTPUT_OPTION) $<
+% : %.cxx
+	$(LINK.cc) -o $@ $^ $(LDLIBS)
+%.o: %.cxx
+	$(COMPILE.cc) $(OUTPUT_OPTION) $<
+%.o : %.cu
+	$(CUDAC) -c $(CPPFLAGS) $(CUDAC_FLAGS) $(CUDA_INCLUDE) -o $@ $<
+
