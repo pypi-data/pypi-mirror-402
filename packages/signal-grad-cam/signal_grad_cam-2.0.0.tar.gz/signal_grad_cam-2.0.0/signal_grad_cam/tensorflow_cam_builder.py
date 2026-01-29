@@ -1,0 +1,354 @@
+# Import dependencies
+import os
+os.environ["PYTHONHASHSEED"] = "11"
+os.environ["TF_DETERMINISTIC_OPS"] = "1"
+
+import numpy as np
+import keras
+import tensorflow as tf
+from typing import Callable, List, Tuple, Dict, Any, Optional
+
+from signal_grad_cam import CamBuilder
+
+
+# Class
+class TfCamBuilder(CamBuilder):
+    """
+    Represents a TensorFlow/Keras Class Activation Map (CAM) builder, supporting multiple methods such as Grad-CAM and
+    HiResCAM.
+    """
+
+    def __init__(self, model: tf.keras.Model | Any, transform_fn: Callable[[np.ndarray, *tuple[Any, ...]], tf.Tensor]
+                 = None, class_names: List[str] = None, time_axs: int = 1, input_transposed: bool = False,
+                 ignore_channel_dim: bool = False, is_regression_network: bool = False, model_output_index: int = None,
+                 extend_search: bool = False, padding_dim: int = None, seed: int = 11):
+        """
+        Initializes the TfCamBuilder class. The constructor also displays, if present and retrievable, the 1D- and
+        2D-convolutional layers in the network, as well as the final Sigmoid/Softmax activation. Additionally, the CAM
+        algorithms available for generating the explanations are shown.
+
+        :param model: (mandatory) A tf.keras.Model or any object (with TensorFlow/Keras layers among its attributes)
+            representing a convolutional neural network model to be explained. Unconventional models should always be
+            set to inference mode before being provided as inputs.
+        :param transform_fn: (optional, default is None) A callable function to preprocess np.ndarray data before model
+            evaluation. This function is also expected to convert data into TensorFlow tensors. The function may
+            optionally take as a second input a list of objects required by the preprocessing method.
+        :param class_names: (optional, default is None) A list of strings where each string represents the name of an
+            output class.
+        :param time_axs: (optional, default is 1) An integer index indicating whether the input signal's time axis is
+            represented as the first or second dimension of the input array.
+        :param input_transposed: (optional, default is False) A boolean indicating whether the input array is transposed
+            during model inference, either by the model itself or by the preprocessing function.
+        :param ignore_channel_dim: (optional, default is False) A boolean indicating whether to ignore the channel
+            dimension. This is useful when the model expects inputs without a singleton channel dimension.
+        :param is_regression_network: (optional, default is False) A boolean indicating whether the network is designed
+            for a regression task. If set to True, the CAM will highlight both positive and negative contributions.
+            While negative contributions are typically irrelevant for classification-based saliency maps, they can be
+            meaningful in regression settings, as they may represent features that decrease the predicted value.
+        :param model_output_index: (optional, default is None) An integer index specifying which of the model's outputs
+            represents output scores (or probabilities). If there is only one output, this argument can be ignored.
+        :param extend_search: (optional, default is False) A boolean flag indicating whether to deepend the search for
+            candidate layers. It should be set true if no convolutional layer was found.
+        :param padding_dim: (optional, default is None) An integer specifying the maximum length along the time axis to
+            which each item will be padded for batching.
+        :param seed: (optional, default is 11) An integer seed for random number generators, used to ensure
+            reproducibility during model evaluation.
+        """
+
+        # Initialize attributes
+        super(TfCamBuilder, self).__init__(model=model, transform_fn=transform_fn, class_names=class_names,
+                                           time_axs=time_axs, input_transposed=input_transposed,
+                                           ignore_channel_dim=ignore_channel_dim,
+                                           is_regression_network=is_regression_network,
+                                           model_output_index=model_output_index,
+                                           extend_search=extend_search, padding_dim=padding_dim, seed=seed)
+
+        # Set seeds
+        tf.random.set_seed(seed)
+
+        # Check for input/output attributes
+        if not hasattr(model, "inputs"):
+            self._CamBuilder__print_justify("Your TensorFlow/Keras model has no attribute 'inputs'. Ensure it is built "
+                                            "or loaded correctly, or provide a different one. If the model contains a "
+                                            "'Sequential' attribute, that Sequential object may be a suitable candidate"
+                                            " for an input model.")
+        elif not hasattr(model, "output"):
+            if hasattr(model, "outputs"):
+                self.model.output = model.outputs[self.model_output_index] if self.model_output_index is not None \
+                    else model.outputs[0]
+            else:
+                self._CamBuilder__print_justify("Your TensorFlow/Keras model has no attribute 'output' or 'outputs'. "
+                                                "Ensure it is built or loaded correctly, or provide a different one. If"
+                                                " the model contains a 'Sequential' attribute, that Sequential object "
+                                                "may be a suitable candidate for an input model.")
+
+    def _get_layers_pool(self, show: bool = False, extend_search: bool = False) \
+            -> Dict[str, tf.keras.layers.Layer | Any]:
+        """
+        Retrieves a dictionary containing all the available TensorFlow/Keras layers (or instance attributes), with the
+        layer (or attribute) names used as keys.
+
+        :param show: (optional, default is False) A boolean flag indicating whether to display the retrieved layers
+            along with their names.
+        :param extend_search: (optional, default is False) A boolean flag indicating whether to deepend the search for
+            candidate layers. It should be set true if no convolutional layer was found.
+
+        :return:
+            - layers_pool: A dictionary storing the model's TensorFlow/Keras layers (or instance attributes), with layer
+            (or attribute) names as keys.
+        """
+
+        if hasattr(self.model, "layers"):
+            layers_pool = {layer.name: layer for layer in self.model.layers}
+            if show:
+                for name, layer in layers_pool.items():
+                    self._show_layer(name, layer)
+            layers_pool.update(self._get_sub_layers_pool(layers_pool, show=show))
+        else:
+            layers_pool = super()._get_layers_pool(show=show)
+            layers_pool.update(self._get_sub_layers_pool(layers_pool, show=show))
+
+        if extend_search:
+            layers_pool.update(super()._get_layers_pool(show=show))
+
+        return layers_pool
+
+    def _get_sub_layers_pool(self, layers_pool: Dict[str, tf.keras.layers.Layer | Any], show: bool = False) \
+            -> Dict[str, tf.keras.layers.Layer | Any]:
+        """
+        Retrieves a dictionary containing all the available TensorFlow/Keras layers (or instance attributes), with the
+        layer (or attribute) names used as keys.
+
+        :param show: (optional, default is False) A boolean flag indicating whether to display the retrieved layers
+            along with their names.
+        :param layers_pool: (mandatory) A dictionary storing the model's TensorFlow/Keras layers (or instance
+            attributes), with layer (or attribute) names as keys.
+
+        :return:
+            - sub_layers_pool: A dictionary storing the model's TensorFlow/Keras layers (or instance attributes), with
+            layer (or attribute) names as keys, enhanced with sub-layers formerly encapsulated in keras.Sequential
+            objects.
+        """
+
+        sub_layers_pool = {}
+        for name, layer in layers_pool.items():
+            if isinstance(layer, keras.Sequential):
+                sub_layers_pool.update({name + "." + sub_layer.name: sub_layer for sub_layer in layer.layers})
+        if show:
+            for name, layer in sub_layers_pool.items():
+                self._show_layer(name, layer)
+
+        return sub_layers_pool
+
+    def _show_layer(self, name: str, layer: tf.keras.layers.Layer | Any, potential: bool = False) -> None:
+        """
+        Displays a single available layer (or instance attribute) in the model, along with its corresponding name.
+
+        :param name: (mandatory) A string representing the name of the layer or attribute.
+        :param layer: (mandatory) A TensorFlow/Keras layer, or an instance attribute in the model.
+        :param potential: (optional, default is False) A flag indicating whether the object displayed is potentially
+            a layer (i.e., a generic instance attribute, not guaranteed to be a layer).
+        """
+
+        if (isinstance(layer, keras.layers.Conv1D) or isinstance(layer, keras.layers.Conv2D) or
+            isinstance(layer, keras.layers.Conv3D) or isinstance(layer, keras.layers.Softmax) or
+                isinstance(layer, keras.Sequential)):
+            super()._show_layer(name, layer, potential=potential)
+
+    def _create_raw_batched_cams(self, data_list: List[np.ndarray | tf.Tensor], target_class: int,
+                                 target_layer: tf.keras.layers.Layer, explainer_type: str, softmax_final: bool,
+                                 extra_inputs_list: List[Any] = None, contrastive_foil_class: int = None,
+                                 eps: float = 1e-6) \
+            -> Tuple[List[np.ndarray], np.ndarray]:
+        """
+        Retrieves raw CAMs from an input data list based on the specified settings (defined by algorithm, target layer,
+        and target class). Additionally, it returns the class probabilities predicted by the model.
+
+        :param data_list: (mandatory) A list of np.ndarrays to be explained, representing either a signal, an image, or
+            a video/volume.
+        :param target_class: (mandatory) An integer representing the target class for the explanation.
+        :param target_layer: (mandatory) A string representing the target layer for the explanation. This string should
+            identify either TensorFlow/Keras layers or it should be a class dictionary key, used to retrieve the layer
+            from the class attributes.
+        :param explainer_type: (mandatory) A string representing the desired algorithm for the explanation. This string
+            should identify one of the CAM algorithms allowed, as listed by the class constructor.
+        :param softmax_final: (mandatory) A boolean indicating whether the network terminates with a Sigmoid/Softmax
+            activation function.
+        :param extra_inputs_list: (optional, defaults is None) A list of additional input objects required by the
+            model's forward method.
+        :param contrastive_foil_class: (optional, default is None) An integer representing the comparative class (foil)
+            for the explanation in the context of Contrastive Explanations. If None, the explanation would follow the
+            classical paradigm.
+        :param eps: (optional, default is 1e-6) A float number used in probability clamping before logarithm application
+            to avoid null or None results.
+
+        :return:
+            - cam_list: A list of np.ndarray containing CAMs for each item in the input data list, corresponding to the
+                given setting (defined by algorithm, target layer, and target class).
+            - target_probs: A np.ndarray, representing the inferred class probabilities for each item in the input list.
+        """
+
+        # Data batching
+        if not isinstance(data_list[0], tf.Tensor):
+            data_list = [tf.convert_to_tensor(x) for x in data_list]
+        if self.padding_dim is not None:
+            padded_data_list = []
+            for item in data_list:
+                pad_size = self.padding_dim - tf.shape(item)[self.time_axs]
+                if not self.time_axs:
+                    zeros = tf.zeros((pad_size, tf.shape(item)[1]), dtype=item.dtype)
+                else:
+                    zeros = tf.zeros((tf.shape(item)[0], pad_size), dtype=item.dtype)
+                padded_data_list.append(tf.concat([item, zeros], axis=self.time_axs))
+            data_list = padded_data_list
+
+        is_2d_layer = self._is_2d_layer(target_layer)
+        if not self.ignore_channel_dim and (is_2d_layer and len(data_list[0].shape) == 2 or not is_2d_layer
+                                            and len(data_list[0].shape) == 1):
+            data_list = [tf.expand_dims(x, axis=0) for x in data_list]
+        data_batch = tf.stack(data_list, axis=0)
+
+        grad_model = keras.models.Model(self.model.inputs, [target_layer.output, self.model.output])
+        extra_inputs_list = extra_inputs_list or []
+        with (tf.GradientTape() as tape):
+            self.activations, outputs = grad_model([data_batch] + extra_inputs_list)
+
+            if softmax_final:
+                target_probs = outputs
+                if len(outputs.shape) == 2 and outputs.shape[1] > 1:
+                    # Approximate Softmax inversion formula logit = log(prob) + constant, as the constant is negligible
+                    # during derivation. Clamp probabilities before log application to avoid null maps for maximum
+                    # confidence.
+                    target_scores = tf.math.log(tf.clip_by_value(outputs, eps, 1.0 - eps))
+                else:
+                    # Adjust results for binary network
+                    target_scores = tf.math.logit(outputs, eps=eps)
+                    if len(outputs.shape) == 1:
+                        target_scores = tf.stack([-target_scores, target_scores], axis=1)
+                        target_probs = tf.stack([1 - target_probs, target_probs], axis=1)
+                    else:
+                        target_scores = tf.concat([-target_scores, target_scores], axis=1)
+                        target_probs = tf.concat([1 - target_probs, target_probs], axis=1)
+            else:
+                target_scores = outputs
+                if len(outputs.shape) == 2 and outputs.shape[1] > 1:
+                    target_probs = tf.nn.softmax(target_scores, axis=1)
+                else:
+                    p = tf.math.sigmoid(outputs)
+                    if len(outputs.shape) == 1:
+                        target_scores = tf.stack([-outputs, outputs], axis=1)
+                        target_probs = tf.stack([1 - p, p], axis=1)
+                    elif len(outputs.shape) == 2 and outputs.shape[1] == 1:
+                        target_scores = tf.concat([-outputs, outputs], axis=1)
+                        target_probs = tf.concat([1 - p, p], axis=1)
+
+            if contrastive_foil_class is not None:
+                contrastive_foil = tf.constant([contrastive_foil_class] * target_scores.shape[0], dtype=tf.int32)
+                target_scores = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)(contrastive_foil,
+                                                                                                target_scores)
+                target_probs = tf.gather(target_probs, [target_class, contrastive_foil_class], axis=1)
+            else:
+                target_scores = target_scores[:, target_class]
+                target_probs = target_probs[:, target_class]
+
+            self.gradients = tape.gradient(target_scores, self.activations)
+
+        cam_list = []
+        is_2d_layer = self._is_2d_layer(target_layer)
+        is_3d_layer = is_2d_layer is None
+        for i in range(len(data_list)):
+            if explainer_type == "HiResCAM":
+                cam = self._get_hirecam_map(is_2d_layer=is_2d_layer, is_3d_layer=is_3d_layer, batch_idx=i)
+            else:
+                cam = self._get_gradcam_map(is_2d_layer=is_2d_layer, is_3d_layer=is_3d_layer, batch_idx=i)
+            cam_list.append(cam.numpy())
+
+        return cam_list, target_probs
+
+    def _get_gradcam_map(self, is_2d_layer: bool, is_3d_layer: bool, batch_idx: int) -> tf.Tensor:
+        """
+        Compute the CAM using the vanilla Gradient-weighted Class Activation Mapping (Grad-CAM) algorithm.
+
+        :param is_2d_layer: (mandatory) A boolean indicating whether the target layers 2D-convolutional layer.
+        :param is_3d_layer: (mandatory) A boolean indicating whether the target layers 3D-convolutional layer.
+        :param batch_idx: (mandatory) The index corresponding to the i-th selected item within the original input data
+            list.
+
+        :return:
+            - cam: A TensorFlow/Keras tensor representing the Class Activation Map (CAM) for the batch_idx-th input,
+                built with the Grad-CAM algorithm.
+        """
+
+        if is_2d_layer is not None and is_2d_layer:
+            dim_mean = (0, 1)
+        elif is_3d_layer:
+            dim_mean = (0, 1, 2)
+        else:
+            dim_mean = 0
+        weights = tf.reduce_mean(self.gradients[batch_idx], axis=dim_mean)
+        activations = self.activations[batch_idx].numpy()
+
+        for i in range(activations.shape[-1]):
+            if is_2d_layer is not None and is_2d_layer:
+                activations[:, :, i] *= weights[i]
+            elif is_3d_layer:
+                activations[:, :, :, i] *= weights[i]
+            else:
+                activations[:, i] *= weights[i]
+
+        cam = tf.reduce_sum(tf.convert_to_tensor(activations), axis=-1)
+        if not self.is_regression_network:
+            cam = tf.nn.relu(cam)
+        return cam
+
+    def _get_hirecam_map(self, is_2d_layer: bool, is_3d_layer: bool, batch_idx: int) -> tf.Tensor:
+        """
+        Compute the CAM using the High-Resolution Class Activation Mapping (HiResCAM) algorithm.
+
+        :param is_2d_layer: (mandatory) A boolean indicating whether the target layers 2D-convolutional layer.
+        :param is_3d_layer: (mandatory) A boolean indicating whether the target layers 3D-convolutional layer.
+        :param batch_idx: (mandatory) The index corresponding to the i-th selected item within the original input data
+            list.
+
+        :return:
+            - cam: A TensorFlow/Keras tensor representing the Class Activation Map (CAM) for the batch_idx-th input,
+                built with the HiResCAM algorithm.
+        """
+
+        activations = self.activations[batch_idx].numpy()
+        gradients = self.gradients[batch_idx].numpy()
+
+        for i in range(activations.shape[-1]):
+            if is_2d_layer is not None and is_2d_layer:
+                activations[:, :, i] *= gradients[:, :, i]
+            elif is_3d_layer:
+                activations[:, :, :, i] *= gradients[:, :, :, i]
+            else:
+                activations[:, i] *= gradients[:, i]
+
+        cam = tf.reduce_sum(tf.convert_to_tensor(activations), axis=-1)
+        if not self.is_regression_network:
+            cam = tf.nn.relu(cam)
+        return cam
+
+    @staticmethod
+    def _is_2d_layer(target_layer: tf.keras.layers.Layer) -> bool | None:
+        """
+        Evaluates whether the target layer is a 2D-convolutional layer.
+
+        :param target_layer: (mandatory) A TensorFlow/Keras layer.
+
+        :return:
+            - is_2d_layer: A boolean indicating whether the target layers 2D-convolutional layer. If the target layer is
+                a 3D-convolutional layer, the function returns a None.
+        """
+
+        if isinstance(target_layer, keras.layers.Conv1D):
+            is_2d_layer = False
+        elif isinstance(target_layer, keras.layers.Conv2D):
+            is_2d_layer = True
+        elif isinstance(target_layer, keras.layers.Conv3D):
+            is_2d_layer = None
+        else:
+            is_2d_layer = CamBuilder._is_2d_layer(target_layer)
+        return is_2d_layer
