@@ -1,0 +1,183 @@
+Metadata-Version: 2.4
+Name: addresscomplete
+Version: 1.0.1
+Summary: A Python client for the Canada Post AddressComplete API
+Project-URL: Homepage, https://github.com/dellwood546/AddressComplete
+Project-URL: Repository, https://github.com/dellwood546/AddressComplete
+Project-URL: Issues, https://github.com/dellwood546/AddressComplete/issues
+Author-email: Darian Elwood <dellwood546@gmail.com>
+License: GPL-3.0
+License-File: LICENSE
+Keywords: address,address-autocomplete,address-validation,addresscomplete,canada-post
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: GNU General Public License v3 (GPLv3)
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.7
+Requires-Dist: requests>=2.32.3
+Description-Content-Type: text/markdown
+
+# AddressComplete
+
+[![PyPI version](https://badge.fury.io/py/addresscomplete.svg)](https://badge.fury.io/py/addresscomplete)
+[![Python Version](https://img.shields.io/pypi/pyversions/addresscomplete)](https://pypi.org/project/addresscomplete/)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Downloads](https://pepy.tech/badge/addresscomplete)](https://pepy.tech/project/addresscomplete)
+[![GitHub stars](https://img.shields.io/github/stars/dellwood546/AddressComplete?style=social)](https://github.com/dellwood546/AddressComplete)
+
+A clean, Pythonic client for the Canada Post AddressComplete API. Simplify address autocomplete and validation in your applications with type-safe error handling and an intuitive interface.
+
+## Quick Start
+
+```bash
+pip install addresscomplete
+```
+
+```python
+from addresscomplete import AddressComplete
+
+client = AddressComplete("your-api-key-here")
+results = client.find("123 Main St, Toronto")
+```
+
+## Features
+
+- **Fast Address Search** - Get instant address suggestions with customizable parameters
+- **Detailed Address Retrieval** - Fetch complete address information using unique IDs
+- **Robust Error Handling** - Specific exception types for every API error scenario
+- **Zero Configuration** - Works out of the box with sensible defaults
+
+## Installation
+
+```bash
+pip install addresscomplete
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/dellwood546/AddressComplete.git
+cd AddressComplete
+pip install .
+```
+
+**Requirements:** Python 3.7+ and the `requests` library (installed automatically).
+
+## Getting Started
+
+Get your free API key from [Canada Post AddressComplete](https://www.canadapost-postescanada.ca/cpc/en/business/marketing/campaigns/addresscomplete.page), then start using the library immediately.
+
+### Basic Usage
+
+```python
+from addresscomplete import AddressComplete
+
+# Initialize the client with your API key
+client = AddressComplete("your-api-key-here")
+
+# Search for addresses
+results = client.find("123 Main St, Toronto")
+print(results)
+
+# Retrieve detailed address information
+address_id = "CA|CP|ENG|3X1-R2J"
+details = client.retrieve(address_id)
+print(details)
+```
+
+### Advanced Usage
+
+```python
+from addresscomplete import AddressComplete, FindError, RetrieveError
+
+client = AddressComplete("your-api-key-here")
+
+try:
+    # Search with custom parameters
+    results = client.find(
+        search_term="123 Main Street",
+        country="CAN",
+        max_suggestions=5,
+        language_preference="en"
+    )
+    
+    # Process and enrich results
+    for item in results.get("Items", []):
+        print(f"{item.get('Description')} (ID: {item.get('Id')})")
+        
+        # Retrieve complete address details
+        try:
+            details = client.retrieve(item["Id"])
+            print(f"Complete address: {details}")
+        except RetrieveError as e:
+            print(f"Retrieval failed: {e}")
+            
+except FindError as e:
+    print(f"Search error: {e}")
+```
+
+## API Reference
+
+### `AddressComplete(api_key)`
+
+Creates a new client instance.
+
+**Parameters:**
+- `api_key` (str): Your Canada Post AddressComplete API key
+
+### `find(search_term, country="CAN", max_suggestions=10, language_preference="en")`
+
+Searches for address suggestions matching the search term.
+
+**Parameters:**
+- `search_term` (str): The address search term
+- `country` (str, optional): Country code, defaults to `"CAN"`
+- `max_suggestions` (int, optional): Maximum results to return, defaults to `10`
+- `language_preference` (str, optional): Language code (2 or 4 digits), defaults to `"en"`
+
+**Returns:** `dict` - JSON response with address suggestions
+
+**Raises:** `FindError` - When the API returns an error
+
+### `retrieve(id)`
+
+Fetches complete address details for the given ID.
+
+**Parameters:**
+- `id` (str): Unique address identifier from `find()` results
+
+**Returns:** `dict` - Complete address information
+
+**Raises:** `RetrieveError` - When the API returns an error
+
+## Error Handling
+
+The library maps API error codes to specific exception types, making error handling straightforward and explicit.
+
+- `FindError` - Raised when address search fails
+- `RetrieveError` - Raised when address retrieval fails
+
+Both exceptions automatically map error codes to specific exception classes (e.g., `InvalidSearchTermError`, `AccountSuspendedError`, `UnknownKeyError`) for granular error handling.
+
+## License
+
+Licensed under the GNU General Public License v3.0 (GPL-3.0). See [LICENSE](LICENSE) for details.
+
+## Contributing
+
+Pull requests are welcome. For major changes, please open an issue first to discuss what you'd like to change.
+
+## Support
+
+Found a bug or have a question? [Open an issue](https://github.com/dellwood546/AddressComplete/issues) on GitHub.
+
+---
+
+**Author:** Darian Elwood (dellwood546@gmail.com)
