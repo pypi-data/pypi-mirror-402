@@ -1,0 +1,535 @@
+Metadata-Version: 2.4
+Name: universal-data-connector
+Version: 0.1.1
+Summary: A Python package to query Oracle databases via CLI.
+Author-email: Mhlasakululeka Mvubu <mhlavubu@woolworths.co.za>
+Requires-Python: >=3.9
+Description-Content-Type: text/x-rst
+License-File: LICENSE.txt
+Requires-Dist: click
+Requires-Dist: pandas
+Requires-Dist: oracledb
+Requires-Dist: sqlalchemy
+Dynamic: license-file
+
+| |sponsor| |bluesky-nedbat| |mastodon-nedbat|
+
+**Note** Since writing this README, I’ve found that the `Python Packaging User
+Guide tutorial`__ is an excellent general reference for packaging projects. This
+document focuses specifically on this project and its design decisions.
+
+__ https://packaging.python.org/en/latest/tutorials/packaging-projects/
+
+-----
+
+################
+oracle-connector
+################
+
+This project provides a lightweight, opinionated way to execute Oracle SQL
+files from the command line or Python, with minimal setup. It is designed for
+data engineers, analysts, and platform teams who want a **simple CLI that runs
+a `.sql` file against Oracle and returns results as a CSV**, without writing
+Python scripts.
+
+This is **one possible way** to structure and package such a tool as of 2025.
+The Python packaging ecosystem is large and complex; this repository focuses on
+a single, practical approach rather than exploring all alternatives.
+
+The emphasis of this project is:
+
+- Clean packaging using ``pyproject.toml``
+- A CLI-first user experience
+- Environment-variable–based configuration
+- Separation between database logic and execution logic
+
+This repository intentionally leaves out some things you may want in a
+production system (for example: tests, CI, linting, or type checking) so that
+the focus remains on packaging and usability.
+
+Comments throughout the source files explain why things are structured the way
+they are.
+
+---
+
+How to use this project
+=======================
+
+This repository is both a usable tool **and** a reference implementation.
+
+You can:
+
+- Install it and immediately run Oracle SQL files
+- Fork it and adapt it to your organisation’s needs
+- Copy parts of it into an existing project
+
+You do not need to copy the entire repository. You can selectively reuse files
+such as ``pyproject.toml`` or the Click-based CLI.
+
+---
+
+Decisions
+=========
+
+Before using or adapting this project, there are a few key decisions to be aware
+of.
+
+Project name
+------------
+
+The project name is ``oracle-connector``. This name serves multiple purposes:
+
+- The package name on PyPI
+- The import namespace
+- The CLI entry point (``oracle-run``)
+
+If you fork or reuse this project, you should choose a name that is available on
+PyPI. You can check availability by searching on PyPI__.
+
+__ https://pypi.org
+
+Version number
+--------------
+
+The package version is defined in ``src/oracle_connector/__init__.py`` as
+``__version__``.
+
+When publishing distributions, you should increment this value. While testing
+your packaging workflow, it is recommended to use development suffixes such as:
+
+::
+
+    __version__ = "0.1.0.dev0"
+
+CLI-first design
+----------------
+
+This project is intentionally designed so that **end users do not need to write
+Python code**. Users interact with the package exclusively through a command-
+line interface and provide only a SQL file.
+
+Example:
+
+::
+
+    oracle-run --sql main.sql --output results.csv
+
+Python usage is still possible, but it is not the primary interface.
+
+Configuration via environment variables
+---------------------------------------
+
+All Oracle connection details are provided through environment variables. This
+avoids hard-coded secrets and works well in:
+
+- Local development
+- CI/CD pipelines
+- Containers
+- Cloud platforms (e.g. AWS, Azure)
+
+---
+
+Project layout
+==============
+
+This repository follows the ``src/`` layout recommended by modern Python
+packaging practices.
+
+src/
+----
+
+All Python source code lives under ``src/oracle_connector``:
+
+- ``connector.py`` – Oracle database connection and execution logic
+- ``runner.py`` – High-level SQL execution helper
+- ``cli.py`` – Click-based command-line interface
+
+This separation keeps responsibilities clear and makes the code easier to test
+and extend.
+
+pyproject.toml
+--------------
+
+This file defines:
+
+- Project metadata
+- Dependencies
+- Python version requirements
+- The CLI entry point
+
+It is the most important configuration file in the project and should be the
+first place you look when adapting this repository.
+
+README.rst
+----------
+
+(This file.)
+
+It explains what the project does, how to install it, how to use it, and how to
+publish it. If you prefer Markdown, you may replace this file with
+``README.md`` and update the ``readme`` field in ``pyproject.toml`` accordingly.
+
+Other files
+-----------
+
+- **.gitignore** – Prevents build artifacts and caches from being committed
+- **LICENSE.txt** – The project license (you may change this)
+
+---
+
+Preparing your environment
+==========================
+
+You will need **Python 3.9 or newer**.
+
+Using a virtual environment is strongly recommended, though not required.
+
+Install build tools
+-------------------
+
+To build distributions, install the development tools:
+
+::
+
+    python -m pip install -r dev-requirements.txt
+
+Or, if provided:
+
+::
+
+    make tools
+
+---
+
+Installation
+============
+
+Local editable install
+----------------------
+
+For development or local testing, install the project in editable mode:
+
+::
+
+    python -m pip install -e .
+
+This allows Python to import directly from your working tree, making iteration
+fast and convenient.
+
+After installation, the CLI will be available immediately.
+
+---
+
+Usage
+=====
+
+Environment variables
+---------------------
+
+Before running the CLI, set the following environment variables:
+
+::
+
+    export ORACLE_USER=your_username
+    export ORACLE_PASSWORD=your_password
+    export ORACLE_HOST=your_host
+    export ORACLE_PORT=1521
+    export ODWH_SERVICE=your_service_name
+
+Running a SQL file
+------------------
+
+Execute a SQL file and export results to CSV:
+
+::
+
+    oracle-run --sql main.sql
+
+Specify a custom output file:
+
+::
+
+    oracle-run --sql SQL/ETL/ODWH/main.sql --output stock_data.csv
+
+If the query returns rows, they will be written to the output file. If no rows
+are returned, the command will still succeed.
+
+---
+
+Making distributions
+====================
+
+Create distributions
+--------------------
+
+Build both a source distribution and a wheel:
+
+::
+
+    python -m build --sdist --wheel
+    python -m twine check dist/*
+
+If successful, the ``dist/`` directory will contain files similar to:
+
+::
+
+    oracle_connector-0.1.0-py3-none-any.whl
+    oracle_connector-0.1.0.tar.gz
+
+Testing distributions
+---------------------
+
+You can test the built wheel in a fresh virtual environment:
+
+::
+
+    python -m pip install oracle_connector-0.1.0-py3-none-any.whl
+
+Verify that the CLI works as expected.
+
+---
+
+Uploading to PyPI
+=================
+
+There are two PyPI instances:
+
+- Test PyPI: https://test.pypi.org
+- Production PyPI: https://pypi.org
+
+Create accounts on both before proceeding.
+
+Upload to Test PyPI
+-------------------
+
+::
+
+    python -m twine upload --repository testpypi dist/*
+
+After uploading, review the project page and README formatting.
+
+**Note:** Uploaded files cannot be replaced. If you need to fix something, you
+must increment the version number and upload again.
+
+Upload to production PyPI
+-------------------------
+
+Once satisfied:
+
+::
+
+    python -m twine upload dist/*
+
+---
+
+Your package is available
+=========================
+
+Users can now install your package with:
+
+::
+
+    pip install oracle-connector
+
+And immediately run:
+
+::
+
+    oracle-run --sql main.sql
+
+---
+
+.. |mastodon-nedbat| image:: https://img.shields.io/badge/Mastodon-follow-purple
+    :target: https://hachyderm.io
+    :alt: Mastodon
+.. |bluesky-nedbat| image:: https://img.shields.io/badge/Bluesky-follow-blue
+    :target: https://bsky.app
+    :alt: Bluesky
+.. |sponsor| image:: https://img.shields.io/badge/%E2%9D%A4-Sponsor-brightgreen
+    :target: https://github.com/sponsors
+    :alt: Sponsor
+
+
+Internal / private PyPI usage
+=============================
+
+This project is designed to be published and consumed from an **internal Python
+package repository** rather than the public PyPI service.
+
+This is the recommended approach for:
+
+- Proprietary business logic
+- Database access tools
+- Organisation-specific conventions
+- Controlled distribution and access
+
+Supported private repositories include (but are not limited to):
+
+- Artifactory
+- Nexus Repository
+- AWS CodeArtifact
+- Azure DevOps Artifacts
+- GitHub Packages
+
+---
+
+Publishing to an internal repository
+====================================
+
+Configure repository access
+----------------------------
+
+Before uploading, ensure your Python environment is configured to authenticate
+with your internal package repository.
+
+This is typically done using one of the following:
+
+- ``~/.pypirc``
+- Environment variables
+- Repository-specific CLI tools (e.g. AWS CLI, Azure CLI)
+
+Example ``~/.pypirc``:
+
+::
+
+    [distutils]
+    index-servers =
+        internal
+
+    [internal]
+    repository = https://pypi.company.com/repository/python-internal/
+    username = __token__
+    password = <your-access-token>
+
+Never commit credentials or tokens to source control.
+
+---
+
+Build the package
+-----------------
+
+Create distribution artifacts locally:
+
+::
+
+    python -m build --sdist --wheel
+    python -m twine check dist/*
+
+Verify that the generated files are valid before uploading.
+
+---
+
+Upload to the internal repository
+---------------------------------
+
+Upload using ``twine``:
+
+::
+
+    python -m twine upload \
+        --repository internal \
+        dist/*
+
+If successful, the package will be available to internal users immediately.
+
+---
+
+Installing from an internal repository
+======================================
+
+Users must configure pip to point to the internal index.
+
+Example (temporary, per-install):
+
+::
+
+    pip install oracle-connector \
+        --index-url https://pypi.company.com/repository/python-internal/simple
+
+Example (persistent, via ``pip.conf``):
+
+::
+
+    [global]
+    index-url = https://pypi.company.com/repository/python-internal/simple
+
+Once configured, installation works the same as public PyPI:
+
+::
+
+    pip install oracle-connector
+
+---
+
+Internal usage expectations
+===========================
+
+This package assumes:
+
+- Users have access to the internal repository
+- Oracle credentials are provided via environment variables
+- SQL files are sourced from approved repositories or pipelines
+
+The package intentionally avoids:
+
+- Interactive credential prompts
+- Embedded secrets
+- Environment-specific logic
+
+This makes it suitable for:
+
+- Batch jobs
+- CI/CD pipelines
+- Scheduled workflows
+- Secure shared environments
+
+---
+
+Versioning and release discipline
+=================================
+
+Because internal repositories do not allow overwriting existing versions, every
+release must use a **new version number**.
+
+Recommended workflow:
+
+- Use ``.devN`` versions for testing
+- Promote to a clean version for release
+- Treat releases as immutable artifacts
+
+Example:
+
+::
+
+    0.1.0.dev0   # Internal testing
+    0.1.0        # First internal release
+    0.1.1        # Bugfix release
+
+---
+
+CI/CD considerations
+====================
+
+When publishing from CI/CD pipelines:
+
+- Use repository-scoped access tokens
+- Store credentials in secret managers
+- Build artifacts once per commit/tag
+- Upload only from protected branches
+
+This ensures traceability, repeatability, and security.
+
+---
+
+Decommissioning and breaking changes
+====================================
+
+For breaking changes:
+
+- Increment the **minor or major** version
+- Communicate changes in advance
+- Allow parallel installation of old and new versions when possible
+
+Internal consumers should pin versions explicitly in production workflows.
+
+
