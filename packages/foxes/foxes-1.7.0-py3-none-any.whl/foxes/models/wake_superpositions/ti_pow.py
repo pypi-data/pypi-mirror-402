@@ -1,0 +1,150 @@
+import numpy as np
+
+from foxes.core import WakeSuperposition
+import foxes.variables as FV
+
+
+class TIPow(WakeSuperposition):
+    """
+    Power wake superposition for TI.
+
+    Attributes
+    ----------
+    pow: float
+        The power to which to take the wake results
+    superp_to_amb: str
+        The method for combining ambient with wake deltas:
+        linear or quadratic
+
+    :group: models.wake_superpositions
+
+    """
+
+    def __init__(self, pow, superp_to_amb="quadratic"):
+        """
+        Constructor.
+
+        Parameters
+        ----------
+        pow: float
+            The power to which to take the wake results
+        superp_to_amb: str
+            The method for combining ambient with wake deltas:
+            linear or quadratic
+
+        """
+        super().__init__()
+        self.pow = pow
+        self.superp_to_amb = superp_to_amb
+
+    def __repr__(self):
+        return (
+            f"{type(self).__name__}(pow={self.pow}, superp_to_amb={self.superp_to_amb})"
+        )
+
+    def add_wake(
+        self,
+        algo,
+        mdata,
+        fdata,
+        tdata,
+        downwind_index,
+        st_sel,
+        variable,
+        wake_delta,
+        wake_model_result,
+    ):
+        """
+        Add a wake delta to previous wake deltas,
+        at rotor points.
+
+        Parameters
+        ----------
+        algo: foxes.core.Algorithm
+            The calculation algorithm
+        mdata: foxes.core.MData
+            The model data
+        fdata: foxes.core.FData
+            The farm data
+        tdata: foxes.core.TData
+            The target point data
+        downwind_index: int
+            The index of the wake causing turbine
+            in the downwind order
+        st_sel: numpy.ndarray of bool
+            The selection of targets, shape: (n_states, n_targets)
+        variable: str
+            The variable name for which the wake deltas applies
+        wake_delta: numpy.ndarray
+            The original wake deltas, shape:
+            (n_states, n_targets, n_tpoints, ...)
+        wake_model_result: numpy.ndarray
+            The new wake deltas of the selected rotors,
+            shape: (n_st_sel, n_tpoints, ...)
+
+        Returns
+        -------
+        wdelta: numpy.ndarray
+            The updated wake deltas, shape:
+            (n_states, n_targets, n_tpoints, ...)
+
+        """
+        if variable != FV.TI:
+            raise ValueError(
+                f"Superposition '{self.name}': Expecting wake variable {FV.TI}, got {variable}"
+            )
+
+        wake_delta[st_sel] += wake_model_result**self.pow
+        return wake_delta
+
+    def calc_final_wake_delta(
+        self,
+        algo,
+        mdata,
+        fdata,
+        tdata,
+        variable,
+        wake_delta,
+    ):
+        """
+        Calculate the final wake delta after adding all
+        contributions.
+
+        Parameters
+        ----------
+        algo: foxes.core.Algorithm
+            The calculation algorithm
+        mdata: foxes.core.MData
+            The model data
+        fdata: foxes.core.FData
+            The farm data
+        tdata: foxes.core.TData
+            The target point data
+        variable: str
+            The variable name for which the wake deltas applies
+        wake_delta: numpy.ndarray
+            The wake deltas at targets, shape:
+            (n_states, n_targets, n_tpoints)
+
+        Returns
+        -------
+        final_wake_delta: numpy.ndarray
+            The final wake delta, which will be added to the ambient
+            results by simple plus operation. Shape:
+            (n_states, n_targets, n_tpoints)
+
+        """
+        # linear superposition to ambient:
+        if self.superp_to_amb == "linear":
+            return wake_delta ** (1 / self.pow)
+
+        # quadratic superposition to ambient:
+        elif self.superp_to_amb == "quadratic":
+            amb_results = tdata[FV.var2amb[variable]]
+            return np.sqrt(wake_delta ** (2 / self.pow) + amb_results**2) - amb_results
+
+        # unknown ti delta:
+        else:
+            raise ValueError(
+                f"Unknown superp_to_amb = '{self.superp_to_amb}', valid choices: linear, quadratic"
+            )
