@@ -1,0 +1,83 @@
+# VAP LangChain Tools
+
+**Execution control for LangChain agents calling paid APIs.**
+
+LangChain tools for VAP - the execution control layer. Enforce cost limits and deterministic retries when your chains generate video, music, and images.
+
+## Installation
+
+```bash
+pip install vap-langchain
+```
+
+## Quick Start
+
+```python
+from langchain.agents import initialize_agent, AgentType
+from langchain_openai import ChatOpenAI
+from vap_langchain import VapProductionTool
+
+# Initialize tools
+vap_tool = VapProductionTool(api_key="vap_your_api_key")
+
+# Create agent
+llm = ChatOpenAI(model="gpt-4")
+agent = initialize_agent(
+    tools=[vap_tool],
+    llm=llm,
+    agent=AgentType.OPENAI_FUNCTIONS,
+)
+
+# Run
+result = agent.run("Create an energetic startup launch video with upbeat music")
+print(result)
+```
+
+## Available Tools
+
+| Tool | Description | Cost |
+|------|-------------|------|
+| `VapProductionTool` | Full production (video + music + thumbnail) | $5.90 |
+| `VapVideoTool` | Single video | $1.96 |
+| `VapMusicTool` | Single music track | $0.68 |
+| `VapImageTool` | Single image | $0.18 |
+
+## Recommended: VapProductionTool
+
+For most use cases, use `VapProductionTool`. It creates everything in one call:
+
+```python
+from vap_langchain import VapProductionTool
+
+tool = VapProductionTool(api_key="vap_...")
+
+# Agent will automatically use this for any media request
+result = tool.run("Cozy coffee shop morning scene with gentle acoustic vibes")
+# Returns: Video URL, Music URL, Thumbnail URL
+```
+
+## With LangGraph
+
+```python
+from langgraph.graph import StateGraph
+from vap_langchain import VapProductionTool
+
+vap = VapProductionTool(api_key="vap_...")
+
+def produce_media(state):
+    result = vap.run(state["prompt"])
+    return {"media": result}
+
+# Add to your graph
+graph.add_node("producer", produce_media)
+```
+
+## Budget Safety
+
+VAP uses a prepaid model - your agent can't overspend. The tool will return an error if balance is insufficient, preventing runaway costs.
+
+## Links
+
+- [VAP Documentation](https://api.vapagent.com/docs)
+- [VAP SDK](https://pypi.org/project/vap-sdk/)
+- [GitHub](https://github.com/elestirelbilinc-sketch/vap-showcase)
