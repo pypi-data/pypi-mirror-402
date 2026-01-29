@@ -1,0 +1,177 @@
+# tc-queue-system
+
+A simple message queue system with SQLite backend and optional Flask API.
+
+[![PyPI version](https://badge.fury.io/py/tc-queue-system.svg)](https://badge.fury.io/py/tc-queue-system)
+[![Python](https://img.shields.io/pypi/pyversions/tc-queue-system.svg)](https://pypi.org/project/tc-queue-system/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## Installation
+
+```bash
+# Basic (module only, no Flask required)
+pip install tc-queue-system
+
+# With Flask API server
+pip install tc-queue-system[server]
+```
+
+## Features
+
+- **SQLite Backend** - No external dependencies, works anywhere
+- **Module Usage** - Use directly in Python code (no Flask required)
+- **REST API Server** - Optional Flask server with basic auth
+- **Priority Queues** - Higher priority messages processed first
+- **Message Acknowledgment** - Ack/Nack support for reliable processing
+- **Thread-Safe** - Singleton pattern with thread-safe operations
+
+## Quick Start
+
+### As Module (No Flask Required)
+
+```python
+from tc_queue_system import QueueService
+
+# Get singleton instance
+qs = QueueService()
+
+# Create queue
+qs.create_queue('tasks')
+
+# Publish message
+msg_id = qs.publish('tasks', {'action': 'send_email', 'to': 'user@example.com'})
+print(f'Published: {msg_id}')
+
+# Publish with priority (higher = processed first)
+qs.publish('tasks', {'action': 'urgent'}, priority=10)
+
+# Consume message
+msg = qs.consume('tasks')
+if msg:
+    print(f'Processing: {msg["data"]}')
+    qs.ack(msg['id'])  # Acknowledge completion
+    # or qs.nack(msg['id']) to requeue
+
+# Get stats
+print(qs.stats())
+# {'queues': 1, 'pending': 0, 'processing': 0, 'timestamp': '...'}
+```
+
+### As REST API Server
+
+```bash
+# Start server (requires Flask)
+pip install tc-queue-system[server]
+python -m tc_queue_system.service --port 8090
+
+# Or use CLI after install
+tc-queue --port 8090
+```
+
+```python
+# Or start from code
+from tc_queue_system import run_server
+run_server(port=8090, auth_user='admin', auth_pass='secret')
+```
+
+## API Endpoints
+
+All endpoints require Basic Auth (default: `admin`/`123`).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | Service info |
+| GET | `/stats` | Overall statistics |
+| GET | `/queues` | List all queues |
+| POST | `/queue/<name>` | Create queue |
+| GET | `/queue/<name>` | Get queue info |
+| DELETE | `/queue/<name>` | Delete queue |
+| POST | `/queue/<name>/publish` | Publish message (JSON body) |
+| POST | `/queue/<name>/consume` | Consume one message |
+| POST | `/queue/<name>/purge` | Purge all messages |
+| GET | `/queue/<name>/size` | Get queue size |
+| POST | `/message/<id>/ack` | Acknowledge message |
+| POST | `/message/<id>/nack` | Requeue message |
+
+### API Examples
+
+```bash
+# Set auth
+AUTH="-u admin:123"
+
+# Create queue
+curl $AUTH -X POST http://localhost:8090/queue/emails
+
+# Publish message
+curl $AUTH -X POST http://localhost:8090/queue/emails/publish \
+  -H "Content-Type: application/json" \
+  -d '{"to": "user@example.com", "subject": "Hello"}'
+
+# Publish with priority
+curl $AUTH -X POST http://localhost:8090/queue/emails/publish \
+  -H "Content-Type: application/json" \
+  -d '{"to": "vip@example.com", "_priority": 10}'
+
+# Consume message
+curl $AUTH -X POST http://localhost:8090/queue/emails/consume
+
+# Ack message
+curl $AUTH -X POST http://localhost:8090/message/1/ack
+
+# Get stats
+curl $AUTH http://localhost:8090/stats
+```
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Auth credentials (optional, defaults to admin/123)
+export QUEUE_AUTH_USER=myuser
+export QUEUE_AUTH_PASS=mypassword
+```
+
+### Custom Database Path
+
+```python
+from tc_queue_system.service import QueueService
+
+# Use custom database path
+qs = QueueService(db_path='/path/to/queue.db')
+```
+
+## QueueService API
+
+```python
+from tc_queue_system import QueueService
+
+qs = QueueService()
+
+# Queue operations
+qs.create_queue(name: str) -> bool
+qs.delete_queue(name: str) -> bool
+qs.list_queues() -> List[Dict]
+qs.get_queue(name: str) -> Dict
+
+# Message operations
+qs.publish(queue: str, data: Dict, priority: int = 0) -> int
+qs.consume(queue: str) -> Optional[Dict]
+qs.ack(message_id: int) -> bool
+qs.nack(message_id: int) -> bool
+qs.purge(queue: str) -> int
+qs.size(queue: str) -> int
+
+# Stats
+qs.stats() -> Dict
+```
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Links
+
+- [PyPI](https://pypi.org/project/tc-queue-system/)
+- [GitHub](https://github.com/task-circuit/tc-queue-system)
+
