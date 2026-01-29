@@ -1,0 +1,217 @@
+Metadata-Version: 2.4
+Name: video-batch-trim
+Version: 0.1.0
+Summary: 视频批量裁剪命令行工具 - 使用 ffmpeg 批量删除视频开头指定秒数
+Project-URL: Homepage, https://github.com/yourusername/video-batch-trim
+Project-URL: Documentation, https://github.com/yourusername/video-batch-trim#readme
+Project-URL: Repository, https://github.com/yourusername/video-batch-trim
+Project-URL: Issues, https://github.com/yourusername/video-batch-trim/issues
+Author: VBT Developer
+License: MIT
+License-File: LICENSE
+Keywords: batch,cli,command-line,ffmpeg,trim,video,video-processing
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: End Users/Desktop
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Multimedia :: Video
+Classifier: Topic :: Utilities
+Requires-Python: >=3.8
+Requires-Dist: build>=1.2.2.post1
+Requires-Dist: click>=8.0
+Requires-Dist: loguru>=0.7.0
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: setuptools>=75.3.3
+Requires-Dist: tqdm>=4.65
+Description-Content-Type: text/markdown
+
+# VBT - 视频批量裁剪工具
+
+一个类似 kubectl/docker 风格的 Python 命令行工具，用于批量裁剪视频开头的指定秒数。
+
+## 功能特性
+
+- 🎬 批量处理视频文件，递归扫描子文件夹
+- ⚡ 使用 ffmpeg 的流复制模式，处理速度快
+- 📊 实时进度显示
+- 📝 完善的日志记录（控制台 + 文件）
+- 🎨 彩色控制台输出
+- ⚙️ 灵活的 YAML 配置文件
+- 🔄 自动处理文件名冲突
+
+## 支持的视频格式
+
+工具支持以下常见视频格式（由 ffmpeg 实际处理能力决定）：
+
+### 常见格式
+- `.mp4`, `.avi`, `.mkv`, `.mov`, `.flv`, `.wmv`, `.m4v`, `.ts`
+
+### MPEG 系列
+- `.mpg`, `.mpeg`, `.m2v`, `.vob`, `.m2ts`
+
+### 移动设备格式
+- `.3gp`, `.3g2`, `.f4v`
+
+### Web 格式
+- `.webm`, `.ogv`, `.ogg`
+
+### 其他格式
+- `.rm`, `.rmvb`, `.asf`, `.wtv`, `.mts`, `.mxf`, `.divx`, `.xvid`, `.vro`, `.dat`, `.amv`, `.drc`, `.gifv`, `.svi`, `.viv`, `.nsv`
+
+**注意**：实际支持的格式取决于系统中安装的 ffmpeg 版本及其编译配置。如果遇到不支持的格式，ffmpeg 会报错，详情可查看日志文件。
+
+## 安装
+
+### 使用 uv（推荐）
+
+```bash
+# 克隆或进入项目目录
+cd video_batch_trim
+
+# 使用 uv 安装依赖
+uv sync
+
+# 或者安装为可编辑模式
+uv pip install -e .
+```
+
+### 使用 pip
+
+```bash
+pip install -e .
+```
+
+## 配置
+
+在项目根目录或运行目录创建 `config.yaml` 文件：
+
+```yaml
+input_dir: "./input"           # 输入视频文件夹
+output_dir: "./output"         # 输出文件夹
+ffmpeg_path: "ffmpeg"          # ffmpeg 可执行文件路径
+trim_seconds: 5                # 删除开头的秒数
+```
+
+## 使用方法
+
+### 基本用法
+
+```bash
+# 显示帮助
+vbt --help
+
+# 执行视频裁剪
+vbt trim
+
+# 查看 trim 命令帮助
+vbt trim --help
+```
+
+### 工作流程
+
+1. 创建配置文件 `config.yaml`
+2. 将要处理的视频放入 `input_dir` 指定的文件夹（支持子文件夹）
+3. 运行 `vbt trim`
+4. 处理后的视频将保存到 `output_dir`，文件名保持不变
+5. 如有文件名冲突，会自动添加 5 位随机数字
+
+### 日志
+
+- **控制台输出**：显示 INFO 级别以上的彩色日志
+- **文件日志**：保存在 `logs/vbt_*.log`，包含详细的 DEBUG 信息
+- 日志文件自动轮转（10MB）并保留 7 天
+
+查看日志：
+
+```bash
+# 实时查看日志
+tail -f logs/vbt_*.log
+
+# 查看所有日志
+cat logs/vbt_*.log
+```
+
+## 技术栈
+
+- **包管理**: [uv](https://github.com/astral-sh/uv) - 极速 Python 包管理器
+- **CLI 框架**: [Click](https://click.palletsprojects.com/) - 优雅的命令行工具
+- **配置解析**: [PyYAML](https://pyyaml.org/) - YAML 解析器
+- **进度显示**: [tqdm](https://tqdm.github.io/) - 美观的进度条
+- **日志框架**: [loguru](https://loguru.readthedocs.io/) - 现代化日志库
+- **视频处理**: [ffmpeg](https://ffmpeg.org/) - 强大的多媒体处理工具
+
+## 示例
+
+### 配置示例
+
+```yaml
+input_dir: "/Users/username/Videos/raw"
+output_dir: "/Users/username/Videos/trimmed"
+ffmpeg_path: "/usr/local/bin/ffmpeg"
+trim_seconds: 3.5
+```
+
+### 执行示例
+
+```bash
+$ vbt trim
+2026-01-15 10:30:15 | INFO     | 正在加载配置文件: config.yaml
+2026-01-15 10:30:15 | INFO     | 开始扫描视频文件...
+2026-01-15 10:30:15 | INFO     | 找到 15 个视频文件
+2026-01-15 10:30:15 | INFO     | 开始处理视频...
+Processing: 100%|██████████| 15/15 [02:30<00:00,  0.10s/it]
+2026-01-15 10:32:45 | SUCCESS  | 处理完成！成功: 15, 失败: 0
+```
+
+## 项目结构
+
+```
+video_batch_trim/
+├── vbt/
+│   ├── __init__.py
+│   ├── cli.py              # CLI 入口
+│   ├── commands/
+│   │   ├── __init__.py
+│   │   └── trim.py         # trim 子命令
+│   ├── config.py           # 配置管理
+│   ├── logger.py           # 日志配置
+│   └── utils.py            # 工具函数
+├── config.yaml             # 配置文件
+├── pyproject.toml          # 项目配置
+├── .python-version         # Python 版本
+└── README.md               # 本文档
+```
+
+## 开发
+
+```bash
+# 安装开发依赖
+uv sync --dev
+
+# 运行测试（如果有）
+pytest
+
+# 格式化代码
+black vbt/
+
+# 类型检查
+mypy vbt/
+```
+
+## 许可证
+
+MIT License
+
+## 注意事项
+
+1. 确保系统已安装 ffmpeg
+2. 处理大量视频时建议先小范围测试
+3. 日志文件会自动清理，但可手动删除 `logs/` 目录
+4. 使用 `-c copy` 模式，某些视频可能因编码问题无法精确裁剪关键帧
