@@ -1,0 +1,123 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crader"
+version = "0.1.0"
+description = "Crader is a production-ready library that transforms source code into a queryable Code Property Graph (CPG) with semantic embeddings. Built for AI-powered code analysis, intelligent retrieval, and agentic workflows."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [
+  {name = "Sheep Technologies"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Operating System :: OS Independent",
+]
+keywords = ["code-analysis", "graph", "tree-sitter", "scip", "indexing"]
+
+
+dependencies = [
+    "networkx>=3.0",
+    "tree-sitter==0.21.3",
+    "tree-sitter-languages==1.8.0",
+    "alembic>=1.7.0",
+    "click>=8.0",
+    "GitPython>=3.1",
+    "openai>=1.0.0",
+    "opentelemetry-api>=1.0.0",
+    "pgvector>=0.2.0",
+    "psycopg>=3.1.0",
+    "psycopg-pool>=3.1.0",
+    "pydantic>=2.0.0",
+    "tenacity>=8.0.0",
+    "python-dotenv>=1.0.0"
+]
+
+[project.urls]
+Homepage = "https://sheeptechnologies.github.io/crader/"
+Repository = "https://github.com/sheeptechnologies/crader"
+Issues = "https://github.com/sheeptechnologies/crader/issues"
+
+[project.scripts]
+crader = "crader.__main__:cli"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "build>=1.0.0",
+    "twine>=4.0.0",
+    "types-requests",
+    "types-PyYAML",
+    "alembic>=1.7.0",
+    "psycopg2-binary>=2.9.0"
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --cov=src/crader --cov-report=term-missing"
+testpaths = [
+    "tests",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+norecursedirs = ["tools"]
+
+[tool.coverage.run]
+omit = [
+    "src/crader/storage/sqlite.py",
+]
+
+[tool.ruff]
+line-length = 120
+exclude = ["*.ipynb", "sheep_data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["E402"]
+"src/crader/storage/sqlite.py" = ["E501", "E722", "W291"]
+"src/crader/storage/postgres.py" = ["W291", "E501", "F841", "W293"]
+"src/crader/volume_manager/git_volume_manager.py" = ["E501"]
+"src/crader/reader.py" = ["E501"]
+"src/crader/retriever.py" = ["E501"]
+"src/crader/storage/connector.py" = ["E501"]
+"src/crader/navigator.py" = ["E501"]
+"src/crader/parsing/parser.py" = ["E501", "F841"]
+"src/crader/parsing/parsing_filters.py" = ["E501"]
+"src/crader/indexer.py" = ["E501", "F841", "E402"]
+"src/crader/models.py" = ["E501"]
+"src/crader/graph/builder.py" = ["E501"]
+"src/crader/graph/indexers/scip.py" = ["E501", "E722", "E741", "F841"]
+"src/crader/embedding/embedder.py" = ["F841", "E501", "E722"]
+"src/crader/config.py" = ["W291"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+no_implicit_optional = false
+strict_optional = false
+allow_redefinition = true
+disable_error_code = ["attr-defined", "name-defined", "assignment", "arg-type", "misc", "override", "list-item", "return-value", "call-arg", "var-annotated", "index", "union-attr"]
+exclude = ["sheep_data", "build", "dist", "tools"]
