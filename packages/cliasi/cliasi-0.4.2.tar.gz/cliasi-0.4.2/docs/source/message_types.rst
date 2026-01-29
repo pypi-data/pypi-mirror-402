@@ -1,0 +1,366 @@
+.. _message_types:
+
+Message types and animations
+==============================
+
+You can view example output of the library using the
+python scripts in the provided examples directory.
+
+Basic Message Types
+--------------------
+
+``cliasi`` provides several methods for common message types, each with its own symbol and color.
+
+Here is how they look in the console:
+
+.. code-block:: python
+    :caption: examples/basic_messages.py
+
+    from cliasi import cli
+
+    cli.info("Starting process...")
+    cli.success("Process completed!")
+    cli.warn("Disk space is low.")
+    cli.fail("Failed to connect to server.")
+    cli.log("Debug info")
+    cli.list("List item")
+
+.. warning::
+    The actual colors and symbols below may vary depending on your terminal and its settings.
+
+.. raw:: html
+
+    <div class="highlight-text notranslate">
+    <div class="highlight"><pre>
+    <span style="color: #ffffff; font-weight: bold">i</span> <span style="color: #888888">[CLI]</span> | Starting process...
+    <span style="color: #00ff00; font-weight: bold">✔</span> <span style="color: #888888">[CLI]</span> | <span style="color: #00ff00">Process completed!</span>
+    <span style="color: #ffff00; font-weight: bold">!</span> <span style="color: #888888">[CLI]</span> | <span style="color: #ffff00">Disk space is low.</span>
+    <span style="color: #ff5959; font-weight: bold">X</span> <span style="color: #888888">[CLI]</span> | <span style="color: #ff5959">Failed to connect to server.</span>
+    <span style="color: #888888">LOG [CLI]</span><span> | Debug info</span>
+    <span style="color: #ffffff; font-weight: bold">-</span> <span style="color: #888888">[CLI]</span> | List item
+    </pre></div>
+    </div>
+
+Exception and Traceback Formatting
+"""""""""""""""""""""""""""""""""""""
+If an exception is raised or a traceback is logged, it will be formatted using the ``fail`` message style:
+
+.. code-block:: python
+    :caption: examples/exception_message.py
+
+    import cliasi
+
+    # Importing cliasi automatically installs the logging handler
+    raise ValueError("An example error")
+
+.. raw:: html
+    .. note::
+
+    <div class="highlight-text notranslate">
+    <div class="highlight"><pre>
+    <span style="color: #ff5959; font-weight: bold">X</span> <span style="color: #888888">[CLI]</span> | <span style="color: #ff5959">Uncaught exception:</span>
+    <span style="color: #ff5959; font-weight: bold">X</span> <span style="color: #888888">[CLI]</span> | <span style="color: #ff5959">Traceback (most recent call last):
+            </span>|<span style="color: #ff5959">   File "examples/exception_message.py", line 7, in &lt;module&gt;
+            </span>|<span style="color: #ff5959">     raise ValueError("An example error")
+            </span>|<span style="color: #ff5959"> ValueError: An example error</span>
+    </pre></div>
+    </div>
+
+Animations and Progress Bars
+----------------------------
+
+Blocking Animation
+""""""""""""""""""""""""""""""
+Blocking animations run in the main thread and block further execution until complete.
+
+.. note::
+    Animated messages trim overflowing text to the current terminal width as animations only
+    work when the text is one line long.
+
+.. code-block:: python
+    :caption: examples/blocking_animation.py
+
+    from cliasi import cli
+    import time
+
+    cli.animate_message_blocking("Saving...", time=3, message_right="[CTRL-C] to stop")
+    # You cant do anything else while the animation is running
+    # Useful if you save something to a file at the end of a program
+    # User can CTRL-C while this is running
+    cli.success("Data saved!")
+
+.. raw:: html
+
+   <div class="asciinema-demo">
+        <img src="_static/asciinema/blocking_animation_demo-light.gif"
+          class="asciinema_demo-light"
+          alt="Blocking animation (light theme)">
+        <img src="_static/asciinema/blocking_animation_demo-dark.gif"
+          class="asciinema_demo-dark"
+          alt="Blocking animation (dark theme)">
+   </div>
+
+.. tip::
+    For more information about alignment of messages, see :ref:`message_alignment`.
+
+Non-Blocking Animation
+"""""""""""""""""""""""
+
+.. code-block:: python
+    :caption: examples/non_blocking_animation.py
+
+    import time
+
+    from cliasi import cli
+
+    cli.messages_stay_in_one_line = True  # To hide animation after finished.
+    task = cli.animate_message_non_blocking("Processing...")
+    # Do other stuff while the animation is running
+    time.sleep(3)  # Simulate a long task
+    task.stop()  # Stop the animation when done
+    cli.success("Done!")
+
+.. raw:: html
+
+    <div class="asciinema-demo">
+        <img src="_static/asciinema/non_blocking_animation_demo-light.gif"
+          class="asciinema_demo-light"
+          alt="Non Blocking animation (light theme)">
+        <img src="_static/asciinema/non_blocking_animation_demo-dark.gif"
+          class="asciinema_demo-dark"
+          alt="Non Blocking animation (dark theme)">
+   </div>
+
+Progress Bars
+"""""""""""""""""""""
+
+.. note::
+    Progress bars (animated and static) trim overflowing text to the current terminal width.
+    They work when the text is one line long.
+
+.. code-block:: python
+    :caption: examples/progress_bar.py
+
+    import time
+
+    from cliasi import cli
+
+    for i in range(101):
+        cli.progressbar("Calculating", message_center=True, progress=i, show_percent=True)
+        time.sleep(0.02)
+    cli.newline()  # Add a newline after the progress bar is complete
+    cli.success("Calculation complete.")
+    # Use cli.progressbar_download() for download-style progress bars.
+
+.. raw:: html
+
+    <div class="asciinema-demo">
+        <img src="_static/asciinema/progress_bar_demo-light.gif"
+          class="asciinema_demo-light"
+          alt="Progress Bar (light theme)">
+        <img src="_static/asciinema/progress_bar_demo-dark.gif"
+          class="asciinema_demo-dark"
+          alt="Progress Bar (dark theme)">
+   </div>
+
+
+Animated Progress Bars
+""""""""""""""""""""""""""""""
+.. code-block:: python
+    :caption: examples/animated_progress_bar.py
+
+    import time
+
+    from cliasi import cli
+
+    task = cli.progressbar_animated_download(
+        message_left="downloading",
+        message_right="please wait",
+    )
+    for i in range(100):
+        time.sleep(0.05)  # Simulate work
+        task.update(progress=i)    # Update progress by 1
+    task.stop()        # Finish the progress bar
+    cli.success("Download complete.")
+
+.. raw:: html
+
+    <div class="asciinema-demo">
+        <img src="_static/asciinema/animated_progress_bar_demo-light.gif"
+          class="asciinema_demo-light"
+          alt="Animated Progress Bar (light theme)">
+        <img src="_static/asciinema/animated_progress_bar_demo-dark.gif"
+          class="asciinema_demo-dark"
+          alt="Animated Progress Bar (dark theme)">
+    </div>
+
+Progress bar customization options
+"""""""""""""""""""""""""""""""""""""
+Progress bars can be customized with several parameters:
+
+* ``show_percent``: Whether to show the percentage completed.
+* ``cover_dead_space_with_bar``: Whether to fill alignment space of messages (there is always a space before ``message_left``) with the bar or just with spaces. False by default.
+* ``calculation_mode``: :class:`~cliasi.constants.PBCalculationMode` to customize the way the progress bar renders progress. Look at the enum documentation for details.
+
+Example usage of calculation modes:
+
+.. code-block:: python
+    :caption: examples/calculation_modes_demo.py
+
+    from time import sleep
+    from cliasi import PBCalculationMode, cli
+
+    for i in range(100):
+        sleep(0.025)
+        # Fills across the full width but skips text
+        cli.progressbar(
+            "progress goes",
+            message_right="under text",
+            progress=i,
+            calculation_mode=PBCalculationMode.FULL_WIDTH,
+            show_percent=True,
+        )
+
+    for i in range(100):
+        sleep(0.025)
+        # Fills only empty space between text segments
+        cli.progressbar_download(
+            message_left="progress goes between here",
+            message_right="and there",
+            progress=i,
+            calculation_mode=PBCalculationMode.ONLY_EMPTY,
+        )
+
+    for i in range(100):
+        sleep(0.025)
+        # Overwrites text when the bar reaches it (useful for dense bars)
+        cli.progressbar(
+            message_left=None,
+            message_right="This text will be overwritten",
+            progress=i,
+            calculation_mode=PBCalculationMode.FULL_WIDTH_OVERWRITE,
+        )
+
+.. raw:: html
+
+    <div class="asciinema-demo">
+        <img src="_static/asciinema/calculation_modes_demo-light.gif"
+        class="asciinema_demo-light"
+        alt="Different calculation modes (light theme)">
+        <img src="_static/asciinema/calculation_modes_demo-dark.gif"
+        class="asciinema_demo-dark"
+        alt="Different calculation modes (dark theme)">
+    </div>
+
+User Input
+""""""""""""
+
+You can ask for user input, including passwords.
+
+If you use any form of alignment, you can use the ``cursor_position`` parameter
+to specify where the input cursor should be placed after the text has been printed.
+
+.. code-block:: python
+    :caption: examples/user_input_interactive.py
+
+    from cliasi import cli
+
+    name = cli.ask("What is your name?")
+    code = cli.ask("Enter your secret code:", hide_input=True, message_right="[login]")
+
+    cli.info(f"Hello, {name} with code {code}")
+
+.. raw:: html
+
+    <div class="asciinema-demo">
+        <img src="_static/asciinema/user_input_interactive-light.gif"
+          class="asciinema_demo-light"
+          alt="User input (light theme)">
+        <img src="_static/asciinema/user_input_interactive-dark.gif"
+          class="asciinema_demo-dark"
+          alt="User input (dark theme)">
+    </div>
+
+.. _message_alignment:
+
+Message alignment
+------------------
+You can align messages to the left, right, or center of the terminal.
+
+All message types support alignment
+with the ``message_left``, ``message_right``, and ``message_center`` parameters.
+
+You can either set the corresponding parameters to ``True``,
+or set the parameters themselves to the desired text.
+
+.. note::
+    If the left message goes too far and covers the middle one
+    or is too long or has newlines, all aligned will be printed
+    one after the other with as many lines as it takes.
+
+    Cliasi will attempt to put ``message_right`` to the right at the end of
+    messages that go over multiple lines, but this is not always possible.
+
+
+.. code-block:: python
+    :caption: examples/message_alignment.py
+
+    from cliasi import cli
+
+    cli.info("This is a left-aligned message.")  # Default is left-aligned
+    cli.success("This is a right-aligned message.", message_right=True)
+    cli.warn(False, message_center="This is a centered message.")
+    # False because parameter message_left is required to be set. Can also use ""
+    cli.info("From left", message_center="to the middle", message_right="to the right")
+
+.. warning::
+    The actual colors and symbols below may vary
+    depending on your terminal and its settings.
+
+.. raw:: html
+
+    <div class="cliasi-align-block highlight">
+        <div class="cliasi-align-preview">
+        <span class="left" style="color: #ffffff; font-weight: bold">i</span>
+        <span style="color: #888888">[CLI]</span>
+        <span>|</span>
+        <span class="left">This is a left-aligned message.</span>
+      </div>
+      <div class="cliasi-align-preview">
+        <span class="left" style="color: #00ff00; font-weight: bold">✔</span>
+        <span style="color: #888888">[CLI]</span>
+        <span>|</span>
+        <span class="right" style="color: #00ff00">This is a right-aligned message.</span>
+      </div>
+      <div class="cliasi-align-preview">
+        <span class="left" style="color: #ffff00; font-weight: bold">!</span>
+        <span style="color: #888888">[CLI]</span>
+        <span>|</span>
+        <span class="center" style="color: #ffff00">This is a centered message.</span>
+      </div>
+      <div class="cliasi-align-preview">
+        <span class="left" style="color: #ffffff; font-weight: bold">i</span>
+        <span style="color: #888888">[CLI]</span>
+        <span>|</span>
+        <span class="left">From left</span>
+        <span class="center">to the middle</span>
+        <span class="right">to the right</span>
+      </div>
+    </div>
+
+.. _max_dead_space:
+
+max_dead_space parameter
+"""""""""""""""""""""""""
+If you send a short message with short left text and short right text they might
+end up very far apart on wide terminals. Users might not read the text on the right.
+
+To prevent this you can set the :attr:`~cliasi.cliasi.Cliasi.max_dead_space`
+parameter to a number of characters.
+If the dead space between left and right aligned text exceeds this number,
+the right or center aligned text put next to the left aligned text.
+
+If you deliberately disable the left aligned text or
+set :attr:`~cliasi.cliasi.Cliasi.max_dead_space` to ``None``
+the check will be skipped
+
