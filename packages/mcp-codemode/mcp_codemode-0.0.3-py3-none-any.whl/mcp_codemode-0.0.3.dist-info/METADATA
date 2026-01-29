@@ -1,0 +1,333 @@
+Metadata-Version: 2.4
+Name: mcp_codemode
+Version: 0.0.3
+Project-URL: Home, https://github.com/datalayer/mcp-codemode
+Author-email: Datalayer <info@datalayer.io>
+License: BSD 3-Clause License
+        
+        Copyright (c) 2025, Datalayer
+        All rights reserved.
+        
+        Redistribution and use in source and binary forms, with or without
+        modification, are permitted provided that the following conditions are met:
+        
+        1. Redistributions of source code must retain the above copyright notice, this
+           list of conditions and the following disclaimer.
+        
+        2. Redistributions in binary form must reproduce the above copyright notice,
+           this list of conditions and the following disclaimer in the documentation
+           and/or other materials provided with the distribution.
+        
+        3. Neither the name of the copyright holder nor the names of its
+           contributors may be used to endorse or promote products derived from
+           this software without specific prior written permission.
+        
+        THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+        AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+        IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+        DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+        FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+        DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+        SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+        CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+        OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+        OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+License-File: LICENSE
+Keywords: AI,Jupyter,MCP,Model Context Protocol
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: System Administrators
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.10
+Requires-Dist: agent-skills
+Requires-Dist: code-sandboxes
+Requires-Dist: httpx>=0.24
+Requires-Dist: mcp[cli]>=1.0
+Provides-Extra: lint
+Requires-Dist: mdformat-gfm>=0.3.5; extra == 'lint'
+Requires-Dist: mdformat>0.7; extra == 'lint'
+Requires-Dist: ruff; extra == 'lint'
+Provides-Extra: pydantic-ai
+Requires-Dist: pydantic-ai-slim; extra == 'pydantic-ai'
+Requires-Dist: pydantic-graph; extra == 'pydantic-ai'
+Provides-Extra: test
+Requires-Dist: ipykernel; extra == 'test'
+Requires-Dist: jupyter-server<3,>=1.6; extra == 'test'
+Requires-Dist: pytest-asyncio>=0.21; extra == 'test'
+Requires-Dist: pytest>=7.0; extra == 'test'
+Provides-Extra: typing
+Requires-Dist: mypy>=0.990; extra == 'typing'
+Description-Content-Type: text/markdown
+
+<!--
+  ~ Copyright (c) 2025-2026 Datalayer, Inc.
+  ~
+  ~ BSD 3-Clause License
+-->
+
+[![Datalayer](https://assets.datalayer.tech/datalayer-25.svg)](https://datalayer.io)
+
+[![Become a Sponsor](https://img.shields.io/static/v1?label=Become%20a%20Sponsor&message=%E2%9D%A4&logo=GitHub&style=flat&color=1ABC9C)](https://github.com/sponsors/datalayer)
+
+# 🔧 MCP Codemode
+
+[![PyPI - Version](https://img.shields.io/pypi/v/mcp-codemode)](https://pypi.org/project/mcp-codemode)
+
+**Code Mode for MCP Tools**: Programmatically call and compose MCP tools through code execution instead of individual LLM tool calls.
+
+## Overview
+
+MCP Codemode enables a "Code Mode" pattern where AI agents write Python code that orchestrates multiple MCP tool calls, rather than making individual tool calls through LLM inference. This approach is:
+
+- **More efficient**: Reduce LLM calls for multi-step operations
+- **More reliable**: Use try/except for robust error handling
+- **More powerful**: Parallel execution with asyncio, loops, conditionals
+- **More composable**: Save reusable patterns as skills
+
+## Configuration highlights
+
+- **Direct tool calls**: `allow_direct_tool_calls` (default: false). When false, `call_tool` is hidden and all execution flows through `execute_code`.
+- **Tool listing filters**: `list_tool_names` accepts `server`, `keywords`, and `limit` for fast, filtered discovery.
+- **Search rerank hook**: Provide an optional `tool_reranker` callable to reorder search results before they are returned (e.g., LLM-based rerankers). Falls back to registry order when not provided.
+- **Execution language**: `execute_code` runs Python inside the configured sandbox; import bindings from `generated.servers.<server_name>`.
+- **Safety cap**: `max_tool_calls` can limit the number of tool invocations per `execute_code` run.
+- **Tool examples**: tool discovery and details include `output_schema` and `input_examples` to improve parameter accuracy.
+- **Deferred tools**: tools may be marked `defer_loading` by servers. `list_tool_names` excludes them by default; `search_tools` includes them unless `include_deferred=false`.
+
+## Installation
+
+\`\`\`bash
+pip install mcp-codemode
+\`\`\`
+
+## Quick Start
+
+\`\`\`python
+from mcp_codemode import ToolRegistry, CodeModeExecutor, MCPServerConfig
+
+# Set up registry with MCP servers
+registry = ToolRegistry()
+registry.add_server(MCPServerConfig(
+    name="filesystem",
+    transport="stdio",
+    command="npx",
+    args=["-y", "@anthropic/mcp-server-filesystem", "/tmp"]
+))
+await registry.discover_all()
+
+# Execute code that composes tools
+async with CodeModeExecutor(registry) as executor:
+    result = await executor.execute("""
+        from generated.servers.filesystem import read_file, write_file
+        
+        # Read multiple files
+        content1 = await read_file({"path": "/tmp/file1.txt"})
+        content2 = await read_file({"path": "/tmp/file2.txt"})
+        
+        # Process and combine
+        combined = content1 + "\\n---\\n" + content2
+        
+        # Write result
+        await write_file({"path": "/tmp/combined.txt", "content": combined})
+    """)
+\`\`\`
+
+## Features
+
+### Progressive Tool Discovery
+
+Use the Tool Search Tool to discover relevant tools without loading all definitions upfront:
+
+\`\`\`python
+# Search for tools matching a description (includes deferred tools)
+result = await registry.search_tools("file operations", limit=10, include_deferred=True)
+
+for tool in result.tools:
+    print(f"{tool.name}: {tool.description}")
+
+# Fast listing (deferred tools excluded by default)
+names = registry.list_tool_names(limit=50)
+\`\`\`
+
+### Code-Based Tool Composition
+
+Execute Python code in an isolated sandbox with auto-generated tool bindings:
+
+\`\`\`python
+async with CodeModeExecutor(registry) as executor:
+    execution = await executor.execute("""
+        import asyncio
+        from generated.servers.filesystem import ls, read_file
+        
+        # List all files
+        files = await ls({"path": "/data"})
+        
+        # Read all files in parallel
+        contents = await asyncio.gather(*[
+            read_file({"path": f}) for f in files
+        ])
+    """, timeout=30.0)
+
+# Standard outputs are available on the execution object
+print(execution.stdout)
+print(execution.stderr)
+print(execution.text)
+\`\`\`
+
+### Skills (Reusable Compositions)
+
+Skills are Python files that compose tools into reusable operations. This allows agents to evolve their own toolbox by saving useful code patterns.
+
+#### Creating Skills as Code Files
+
+The primary pattern is skills as Python files in a `skills/` directory:
+
+```python
+# skills/batch_process.py
+"""Process all files in a directory."""
+
+async def batch_process(input_dir: str, output_dir: str) -> dict:
+    """Process all files in a directory.
+    
+    Args:
+        input_dir: Input directory path.
+        output_dir: Output directory path.
+    
+    Returns:
+        Processing statistics.
+    """
+    from generated.servers.filesystem import list_directory, read_file, write_file
+    
+    entries = await list_directory({"path": input_dir})
+    processed = 0
+    
+    for entry in entries.get("entries", []):
+        content = await read_file({"path": f"{input_dir}/{entry}"})
+        # Process content...
+        await write_file({"path": f"{output_dir}/{entry}", "content": content.upper()})
+        processed += 1
+    
+    return {"processed": processed}
+```
+
+#### Using Skills in Executed Code
+
+Skills are imported and called like any Python module:
+
+```python
+# In executed code
+from skills.batch_process import batch_process
+
+result = await batch_process("/data/input", "/data/output")
+print(f"Processed {result['processed']} files")
+```
+
+#### Composing Skills
+
+Skills can import and use other skills:
+
+```python
+# skills/analyze_and_report.py
+"""Analyze data and generate a report."""
+
+async def analyze_and_report(data_dir: str) -> dict:
+    from skills.batch_process import batch_process
+    from skills.generate_report import generate_report
+    
+    # First process the files
+    process_result = await batch_process(data_dir, f"{data_dir}/processed")
+    
+    # Then generate a report
+    report = await generate_report(f"{data_dir}/processed")
+    
+    return {"processed": process_result["processed"], "report": report}
+```
+
+#### Managing Skills
+
+```python
+from mcp_codemode.skills import SkillDirectory, setup_skills_directory
+
+# Initialize skills directory
+skills = setup_skills_directory("./workspace/skills")
+
+# List available skills
+for skill in skills.list():
+    print(f"{skill.name}: {skill.description}")
+
+# Search for relevant skills
+matches = skills.search("data processing")
+
+# Create a new skill programmatically
+skills.create(
+    name="my_skill",
+    code='async def my_skill(x: str) -> str: return x.upper()',
+    description="Transform text to uppercase",
+)
+```
+
+### MCP Server
+
+Expose Code Mode capabilities as an MCP server:
+
+\`\`\`python
+from mcp_codemode import codemode_server, configure_server
+
+configure_server()
+codemode_server.run()
+\`\`\`
+
+Tools exposed:
+- \`search_tools\` - Progressive tool discovery
+- \`execute_code\` - Run code that composes tools
+- \`call_tool\` - Direct tool invocation
+- \`save_skill\` / \`run_skill\` - Skill management
+
+## Key Concepts
+
+### Tool Discovery
+
+Instead of loading all tool definitions upfront (which can overwhelm context), use the Tool Search Tool pattern for progressive discovery based on the task at hand.
+
+### Tool Composition
+
+Compose tools through code instead of reading all data into LLM context. This is faster, more reliable (no text reproduction errors), and more efficient.
+
+### Control Flow
+
+Code allows models to implement complex control flow: loops, conditionals, waiting patterns, and parallel execution without burning through context with repeated tool calls.
+
+### State Persistence
+
+When running in a sandbox (like mcp-codemode), state can persist on disk. Skills themselves can be saved and composed into increasingly powerful tools.
+
+## Architecture
+
+\`\`\`
+┌─────────────────────────────────────────────────────┐
+│                   MCP Codemode                       │
+├─────────────────────────────────────────────────────┤
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────┐ │
+│  │ Tool Registry │  │ Code Executor│  │  Skills   │ │
+│  │  - Discovery  │  │  - Sandbox   │  │ - Save    │ │
+│  │  - Search     │  │  - Bindings  │  │ - Load    │ │
+│  │  - Cache      │  │  - Execute   │  │ - Execute │ │
+│  └──────────────┘  └──────────────┘  └───────────┘ │
+├─────────────────────────────────────────────────────┤
+│                    mcp-codemode                    │
+│              (Isolated execution environment)        │
+└─────────────────────────────────────────────────────┘
+\`\`\`
+
+## References
+
+- [Introducing Code Mode](https://blog.cloudflare.com/introducing-code-mode) - Cloudflare
+- [Code Execution with MCP](https://www.anthropic.com/engineering/code-execution-with-mcp) - Anthropic
+- [Programmatic Tool Calling](https://platform.claude.com/docs/en/agents-and-tools/tool-use/programmatic-tool-calling) - Anthropic
+- [Advanced Tool Use](https://www.anthropic.com/engineering/advanced-tool-use) - Anthropic
+- [Programmatic MCP Prototype](https://github.com/domdomegg/programmatic-mcp-prototype)
+
+## License
+
+BSD 3-Clause License
