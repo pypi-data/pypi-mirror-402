@@ -1,0 +1,2 @@
+from .transpose_inside_axis import transpose_inside_axis as inside_axis
+from .get_inverse_of_transpose_index_ls import get_inverse_of_transpose_index_ls as get_inverse_index_ls
