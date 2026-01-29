@@ -1,0 +1,60 @@
+version: 1
+
+script:
+  - rm -rf AppDir | true
+  - mkdir -p AppDir/usr/share/icons/hicolor/128x128/apps
+  - mkdir -p AppDir/resources/
+  - cp resources/images/eddy.png AppDir/usr/share/icons/hicolor/128x128/apps/
+  - cp -r resources/java AppDir/resources/ | true
+  # Do not ship examples with the AppImage
+  # - cp -r examples AppDir/ | true
+  - cp LICENSE AppDir/ | true
+  - cp README.md AppDir/ | true
+  - python3.12 -m pip install -I --prefix=/usr --root=AppDir -r ./requirements/in/base.in
+  - python3.12 setup.py install --prefix=/usr --root=AppDir
+
+AppDir:
+  path: ./AppDir
+  app_info:
+    id: !ENV "${EDDY_APPIMAGE_ID}"
+    name: !ENV "${EDDY_APPIMAGE_NAME}"
+    icon: !ENV "${EDDY_APPIMAGE_ICON}"
+    version: !ENV "${EDDY_APPIMAGE_VERSION}"
+    exec: usr/bin/python3.12
+    exec_args: "-m eddy $@"
+  apt:
+    arch: amd64
+    sources:
+      - sourceline: 'deb [arch=amd64] https://archive.ubuntu.com/ubuntu/ noble main restricted universe multiverse'
+        key_url: 'http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C'
+      - sourceline: 'deb [arch=amd64] https://archive.ubuntu.com/ubuntu/ noble-updates main restricted universe multiverse'
+        key_url: 'http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C'
+      - sourceline: 'deb [arch=amd64] https://archive.ubuntu.com/ubuntu/ noble-backports main restricted universe multiverse'
+        key_url: 'http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C'
+      - sourceline: 'deb [arch=amd64] https://archive.ubuntu.com/ubuntu/ noble-security main restricted universe multiverse'
+        key_url: 'http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C'
+      # Deactivated as it is not needed for now
+      #- sourceline: 'deb [arch=amd64] http://ppa.launchpad.net/deadsnakes/ppa/ubuntu noble main'
+      #  key_url: 'http://keyserver.ubuntu.com/pks/lookup?op=get&search=0xBA6932366A755776'
+    include:
+      - python3.12
+      - python3-pyqt5
+      - python3-pyqt5.qtopengl
+      - python3-pyqt5.qtxmlpatterns
+  files:
+    exclude:
+      - usr/share/man
+      - usr/share/doc
+      - usr/share/python-wheels
+  after_bundle: |
+  runtime:
+    # See: https://github.com/AppImageCrafters/AppRun/issues/44
+    version: "v2.0.0"
+    env:
+      PATH: '${APPDIR}/usr/bin:${PATH}'
+      PYTHONHOME: '${APPDIR}/usr'
+      PYTHONPATH: '${APPDIR}/usr/lib/python3.12/site-packages:${APPDIR}/usr/lib64/python3.12/site-packages'
+
+AppImage:
+  arch: x86_64
+  comp: zstd
