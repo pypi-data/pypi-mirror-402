@@ -1,0 +1,49 @@
+# docker-compose.yml
+version: '3.8'
+
+networks:
+  fastmvc_net:
+    driver: bridge
+
+services:
+
+  redis:
+    image: "redis:7.2-alpine"
+    command: redis-server --requirepass "test123"
+    expose:
+     - "6379"
+    ports:
+      - 6379:6379
+    networks:
+      - fastmvc_net
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      POSTGRES_DB: fastmvc
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - fastmvc_net
+
+  fastapi:
+    image: fastmvc:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8003:8003"
+    volumes:
+      - .:/app
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - fastmvc_net
+
+volumes:
+  postgres_data:
