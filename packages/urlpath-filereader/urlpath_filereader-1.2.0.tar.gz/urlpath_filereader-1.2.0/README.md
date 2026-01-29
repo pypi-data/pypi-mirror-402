@@ -1,0 +1,152 @@
+# urlpath-filereader
+
+**Version:** 1.2.0  
+**Author:** Маг Ильяс DOMA (MagIlyasDOMA)  
+**Email:** magilyas.doma.09@list.ru  
+**GitHub:** [https://github.com/MagIlyasDOMA/urlpath-filereader](https://github.com/MagIlyasDOMA/urlpath-filereader)
+
+---
+
+## Описание
+`urlpath-filereader` — это Python-библиотека для удобного чтения файлов как из локальной файловой системы, так и из URL-адресов. Библиотека автоматически определяет кодировку файлов и поддерживает широкий спектр режимов открытия файлов.
+
+## Установка
+Установите пакет через pip:
+
+```bash
+pip install urlpath-filereader
+```
+
+Или добавьте в `requirements.txt`:
+```requirements
+urlpath-filereader==1.2.0
+```
+
+## Зависимости
+- `requests`
+- `chardet>=2.0.0`
+- `pathlike-typing`
+
+## Основные функции
+### `detect_encoding(file_path)`
+Определяет кодировку файла с помощью `chardet`.
+
+#### Параметры:
+- `file_path` (`PathLike`): путь к файлу
+
+#### Возвращает:
+- `str`: предполагаемая кодировка файла
+
+### `is_url(source)`
+Проверяет, является ли источник URL-адресом.
+
+#### Параметры:
+- `source` (`PathLike`): путь или URL
+
+#### Возвращает:
+- `bool`: `True`, если источник является валидным URL
+
+### `read_file(source)`
+Читает содержимое файла или URL-адреса.
+
+#### Параметры:
+- `source` (`PathLike`): путь к файлу или URL
+
+#### Возвращает:
+- `str`: содержимое файла в виде строки
+
+#### Исключения:
+- `FileNotFoundError`: если локальный файл не существует
+- `requests.exceptions.RequestException`: при ошибке HTTP-запроса
+
+### create_file_from_url(source, encoding)
+Создаёт локальную копию файла из URL.
+
+#### Параметры:
+- `source` (`PathLike`): URL-адрес
+- `encoding` (`str`): кодировка для сохранения
+
+#### Возвращает:
+- `str`: путь к созданному файлу
+
+### `open_plus(source, mode='r', ..., auto_detect_encoding=False)`
+Универсальная функция для открытия файлов и URL.
+
+#### Параметры:
+- `source` (`PathLike`): путь к файлу или URL
+- `mode` (`FileOpenMode`): режим открытия файла (по умолчанию 'r')
+- `auto_detect_encoding` (`bool`): автоматически определять кодировку (по умолчанию False)
+
+Остальные параметры соответствуют стандартной функции open()
+
+#### Возвращает:
+
+Файловый объект
+
+## Поддерживаемые режимы открытия файлов (`FileOpenMode`)
+Библиотека поддерживает все стандартные режимы открытия файлов Python, включая:
+
+- `'r'`, `'w'`, `'a'`, `'x'`
+- Комбинированные режимы: `'r+'`, `'w+'`, `'a+'`, `'x+'`
+- Текстовые режимы: `'rt'`, `'wt'`, `'at'`, `'xt'`
+- Устаревшие режимы: `'U'`, `'rU'`, и др.
+
+Полный список доступен в коде библиотеки.
+
+## Примеры использования
+### Чтение локального файла
+```python
+from urlpath_filereader import read_file
+
+content = read_file('example.txt')
+print(content)
+```
+
+### Чтение файла из URL
+```python
+from urlpath_filereader import read_file
+
+url_content = read_file('https://example.com/file.txt')
+print(url_content)
+```
+
+### Определение кодировки файла
+```python
+from urlpath_filereader import detect_encoding
+
+encoding = detect_encoding('example.txt')
+print(f'Кодировка файла: {encoding}')
+```
+
+### Открытие файла с автоматическим определением кодировки
+```python
+from urlpath_filereader import open_plus
+
+with open_plus('example.txt', auto_detect_encoding=True) as f:
+    content = f.read()
+```
+
+### Создание локальной копии файла из URL
+```python
+from urlpath_filereader import create_file_from_url
+
+local_path = create_file_from_url('https://example.com/data.txt', 'utf-8')
+print(f'Файл сохранён: {local_path}')
+```
+
+## Обработка ошибок
+- При чтении несуществующего локального файла выбрасывается `FileNotFoundError`
+- При ошибках HTTP-запросов выбрасываются исключения из библиотеки `requests`
+- При проблемах с кодировкой могут возникать `UnicodeDecodeError`
+
+## Совместимость
+- **Python:** >=3.10
+- **ОС:** Независимая (Windows, Linux, macOS)
+
+## Лицензия
+Проект распространяется под лицензией MIT. Подробности см. в файле LICENSE в репозитории.
+
+## Поддержка и обратная связь
+По вопросам и предложениям обращайтесь:
+- GitHub Issues: [https://github.com/MagIlyasDOMA/urlpath-filereader/issues](https://github.com/MagIlyasDOMA/urlpath-filereader/issues)
+- Email: magilyas.doma.09@list.ru
