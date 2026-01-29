@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  release:
+    name: Release
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine bump type from branch name
+        id: bump-type
+        run: |
+          BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
+          if [[ "$BRANCH_NAME" == patch/* ]]; then
+            echo "type=patch" >> $GITHUB_OUTPUT
+          elif [[ "$BRANCH_NAME" == minor/* ]]; then
+            echo "type=minor" >> $GITHUB_OUTPUT
+          elif [[ "$BRANCH_NAME" == major/* ]]; then
+            echo "type=major" >> $GITHUB_OUTPUT
+          else
+            echo "Branch '$BRANCH_NAME' does not match patch/*/minor/*/major/*"
+            echo "type=none" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install uv
+        if: steps.bump-type.outputs.type != 'none'
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        if: steps.bump-type.outputs.type != 'none'
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Bump version
+        if: steps.bump-type.outputs.type != 'none'
+        id: version
+        run: |
+          OLD_VERSION=$(uvx hatch version)
+          uvx hatch version ${{ steps.bump-type.outputs.type }}
+          NEW_VERSION=$(uvx hatch version)
+          echo "old=$OLD_VERSION" >> $GITHUB_OUTPUT
+          echo "new=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Bumped version: $OLD_VERSION -> $NEW_VERSION"
+
+      - name: Commit and push
+        if: steps.bump-type.outputs.type != 'none'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add mtg_print/__version__.py
+          git commit -m "Bump version to ${{ steps.version.outputs.new }}"
+          git push
+
+      - name: Create and push tag
+        if: steps.bump-type.outputs.type != 'none'
+        run: |
+          git tag "v${{ steps.version.outputs.new }}"
+          git push origin "v${{ steps.version.outputs.new }}"
+
+      - name: Build package
+        if: steps.bump-type.outputs.type != 'none'
+        run: uv build
+
+      - name: Publish to PyPI
+        if: steps.bump-type.outputs.type != 'none'
+        run: uv publish
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+
+      - name: Create GitHub release
+        if: steps.bump-type.outputs.type != 'none'
+        run: |
+          gh release create "v${{ steps.version.outputs.new }}" \
+            --title "v${{ steps.version.outputs.new }}" \
+            --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
