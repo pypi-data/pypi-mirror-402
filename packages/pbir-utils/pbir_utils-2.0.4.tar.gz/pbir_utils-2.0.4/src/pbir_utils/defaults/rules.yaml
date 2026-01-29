@@ -1,0 +1,89 @@
+# Default Rules Configuration
+# This file defines expression-based validation rules only.
+# Sanitizer-based checks are now handled directly via sanitize.yaml.
+#
+# Engine loads entire PBIR into a context object for expression evaluation.
+# Expressions can traverse: report, reportExtensions, pages (with visuals), bookmarks, themes.
+
+options:
+  fail_on_warning: false
+
+definitions:
+  # ============================================
+  # Expression-based rules (traverse PBIR context)
+  # ============================================
+
+  reduce_pages:
+    description: "Limit report page count"
+    severity: info
+    scope: report
+    params:
+      max_pages: 10
+    expression: >
+      len(pages) <= max_pages
+
+  explicit_page_names:
+    description: "Ensure pages have explicit names, not default 'Page N' names"
+    severity: warning
+    scope: page
+    expression: >
+      not re_match(r'^Page \d+$', page.get("displayName", ""))
+
+  reduce_visuals_on_page:
+    description: "Limit visuals per page"
+    severity: info
+    scope: page
+    params:
+      max_visuals: 20
+      excluded_types: ["shape", "slicer", "actionButton", "textbox"]
+    expression: >
+      len([v for v in page.get("visuals", []) 
+           if not v.get("isHidden") 
+           and get_path(v, "visual.visualType") not in excluded_types]) <= max_visuals
+
+  reduce_objects_within_visuals:
+    description: "Limit data fields per visual"
+    severity: info
+    scope: visual
+    params:
+      max_fields: 6
+    expression: >
+      sum(len(p) for p in find_all(get_path(visual, "visual.query"), "projections")) <= max_fields
+
+  reduce_topn_filters:
+    description: "Limit TopN filter usage"
+    severity: info
+    scope: visual
+    params:
+      max_topn_filters: 1
+    expression: >
+      len([f for f in get_path(visual, "filterConfig.filters", []) 
+           if f.get("type") == "TopN"]) <= max_topn_filters
+
+  reduce_advanced_filters:
+    description: "Limit advanced filter usage"
+    severity: info
+    scope: visual
+    disabled: true
+    params:
+      max_advanced_filters: 1
+    expression: >
+      len([f for f in get_path(visual, "filterConfig.filters", []) 
+           if f.get("type") == "Advanced"]) <= max_advanced_filters
+
+  ensure_theme_colors:
+    description: "Avoid hardcoded hex colors; use ThemeDataColor for consistency"
+    severity: info
+    scope: visual
+    disabled: true
+    expression: >
+      get_path(visual, "visual.visualType") == "textbox" or 
+      all(not re_search(r'#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})', str(c)) 
+          for c in find_all(visual, "color"))
+
+# NOTE: No explicit 'rules:' list needed!
+# When omitted, ALL rules from 'definitions' are run automatically.
+#
+# To exclude specific rules, use:
+#   exclude:
+#     - rule_id_to_skip

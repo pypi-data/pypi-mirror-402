@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: uv sync --extra dev --extra ui
+
+    - name: Lint with ruff
+      run: uv run ruff check src tests
+
+    - name: Format check with black
+      run: uv run ruff format --check src tests
+
+    - name: Security check with bandit
+      run: uv run bandit -r src
+
+    - name: Check dependencies for vulnerabilities
+      run: |
+        uv pip install pip-audit
+        uv run pip-audit
+
+    - name: Run tests with pytest
+      run: uv run pytest --cov=src --cov-fail-under=80
