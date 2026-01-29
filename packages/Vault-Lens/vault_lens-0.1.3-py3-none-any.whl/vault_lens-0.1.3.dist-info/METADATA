@@ -1,0 +1,90 @@
+Metadata-Version: 2.4
+Name: Vault_Lens
+Version: 0.1.3
+Summary: Vault_Lens lets you run private datasets locally and gives Ollama a lens to see in the vault. Raw data is never touched by the llm.
+Author-email: Steven Polino <stpolino@gmail.com>
+License: MIT
+Project-URL: Homepage, https://github.com/CharSiu8/Vault_Lens
+Project-URL: GithubPage, https://charsiu8.github.io/Vault_Lens/
+Project-URL: Bug Tracker, https://github.com/yourusername/vaultlens/issues
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+
+# Privacy-First Automated Data Observability Pipeline
+
+## The Business Value
+In modern data environments, companies face two major hurdles: **Data Privacy (GDPR/HIPAA)** and **Data Integrity**.
+
+Most "AI Data Assistants" require uploading sensitive raw data to a third-party cloud, risking privacy breaches. Furthermore, LLMs often "hallucinate" mathematical statistics.
+
+## Validation
+Tested against the same 10K insurance dataset used in my [Insurance Claims Prediction](https://github.com/CharSiu8/insurance-claims-prediction-logistic-regression) project. The auditor correctly identified the same 982 null values in `credit_score` and 957 in `annual_mileage` that I found through manual EDA—confirming the pipeline replicates expert-level data quality checks automatically.
+
+**This project solves these issues by:**
+1. **Local-First Auditing:** All statistical analysis (null detection, type inconsistency checks, date validation) happens locally using Pandas—raw data never leaves your machine. 
+2. **Hybrid Intelligence:** Deterministic Python logic ensures 100% mathematical accuracy. AI is used only to *interpret* the pre-computed findings and suggest remediation plans.
+3. **Automation:** Built as a modular pipeline that can be integrated into automated workflows, rather than a manual "chat" interface.
+4. **Flexible AI Providers:** Choose between OpenAI (cloud) or Ollama (fully local)—enabling 100% offline operation for maximum privacy.
+
+## Installation
+```bash
+git clone https://github.com/CharSiu8/data_auditor.git
+cd data_auditor
+pip install -r requirements.txt
+```
+
+## Quick Start
+
+### Option A: Fully Local (No API Key Needed)
+1. Install [Ollama](https://ollama.ai)
+2. Pull a model: `ollama pull llama3.2`
+3. Run: `python main.py --model ollama`
+
+### Option B: Cloud (OpenAI)
+1. Create `.env` file: `OPENAI_API_KEY=your-key-here`
+2. Run: `python main.py --model openai`
+
+### Command Line Options
+```bash
+python main.py --model ollama --file your_data.csv
+```
+| Argument | Options | Default | Description |
+|----------|---------|---------|-------------|
+| `--model` | `openai`, `ollama` | `openai` | AI provider to use |
+| `--file` | any CSV path | `test_data.csv` | File to audit |
+
+## Tech Stack & Architecture
+- **Language:** Python 3.x
+- **Data Engineering:** Pandas
+- **AI Integration:** OpenAI API (GPT-4o-mini) or Ollama (Llama 3.2, local)
+- **Security:** python-dotenv (Environment Variable Management)
+- **Version Control:** Git/GitHub
+
+### Project Structure
+| File | Purpose |
+|------|---------|
+| `main.py` | Application entry point and pipeline coordinator |
+| `auditor.py` | Statistical engine—performs all data quality checks locally |
+| `reporter.py` | Serializes audit results to JSON |
+| `analyzer.py` | Routes to OpenAI or Ollama for AI interpretation |
+| `feedback.py` | Sends user feedback to developer via Discord webhook |
+| `.env` | Secure storage for API keys (ignored by Git) |
+
+### Data Flow
+```
+CSV File → auditor.py (local analysis) → reporter.py (JSON) → analyzer.py (AI interpretation) → Summary
+```
+
+## Privacy Architecture
+- **What stays local:** Raw data, all statistical computations
+- **What is sent to AI:** Only audit metadata (column names, data types, row indices with issues)—no actual data values are transmitted
+- **With Ollama:** Everything stays local—zero data leaves your machine
+
+
+## Impact
+By automating the Exploratory Data Analysis (EDA) phase, this tool reduces the "Data Cleaning" bottleneck—which typically takes up 80% of a Data Scientist's time—allowing for faster, safer insights.
+## Feedback
+Built-in feedback system lets users send comments directly to the developer. Help improve VaultLens by sharing your experience after running an audit.
