@@ -1,0 +1,71 @@
+@startuml L4-almaqso.Almaqso._process-activity
+start
+partition "Preprocess" #LightYellow {
+    :Extract name of ASDM from downloaded tarball;
+    :Create working directory for the ASDM. If exists, remove it first;
+}
+partition "Extract ASDM" #LightYellow {
+    :Extract ASDM tarball into working directory;
+}
+partition "Process ASDM" #LightYellow {
+    :Import ASDM into MS and get field names;
+    if (User's target contains?) then (yes)
+        :Record retain field names;
+    else (no)
+        stop
+    endif
+    :Create calibration script;
+    :Run calibration script;
+
+    :Extract user's target fields into new MS;
+
+    if (Required imaging?) then (yes)
+        partition "Imaging" #Moccasin {
+            if (Required self-calibration later?) then (yes)
+                :savemodel = 'modelcolumn';
+            else (no)
+                :savemodel = 'none';
+            endif
+            :Run tclean;
+        }
+    else (no)
+    endif
+
+    if (Required self-calibration?) then (yes)
+        partition "Self-calibration and generate 2nd images" #Moccasin {
+            :Perform self-calibration;
+        }
+    else (no)
+    endif
+
+    partition "Export images to FITS" #Moccasin {
+        :Export images to FITS format;
+        if (Required to remove CASA images after export?) then (yes)
+            :Remove CASA images;
+        else (no)
+        endif
+    }
+
+    partition "Cleanup" #Moccasin {
+        if (Required to remove ASDM?) then (yes)
+            :Remove ASDM working directory;
+        else (no)
+        endif
+
+        if (Required to remove intermediate files?) then (yes)
+            :Remove intermediate files. Only keep images dirs, MS and *.py and *.log files;
+        else (no)
+        endif
+    }
+
+    partition "Check success" #Moccasin {
+        while (more log files?) is (yes)
+            if (log files contains "SEVERE"?) then (yes)
+                :Mark ASDM process as failed;
+            else (no)
+            endif
+        endwhile
+    }
+}
+stop
+@enduml
