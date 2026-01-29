@@ -1,0 +1,113 @@
+# pdfcoordex
+
+Extract text, images, and tables from PDF files with automatic analysis.
+
+## Installation
+
+```bash
+pip install pdfcoordex
+```
+
+## Features
+
+- ✅ Extract all text content from PDFs
+- ✅ Analyze embedded images (size, format, type)
+- ✅ Extract tables with data preservation
+- ✅ Save results to plain text file
+- ✅ Simple and easy to use
+
+## Quick Start
+
+```python
+from pdfcoordex import PDFCoordExtractor
+
+# Create extractor
+extractor = PDFCoordExtractor("document.pdf")
+
+# Save to text file
+extractor.save_to_text_file("output.txt")
+
+# Close when done
+extractor.close()
+```
+
+## Usage Examples
+
+### Extract Single Page
+
+```python
+from pdfcoordex import PDFCoordExtractor
+
+extractor = PDFCoordExtractor("document.pdf")
+
+# Get page 1 data
+page_data = extractor.extract_page(1)
+
+print("Text:", page_data['text'])
+print("Images:", len(page_data['images']))
+print("Tables:", len(page_data['tables']))
+
+extractor.close()
+```
+
+### Extract All Pages
+
+```python
+from pdfcoordex import PDFCoordExtractor
+
+extractor = PDFCoordExtractor("document.pdf")
+
+# Get all pages
+all_pages = extractor.extract_all_pages()
+
+for page_name, data in all_pages.items():
+    print(f"{page_name}: {len(data['text'])} characters")
+
+extractor.close()
+```
+
+### Using Context Manager
+
+```python
+from pdfcoordex import PDFCoordExtractor
+
+# Automatically closes the PDF
+with PDFCoordExtractor("document.pdf") as extractor:
+    extractor.save_to_text_file("output.txt")
+```
+
+## Output Format
+
+The text file output includes:
+
+### Text Content
+All text from each page as plain text.
+
+### Image Analysis
+- Image format (PNG, JPEG, etc.)
+- Image dimensions (width x height)
+- Orientation (landscape, portrait, square)
+- Type classification (diagram, icon, chart)
+- Color mode information
+
+### Tables
+Tables are formatted with pipe separators for easy reading:
+```
+Header1 | Header2 | Header3
+Data1   | Data2   | Data3
+```
+
+## Requirements
+
+- Python >= 3.8
+- pdfplumber >= 0.10.3
+- PyMuPDF >= 1.23.8
+- Pillow >= 10.0.0
+
+## License
+
+MIT License
+
+## Support
+
+For issues and questions, please visit the GitHub repository.
