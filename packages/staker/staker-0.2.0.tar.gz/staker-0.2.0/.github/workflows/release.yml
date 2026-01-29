@@ -1,0 +1,117 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  test:
+    name: Test
+    uses: ./.github/workflows/test.yml
+
+  version:
+    name: Version
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.version.outputs.new_tag }}
+      tag_name: ${{ steps.version.outputs.new_tag }}
+      pypi_version: ${{ steps.set-version.outputs.pypi_version }}
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Bump version and push tag
+      id: version
+      uses: anothrNick/github-tag-action@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        DEFAULT_BUMP: minor
+        WITH_V: true
+        TAG_CONTEXT: repo
+        BRANCH_HISTORY: compare
+        INITIAL_VERSION: 0.1.0
+    
+    - name: Update version in pyproject.toml
+      id: set-version
+      run: |
+        # Strip 'v' prefix for PyPI-compatible version
+        PYPI_VERSION="${NEW_TAG#v}"
+        sed -i "s/^version = .*/version = \"$PYPI_VERSION\"/" pyproject.toml
+        echo "Tag version: $NEW_TAG"
+        echo "PyPI version: $PYPI_VERSION"
+        echo "pypi_version=$PYPI_VERSION" >> $GITHUB_OUTPUT
+        grep "^version" pyproject.toml
+      env:
+        NEW_TAG: ${{ steps.version.outputs.new_tag }}
+    # Note: Version is injected locally for this job only.
+    # Not committed to repo - downstream jobs inject version from tag.
+
+  publish:
+    name: Publish PyPI
+    needs: version
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/staker
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: master
+        fetch-depth: 1
+    
+    - name: Pull latest changes
+      run: git pull origin master
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+    
+    - name: Inject version from tag
+      run: |
+        PYPI_VERSION="${{ needs.version.outputs.new_version }}"
+        PYPI_VERSION="${PYPI_VERSION#v}"  # Strip 'v' prefix
+        sed -i "s/^version = .*/version = \"$PYPI_VERSION\"/" pyproject.toml
+        echo "PyPI version: $PYPI_VERSION"
+        grep "^version" pyproject.toml
+    
+    - name: Build distributions
+      run: |
+        uv build --sdist
+        uv build --wheel
+    
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      # Uses OIDC trusted publishing - configure at:
+      # https://pypi.org/manage/account/publishing/
+
+  release:
+    name: Release
+    needs: version
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: master
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ needs.version.outputs.tag_name }}
+        generate_release_notes: true
+        draft: false
+        prerelease: ${{ contains(needs.version.outputs.new_version, 'alpha') || contains(needs.version.outputs.new_version, 'beta') || contains(needs.version.outputs.new_version, 'rc') }}

@@ -1,0 +1,36 @@
+name: Test
+
+on:
+  workflow_call:  # Only callable by other workflows (pr.yml, release.yml)
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+    
+    - name: Install dependencies
+      run: uv sync --all-groups
+    
+    - name: Lint with ruff
+      run: |
+        uv run ruff check .
+        uv run ruff format --check .
+    
+    - name: Run tests with coverage
+      env:
+        DEPLOY_ENV: dev
+        ETH_ADDR: "0x0000000000000000000000000000000000000000"
+      run: uv run python -m pytest --cov --cov-report=term-missing
