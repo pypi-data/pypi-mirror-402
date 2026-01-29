@@ -1,0 +1,142 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "duckdb-haystack"
+dynamic = ["version"]
+description = ''
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+keywords = ["DuckDB", "haystack-ai"]
+authors = [{ name = "Adrian Rumpold", email = "a.rumpold@gmail.com" }]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: Implementation :: CPython",
+]
+dependencies = [
+  "duckdb>=0.10.3",
+  "haystack-ai",
+  "pandas>=2.3.3",
+  "typing-extensions",
+]
+
+[project.urls]
+Documentation = "https://github.com/AdrianoKF/duckdb-haystack#readme"
+Issues = "https://github.com/AdrianoKF/duckdb-haystack/issues"
+Source = "https://github.com/AdrianoKF/duckdb-haystack"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/haystack_integrations"]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/haystack_integrations/document_stores/duckdb/_version.py"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+lint.select = [
+  "A",
+  "ARG",
+  "B",
+  "C",
+  "DTZ",
+  "E",
+  "EM",
+  "F",
+  "FBT",
+  "I",
+  "ICN",
+  "ISC",
+  "N",
+  "PLC",
+  "PLE",
+  "PLR",
+  "PLW",
+  "Q",
+  "RUF",
+  "S",
+  "T",
+  "TID",
+  "UP",
+  "W",
+  "YTT",
+]
+lint.ignore = [
+  # Allow non-abstract empty methods in abstract base classes
+  "B027",
+  # Allow boolean positional values in function calls, like `dict.get(... True)`
+  "FBT003",
+  # Ignore checks for possible passwords
+  "S105",
+  "S106",
+  "S107",
+  # Ignore SQL injection vector warning (we need to inject table names, ..., into the query)
+  "S608",
+  # Ignore complexity
+  "C901",
+  "PLR0911",
+  "PLR0912",
+  "PLR0913",
+  "PLR0915",
+]
+lint.unfixable = [
+  # Don't touch unused imports
+  "F401",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["duckdb_store"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "parents"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests can use magic values, assertions, and relative imports
+"tests/**/*" = ["PLR2004", "S101", "TID252"]
+
+[tool.coverage.run]
+source_pkgs = ["haystack_integrations", "tests"]
+branch = true
+parallel = true
+omit = ["src/haystack_integrations/document_stores/duckdb/_version.py"]
+
+[tool.coverage.paths]
+haystack_integrations = [
+  "src/haystack_integrations",
+  "*/duckdb-haystack/src/haystack_integrations",
+]
+tests = ["tests", "*/duckdb-haystack/tests"]
+
+[tool.coverage.report]
+exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+markers = ["unit: unit tests", "integration: integration tests"]
+
+[tool.basedpyright]
+typeCheckingMode = "standard"
+pythonVersion = "3.10"
+reportMissingTypeStubs = false
+
+[dependency-groups]
+dev = [
+  "coverage[toml]>=6.5",
+  "pytest>=9.0.2",
+  "basedpyright>=1.29",
+  "ruff>=0.14.11",
+]
