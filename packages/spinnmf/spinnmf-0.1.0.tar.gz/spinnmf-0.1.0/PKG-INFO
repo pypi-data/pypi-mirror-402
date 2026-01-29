@@ -1,0 +1,76 @@
+Metadata-Version: 2.4
+Name: spinnmf
+Version: 0.1.0
+Summary: SPINNMF: Stable Spatial Pattern Discovery via AutoK Consensus Graph-Regularized Poisson NMF
+Project-URL: Homepage, https://github.com/ZHANGCaicai581/SPINNMF
+Project-URL: Repository, https://github.com/ZHANGCaicai581/SPINNMF
+Project-URL: Issues, https://github.com/ZHANGCaicai581/SPINNMF/issues
+Author: Caicai Zhang, Frank Qingyun Wang
+License: MIT
+License-File: LICENSE
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Bio-Informatics
+Classifier: Topic :: Scientific/Engineering :: Information Analysis
+Requires-Python: >=3.9
+Requires-Dist: anndata>=0.9
+Requires-Dist: joblib>=1.3
+Requires-Dist: matplotlib>=3.7
+Requires-Dist: numpy>=1.22
+Requires-Dist: pandas>=1.5
+Requires-Dist: scanpy>=1.9
+Requires-Dist: scikit-learn>=1.2
+Requires-Dist: scipy>=1.9
+Requires-Dist: tqdm>=4.66
+Provides-Extra: dev
+Requires-Dist: build>=1.0; extra == 'dev'
+Requires-Dist: pytest>=7.4; extra == 'dev'
+Requires-Dist: ruff>=0.3; extra == 'dev'
+Requires-Dist: twine>=4.0; extra == 'dev'
+Description-Content-Type: text/markdown
+
+# SPINNMF
+
+![SPINNMF workflow](docs/method_workflow.png)
+
+## 安装
+
+-（发布到 PyPI 后）`pip install spinnmf`
+- 开发模式：在源码根目录运行 `pip install -e .[dev]`
+
+## 快速使用
+
+命令行运行 AutoK：
+```bash
+spinnmf \
+  --h5ad /path/to/spatial.h5ad \
+  --outdir /path/to/outdir \
+  --k_grid 2,3,4,5 \
+  --n_seeds 5 \
+  --n_jobs 4
+```
+
+Python 调用：
+```python
+import anndata as ad
+from spinnmf import fit_spin_nmf_autok, config
+
+adata = ad.read_h5ad("path/to/spatial.h5ad")
+cfg = config.SPINNMFConfig(k_grid=(2, 3, 4), n_seeds=3, n_jobs=1)
+res = fit_spin_nmf_autok(adata.X, adata.obsm["spatial"], cfg)
+print(res.K_star, res.W.shape, res.H.shape)
+```
+
+## 测试与构建
+
+```bash
+pytest
+python -m build
+twine check dist/*
+```
