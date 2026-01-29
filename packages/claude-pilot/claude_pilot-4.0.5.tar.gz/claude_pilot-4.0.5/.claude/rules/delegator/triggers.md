@@ -1,0 +1,187 @@
+# Delegation Triggers
+
+This file defines when to delegate to GPT experts via Codex.
+
+## ⚠️ CRITICAL ENFORCEMENT
+
+**This is NOT optional.** Trigger detection MUST happen automatically.
+
+### Enforcement Protocol
+
+**Commands MUST include trigger detection checkpoints at key decision points:**
+- `/02_execute`: After Step 1 (Plan Detection), before Step 2
+- `/90_review`: After Step 0 (Load Plan), before Step 1
+- Any command handling failures, architecture decisions, or security concerns
+
+### When to Check (MANDATORY)
+
+- **Before starting ANY command execution**
+- **At key decision points within commands**
+- **When encountering documented trigger keywords**
+- **After ANY failure (2+ attempts → escalate)**
+
+### Trigger Check Template
+
+1. **STOP**: Scan input for trigger signals
+2. **MATCH**: Identify expert type from triggers below
+3. **READ**: Load expert prompt file from `.claude/rules/delegator/prompts/`
+4. **EXECUTE**: Call codex-sync.sh or continue
+5. **CONFIRM**: Log delegation decision
+
+### BEFORE PROCEEDING Checklist
+
+- [ ] Scanned for explicit triggers ("ask GPT", "consult GPT")
+- [ ] Checked for failure escalation (2+ attempts on same issue)
+- [ ] Checked for architecture decision keywords
+- [ ] Checked for security-related keywords
+- [ ] If trigger matched → read expert prompt → delegate
+
+---
+
+## IMPORTANT: Check These Triggers on EVERY Message
+
+You MUST scan incoming messages for delegation triggers. This is NOT optional.
+
+**Behavior:**
+1. **PROACTIVE**: On every user message, check if semantic triggers match → delegate automatically
+2. **REACTIVE**: If user explicitly mentions GPT/Codex → delegate immediately
+
+When a trigger matches:
+1. Identify the appropriate expert
+2. Read their prompt file from `.claude/rules/delegator/prompts/[expert].md`
+3. Follow the delegation flow in `rules/orchestration.md`
+
+---
+
+## Available Experts
+
+| Expert | Specialty | Use For |
+|--------|-----------|---------|
+| **Architect** | System design, tradeoffs | Architecture decisions, complex debugging |
+| **Plan Reviewer** | Plan validation | Reviewing work plans before execution |
+| **Scope Analyst** | Pre-planning analysis | Catching ambiguities before work starts |
+| **Code Reviewer** | Code quality, bugs | Reviewing code changes, finding issues |
+| **Security Analyst** | Vulnerabilities, threats | Security audits, hardening |
+
+## Explicit Triggers (Highest Priority)
+
+User explicitly requests delegation:
+
+| Phrase Pattern | Expert |
+|----------------|--------|
+| "ask GPT", "consult GPT" | Route based on context |
+| "review this architecture" | Architect |
+| "review this plan" | Plan Reviewer |
+| "analyze the scope" | Scope Analyst |
+| "review this code" | Code Reviewer |
+| "security review", "is this secure" | Security Analyst |
+
+## Semantic Triggers (Intent Matching)
+
+### Architecture & Design (→ Architect)
+
+| Intent Pattern | Example |
+|----------------|---------|
+| "how should I structure" | "How should I structure this service?" |
+| "what are the tradeoffs" | "Tradeoffs of this caching approach" |
+| "should I use [A] or [B]" | "Should I use microservices or monolith?" |
+| System design questions | "Design a notification system" |
+| After 2+ failed fix attempts | Escalation for fresh perspective |
+
+### Plan Validation (→ Plan Reviewer)
+
+| Intent Pattern | Example |
+|----------------|---------|
+| "review this plan" | "Review my migration plan" |
+| "is this plan complete" | "Is this implementation plan complete?" |
+| "validate before I start" | "Validate my approach before starting" |
+| Before significant work | Pre-execution validation |
+
+### Requirements Analysis (→ Scope Analyst)
+
+| Intent Pattern | Example |
+|----------------|---------|
+| "what am I missing" | "What am I missing in these requirements?" |
+| "clarify the scope" | "Help clarify the scope of this feature" |
+| Vague or ambiguous requests | Before planning unclear work |
+| "before we start" | Pre-planning consultation |
+
+### Code Review (→ Code Reviewer)
+
+| Intent Pattern | Example |
+|----------------|---------|
+| "review this code" | "Review this PR" |
+| "find issues in" | "Find issues in this implementation" |
+| "what's wrong with" | "What's wrong with this function?" |
+| After implementing features | Self-review before merge |
+
+### Security (→ Security Analyst)
+
+| Intent Pattern | Example |
+|----------------|---------|
+| "security implications" | "Security implications of this auth flow" |
+| "is this secure" | "Is this token handling secure?" |
+| "vulnerabilities in" | "Any vulnerabilities in this code?" |
+| "threat model" | "Threat model for this API" |
+| "harden this" | "Harden this endpoint" |
+
+## Trigger Priority
+
+1. **Explicit user request** - Always honor direct requests
+2. **Security concerns** - When handling sensitive data/auth
+3. **Architecture decisions** - System design with long-term impact
+4. **Failure escalation** - After 2+ failed attempts
+5. **Don't delegate** - Default: handle directly
+
+## When NOT to Delegate
+
+| Situation | Reason |
+|-----------|--------|
+| Simple syntax questions | Answer directly |
+| Direct file operations | No external insight needed |
+| Trivial bug fixes | Obvious solution |
+| Research/documentation | Use other tools |
+| First attempt at any fix | Try yourself first |
+
+## Advisory vs Implementation Mode
+
+Any expert can operate in two modes:
+
+| Mode | Sandbox | When to Use |
+|------|---------|-------------|
+| **Advisory** | `read-only` | Analysis, recommendations, review verdicts |
+| **Implementation** | `workspace-write` | Actually making changes, fixing issues |
+
+Set the sandbox based on what the task requires, not the expert type.
+
+**Examples:**
+
+```bash
+# Architect analyzing (advisory)
+.claude/scripts/codex-sync.sh "read-only" "You are a software architect...
+TASK: Analyze tradeoffs of Redis vs in-memory caching.
+EXPECTED OUTCOME: Clear recommendation with rationale.
+CONTEXT: [user's situation, full details]
+..."
+
+# Architect implementing (implementation)
+.claude/scripts/codex-sync.sh "workspace-write" "You are a software architect...
+TASK: Refactor the caching layer to use Redis.
+EXPECTED OUTCOME: Working Redis integration.
+CONTEXT: [relevant code snippets]
+..."
+
+# Security Analyst reviewing (advisory)
+.claude/scripts/codex-sync.sh "read-only" "You are a security engineer...
+TASK: Review this auth flow for vulnerabilities.
+EXPECTED OUTCOME: Vulnerability report with risk rating.
+CONTEXT: [auth flow code]
+..."
+
+# Security Analyst hardening (implementation)
+.claude/scripts/codex-sync.sh "workspace-write" "You are a security engineer...
+TASK: Fix the SQL injection vulnerability in user.ts.
+EXPECTED OUTCOME: Secure code with parameterized queries.
+CONTEXT: [vulnerable code snippet]
+..."
+```
