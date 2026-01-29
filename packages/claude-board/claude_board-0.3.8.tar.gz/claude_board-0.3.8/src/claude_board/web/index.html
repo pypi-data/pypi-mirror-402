@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Claude Board</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- xterm.js -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
+    <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.js"></script>
+    <!-- PWA support for mobile -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1a1a2e">
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎛️</text></svg>">
+</head>
+<body>
+    <!-- Fixed Header Area (Header + Tabs) -->
+    <div class="fixed-header" id="fixed-header">
+        <div class="fixed-header-inner">
+            <!-- Header with connection status and notification bell -->
+            <header class="header-bar">
+                <h1 class="app-title">Claude Board</h1>
+                <div class="header-actions">
+                    <button id="notification-bell" class="notification-bell" title="Click to enable sound and vibration notifications">
+                        <svg class="bell-icon bell-outline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                        </svg>
+                        <svg class="bell-icon bell-filled" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                        </svg>
+                        <span class="bell-text">Enable</span>
+                    </button>
+                    <span id="connection-status" class="status-badge disconnected">Disconnected</span>
+                </div>
+            </header>
+
+            <!-- Session Tabs (below header) -->
+            <div class="session-tabs-bar" id="session-tabs-bar">
+                <div class="session-tabs" id="project-tabs">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scrollable Content Area -->
+    <div class="container" id="main-container">
+        <!-- Hidden placeholder for backward compatibility -->
+        <section id="project-section" class="hidden"></section>
+
+        <!-- TODO List (hidden when empty, collapsible when all completed) -->
+        <section id="todo-section" class="card todo-list hidden">
+            <h2 id="todo-header" class="todo-header">
+                <span class="todo-completed-icon">✓</span>
+                <span>TODO List (<span id="todo-count">0</span>)</span>
+            </h2>
+            <ul id="todo-list" class="todos">
+                <!-- Populated by JavaScript -->
+            </ul>
+        </section>
+
+        <!-- Status Section (shown when there's a pending request OR when waiting) -->
+        <section id="status-section" class="card status-section hidden">
+            <h2 id="status-title">Status</h2>
+            <div id="status-content">
+                <!-- Populated by JavaScript -->
+            </div>
+        </section>
+
+        <!-- Pending Approvals (shown when there are requests) -->
+        <section id="pending-section" class="card pending-approval hidden">
+            <h2>Pending Approval (<span id="pending-count">0</span>)</h2>
+            <div id="pending-list" class="pending-list">
+                <!-- Populated by JavaScript - multiple pending requests -->
+            </div>
+        </section>
+
+        <!-- Completed Tasks (hidden when empty) -->
+        <section id="completed-section" class="card completed-tasks hidden">
+            <h2>Completed (<span id="completed-count">0</span>)</h2>
+            <ul id="completed-list" class="task-list">
+                <!-- Populated by JavaScript -->
+            </ul>
+        </section>
+
+        <!-- Terminal Section (collapsible, auto-connects for internal sessions) -->
+        <section id="terminal-section" class="card terminal-section collapsed">
+            <div class="terminal-header" id="terminal-toggle">
+                <h2>
+                    <span class="collapse-icon">▶</span>
+                    Terminal <span id="terminal-session-count" class="session-count"></span>
+                    <span id="terminal-status" class="terminal-status"></span>
+                </h2>
+                <div class="terminal-controls">
+                    <!-- Session select dropdown (auto-connects when session is selected) -->
+                    <select id="session-select" class="session-select hidden">
+                        <option value="">Select session...</option>
+                    </select>
+                </div>
+            </div>
+            <div id="terminal-body" class="terminal-body hidden">
+                <div id="terminal-container" class="terminal-container"></div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Fixed Bottom Bar -->
+    <footer class="bottom-bar">
+        <!-- Prompt Input (above buttons, for terminal sessions) -->
+        <div id="prompt-input-bar" class="prompt-input-bar hidden">
+            <input type="text" id="prompt-input" class="prompt-input" placeholder="Type a prompt and press Enter..." disabled>
+            <button id="prompt-send-btn" class="prompt-send-btn" disabled>Send</button>
+        </div>
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button id="approve-btn" class="action-btn approve" disabled>
+                <span class="btn-icon">✓</span>
+                <span class="btn-text">APPROVE</span>
+            </button>
+            <button id="deny-btn" class="action-btn deny" disabled>
+                <span class="btn-icon">✗</span>
+                <span class="btn-text">DENY</span>
+            </button>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat">
+                <span class="stat-value" id="total-count">0</span>
+                <span class="stat-label">Total</span>
+            </div>
+            <div class="stat approved">
+                <span class="stat-value" id="approved-count">0</span>
+                <span class="stat-label">Approved</span>
+            </div>
+            <div class="stat denied">
+                <span class="stat-value" id="denied-count">0</span>
+                <span class="stat-label">Denied</span>
+            </div>
+        </div>
+
+        <!-- YOLO Toggle -->
+        <div class="yolo-row">
+            <span class="yolo-label">YOLO Mode</span>
+            <button id="yolo-toggle" class="toggle-btn off">OFF</button>
+        </div>
+    </footer>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
