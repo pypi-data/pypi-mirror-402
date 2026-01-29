@@ -1,0 +1,344 @@
+# Adaptable Agents Python Client
+
+A Python client library that wraps your LLM clients (OpenAI, Anthropic, etc.) with automatic context generation from the Adaptable Agents API. This package seamlessly integrates with your existing LLM workflows to enhance responses with relevant past experiences through intelligent memory strategies.
+
+## Features
+
+- **Automatic Context Integration**: Automatically fetches relevant past experiences and appends them to your prompts
+- **Memory Storage**: Optionally stores input/output pairs as memories for future learning
+- **Multiple Learning Strategies**:
+  - **DC (Dynamic Cheatsheet)**: Intelligent extraction of relevant past experiences as contextual cheatsheets
+  - **AMEM (Agentic Memory)**: Evolving memory system with semantic search and memory evolution
+- **OpenAI Support**: Drop-in replacement for OpenAI client with context integration
+- **Anthropic Support**: Drop-in replacement for Anthropic client with context integration
+- **Easy Configuration**: Simple API key-based setup
+- **Memory Scope Control**: Organize memories hierarchically with custom scope paths
+
+## Installation
+
+```bash
+pip install adaptable-agents
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/your-org/adaptable-agents-python-package.git
+cd adaptable-agents-python-package
+pip install -e .
+```
+
+### Development Setup with uv
+
+This project uses [uv](https://github.com/astral-sh/uv) for fast virtual environment management. To set up a development environment:
+
+```bash
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create and activate virtual environment
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install the package in editable mode with dev dependencies
+uv pip install -e ".[dev]"
+```
+
+The `.python-version` file specifies Python 3.11, which `uv` will automatically use.
+
+## Quick Start
+
+### OpenAI Integration
+
+```python
+from adaptable_agents import AdaptableOpenAIClient
+
+# Initialize the client with your API keys
+client = AdaptableOpenAIClient(
+    adaptable_api_key="your-adaptable-agents-api-key",
+    openai_api_key="your-openai-api-key",
+    memory_scope_path="customer-support/billing",  # Optional: organize by scope
+    api_base_url="http://localhost:8000",  # Optional: defaults to localhost
+    strategy="vd"  # "vd" for DC (Dynamic Cheatsheet) or "kg" for AMEM (Agentic Memory)
+)
+
+# Use it just like the regular OpenAI client
+response = client.chat.completions.create(
+    model="gpt-4",
+    messages=[
+        {"role": "user", "content": "User asked about billing issues with subscription renewal"}
+    ]
+)
+
+print(response.choices[0].message.content)
+```
+
+### Anthropic Integration
+
+```python
+from adaptable_agents import AdaptableAnthropicClient
+
+# Initialize the client
+client = AdaptableAnthropicClient(
+    adaptable_api_key="your-adaptable-agents-api-key",
+    anthropic_api_key="your-anthropic-api-key",
+    memory_scope_path="engineering/frontend",
+    api_base_url="http://localhost:8000",
+    strategy="kg"  # Use AMEM strategy for evolving memories
+)
+
+# Use it just like the regular Anthropic client
+response = client.messages.create(
+    model="claude-3-opus-20240229",
+    max_tokens=1024,
+    messages=[
+        {"role": "user", "content": "How do I implement authentication?"}
+    ]
+)
+
+print(response.content[0].text)
+```
+
+## How It Works
+
+1. **Context Retrieval**: Before making an LLM call, the client automatically fetches relevant context from the Adaptable Agents API based on your input and selected strategy
+2. **Prompt Enhancement**: The context is prepended to your user prompt to provide information from past successful interactions
+3. **LLM Generation**: The enhanced prompt is sent to your LLM provider (OpenAI, Anthropic, etc.)
+4. **Memory Storage** (optional): After generation, the input/output pair is stored as a memory for future learning
+
+## Learning Strategies
+
+### DC (Dynamic Cheatsheet) - Strategy "vd"
+
+The DC strategy extracts relevant past experiences and presents them as contextual cheatsheets. It's ideal for:
+- Quick reference to successful patterns
+- Static knowledge extraction
+- Fast context retrieval with caching support
+
+```python
+client = AdaptableOpenAIClient(
+    adaptable_api_key="your-api-key",
+    openai_api_key="your-openai-key",
+    strategy="vd",  # DC strategy
+    memory_scope_path="customer-support/billing"
+)
+```
+
+### AMEM (Agentic Memory) - Strategy "kg"
+
+The AMEM strategy creates evolving, semantic memories that adapt based on new experiences. It's ideal for:
+- Evolving knowledge bases
+- Complex semantic understanding
+- Long-term memory evolution
+
+```python
+client = AdaptableOpenAIClient(
+    adaptable_api_key="your-api-key",
+    openai_api_key="your-openai-key",
+    strategy="kg",  # AMEM strategy
+    memory_scope_path="engineering/frontend"
+)
+```
+
+## Advanced Usage
+
+### Custom Context Configuration
+
+```python
+from adaptable_agents import AdaptableOpenAIClient, ContextConfig
+
+config = ContextConfig(
+    similarity_threshold=0.85,  # Higher threshold = more similar results
+    max_items=10  # Maximum number of past experiences to include
+)
+
+client = AdaptableOpenAIClient(
+    adaptable_api_key="your-api-key",
+    openai_api_key="your-openai-key",
+    context_config=config,
+    memory_scope_path="my-scope",
+    strategy="vd"
+)
+```
+
+### Disable Automatic Memory Storage
+
+```python
+client = AdaptableOpenAIClient(
+    adaptable_api_key="your-api-key",
+    openai_api_key="your-openai-key",
+    auto_store_memories=False,  # Don't automatically store memories
+    strategy="vd"
+)
+```
+
+### Manual Memory Storage
+
+```python
+from adaptable_agents import AdaptableAgent
+
+agent = AdaptableAgent(
+    api_key="your-api-key",
+    memory_scope_path="customer-support/billing",
+    strategy="vd"
+)
+
+# Store a memory manually
+agent.store_memory(
+    input_text="User asked about refund policy",
+    output_text="Explained 30-day refund policy and processed refund",
+    summarize_input=False  # Optional: whether to summarize input
+)
+```
+
+### Using Existing Client Instances
+
+```python
+from openai import OpenAI
+from adaptable_agents import AdaptableOpenAIClient
+
+# Use your existing OpenAI client
+existing_client = OpenAI(api_key="your-key")
+
+# Wrap it with adaptable agents
+client = AdaptableOpenAIClient(
+    adaptable_api_key="your-adaptable-key",
+    openai_client=existing_client,
+    memory_scope_path="my-scope",
+    strategy="vd"
+)
+```
+
+### Enable/Disable Adaptable Agents
+
+You can toggle the adaptable agents functionality on or off:
+
+```python
+from adaptable_agents import AdaptableAnthropicClient
+
+client = AdaptableAnthropicClient(
+    adaptable_api_key="your-api-key",
+    anthropic_api_key="your-anthropic-key",
+    enable_adaptable_agents=True  # Set to False to bypass context fetching
+)
+
+# Temporarily disable
+client.enable_adaptable_agents = False
+response = client.messages.create(...)  # Direct call, no context
+
+# Re-enable
+client.enable_adaptable_agents = True
+response = client.messages.create(...)  # With context
+```
+
+## API Reference
+
+### AdaptableOpenAIClient
+
+Wrapper for OpenAI client with context integration.
+
+**Parameters:**
+- `adaptable_api_key` (str): API key for Adaptable Agents API
+- `openai_api_key` (str, optional): OpenAI API key (if not using existing client)
+- `api_base_url` (str): Base URL of Adaptable Agents API (default: "http://localhost:8000")
+- `memory_scope_path` (str): Memory scope path for organizing memories (default: "default")
+- `context_config` (ContextConfig, optional): Configuration for context generation
+- `auto_store_memories` (bool): Whether to automatically store memories (default: True)
+- `openai_client` (OpenAI, optional): Pre-initialized OpenAI client
+- `summarize_input` (bool, optional): Whether to summarize inputs before storage
+- `strategy` (StrategyType): Strategy to use - "vd" for DC or "kg" for AMEM (default: "vd")
+
+### AdaptableAnthropicClient
+
+Wrapper for Anthropic client with context integration.
+
+**Parameters:**
+- `adaptable_api_key` (str): API key for Adaptable Agents API
+- `anthropic_api_key` (str, optional): Anthropic API key (if not using existing client)
+- `api_base_url` (str): Base URL of Adaptable Agents API (default: "http://localhost:8000")
+- `memory_scope_path` (str): Memory scope path for organizing memories (default: "default")
+- `context_config` (ContextConfig, optional): Configuration for context generation
+- `auto_store_memories` (bool): Whether to automatically store memories (default: True)
+- `anthropic_client` (Anthropic, optional): Pre-initialized Anthropic client
+- `summarize_input` (bool, optional): Whether to summarize inputs before storage
+- `enable_adaptable_agents` (bool): Enable/disable adaptable agents functionality (default: True)
+- `strategy` (StrategyType): Strategy to use - "vd" for DC or "kg" for AMEM (default: "vd")
+
+### AdaptableAgent
+
+Core client for interacting with Adaptable Agents API.
+
+**Parameters:**
+- `api_key` (str): API key for Adaptable Agents API
+- `api_base_url` (str): Base URL of Adaptable Agents API (default: "http://localhost:8000")
+- `memory_scope_path` (str): Memory scope path (default: "default")
+- `context_config` (ContextConfig, optional): Context configuration
+- `strategy` (StrategyType): Strategy to use - "vd" for DC or "kg" for AMEM (default: "vd")
+
+**Methods:**
+- `get_context(input_text: str, use_cache: bool = False) -> Optional[str]`: Fetch context for the given input. `use_cache` only works for DC strategy ("vd").
+- `load_prior_knowledge(input_text: Optional[str] = None) -> Optional[str]`: Convenience method to load context without storing memories
+- `store_memory(input_text: str, output_text: str, summarize_input: Optional[bool] = None) -> Optional[Dict]`: Store a memory
+- `format_prompt_with_context(user_prompt: str, context: Optional[str]) -> str`: Format prompt with context
+
+### ContextConfig
+
+Configuration for context generation.
+
+**Parameters:**
+- `similarity_threshold` (float): Minimum similarity score for inclusion (default: 0.8)
+- `max_items` (int): Maximum number of past experiences to include (default: 5)
+
+## Memory Scopes
+
+Memory scopes allow you to organize memories hierarchically. Use different scopes for different contexts:
+
+- `customer-support/billing` - Billing-related support memories
+- `engineering/frontend` - Frontend engineering memories
+- `sales/enterprise` - Enterprise sales memories
+- `custom/scope/path` - Any custom hierarchical structure
+
+Different memory scope paths ensure complete isolation between contexts at the database level, allowing you to organize memories by department, project, feature, or any custom hierarchy.
+
+## Requirements
+
+- Python >= 3.8
+- requests >= 2.31.0
+- openai >= 1.0.0 (for OpenAI support)
+- anthropic >= 0.18.0 (for Anthropic support)
+
+## Examples
+
+See the `examples/` directory for complete usage examples:
+- `examples/openai_example.py` - OpenAI client usage
+- `examples/anthropic_example.py` - Anthropic client usage
+
+## Testing
+
+Run tests with pytest:
+
+```bash
+pytest
+```
+
+With coverage:
+
+```bash
+pytest --cov=adaptable_agents --cov-report=html
+```
+
+## License
+
+MIT License
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Support
+
+For issues and questions, please open an issue on GitHub or contact support@adaptable-agents.com.
+
+## Related Projects
+
+- [Adaptable Agents API](https://github.com/your-org/adaptable-agents) - The backend API service that powers this client
