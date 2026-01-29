@@ -1,0 +1,32 @@
+name: Release pipeline for sdk
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build:
+    uses: ./.github/workflows/sdk-build.yml
+    with:
+      python-version: "3.11"
+
+  test-publish:
+    needs: build
+    uses: ./.github/workflows/sdk-test-pypi-publish.yml
+    with:
+      python-version: "3.11"
+    permissions:
+      id-token: write
+      contents: read
+    secrets: inherit
+
+  prod-publish:
+    needs: test-publish
+    uses: ./.github/workflows/sdk-pypi-publish.yml
+    with:
+      python-version: "3.11"
+    permissions:
+      id-token: write
+      contents: read
+    secrets: inherit
