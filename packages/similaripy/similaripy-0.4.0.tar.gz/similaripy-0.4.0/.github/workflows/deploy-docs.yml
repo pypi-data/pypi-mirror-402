@@ -1,0 +1,34 @@
+name: Deploy MkDocs Documentation
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv and make
+        run: |
+          pip install uv
+
+      - name: Install project dev dependencies
+        run: |
+          uv pip install --system '.[dev]'
+
+      - name: Deploy documentation
+        run: |
+          mkdocs gh-deploy --force
