@@ -1,0 +1,148 @@
+Metadata-Version: 2.4
+Name: pipeline_node_agents
+Version: 0.1.4
+Summary: A lightweight Python framework for building modular AI pipelines with function nodes and agent nodes.
+Author: Sergei Ovsiannikov
+Author-email: a12230165@unet.univie.ac.at
+Requires-Python: >=3.11,<3.14
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Requires-Dist: beautifulsoup4 (>=4.14.3,<5.0.0)
+Requires-Dist: crewai (>=1.6.1,<2.0.0) ; python_version >= "3.10" and python_version < "3.14"
+Requires-Dist: ddgs (>=9.8.0,<10.0.0)
+Requires-Dist: litellm (>=1.80.7,<2.0.0)
+Requires-Dist: lxml (>=6.0.2,<7.0.0)
+Requires-Dist: requests (>=2.32.0,<3.0.0)
+Project-URL: Documentation, https://github.com/ser0vs/pipeline_node_agents/blob/master/docs/maintenance_guide.md
+Project-URL: Homepage, https://github.com/ser0vs/pipeline_node_agents
+Project-URL: Repository, https://github.com/ser0vs/pipeline_node_agents
+Description-Content-Type: text/markdown
+
+# Pipeline Node Agents
+
+A lightweight Python framework for building modular AI pipelines with function nodes and agent nodes. Designed to work well with lightweight local LLMs by giving you full control over context and task complexity at each step.
+
+## Usage Guide
+
+### Requirements
+
+- OS: Ubuntu 20.04 or later
+- RAM: 8 GB minimum (16 GB recommended)
+- Disk: 10 GB free space
+- **curl** (any recent version)
+- **Python 3.11 - 3.13**
+
+
+### 1) Setup Ollama
+- **Install Ollama** (if not already installed):
+    ```bash
+    curl -fsSL https://ollama.com/install.sh | sh
+    ```
+
+- **Run Ollama in a separate terminal**:
+    ```bash
+    ollama serve
+    ```
+
+- **Install LLM** (default: `llama3.2:latest`):
+    ```bash
+    ollama pull llama3.2:latest
+    ```
+
+- **Make sure** the required LLM is installed using command:
+    ```bash
+    ollama list
+    ```
+
+Expected output:
+```bash
+NAME                ID              SIZE     MODIFIED
+llama3.2:latest     9f1c3d6a5b8e    2.0 GB   1 minute ago
+```
+
+### 2) Install Package
+
+- *(Optional, but recommended)* create python virtual environment:
+    ```bash
+    python3 -m venv .venv && source .venv/bin/activate
+    ```
+
+- Install package:
+    ```bash
+    pip install pipeline-node-agents
+    ```
+
+
+### 3) Verify Installation
+
+```python
+from pipeline_node_agents import greet
+
+print(greet())
+```
+
+Expected output:
+```
+Hello, World! Pipeline Node Agents <version> is working.
+```
+
+### 4) Run Pipelines
+
+#### Option 1: With defined model and logger (recommended)
+```python
+from crewai import LLM
+from pipeline_node_agents import init_pipeline_logger, get_logger, TripPlannerPipeline
+
+init_pipeline_logger(pipeline_name="trip_planner_pipeline", project_root=".")
+logger = get_logger(__name__)
+
+# Default model is llama3.2, change if needed
+ollama_llm = LLM(model="ollama/llama3.2", base_url="http://localhost:11434")
+
+pipeline = TripPlannerPipeline(ollama_llm=ollama_llm, logger=logger)
+pipeline.run()
+```
+
+#### Option 2: Without logger
+```python
+from pipeline_node_agents import TripPlannerPipeline
+
+# Default model is llama3.2
+pipeline = TripPlannerPipeline()
+pipeline.run()
+```
+
+#### Available pipelines
+
+The following pipelines are included as examples:
+
+- `ConditioningPipeline`: Randomly chooses whether to go to a park or cinema, and suggests either a film or a park in Vienna.
+
+- `InputCheckerPipeline`: Takes text as input and returns true if the text is a list of populated places (cities). Can be run as a loop, returning to the input step as long as the input is invalid: `pipeline.run(loop=True)`
+
+- `RandomMeanPipeline`: Simple pipeline without LLM usage that generates random numbers and calculates their mean.
+
+- `RandomMeanPipelineCrewAI`: Generates random numbers and summarizes them using an LLM.
+
+- `SearchAndSummarizePipeline`: Searches for the best country for business using DuckDuckGo and summarizes results using an LLM, returning the best country for business.
+
+- `TripPlannerPipeline`: Takes a list of cities and trip dates as input, chooses the city based on weather conditions, and creates a full 7-day trip itinerary for the provided dates.
+
+To run one of them, replace "TripPlannerPipeline" in the code example with a class from the list above.
+
+Example with `SearchAndSummarizePipeline`:
+```python
+from pipeline_node_agents import SearchAndSummarizePipeline
+pipeline = SearchAndSummarizePipeline()
+pipeline.run()
+```
+
+
+
+## Maintenance Guide
+
+For detailed maintenance instructions, including how to create nodes, build pipelines, and extend the framework, please refer to the [Maintenance Guide](docs/maintenance_guide.md).
+
+
