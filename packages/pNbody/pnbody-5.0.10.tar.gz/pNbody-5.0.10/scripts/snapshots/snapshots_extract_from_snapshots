@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+
+from pNbody import Nbody
+import argparse
+import os
+
+####################################################################
+# option parser
+####################################################################
+
+description="""extract a subsample of the particles containes in a set of snapshots, applying a specific selection function.
+"""
+
+epilog     ="""
+Examples:
+--------
+snapshot_extract_from_snapshots snapshots/* -o snap_dir
+snapshot_extract_from_snapshots snapshots/* -o snap_dir --exec="nb = nb.select('stars')"
+snapshot_extract_from_snapshots snapshots/* -o snap_dir --exec="nb = nb.selecp(nb.num>1234)"
+"""
+
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+parser.add_argument(action="store", 
+                    dest="files", 
+                    metavar='FILE', 
+                    type=str,
+                    default=None,
+                    nargs='*',
+                    help='a list of snapshots')       
+
+parser.add_argument('-o','--output_directory',
+                    dest="output_directory", 
+                    type=str,
+                    default=None,
+                    help='output directory') 
+
+parser.add_argument("--exec",
+                    action="store",
+                    type=str,
+                    default=None,
+                    help="give command to execute before")
+
+
+
+####################################################################
+# main
+####################################################################
+
+opt = parser.parse_args()
+
+if opt.output_directory is not None:
+  if not os.path.exists(opt.output_directory):
+    os.makedirs(opt.output_directory)
+
+
+for snapshot in opt.files:
+
+  # open the file
+  print(snapshot)
+  nb = Nbody(snapshot)
+
+  # apply option  
+  if opt.exec is not None:
+    exec(opt.exec)
+
+  # save the file   
+  if opt.output_directory is not None:
+    basename = os.path.basename(snapshot)
+    nb.write(os.path.join(opt.output_directory,basename))
+
+
+    
+    
+  

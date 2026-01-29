@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+###########################################################################################
+#  package:   pNbody
+#  file:      combinegmov
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of pNbody.
+###########################################################################################
+import sys
+import os
+import string
+import getopt
+import math
+
+from pNbody import Movie
+from numpy import *
+
+##########################################################################
+
+
+def version():
+    ##########################################################################
+    print('version 1.0')
+    sys.exit(0)
+
+
+##########################################################################
+def help_message():
+    ##########################################################################
+    print("""Usage : combinegmov -o output film1 film2
+  Options: -h        -- this help message
+	   -o	     -- name of the output
+           --help    -- this help message
+           --version -- displays version
+
+  """)
+    sys.exit(0)
+
+
+##########################################################################
+def check_arguments(options, xarguments):
+    ##########################################################################
+
+    output = "out.mov"
+
+    for a in options[:]:
+        if a[0] == '-h':
+            help_message()
+
+        if a[0] == '--help':
+            help_message()
+
+        if a[0] == '--version':
+            version()
+
+        if a[0] == '--info':
+            info = 1
+
+        if a[0] == '-o':
+            if a[1] == '':
+                help_message()
+            else:
+                output = a[1]
+                continue
+
+    files = xarguments
+
+    return output, files
+
+
+##########################################################################
+#
+#  MAIN
+#
+##########################################################################
+
+
+try:
+    options, xarguments = getopt.getopt(
+        sys.argv[1:], 'o:h', ['info', 'help', 'version', 'nh=', 'nv='])
+except getopt.error:
+    help_message()
+    sys.exit(0)
+
+
+# check arguments
+output, films = check_arguments(options, xarguments)
+
+
+# check that all films exists
+
+for film in films:
+    if (os.path.exists(film) == 0):
+        print("Error : the file ", film, " do no not exist.")
+        sys.exit(0)
+
+
+# open films
+
+film1 = Movie.Movie(films[0])
+film2 = Movie.Movie(films[1])
+film1.open()
+film2.open()
+
+
+if (film1.npic != film2.npic):
+    print("films have not the same number of frames")
+if (film1.numByte != film2.numByte):
+    print("films have not the same width")
+if (film1.numLine != film2.numLine):
+    print("films have not the same height")
+
+
+npic = film1.npic
+numByte = film1.numByte
+numLine = film1.numLine
+headerlength = 0
+
+
+# loop over the images
+
+fo = Movie.Movie(output)
+fo.new(numByte, numLine)
+
+for i in range(0, npic - 1):
+
+    print(i, '/', npic - 1)
+
+    d1 = film1.read_one(mode="array") 	# array
+    d2 = film2.read_one(mode="array") 	# array
+    tpe1 = d1.dtype
+    tpe2 = d2.dtype
+
+    ##################################
+    # here we combine d1 and d2
+    ##################################
+    d1 = d1.astype(float)
+    d2 = d2.astype(float)
+
+    a = d2 / 255.
+    d2 = 0 * d2
+    d = a * d2 + (1 - a) * d1
+
+    ##################################
+    d = d.astype(tpe1)
+
+    data = d.tostring()
+    fo.write_pic(film1.current_time, data)

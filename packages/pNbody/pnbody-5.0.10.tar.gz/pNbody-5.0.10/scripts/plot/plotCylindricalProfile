@@ -1,0 +1,611 @@
+#!/usr/bin/python3
+###########################################################################################
+#  package:   pNbody
+#  file:      plotSphericalProfile
+#  brief:     
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of pNbody.
+###########################################################################################
+
+import os
+import numpy as np
+import argparse
+
+import matplotlib.pyplot as plt
+from pNbody import plot
+from pNbody import *
+from pNbody import cosmo
+from pNbody import libutil
+
+from astropy import units as u
+from astropy import constants as c
+
+import copy
+
+####################################################################
+# option parser
+####################################################################
+
+description="""plot different physical quantities as a function of the 2-d radius, 
+assuming polar quantities."""
+epilog     ="""
+Examples:
+--------
+
+# density profile
+plotCylindricalProfile -y sdens  --xmax 10 --rmax 10 --nr 64  --log xy  snapshot.hdf5  
+plotCylindricalProfile -y sdens  --xmax 10 --rmax 10 --nr 64  --log xy  --select stars snapshot.hdf5  
+
+# velocity dispersion profile
+plotCylindricalProfile -y sigmaz  --ymin 0 --xmax 10 --rmax 10 --nr 64    snapshot.hdf5
+plotCylindricalProfile -y sigmaz  --ymin 0 --xmax 10 --rmax 10 --nr 64    --select stars snapshot.hdf5
+
+# mass profile
+plotCylindricalProfile -y mass    --ymin 0 --xmax 50 --rmax 50 --nr 64    snapshot.hdf5
+
+# integrated mass profile
+plotCylindricalProfile -y imass   --ymin 0 --xmax 50 --rmax 50 --nr 64    snapshot.hdf5
+
+# circular velocity
+plotCylindricalProfile -y vcirc      --xmax 50 --rmax 50 --nr 64 --eps 0.1   snapshot.hdf5
+
+# line of sight velocity dispertion profile with errors
+plotCylindricalProfile -y sigmaz      --xmax 50 --rmax 50 --nr 64 --eps 0.1  --nlos 32  snapshot.hdf5
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+plot.add_files_options(parser)
+plot.add_arguments_units(parser)
+plot.add_arguments_reduc(parser)
+plot.add_arguments_center(parser)
+plot.add_arguments_select(parser)
+plot.add_arguments_info(parser)
+plot.add_arguments_legend(parser)
+plot.add_arguments_icshift(parser)
+plot.add_arguments_cmd(parser)
+
+parser.add_argument(action="store", 
+                    dest="files", 
+                    metavar='FILE', 
+                    type=str,
+                    default=None,
+                    nargs='*',
+                    help='a list of files')                     
+
+
+parser.add_argument("-o",
+                    action="store",
+                    type=str,
+                    dest="outputfilename",
+                    default=None,
+                    help="Name of the output file")  
+
+
+
+parser.add_argument('--xmin',
+                    action="store", 
+                    dest="xmin", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=None,
+                    help='x min')
+
+parser.add_argument('--xmax',
+                    action="store", 
+                    dest="xmax", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=None,
+                    help='x max')
+                    
+parser.add_argument('--ymin',
+                    action="store", 
+                    dest="ymin", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=None,
+                    help='y min')
+
+parser.add_argument('--ymax',
+                    action="store", 
+                    dest="ymax", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=None,
+                    help='y max')
+
+                                        
+parser.add_argument('--log',
+                    action="store", 
+                    dest="log", 
+                    metavar='STR', 
+                    type=str,
+                    default=None,
+                    help='log scale (None,x,y,xy)')
+
+
+parser.add_argument('-y','--y',
+                    action="store", 
+                    dest="y", 
+                    metavar='STR', 
+                    type=str,
+                    default='density',
+                    help='quantity to plot in the y axis')
+
+parser.add_argument("--rmax",
+                  action="store",
+                  dest="rmax",
+                  type=float,
+                  default=50.,
+                  help="max radius of bins",
+                  metavar=" FLOAT")
+
+parser.add_argument("--nr",
+                  action="store",
+                  dest="nr",
+                  type=int,
+                  default=32,
+                  help="number of bins in r",
+                  metavar=" INT")   
+
+
+parser.add_argument("--nt",
+                  action="store",
+                  dest="nt",
+                  type=int,
+                  default=32,
+                  help="number of division in theta",
+                  metavar=" INT")
+
+
+parser.add_argument("--nlos",
+                  action="store",
+                  dest="nlos",
+                  type=int,
+                  default=1,
+                  help="number of ligne of signt",
+                  metavar=" INT")   
+
+parser.add_argument("--eps",
+                     action="store",
+                     dest="eps",
+                     type=float,
+                     default=0.1,
+                     help="smoothing length",
+                     metavar=" FLOAT")
+
+
+parser.add_argument("--colormap",
+                    action="store", 
+                    default='jet',
+                    help='matplotlib colormap name (e.g. mycmap, tab20c, Greys, jet, binary)') 
+                    
+                    
+parser.add_argument("--AdaptativeSoftenning",
+                      action="store",
+                      dest="AdaptativeSoftenning",
+                      required=True,
+                      help="AdaptativeSoftenning")
+
+parser.add_argument("--ErrTolTheta",
+                      action="store",
+                      dest="ErrTolTheta",
+                      type=float,
+                      default=0.5,
+                      help="Error tolerance theta",
+                      metavar=" FLOAT")                    
+
+#######################################
+# MakePlot
+#######################################
+
+
+def MakePlot(opt):
+  
+  params = {
+    "axes.labelsize": 14,
+    "axes.titlesize": 18,
+    "font.size": 12,
+    "legend.fontsize": 12,
+    "xtick.labelsize": 14,
+    "ytick.labelsize": 14,
+    "text.usetex": True,
+    "figure.subplot.left": 0.15,
+    "figure.subplot.right": 0.95,
+    "figure.subplot.bottom": 0.15,
+    "figure.subplot.top": 0.95,
+    "figure.subplot.wspace": 0.02,
+    "figure.subplot.hspace": 0.02,
+    "figure.figsize" : (8, 6),
+    "lines.markersize": 6,
+    "lines.linewidth": 2.0,
+  }
+  plt.rcParams.update(params)
+  
+  
+  # create the plot
+  fig = plt.gcf()
+  fig.set_size_inches(8,6)
+  ax  = plt.gca()
+
+
+  # get a list of color
+  colors = plot.ColorList(n=len(opt.files),colormap=opt.colormap)
+  
+  # list of points
+  datas = []
+  
+  
+  #################################
+  # loop over files
+  
+  for filename in opt.files:
+    
+    nb = Nbody(filename, ftype=opt.ftype)
+    
+    ################
+    # units
+    ################
+    
+    # define local units
+    unit_params = plot.apply_arguments_units(opt)
+    nb.set_local_system_of_units(params=unit_params)
+    
+    ################
+    # apply options
+    ################
+    nb = plot.apply_arguments_icshift(nb, opt)
+    nb = plot.apply_arguments_reduc(nb, opt)
+    nb = plot.apply_arguments_select(nb, opt)
+    nb = plot.apply_arguments_center(nb, opt)
+    nb = plot.apply_arguments_cmd(nb, opt)
+    nb = plot.apply_arguments_info(nb, opt)
+    nb = plot.apply_arguments_display(nb, opt)
+    nb = plot.apply_arguments_verbose(nb, opt)
+
+
+    ################
+    # some info
+    ################
+    print("---------------------------------------------------------")
+    nb.localsystem_of_units.info()
+    nb.HubbleFactorCorrectionInfo()
+    nb.ComovingToProperConversionInfo()
+    print("---------------------------------------------------------")
+
+    # grid division
+    rc = 1
+
+    def f(r): return np.log(r / rc + 1.)
+
+    def fm(r): return rc * (np.exp(r) - 1.)
+
+    ###############################
+    # compute physical quantities
+    ###############################
+
+    ##########################################
+    # Cylindrical_2drt_Grid
+    ##########################################
+
+
+    if opt.y == 'sdens':
+
+      nb.pos  = nb.Pos(units="kpc")
+      nb.mass = nb.Mass(units="Msol")
+    
+      G = libgrid.Cylindrical_2drt_Grid(rmin=0, rmax=opt.rmax, nr=opt.nr, nt=1, g=f, gm=fm)
+
+      x, t = G.get_rt()
+
+
+
+      # set labels
+      # set labels
+      xlabel = r'$\rm{Radius}\,\left[ \rm{kpc} \right]$'
+      ylabel = r'$\rm{Density}\,\left[ \rm{M_{\odot}\, / kpc^2} \right]$'
+
+              
+      if opt.nlos > 1:
+        los = getLOS(opt.nlos,seed=0)
+      else:
+        los = np.array([0,0,1])
+
+
+      for j in range(opt.nlos):
+                        
+        # copy the model
+        nbc = copy.deepcopy(nb)
+      
+        # rotate
+        if opt.nlos > 1:
+          nbc.align(axis=los[j])
+                 
+        y = G.get_SurfaceDensityMap(nbc)
+        # convert from Msol/kpc**2 -> Msol/kpc**2 ()
+        #y = y* (u.M_sun/u.kpc**2).to(u.M_sun/u.kpc**2) # no convertion
+
+        y = y.ravel()
+        #x, y = plot.CleanVectorsForLogX(x, y)
+        #x, y = plot.CleanVectorsForLogY(x, y)
+        
+        datas.append(plot.DataPoints(x,y,color=colors.get(),label=filename,tpe='points'))
+
+
+
+
+
+
+    if opt.y == 'mass':
+
+      nb.pos  = nb.Pos(units="kpc")
+      nb.mass = nb.Mass(units="Msol")
+      
+      G = libgrid.Cylindrical_2drt_Grid(rmin=0, rmax=opt.rmax, nr=opt.nr, nt=1, g=f, gm=fm)
+
+      x, t = G.get_rt()
+
+      # set labels
+      xlabel = r'$\rm{Radius}\,\left[ \rm{kpc} \right]$'
+      ylabel = r'$\rm{Mass}\,\left[ M_{\odot} \right]$'
+      
+      if opt.nlos > 1:
+        los = getLOS(opt.nlos,seed=0)
+      else:
+        los = np.array([0,0,1])
+
+      for j in range(opt.nlos):
+                        
+        # copy the model
+        nbc = copy.deepcopy(nb)
+      
+        # rotate
+        if opt.nlos > 1:
+          nbc.align(axis=los[j])
+
+        y = G.get_MassMap(nbc)
+
+        y = y.ravel()
+        #x, y = plot.CleanVectorsForLogX(x, y)
+        #x, y = plot.CleanVectorsForLogY(x, y)
+        
+        datas.append(plot.DataPoints(x,y,color=colors.get(),label=filename,tpe='points'))
+
+
+    if opt.y == 'imass':
+
+      nb.pos  = nb.Pos(units="kpc")
+      nb.mass = nb.Mass(units="Msol")
+      
+      G = libgrid.Cylindrical_2drt_Grid(rmin=0, rmax=opt.rmax, nr=opt.nr, nt=1, g=f, gm=fm)
+
+      x, t = G.get_rt()
+
+      # set labels
+      xlabel = r'$\rm{Radius}\,\left[ \rm{kpc} \right]$'
+      ylabel = r'$\rm{Mass}\,\left[ M_{\odot} \right]$'
+      
+      if opt.nlos > 1:
+        los = getLOS(opt.nlos,seed=0)
+      else:
+        los = np.array([0,0,1])
+
+      for j in range(opt.nlos):
+                        
+        # copy the model
+        nbc = copy.deepcopy(nb)
+      
+        # rotate
+        if opt.nlos > 1:
+          nbc.align(axis=los[j])
+
+        y = G.get_MassMap(nbc)
+        y = np.add.accumulate(y)
+              
+        y = y.ravel()
+        #x, y = plot.CleanVectorsForLogX(x, y)
+        #x, y = plot.CleanVectorsForLogY(x, y)
+        
+        datas.append(plot.DataPoints(x,y,color=colors.get(),label=filename,tpe='points'))
+
+
+
+    if opt.y == 'imassnormed':
+
+      nb.pos  = nb.Pos(units="kpc")
+      nb.mass = nb.Mass(units="Msol")
+      
+      G = libgrid.Cylindrical_2drt_Grid(rmin=0, rmax=opt.rmax, nr=opt.nr, nt=1, g=f, gm=fm)
+
+      x, t = G.get_rt()
+      y = G.get_MassMap(nb)
+      y = np.add.accumulate(y)
+      y = y/y[-1]
+              
+      # set labels
+      xlabel = r'$\rm{Radius}\,\left[ \rm{kpc} \right]$'
+      ylabel = r'$\rm{Normalized\,Mass}$'
+
+      x, y = plot.CleanVectorsForLogX(x, y)
+      x, y = plot.CleanVectorsForLogY(x, y)
+
+      datas.append(plot.DataPoints(x,y,color=colors.get(),label=filename,tpe='points'))
+      
+
+      
+    if ((opt.y == 'sigmar') or (opt.y == "sigmat") or (opt.y == "sigmaz")) :
+      
+      G = libgrid.Cylindrical_2drt_Grid(rmin=0, rmax=opt.rmax, nr=opt.nr, nt=1, g=f, gm=fm)
+      
+      nb.pos = nb.Pos(units="kpc")
+      nb.vel = nb.Vel(units="km/s")
+
+      x, t = G.get_rt()
+
+
+      # set labels
+      xlabel = r'$\rm{Radius}\,\left[ \rm{kpc} \right]$'
+        
+      if opt.y == 'sigmaz':
+        ylabel = r'$\sigma_z\,\left[ \rm{km}/\rm{s} \right]$'    
+      elif opt.y == 'sigmar':
+        ylabel = r'$\sigma_R\,\left[ \rm{km}/\rm{s} \right]$'                     
+      elif opt.y == 'sigmat':
+        ylabel = r'$\sigma_\theta\,\left[ \rm{km}/\rm{s} \right]$'    
+
+              
+      if opt.nlos > 1:
+        los = getLOS(opt.nlos,seed=0)
+      else:
+        los = np.array([0,0,1])
+
+
+      for j in range(opt.nlos):
+                        
+        # copy the model
+        nbc = copy.deepcopy(nb)
+      
+        # rotate
+        if opt.nlos > 1:
+          nbc.align(axis=los[j])
+                 
+        if opt.y == 'sigmaz':
+          y = G.get_SigmaValMap(nbc, nbc.Vz())         
+        elif opt.y == 'sigmar':
+          y = G.get_SigmaValMap(nbc, nbc.VR())         
+        elif opt.y == 'sigmat':
+          y = G.get_SigmaValMap(nbc, nbc.VT())
+
+        #x, y = plot.CleanVectorsForLogX(x, y)
+        #x, y = plot.CleanVectorsForLogY(x, y)
+        
+        y = y.ravel()
+        
+        datas.append(plot.DataPoints(x,y,color=colors.get(),label=filename,tpe='points'))
+
+
+        
+
+    if opt.y == 'vcirc':
+
+      nb.pos  = nb.Pos(units='kpc')  
+      nb.mass = nb.Mass(units='Msol')
+      
+      G = libgrid.Cylindrical_2drt_Grid(rmin=0, rmax=opt.rmax, nr=opt.nr, nt=opt.nt, z=0, g=f, gm=fm)
+      
+      x, t = G.get_rt()
+
+      Gcte = ctes.GRAVITY.into(nb.localsystem_of_units)
+
+      # set labels
+      xlabel = r'$\rm{Radius}\,\left[ \rm{kpc} \right]$'
+      ylabel = r'$V_{\rm c}\,\left[ \rm{km}/\rm{s} \right]$'
+
+
+      if opt.nlos > 1:
+        los = getLOS(opt.nlos,seed=0)
+      else:
+        los = np.array([0,0,1])
+
+
+      for j in range(opt.nlos):
+                        
+        # copy the model
+        nbc = copy.deepcopy(nb)
+      
+        # rotate
+        if opt.nlos > 1:
+          nbc.align(axis=los[j])
+                 
+
+        nbc.getTree(force_computation=True, ErrTolTheta=opt.ErrTolTheta)
+        Accx, Accy, Accz = G.get_AccelerationMap( nbc, eps=opt.eps, UseTree=True, AdaptativeSoftenning=opt.AdaptativeSoftenning)
+        Ar = np.sqrt(Accx**2 + Accy**2)
+        Ar = np.sum(Ar, 1) / opt.nt
+        dPhit = Ar
+         
+        y = libdisk.Vcirc(x, dPhit)
+         
+        # correct from Gravity constant
+        y = y*np.sqrt(c.G*u.M_sun/u.kpc)
+        y = y.to(u.km/u.s).value
+
+          
+        #x, y = plot.CleanVectorsForLogX(x, y)
+        #x, y = plot.CleanVectorsForLogY(x, y)
+        y = y.ravel()
+        
+        datas.append(plot.DataPoints(x,y,color=colors.get(),label=filename,tpe='points'))
+
+
+
+
+      
+
+  ##################
+  # plot all
+  ##################
+
+  if opt.nlos == 1:
+    for d in datas:
+      ax.plot(d.x, d.y, color=d.color)
+
+  else:    
+    d = datas[0]
+    ys = np.zeros((opt.nlos,len(d.y)))
+    
+    for i,d in enumerate(datas):
+      ys[i] = d.y
+      
+    mean = ys.mean(axis=0)
+    std  = ys.std(axis=0)
+    meanp= mean + 3*std
+    meanm= mean - 3*std
+    
+    ax.plot(d.x, mean, color='k',lw=3)
+    ax.fill_between(d.x,meanp,meanm,facecolor='blue',alpha=0.25)  
+
+    
+    
+      
+  # set limits
+  xmin, xmax, ymin, ymax, log = plot.SetLimitsFromDataPoints(datas, opt.xmin, opt.xmax, opt.ymin, opt.ymax, opt.log)
+
+  # set the axis (the extention is done in the previous command)
+  plot.SetAxis(ax,xmin,xmax,ymin,ymax,log,extend=False)
+  
+  # labels
+  ax.set_xlabel(xlabel)
+  ax.set_ylabel(ylabel)
+  
+  # legend
+  if opt.legend:
+    plot.LegendFromDataPoints(ax, datas, opt.legend_loc)
+
+
+
+  # save or display
+  if opt.outputfilename:
+    plt.savefig(opt.outputfilename)
+  else:
+    plt.show()    
+      
+
+
+#################################
+# main
+#################################
+
+if __name__ == '__main__':  
+  
+  opt = parser.parse_args()
+  MakePlot(opt)
+  
+
+
+

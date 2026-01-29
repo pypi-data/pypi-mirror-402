@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+###########################################################################################
+#  package:   pNbody
+#  file:      gmov2gmov
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of pNbody.
+###########################################################################################
+
+import sys
+import os
+from optparse import OptionParser
+from pNbody import Movie
+from numpy import *
+
+
+##########################################################################
+def parse_options():
+    ##########################################################################
+
+    usage = "usage: %prog [options] file"
+    parser = OptionParser(usage=usage)
+
+    parser.add_option("-o",
+                      action="store",
+                      dest="outfile",
+                      type="string",
+                      default=None,
+                      help="output filename",
+                      metavar=" FILE")
+
+    parser.add_option("-s",
+                      action="store",
+                      dest="skip",
+                      type="int",
+                      default=1,
+                      help="number of images to skip",
+                      metavar=" INT")
+
+    parser.add_option("--rgb",
+                      action="store_true",
+                      dest="rgb",
+                      default=0,
+                      help="rgb mode")
+
+    (options, args) = parser.parse_args()
+
+    outfile = options.outfile
+    skip = options.skip
+    rgb = options.rgb
+
+    return args[0], outfile, skip, rgb
+
+
+##########################################################################
+#
+#  MAIN
+#
+##########################################################################
+
+
+file, outfile, skip, rgb = parse_options()
+
+
+if (skip == 0):
+    skip = 1
+
+#bname =  os.path.split(os.path.splitext(file)[0])[1]
+#ext   =  os.path.splitext(name)[1]
+
+
+film = Movie.Movie(file)
+film.open()
+
+
+size = [film.numByte, film.numLine]
+
+
+fo = Movie.Movie(outfile)
+fo.new(film.numByte, film.numLine)
+
+i = 0
+
+# rgb mode
+if rgb:
+
+    while True:
+        datar = film.read_one(mode='array')
+        if datar is None:
+            break
+        datag = film.read_one(mode='array')
+        if datag is None:
+            break
+        datab = film.read_one(mode='array')
+        if datab is None:
+            break
+
+        if fmod(i, skip) == 0:
+            fo.write_pic(film.current_time, datar)
+            fo.write_pic(film.current_time, datag)
+            fo.write_pic(film.current_time, datab)
+        i = i + 1
+
+
+# normal mode
+else:
+
+    while True:
+        data = film.read_one(mode='array')
+        if data is None:
+            break
+
+        if fmod(i, skip) == 0:
+            fo.write_pic(film.current_time, data)
+        i = i + 1

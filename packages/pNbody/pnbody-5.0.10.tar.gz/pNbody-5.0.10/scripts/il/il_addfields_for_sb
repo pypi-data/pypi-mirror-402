@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+
+import argparse
+import numpy as np
+from pNbody import *
+
+
+  
+####################################################################
+# option parser
+####################################################################
+
+description="add additional fields in an illustris hdf5 snapshot to allow the computation of surface brightness maps with pNbody"
+epilog     ="""
+Examples:
+--------
+il_addfields_for_sb TNG50_479938_stars.hdf5 -o TNG50_479938.hdf5
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+
+parser.add_argument(action="store", 
+                    dest="files", 
+                    metavar='FILE', 
+                    type=str,
+                    default=None,
+                    nargs='*',
+                    help='a file name') 
+
+parser.add_argument("-o",
+                    action="store",
+                    type=str,
+                    dest="outputfilename",
+                    default=None,
+                    help="Name of the output file")  
+                    
+parser.add_argument("--nngb",
+                    action="store",
+                    type=int,
+                    dest="nngb",
+                    default=5,
+                    help="Number of neighbouring particles to consider to compute RSP(==HSML)")  
+
+parser.add_argument("--eps",
+                    action="store",
+                    type=float,
+                    dest="eps",
+                    default=1e-4,
+                    help="Kind of softening length. Particles are randomly moved over this scale.") 
+
+parser.add_argument("--do_not_compute_ages",
+                    action="store_true",
+                    default=False,
+                    help="do not compute ages") 
+
+parser.add_argument("--do_not_compute_rsp",
+                    action="store_true",
+                    default=False,
+                    help="do not compute rsp")                     
+
+parser.add_argument("--do_not_compute_mh",
+                    action="store_true",
+                    default=False,
+                    help="do not compute mh")                      
+                    
+                    
+####################################################################
+# main
+####################################################################
+
+
+if __name__ == '__main__':
+  
+  opt = parser.parse_args()       
+  
+  for f in opt.files:
+    nb = Nbody(f,ftype="arepo")
+    
+    # remove tstar < 0
+    nb = nb.selectc(nb.tstar>0)
+
+    # remove mass < 0
+    nb = nb.selectc(nb.mass>0)
+    
+    # center (prevent problems with the tree)
+    nb.cmcenter()
+    
+    # shake a bit
+    eps = opt.eps
+    nb.pos[:,0] = nb.pos[:,0] + np.random.uniform(-0.5,0.5,nb.nbody)*eps
+    nb.pos[:,1] = nb.pos[:,1] + np.random.uniform(-0.5,0.5,nb.nbody)*eps
+    nb.pos[:,2] = nb.pos[:,2] + np.random.uniform(-0.5,0.5,nb.nbody)*eps
+        
+    # to proper coordinates
+    nb.pos  = nb.pos/nb.hubbleparam   * nb.atime
+    #nb.mass = nb.mass/nb.hubbleparam  * nb.atime 
+    nb.mass = nb.minit/nb.hubbleparam  * nb.atime  
+     
+    
+    
+    ###################################
+    # Stellar ages
+    ###################################
+    if opt.do_not_compute_ages is False:
+      print("Compute ages...")
+      nb.age = nb.StellarAge(units="Gyr")
+      print("done.")
+  
+    ###################################
+    # compute Hsml
+    ###################################
+    if opt.do_not_compute_rsp is False:
+      print("Compute Rsp...")
+      nb.ComputeRsp(5)
+      print("done.")
+  
+    ###################################
+    # compute Metallicities
+    ###################################
+    if opt.do_not_compute_mh is False:
+      print("Compute metallicites...")
+      nb.mh = nb.MH()
+    
+  
+    if opt.outputfilename:
+      nb.rename(opt.outputfilename)
+      nb.write()
+  

@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+
+import argparse
+import pickle
+import os
+import numpy as np
+  
+####################################################################
+# option parser
+####################################################################
+
+description="check if the content of two pkl containers is the same"
+epilog     ="""
+Examples:
+--------
+mockimgs_pkl_diff image1.pkl image2.pkl
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+
+
+
+
+parser.add_argument(action="store", 
+                    dest="files", 
+                    metavar='FILE', 
+                    type=str,
+                    default=None,
+                    nargs=2,
+                    help='two files') 
+
+
+                                        
+                    
+####################################################################
+# main
+####################################################################
+
+
+if __name__ == '__main__':
+  
+  opt = parser.parse_args()
+  
+  
+  f = open(opt.files[0],"rb")
+  images1 = pickle.load(f)
+  f.close()
+
+  f = open(opt.files[1],"rb")
+  images2 = pickle.load(f)
+  f.close()
+
+  if len(images1) != len(images2):
+    print("the number of images is different (%d vs %d)"%(len(images1),len(images2)))
+    exit() 
+
+  n = len(images1)
+  
+  for i in range(n):
+    data1,params = images1[i]
+    data2,params = images2[i]
+    
+    equal = np.equal(data1,data2)
+  
+    if not equal.all():
+      print("image ",i)
+      print("pkl files %s and %s differ"%(opt.files[0],opt.files[1]))
+    
+
+  
+  
+  
+

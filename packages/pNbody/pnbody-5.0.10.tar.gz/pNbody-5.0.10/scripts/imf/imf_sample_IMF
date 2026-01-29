@@ -1,0 +1,171 @@
+#!/usr/bin/python3
+
+import numpy as np
+import argparse
+from tqdm import tqdm
+from matplotlib import pylab as plt
+
+from pNbody.IMF import IMF
+from pNbody.IMF import imf_default_params as params
+from pNbody import iofunc
+
+params_yml = """
+Mmin: %g
+Mmax: %g
+as:   %s
+ms:   %s
+"""%(params['Mmin'],params['Mmax'],params["as"],params["ms"])
+
+
+
+####################################################################
+# option parser
+####################################################################
+
+description="""sample an IMF and display it
+
+By default, the Kroupa 2001 IMF is used. It can be changed to anything providing a yaml parameter file containing
+the IMF parametrisation:
+
+'''
+%s
+'''
+
+where ``as`` is the slope of the IMF in the mass intervals ``ms`` given is solar masses.   
+
+"""%(params_yml)
+
+
+epilog     ="""
+Examples:
+--------
+imf_sample_IMF 
+imf_sample_IMF --M0 1e6
+imf_sample_IMF --M0 1e6 --info
+imf_sample_IMF -p params.yml
+imf_sample_IMF -p params.yml --info
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+
+parser.add_argument("-o",
+                    action="store",
+                    type=str,
+                    dest="outputfilename",
+                    default=None,
+                    help="Name of the output file")  
+
+
+parser.add_argument("--info",
+                    action="store_true", 
+                    dest="info", 
+                    default=False,
+                    help='get info on the IMF and exit.')  
+
+parser.add_argument("--seed",
+                    action="store", 
+                    dest="seed",
+                    metavar='INT',
+                    type=int, 
+                    default=1,
+                    help='random seed')  
+                
+
+parser.add_argument("-p", "--parameter-file",
+                    action="store",
+                    type=str,
+                    dest="parameter_file",
+                    required=False,
+                    default=None,
+                    help="Name of the parameter file")
+
+
+parser.add_argument("--M0",
+                    action="store", 
+                    dest="M0", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=1e5,
+                    help='stellar mass to generate [Msol]') 
+
+
+####################################################################
+# main
+####################################################################
+
+
+def Do(opt):
+
+  ##################################
+  # IMF parameters
+  ##################################
+
+
+  # if the parameter file is not provided, use the default values
+  if opt.parameter_file is not None:
+    params = iofunc.ReadYaml(opt.parameter_file)
+    imf = IMF(params=params,M0=opt.M0,seed=opt.seed)
+  else:
+    # create the IMF
+    imf = IMF(M0=opt.M0,seed=opt.seed)    
+
+
+  # info and quit
+  if opt.info:
+    imf.info()
+    exit()
+    
+
+  params = {
+    "axes.labelsize": 18,
+    "axes.titlesize": 18,
+    "font.size": 18,
+    "legend.fontsize": 18,
+    "xtick.labelsize": 18,
+    "ytick.labelsize": 18,
+    "text.usetex": True,
+    "figure.subplot.left": 0.15,
+    "figure.subplot.right": 0.95,
+    "figure.subplot.bottom": 0.15,
+    "figure.subplot.top": 0.95,
+    "figure.subplot.wspace": 0.02,
+    "figure.subplot.hspace": 0.02,
+    "figure.figsize" : (8, 6),
+    "lines.markersize": 6,
+    "lines.linewidth": 2.0,
+  }
+  plt.rcParams.update(params)
+
+  # create the plot
+  fig = plt.gcf()
+  fig.set_size_inches(8,6)
+  ax  = plt.gca()
+
+  # sample stars
+  masses = imf.Sample()
+
+  mmin = imf.getMinMass()  
+  mmax = imf.getMaxMass()
+  
+  bins = np.logspace(np.log10(mmin)-0.05,np.log10(mmax)+0.05,100)
+
+  ax.hist(masses,bins=bins)
+  ax.set_xscale('log')
+  ax.set_yscale('log')
+  ax.set_xlabel("Stellar Mass [Solar Mass]")
+
+
+  # save or display
+  if opt.outputfilename:
+    plt.savefig(opt.outputfilename)
+  else:
+    plt.show()          
+
+
+if __name__ == '__main__':
+  
+  opt = parser.parse_args()
+  
+  Do(opt)
+ 

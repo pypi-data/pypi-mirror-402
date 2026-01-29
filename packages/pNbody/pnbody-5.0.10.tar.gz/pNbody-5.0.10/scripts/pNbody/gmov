@@ -1,0 +1,1216 @@
+#!/usr/bin/env python3
+###########################################################################################
+#  package:   pNbody
+#  file:      gmov
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of pNbody.
+###########################################################################################
+
+# version 5.2
+
+import getopt
+import string
+from numpy import *
+from tkinter import *
+from tkinter.messagebox import askokcancel
+from tkinter.filedialog import asksaveasfilename
+import os
+import glob
+import time
+
+import pNbody
+from pNbody.palette import *
+from pNbody import Movie
+
+try:
+    from optik import OptionParser
+except ImportError:
+    from optparse import OptionParser
+
+
+##########################################################################
+def parse_options():
+    ##########################################################################
+
+    usage = "usage: %prog [options] file"
+    parser = OptionParser(usage=usage)
+
+    parser.add_option("-f", "--fullscreen",
+                      action="store_true",
+                      dest="fullscreen",
+                      default=0,
+                      help="fullscreen mode")
+
+    parser.add_option("-a", "--auto",
+                      action="store_true",
+                      dest="auto",
+                      default=0,
+                      help="automatically run the movie")
+
+    parser.add_option("--nopalette",
+                      action="store_true",
+                      dest="nopalette",
+                      default=0,
+                      help="do not display the palette")
+
+    parser.add_option("--nocontroll",
+                      action="store_true",
+                      dest="nocontroll",
+                      default=0,
+                      help="do not display the controll pannel")
+
+    parser.add_option("--notime",
+                      action="store_true",
+                      dest="notime",
+                      default=0,
+                      help="do not display the time")
+
+    parser.add_option("-p",
+                      action="store",
+                      dest="palette",
+                      type="string",
+                      default=None,
+                      help="palette name",
+                      metavar=" PALETTE NAME")
+
+    parser.add_option("-z",
+                      action="store",
+                      dest="zoom",
+                      type="string",
+                      default=1,
+                      help="zoom factor",
+                      metavar=" INT")
+
+    parser.add_option("-s",
+                      action="store",
+                      dest="speed",
+                      type="int",
+                      default=1,
+                      help="speed",
+                      metavar=" INT")
+
+    parser.add_option(
+        "-i",
+        action="store_true",
+        dest="info",
+        default=0,
+        help="read the whole film before displaying it (get info)")
+
+    parser.add_option("--stepsize",
+                      action="store",
+                      dest="stepsize",
+                      type="int",
+                      default=1,
+                      help="size of step",
+                      metavar=" INT")
+
+    parser.add_option("--delay",
+                      action="store",
+                      dest="delay",
+                      type="float",
+                      default=0.,
+                      help="delay before starting in auto mode",
+                      metavar=" FLOAT")
+
+    parser.add_option("--presentation",
+                      action="store_true",
+                      dest="presentation",
+                      default=0,
+                      help="choose parameters for presentation")
+
+    parser.add_option("--loop",
+                      action="store_true",
+                      dest="loop",
+                      default=0,
+                      help="loop on")
+
+    parser.add_option("--rgb",
+                      action="store_true",
+                      dest="rgb",
+                      default=0,
+                      help="rgb mode")
+
+    parser.add_option("-b", "--background",
+                      action="store",
+                      dest="background",
+                      type="string",
+                      default='black',
+                      help="palette name",
+                      metavar=" COLOR")
+
+    (options, args) = parser.parse_args()
+
+    palette = options.palette
+    zoom = options.zoom
+    speed = options.speed
+    stepsize = options.stepsize
+    info = options.info
+    fullscreen = options.fullscreen
+    auto = options.auto
+    nopalette = options.nopalette
+    nocontroll = options.nocontroll
+    notime = options.notime
+    delay = options.delay
+    background = options.background
+    loop = options.loop
+    rgb = options.rgb
+
+    if options.presentation:
+        fullscreen = 1
+        nopalette = 1
+        nocontroll = 1
+        notime = 1
+
+    if len(args) == 0:
+        print("you must specify a filename")
+        sys.exit(0)
+
+    return args[0], palette, zoom, speed, info, fullscreen, auto, nopalette, nocontroll, notime, delay, background, loop, rgb, stepsize
+
+
+##########################################################################
+#
+# Main Class
+#
+##########################################################################
+
+
+from tkinter import *
+import os
+from tkinter.filedialog import askopenfilename
+
+
+class App:
+
+    def __init__(
+            self,
+            master,
+            fname_init,
+            palette_init,
+            zoom_init,
+            speed_init,
+            info_init,
+            fullscreen,
+            auto,
+            nopalette,
+            nocontroll,
+            notime,
+            delay,
+            background,
+            loop,
+            rgb,
+            stepsize):
+
+        # global variables
+
+        self.master = master
+        self.npic = 0
+        self.stopfl = 0
+        self.fnopen = 0
+        self.stepfl = 0
+        self.strtime = StringVar()
+        self.current_fname = fname_init
+        self.subfname = os.path.basename(self.current_fname)
+
+        # look at the availables colormap tables
+        self.tables = glob.glob(os.path.join(PALETTEDIR, '*'))
+        self.tables.sort()
+        # create a pallette object
+        self.palette = Palette()
+
+        # parameters
+
+        self.speed = speed_init
+        self.zoom = float(zoom_init)
+        self.info = info_init
+
+        self.fullscreen = fullscreen
+        self.auto = auto
+        self.nopalette = nopalette
+        self.nocontroll = nocontroll
+        self.notime = notime
+        self.delay = delay
+        self.background = background
+        self.loop = loop
+
+        self.stepsize = stepsize
+
+        if rgb:
+            self.mode = 'image_rgb'
+        else:
+            self.mode = 'image'
+
+        # init sequence
+
+        if self.current_fname != "":
+            self.film_init()
+        else:
+            self.default_init()
+
+        ###############
+        # control panel
+        ###############
+
+        # frame
+
+        frame = Frame(master)
+        frame.grid(column=0, row=0, sticky=N + S + E + W)
+        self.frame = frame
+
+        if fullscreen and auto:
+            self.draw_win_control(0)
+        else:
+            self.draw_win_control(1)
+
+        if palette_init is not None:
+
+            if os.path.isfile(palette_init):
+                palette_name = palette_init
+            else:
+                palette_name = os.path.join(PALETTEDIR, palette_init)
+
+            self.palette.change(palette_name)
+
+        self.stopfl = 0
+
+        # if needed, open the film window and
+        # display the first image
+
+        if self.current_fname != "":
+            self.displayfilm()
+
+        if self.auto:
+            self.run()
+
+    ###########################
+
+    def draw_win_control(self, mode):
+        ###########################
+
+        self.frame_controll = Frame(self.frame)
+        if not self.nocontroll:
+            self.frame_controll.grid(column=0, row=0, sticky=E + N + S + W)
+
+        # run button
+        self.runBut = Button(
+            self.frame_controll,
+            text="RUN",
+            fg="black",
+            command=self.run)
+        self.runBut.grid(column=0, row=1, sticky=E + N + S + W)
+
+        # stop button
+        self.stopBut = Button(
+            self.frame_controll,
+            text="STOP",
+            fg="black",
+            command=self.stop)
+        self.stopBut.grid(column=0, row=2, sticky=E + N + S + W)
+
+        # step button
+        self.stepBut = Button(
+            self.frame_controll,
+            text="STEP",
+            fg="black",
+            command=self.step)
+        self.stepBut.grid(column=1, row=1, sticky=E + N + S + W)
+
+        # reset button
+        self.resetBut = Button(
+            self.frame_controll,
+            text="RESET",
+            fg="black",
+            command=self.reset)
+        self.resetBut.grid(column=2, row=1, sticky=E + N + S + W)
+
+        # back button
+        self.backBut = Button(
+            self.frame_controll,
+            text="BACK",
+            fg="black",
+            command=self.back)
+        self.backBut.grid(column=1, row=2, sticky=E + N + S + W)
+
+        # quit button
+        self.quitBut = Button(
+            self.frame_controll,
+            text="QUIT",
+            fg="black",
+            command=self.quit)
+        self.quitBut.grid(column=2, row=2, sticky=E + N + S + W)
+
+        # zoom button
+        self.resetBut = Button(
+            self.frame_controll,
+            text="ZOOM",
+            fg="black",
+            command=lambda zoom=self.makezoom: zoom(1.25))
+        self.resetBut.grid(column=0, row=3, sticky=E + N + S + W)
+
+        # unzoom button
+        self.resetBut = Button(
+            self.frame_controll,
+            text="UNZOOM",
+            fg="black",
+            command=lambda zoom=self.makezoom: zoom(0.8))
+        self.resetBut.grid(column=1, row=3, sticky=E + N + S + W)
+
+        # reset zoom button
+        self.resetzoomBut = Button(
+            self.frame_controll,
+            text="RESET ZOOM",
+            fg="black",
+            command=self.reset_zoom)
+        self.resetzoomBut.grid(column=2, row=3, sticky=E + N + S + W)
+
+        # label for the file entry
+        self.filenameLab = Label(self.frame_controll, text="filename :")
+        self.filenameLab.grid(column=0, row=0, sticky=E + N + S + W)
+
+        if self.info:
+            # labels for the starting time
+            self.starttimeLab = Label(
+                self.frame_controll, text="start. time :")
+            self.starttimeLab.grid(column=5, row=1, sticky=E + N + S + W)
+
+            # entry for the starting time
+            self.starttimeEnt = Entry(self.frame_controll, width=5)
+            self.starttimeEnt.grid(column=6, row=1, sticky=E + N + S + W)
+            self.starttimeEnt.insert(INSERT, self.starttime)
+            self.starttimeEnt.bind("<Return>", self.changestarttime)
+
+            # labels for the stoping time
+            self.stoptimeLab = Label(self.frame_controll, text="stop. time :")
+            self.stoptimeLab.grid(column=5, row=2, sticky=E + N + S + W)
+
+            # entry for the stopping time
+            self.stoptimeEnt = Entry(self.frame_controll, width=5)
+            self.stoptimeEnt.grid(column=6, row=2, sticky=E + N + S + W)
+            self.stoptimeEnt.insert(INSERT, self.stoptime)
+            self.stoptimeEnt.bind("<Return>", self.changestoptime)
+
+            # labels for the starting pic
+            self.startpicLab = Label(self.frame_controll, text="start. pic :")
+            self.startpicLab.grid(column=7, row=1, sticky=E + N + S + W)
+
+            # entry for the starting pic
+            self.startpicEnt = Entry(self.frame_controll, width=5)
+            self.startpicEnt.grid(column=8, row=1, sticky=E + N + S + W)
+            self.startpicEnt.insert(INSERT, repr(self.startpic))
+            self.startpicEnt.bind("<Return>", self.changestartpic)
+
+            # labels for the stoping pic
+            self.stoppicLab = Label(self.frame_controll, text="stop. pic :")
+            self.stoppicLab.grid(column=7, row=2, sticky=E + N + S + W)
+
+            # entry for the stopping pic
+            self.stoppicEnt = Entry(self.frame_controll, width=5)
+            self.stoppicEnt.grid(column=8, row=2, sticky=E + N + S + W)
+            self.stoppicEnt.insert(INSERT, self.stoppic)
+            self.stoppicEnt.bind("<Return>", self.changestoppic)
+
+            # labels for the step size
+            self.stepsizeLab = Label(self.frame_controll, text="step size :")
+            self.stepsizeLab.grid(column=7, row=3, sticky=E + N + S + W)
+
+            # entry for the step size
+            self.stepsizeEnt = Entry(self.frame_controll, width=3)
+            self.stepsizeEnt.grid(column=8, row=3, sticky=E + N + S + W)
+            self.stepsizeEnt.insert(INSERT, self.stepsize)
+
+        # entry for the filename
+        self.fname = Entry(self.frame_controll)
+        self.fname.grid(column=1, row=0, columnspan=10, sticky=E + N + S + W)
+        self.fname.insert(INSERT, self.current_fname)
+        self.fname.bind("<Return>", self.fnameentry)
+
+        # frame for the palette
+        if not self.nocontroll and not self.nopalette:
+            self.paletteFrame = Frame(
+                self.frame_controll, height=48, width=512)
+            self.paletteFrame.grid(column=0, row=5, columnspan=10)
+            self.palette.addFrame(self.paletteFrame)
+            self.paletteFrame.bind('<ButtonRelease>', self.redisplay)
+
+        # menus
+
+        self.menubar = Menu(self.master)
+
+        self.filemenu = Menu(self.menubar, tearoff=0)
+        self.filemenu.add_command(label="open", command=self.open)
+        self.filemenu.add_command(label="reload", command=self.reload)
+        self.filemenu.add_command(label="save image", command=self.save)
+        self.filemenu.add_separator()
+        self.filemenu.add_command(label="quit", command=self.quit)
+
+        self.colormapmenu = Menu(self.menubar, tearoff=0)
+
+        for table in self.tables:
+            self.colormapmenu.add_command(
+                label=os.path.basename(table),
+                command=lambda table=table,
+                colormap=self.colormap: colormap(table))
+
+        self.speedmenu = Menu(self.menubar, tearoff=0)
+        self.speedmenu.add_command(
+            label="speed   1",
+            command=lambda speed=self.set_speed: speed(1))
+        self.speedmenu.add_command(
+            label="speed  50",
+            command=lambda speed=self.set_speed: speed(50))
+        self.speedmenu.add_command(
+            label="speed 100",
+            command=lambda speed=self.set_speed: speed(100))
+
+        self.zoommenu = Menu(self.menubar, tearoff=0)
+        self.zoommenu.add_command(label="x 1.25",
+                                  command=lambda zoom=self.makezoom: zoom(1.25))
+        self.zoommenu.add_command(label="x 2.00",
+                                  command=lambda zoom=self.makezoom: zoom(2.))
+        self.zoommenu.add_command(label="x 0.80",
+                                  command=lambda zoom=self.makezoom: zoom(0.8))
+        self.zoommenu.add_command(label="x 0.50",
+                                  command=lambda zoom=self.makezoom: zoom(0.5))
+
+        self.menubar.add_cascade(label="File", menu=self.filemenu)
+        self.menubar.add_cascade(label="Colormap", menu=self.colormapmenu)
+        self.menubar.add_cascade(label="Speed", menu=self.speedmenu)
+        self.menubar.add_cascade(label="Zoom", menu=self.zoommenu)
+
+        if not self.fullscreen and not self.nocontroll:
+            self.master.config(menu=self.menubar)
+
+        # bind key
+        self.master.bind('<KeyPress>', self.onKeyPress)
+
+        if self.nocontroll:
+            self.master.bind('<Button-1>', lambda event: self.step())
+            self.master.bind('<Button-2>', lambda event: self.reset())
+            self.master.bind('<Button-3>', lambda event: self.back())
+
+            self.master.bind('<Double-Button-1>', lambda event: self.run())
+            self.master.bind('<Double-Button-2>', lambda event: self.quit())
+            self.master.bind('<Double-Button-3>', lambda event: self.stop())
+
+    ##########################
+
+    def onKeyPress(self, event):
+        ##########################
+
+        if event.char == 'r':		# run
+            self.run()
+
+        if event.char == 's':		# stop
+            self.stop()
+
+        if event.char == 'n':		# step
+            self.step()
+
+        if event.char == 'b':		# back
+            self.back()
+
+        if event.char == '\u000D':  # reset (enter)
+            self.reset()
+
+        if event.char == 'q':		# quit
+            self.quit()
+
+        if event.char == '\u001B':		# quit (escape)
+            self.quit()
+
+#    if event.char == 'f':		# fullscreen
+#      self.master.overrideredirect(1)
+
+    ###########################
+    def colormap_slider(self, event):
+        ###########################
+        self.colormap(self.paletteSc.get())
+
+    ###########################
+    def default_init(self):
+        ###########################
+
+        self.starttime = '0.'
+        self.stoptime = '0.'
+        self.startpic = 0
+        self.stoppic = 0
+
+    ###########################
+
+    def film_init(self):
+        ###########################
+
+        # parameters
+
+        npic = 0
+
+        self.openfilm()
+        if self.fnopen == 1:
+
+            # first, read the header and find numByte
+
+            self.header = self.film.read(256)
+
+            if len(self.header) == 256:
+
+                self.film.seek(240)
+
+                str1 = self.film.read(8)
+                str2 = self.film.read(8)
+
+                if (str1 != "        " and str2 != "        "):
+                    self.naxis1_init = int(str1)
+                    self.naxis2_init = int(str2)
+                else:
+                    self.naxis1_init = 256
+                    self.naxis2_init = 192
+
+                self.numByte = self.naxis1_init
+                self.numLine = self.naxis2_init
+
+                self.naxis1 = self.naxis1_init * self.zoom
+                self.naxis2 = self.naxis2_init * self.zoom
+                self.shape = (self.naxis1_init, self.naxis2_init)
+                self.zshape = (self.naxis1, self.naxis2)
+
+                if self.numByte < 256:
+                    self.headerlength = 256
+                else:
+                    self.headerlength = self.numByte
+
+                # !!!!!!!! go to the top of the file !!!!!!!! #
+                self.film.seek(0)
+                self.film.close()
+
+                self.film = Movie.Movie(self.current_fname)
+                self.film.open()
+
+                #self.time,self.image =  self.film.read_one_with_time(mode='image')
+                #self.starttime = self.time[:8]
+                #npic = npic + 1
+
+                """
+        # reading next label
+        self.time = self.film.read(self.headerlength)
+	self.starttime = self.time[:8]
+        if len(self.time) == self.headerlength:
+
+          # reading next data
+          self.data = self.film.read(self.numByte*self.numLine)
+          if len(self.data) == self.numByte*self.numLine:
+
+            # converting time
+            self.time = self.time[:8]
+            npic = npic + 1
+
+            # converting data
+            self.image = Image.fromstring("P",self.shape,self.data)
+
+
+            ok = 1
+
+	    if self.info:
+
+	      while ok:
+
+	        ok = 0
+	        # reading next label
+	        ctime = self.film.read(self.headerlength)
+	        if len(ctime) == self.headerlength:
+
+	         # reading next data
+	         self.data = self.film.read(self.numByte*self.numLine)
+	         if len(self.data) == self.numByte*self.numLine:
+	           ok = 1
+	           npic = npic + 1
+	           self.stoptime = ctime[:8]
+
+        """
+
+            # go to the top of the file and miss the header
+
+            # self.film.seek(0)
+
+            # read the first image
+            self.readpic()
+
+            # parameters
+            if self.info:
+                npcitot = npic
+                self.npic = 1
+                self.startpic = 1
+                self.stoppic = npic
+                self.ntotime = (string.atof(self.stoptime) -
+                                string.atof(self.starttime)) / (npic - 1)
+                if self.ntotime == 0:
+                    self.timeton = 1.0
+                else:
+                    self.timeton = 1. / self.ntotime
+                self.firsttime = string.atof(self.starttime)
+
+                self.npicmax = self.stoppic
+                self.npicmin = self.startpic
+
+    ###########################
+
+    def open(self):
+        ###########################
+
+        name = askopenfilename()
+        if name != "":
+            self.current_fname = name
+
+            self.fname.delete(0, len(self.fname.get()) + 1)
+            self.fname.insert(INSERT, self.current_fname)
+            self.reload()
+
+    ###########################
+    def reload(self):
+        ###########################
+
+        self.film_init()
+
+        if self.info:
+
+            # erasing old values
+            self.starttimeEnt.delete(0, len(self.starttimeEnt.get()) + 1)
+            self.stoptimeEnt.delete(0, len(self.stoptimeEnt.get()) + 1)
+            self.startpicEnt.delete(0, len(self.startpicEnt.get()) + 1)
+            self.stoppicEnt.delete(0, len(self.stoppicEnt.get()) + 1)
+
+            # inserting new values
+            self.startpicEnt.insert(INSERT, repr(self.startpic))
+            self.stoppicEnt.insert(INSERT, repr(self.stoppic))
+            self.starttimeEnt.insert(INSERT, self.starttime)
+            self.stoptimeEnt.insert(INSERT, self.stoptime)
+
+        # displaying first image
+        self.subfname = os.path.basename(self.current_fname)
+
+        self.set_size()
+        self.film_window.title(self.subfname)
+
+    ###########################
+
+    def readpic(self):
+        ###########################
+
+        self.time, self.image = self.film.read_one_with_time(mode=self.mode)
+
+        if self.time is None:
+            return 0
+
+        self.time = self.time[:8]
+        self.npic = self.npic + 1
+
+        return 1
+
+        """
+    # reading next label
+    self.time = self.film.read(self.headerlength)
+
+    if len(self.time) == self.headerlength:
+
+      # reading next data
+      self.data = self.film.read(self.numByte*self.numLine)
+      if len(self.data) == self.numByte*self.numLine:
+
+    	# converting time
+    	self.time = self.time[:8]
+    	self.npic = self.npic + 1
+
+    	# converting data
+    	self.image = Image.fromstring("P",self.shape,self.data)
+	return(1)
+
+    else:
+      return(0)
+   """
+
+    ###########################
+    def draw_win_film(self):
+        ###########################
+
+        try:
+            self.film_window
+
+        except AttributeError:
+
+            if not self.fullscreen and not self.nocontroll:
+
+                self.film_window = Toplevel()
+                self.film_window.title(self.subfname)
+
+            else:
+
+                self.film_window = Frame(self.frame, height=48, width=512)
+                self.film_window.grid(
+                    column=0, row=6, columnspan=10, sticky=W + E + N + S)
+                self.film_window.bind('<ButtonRelease>', self.redisplay)
+
+            # frame
+            self.frame_film = Frame(self.film_window)
+            self.frame_film.grid(column=0, row=0, sticky=W + E + N + S)
+
+            # label for the time
+            if not self.notime:
+                self.timeLab = Label(
+                    self.frame_film, textvariable=self.strtime)
+                self.timeLab.grid(column=0, row=0, sticky=W + E + N + S)
+
+            # canvas for the film
+            self.canvas = Canvas(
+                self.frame_film,
+                height=self.naxis2,
+                width=self.naxis1,
+                background=self.background)
+            self.canvas.grid(column=0, row=1, sticky=W + E + N + S)
+
+            # frame for the palette
+            if self.nocontroll and not self.nopalette:
+                self.paletteFilmFrame = Frame(
+                    self.frame_film, height=48, width=512)
+                self.paletteFilmFrame.grid(column=0, row=2)
+                self.palette.addFrame(self.paletteFilmFrame)
+                self.paletteFilmFrame.bind('<ButtonRelease>', self.redisplay)
+
+            # bind events
+            self.film_window.bind("<Destroy>", self.destroy_film)
+
+            # bind key
+            self.film_window.bind('<KeyPress>', self.onKeyPress)
+
+    ###########################
+    def destroy_film(self, event):
+        ###########################
+
+        try:
+            del self.film_window
+        except AttributeError:
+            return
+
+    ###########################
+    def reset_zoom(self):
+        ###########################
+
+        try:
+            self.film_window.destroy
+            self.zoom = 1.
+            self.naxis1 = self.naxis1_init
+            self.naxis2 = self.naxis2_init
+            self.zshape = (self.naxis1, self.naxis2)
+
+            self.canvas.config(height=self.naxis2, width=self.naxis1)
+
+        except AttributeError:
+            pass
+
+        self.displayfilm()
+
+    ###########################
+    def set_size(self):
+        ###########################
+
+        try:
+            self.film_window.destroy
+            self.naxis1 = self.naxis1_init * self.zoom
+            self.naxis2 = self.naxis2_init * self.zoom
+            self.zshape = (self.naxis1, self.naxis2)
+
+            self.canvas.config(height=self.naxis2, width=self.naxis1)
+
+        except AttributeError:
+            pass
+
+        self.displayfilm()
+
+    ###########################
+
+    def makezoom(self, z):
+        ###########################
+
+        self.film_window.destroy
+        self.zoom = self.zoom * z
+        self.naxis1 = int(self.naxis1 * z)
+        self.naxis2 = int(self.naxis2 * z)
+        self.zshape = (self.naxis1, self.naxis2)
+
+        self.canvas.config(height=self.naxis2, width=self.naxis1)
+        self.displayfilm()
+
+    ###########################
+    def colormap(self, name):
+        ###########################
+
+        self.palette.change(name)
+
+        if self.stopfl == 0:
+            self.palette.draw()
+
+        self.displayfilm()
+
+    ###########################
+    def set_speed(self, sp):
+        ###########################
+
+        self.speed = sp
+
+    ###########################
+
+    def errorbox(self, txterror):
+        ###########################
+
+        self.error = Toplevel()
+
+        frame = Frame(self.error)
+        frame.pack()
+
+        text0 = Label(frame, text="ERROR !", fg="red")
+        text0.pack()
+
+        text = Label(frame, text=txterror, fg="red")
+        text.pack()
+
+        ok = Button(frame, text="OK", fg="black", command=self.error.destroy)
+        ok.pack()
+
+        self.error.mainloop()
+
+    ###########################
+    def fnameentry(self, event):
+        ###########################
+
+        self.current_fname = self.fname.get()
+        self.reload()
+
+    ###########################
+
+    def openfilm(self):
+        ###########################
+
+        # check if the file is already open
+
+        self.fnopen = 0
+
+        # check if it exists
+        if os.path.exists(self.current_fname):
+
+            try:
+                self.film.close()
+            except BaseException:
+                None
+
+            self.film = open(self.current_fname, 'r')
+            self.fnopen = 1
+        else:
+            self.film = None
+            self.errorbox("'" + self.current_fname + "'" + "  does not exist")
+
+    ###########################
+
+    def changestartpic(self, event):
+        ###########################
+
+        self.startpic = int(self.startpicEnt.get())
+        if self.startpic > self.npicmax:
+            self.startpic = self.npicmax
+            self.startpicEnt.delete(0, len(self.startpicEnt.get()) + 1)
+            self.startpicEnt.insert(INSERT, repr(self.startpic))
+        elif self.startpic < self.npicmin:
+            self.startpic = self.npicmin
+            self.startpicEnt.delete(0, len(self.startpicEnt.get()) + 1)
+            self.startpicEnt.insert(INSERT, repr(self.startpic))
+
+        self.starttimeEnt.delete(0, len(self.starttimeEnt.get()) + 1)
+        self.starttimeEnt.insert(
+            INSERT, self.firsttime + self.ntotime * (self.startpic - 1))
+
+    ###########################
+    def changestoppic(self, event):
+        ###########################
+
+        self.stoppic = int(self.stoppicEnt.get())
+        if self.stoppic > self.npicmax:
+            self.stoppic = self.npicmax
+            self.stoppicEnt.delete(0, len(self.stoppicEnt.get()) + 1)
+            self.stoppicEnt.insert(INSERT, repr(self.stoppic))
+        elif self.stoppic < self.npicmin:
+            self.stoppic = self.npicmin
+            self.stoppicEnt.delete(0, len(self.stoppicEnt.get()) + 1)
+            self.stoppicEnt.insert(INSERT, repr(self.stoppic))
+
+        self.stoptimeEnt.delete(0, len(self.stoptimeEnt.get()) + 1)
+        self.stoptimeEnt.insert(
+            INSERT, self.firsttime + self.ntotime * (self.stoppic - 1))
+
+    ###########################
+    def changestarttime(self, event):
+        ###########################
+
+        starttime = string.atof(self.starttimeEnt.get())
+        self.startpic = int(self.timeton * (starttime - self.firsttime)) + 1
+        self.startpicEnt.delete(0, len(self.startpicEnt.get()) + 1)
+        self.startpicEnt.insert(INSERT, repr(self.startpic))
+        self.changestartpic(None)
+
+    ###########################
+
+    def changestoptime(self, event):
+        ###########################
+
+        stoptime = string.atof(self.stoptimeEnt.get())
+        self.stoppic = int(self.timeton * (stoptime - self.firsttime)) + 1
+        self.stoppicEnt.delete(0, len(self.stoppicEnt.get()) + 1)
+        self.stoppicEnt.insert(INSERT, repr(self.stoppic))
+        self.changestoppic(None)
+
+    ###########################
+
+    def run(self):
+        ###########################
+
+        # parameters
+
+        if self.info:
+
+            self.stepsize = int(self.stepsizeEnt.get())
+            self.startpic = int(self.startpicEnt.get())
+            self.stoppic =  int(self.stoppicEnt.get())
+
+        else:
+
+            #self.stepsize = 1
+            self.startpic = 1
+            self.stoppic = 1e20
+
+        # if the film is correctely open
+        if self.fnopen == 1:
+
+            # if the stop button has not been pressed
+            if self.stopfl == 0:
+
+                #        if self.npic < self.stoppic:
+
+                if self.stepsize > 1:
+                    self.film.read(
+                        (self.stepsize - 1) * (self.numByte * (self.numLine) + self.headerlength))
+                    self.npic = self.npic + self.stepsize - 1
+
+                if self.readpic():
+
+                    # displaying data
+                    self.displayfilm()
+
+                    # wait before begining
+                    if self.delay != 0:
+                        if self.auto:
+                            self.master.update()
+                            time.sleep(self.delay)
+                            self.delay = 0.
+
+                    if self.stepfl == 0:
+
+                        self.master.after(self.speed, self.run)
+                    else:
+                        self.stepfl = 0
+
+                else:					# go through only if -i is enabled
+                    if self.loop:
+                        self.reset()
+                        self.run()
+
+            # if the stop button has been pressed
+
+            else:
+                self.stopfl = 0
+
+    ###########################
+
+    def step(self):
+        ###########################
+
+        self.stepfl = 1
+        self.run()
+
+    ###########################
+    def back(self):
+        ###########################
+
+        if self.mode == 'image_rgb':
+            fac = 3
+        else:
+            fac = 1
+
+        self.stepfl = 1
+        if self.fnopen == 1:
+
+            current_byte = self.film.film.tell()
+            new_byte = current_byte - self.stepsize * 2 * \
+                (self.numByte * (self.numLine) + self.headerlength) * fac
+
+            if new_byte < 0:
+                self.film.film.seek(0)
+                self.npic = 0
+            else:
+                self.film.film.seek(new_byte)
+                self.npic = self.npic - 2 * self.stepsize
+
+            self.stepfl = 1
+            self.run()
+
+    ###########################
+    def displayfilm(self):
+        ###########################
+
+        # parameters
+        import os
+
+        # open the win film if not already done
+        self.draw_win_film()
+
+        # zoom
+        if self.zoom != 1:
+            zimage = self.image.transform(
+                self.zshape,
+                Image.AFFINE,
+                (1. / self.zoom,
+                 0.,
+                 0.,
+                 0.,
+                 1. / self.zoom,
+                 0.),
+                Image.BICUBIC)  # no change if NEAREST is used
+        else:
+            zimage = self.image
+
+        # include the palette
+        if self.mode != 'image_rgb':
+            zimage.putpalette(self.palette.palette)
+        # making the photo
+        self.photo = ImageTk.PhotoImage(zimage)
+        # displaying the photo
+        self.canvas.create_image(0., 0., anchor=NW, image=self.photo)
+
+        # new value for the label
+        if not self.notime:
+            self.strtime.set(self.time[:8] + ' (' + repr(self.npic) + ' )')
+
+    ###########################
+
+    def redisplay(self, event):
+        ###########################
+
+        self.displayfilm()
+
+    ###########################
+
+    def stop(self):
+        ###########################
+
+        self.film_window.destroy
+        self.stopfl = 1
+
+    ###########################
+    def reset(self):
+        ###########################
+
+        if self.fnopen == 1:
+
+            self.film.film.seek(0)
+            self.npic = 0
+
+            while self.npic != self.startpic:
+                self.readpic()
+
+            # displaying data
+            self.displayfilm()
+
+    ###########################
+
+    def quit(self):
+        ###########################
+        #ans = askokcancel('Verify exit', "Really quit?")
+        #if ans: sys.exit()
+        sys.exit()
+
+    ###########################
+    def save(self):
+        ###########################
+
+        savename = asksaveasfilename()
+        if savename != "":
+
+            # if savename[len(savename)-5:] == ".fits":
+            #  shape = [self.naxis2,self.naxis1]
+            #  data = fromstring(self.data,'b')
+            #  data.shape = shape
+            #  WriteFits(data,savename, None)
+            # else:
+
+            self.image.save(savename)
+
+
+##########################################################################
+#
+#  MAIN
+#
+##########################################################################
+
+
+from PIL import Image
+from PIL import ImageDraw
+from PIL import ImageFont
+from PIL import ImagePalette
+from PIL import ImageTk
+
+
+# parse options
+fname_init, palette_init, zoom_init, speed_init, info_init, fullscreen, auto, nopalette, nocontroll, notime, delay, background, loop, rgb, stepsize = parse_options()
+
+if not(os.path.exists(fname_init)):
+    if fname_init != "":
+        print(fname_init + " does not exist.")
+        sys.exit(0)
+
+
+######################
+# create main window
+######################
+
+root = Tk()
+root.title("gmov")
+root.configure(bg=background)
+if fullscreen:
+    root.overrideredirect(1)
+    root.geometry(str(root.winfo_screenwidth()) +
+                  "x" + str(root.winfo_screenheight()))
+    #  root.focus_set()
+    #  root.focus_force()
+    #  root.focus_displayof()
+    #  root.focusmodel()
+    #  root.grab_set_global()
+
+
+app = App(
+    root,
+    fname_init,
+    palette_init,
+    zoom_init,
+    speed_init,
+    info_init,
+    fullscreen,
+    auto,
+    nopalette,
+    nocontroll,
+    notime,
+    delay,
+    background,
+    loop,
+    rgb,
+    stepsize)
+
+root.mainloop()

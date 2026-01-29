@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+###########################################################################################
+#  package:   pNbody
+#  file:      mergegmov
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of pNbody.
+###########################################################################################
+
+import sys
+import os
+import string
+import getopt
+import math
+
+from pNbody import Movie
+
+
+##########################################################################
+def version():
+    ##########################################################################
+    print('version 1.0')
+    sys.exit(0)
+
+
+##########################################################################
+def help_message():
+    ##########################################################################
+    print("""Usage : mergegmov -o output --nh=nh --nv=nv film1 film2 ...
+  Options: -h        -- this help message
+	   -o	     -- name of the output
+  	   --nh	     -- number of horizontal images
+	   --nv	     -- number of vertical images
+           --help    -- this help message
+           --version -- displays version
+
+  """)
+    sys.exit(0)
+
+
+##########################################################################
+def check_arguments(options, xarguments):
+    ##########################################################################
+
+    nh = 1
+    nv = 1
+    output = "out.mov"
+
+    for a in options[:]:
+        if a[0] == '-h':
+            help_message()
+
+        if a[0] == '--help':
+            help_message()
+
+        if a[0] == '--version':
+            version()
+
+        if a[0] == '--info':
+            info = 1
+
+        if a[0] == '--nh':
+            if a[1] == '':
+                help_message()
+            else:
+                nh = a[1]
+                continue
+
+        if a[0] == '--nv':
+            if a[1] == '':
+                help_message()
+            else:
+                nv = a[1]
+                continue
+
+        if a[0] == '-o':
+            if a[1] == '':
+                help_message()
+            else:
+                output = a[1]
+                continue
+
+    files = xarguments
+
+    return nh, nv, output, files
+
+
+##########################################################################
+#
+#  MAIN
+#
+##########################################################################
+
+
+try:
+    options, xarguments = getopt.getopt(
+        sys.argv[1:], 'o:h', ['info', 'help', 'version', 'nh=', 'nv='])
+except getopt.error:
+    help_message()
+    sys.exit(0)
+
+
+# check arguments
+nh, nv, output, films = check_arguments(options, xarguments)
+
+nh = int(nh)
+nv = int(nv)
+
+
+# check the number of films
+if nh * nv != len(films):
+    print("nh and nv do not match the number of films")
+    sys.exit()
+
+# check that all films exists
+
+for film in films:
+    if (os.path.exists(film) == 0):
+        print("Error : the file ", film, " do no not exist.")
+        sys.exit(0)
+
+
+# open films
+
+fs = []
+n = -1
+
+for film in films:
+
+    n = n + 1
+    fs.append(Movie.Movie(film))
+    fs[n].open(readall=1)
+
+    if n > 0:
+        if (fs[n].npic != fs[0].npic):
+            print("films have not the same number of frames")
+        if (fs[n].numByte != fs[0].numByte):
+            print("films have not the same width")
+        if (fs[n].numLine != fs[0].numLine):
+            print("films have not the same height")
+
+
+npic = fs[0].npic
+numByte = nh * fs[0].numByte
+numLine = nv * fs[0].numLine
+headerlength = 0
+
+
+idx = []
+for j in range(1, nv + 1):
+    for i in range(1, nh + 1):
+        idx.append((i, j))
+
+
+# loop over the images
+
+fo = Movie.Movie(output)
+fo.new(numByte, numLine)
+
+for i in range(0, npic - 1):
+
+    print(i, '/', npic - 1)
+
+    d = []
+    for j in range(len(fs)):
+        d.append(fs[j].read_one()) 		# read one frame in each film
+
+    data = ''
+
+    for iv in range(nv):
+
+        for k in range(fs[0].numLine):
+            k1 = k * fs[0].numByte
+            k2 = k1 + fs[0].numByte
+
+            for ih in range(nh):
+                data = data + d[idx.index((ih + 1, iv + 1))][k1:k2]
+
+    fo.write_pic(fs[0].current_time, data)

@@ -1,0 +1,227 @@
+#!/usr/bin/env python3
+
+###########################################################################################
+#  package:   Gtools
+#  file:      pplot
+#  brief:     
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of Gtools.
+###########################################################################################
+
+import sys
+import argparse
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+keys=[
+"Step",
+"Time",
+"Scale-factor",
+"Redshift",
+"Time-step",
+"Time-bins_min",
+"Time-bins_max",
+"Updates",
+"g-Updates",
+"s-Updates",
+"Sink-Updates",
+"b-Updates",
+"Wall-clock_time", 
+"Props",
+"Dead_time",
+]
+
+
+
+
+description="Plot the content of a timesteps.txt Swift output file."
+epilog     ="""
+Examples:
+--------
+sw_plot_timesteps timesteps.txt
+sw_plot_timesteps timesteps.txt --y Scale-factor
+sw_plot_timesteps timesteps.txt --x Scale-factor --y Wall-clock_time
+
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+parser.add_argument(action="store", 
+                    dest="files", 
+                    metavar='FILE', 
+                    type=str,
+                    nargs="*",
+                    default=None,
+                    help='lis of files') 
+
+parser.add_argument("--mode",
+                    action="store", 
+                    dest="mode", 
+                    metavar='STRING', 
+                    required=False,
+                    type=str,
+                    default=None,
+                    help='plotting mode') 
+
+parser.add_argument("--x",
+                    action="store", 
+                    dest="x", 
+                    metavar='STRING', 
+                    required=False,
+                    type=str,
+                    default="Step",
+                    help='x value %s'%keys)
+
+parser.add_argument("--y",
+                    action="store", 
+                    dest="y", 
+                    metavar='STRING', 
+                    required=False,
+                    type=str,
+                    default="Wall-clock_time",
+                    help='y value %s'%keys)
+
+
+
+parser.add_argument("-o",
+                    action="store", 
+                    dest="outputfile", 
+                    metavar='STRING', 
+                    required=False,
+                    type=str,
+                    default=None,
+                    help='save the output to the given filename')
+
+
+
+
+params = {
+    "axes.labelsize": 14,
+    "axes.titlesize": 18,
+    "font.size": 12,
+    "legend.fontsize": 12,
+    "xtick.labelsize": 14,
+    "ytick.labelsize": 14,
+    "text.usetex": True,
+    "figure.subplot.left": 0.19,
+    "figure.subplot.right": 0.98,
+    "figure.subplot.bottom": 0.12,
+    "figure.subplot.top": 0.95,
+    "figure.subplot.wspace": 0.14,
+    "figure.subplot.hspace": 0.12,
+    "figure.figsize" : (8,6),
+    "lines.markersize": 6,
+    "lines.linewidth": 3.0,
+}
+plt.rcParams.update(params)
+
+
+
+
+def getValueAndLabel(value):
+  
+  if value == "Wall-clock_time":
+    label = "Wall clock time [hour]"
+    value = data[value] / 1000. / 3600.
+    value = np.add.accumulate(value)
+    return value,label  
+  
+  elif value == "Step":
+    label = "Step"
+    value = data[value]
+    return value,label  
+    
+  else:
+    label = value
+    value = data[value]
+    return value,label      
+    
+
+  
+
+
+
+
+##########################################
+#
+#  M A I N
+#
+##########################################
+
+opt = parser.parse_args()
+
+
+
+############################
+# load the data
+
+datas = []
+
+for fle in opt.files:
+
+  # do not use loadtxt as it crashes when a line is cutted
+  #data_tmp = np.loadtxt(f,comments="#")
+
+  fle = open(fle,'r')
+  lines = fle.readlines()
+  fle.close()
+  lines = lines[:-1]
+  boo = list(map(lambda x:x[0]!="#", lines))
+  lines = np.compress(boo,lines)
+  lines = list(map(str.split, lines))
+  
+  lines = np.array(list(map(np.array, lines)))
+  data_tmp = lines.astype(np.double)
+  
+
+  # create a dictionary
+  data = {}
+  for i,key in enumerate(keys):
+    data[key] = data_tmp[:,i]
+  
+  del data_tmp
+
+  datas.append(data)
+
+
+
+############################
+# do the plot
+
+
+for data in datas:
+  
+  if opt.mode is None:
+  
+    x,xlabel = getValueAndLabel(opt.x)
+    y,ylabel = getValueAndLabel(opt.y)
+    
+    ax = plt.gca()
+    ax.plot(x,y)
+
+    
+
+
+ax = plt.gca()
+ax.set_xlabel(xlabel)
+ax.set_ylabel(ylabel)
+
+
+
+
+if opt.outputfile is not None:
+  plt.savefig(opt.outputfile)
+else:
+  plt.show()
+
+
+
+
+
+
+

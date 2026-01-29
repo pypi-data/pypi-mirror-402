@@ -1,0 +1,122 @@
+#!/usr/bin/python3
+
+###########################################################################################
+#  package:   pNbody
+#  file:      example11.py
+#  brief:     Make a model and display it
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of pNbody.
+###########################################################################################
+
+from pNbody import ic
+
+
+from pNbody import ic
+import numpy as np
+
+
+
+#################
+# a disk
+#################
+
+m = 1e-5
+
+n = 100000
+Hz = 0.3
+Hr = 3.
+Rmax = 30.
+Zmax = 3.
+nb = ic.expd(n, Hr, Hz, Rmax, Zmax, irand=1, name='expd.dat', ftype='gadget')
+nb.mass = (np.ones(nb.nbody) * m).astype(np.float32)
+
+grmin = 0.            # minimal grid radius
+grmax = 1.1 * Rmax     # maximal grid radius
+gzmin = -1.1 * Zmax     # minimal grid z
+gzmax = 1.1 * Zmax     # maximal grid z
+nr = 32	     # number of bins in r
+nt = 2	     # number of bins in t
+nz = 64 + 1	     # number of bins in z
+
+rc = Hr
+
+
+def g(r): return np.log(r / rc + 1.)
+
+
+def gm(r): return rc * (np.exp(r) - 1.)
+
+
+mode_sigma_z = {"name": "jeans", "param": None}
+mode_sigma_r = {"name": "toomre", "param": 1.0}
+mode_sigma_p = {"name": "epicyclic_approximation", "param": None}
+params = [mode_sigma_z, mode_sigma_r, mode_sigma_p]
+
+
+eps = 0.1
+nb_disk, phi, stats = nb.Get_Velocities_From_Cylindrical_Grid(select=0, disk=(0), eps=eps, nR=nr, nz=nz, nt=nt, Rmax=grmax, zmin=gzmin, zmax=gzmax, params=params, Phi=None, g=g, gm=gm)
+
+#################
+# a sphere
+#################
+
+n = 50000
+a = 1.
+rmax = 10.
+nb = ic.plummer(
+    n,
+    1,
+    1,
+    1,
+    eps=a,
+    rmax=rmax,
+    name='plummer.dat',
+    ftype='gadget')
+nb.mass = (np.ones(nb.nbody) * m).astype(np.float32)
+
+grmin = 0         # grid minimal radius
+grmax = rmax * 1.05  # grid maximal radius
+nr = 128	  # number of radial bins
+
+rc = a
+
+
+def g(r): return np.log(r / rc + 1)  # the function
+
+
+def gm(r): return rc * (np.exp(r) - 1)  # and its inverse
+
+
+eps = 0.01  # gravitational softening
+nb_sphere, phi, stats = nb.Get_Velocities_From_Spherical_Grid(
+    eps=eps, nr=nr, rmax=grmax, phi=None, g=g, gm=gm, UseTree=True, ErrTolTheta=0.5)
+
+nb_sphere.translate([15, 15, 10], mode='p')
+nb_sphere.translate([0.5, 0, 0], mode='v')
+
+#####################
+# add the two models
+#####################
+
+
+nb = nb_disk + nb_sphere
+
+name = "snapd.dat"
+nb.rename(name)
+print(("writing %s." % name))
+nb.write()
+
+
+#####################
+# a simple box
+#####################
+
+nb = ic.sphere(ftype='gadget')
+name = "sphere.dat"
+nb.rename(name)
+print(("writing %s." % name))
+nb.write()

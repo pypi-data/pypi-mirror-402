@@ -1,0 +1,3046 @@
+#!/usr/bin/env python3
+###########################################################################################
+#  package:   pNbody
+#  file:      gwin
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of pNbody.
+###########################################################################################
+import os
+import _thread
+import sys
+import string
+import time
+import glob
+import traceback
+import types
+import copy as pycopy
+
+from tkinter import *
+from tkinter.messagebox import askokcancel
+from tkinter.messagebox import showerror
+from tkinter.filedialog import asksaveasfilename
+from tkinter.filedialog import askopenfilename
+
+from numpy import *
+
+from pNbody import *
+from pNbody import param
+from pNbody import geometry as geo
+from pNbody import liblog
+from pNbody import mpiwrapper as mpi
+from pNbody import iofunc as io
+
+from PIL import ImageTk
+
+try:
+    from optparse import OptionParser
+except ImportError:
+    from optik import OptionParser
+
+
+########################################
+#
+# parser
+#
+########################################
+
+
+def parse_options():
+
+    usage = "usage: %prog [options] file"
+    parser = OptionParser(usage=usage)
+
+    parser.add_option("-t",
+                      action="store",
+                      dest="ftype",
+                      type="string",
+                      default=None,
+                      help="type of the file",
+                      metavar=" TYPE")
+
+    parser.add_option("--stereo",
+                      action="store_true",
+                      dest="stereo",
+                      default=0,
+                      help="enable stereo view")
+
+    parser.add_option("-p",
+                      action="store",
+                      dest="palette",
+                      type="string",
+                      default=None,
+                      help="palette name",
+                      metavar=" PALETTE NAME")
+
+    parser.add_option("-f",
+                      action="store",
+                      dest="parameters_file",
+                      type="string",
+                      default=None,
+                      help="parameter file",
+                      metavar=" FILE NAME")
+
+    parser.add_option("-u",
+                      action="store",
+                      dest="unitsparameters_file",
+                      type="string",
+                      default=None,
+                      help="unitsparameter file",
+                      metavar=" FILE NAME")
+
+    parser.add_option("--fullscreen",
+                      action="store_true",
+                      dest="fullscreen",
+                      default=0,
+                      help="fullscreen mode")
+
+    parser.add_option("--pio",
+                      action="store_true",
+                      dest="pio",
+                      default=0,
+                      help="parallel io mode")
+
+    (options, args) = parser.parse_args()
+
+    if len(args) == 0:
+        # print "you must specify a filename"
+        # sys.exit(0)
+        file = None
+    else:
+        #file = args[0]
+        file = args
+
+    return file, options
+
+
+########################################
+#
+# History class
+#
+########################################
+
+class History:
+    """
+    History class
+    """
+
+    def __init__(self, file):
+
+        if os.path.isfile(file):
+            self.f = open(file, 'r+')
+            self.cmds = self.f.readlines()
+        else:
+            self.f = open(file, 'w')
+            self.cmds = []
+
+        self.file = file
+        self.index = len(self.cmds)
+
+    def add(self, cmd):
+        self.cmds.append(cmd)
+        self.f.write('%s\n' % cmd)
+        self.f.flush()
+        # force index to be the last index + 1
+        self.index = len(self.cmds)
+
+    def get(self):
+        return self.cmds[self.index]
+
+    def up(self):
+        if self.index < len(self.cmds) - 1:
+            self.index = self.index + 1
+
+    def down(self):
+        if self.index > 0:
+            self.index = self.index - 1
+
+    def close(self):
+        self.f.close()
+
+    def write(self):
+        f = open(self.file, 'w')
+        for cmd in self.cmds:
+            f.write('%s\n' % cmd)
+        f.close()
+
+
+########################################
+#
+# Ginteractor classes
+#
+########################################
+
+class Ginter:
+    """
+    abstract Interactor class
+    """
+
+    def __init__(self):
+        self.M1 = self.R1
+        self.M2 = self.R2
+        self.M3 = self.R3
+
+    def set_mode(self, mode):
+        if mode == 'r':
+            self.M1 = self.R1
+            self.M2 = self.R2
+            self.M3 = self.R3
+        elif mode == 't':
+            self.M1 = self.T1
+            self.M2 = self.T2
+            self.M3 = self.T3
+
+    def R1(self, obs, dx, dy, dxw, dyw):
+        return obs
+
+    def R2(self, obs, dx, dy, dxw, dyw):
+        return obs
+
+    def R3(self, obs, dx, dy, dxw, dyw):
+        return obs
+
+    def T1(self, obs, dx, dy, dxw, dyw):
+        return obs
+
+    def T2(self, obs, dx, dy, dxw, dyw):
+        return obs
+
+    def T3(self, obs, dx, dy, dxw, dyw):
+        return obs
+
+
+class Ginter_xp(Ginter):
+    """
+
+     - - xp fixed - -
+
+    move x0 with respect to xp
+    """
+
+    def R1(self, obs, dx, dy, dxw, dyw):
+        """
+        rotation around xp (obs[1]) of axis e3-e0
+        rotation around xp (obs[1]) of axis e2-e0
+        """
+        angle_x = -dxw * pi / 180.
+        angle_y = dyw * pi / 180.
+        axis_x = (obs[3] - obs[0])
+        axis_y = (obs[2] - obs[0])
+        obs = geo.rotate(obs, angle=angle_x, axis=axis_x, point=obs[1])
+        obs = geo.rotate(obs, angle=angle_y, axis=axis_y, point=obs[1])
+        return obs
+
+    def R2(self, obs, dx, dy, dxw, dyw):
+        """
+        rotation around xp (obs[1]) of axis e1-e0
+        """
+        dzw = (dxw + dyw) / 2.
+        angle_z = -dzw * pi / 180.
+        axis_z = (obs[1] - obs[0])
+        obs = geo.rotate(obs, angle=angle_z, axis=axis_z, point=obs[1])
+        return obs
+
+    def T1(self, obs, dx, dy, dxw, dyw):
+        """
+        idem R1
+        """
+        return self.R1(obs, dx, dy, dxw, dyw)
+
+    def T2(self, obs, dx, dy, dxw, dyw):
+        """
+        translation along axis e1-e0
+        """
+        dz = (dx + dy) / 2.
+        axis_z = (obs[1] - obs[0]) / geo.norm(obs[1] - obs[0])
+        obs[0] = obs[0] + axis_z * dz
+        obs[2] = obs[2] + axis_z * dz
+        obs[3] = obs[3] + axis_z * dz
+        return obs
+
+
+class Ginter_x0(Ginter):
+    """
+
+    - - x0 fixed - -
+
+    move xp with respect to x0
+    """
+
+    def R1(self, obs, dx, dy, dxw, dyw):
+        """
+        rotation around xp (obs[0]) of axis e3-e0
+        rotation around xp (obs[0]) of axis e2-e0
+        """
+        angle_x = -dxw * pi / 180.
+        angle_y = dyw * pi / 180.
+        axis_x = (obs[3] - obs[0])
+        axis_y = (obs[2] - obs[0])
+        obs = geo.rotate(obs, angle=angle_x, axis=axis_x, point=obs[0])
+        obs = geo.rotate(obs, angle=angle_y, axis=axis_y, point=obs[0])
+        return obs
+
+    def R2(self, obs, dx, dy, dxw, dyw):
+        """
+        rotation around xp (obs[0]) of axis e1-e0
+        """
+        dzw = (dxw + dyw) / 2.
+        angle_z = -dzw * pi / 180.
+        axis_z = (obs[1] - obs[0])
+        obs = geo.rotate(obs, angle=angle_z, axis=axis_z, point=obs[0])
+        return obs
+
+    def T1(self, obs, dx, dy, dxw, dyw):
+        """
+        idem R1
+        """
+        return self.R1(obs, dx, dy, dxw, dyw)
+
+    def T2(self, obs, dx, dy, dxw, dyw):
+        """
+        translation along axis e1-e0
+        """
+        dz = (dx + dy) / 2.
+        axis_z = (obs[1] - obs[0]) / geo.norm(obs[1] - obs[0])
+        obs[1] = obs[1] + axis_z * dz
+        return obs
+
+
+class Ginter_x0xp(Ginter):
+    """
+
+     - - x0xp fixed - -
+
+    move x0 and xp
+    """
+
+    def T1(self, obs, dx, dy, dxw, dyw):
+        """
+        translation along axis e2-e0
+        translation along axis e3-e0
+        """
+
+        dx = dx
+        dy = dy
+
+        axis_x = (obs[2] - obs[0]) / geo.norm(obs[2] - obs[0])
+        axis_y = (obs[3] - obs[0]) / geo.norm(obs[3] - obs[0])
+
+        obs = obs + axis_x * dx
+        obs = obs + axis_y * dy
+
+        return obs
+
+    def T2(self, obs, dx, dy, dxw, dyw):
+        """
+        translation along axis e1-e0
+        """
+
+        dz = dx
+
+        axis_z = (obs[1] - obs[0]) / geo.norm(obs[1] - obs[0])
+
+        obs = obs + axis_z * dz
+
+        return obs
+
+########################################
+#
+# Gcan class
+#
+########################################
+
+
+class Gcan(Canvas):
+    """
+    extended tkinter canvas object
+
+    self.obs   : position of the observer (very useful frame)
+    self.lab   : label coord (arbitrary and unused frame)
+    """
+
+    ###########################
+    def init(self, params, root=None, eye=None, twin=None, labsize=1):
+        ###########################
+
+        self.root = root
+        self.eye = eye
+        self.twin = twin
+        self.init_params(params)
+        self.labsize = labsize
+
+        # init coord and lab
+        self.init_obs()
+        self.init_lab()
+
+        # link an interactor
+        self.interactor = Ginter_xp()
+
+        # bind events
+        self.bindevents()
+
+    ###########################
+    def init_params(self, params):
+        ###########################
+        """
+        init params
+        """
+        self.params = params
+
+        if self.params.get('obs') is not None:
+            self.obs = array(self.params.get('obs'), float)
+        else:
+            self.obs = None
+
+        if self.params.get('xp') is not None:
+            self.xp = array(self.params.get('xp'), float)
+        else:
+            self.xp = None
+
+        if self.params.get('x0') is not None:
+            self.x0 = array(self.params.get('x0'), float)
+        else:
+            self.x0 = None
+
+        self.alpha = self.params.get('alpha')
+
+        if self.twin is None:
+            self.eye = self.params.get('eye')
+
+        self.dist_eye = self.params.get('dist_eye')
+        self.r_obs = self.params.get('r_obs')
+        self.foc = self.params.get('foc')
+        self.view = self.params.get('view')  # ?
+        self.persp = self.params.get('persp')
+
+        self.size = self.params.get('size')
+        self.shape = self.params.get('shape')
+        self.clip = self.params.get('clip')
+        self.cut = self.params.get('cut')
+
+    ###########################
+    def set_interactor(self, mode='xp'):
+        ###########################
+        """
+        set type of interactor
+        """
+
+        if mode == 'xp':
+            self.interactor = Ginter_xp()
+        elif mode == 'x0':
+            self.interactor = Ginter_x0()
+        elif mode == 'x0xp':
+            self.interactor = Ginter_x0xp()
+        else:
+            self.interactor = Ginter_xp()
+
+    ###########################
+    def set_interactor_mode(self, mode='r'):
+        ###########################
+        """
+        set interactor mode
+        """
+        self.interactor.set_mode(mode)
+
+    ###########################
+
+    def init_obs(self):
+        ###########################
+        """
+        initialize the coord system
+        """
+        if self.obs is None:
+            self.obs = geo.get_obs(
+                x0=self.x0,
+                xp=self.xp,
+                alpha=self.alpha,
+                view=self.view,
+                r_obs=self.r_obs)
+
+    ###########################
+    def init_lab(self):
+        ###########################
+        """
+        init the label (pointer towards an arbitrary center)
+
+        # ref. frame
+        x0,y0,z0
+        xp,yp,zp
+
+        """
+
+        e0 = array([0, 0, 0], float)
+        e1 = array([1, 0, 0], float)
+        e2 = array([0, 1, 0], float)
+        e3 = array([0, 0, 1], float)
+
+        e4 = e1 * 1.2
+        e5 = e2 * 1.2
+        e6 = e3 * 1.2
+
+        self.lab = array([e0, e1, e2, e3, e4, e5, e6], float) * self.labsize
+
+    ###########################
+    def set_view(self, mode):
+        ###########################
+        """
+        Set where obs look at$
+
+        mode = xz,xy,xz
+        """
+
+        r_obs = sqrt((self.obs[0][0] -
+                      self.obs[1][0])**2 +
+                     (self.obs[0][1] -
+                      self.obs[1][1])**2 +
+                     (self.obs[0][2] -
+                      self.obs[1][2])**2)
+        obs = geo.get_obs(x0=None, xp=None, alpha=None, view=mode, r_obs=r_obs)
+        self.obs = obs - obs[1] + self.obs[1]
+
+    ###########################
+
+    def draw_lab(self):
+        ###########################
+
+        if self.obs is not None:
+
+            try:
+                self.del_lab()
+            except BaseException:
+                pass
+
+            lab = pycopy.deepcopy(self.lab)
+            lab = concatenate((lab, array([self.obs[1]])))
+
+            # model-view transformation (could be better)
+            lab = geo.expose(
+                lab,
+                self.obs,
+                eye=self.eye,
+                dist_eye=self.dist_eye,
+                foc=self.foc)
+
+            # projection transformation
+            if self.persp == 'on':
+                lab = geo.frustum(lab, self.clip, self.size)
+            else:
+                lab = geo.ortho(lab, self.clip, self.size)
+
+            # flag point outside 1:1:1
+            if self.cut == 'yes':
+                c = logical_not((fabs(lab[:, 0]) > 1) | (
+                    fabs(lab[:, 1]) > 1) | (fabs(lab[:, 2]) > 1))
+            else:
+                c = ones(len(lab))
+
+            # viewport transformation
+            lab = geo.viewport(lab, self.shape)
+
+            # reference frame
+            for i in range(1, 4):	  # reference frame
+                if c[i]:
+                    x1, y1 = lab[0][0], lab[0][1]
+                    x2, y2 = lab[i][0], lab[i][1]
+                    id = self.create_line(
+                        x1, y1, x2, y2, tag='lab', fill="red")
+
+            # label
+
+            if c[4]:
+                x, y = lab[4][0], lab[4][1]
+                id = self.create_text(x, y, text="x", tag='lab', fill="red")
+
+            if c[5]:
+                x, y = lab[5][0], lab[5][1]
+                id = self.create_text(x, y, text="y", tag='lab', fill="red")
+
+            if c[6]:
+                x, y = lab[6][0], lab[6][1]
+                id = self.create_text(x, y, text="z", tag='lab', fill="red")
+
+            # pointer
+            if c[7]:
+                x, y = lab[7][0], lab[7][1]
+                id = self.create_text(x, y, text="o", tag='lab', fill="green")
+
+    ###########################
+    def draw_marker(self, lab):
+        ###########################
+
+        self.delete('mrk')
+
+        lab = array([lab, lab])
+
+        # model-view transformation (could be better)
+        lab = geo.expose(
+            lab,
+            self.obs,
+            eye=self.eye,
+            dist_eye=self.dist_eye,
+            foc=self.foc)
+
+        # projection transformation
+        if self.persp == 'on':
+            lab = geo.frustum(lab, self.clip, self.size)
+        else:
+            lab = geo.ortho(lab, self.clip, self.size)
+
+        # flag point outside 1:1:1
+        if self.cut == 'yes':
+            c = logical_not((fabs(lab[:, 0]) > 1) | (
+                fabs(lab[:, 1]) > 1) | (fabs(lab[:, 2]) > 1))
+        else:
+            c = ones(len(lab))
+
+        # viewport transformation
+        lab = geo.viewport(lab, self.shape)
+
+        # pointer
+        if c[0]:
+            x, y = lab[0][0], lab[0][1]
+            id = self.create_text(x, y, text="X", tag='mrk', fill="yellow")
+
+    ###########################
+
+    def change_lab_size(self, size):
+        ###########################
+
+        self.labsize = size
+
+        # translate to the origin
+        dl = self.lab[0]
+        self.lab = self.lab - dl
+
+        # get the old norm
+        norm = sqrt(self.lab[1][0]**2 + self.lab[1][1]**2 + self.lab[1][2]**2)
+        fact = self.labsize / norm
+
+        # scale it
+        self.lab = self.lab * fact
+
+        # translate back
+        self.lab = self.lab + dl
+
+    ###########################
+
+    def del_lab(self):
+        ###########################
+        """
+        delete lab
+        """
+        self.delete('lab')
+
+    ###########################
+    def del_object(self, obj):
+        ###########################
+
+        self.delete(obj)
+
+    ###########################
+
+    def bindevents(self):
+        ###########################
+        """
+        bind events
+        """
+
+        # self.bind('<Button-3>',self.click1)
+        # self.bind('<Button-3>',self.click2)
+        self.bind('<Button-3>', self.click3)
+
+        self.bind('<Enter>', self.enter_window)
+        self.bind('<Leave>', self.leave_window)
+
+        # is defined in the master
+        # self.bind('<Motion>',self.move)
+
+        self.bind('<B1-Motion>', self.move1)
+        self.bind('<B2-Motion>', self.move2)
+        # self.bind('<B3-Motion>',self.move3)
+
+        # self.bind('<Double-1>',self.double1)
+        # self.bind('<Double-2>',self.double2)
+        # self.bind('<Double-3>',self.double3)
+
+    ###########################
+
+    def click3(self, event):
+        ###########################
+        self.root.redisplay()
+
+    ###########################
+    def enter_window(self, event):
+        ###########################
+        self.last_event = event
+        self.draw_lab()
+        if self.twin is not None:
+            self.twin.draw_lab()
+
+    ###########################
+    def leave_window(self, event):
+        ###########################
+        self.last_event = event
+        self.del_lab()
+        if self.twin is not None:
+            self.twin.del_lab()
+
+    ###########################
+    def move1(self, event):
+        ###########################
+
+        dxw, dyw = self.getdiff(event)
+
+        # dx,dy in phys coord (cf +- inv_viewport)
+        dx = self.size[0] * 2. * dxw / self.shape[0]
+        dy = self.size[0] * 2. * dyw / self.shape[0]
+
+        # compute motion 1
+        self.obs = self.interactor.M1(self.obs, dx, -dy, dxw, -dyw)
+
+        # draw label
+        self.draw_lab()
+
+        # send to twin
+        if self.twin is not None:
+            self.twin.obs = self.obs
+            self.twin.draw_lab()
+
+    ###########################
+
+    def move2(self, event):
+        ###########################
+
+        dxw, dyw = self.getdiff(event)
+
+        # dx,dy in phys coord (cf +- inv_viewport)
+        dx = self.size[0] * 2. * dxw / self.shape[0]
+        dy = self.size[0] * 2. * dyw / self.shape[0]
+
+        # compute motion 2
+        self.obs = self.interactor.M2(self.obs, dx, -dy, dxw, -dyw)
+
+        # draw label
+        self.draw_lab()
+
+        # send to twin
+        if self.twin is not None:
+            self.twin.obs = self.obs
+            self.twin.draw_lab()
+
+    ###########################
+    def move3(self, event):
+        ###########################
+        pass
+
+    ###########################
+    def double1(self, event):
+        ###########################
+        diffx, diffy = self.getdiff(event)
+
+    ###########################
+    def double2(self, event):
+        ###########################
+        diffx, diffy = self.getdiff(event)
+
+    ###########################
+    def double3(self, event):
+        ###########################
+        diffx, diffy = self.getdiff(event)
+
+    ###########################
+
+    def getdiff(self, event):
+        ###########################
+        canvas = event.widget
+        diffx = float(event.x - self.last_event.x)
+        diffy = float(-event.y + self.last_event.y)
+        self.last_event = event
+        return diffx, diffy
+
+
+##########################################################################
+#
+# Gwin class
+#
+##########################################################################
+class Gwin:
+
+    ###########################
+    def __init__(self, file=None, options=None, comm=None):
+        ###########################
+
+        # logfiles
+        self.log = liblog.Log(os.path.join(HOME, '.gwinlog'), show='no')
+
+        # self.gather_functions()
+        self.comm = comm
+
+        self.file = file
+        self.ftype = options.ftype
+        palette = options.palette
+        self.d3 = options.stereo
+        self.fullscreen = options.fullscreen
+        self.parameters_file = options.parameters_file
+        self.unitsparameters_file = options.unitsparameters_file
+        if options.pio:
+            self.pio = "yes"
+        else:
+            self.pio = "no"
+
+        self.subs = None
+
+        self.winw = 512
+        self.winh = 512 + 300
+
+        self.selected_point = None
+
+        # init parameters
+        self.init_parameters(self.parameters_file)
+
+        # init unitsparameters
+        self.init_unitsparameters(self.unitsparameters_file)
+
+        # init palette tables
+        self.init_palette(palette)
+
+        if self.comm.mpi_IsMaster():
+
+            # create main window
+            self.root = Tk()
+            self.root.configure(bg='black')
+
+            # fullscreen mode
+            if self.fullscreen:
+                height = self.root.winfo_screenheight()
+                width = self.root.winfo_screenwidth()
+                self.root.overrideredirect(1)
+                self.root.geometry(str(width) + "x" + str(height))
+
+            # string var
+            self.varRad = StringVar()
+            self.varMod = StringVar()
+            self.strlabsize = StringVar()
+            self.strwinxsize = StringVar()
+            self.strwinysize = StringVar()
+            self.val = StringVar()
+            self.xpos = StringVar()
+            self.ypos = StringVar()
+
+            # init history
+            self.init_hist()
+
+            # create frames
+            self.create_main_frame()
+            if not self.fullscreen:
+                self.create_header_frame(0, 0)
+                self.create_info_frame(0, 1)
+
+            self.create_display_frame(0, 2)
+
+            if not self.fullscreen:
+                self.create_palette_frame(0, 3)
+
+                self.create_cmdwin_frame(1, 0, 1, 1)
+                self.create_control_frame(1, 2, 1, 1)
+                self.create_cmd_frame(0, 4, 3, 1)
+                self.create_log_frame(0, 5, 3, 1)
+
+            if not self.fullscreen:
+                # create menu bar
+                self.create_menu_bar()
+
+            # display params
+            self.update_param()
+
+            # init axes
+            self.init_axes_size()
+
+            # bind events
+            self.bindevents()
+
+            # open and display a model if file give
+            if self.file is not None:
+                self.open(file=self.file, pio=self.pio)
+                self.redisplay()
+
+            self.root.mainloop()
+
+        else:  # we are slave
+            self.WaitForACommand()
+
+    ########################################
+    #
+    # function used for parallelism
+    #
+    ########################################
+
+    ############################
+    # def gather_functions(self):
+    ############################
+    #  """
+    #  This function gather all available functions of the class
+    #  and record it into the dictionary self.allfct
+    #  """
+    #
+    #  fs = dir(self)
+    #  self.allfct = {}
+    #  for f in fs:
+    #    exec("func = self.%s"%(f))			# here it could be better
+    #    if type(func) == types.MethodType:
+    #      self.allfct[f] = func
+
+    ###########################
+    def WaitForACommand(self, *arg, **kw):
+        ###########################
+
+        # wait for the command
+
+        if self.comm.NTask == 1:
+            #name = self.comm[0].Bcast(None)
+            #arg  = self.comm[0].Bcast(None)
+            #kw   = self.comm[0].Bcast(None)
+
+            name = self.comm.mpi_bcast(None, 0)
+            arg = self.comm.mpi_bcast(None, 0)
+            kw = self.comm.mpi_bcast(None, 0)
+
+        else:
+            #name = MPI.COMM_WORLD[0].Bcast(None)
+            #arg  = MPI.COMM_WORLD[0].Bcast(None)
+            #kw   = MPI.COMM_WORLD[0].Bcast(None)
+            name = MPI.COMM_WORLD.bcast(None)
+            arg = MPI.COMM_WORLD.bcast(None)
+            kw = MPI.COMM_WORLD.bcast(None)
+
+        # now, execute the command
+        # print "(%d)"%(ThisTask),name,arg,kw
+        getattr(self, name)(*arg, **kw)
+        # apply(self.allfct[name],arg,kw)
+        # print "(%d) done :"%(ThisTask),name,arg,kw
+
+        # recursive call
+        self.WaitForACommand()    # !!! here, we have the rist to never quit !!!
+        # thread.start_new_thread(self.WaitForACommand,arg,kw)
+
+    ###########################
+    def BroadcastCmd(self, name, arg, kw):
+        ###########################
+        if self.comm.mpi_IsMaster():
+
+            if self.comm.ThisTask == 0:
+
+                if self.comm.NTask == 1:
+
+                    #name = self.comm[0].Bcast(name)
+                    #arg  = self.comm[0].Bcast(arg)
+                    #kw	= self.comm[0].Bcast(kw)
+
+                    name = self.comm.mpi_bcast(None, 0)
+                    arg = self.comm.mpi_bcast(None, 0)
+                    kw = self.comm.mpi_bcast(None, 0)
+
+                else:
+                    #name = MPI.COMM_WORLD[0].Bcast(name)
+                    #arg  = MPI.COMM_WORLD[0].Bcast(arg)
+                    #kw   = MPI.COMM_WORLD[0].Bcast(kw)
+                    name = MPI.COMM_WORLD.bcast(name)
+                    arg = MPI.COMM_WORLD.bcast(arg)
+                    kw = MPI.COMM_WORLD.bcast(kw)
+
+    ########################################
+    #
+    # init
+    #
+    ########################################
+
+    ###########################
+
+    def init_parameters(self, file):
+        # grab_set_global()
+        """
+        init Nbody parameters
+        """
+        if file is not None:
+            self.params = param.Params(file, self)
+        else:
+            self.params = param.Params(PARAMETERFILE, self)
+
+    ###########################
+    def init_unitsparameters(self, file):
+        # grab_set_global()
+        """
+        init Nbody unitsparameters
+        """
+        if file is not None:
+            self.unitsparams = param.Params(file, self)
+        else:
+            self.unitsparams = param.Params(UNITSPARAMETERFILE, self)
+
+    ###########################
+
+    def init_palette(self, palette):
+        ###########################
+        """
+        init palettes
+        """
+
+        # look at the availables colormap tables
+        self.tables = glob.glob(os.path.join(PALETTEDIR, '*'))
+        # create a pallette object
+        self.palette = Palette()
+
+        if palette is not None:
+
+            if os.path.isfile(palette):
+                pass
+            else:
+                palette = os.path.join(PALETTEDIR, palette)
+
+            self.palette.change(palette)
+
+    ###########################
+
+    def bindevents(self):
+        ###########################
+        """
+        bind events
+        """
+        self.canvas1.bind('<Motion>', self.move)
+        self.canvas1.bind('<Double-1>', self.select_point)
+        self.canvas1.bind('<Double-3>', self.oldset_xp)
+
+        if self.d3:
+            self.canvas2.bind('<Motion>', self.move)
+            self.canvas2.bind('<Double-1>', self.select_point)
+            self.canvas2.bind('<Double-3>', self.oldset_xp)
+
+        if self.fullscreen:
+            self.root.bind('<Double-Button-2>', lambda event: self.quit())
+
+        self.root.bind('<KeyPress>', self.OnKeyPressed)
+
+    ###########################
+    def init_hist(self):
+        ###########################
+        """
+        init history
+        """
+        self.hist = History(os.path.join(HOME, '.ghist'))
+
+    ########################################
+    #
+    # create some frames
+    #
+    ########################################
+
+    ###########################
+
+    def create_main_frame(self):
+        ###########################
+        """
+        create the main frame
+        """
+
+        if self.fullscreen:
+            self.main_frame = Frame(
+                self.root, bg='black', highlightbackground='black')
+        else:
+            self.main_frame = Frame(self.root, highlightbackground='black')
+
+        self.main_frame.pack()
+
+    ###########################
+    def create_header_frame(self, x, y):
+        ###########################
+        """
+        create the header frame
+        """
+        self.header_frame = Frame(self.main_frame, relief=RIDGE, borderwidth=1)
+        self.header_frame.grid(column=x, row=y, sticky=E + N + S + W)
+
+        # filename
+        self.filenameLab = Label(self.header_frame, text="fname : ", width=10)
+        self.filenameLab.grid(column=0, row=0, sticky=E + N + S + W)
+
+        self.fnameEnt = Entry(self.header_frame)
+        self.fnameEnt.grid(column=1, row=0, columnspan=4, sticky=E + N + S + W)
+
+        # file type
+        self.ftypeLab = Label(self.header_frame, text="ftype :", width=10)
+        self.ftypeLab.grid(column=0, row=1, sticky=E + N + S + W)
+
+        self.ftypeEnt = Entry(self.header_frame, width=28)
+        self.ftypeEnt.grid(column=1, row=1, columnspan=1, sticky=E + N + S + W)
+
+        # mass
+        self.massLab = Label(self.header_frame, text="m_tot :", width=10)
+        self.massLab.grid(column=2, row=1, sticky=E + N + S + W)
+
+        self.massEnt = Entry(self.header_frame, width=28)
+        self.massEnt.grid(column=3, row=1, columnspan=1, sticky=E + N + S + W)
+
+        # nbody
+        self.nbodyLab = Label(self.header_frame, text="nbody :", width=10)
+        self.nbodyLab.grid(column=0, row=2, sticky=E + N + S + W)
+
+        self.nbodyEnt = Entry(self.header_frame, width=28)
+        self.nbodyEnt.grid(column=1, row=2, columnspan=1, sticky=E + N + S + W)
+
+        # npart_tot
+        self.nbody_totLab = Label(
+            self.header_frame,
+            text="nbody_tot : ",
+            width=10)
+        self.nbody_totLab.grid(column=2, row=2, sticky=E + N + S + W)
+
+        self.nbody_totEnt = Entry(self.header_frame, width=28)
+        self.nbody_totEnt.grid(
+            column=3,
+            row=2,
+            columnspan=1,
+            sticky=E + N + S + W)
+
+        # npart
+        self.npartLab = Label(self.header_frame, text="npart :", width=10)
+        self.npartLab.grid(column=0, row=3, sticky=E + N + S + W)
+
+        self.npartEnt = Entry(self.header_frame, width=28)
+        self.npartEnt.grid(column=1, row=3, columnspan=1, sticky=E + N + S + W)
+
+        # npart_tot
+        self.npart_totLab = Label(
+            self.header_frame,
+            text="npart_tot : ",
+            width=10)
+        self.npart_totLab.grid(column=2, row=3, sticky=E + N + S + W)
+
+        self.npart_totEnt = Entry(self.header_frame, width=28)
+        self.npart_totEnt.grid(
+            column=3,
+            row=3,
+            columnspan=1,
+            sticky=E + N + S + W)
+
+        # bind
+        #
+        # self.labelEnt.bind("<Return>",self.update_from_header)
+        # self.ftypeEnt.bind("<Return>",self.update_from_header)
+        # self.tnowEnt.bind("<Return>",self.update_from_header)
+        # self.firstpartEnt.bind("<Return>",self.update_from_header)
+        # self.lastpartEnt.bind("<Return>",self.update_from_header)
+
+    ###########################
+    def create_palette_frame(self, x, y):
+        ###########################
+        """
+        create the palette frame
+        """
+
+        self.paletteFrame = Frame(
+            self.main_frame,
+            height=48,
+            width=512,
+            relief=RIDGE,
+            borderwidth=1)
+        self.paletteFrame.grid(column=x, row=y)
+        self.palette.addFrame(self.paletteFrame)
+
+    ###########################
+    def create_info_frame(self, x, y, dx=1, dy=1):
+        ###########################
+        """
+        create the info frame
+        """
+
+        labwidth = 10
+        valwidth = 10
+
+        self.info_frame = Frame(
+            self.main_frame,
+            relief=RIDGE,
+            borderwidth=1,
+            height=60)
+        self.info_frame.grid(
+            column=x,
+            row=y,
+            columnspan=dx,
+            rowspan=dy,
+            sticky=E + N + S + W)
+
+        # label for the label size
+        self.labsizeLab = Label(
+            self.info_frame,
+            text="lab  = ",
+            width=labwidth)
+        self.labsizeLab.grid(column=0, row=2)
+
+        self.labsizeVal = Label(
+            self.info_frame,
+            textvariable=self.strlabsize,
+            width=valwidth)
+        self.labsizeVal.grid(column=1, row=2)
+
+        # label for the window size
+        self.winsizexLab = Label(
+            self.info_frame,
+            text="winx = ",
+            width=labwidth)
+        self.winsizexLab.grid(column=0, row=0)
+
+        self.winsizeyLab = Label(
+            self.info_frame,
+            text="winy = ",
+            width=labwidth)
+        self.winsizeyLab.grid(column=2, row=0)
+
+        self.winsizexVal = Label(
+            self.info_frame,
+            textvariable=self.strwinxsize,
+            width=valwidth)
+        self.winsizexVal.grid(column=1, row=0)
+
+        self.winsizeyVal = Label(
+            self.info_frame,
+            textvariable=self.strwinysize,
+            width=valwidth)
+        self.winsizeyVal.grid(column=3, row=0)
+
+        # x win
+        self.xLab = Label(self.info_frame, text="x    = ", width=labwidth)
+        self.xLab.grid(column=0, row=1)
+
+        self.xVal = Label(
+            self.info_frame,
+            textvariable=self.xpos,
+            width=valwidth)
+        self.xVal.grid(column=1, row=1)
+
+        # y win
+        self.yLab = Label(self.info_frame, text="y    = ", width=labwidth)
+        self.yLab.grid(column=2, row=1)
+
+        self.yVal = Label(
+            self.info_frame,
+            textvariable=self.ypos,
+            width=valwidth)
+        self.yVal.grid(column=3, row=1)
+
+        # val
+        self.valLab = Label(self.info_frame, text="val  = ", width=labwidth)
+        self.valLab.grid(column=2, row=2)
+
+        self.valVal = Label(
+            self.info_frame,
+            textvariable=self.val,
+            width=valwidth)
+        self.valVal.grid(column=3, row=2)
+
+    ###########################
+
+    def create_display_frame(self, x, y):
+        ###########################
+        """
+        create the display frame
+        """
+        self.display_frame = Frame(
+            self.main_frame,
+            bg='black',
+            highlightbackground='black')
+        self.display_frame.grid(column=x, row=y)
+
+        self.canvas1 = Gcan(
+            self.display_frame,
+            height=self.params.get('shape')[1],
+            width=self.params.get('shape')[0],
+            bg="black",
+            highlightbackground='black')
+        self.canvas1.grid(column=0, row=0)
+
+        if self.d3:
+            self.canvas2 = Gcan(
+                self.display_frame,
+                height=self.params.get('shape')[1],
+                width=self.params.get('shape')[0],
+                bg="black",
+                highlightbackground='black')
+            self.canvas2.grid(column=2, row=0)
+            if self.fullscreen:
+                width = (self.root.winfo_screenwidth() -
+                         2 * self.params.get('shape')[0]) / 2
+                height = self.root.winfo_screenheight()
+                self.canvas = Canvas(
+                    self.display_frame,
+                    bg='black',
+                    height=height,
+                    width=width,
+                    highlightbackground='black')
+                self.canvas.grid(column=1, row=0)
+
+        if self.d3:
+            self.canvas1.init(
+                self.params,
+                root=self,
+                eye='left',
+                twin=self.canvas2)
+            self.canvas2.init(
+                self.params,
+                root=self,
+                eye='right',
+                twin=self.canvas1)
+        else:
+            self.canvas1.init(self.params, root=self, eye='left', twin=None)
+
+    ###########################
+    def create_cmdwin_frame(self, x, y, dx, dy):
+        ###########################
+        """
+        create the cmdwin frame
+        """
+        self.cmdwin_frame = Frame(self.main_frame, relief=RIDGE, borderwidth=1)
+        self.cmdwin_frame.grid(
+            column=x,
+            row=y,
+            columnspan=dx,
+            rowspan=dy,
+            sticky=N)
+
+        # quit button
+        self.quitBut = Button(
+            self.cmdwin_frame,
+            text="QUIT",
+            fg="black",
+            width=16,
+            height=2,
+            command=lambda: self.quit())
+        self.quitBut.grid(column=0, row=0, sticky=E + N + S + W)
+
+        # reset button
+        self.resetBut = Button(
+            self.cmdwin_frame,
+            text="RESET",
+            fg="black",
+            width=16,
+            height=2,
+            command=lambda: self.reset())
+        self.resetBut.grid(column=0, row=1, sticky=E + N + S + W)
+
+    ###########################
+    def create_control_frame(self, x, y, dx, dy):
+        ###########################
+        """
+        create the control frame
+        """
+        self.control_frame = Frame(
+            self.main_frame, relief=RIDGE, borderwidth=1)
+        self.control_frame.grid(
+            column=x,
+            row=y,
+            columnspan=dx,
+            rowspan=dy,
+            sticky=N)
+
+        #
+        # zoom
+        #
+
+        # frame for the zoom
+        self.zoomFr = Frame(self.control_frame, relief=RIDGE, borderwidth=1)
+        self.zoomFr.grid(column=0, row=0)
+
+        # zoomin button
+        self.zoominBut = Button(
+            self.zoomFr,
+            text="IN",
+            fg="black",
+            width=16,
+            height=2,
+            command=lambda: self.cmd_zoom('in'))
+        self.zoominBut.grid(column=0, row=0, sticky=E + N + S + W)
+
+        # zoomout button
+        self.zoomoutBut = Button(
+            self.zoomFr,
+            text="OUT",
+            fg="black",
+            width=16,
+            height=2,
+            command=lambda: self.cmd_zoom('out'))
+        self.zoomoutBut.grid(column=0, row=1, sticky=E + N + S + W)
+
+        #
+        # ctrl
+        #
+
+        # frame for the control
+        self.ctrlFr = Frame(self.control_frame, relief=RIDGE, borderwidth=1)
+        self.ctrlFr.grid(column=0, row=1)
+
+        self.bnBut = Button(
+            self.ctrlFr,
+            text="N",
+            fg="black",
+            command=lambda: self.cmd_rotate('n'),
+            width=3,
+            height=2)
+        self.bnBut.grid(column=1, row=0, sticky=E + N + S + W)
+
+        self.bsBut = Button(
+            self.ctrlFr,
+            text="S",
+            fg="black",
+            command=lambda: self.cmd_rotate('s'),
+            width=3,
+            height=2)
+        self.bsBut.grid(column=1, row=2, sticky=E + N + S + W)
+
+        self.beBut = Button(
+            self.ctrlFr,
+            text="E",
+            fg="black",
+            command=lambda: self.cmd_rotate('e'),
+            width=3,
+            height=2)
+        self.beBut.grid(column=0, row=1, sticky=E + N + S + W)
+
+        self.bwBut = Button(
+            self.ctrlFr,
+            text="W",
+            fg="black",
+            command=lambda: self.cmd_rotate('w'),
+            width=3,
+            height=2)
+        self.bwBut.grid(column=2, row=1, sticky=E + N + S + W)
+
+        self.bmBut = Button(
+            self.ctrlFr,
+            text="M",
+            fg="black",
+            command=lambda: self.cmd_rotate('m'),
+            width=3,
+            height=2)
+        self.bmBut.grid(column=0, row=0, sticky=E + N + S + W)
+
+        self.bpBut = Button(
+            self.ctrlFr,
+            text="P",
+            fg="black",
+            command=lambda: self.cmd_rotate('p'),
+            width=3,
+            height=2)
+        self.bpBut.grid(column=2, row=0, sticky=E + N + S + W)
+
+        self.brBut = Button(
+            self.ctrlFr,
+            text="*",
+            fg="black",
+            command=lambda: self.redisplay())
+        self.brBut.grid(column=1, row=1, sticky=E + N + S + W)
+
+        #
+        # params Ang
+        #
+
+        self.parFrAng = Frame(self.control_frame, relief=RIDGE, borderwidth=1)
+        self.parFrAng.grid(column=0, row=2, sticky=E + N + S + W)
+
+        # rotation angle
+        self.rotLab = Label(self.parFrAng, text="angle:", width=7, height=2)
+        self.rotLab.grid(column=0, row=0, sticky=E + N + S + W)
+
+        self.rotEnt = Entry(self.parFrAng, width=7)
+        self.rotEnt.grid(column=1, row=0, sticky=E + N + S + W)
+        self.rotEnt.insert(INSERT, "90")
+
+        #
+        # params Mod1
+        #
+
+        self.parFrMod1 = Frame(self.control_frame, relief=RIDGE, borderwidth=1)
+        self.parFrMod1.grid(column=0, row=3, sticky=E + N + S + W)
+
+        self.Radlab = Label(
+            self.parFrMod1,
+            text="rotation/translat",
+            width=14,
+            height=2)
+        self.Radlab.grid(column=0, row=0, columnspan=2, sticky=E + N + S + W)
+        self.transRad = Radiobutton(
+            self.parFrMod1,
+            text="trans",
+            command=self.cmdRad,
+            var=self.varRad,
+            value="t")
+        self.transRad.grid(column=0, row=1)
+        self.rotRad = Radiobutton(
+            self.parFrMod1,
+            text="rotat",
+            command=self.cmdRad,
+            var=self.varRad,
+            value="r")
+        self.rotRad.grid(column=1, row=1)
+        self.varRad.set('r')
+
+        #
+        # params Mod2
+        #
+
+        self.parFrMod2 = Frame(self.control_frame, relief=RIDGE, borderwidth=1)
+        self.parFrMod2.grid(column=0, row=4, sticky=E + N + S + W)
+
+        self.Radlab = Label(
+            self.parFrMod2,
+            text="motion mode",
+            width=14,
+            height=2)
+        self.Radlab.grid(column=0, row=0, columnspan=3, sticky=E + N + S + W)
+        self.transRad = Radiobutton(
+            self.parFrMod2,
+            text="xp",
+            command=self.cmdMod,
+            var=self.varMod,
+            value="xp")
+        self.transRad.grid(column=0, row=1)
+        self.rotRad = Radiobutton(
+            self.parFrMod2,
+            text="x0",
+            command=self.cmdMod,
+            var=self.varMod,
+            value="x0")
+        self.rotRad.grid(column=1, row=1)
+        self.rotRad = Radiobutton(
+            self.parFrMod2,
+            text="x0xp",
+            command=self.cmdMod,
+            var=self.varMod,
+            value="x0xp")
+        self.rotRad.grid(column=2, row=1)
+        self.varMod.set('xp')
+
+        #
+        # obs params
+        #
+        self.obsparFr = Frame(self.control_frame, relief=RIDGE, borderwidth=1)
+        self.obsparFr.grid(column=0, row=5, sticky=E + N + S + W)
+
+        self.resetobsBut = Button(
+            self.obsparFr,
+            text="Reset Obs",
+            fg="black",
+            command=self.reset_obs,
+            width=18,
+            height=2)
+        self.resetobsBut.grid(
+            column=0,
+            columnspan=3,
+            row=0,
+            sticky=E + N + S + W)
+
+        self.autoobsBut = Button(
+            self.obsparFr,
+            text="Auto Obs",
+            fg="black",
+            command=lambda: self.auto_obs(),
+            width=18,
+            height=2)
+        self.autoobsBut.grid(
+            column=0,
+            columnspan=3,
+            row=1,
+            sticky=E + N + S + W)
+
+        self.xzobsBut = Button(
+            self.obsparFr,
+            text="xz",
+            fg="black",
+            command=lambda: self.setview('xz'),
+            width=6,
+            height=2)
+        self.xzobsBut.grid(column=0, row=2, sticky=E + N + S + W)
+
+        self.xyobsBut = Button(
+            self.obsparFr,
+            text="xy",
+            fg="black",
+            command=lambda: self.setview('xy'),
+            width=6,
+            height=2)
+        self.xyobsBut.grid(column=1, row=2, sticky=E + N + S + W)
+
+        self.yzobsBut = Button(
+            self.obsparFr,
+            text="yz",
+            fg="black",
+            command=lambda: self.setview('yz'),
+            width=6,
+            height=2)
+        self.yzobsBut.grid(column=2, row=2, sticky=E + N + S + W)
+
+        #
+        # axes size
+        #
+
+        self.axeFr = Frame(self.control_frame, relief=RIDGE, borderwidth=1)
+        self.axeFr.grid(column=0, row=6, sticky=E + N + S + W)
+
+        self.axesizeLab = Label(
+            self.axeFr,
+            text="axes size:",
+            width=10,
+            height=2)
+        self.axesizeLab.grid(column=0, row=0, sticky=E + N + S + W)
+
+        self.axesizeEnt = Entry(self.axeFr, width=7)
+        self.axesizeEnt.grid(column=2, row=0, sticky=E + N + S + W)
+        self.axesizeEnt.insert(INSERT, "10")
+
+        self.axesizeEnt.bind("<Return>", self.set_axes_size)
+
+    ###########################
+    def create_cmd_frame(self, x, y, dx, dy):
+        ###########################
+        """
+        create the cmd frame
+        """
+
+        def ok(arg):
+
+            goodcmd = 1
+            cmd = self.command_entry.get()
+            try:
+                self.execute_command(cmd)
+            except Exception as message:
+                self.log.write("""command "%s" failed\n""" % (cmd))
+                self.log.write_traceback()
+                self.log.write(str(message))
+                goodcmd = 0
+
+            if goodcmd:
+                self.hist.add(cmd)
+                self.command_entry.delete(0, len(self.command_entry.get()) + 1)
+                self.display_info()
+                # self.redisplay()
+
+        def up(event):
+            self.hist.down()
+            cmd = string.strip(self.hist.get())
+            self.command_entry.delete(0, len(self.command_entry.get()) + 1)
+            self.command_entry.insert(INSERT, cmd)
+
+        def down(event):
+            self.hist.up()
+            cmd = string.strip(self.hist.get())
+            self.command_entry.delete(0, len(self.command_entry.get()) + 1)
+            self.command_entry.insert(INSERT, cmd)
+
+        def cancel():
+            pass
+
+        def clear():
+            self.log.clear()
+
+        self.cmd_frame = Frame(self.main_frame, relief=RIDGE, borderwidth=1)
+        self.cmd_frame.grid(
+            column=x,
+            row=y,
+            columnspan=dx,
+            rowspan=dy,
+            sticky=N)
+
+        # label command
+        #label = Label(self.cmd_frame,text='command')
+        # label.grid(column=0,row=0)
+
+        # entry command
+        self.command_entry = Entry(self.cmd_frame, width=104)
+        self.command_entry.grid(column=1, row=0, sticky=N + S + E + W)
+        self.command_entry.bind("<Return>", ok)
+        self.command_entry.bind("<Down>", down)
+        self.command_entry.bind("<Up>", up)
+
+        # buttons
+        clearbutton = Button(
+            self.cmd_frame,
+            text='clear',
+            command=clear,
+            width=2)
+        clearbutton.grid(column=2, row=0)
+
+        #cancelbutton = Button(self.cmd_frame,text='cancel',command=cancel)
+        # cancelbutton.grid(column=3,row=0)
+
+    ###########################
+    def create_log_frame(self, x, y, dx, dy):
+        ###########################
+        """
+        create the control frame
+        """
+        self.log_frame = Frame(
+            self.main_frame,
+            relief=RIDGE,
+            borderwidth=1,
+            background='white')
+        self.log_frame.grid(
+            column=x,
+            row=y,
+            columnspan=dx,
+            rowspan=dy,
+            sticky=E + N + S + W)
+
+        sbar = Scrollbar(self.log_frame)
+
+        self.logText = Text(
+            self.log_frame,
+            relief=SUNKEN,
+            padx=5,
+            wrap='none',
+            width=106,
+            height=10,
+            background='white')
+        sbar.config(command=self.logText.yview)
+        self.logText.config(yscrollcommand=sbar.set)
+        sbar.grid(column=1, row=0, sticky=E + N + S)
+        self.logText.grid(column=0, row=0, sticky=E + N + S + W)
+        self.logText.config(state=DISABLED)
+
+        # link to the log object
+        self.log.show = 1
+        self.log.logframe = self.logText
+
+    ############################
+    # def write_log(self,line):
+    ############################
+    #
+    #  self.logText.config(state=NORMAL)
+    #  self.logText.insert(INSERT,line)
+    #  self.logText.yview(MOVETO,1)
+    #  self.logText.config(state=DISABLED)
+
+    ###########################
+    def create_menu_bar(self):
+        ###########################
+        """
+        create the menu bar
+        """
+
+        self.menubar = Menu(self.root)
+
+        # file menu
+        self.filemenu = Menu(self.menubar, tearoff=0)
+
+        if self.comm.NTask == 1:
+            self.filemenu.add_command(
+                label="open file",
+                command=lambda: self.open_file(
+                    pio='no'))
+        else:
+            self.filemenu.add_command(
+                label="open single file",
+                command=lambda: self.open_file(
+                    pio='no'))
+            self.filemenu.add_command(
+                label="open multi files",
+                command=lambda: self.open_file(
+                    pio='yes'))
+
+        self.filemenu.add_separator()
+        if self.comm.NTask == 1:
+            self.filemenu.add_command(
+                label="write file",
+                command=lambda: self.write('single'))
+        else:
+            self.filemenu.add_command(
+                label="write single file",
+                command=lambda: self.write('single'))
+            self.filemenu.add_command(
+                label="write multi files",
+                command=lambda: self.write('multi'))
+
+        self.filemenu.add_separator()
+        if self.comm.NTask == 1:
+            self.filemenu.add_command(
+                label="write num ",
+                command=lambda: self.write_num('single'))
+        else:
+            self.filemenu.add_command(
+                label="write num single file",
+                command=lambda: self.write_num('single'))
+            self.filemenu.add_command(
+                label="write num multi files",
+                command=lambda: self.write_num('multi'))
+
+        self.filemenu.add_separator()
+        self.filemenu.add_command(label="save image", command=self.save_image)
+
+        #
+        # self.filemenu.add_command(label="about",command=self.about)
+        self.filemenu.add_separator()
+        self.filemenu.add_command(label="quit", command=lambda: self.quit())
+
+        # palette menu
+        self.palettemenu = Menu(self.menubar, tearoff=0)
+        self.tables.sort()
+        for table in self.tables:
+            self.palettemenu.add_command(
+                label=os.path.basename(table),
+                command=lambda table=table,
+                colormap=self.colormap: colormap(table))
+
+        # operation menu
+        self.opermenu = Menu(self.menubar, tearoff=0)
+        self.opermenu.add_command(label="reset", command=self.reset)
+        self.opermenu.add_separator()
+        self.opermenu.add_command(label="model info", command=self.info)
+        self.opermenu.add_command(
+            label="object info",
+            command=self.object_info)
+        self.opermenu.add_command(label="nodes info", command=self.nodes_info)
+        self.opermenu.add_separator()
+
+        if self.comm.NTask > 1:
+            self.opermenu.add_command(
+                label="redistribute particles",
+                command=lambda: self.redistribute())
+            self.opermenu.add_separator()
+
+        if self.comm.NTask == 1:
+            self.opermenu.add_command(
+                label="select from num file",
+                command=lambda: self.open_num_file(
+                    mode='single'))
+        else:
+            self.opermenu.add_command(
+                label="select from num file (single)",
+                command=lambda: self.open_num_file(
+                    mode='single'))
+            self.opermenu.add_command(
+                label="select from num file (multi)",
+                command=lambda: self.open_num_file(
+                    mode='multi'))
+
+        self.opermenu.add_separator()
+        self.opermenu.add_command(label="plug-in", command=self.plugins)
+        # self.opermenu.add_separator()
+        # self.opermenu.add_command(label="subs",command=self.open_subs)
+        #self.opermenu.add_command(label="reset subs",command=self.reset_subs)
+
+        # mode menu
+        self.modemenu = Menu(self.menubar, tearoff=0)
+        self.modemenu.add_command(
+            label="pos  ",
+            command=lambda: self.set_mode('pos'))
+        self.modemenu.add_command(
+            label="vel  ",
+            command=lambda: self.set_mode('vel'))
+        self.modemenu.add_separator()
+        self.modemenu.add_command(
+            label="m    ",
+            command=lambda: self.set_mode('m'))
+        self.modemenu.add_command(
+            label="u  ", command=lambda: self.set_mode('u'))
+        self.modemenu.add_command(
+            label="rho  ",
+            command=lambda: self.set_mode('rho'))
+        self.modemenu.add_command(
+            label="T  ", command=lambda: self.set_mode('T'))
+        self.modemenu.add_command(
+            label="A  ", command=lambda: self.set_mode('A'))
+        self.modemenu.add_command(
+            label="P  ", command=lambda: self.set_mode('P'))
+        self.modemenu.add_command(
+            label="Tcool",
+            command=lambda: self.set_mode('Tcool'))
+        self.modemenu.add_command(
+            label="Lum", command=lambda: self.set_mode('Lum'))
+        self.modemenu.add_command(
+            label="Ne ", command=lambda: self.set_mode('Ne'))
+        self.modemenu.add_separator()
+        self.modemenu.add_command(
+            label="x    ",
+            command=lambda: self.set_mode('x'))
+        self.modemenu.add_command(
+            label="y    ",
+            command=lambda: self.set_mode('y'))
+        self.modemenu.add_command(
+            label="z    ",
+            command=lambda: self.set_mode('z'))
+        self.modemenu.add_command(
+            label="x2    ",
+            command=lambda: self.set_mode('x2'))
+        self.modemenu.add_command(
+            label="y2    ",
+            command=lambda: self.set_mode('y2'))
+        self.modemenu.add_command(
+            label="z2    ",
+            command=lambda: self.set_mode('z2'))
+        self.modemenu.add_command(
+            label="vx    ",
+            command=lambda: self.set_mode('vx'))
+        self.modemenu.add_command(
+            label="vy    ",
+            command=lambda: self.set_mode('vy'))
+        self.modemenu.add_command(
+            label="vz    ",
+            command=lambda: self.set_mode('vz'))
+        self.modemenu.add_command(
+            label="vx2  ",
+            command=lambda: self.set_mode('vx2'))
+        self.modemenu.add_command(
+            label="vy2  ",
+            command=lambda: self.set_mode('vy2'))
+        self.modemenu.add_command(
+            label="vz2  ",
+            command=lambda: self.set_mode('vz2'))
+        self.modemenu.add_separator()
+        self.modemenu.add_command(
+            label="lx  ", command=lambda: self.set_mode('lx'))
+        self.modemenu.add_command(
+            label="ly  ", command=lambda: self.set_mode('ly'))
+        self.modemenu.add_command(
+            label="lz  ", command=lambda: self.set_mode('lz'))
+        self.modemenu.add_command(
+            label="Lx  ", command=lambda: self.set_mode('Lx'))
+        self.modemenu.add_command(
+            label="Ly  ", command=lambda: self.set_mode('Ly'))
+        self.modemenu.add_command(
+            label="Lz  ", command=lambda: self.set_mode('Lz'))
+        self.modemenu.add_separator()
+        self.modemenu.add_command(
+            label="r    ",
+            command=lambda: self.set_mode('r'))
+        self.modemenu.add_command(
+            label="r2    ",
+            command=lambda: self.set_mode('r2'))
+        self.modemenu.add_command(
+            label="sr   ",
+            command=lambda: self.set_mode('sr'))
+        self.modemenu.add_command(
+            label="vr   ",
+            command=lambda: self.set_mode('vr'))
+        self.modemenu.add_command(
+            label="vr2   ",
+            command=lambda: self.set_mode('vr2'))
+        self.modemenu.add_command(
+            label="svr  ",
+            command=lambda: self.set_mode('svr'))
+        self.modemenu.add_command(
+            label="vxyr  ",
+            command=lambda: self.set_mode('vxyr'))
+        self.modemenu.add_command(
+            label="vxyr2   ",
+            command=lambda: self.set_mode('vxyr2'))
+        self.modemenu.add_command(
+            label="svxyr ",
+            command=lambda: self.set_mode('svxyr'))
+        self.modemenu.add_command(
+            label="vtr   ",
+            command=lambda: self.set_mode('vtr'))
+        self.modemenu.add_command(
+            label="vtr2   ",
+            command=lambda: self.set_mode('vtr2'))
+        self.modemenu.add_command(
+            label="svtr  ",
+            command=lambda: self.set_mode('svtr'))
+        self.modemenu.add_command(
+            label="szr  ",
+            command=lambda: self.set_mode('szr'))
+        self.modemenu.add_command(
+            label="svx  ",
+            command=lambda: self.set_mode('svx'))
+        self.modemenu.add_command(
+            label="svy  ",
+            command=lambda: self.set_mode('svy'))
+
+        # parameter menu
+        self.parammenu = Menu(self.menubar, tearoff=0)
+        self.parammenu.add_command(label="set", command=self.set_param)
+        self.parammenu.add_separator()
+        self.parammenu.add_command(label="reset", command=self.read_param)
+        self.parammenu.add_command(label="open", command=self.open_param)
+        self.parammenu.add_separator()
+        self.parammenu.add_command(label="save", command=self.save_param)
+        self.parammenu.add_command(label="save as", command=self.saveas_param)
+
+        # unitsparameter menu
+        self.unitsparammenu = Menu(self.menubar, tearoff=0)
+        self.unitsparammenu.add_command(
+            label="set", command=self.set_unitsparam)
+        self.unitsparammenu.add_separator()
+        self.unitsparammenu.add_command(
+            label="reset", command=self.read_unitsparam)
+        self.unitsparammenu.add_command(
+            label="open", command=self.open_unitsparam)
+        self.unitsparammenu.add_separator()
+        self.unitsparammenu.add_command(
+            label="save", command=self.save_unitsparam)
+        self.unitsparammenu.add_command(
+            label="save as", command=self.saveas_unitsparam)
+
+        self.menubar.add_cascade(label="File", menu=self.filemenu)
+        self.menubar.add_cascade(label="Palette", menu=self.palettemenu)
+        self.menubar.add_cascade(label="Operations", menu=self.opermenu)
+        self.menubar.add_cascade(label="Mode", menu=self.modemenu)
+        self.menubar.add_cascade(label="Parameters", menu=self.parammenu)
+        self.menubar.add_cascade(
+            label="Units Parameters",
+            menu=self.unitsparammenu)
+
+        self.root.config(menu=self.menubar)
+
+    ########################################
+    #
+    # functions linked to the menu
+    #
+    ########################################
+
+    ###########################
+    def open_file(self, filename=None, pio='no'):
+        ###########################
+        """
+        open a file
+
+        This function may be called only by the master
+        """
+
+        if filename is None and self.comm.mpi_IsMaster():
+            filename = askopenfilename(initialdir='.')
+
+            if filename == "":
+                filename is None
+
+        if filename is not None:
+            self.open(file=filename, pio=pio)
+            self.redisplay()
+
+    ###########################
+    def open_num_file(self, filename=None, mode='single'):
+        ###########################
+        """
+        open a num file and select particles from it
+        """
+
+        filename = askopenfilename(initialdir='.')
+        if mode == 'single':
+            self.select_from_num_single(file=filename)
+        else:
+            self.select_from_num_multi(file=filename)
+
+    ###########################
+    def select_from_num_single(self, *arg, **kw):
+        ###########################
+        self.BroadcastCmd("select_from_num_single", arg, kw)
+
+        if 'file' in kw:
+            file = kw['file']
+
+        if self.comm.mpi_IsMaster():
+            num = io.read_ascii(file, [0])[0]
+        else:
+            num = None
+
+        # broadcast
+        num = self.comm.mpi_bcast(num, 0)
+
+        # apply
+        self.nb = self.nb.selectp(num)
+
+        if self.comm.mpi_IsMaster():
+            self.redisplay()
+
+    ###########################
+    def select_from_num_multi(self, *arg, **kw):
+        ###########################
+        self.BroadcastCmd("select_from_num_multi", arg, kw)
+
+        if 'file' in kw:
+            file = kw['file']
+
+        numfile = "%s.%d" % (file, self.comm.ThisTask)
+        if os.path.getsize(numfile) > 0:
+            num = io.read_ascii(numfile, [0])[0]
+        else:
+            num = array([], int)
+
+        # apply
+        self.nb = self.nb.selectp(num)
+
+        if self.comm.mpi_IsMaster():
+            self.redisplay()
+
+    ###########################
+
+    def write(self, mode):
+        ###########################
+        """
+        write a file
+        """
+        initialfile = self.fnameEnt.get()
+        savename = asksaveasfilename(initialdir='.', initialfile=initialfile)
+        if savename != "":
+            if mode == 'single':
+                self.write_single(name=savename)
+            elif mode == 'multi':
+                self.write_multi(name=savename)
+
+    ###########################
+    def write_single(self, *arg, **kw):
+        ###########################
+        self.BroadcastCmd("write_single", arg, kw)
+        """
+    write only a file
+    """
+
+        if 'name' in kw:
+            savename = kw['name']
+
+        self.nb.set_pio('no')
+        self.nb.rename(savename)
+        self.nb.write()
+
+    ###########################
+    def write_multi(self, *arg, **kw):
+        ###########################
+        self.BroadcastCmd("write_multi", arg, kw)
+        """
+    write files in parallel
+    """
+
+        if 'name' in kw:
+            savename = kw['name']
+
+        self.nb.set_pio('yes')
+        self.nb.rename(savename)
+        self.nb.write()
+
+    ###########################
+
+    def write_num(self, mode):
+        ###########################
+        """
+        write a num file
+        """
+        savename = asksaveasfilename(initialdir='.', initialfile='num.dat')
+        if savename != "":
+            if mode == 'single':
+                self.write_num_single(name=savename)
+            elif mode == 'multi':
+                self.write_num_multi(name=savename)
+
+    ###########################
+    def write_num_single(self, *arg, **kw):
+        ###########################
+        self.BroadcastCmd("write_num_single", arg, kw)
+        """
+    write only a file
+    """
+
+        if 'name' in kw:
+            savename = kw['name']
+
+        f = open(savename, 'w')
+
+        if self.comm.mpi_IsMaster():
+
+            for Task in range(self.comm.NTask - 1, -1, -1):
+
+                if Task != 0:
+                    num = self.comm.mpi_recv(source=Task)
+                    for n in num:
+                        f.write('%8i\n' % (n))
+                else:
+                    for n in self.nb.num:
+                        f.write('%8i\n' % (n))
+
+        else:
+            self.comm.mpi_send(self.nb.num, dest=0)
+
+    ###########################
+    def write_num_multi(self, *arg, **kw):
+        ###########################
+        self.BroadcastCmd("write_num_multi", arg, kw)
+        """
+    write files in parallel
+    """
+
+        if 'name' in kw:
+            savename = kw['name']
+
+        f = open("%s.%d" % (savename, self.comm.ThisTask), 'w')
+        for n in self.nb.num:
+            f.write('%8i\n' % (n))
+        f.close()
+
+    ###########################
+
+    def save_image(self):
+        ###########################
+
+        savename = asksaveasfilename(initialdir='.')
+        if savename != "":
+            if os.path.splitext(savename)[1] == ".fits":
+                io.WriteFits(
+                    transpose(
+                        self.mat1).astype(float32),
+                    savename,
+                    None)
+            else:
+                self.image1.save(savename)
+
+    ###########################
+
+    def about(self):
+        ###########################
+        """
+        about this program
+        """
+        import Pmw
+
+        Pmw.aboutversion('1.0')
+        Pmw.aboutcopyright('Copyright Revax 2001\nAll rights reserved')
+        Pmw.aboutcontact("""Yves Revaz
+  Geneva Observatory
+  ch. des Maillettes
+  1290 Sauverny
+  Switzerland
+
+  email: yves.revaz@obs.unige.ch""")
+
+#    self.about = Pmw.AboutDialog(self.master, applicationname = 'gdisp')
+#    self.about.withdraw()
+#    self.about.show()
+
+    ###########################
+    def quit(self, *arg, **kw):
+        ###########################
+        self.BroadcastCmd("quit", arg, kw)
+        """
+    Quit the application
+    """
+        sys.exit()
+
+    ###########################
+    def reset(self):
+        ###########################
+        """
+        Reset (reload) the current file
+        """
+        self.open(file=self.file, ftype=self.ftype, pio=self.pio)
+        self.redisplay()
+
+    ###########################
+    def redisplay(self, *arg, **kw):
+        ###########################
+        self.BroadcastCmd("redisplay", arg, kw)
+        """
+    Send the display command interactively
+
+    !!! This command must be called only by the master !!!
+    """
+
+        self.display()
+        self.display_info()
+
+    ###########################
+
+    def colormap(self, name):
+        ###########################
+
+        # change the color in the colormap menu
+        self.palette.read(name)
+        self.palette.draw()
+
+        try:
+            self.nbodyviewer.colormap(self.palette)
+        except BaseException:
+            pass
+
+        self.display_image()
+
+    ###########################
+    def info(self, *arg, **kw):
+        ###########################
+        self.BroadcastCmd("info", arg, kw)
+        """
+    Display info on the current file
+    """
+        self.nb.info()
+
+    ###########################
+    def object_info(self, *arg, **kw):
+        ###########################
+        self.BroadcastCmd("object_info", arg, kw)
+        """
+    Display info on the current file
+    """
+        self.nb.object_info()
+
+    ###########################
+    def nodes_info(self, *arg, **kw):
+        ###########################
+        self.BroadcastCmd("nodes_info", arg, kw)
+        """
+    Display info on the current nodes
+    """
+        self.nb.nodes_info()
+
+    ###########################
+    def redistribute(self, *arg, **kw):
+        ###########################
+        self.BroadcastCmd("redistribute", arg, kw)
+        """
+    Redistribute particles amoung nodes
+    """
+        self.nb.redistribute()
+
+    ###########################
+    def plugins(self):
+        ###########################
+        """
+        Open a plugin
+        """
+
+        filtername = askopenfilename(initialdir=PLUGINSDIR)
+        if filtername != "":
+            exec(compile(open(filtername).read(), filtername, 'exec'))
+
+    ###########################
+    def open_subs(self):
+        ###########################
+        """
+        Open a sub file
+        """
+
+        filename = askopenfilename(initialdir='.')
+        if filename != "":
+            exec(compile(open(filename).read(), filename, 'exec'))
+            self.redisplay()
+
+    ###########################
+    def reset_subs(self):
+        ###########################
+        """
+        Reset subs
+        """
+
+        self.subs = None
+
+    ###########################
+    def set_mode(self, mode):
+        ###########################
+
+        if mode == 'pos' or mode == 'vel':
+            self.params.set('space', mode)
+        else:
+            self.params.set('mode', mode)
+
+        self.send_param()
+        self.redisplay()
+
+    ###########################
+
+    def set_param(self):
+        ###########################
+        self.params.edit()
+
+    ###########################
+    def read_param(self):
+        ###########################
+
+        paramname = PARAMETERFILE
+        if os.path.exists(paramname):
+            self.params.read(paramname)
+            self.send_param()
+
+    ###########################
+    def open_param(self):
+        ###########################
+
+        paramname = askopenfilename()
+        if paramname != "":
+            self.params.read(paramname)
+            self.send_param()
+
+    ###########################
+
+    def save_param(self):
+        ###########################
+
+        savename = PARAMETERFILE
+        self.params.save(savename)
+
+    ###########################
+    def saveas_param(self):
+        ###########################
+
+        savename = asksaveasfilename(initialfile=PARAMETERFILE)
+        if savename != "":
+            self.params.save(savename)
+
+    ###########################
+
+    def set_unitsparam(self):
+        ###########################
+        self.unitsparams.edit()
+
+    ###########################
+    def read_unitsparam(self):
+        ###########################
+
+        unitsparamname = UNITSPARAMETERFILE
+        if os.path.exists(unitsparamname):
+            self.unitsparams.read(unitsparamname)
+            self.send_unitsparam()
+
+    ###########################
+    def open_unitsparam(self):
+        ###########################
+
+        unitsparamname = askopenfilename()
+        if unitsparamname != "":
+            self.unitsparams.read(unitsparamname)
+            self.send_unitsparam()
+
+    ###########################
+
+    def save_unitsparam(self):
+        ###########################
+
+        savename = UNITSPARAMETERFILE
+        self.unitsparams.save(savename)
+
+    ###########################
+    def saveas_unitsparam(self):
+        ###########################
+
+        savename = asksaveasfilename(initialfile=UNITSPARAMETERFILE)
+        if savename != "":
+            self.unitsparams.save(savename)
+
+    ########################################
+    #
+    # functions linked to the header
+    #
+    ########################################
+
+    ###########################
+
+    def update_from_header(self, event):
+        ###########################
+        """
+        Read the values from the header frame and update data
+        """
+
+        # gather values for the header
+        new_p_name = self.fnameEnt.get()
+        if new_p_name != self.nb.p_name:
+            self.file = new_p_name
+            status = self.open(file=self.file)
+            if status == -1:
+                return
+
+        #self.nb.p_name = self.fnameEnt.get()
+        #self.file = self.nb.p_name
+
+        #self.nb.label = self.labelEnt.get()
+        #self.nb.tnow = float(self.tnowEnt.get())
+
+        #self.nb = self.nb.set_ftype(self.ftypeEnt.get())
+        #self.ftype = self.ftypeEnt.get()
+
+        #self.tnow = float(self.tnowEnt.get())
+
+        #n1 = int(self.firstpartEnt.get())
+        #n2 = int(self.lastpartEnt.get())
+        #self.nb = self.nb.sub(n1,n2)
+
+        self.redisplay()
+
+    ########################################
+    #
+    # functions linked to the buttons
+    #
+    ########################################
+
+    ###########################
+
+    def cmd_zoom(self, cmd):
+        ###########################
+        """
+        set zoom
+
+        zooming corresponds to changing the physical width and height
+        of the canvas in physical coordinates
+        """
+
+        wx = self.params.get('size')[0]
+        wy = self.params.get('size')[1]
+        #zf = self.params.get('zfact')
+        zf = 0.75
+        if cmd == 'out':
+            wx = wx / zf
+            wy = wy / zf
+        elif cmd == 'in':
+            wx = wx * zf
+            wy = wy * zf
+
+        self.params.set('size', (wx, wy))
+
+        self.send_param()
+
+    ###########################
+
+    def cmd_rotate(self, cmd):
+        ###########################
+        """
+        set rotation
+        """
+        angle = float(self.rotEnt.get())
+        mode = None
+
+        if cmd == 'e':
+            dx = -angle
+            dy = 0
+            mode = 1
+        elif cmd == 'w':
+            dx = angle
+            dy = 0
+            mode = 1
+        elif cmd == 'n':
+            dx = 0
+            dy = angle
+            mode = 1
+        elif cmd == 's':
+            dx = 0
+            dy = -angle
+            mode = 1
+        elif cmd == 'm':
+            dx = -angle
+            dy = 0
+            mode = 2
+        elif cmd == 'p':
+            dx = angle
+            dy = 0
+            mode = 2
+
+        # compute rotation
+        if mode == 1:
+            self.canvas1.obs = self.canvas1.interactor.M1(
+                self.canvas1.obs, dx, -dy, dx, -dy)
+            if self.d3:
+                self.canvas2.obs = self.canvas2.interactor.M1(
+                    self.canvas1.obs, dx, -dy, dx, -dy)
+        elif mode == 2:
+            self.canvas1.obs = self.canvas1.interactor.M2(
+                self.canvas1.obs, dx, -dy, dx, -dy)
+            if self.d3:
+                self.canvas2.obs = self.canvas2.interactor.M2(
+                    self.canvas1.obs, dx, -dy, dx, -dy)
+        # draw label
+        self.canvas1.draw_lab()
+        if self.d3:
+            self.canvas2.draw_lab()
+
+    ###########################
+    def reset_obs(self):
+        ###########################
+        """
+        Reset observer position
+        """
+
+        self.canvas1.init_obs()
+        if self.d3:
+            self.canvas2.init_obs()
+
+    ###########################
+    def auto_obs(self, *arg, **kw):
+        ###########################
+        self.BroadcastCmd("auto_obs", arg, kw)
+        """
+    Choose observer parameters automatically
+    """
+
+        # center of mass of the model
+        cm = self.nb.cm()
+
+        # extention of the model
+        dm = max(self.nb.minert())
+        #dm = max(ravel(self.nb.pos))
+
+        if self.comm.mpi_IsMaster():
+
+            # lab xp,r_obs,view
+            self.params.set('obs', None)
+            # self.params.set('xp',cm)
+            self.params.set('x0', None)
+            self.params.set('alpha', None)
+            self.params.set('view', 'xz')
+            self.params.set('r_obs', dm * 4)
+
+            self.params.set('clip', (dm * 4 - dm * 2, 2 * (dm * 4)))
+            self.params.set('size', (dm, dm))
+
+            # self.params.set('labsize',0.5*dm)
+            labsize = 0.5 * dm
+
+            # send params init obs and display
+            self.send_param()
+            self.canvas1.init_obs()
+
+            if self.d3:
+                self.canvas2.init_obs()
+
+            self.set_axes_size(labsize)
+
+            self.redisplay()
+
+    ###########################
+
+    def setview(self, mode):
+        ###########################
+        """
+        Choose view xy,xz or yz
+        """
+
+        self.canvas1.set_view(mode)
+        self.canvas1.draw_lab()
+        if self.d3:
+            self.canvas2.set_view(mode)
+            self.canvas2.draw_lab()
+
+    ###########################
+
+    def cmdRad(self):
+        ###########################
+        self.canvas1.set_interactor_mode(self.varRad.get())
+        if self.d3:
+            self.canvas2.set_interactor_mode(self.varRad.get())
+
+    ###########################
+    def cmdMod(self):
+        ###########################
+        self.canvas1.set_interactor(self.varMod.get())
+        if self.d3:
+            self.canvas2.set_interactor(self.varMod.get())
+
+    ########################################
+    #
+    # functions linked to the model
+    #
+    ########################################
+
+    ###########################
+    def open(self, *arg, **kw):
+        ###########################
+        self.BroadcastCmd("open", arg, kw)
+        """
+    open a model
+    """
+
+        if 'file' in kw:
+            file = kw['file']
+        else:
+            file = None
+
+        if 'ftype' in kw:
+            ftype = kw['ftype']
+        else:
+            ftype = None
+
+        if 'pio' in kw:
+            pio = kw['pio']
+        else:
+            pio = 'no'
+
+        # if not os.path.exists(file):
+        #  showerror("error","the file %s does not exists !" %(file))
+        #  return -1
+
+        if ftype is None:
+            ftype = self.ftype
+
+        self.nb = Nbody(file, ftype=ftype, pio=pio)
+
+    ###########################
+
+    def display(self):
+        ###########################
+        """
+        display the model
+        (this function must be called by the master and the slaves)
+
+        create
+
+        self.mat
+        self.matint
+        self.image
+        self.photo
+        """
+
+        params = {}
+        if self.comm.mpi_IsMaster():
+            # read obs and send it
+            obs = self.canvas1.obs
+            self.params.set('obs', obs)
+
+            # gather parameters
+            params = self.params.get_dic()
+
+            # if self.canvas1.obs != None:
+            #params['x0'] = self.canvas1.obs[0]
+            #params['xp'] = self.canvas1.obs[1]
+
+        # send params to everybody
+        params = self.comm.mpi_bcast(params, 0)
+
+        # value of the eye for the first image
+        if self.d3:
+            eye = 'left'
+
+        # compute map1
+        self.mat1, self.matint1, mn_opts1, mx_opts1, cd_opts1 = self.nb.Map(
+            params)
+        self.log.write("%002d min=%10.3e max=%10.3e cd=%10.3e" %
+                       (1., mn_opts1[0], mx_opts1[0], cd_opts1[0]))
+
+        # compute map2
+        if self.d3:
+            self.mat2, self.matint2, mn_opts2, mx_opts2, cd_opts2 = self.nb.Map(
+                params)
+            self.log.write(
+                "%002d min=%10.3e max=%10.3e cd=%10.3e" %
+                (2, mn_opts2[0], mx_opts2[0], cd_opts2[0]))
+
+        # display image
+        if self.comm.mpi_IsMaster():
+            self.display_image()
+
+    ###########################
+
+    def display_image(self):
+        ###########################
+        """
+        display the image(s)
+        """
+
+        # create first image
+        # create an image and insert a palette
+        self.image1 = get_image(self.matint1, name=None, mode='P')
+
+        # include the palette
+        self.image1.putpalette(self.palette.palette)
+
+        # make the photo
+        self.photo1 = ImageTk.PhotoImage(self.image1)
+
+        # change the size of the canvas
+        self.canvas1.config(
+            width=self.mat1.shape[0],
+            height=self.mat1.shape[1])
+
+        # displaying the photo
+        self.canvas1.create_image(0., 0., anchor=NW, image=self.photo1)
+
+        # displaying the label
+        self.canvas1.draw_lab()
+
+        # create second image
+        # compute map2
+        if self.d3:
+
+            # create an image and insert a palette
+            self.image2 = get_image(self.matint2, name=None)
+
+            # include the palette
+            self.image2.putpalette(self.palette.palette)
+
+            # make the photo
+            self.photo2 = ImageTk.PhotoImage(self.image2)
+
+            # change the size of the canvas
+            self.canvas2.config(
+                width=self.mat2.shape[0],
+                height=self.mat2.shape[1])
+
+            # displaying the photo
+            self.canvas2.create_image(0., 0., anchor=NW, image=self.photo2)
+
+            # displaying the label
+            self.canvas2.draw_lab()
+
+    ###########################
+
+    def display_info(self):
+        ###########################
+        """
+        display info of the model
+        """
+
+        if self.comm.mpi_IsMaster():
+
+            if not self.fullscreen:
+
+                # filename
+                self.fnameEnt.delete(0, len(self.fnameEnt.get()) + 1)
+                self.fnameEnt.insert(INSERT, self.nb.p_name[0])
+
+                # ftype
+                self.ftypeEnt.delete(0, len(self.ftypeEnt.get()) + 1)
+                self.ftypeEnt.insert(INSERT, self.nb.ftype)
+
+                # mass
+                self.massEnt.delete(0, len(self.massEnt.get()) + 1)
+                self.massEnt.insert(INSERT, self.nb.mass_tot)
+
+                # nbody
+                self.nbodyEnt.delete(0, len(self.nbodyEnt.get()) + 1)
+                self.nbodyEnt.insert(INSERT, self.nb.nbody)
+
+                # nbody_tot
+                self.nbody_totEnt.delete(0, len(self.nbody_totEnt.get()) + 1)
+                self.nbody_totEnt.insert(INSERT, self.nb.nbody_tot)
+
+                # npart
+                self.npartEnt.delete(0, len(self.npartEnt.get()) + 1)
+                self.npartEnt.insert(INSERT, "%s" % (str(self.nb.npart)))
+                # self.npartEnt.insert(INSERT,"%d,%d,%d,%d,%d,%d"%(self.nb.npart[0],self.nb.npart[1],self.nb.npart[2],self.nb.npart[3],self.nb.npart[4],self.nb.npart[5]))
+
+                # npart_tot
+                self.npart_totEnt.delete(0, len(self.npart_totEnt.get()) + 1)
+                self.npart_totEnt.insert(INSERT, "%s" %
+                                         (str(self.nb.npart_tot)))
+                # self.npart_totEnt.insert(INSERT,"%d,%d,%d,%d,%d,%d"%(self.nb.npart_tot[0],self.nb.npart_tot[1],self.nb.npart_tot[2],self.nb.npart_tot[3],self.nb.npart_tot[4],self.nb.npart_tot[5]))
+
+    ###########################
+
+    def update_param(self):
+        ###########################
+        """
+        update the display of some params
+        """
+
+        # window size
+        wx = self.params.get('size')[0]
+        wy = self.params.get('size')[0]
+        self.strwinxsize.set("%10.3f" % wx)
+        self.strwinysize.set("%10.3f" % wy)
+
+        # label size
+        #size = self.params.get('labsize')
+        #size = float(self.axesizeEnt.get())
+        # self.strlabsize.set("%10.3f"%size)
+
+        self.shape = self.params.get('shape')
+        self.size = self.params.get('size')
+
+    ###########################
+    def send_param(self):
+        ###########################
+        """
+        send params to the canvas class
+        """
+
+        # copy the params to the nbody class
+        self.nb.set_parameters(self.params)
+        self.nb.set_unitsparameters(self.unitsparams)
+
+        # update display of some params
+        self.update_param()
+
+        # send to canvas
+        self.canvas1.init_params(self.params)
+        # self.canvas1.change_lab_size()
+        self.canvas1.draw_lab()
+
+        if self.d3:
+            self.canvas2.init_params(self.params)
+            # self.canvas2.change_lab_size()
+            self.canvas2.draw_lab()
+
+    ###########################
+
+    def print_param(self):
+        ###########################
+        """
+        print params
+        """
+
+        obs = ravel(self.canvas1.obs)
+        self.log.write("%s" % str(obs))
+        obs.shape = (4, 3)
+
+    ###########################
+    def execute_command(self, *arg, **kw):
+        ###########################
+        self.BroadcastCmd("execute_command", arg, kw)
+        """
+    execute a command
+    """
+        sto_stdout = sys.stdout
+        sys.stdout = self.log.f
+
+        exec(arg[0])
+        self.log.write_content()
+
+        sys.stdout = sto_stdout
+
+    ########################################
+    #
+    # events
+    #
+    ########################################
+
+    ###########################
+
+    def OnKeyPressed(self, event):
+        ###########################
+
+        # if event.char == 'q':
+        #  self.quit()
+        # if event.char == 'p':
+        #  self.print_param()
+        pass
+
+    ###########################
+    def move(self, event):
+        ###########################
+
+        self.canvas1.last_event = event
+        if self.d3:
+            self.canvas2.last_event = event
+
+        x = event.x
+        y = event.y
+
+        # local value of the matrix
+        try:
+            self.val.set('%10.3e' % self.mat1[x, y])
+        except BaseException:
+            pass
+
+        # position on the window
+        x, y, z = geo.inv_viewport(x, y, 0, self.shape)
+        x = x * self.size[0]
+        y = y * self.size[1]
+
+        self.xpos.set('%10.5f' % x)
+        self.ypos.set('%10.5f' % y)
+
+    ###########################
+    def select_point(self, event):
+        ###########################
+
+        self.canvas1.last_event = event
+        if self.d3:
+            self.canvas2.last_event = event
+
+        x = event.x
+        y = event.y
+
+        # local value of the matrix
+        try:
+            self.val.set('%10.3e' % self.mat[x, y])
+        except BaseException:
+            pass
+
+        # position on the window
+        x, y, z = geo.inv_viewport(x, y, 0, self.shape)
+        x = x * self.size[0]
+        y = y * self.size[1]
+
+        # !!! here, we should also inverse the projection matrix !!!
+
+        self.selected_point = array([x, y, 0])
+
+        self.canvas1.draw_marker(self.selected_point)
+        if self.d3:
+            self.canvas2.draw_marker(self.selected_point)
+
+    ###########################
+    def oldset_xp(self, event):
+        ###########################
+
+        if self.selected_point is not None:
+
+            x0 = self.canvas1.obs[0]
+            xp = self.canvas1.obs[1]
+            xpn = xp + (self.selected_point - xp)
+
+            # rotate lab in order to align (xp-x0) with (xpn-x0)
+            obs = geo.align(
+                self.canvas.obs,
+                axis1=xp - x0,
+                axis2=xpn - x0,
+                point=x0)
+            obs[1] = xpn
+
+            self.canvas1.obs = obs
+            if self.d3:
+                self.canvas2.obs = obs
+
+            self.redisplay()
+
+    ###########################
+
+    def set_xp(self, pos):
+        ###########################
+
+        xp = pos
+        x0 = array(self.params.get('x0'), float)
+        alpha = self.params.get('alpha')
+        r_obs = self.params.get('r_obs')
+        view = self.params.get('view')
+
+        obs = geo.get_obs(x0=x0, xp=xp, alpha=alpha, view=view, r_obs=r_obs)
+        self.params.set('obs', obs)
+
+        self.send_param()
+        self.redisplay()
+
+    ###########################
+
+    def init_axes_size(self):
+        ###########################
+
+        size = 10
+
+        self.axesizeEnt.delete(0, len(self.axesizeEnt.get()) + 1)
+        self.axesizeEnt.insert(INSERT, "%s" % (str(size)))
+
+        self.set_axes_size(None)
+
+    ###########################
+
+    def set_axes_size(self, labsize):
+        ###########################
+
+        if (isinstance(labsize, int)) or (
+                isinstance(labsize, float)):
+            size = labsize
+            self.axesizeEnt.delete(0, len(self.axesizeEnt.get()) + 1)
+            self.axesizeEnt.insert(INSERT, "%s" % (str(size)))
+        else:
+            size = float(self.axesizeEnt.get())
+
+        self.strlabsize.set("%10.3f" % size)
+
+        self.canvas1.change_lab_size(size)
+        self.canvas1.draw_lab()
+
+        if self.d3:
+            self.canvas2.change_lab_size(size)
+            self.canvas2.draw_lab()
+
+
+##########################################################################
+#
+#                                    MAIN
+#
+##########################################################################
+
+
+file, options = parse_options()
+#w = Gwin(file,options,comm=MPI.COMM_WORLD)
+w = Gwin(file, options, comm=mpi)

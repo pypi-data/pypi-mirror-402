@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+###########################################################################################
+#  package:   pNbody
+#  file:      pNbody_copy-defaultconfig
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of pNbody.
+###########################################################################################
+
+from pNbody import *
+import shutil
+import glob
+
+
+# check if .pNbody exists
+dest = os.path.join(HOME, '.pNbody')
+if os.path.isdir(dest):
+    answer = input(
+        'WARNING : The directory %s alredy exists. Remove it [y/N] ? ' %
+        (dest))
+    if answer == "y" or answer == "Y":
+        print("Removing %s" % dest)
+        shutil.rmtree(dest)
+    else:
+        print("Nothing done.")
+        sys.exit()
+
+# recursive copy
+print("copying files from %s" % CONFIGDIR)
+print("to %s" % dest)
+
+shutil.copytree(CONFIGDIR, dest)
+
+
+# remove all files in .pNbody/extensions
+files = glob.glob(os.path.join(HOME, '.pNbody', 'extensions', '*'))
+
+for file in files:
+    os.remove(file)
+
+
+f = open(
+    os.path.join(
+        HOME,
+        '.pNbody',
+        'extensions',
+        'my_default_extension.py'),
+    'w')
+content = """
+
+import string
+import types
+import numpy as np
+
+from copy import deepcopy
+
+import pNbody
+from pNbody import mpi, thermodyn, mapping, myNumeric
+from pNbody import ctes, libutil, FLOAT, nbodymodule
+from pNbody import coolinglib, geometry
+
+class MyDefault:
+
+  def my_method(self):
+    """
+    Example of method
+    """
+    print "this is my_method(), an example of extending the pNbody class with new methods"
+
+
+"""
+
+f.write(content)
+f.close()
+
+
+print("done.")
+print()
+print("you can now type pNbody_show-path to check the new configuration.")
+print()

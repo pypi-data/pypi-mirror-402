@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+
+###########################################################################################
+#  package:   Gtools
+#  file:      pplot
+#  brief:     
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of Gtools.
+###########################################################################################
+
+
+import argparse
+from h5py import File
+
+
+description="Print the description of all particles attributes."
+epilog     ="""
+Examples:
+--------
+sw_getPartTypeSize file1.hdf5 file2.hdf5
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+
+parser.add_argument(action="store", 
+                    dest="files", 
+                    metavar='FILE', 
+                    type=str,
+                    default=None,
+                    nargs='*',
+                    help='files') 
+                    
+                    
+
+########################################################################
+# MAIN
+########################################################################
+
+
+if __name__ == '__main__':
+
+    opt = parser.parse_args()
+    
+    for filename in opt.files: 
+      with File(filename, "r") as f:
+        
+         # read the header
+         npart = f["Header"].attrs["NumPart_ThisFile"]
+        
+         tsum = 0
+        
+         for i in range(6):
+             name = "PartType%i" % i
+             if name not in f:
+                 continue
+             
+             if "NumberOfParticles" in list(f[name].attrs):
+               NumPart = f[name].attrs["NumberOfParticles"][0]
+               if NumPart != npart[i]:
+                 print("NumPart != npart[i]")
+                 print("Better stop.")
+                 exit()
+             else:
+               NumPart = npart[i]
+             
+             
+             
+             
+             
+             
+  
+             print()
+             print("{0:s}\t\t\t\t\t  {1:<10d} particles".format(name,NumPart))
+             print()
+                   
+             part = f[name]     
+             
+             bsum = 0
+                            
+             for d in part:
+               
+               nbytes   = part[d].nbytes
+               itemsize = part[d].dtype.itemsize
+               
+               s = "  {0:>40s} {1:>15d} bytes :{2:>3d} b/elt".format(d,nbytes,itemsize)
+               print(s)
+
+               bsum = bsum + nbytes
+               
+             print()
+             s = "  {0:>40s} {1:>15d} bytes".format("total:",bsum) 
+             print(s) 
+            
+             tsum = tsum+bsum
+               
+               
+               
+
+         #print("{0:>f}Gb".format(bsum/(1024)**3))
+         print()
+         s = "  {0:>40s} {1:>15d} bytes".format("Total:",tsum)
+         print(s)
+         s = "  {0:>40s} {1:>15.2f} MB   ".format("      ",tsum/1024**2)
+         print(s)
+         s = "  {0:>40s} {1:>15.2f} GB   ".format("      ",tsum/1024**3)
+         print(s)
+
+
+
+

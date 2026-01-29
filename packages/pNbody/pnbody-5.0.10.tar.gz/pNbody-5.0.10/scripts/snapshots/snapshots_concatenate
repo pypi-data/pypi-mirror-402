@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+
+from pNbody import Nbody
+import argparse
+import os
+import glob
+import numpy as np
+
+####################################################################
+# option parser
+####################################################################
+
+description="""Loop over a set of snapshot and concatenate all of them in the same file.
+"""
+
+epilog     ="""
+Examples:
+--------
+snapshots_contatenate snapshots/* -o outputfile.hdf5
+snapshots_contatenate snapshots/* -o outputfile.hdf5 --remove-fields metallicity rho u
+snapshots_contatenate snapshots/* -o outputfile.hdf5 --add-fields    metallicity rho u
+
+"""
+
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+parser.add_argument(action="store", 
+                    dest="files", 
+                    metavar='FILE', 
+                    type=str,
+                    default=None,
+                    nargs='*',
+                    help='a list of snapshots')       
+
+parser.add_argument('-o','--outputfile',
+                    type=str,
+                    default=None,
+                    help='output file') 
+
+parser.add_argument("--remove-fields",
+                    action="store",  
+                    metavar='STR', 
+                    type=str,
+                    nargs=argparse.REMAINDER,
+                    help='list of fields to remove from the Nbody models')
+
+parser.add_argument("--add-fields",
+                    action="store",  
+                    metavar='STR', 
+                    type=str,
+                    nargs=argparse.REMAINDER,
+                    help='list of fields to add from the Nbody models')
+
+####################################################################
+# main
+####################################################################
+
+opt = parser.parse_args()
+
+for i,snapshot in enumerate(opt.files):
+  
+  print("adding %s"%snapshot)
+
+  if i==0:
+    nb = Nbody(snapshot)
+
+    # delete fields to be removed
+    if opt.remove_fields is not None:
+      for field in opt.remove_fields:
+        if nb.has_array(field):
+          delattr(nb,field)
+
+    # add fields to be added
+    if opt.add_fields is not None:
+      for field in opt.add_fields:
+        setattr(nb,field,np.zeros(nb.nbody))          
+
+          
+  else:
+    nbtmp = Nbody(snapshot)
+
+    # delete fields to be removed
+    if opt.remove_fields is not None:
+      for field in opt.remove_fields:
+        if nbtmp.has_array(field):
+          delattr(nbtmp,field)
+
+    # add fields to be added
+    if opt.add_fields is not None:
+      for field in opt.add_fields:
+        setattr(nbtmp,field,np.zeros(nbtmp.nbody))             
+    
+    nb.append(nbtmp,do_init_num=True,do_not_change_num=True,)
+
+
+# save the file   
+if opt.outputfile is not None:
+  print("writing %s ..."%opt.outputfile)
+  nb.write(opt.outputfile)
+
+
+    
+    
+  

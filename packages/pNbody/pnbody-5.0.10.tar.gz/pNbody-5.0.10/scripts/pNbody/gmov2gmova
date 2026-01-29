@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+###########################################################################################
+#  package:   pNbody
+#  file:      gmov2gmova
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of pNbody.
+###########################################################################################
+import sys
+import os
+from optparse import OptionParser
+from pNbody import Movie
+from numpy import *
+
+
+def logfilter(mat, cd):
+    mn = 0.
+    mx = 255.
+    mat = 255. * log(1. + (mat - mn) / (cd)) / log(1. + (mx - mn) / (cd))
+    return mat
+
+
+def linfilter(mat, mn, mx):
+    mat = clip(mat, mn, mx)
+    mat = 255. * (mat - mn) / (mx - mn)
+    return mat
+
+
+##########################################################################
+def parse_options():
+    ##########################################################################
+
+    usage = "usage: %prog [options] file"
+    parser = OptionParser(usage=usage)
+
+    parser.add_option("-o",
+                      action="store",
+                      dest="outfile",
+                      type="string",
+                      default=None,
+                      help="output filename",
+                      metavar=" FILE")
+
+    parser.add_option("--log",
+                      action="store",
+                      dest="log",
+                      type="int",
+                      default=None,
+                      help="log filter value (0-255)",
+                      metavar=" INT")
+
+    (options, args) = parser.parse_args()
+
+    outfile = options.outfile
+
+    return args[0], outfile, options
+
+
+##########################################################################
+#
+#  MAIN
+#
+##########################################################################
+
+
+file, outfile, options = parse_options()
+
+
+#bname =  os.path.split(os.path.splitext(file)[0])[1]
+#ext   =  os.path.splitext(name)[1]
+
+
+film = Movie.Movie(file)
+film.open()
+
+
+size = [film.numByte, film.numLine]
+
+
+fo = Movie.Movie(outfile)
+fo.new(film.numByte / 2, film.numLine)
+
+while True:
+    data = film.read_one(mode='array')
+
+    if data is None:
+        break
+
+    # cut image
+    r2 = data[:, 0:size[0] / 2]
+    g2 = data[:, 0:size[0] / 2]
+    b2 = data[:, 0:size[0] / 2]
+
+    r1 = data[:, size[0] / 2:]
+    g1 = data[:, size[0] / 2:]
+    b1 = data[:, size[0] / 2:]
+
+    if options.log is not None:
+        r1 = logfilter(r1, options.log).astype(uint8)
+        g2 = logfilter(g2, options.log).astype(uint8)
+        b2 = logfilter(b2, options.log).astype(uint8)
+
+    r = r1
+    g = g2
+    b = b2
+
+    r = r.tostring()
+    g = g.tostring()
+    b = b.tostring()
+
+    fo.write_pic(film.current_time, r)
+    fo.write_pic(film.current_time, g)
+    fo.write_pic(film.current_time, b)

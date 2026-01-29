@@ -1,0 +1,220 @@
+#!/usr/bin/python3
+
+import numpy as np
+from pNbody.Mockimgs import filters
+from pNbody.Mockimgs import spectra
+from pNbody import iofunc
+
+from astropy import constants as cte
+from astropy import units as u
+import argparse
+import sys
+from tqdm import tqdm
+
+####################################################################
+# option parser
+####################################################################
+
+description="""Generate a grid of magnitude. The grid is a 2d matrix discretized in [M/H] and ages. 
+It is actually stored as an hdf5 file.
+The script takes as input a fits file containing a set of Spectral Energy Distribution (SED) for a given
+age and metallicity.
+
+The current SED used is the one used by default by SKIRT and described here:
+https://skirt.ugent.be/skirt9/class_starburst99_s_e_d_family.html
+
+The file my be downloaded from the following link:
+https://bitbucket.org/lutorm/sunrise/downloads/Patrik-imfKroupa-Zmulti-ml.fits.gz
+
+The IMF used (Kroupa 2001) is parametrized by
+IMF_exponent = '1.3,2.3 ' / Kroupa                                     
+IMF_limits = '.1,.5,100' / Kroupa   
+
+
+
+The magnitudes stored in the output file are in AB system.
+
+"""
+
+epilog     ="""
+Examples:
+--------
+
+sed_generate_magnitudes_grid  --M0 1e6 --filter SDSSr.txt  --sed Patrik-imfKroupa-Zmulti-ml.fits -o SB99_SDSSr_1e6.hdf5
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+
+parser.add_argument("--sed",
+                    action="store", 
+                    dest="sed", 
+                    metavar='FILENAME', 
+                    type=str,
+                    default=None,
+                    help='the name of sed database') 
+
+parser.add_argument("--filter",
+                    action="store", 
+                    dest="filter", 
+                    metavar='FILENAME', 
+                    type=str,
+                    default=None,
+                    help='the name of the filter transmission file (transmission vs wavelength in angstrom)') 
+
+
+parser.add_argument("-o",
+                    action="store",
+                    type=str,
+                    dest="outputfilename",
+                    default=None,
+                    help="Name of the output file")  
+
+                
+
+parser.add_argument("--info",
+                    action="store_true", 
+                    dest="info", 
+                    default=False,
+                    help='get info (list of keys) and exit.')  
+                    
+
+
+
+def ReadFitsSED(filename):
+  """
+  read and SED in a fits format as defined in
+  Patrik-imfKroupa-Zmulti-ml.fits
+  """
+
+  import astropy.io.fits as pyfits
+  hdulist = pyfits.open(filename)
+  
+  # SED
+  data2 = hdulist[2]
+  
+  # current_mass        # SSP initial mass [Msol] at current age
+  data3 = hdulist[3]      
+  MiniMfin = 1/data3.data # initial mass/current mass
+  
+  # axes
+  data4 = hdulist[4]  
+  data4.data.columns  # ColDefs(
+                      #  name = 'time'; format = 'D'; unit = 'yr'
+                      #  name = 'metallicity'; format = 'D'
+                      #  name = 'lambda'; format = 'D'; unit = 'm'
+                      # )
+  
+  tmp = np.array(list(data4.data))
+  
+  nl = data2.shape[0]
+  nm = data2.shape[1]
+  na = data2.shape[2]
+  
+  ages  = tmp[:,0][:na]    # ages      
+  metals = tmp[:,1][:nm]   # metals    
+  lmbd   = tmp[:,2][:nl]   # lmbd  
+  
+  # units conversion
+  lmbd = lmbd*1e10   # m to angstrom
+  
+  
+  # sed : convert to erg/s/angstrom
+  sed   = 10**data2.data  # in W/m normalized to 1 Msol (Initial IMF mass)
+  sed = sed*u.W/u.m
+  sed = sed.to(u.erg/u.s/u.angstrom)
+  sed = sed.value
+  
+  return ages,metals,lmbd,sed,MiniMfin
+
+
+                    
+####################################################################
+# main
+####################################################################
+
+
+# compute cmdline
+cmdline = ""
+for elt in sys.argv:
+ cmdline = cmdline + " " + elt
+cmdline = cmdline[1:]
+
+
+def Do(opt):
+  
+  
+  #############################################
+  # Open the SED file
+  ############################################# 
+  
+  binsAge,binsZ,lmbd,sed,MiniMfin = ReadFitsSED(opt.sed)
+  
+  # turn Z to MH : 0.02 is the solar abundance also used in the fits file
+  binsMH = np.log10(binsZ/0.02) 
+  
+  # reduce bins for testing
+  #binsAge = 10**(np.array([6,7,8,9,10]))
+  #binsMH = np.array([-2,-1,0,1])
+  
+
+  #############################################
+  # Open the filter file
+  ############################################# 
+
+  Filter = filters.FilterCl(opt.filter)  
+  Filter.resample()
+  
+  #######################################
+  # Main loop
+  #######################################  
+  
+  Mags      = np.zeros((len(binsAge),len(binsMH)))
+  M0MfRatio = np.zeros((len(binsAge),len(binsMH)))
+  
+  # loop over Ages
+  for i in tqdm(range(len(binsAge))):   
+  #for i in range(len(binsAge)):      
+    # loop over MH
+    for j in range(len(binsMH)):
+      
+      # get the SED per unit of solar mass
+      sedM =  sed[:,j,i]   
+      
+      SED = spectra.SED(sedM*u.erg/u.s/u.angstrom,lmbd*u.angstrom)
+      SED.resample()
+      SED.computeAbsoluteFlux()
+
+      # compute the AB magnitude
+      M = SED.ABMagnitude(Filter)
+      
+      # store it
+      Mags[i,j] = M
+      
+      # initial to final IMF mass ratio
+      M0MfRatio[i,j] = MiniMfin[j,i]
+  
+  
+
+  #######################################
+  # output
+  #######################################  
+   
+  if opt.outputfilename is not None:
+    
+    # hdf5
+    if opt.outputfilename.endswith(".hdf5"):
+      binsAge = binsAge/1e6 # to Myr
+      sspGrid = iofunc.SSPGrid(opt.outputfilename)
+      sspGrid.write(binsAge,binsMH,magnitudes=Mags,minimfin=M0MfRatio,cmdline=cmdline)
+    else:
+      raise ValueError('output file must be in hdf5 format.')
+
+    
+
+if __name__ == '__main__':
+  
+  opt = parser.parse_args()
+  
+  Do(opt)
+ 

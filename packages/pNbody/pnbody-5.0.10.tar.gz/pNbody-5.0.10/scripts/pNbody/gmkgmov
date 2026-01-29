@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+###########################################################################################
+#  package:   pNbody
+#  file:      gmkgmov
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of pNbody.
+###########################################################################################
+
+import matplotlib
+matplotlib.use('Agg')
+
+from optparse import OptionParser
+import os
+import sys
+
+from pNbody import Mkgmov
+from pNbody import mpi
+
+
+def parse_options():
+
+    usage = "usage: %prog [options] file"
+    parser = OptionParser(usage=usage)
+
+    parser.add_option("-p",
+                      action="store",
+                      dest="parameterfile",
+                      type="string",
+                      default=None,
+                      help="parameterfile file",
+                      metavar=" FILE")
+
+    parser.add_option("--format",
+                      action="store",
+                      dest="format",
+                      type="string",
+                      default=None,
+                      help="output file format",
+                      metavar=" FILE")
+
+    parser.add_option("--imdir",
+                      action="store",
+                      dest="imdir",
+                      type="string",
+                      default=None,
+                      help="outputdirectory for fits files",
+                      metavar=" DIRECTORY")
+
+    parser.add_option("-i",
+                      action="store",
+                      dest="ifile",
+                      type="int",
+                      default=0,
+                      help="number of first file",
+                      metavar=" INT")
+
+    parser.add_option("--pio",
+                      action="store_true",
+                      dest="pio",
+                      default=False,
+                      help="parallele io",
+                      metavar=" BOOL")
+
+    parser.add_option("--compress",
+                      action="store_true",
+                      dest="compress",
+                      default=True,
+                      help="compress output files",
+                      metavar=" BOOL")
+
+    (options, args) = parser.parse_args()
+    files = args
+
+    return files, options
+
+
+#######################################################################
+#
+#	M A I N
+#
+#######################################################################
+
+
+files = None
+movie = None
+opt = None
+
+if mpi.mpi_IsMaster():
+
+    ##############################
+    # parse options and check dirs
+    ##############################
+
+    files, opt = parse_options()
+
+    movie = Mkgmov.Movie(
+        parameterfile=opt.parameterfile,
+        format=opt.format,
+        imdir=opt.imdir,
+        timesteps=None,
+        pio=opt.pio,
+        compress=opt.compress,
+        ifile=opt.ifile)
+
+
+# broadcast files and parameters
+files = mpi.mpi_bcast(files, root=0)
+opt = mpi.mpi_bcast(opt, root=0)
+movie = mpi.mpi_bcast(movie, root=0)
+sys.path = mpi.mpi_bcast(sys.path, root=0)
+
+##########################################################################
+##########################################################################
+##
+# main loop over all files
+##
+##########################################################################
+##########################################################################
+
+for ifile, file in enumerate(files):
+    movie.dumpimage(file=file)

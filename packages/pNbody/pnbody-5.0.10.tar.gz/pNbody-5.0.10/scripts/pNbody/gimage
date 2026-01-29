@@ -1,0 +1,412 @@
+#!/usr/bin/env python3
+###########################################################################################
+#  package:   pNbody
+#  file:      gimage
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of pNbody.
+###########################################################################################
+
+"""
+Create an image from an nbody model
+
+
+Yves Revaz
+mer oct 18 11:32:00 CEST 2006
+
+"""
+
+
+from numpy import *
+from pNbody import *
+from pNbody import iofunc as io
+
+import string
+import sys
+import os
+
+from pNbody.libutil import histogram
+
+from optparse import OptionParser
+# Gtools is now part of pNbody
+#from Gtools import *
+#from Gtools import vanderwaals as vw
+#from Gtools import units
+#from Gtools import ctes
+#from Gtools import io
+#from pNbody import units
+#from pNbody import ctes
+#from pNbody import thermodyn
+
+
+def parse_options():
+
+    usage = "usage: %prog [options] file"
+    parser = OptionParser(usage=usage)
+
+    # here, we need Gtools
+    #parser = add_reduc_options(parser)
+    #parser = add_center_options(parser)
+    #parser = add_select_options(parser)
+
+    parser.add_option("-f",
+                      action="store",
+                      dest="parameters_file",
+                      type="string",
+                      default=None,
+                      help="parameter file",
+                      metavar=" FILE NAME")
+
+    parser.add_option("-u",
+                      action="store",
+                      dest="unitsparameters_file",
+                      type="string",
+                      default=None,
+                      help="unitsparameter file",
+                      metavar=" FILE NAME")
+
+    parser.add_option("-t",
+                      action="store",
+                      dest="ftype",
+                      type="string",
+                      default=None,
+                      help="type of the file",
+                      metavar=" TYPE")
+
+    parser.add_option("-o",
+                      action="store",
+                      dest="output",
+                      type="string",
+                      default=None,
+                      help="oputput file name",
+                      metavar=" STRING")
+
+    parser.add_option("--mode",
+                      action="store",
+                      dest="mode",
+                      type="string",
+                      default='m',
+                      help="observable mode",
+                      metavar=" STRING")
+
+    parser.add_option("--palette",
+                      action="store",
+                      dest="palette",
+                      type="string",
+                      default='light',
+                      help="palette name",
+                      metavar=" STRING")
+
+    parser.add_option("--frsp",
+                      action="store",
+                      dest="frsp",
+                      type="float",
+                      default=0.0,
+                      help="frsp value",
+                      metavar=" FLOAT")
+
+    parser.add_option("--mn",
+                      action="store",
+                      dest="mn",
+                      type="float",
+                      default=0.0,
+                      help="min value",
+                      metavar=" FLOAT")
+
+    parser.add_option("--mx",
+                      action="store",
+                      dest="mx",
+                      type="float",
+                      default=0.0,
+                      help="max value",
+                      metavar=" FLOAT")
+
+    parser.add_option("--cd",
+                      action="store",
+                      dest="cd",
+                      type="float",
+                      default=0.0,
+                      help="cd value",
+                      metavar=" FLOAT")
+
+    parser.add_option("--scale",
+                      action="store",
+                      dest="scale",
+                      type="string",
+                      default='log',
+                      help="scale",
+                      metavar=" STRING")
+
+    parser.add_option("--view",
+                      action="store",
+                      dest="view",
+                      type="string",
+                      default='xz',
+                      help="view xy,xz,yz",
+                      metavar=" STRING")
+
+    parser.add_option("--space",
+                      action="store",
+                      dest="space",
+                      type="string",
+                      default='pos',
+                      help="space pos,vel",
+                      metavar=" STRING")
+
+    parser.add_option("--filter_name",
+                      action="store",
+                      dest="filter_name",
+                      type="string",
+                      default="None",
+                      help="filter name",
+                      metavar=" STRING")
+
+    parser.add_option("--filter_opts",
+                      action="store",
+                      dest="filter_opts",
+                      type="string",
+                      default="[20, 20, 2, 2]",
+                      help="filter opts",
+                      metavar=" STRING")
+
+    parser.add_option("--shape",
+                      action="store",
+                      dest="shape",
+                      type="string",
+                      default="(256,256)",
+                      help="shape (x,y)",
+                      metavar=" STRING")
+
+    parser.add_option("--size",
+                      action="store",
+                      dest="size",
+                      type="string",
+                      default="(512,512)",
+                      help="size (x,y)",
+                      metavar=" STRING")
+
+    parser.add_option("--exec",
+                      action="store",
+                      dest="execline",
+                      type="string",
+                      default=None,
+                      help="give command to execute before making the image",
+                      metavar=" STRING")
+
+    (options, args) = parser.parse_args()
+
+    if len(args) == 0:
+        print("you must specify a filename")
+        sys.exit(0)
+
+    files = args
+
+    return files, options
+
+
+#############################
+# initfunctions
+#############################
+
+###########################
+def init_parameters(file):
+    ###########################
+    """
+    init Nbody parameters
+    """
+    if file is not None:
+        params = param.Params(file, None)
+    else:
+        params = param.Params(PARAMETERFILE, None)
+
+    return params
+
+###########################
+
+
+def init_unitsparameters(file):
+    ###########################
+    """
+    init Nbody unitsparameters
+    """
+    if file is not None:
+        unitsparams = param.Params(file, None)
+    else:
+        unitsparams = param.Params(UNITSPARAMETERFILE, None)
+
+    return unitsparams
+
+#############################
+# main
+#############################
+
+
+
+# get options
+files, options = parse_options()
+
+ftype = options.ftype
+parameters_file = options.parameters_file
+unitsparameters_file = options.unitsparameters_file
+
+#reduc = options.reduc
+reduc = None
+#center = options.center
+center = None
+#select = options.select
+select = None
+
+output = options.output
+palette = options.palette
+
+mode = options.mode
+size = options.size
+shape = options.shape
+mn = options.mn
+mx = options.mx
+cd = options.cd
+scale = options.scale
+view = options.view
+space = options.space
+
+execline = options.execline
+
+filter_name = options.filter_name
+filter_opts = options.filter_opts
+
+frsp = options.frsp
+
+#######################################
+# LOOP
+#######################################
+
+
+# read files
+for file in files:
+
+    nb = Nbody(file, ftype=ftype)
+
+    # init parameters
+    params = init_parameters(parameters_file)
+    # init unitsparameters
+    unitsparams = init_unitsparameters(unitsparameters_file)
+    # copy the params to the nbody class
+    nb.set_parameters(params)
+    nb.set_unitsparameters(unitsparams)
+
+    # center the model
+    if center == 'hdcenter':
+        print("centering %s" % (center))
+        nb.hdcenter()
+    elif center == 'histocenter':
+        print("centering %s" % (center))
+        nb.histocenter()
+
+    # select
+    if select is not None:
+        print("select %s" % (select))
+        nb = nb.select(select)
+
+    if reduc is not None:
+        print("reducing %s" % (reduc))
+        nb = nb.reduc(reduc)
+
+    obs = None
+    x0 = None
+    xp = None
+    alpha = None
+    r_obs = 1.0
+    clip = (0, 100000)
+    cut = 'no'
+    eye = None
+    dist_eye = 0.
+    foc = 1.
+    persp = 'off'
+
+    view = view
+    exec("shape = %s" % (shape))
+    exec("size = %s" % (size))
+    center = (0.0, 0.0, 0.0)
+    frsp = frsp
+    space = space
+    mode = mode
+    filter_name = filter_name
+    exec("filter_opts = %s" % (filter_opts))
+    scale = scale
+    cd = cd
+    mn = mn
+    mx = mx
+
+    l_n = 15
+    l_min = 0.0
+    l_max = 0.0
+    l_kx = 10
+    l_ky = 10
+    l_color = 0
+    l_crush = 'no'
+    b_weight = 0
+    b_xopts = None
+    b_yopts = None
+    b_color = 255
+
+    if execline is not None:
+        exec(execline)
+
+    # compute map1
+    mat, matint, mn_opts, mx_opts, cd_opts = nb.Map(obs=obs,
+                                                    x0=x0,
+                                                    xp=xp,
+                                                    alpha=alpha,
+                                                    view=view,
+                                                    r_obs=r_obs,
+                                                    eye=eye,
+                                                    dist_eye=dist_eye,
+                                                    foc=foc,
+                                                    mode=mode,
+                                                    space=space,
+                                                    persp=persp,
+                                                    clip=clip,
+                                                    size=size,
+                                                    cut=cut,
+                                                    frsp=frsp,
+                                                    shape=shape,
+                                                    filter_name=filter_name,
+                                                    filter_opts=filter_opts,
+                                                    scale=scale,
+                                                    cd=cd,
+                                                    mn=mn,
+                                                    mx=mx,
+                                                    l_color=l_color,
+                                                    l_n=l_n,
+                                                    l_min=l_min,
+                                                    l_max=l_max,
+                                                    l_kx=l_kx,
+                                                    l_ky=l_ky,
+                                                    l_crush=l_crush,
+                                                    b_weight=b_weight,
+                                                    b_xopts=b_xopts,
+                                                    b_yopts=b_yopts,
+                                                    b_color=b_color)
+
+    mn_opt = mn_opts[0]
+    mx_opt = mx_opts[0]
+    cd_opt = cd_opts[0]
+
+    print("min=%10.3e max=%10.3e cd=%10.3e" % (mn_opt, mx_opt, cd_opt))
+
+    image = get_image(matint, name=None, palette_name=palette)
+
+    if output is not None:
+
+        if os.path.splitext(output)[1] == ".fits":
+            header = None
+            if os.path.isfile(output):
+                os.remove(output)
+            io.WriteFits(transpose(mat).astype(float32), output, header)
+        else:
+            image.save(output)
+    else:
+        display(image)

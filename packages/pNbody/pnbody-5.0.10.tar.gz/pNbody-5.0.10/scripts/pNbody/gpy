@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+###########################################################################################
+#  package:   pNbody
+#  file:      gpy
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of pNbody.
+###########################################################################################
+
+import os
+import sys
+import string
+import argparse
+
+from pNbody import Nbody
+from pNbody import param
+from pNbody import plot
+
+from IPython import embed
+
+
+####################################################################
+# option parser
+####################################################################
+
+description="""run the python interpreter and load a snapshot"""
+epilog     ="""
+Examples:
+--------
+gpy snapshot.hdf5
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+plot.add_arguments_units(parser)
+plot.add_files_options(parser)
+
+parser.add_argument(action="store", 
+                    dest="file", 
+                    metavar='FILE', 
+                    type=str,
+                    default=None,
+                    nargs=1,
+                    help='a file')      
+                    
+parser.add_argument("--exec",
+                  action="store",
+                  dest="execline",
+                  type=str,
+                  default=None,
+                  help="give command to execute before",
+                  metavar=" STRING")
+
+parser.add_argument("--ptypes",
+                  action="store",
+                  dest="ptypes",
+                  type=str,
+                  default=None,
+                  help="list of particle type to read",
+                  metavar=" STRING")
+
+parser.add_argument("--arrays",
+                  action="store",
+                  dest="arrays",
+                  type=str,
+                  default=None,
+                  help="list of arrays to read",
+                  metavar=" STRING")
+
+
+parser.add_argument("-v",
+                  action="store",
+                  dest="verbose",
+                  type=int,
+                  default=0,
+                  help="verbosity level",
+                  metavar=" INT")
+
+
+
+
+
+##########################################################################
+#
+#                                    MAIN
+#
+##########################################################################
+
+opt = parser.parse_args()
+
+
+
+execline = opt.execline
+ptypes = opt.ptypes
+arrays = opt.arrays
+
+if ptypes is not None:
+  ptypes = ptypes.split(",")
+  new_ptypes = []
+  for elt in ptypes:
+    new_ptypes.append(int(elt))
+  ptypes = new_ptypes
+
+if arrays is not None:
+  arrays = arrays.split(",")
+  new_arrays = []
+  for elt in arrays:
+    new_arrays.append(elt)
+  arrays = new_arrays
+
+
+nb = Nbody(opt.file, ftype=opt.ftype,verbose=opt.verbose,ptypes=ptypes,arrays=arrays)
+
+# define local units
+unit_params = plot.apply_arguments_units(opt)
+nb.set_local_system_of_units(params=unit_params)
+
+
+if execline is not None:
+    exec(execline)
+    
+#code.interact(local=locals(),banner="")
+embed()
+

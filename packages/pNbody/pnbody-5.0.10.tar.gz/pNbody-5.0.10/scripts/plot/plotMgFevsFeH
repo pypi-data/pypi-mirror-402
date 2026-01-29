@@ -1,0 +1,420 @@
+#!/usr/bin/python3
+###########################################################################################
+#  package:   pNbody
+#  file:      plotCylindricalProfile
+#  brief:     
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of Gtools.
+###########################################################################################
+
+import os
+import numpy as np
+import argparse
+
+import matplotlib.pyplot as plt
+from pNbody import Nbody
+from pNbody import libgrid
+from pNbody import plot
+from pNbody import mapping
+
+from scipy import optimize
+
+
+####################################################################
+# option parser
+####################################################################
+
+description="""plot [Mg/Fe] as a function of [Fe/H]"""
+epilog     ="""
+[Mg/Fe] is computed via the function nb.MgFe()
+[Fe/H]  is computed via the function nb.Fe()
+
+ 
+Examples:
+--------
+plotMgFevsFeH                   snapshot.hdf5
+plotMgFevsFeH   --map           snapshot.hdf5
+
+
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+plot.add_files_options(parser)
+plot.add_arguments_units(parser)
+plot.add_arguments_reduc(parser)
+plot.add_arguments_center(parser)
+plot.add_arguments_select(parser)
+plot.add_arguments_info(parser)
+plot.add_arguments_legend(parser)
+plot.add_arguments_icshift(parser)
+plot.add_arguments_cmd(parser)
+
+
+parser.add_argument(action="store", 
+                    dest="files", 
+                    metavar='FILE', 
+                    type=str,
+                    default=None,
+                    nargs='*',
+                    help='a list of files')                     
+
+
+parser.add_argument("-o",
+                    action="store",
+                    type=str,
+                    dest="outputfilename",
+                    default=None,
+                    help="Name of the output file")  
+
+parser.add_argument('--x',
+                    action="store", 
+                    dest="x", 
+                    type=str,
+                    default="Fe",
+                    help='value on the x axis')
+
+parser.add_argument('--y',
+                    action="store", 
+                    dest="y", 
+                    type=str,
+                    default="MgFe",
+                    help='value on the y axis')
+
+parser.add_argument('--z',
+                    action="store", 
+                    dest="z", 
+                    type=str,
+                    default=None,
+                    help='value on the z axis')
+
+
+parser.add_argument('--xmin',
+                    action="store", 
+                    dest="xmin", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=-4,
+                    help='x min')
+
+parser.add_argument('--xmax',
+                    action="store", 
+                    dest="xmax", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=0.5,
+                    help='x max')
+
+
+parser.add_argument('--nx',
+                    action="store", 
+                    dest="nx", 
+                    metavar='INT', 
+                    type=int,
+                    default=64,
+                    help='number of bins in the x axis')
+
+parser.add_argument('--ny',
+                    action="store", 
+                    dest="ny", 
+                    metavar='INT', 
+                    type=int,
+                    default=64,
+                    help='number of bins in the < axis')
+
+
+parser.add_argument('--ymin',
+                    action="store", 
+                    dest="ymin", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=-1,
+                    help='y min')
+
+parser.add_argument('--ymax',
+                    action="store", 
+                    dest="ymax", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=1.5,
+                    help='y max')
+
+parser.add_argument('--zmin',
+                    action="store", 
+                    dest="zmin", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=None,
+                    help='z min')
+
+parser.add_argument('--zmax',
+                    action="store", 
+                    dest="zmax", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=None,
+                    help='z max')
+
+                                        
+parser.add_argument('--log',
+                    action="store", 
+                    dest="log", 
+                    metavar='STR', 
+                    type=str,
+                    default=None,
+                    help='log scale (None,x,y,xy)')
+
+
+parser.add_argument("--colormap",
+                    action="store", 
+                    default='jet',
+                    help='matplotlib colormap name (e.g. mycmap, tab20c, Greys, jet, binary)') 
+
+parser.add_argument("--nopoints",
+                    action="store_true",
+                    dest="nopoints",
+                    default=False,
+                    help="do not plot points")
+
+parser.add_argument("--map",
+                    action="store_true",
+                    dest="map",
+                    default=False,
+                    help="plot map instead of points")
+
+    
+
+def get_value_and_label(nb, val):
+
+    if val == 'Fe':
+        label = r'$\left[ \rm{Fe}/\rm{H} \right]$'
+        val = nb.Fe()
+        return val, label
+
+    elif val == 'Mg':
+        label = r'$\left[ \rm{Mg}/\rm{H} \right]$'
+        val = nb.Mg()
+        return val, label
+
+    elif val == 'MgFe':
+        label = r'$\left[ \rm{Mg}/\rm{Fe} \right]$'
+        val = nb.MgFe()
+        return val, label
+
+    elif val == 'BaFe':
+        label = r'$\left[ \rm{Ba}/\rm{Fe} \right]$'
+        val = nb.BaFe()
+        return val, label
+
+    else:
+        label = r'%s' % val
+        print(("val = %s" % val))
+        exec("val = %s" % val)
+        return val, label
+
+
+#######################################
+# MakePlot
+#######################################
+
+
+def MakePlot(opt):
+  
+  params = {
+    "axes.labelsize": 14,
+    "axes.titlesize": 18,
+    "font.size": 12,
+    "legend.fontsize": 12,
+    "xtick.labelsize": 14,
+    "ytick.labelsize": 14,
+    "text.usetex": True,
+    "figure.subplot.left": 0.15,
+    "figure.subplot.right": 0.95,
+    "figure.subplot.bottom": 0.15,
+    "figure.subplot.top": 0.95,
+    "figure.subplot.wspace": 0.02,
+    "figure.subplot.hspace": 0.02,
+    "figure.figsize" : (8, 6),
+    "lines.markersize": 6,
+    "lines.linewidth": 2.0,
+  }
+  plt.rcParams.update(params)
+  
+  
+  # create the plot
+  fig = plt.gcf()
+  fig.set_size_inches(8,6)
+  ax  = plt.gca()
+
+
+  # get a list of color
+  colors = plot.ColorList(n=len(opt.files),colormap=opt.colormap)
+  
+  # list of points
+  datas = []
+
+  # number of files
+  nfiles = len(opt.files)
+  
+  
+  #################################
+  # loop over files
+  
+  for filename in opt.files:
+    
+    nb = Nbody(filename, ftype=opt.ftype)
+
+    # base name
+    bname = os.path.basename(filename)
+
+    ################
+    # keep only stars
+    ################
+
+    nb = nb.select("stars")
+    
+    ################
+    # units
+    ################
+    
+    # define local units
+    unit_params = plot.apply_arguments_units(opt)
+    nb.set_local_system_of_units(params=unit_params)
+    
+    ################
+    # apply options
+    ################
+    nb = plot.apply_arguments_icshift(nb, opt)
+    nb = plot.apply_arguments_comoving(nb, opt)
+    nb = plot.apply_arguments_reduc(nb, opt)
+    nb = plot.apply_arguments_select(nb, opt)
+    nb = plot.apply_arguments_center(nb, opt)
+    nb = plot.apply_arguments_cmd(nb, opt)
+    nb = plot.apply_arguments_info(nb, opt)
+    nb = plot.apply_arguments_display(nb, opt)
+
+
+    ################
+    # some info
+    ################
+    print("---------------------------------------------------------")
+    nb.localsystem_of_units.info()
+    nb.ComovingIntegrationInfo()
+    print("---------------------------------------------------------")
+
+
+    #################
+    # get values
+    ################
+
+    if not opt.nopoints:
+      x, xlabel = get_value_and_label(nb, opt.x)
+      y, ylabel = get_value_and_label(nb, opt.y)
+      if opt.z is not None:
+          z, zlabel = get_value_aNd_label(nb, opt.z)
+          data = plot.DataPoints(x, y, color=z, label=bname, tpe='points')
+      else:
+          data = plot.DataPoints(x, y, color=colors.get(), label=bname, tpe='points')
+
+      datas.append(data)
+    
+  
+  ##################
+  # finalize plot
+  ##################
+
+  norm = None
+  # now, plot
+  if not opt.map:
+    for d in datas:
+      if opt.log is not None:
+        if string.find(opt.log, 'z') != -1:
+          norm = pt.colors.LogNorm()
+      else:
+        norm = None
+      cmap = plot.GetColormap('rainbow4', revesed=True)
+      ax.scatter(d.x,d.y,c=d.color,edgecolor=d.color,s=1,linewidths=1,marker='o',vmin=opt.zmin,vmax=opt.zmax,norm=norm,cmap=cmap)
+
+
+  # set limits and draw axis
+  xmin, xmax, ymin, ymax, log = plot.SetLimitsFromDataPoints(datas, opt.xmin, opt.xmax, opt.ymin, opt.ymax, opt.log)
+      
+  if opt.map:
+    # now, plot
+    for d in datas:
+      x = d.x
+      y = d.y
+      z = np.zeros(len(x))
+
+      c = np.isreal(x) * np.isreal(y)
+      x = np.compress(c, x)
+      y = np.compress(c, y)
+
+      # re-scale between 0 and 1
+      xs = 1 - (x - xmax) / (xmin - xmax)
+      ys = 1 - (y - ymax) / (ymin - ymax)
+
+      pos = np.transpose(np.array([xs, ys, z], np.float32))
+      m = np.ones(len(x), np.float32)
+
+      data = mapping.mkmap2d(pos, m, m, (opt.nx, opt.ny))
+      data = np.transpose(data) / np.sum(np.ravel(data))
+
+      #########################
+      # compute and draw level
+      #########################
+
+      rdata = np.ravel(data)
+      rdata = rdata / np.sum(rdata)
+
+      zmin = np.min(rdata)
+      zmax = np.max(rdata)
+
+      def levfct(x, flev):
+          da = np.where(rdata < x, 0., rdata)
+          return np.sum(da) - flev
+
+      # here, we cut at 90% of the flux
+      levelmax = zmax
+      levelmin = optimize.bisect(levfct, a=zmin, b=zmax, args=(0.90,), xtol=1e-10, maxiter=100)
+
+      cmap = plot.GetColormap('heat', revesed=True)
+      im = ax.imshow(data,interpolation='bilinear',origin='lower',cmap=cmap,extent=(xmin,xmax,ymin,ymax),aspect='auto',vmin=levelmin,vmax=levelmax)
+
+
+  
+
+  # set the axis (the extention is done in the previous command)
+  plot.SetAxis(ax,xmin, xmax, ymin, ymax, log=log)
+
+  
+  # labels
+  ax.set_xlabel(xlabel)
+  ax.set_ylabel(ylabel)
+  
+  # legend
+  if opt.legend:
+    plt.legend()
+
+
+
+  # save or display
+  if opt.outputfilename:
+    plt.savefig(opt.outputfilename)
+  else:
+    plt.show()    
+      
+
+
+#################################
+# main
+#################################
+
+if __name__ == '__main__':  
+  
+  opt = parser.parse_args()
+  MakePlot(opt)

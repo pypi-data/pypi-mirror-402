@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+
+import argparse
+
+from pNbody import RT
+from astropy import constants as cte
+from astropy import units as u
+import numpy as np
+
+
+description=""
+epilog     ="""
+Examples:
+--------
+rt_get_interaction_rates --T 1e5  --Ndot 1e13   --nHI  1.67262e-24 --nHeI 1e-24
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+parser.add_argument("--T",
+                    action="store", 
+                    dest="T", 
+                    metavar='FLOAT', 
+                    type=float,                    
+                    default=5000,
+                    help='Blackbody temperature')     
+
+parser.add_argument("--Ndot",
+                    action="store", 
+                    metavar='FLOAT', 
+                    type=float,                    
+                    default=1e12,
+                    help='Photon flux per s per cm2 ')  
+
+parser.add_argument("--nHI",
+                    action="store", 
+                    metavar='FLOAT', 
+                    type=float,                    
+                    default=1.67262e-24,
+                    help='neutral hydrogen density in g/cm3 //HI   grackle_fields.HI_density[0] * density_units') 
+
+parser.add_argument("--nHII",
+                    action="store", 
+                    metavar='FLOAT', 
+                    type=float,                    
+                    default=0,
+                    help='ionized hydrogen density in g/cm3 //HI   grackle_fields.HII_density[0] * density_units') 
+                    
+parser.add_argument("--nHeI",
+                    action="store", 
+                    metavar='FLOAT', 
+                    type=float,                    
+                    default=0,
+                    help='neutral helium density in g/cm3 //HI HeI  grackle_fields.HeI_density[0] * density_units') 
+                    
+parser.add_argument("--nHeII",
+                    action="store", 
+                    metavar='FLOAT', 
+                    type=float,                    
+                    default=0,
+                    help='1-ionized helium density in g/cm3 //HI   HeII grackle_fields.HeII_density[0] * density_units')
+                    
+parser.add_argument("--nHeIII",
+                    action="store", 
+                    metavar='FLOAT', 
+                    type=float,                    
+                    default=0,
+                    help='2-ionized helium density in g/cm3 //HI  HeII grackle_fields.HeIII_density[0] * density_units')                                        
+parser.add_argument("--ne",
+                    action="store", 
+                    metavar='FLOAT', 
+                    type=float,                    
+                    default=0,
+                    help='electron density in g/cm3 //HI          e grackle_fields.e_density[0] * density_units')                                        
+                                        
+
+########################################################################
+#             M A I N
+########################################################################
+
+opt = parser.parse_args()
+ 
+
+# from a given black body temperature, from a given photon flux,
+# compute the luminosity for each photon group
+
+Ls = RT.convert_photon_number_rate_to_luminosity_with_frequency_bins(T=opt.T,Ndot=opt.Ndot,frequency_bins=RT.frequency_bins)
+
+LHI_cgs              = Ls[0] # photon energy in the 1st group erg / cm^2 / s */
+LHeI_cgs             = Ls[1] # photon energy in the 2nd group erg / cm^2 / s */
+LHeII_cgs            = Ls[2] # photon energy in the 3rd group erg / cm^2 / s */
+
+
+# compute the different rates
+
+rates_cgs, rates_grackle = RT.get_interaction_rates(opt.T,
+                                                    HI_densities_cgs    = opt.nHI,
+                                                    HII_densities_cgs   = opt.nHII,
+                                                    HeI_densities_cgs   = opt.nHeI,
+                                                    HeII_densities_cgs  = opt.nHeII,
+                                                    HeIII_densities_cgs = opt.nHeIII,
+                                                    e_densities_cgs     = opt.ne,
+                                                    LHI_cgs             = LHI_cgs,
+                                                    LHeI_cgs            = LHeI_cgs,
+                                                    LHeII_cgs           = LHeII_cgs
+                                                    )
+
+
+
+# rates in cgs
+print("Rates in CGS");
+print("heating rate         : %g"%rates_cgs[0]);
+print("HI ionization rate   : %g"%rates_cgs[1]);
+print("HeI ionization rate  : %g"%rates_cgs[2]);
+print("HeII ionization rate : %g"%rates_cgs[3]);
+print("H2 dissociation rate : %g"%rates_cgs[4]);
+
+print()
+
+# rates for Grackle 
+print("Rates for Grackle");
+print("heating rate         : %g"%rates_grackle[0]);
+print("HI ionization rate   : %g"%rates_grackle[1]);
+print("HeI ionization rate  : %g"%rates_grackle[2]);
+print("HeII ionization rate : %g"%rates_grackle[3]);
+print("H2 dissociation rate : %g"%rates_grackle[4]);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

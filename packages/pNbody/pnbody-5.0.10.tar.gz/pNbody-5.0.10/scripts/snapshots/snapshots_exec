@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+
+from pNbody import Nbody
+import argparse
+import os
+import glob
+import numpy as np
+
+####################################################################
+# option parser
+####################################################################
+
+description="""Loop over a set of snapshot and apply the same command to each snapshot.
+This command also allows to modify the snapshots or extract part of it and save it to another directory.
+"""
+
+epilog     ="""
+Examples:
+--------¨
+
+single file
+---------------
+snapshots_exec snap.hdf5 --exec "print(nb.nbody)"
+snapshots_exec snap.hdf5 --exec "nb.pos = nb.pos * 10" -o new_snap.hdf5
+snapshots_exec snap.hdf5 --exec="nb = nb.select('stars')" -o new_snap.hdf5
+snapshots_exec snap.hdf5 --exec="nb = nb.selecp(nb.num>1234)" -o new_snap.hdf5
+snapshots_exec snap.hdf5 --exec="nb = nb.selecp(nb.num>1234)" --do-not-skip-processed -o new_snap.hdf5
+
+
+multiple files
+---------------
+snapshots_exec snapshots/* --exec "print(nb.nbody)"
+snapshots_exec snapshots/* --exec "nb.pos = nb.pos * 10" -o snap
+snapshots_exec snapshots/* --exec="nb = nb.select('stars')" -o snap
+snapshots_exec snapshots/* --exec="nb = nb.selecp(nb.num>1234)" -o snap
+snapshots_exec snapshots/* --exec="nb = nb.selecp(nb.num>1234)" --do-not-skip-processed -o snap
+
+
+from a list of files
+--------------------
+snapshots_exec --files-list --exec "print(nb.nbody)"
+
+
+"""
+
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+parser.add_argument(action="store", 
+                    dest="files", 
+                    metavar='FILE', 
+                    type=str,
+                    default=None,
+                    nargs='*',
+                    help='a list of snapshots')       
+
+parser.add_argument('-o','--output_directory',
+                    dest="output_directory", 
+                    type=str,
+                    default=None,
+                    help='output directory or output file') 
+
+parser.add_argument('--files-list',
+                    dest="files_list", 
+                    type=str,
+                    default=None,
+                    help='a file containing a list of snapshots') 
+
+parser.add_argument('--do-not-skip-processed', 
+                    action="store_true",
+                    help='force processing all files, even the ones already processed') 
+
+parser.add_argument("--exec",
+                    action="store",
+                    type=str,
+                    default=None,
+                    help="give command to execute before")
+
+
+
+####################################################################
+# main
+####################################################################
+
+opt = parser.parse_args()
+
+if opt.output_directory is not None:
+  if len(opt.files)>1:
+    if not os.path.exists(opt.output_directory):
+      os.makedirs(opt.output_directory)
+
+
+if opt.files_list is not None:
+
+  file_list=[]      
+  
+  f = open(opt.files_list,'r')
+  lines = f.readlines()
+  f.close()
+
+  for line in lines:
+    filename = line.strip()
+    if os.path.isfile(filename):
+      file_list.append(filename)
+
+  # add to the list of files  
+  opt.files.extend(file_list)
+
+  
+for snapshot in opt.files:
+
+  # save the file   
+  if opt.output_directory is not None:
+
+    if len(opt.files)==1:
+      output_filename = opt.output_directory
+    else:  
+      basename = os.path.basename(snapshot)
+      output_filename = os.path.join(opt.output_directory,basename)
+      if os.path.isfile(output_filename) and not opt.do_not_skip_processed:
+        print("skipping %s"%snapshot)
+        continue
+      
+  
+  # open the file
+  #print(snapshot)
+  nb = Nbody(snapshot)
+
+  # apply option  
+  if opt.exec is not None:
+    exec(opt.exec)
+
+  # save the file   
+  if opt.output_directory is not None:
+    nb.write(output_filename)
+
+
+    
+    
+  

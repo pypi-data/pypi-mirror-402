@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+
+import argparse
+import numpy as np
+from pNbody import ic
+from astropy import constants as cte
+from astropy import units as u
+
+
+
+####################################################################
+# option parser
+####################################################################
+
+description="generate initial an homogeneous box"
+epilog     ="""
+Examples:
+--------
+ic_homogeneous_box -N 1024                                             -o output.hdf5
+ic_homogeneous_box -N 1024 --lJ=0.5                                    -o output.hdf5
+ic_homogeneous_box -N 1024 --lJ=0.5 --hydro                            -o output.hdf5
+ic_homogeneous_box -N 1024 --lJ=0.5 --hydro -t swift                   -o output.hdf5
+ic_homogeneous_box -N 1024 --lJ=0.5 --hydro -t swift --hydro           -o output.hdf5
+ic_homogeneous_box -N 1024 --lJ=0.5 --hydro -t swift --hydro --ptype 2 -o output.hdf5
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+
+
+
+parser.add_argument("-o",
+                    action="store",
+                    type=str,
+                    dest="outputfilename",
+                    default=None,
+                    help="Name of the output file")  
+
+
+parser.add_argument("-t",
+                    action="store",
+                    type=str,
+                    dest="ftype",
+                    default='gh5',
+                    help="Type of the output file")  
+
+parser.add_argument("--lJ",
+                    action="store", 
+                    dest="lJ", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=0.250,
+                    help='Jeans wavelength') 
+
+parser.add_argument("--irand",
+                    action="store", 
+                    dest="irand", 
+                    metavar='INT', 
+                    type=int,
+                    default=0,
+                    help='random seed') 
+                    
+parser.add_argument("--hydro",
+                    action="store_true", 
+                    dest="hydro", 
+                    default=False,
+                    help='consider gas') 
+
+parser.add_argument("--ptype",
+                    action="store", 
+                    dest="ptype", 
+                    metavar='INT', 
+                    type=int,
+                    default=1,
+                    help='particle type') 
+
+
+parser.add_argument("-N",
+                    action="store", 
+                    dest="N", 
+                    metavar='INT', 
+                    type=int,
+                    default=2**18,
+                    help='total number of particles') 
+                    
+parser.add_argument("-q","--quiet",
+                    action="store_true",
+                    dest="quiet",
+                    default=False,
+                    help="quiet mode") 
+                    
+    
+########################################
+# main
+########################################
+
+
+opt = parser.parse_args()
+
+if opt.quiet:
+  import warnings
+  warnings.filterwarnings("ignore")
+
+# define units
+u_Length   = 1* u.kpc
+u_Mass     = 10**10 * u.M_sun
+u_Velocity = 1* u.km/u.s
+u_Time     = u_Length/u_Velocity 
+toMsol     = u_Mass.to(u.M_sun).value
+
+u_dict = {}
+u_dict["UnitLength_in_cm"]         = u_Length.to(u.cm).value
+u_dict["UnitMass_in_g"]            = u_Mass.to(u.g).value
+u_dict["UnitVelocity_in_cm_per_s"] = u_Velocity.to(u.cm/u.s).value
+u_dict["Unit_time_in_cgs"]         = u_Time.to(u.s).value
+
+# define constants values
+G = cte.G.to( u_Length**3/(u_Mass*u_Time**2) ).value
+
+
+
+lJ = opt.lJ     # Jeans wavelength
+
+
+n   = opt.N     # number of particles
+L   = 1.        # box size
+rho = 1.        # density
+
+kJ = 2*np.pi/lJ
+
+sigma = np.sqrt(4*np.pi*G*rho)/ kJ
+
+#print("Lambda Jeans = {}".format(lJ))
+print("sigma = {}".format(sigma))
+print("tdyn  = {}".format(L/sigma))
+
+
+#################################
+# create the box
+
+nb = ic.box(n, L/2.,L/2.,L/2., irand=opt.irand, name=opt.outputfilename, ftype=opt.ftype)
+nb.mass = np.ones(n)/n * rho * L**3 
+
+
+# add units
+nb.UnitLength_in_cm         = u_dict["UnitLength_in_cm"]
+nb.UnitMass_in_g            = u_dict["UnitMass_in_g"]           
+nb.UnitVelocity_in_cm_per_s = u_dict["UnitVelocity_in_cm_per_s"]
+nb.Unit_time_in_cgs         = u_dict["Unit_time_in_cgs"]
+
+nb.setComovingIntegrationOff()
+
+# additional stuffs
+if opt.ftype == "gh5":
+  nb.massarr=None
+  nb.nzero = None
+  nb.rebox()
+if opt.ftype == "swift":
+  nb.boxsize=L
+  nb.pos[:,0] = nb.pos[:,0] + L/2.
+  nb.pos[:,1] = nb.pos[:,1] + L/2.
+  nb.pos[:,2] = nb.pos[:,2] + L/2.
+  
+
+
+if opt.hydro:
+  nb.u = np.ones(n)*sigma**2
+  
+else:
+  nb.vel[:,0] = sigma* np.sqrt(3) *np.random.standard_normal([nb.nbody])
+  nb.vel[:,1] = sigma* np.sqrt(3) *np.random.standard_normal([nb.nbody])
+  nb.vel[:,2] = sigma* np.sqrt(3) *np.random.standard_normal([nb.nbody])
+
+  print("vmax = {}".format(nb.vx().max()))
+  nb.set_tpe(opt.ptype)
+
+
+
+
+nb.write()
+
+
+
+
+
+
+
+
+
+

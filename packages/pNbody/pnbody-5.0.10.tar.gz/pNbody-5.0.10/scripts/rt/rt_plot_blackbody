@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+
+import argparse
+
+from pNbody.RT import blackbody
+from astropy import constants as cte
+from astropy import units as u
+import numpy as np
+import matplotlib.pyplot as plt
+
+description=""
+epilog     ="""
+Examples:
+--------
+rt_plot_blackbody
+rt_plot_blackbody -T 1e5
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+parser.add_argument("-T",
+                    action="store", 
+                    dest="T", 
+                    metavar='FLOAT', 
+                    type=float,                    
+                    default=5000,
+                    help='Blackbody temperature')     
+
+parser.add_argument("--lmin",
+                    action="store", 
+                    dest="lmin", 
+                    metavar='FLOAT', 
+                    type=float,                    
+                    default=100,
+                    help='min wavelength in nm') 
+
+parser.add_argument("--lmax",
+                    action="store", 
+                    dest="lmax", 
+                    metavar='FLOAT', 
+                    type=float,                    
+                    default=2500,
+                    help='max wavelength in nm') 
+
+
+########################################################################
+#             M A I N
+########################################################################
+
+opt = parser.parse_args()
+
+# some constants
+k_B = cte.k_B.to(u.erg/u.K).value
+c   = cte.c.to(u.cm/u.s).value
+h   = cte.h.to(u.cm**2*u.g/u.s).value
+
+
+# temperature
+T   = opt.T*u.K
+T   = T.value
+
+# wavelength in nm
+l = np.linspace(opt.lmin,opt.lmax,100)*u.nm
+l = l.to(u.cm).value
+
+# frequency
+nu = c/l
+
+
+# peak of the blackbody spectrum
+peak_frequency = blackbody.nu_peak(T, k_B, h)
+lp = c/peak_frequency
+lp = lp*u.cm
+lp = lp.to(u.nm).value
+
+
+# blackbody spectrum
+Bnu = blackbody.B_nu(nu,T,k_B,h,c)
+#Bl  = blackbody.B_l(l,T,k_B,h,c)
+
+
+l = l*u.cm
+l = l.to(u.nm).value
+
+plt.plot(l,Bnu)
+plt.xlabel(r"$\lambda\,[\rm{nm}]$")
+plt.ylabel(r"$B_{\nu}$")
+
+plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

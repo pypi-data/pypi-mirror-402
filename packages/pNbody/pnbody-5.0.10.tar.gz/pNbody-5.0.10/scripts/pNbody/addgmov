@@ -1,0 +1,134 @@
+#!/usr/bin/env python3
+###########################################################################################
+#  package:   pNbody
+#  file:      addgmov
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of pNbody.
+###########################################################################################
+
+import sys
+import os
+import string
+import getopt
+import math
+
+from pNbody import Movie
+
+
+##########################################################################
+def version():
+    ##########################################################################
+    print('version 1.0')
+    sys.exit(0)
+
+
+##########################################################################
+def help_message():
+    ##########################################################################
+    print("""Usage : addgmov -o outfilm film1 film2 ...
+  Options: -h        -- this help message
+	   -o	     -- name of the output
+           --help    -- this help message
+           --version -- displays version
+
+  """)
+    sys.exit(0)
+
+
+##########################################################################
+def check_arguments(options, xarguments):
+    ##########################################################################
+
+    output = "out.mov"
+
+    for a in options[:]:
+        if a[0] == '-h':
+            help_message()
+
+        if a[0] == '--help':
+            help_message()
+
+        if a[0] == '--version':
+            version()
+
+        if a[0] == '-o':
+            if a[1] == '':
+                help_message()
+            else:
+                output = a[1]
+                continue
+
+    files = xarguments
+
+    return output, files
+
+
+##########################################################################
+#
+#  MAIN
+#
+##########################################################################
+
+
+try:
+    options, xarguments = getopt.getopt(
+        sys.argv[1:], 'o:h', ['help', 'version'])
+except getopt.error:
+    help_message()
+    sys.exit(0)
+
+
+# check arguments
+output, films = check_arguments(options, xarguments)
+
+
+# check that all films exists
+
+for film in films:
+    if (os.path.exists(film) == 0):
+        print("Error : the file ", film, " do no not exist.")
+        sys.exit(0)
+
+
+# open films
+
+fs = []
+n = -1
+
+for film in films:
+
+    n = n + 1
+    fs.append(Movie.Movie(film))
+    fs[n].open()
+
+    if n > 0:
+        if (fs[n].npic != fs[0].npic):
+            print("films have not the same number of frames")
+        if (fs[n].numByte != fs[0].numByte):
+            print("films have not the same width")
+        if (fs[n].numLine != fs[0].numLine):
+            print("films have not the same height")
+
+
+numByte = fs[0].numByte
+numLine = fs[0].numLine
+
+# create the newfilm
+fo = Movie.Movie(output)
+fo.new(numByte, numLine)
+
+# loop over the films
+
+for f in fs:
+    for i in range(f.npic):
+        data = f.read_one()
+        fo.write_pic(f.current_time, data)
+        print(f.current_time)
+
+    f.close()
+
+fo.close()

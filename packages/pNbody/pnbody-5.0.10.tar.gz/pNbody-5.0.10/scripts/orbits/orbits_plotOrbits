@@ -1,0 +1,268 @@
+#!/usr/bin/env python3
+###########################################################################################
+#  package:   pNbody
+#  file:      orbits_plotOrbits
+#  brief:     
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of Gtools.
+###########################################################################################
+
+import os
+import numpy as np
+import argparse
+
+import matplotlib.pyplot as plt
+from pNbody import plot
+
+####################################################################
+# option parser
+####################################################################
+
+description="""plot orbits from the output files of orbits_integration_MW"""
+epilog     ="""
+Examples:
+--------
+
+orbits_plotOrbits output/forward_integration_data.npz
+
+orbits_plotOrbits --legend --colormap RdYlBu --colormap-reverse  output/backward_integration_data.npz -o rt.png
+
+orbits_plotOrbits --legend --colormap RdYlBu --colormap-reverse  output/backward_integration_data.npz -o rt.png -names Hercules TucanaII BootesIII
+
+orbits_plotOrbits --legend --colormap RdYlBu --colormap-reverse  output/backward_integration_data.npz --xmin -150 --xmax 150 --ymin -150 --ymax 150 --x x --y y  -o xy.png
+orbits_plotOrbits --legend --colormap RdYlBu --colormap-reverse  output/backward_integration_data.npz --xmin -150 --xmax 150 --ymin -150 --ymax 150 --x x --y z  -o xz.png
+orbits_plotOrbits --legend --colormap RdYlBu --colormap-reverse  output/backward_integration_data.npz --xmin -150 --xmax 150 --ymin -150 --ymax 150 --x y --y z  -o yz.png
+
+"""
+
+
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+plot.add_arguments_legend(parser)
+
+parser.add_argument(action="store", 
+                    dest="file", 
+                    metavar='FILE', 
+                    type=str,
+                    default=None,
+                    help='a file name')
+
+parser.add_argument("-o",
+                    action="store",
+                    type=str,
+                    dest="outputfilename",
+                    default=None,
+                    help="Name of the output file")  
+
+parser.add_argument('--xmin',
+                    action="store", 
+                    dest="xmin", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=None,
+                    help='x min')
+
+parser.add_argument('--xmax',
+                    action="store", 
+                    dest="xmax", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=None,
+                    help='x max')
+                    
+parser.add_argument('--ymin',
+                    action="store", 
+                    dest="ymin", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=None,
+                    help='y min')
+
+parser.add_argument('--ymax',
+                    action="store", 
+                    dest="ymax", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=None,
+                    help='y max')
+
+parser.add_argument('-x','--x',
+                    action="store", 
+                    metavar='STR', 
+                    type=str,
+                    default='t',
+                    help='quantity to plot in the x axis')
+
+parser.add_argument('-y','--y',
+                    action="store", 
+                    metavar='STR', 
+                    type=str,
+                    default='r',
+                    help='quantity to plot in the y axis')
+
+
+parser.add_argument("--colormap",
+                    action="store", 
+                    default=None,
+                    help='matplotlib colormap name (e.g. turbo, tab20c, Greys, jet, binary)')
+
+parser.add_argument("--colormap-reverse",
+                    action="store_true", 
+                    default=False,
+                    help='reverse colormap')                    
+
+parser.add_argument('--names',
+                    action="store", 
+                    metavar='STR', 
+                    type=str,
+                    default=None,
+                    nargs="*",
+                    help='list of names to plot')
+
+parser.add_argument("--ax-equal",
+                    action="store_true", 
+                    default=False,
+                    help='force equal axes')                    
+
+parser.add_argument('--log',
+                    action="store", 
+                    dest="log", 
+                    metavar='STR', 
+                    type=str,
+                    default=None,
+                    help='log scale (None,x,y,xy)')
+
+
+#######################################
+# MakePlot
+#######################################
+
+def set_value_and_label(key,x,y,z,r,t):
+
+  if key=="x":
+      val = x
+      lab = "x [kpc]"
+  elif key=="y":
+      val = y
+      lab = "y [kpc]"
+  elif key=="z":
+      val = z
+      lab = "z [kpc]"
+  elif key=="r":
+      val = r
+      lab = "Distance [kpc]"
+  elif key=="t":
+      val = t
+      lab = "Time [Gyr]"
+
+  return val,lab
+
+      
+
+def MakePlot(opt):
+
+  fontsize = 18
+  
+  params = {
+    "axes.labelsize": fontsize,
+    "axes.titlesize": fontsize,
+    "font.size": fontsize,
+    "legend.fontsize": fontsize,
+    "xtick.labelsize": fontsize,
+    "ytick.labelsize": fontsize,
+    "text.usetex": True,
+    "figure.subplot.left": 0.15,
+    "figure.subplot.right": 0.95,
+    "figure.subplot.bottom": 0.15,
+    "figure.subplot.top": 0.95,
+    "figure.subplot.wspace": 0.02,
+    "figure.subplot.hspace": 0.02,
+    "figure.figsize" : (8, 6),
+    "lines.markersize": 6,
+    "lines.linewidth": 2.0,
+  }
+  plt.rcParams.update(params)  
+  
+  # create the plot
+  fig = plt.gcf()
+  fig.set_size_inches(8,8)
+  ax  = plt.gca()
+
+  ####################
+  # open the file
+
+  data = np.load(opt.file)
+
+  NumberOfObits = data['position'].shape[2]
+  
+  xs    = data['position']
+  vs    = data['velocity']
+  ts    = data['time']
+  names = data['names']
+
+  # get a list of colors
+  colors = plot.ColorList(n=NumberOfObits,colormap=opt.colormap,reverse=opt.colormap_reverse)
+  
+  for i in range(NumberOfObits):
+
+    
+    x = xs[0,:,i]
+    y = xs[1,:,i]
+    z = xs[2,:,i]
+    t = ts[:,i]
+    r = np.sqrt(x**2+y**2+z**2)
+
+
+    xp,xlabel = set_value_and_label(opt.x,x,y,z,r,t)
+    yp,ylabel = set_value_and_label(opt.y,x,y,z,r,t)  
+    color = colors.get()
+
+    
+    if opt.names is None or names[i] in opt.names: 
+      ax.plot(xp,yp,label=names[i],color=color)
+
+      ax.scatter(xp[0],yp[0],color=color,s=200,marker="*")
+      
+      
+    
+
+  if opt.ax_equal:
+    ax.set_aspect('equal', adjustable='box')
+
+      
+  # set the axis (the extention is done in the previous command)
+  plot.SetAxis(ax,opt.xmin,opt.xmax,opt.ymin,opt.ymax,log=opt.log,extend=False)
+  
+  # labels
+  ax.set_xlabel(xlabel)
+  ax.set_ylabel(ylabel)
+
+
+  # legend
+  if opt.legend:
+    plt.legend()
+    
+
+  # save or display
+  if opt.outputfilename:
+    plt.savefig(opt.outputfilename)
+  else:
+    plt.show()    
+      
+
+
+#################################
+# main
+#################################
+
+if __name__ == '__main__':  
+  
+  opt = parser.parse_args()
+  MakePlot(opt)
+
+

@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+###########################################################################################
+#  package:   pNbody
+#  file:      pNbody_checkall
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of pNbody.
+###########################################################################################
+
+from pNbody import *
+from pNbody import ic
+
+import numpy as np
+
+from optparse import OptionParser
+import os
+
+HOME = os.environ['HOME']
+
+########################################
+#
+# parser
+#
+########################################
+
+
+def random_string(n=10):
+  import string
+  s = np.array(list(string.ascii_lowercase))
+  idxs = np.random.randint(0,len(s),n)
+  return "".join(list(s[idxs]))
+
+
+random_filename = os.path.join("/tmp/",random_string())
+
+
+def parse_options():
+
+    usage = "usage: %prog [options] file"
+    parser = OptionParser(usage=usage)
+
+
+    parser.add_option("-f",
+                      action="store",
+                      dest="file",
+                      type="string",
+                      default=os.path.join(HOME, random_filename),
+                      help="output file name",
+                      metavar=" FILE")
+
+    parser.add_option("-n",
+                      action="store",
+                      dest="n",
+                      type="int",
+                      default=2**14,
+                      help="number of particles",
+                      metavar=" INT")
+
+    (options, args) = parser.parse_args()
+
+    files = args
+
+    return files, options
+
+
+#################################
+#
+# main
+#
+#################################
+
+
+files, opt = parse_options()
+
+
+
+file = opt.file
+
+
+
+print("create an exponential disk (type=gadget)")
+nb = ic.expd(
+    n=opt.n,
+    Hr=3.,
+    Hz=0.3,
+    Rmax=20,
+    Zmax=2,
+    irand=1,
+    name=file,
+    ftype="gadget")
+nb.write()
+
+# read it
+nb = Nbody(file)
+
+
+
+print("create an exponential disk (type=gh5)")
+nb = ic.expd(
+    n=opt.n,
+    Hr=3.,
+    Hz=0.3,
+    Rmax=20,
+    Zmax=2,
+    irand=1,
+    name=file,
+    ftype="gh5")
+nb.write()
+
+# read it
+nb = Nbody(file)
+
+
+
+
+print("create an exponential disk (type=swift)")
+nb = ic.expd(
+    n=opt.n,
+    Hr=3.,
+    Hz=0.3,
+    Rmax=20,
+    Zmax=2,
+    irand=1,
+    name=file,
+    ftype="swift")
+nb.write()
+
+# read it
+nb = Nbody(file)
+
+
+# clean
+os.remove(file)
+
+#################################
+#
+# the end
+#
+#################################
+
+print(72 * "#")
+print("Good News ! pNbody with format swift, gadget and gh5 is working !")
+print(72 * "#")
+
+
+
+

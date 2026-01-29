@@ -1,0 +1,160 @@
+#!/usr/bin/python3
+
+import numpy as np
+import argparse
+from tqdm import tqdm
+
+from pNbody import Nbody
+from pNbody.Mockimgs import lib as libMockimgs
+
+from astropy.io import fits
+import os
+
+  
+####################################################################
+# option parser
+####################################################################
+
+description="From a 2D mask, extract the corresponding 3D features from the snapshot and save a new snapshot file."
+epilog     ="""
+Examples:
+--------
+mockimgs_sb_extract_3Dfeatures_from_2Dmask snapshot.npy --masks-file masks.fits.gz -n 1 --nb-file snapshot.hdf5 -o snapshot-LSB1.hdf5
+mockimgs_sb_extract_3Dfeatures_from_2Dmask snapshot.npy --masks-file masks.fits.gz      --nb-file snapshot.hdf5 -o snapshot-LSB1.hdf5
+
+
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+
+
+parser.add_argument(action="store", 
+                    dest="file", 
+                    metavar='FILE', 
+                    type=str,
+                    default=None,
+                    help='a numpy file containing IDs of particles, output of mockimgs_sb_compute_images (with option --IDsMap)') 
+
+parser.add_argument("-o",
+                    action="store",
+                    type=str,
+                    dest="outputfilename",
+                    default=None,
+                    help="Name of the output file containing only extracted particles")  
+
+parser.add_argument("--masks-file",
+                    action="store",
+                    type=str,
+                    dest="masks_file",
+                    default=None,
+                    help="Name of the fits file containing the masks")
+
+parser.add_argument("--nb-file",
+                    action="store",
+                    type=str,
+                    dest="nb_file",
+                    default=None,
+                    help="Name of the nbody file from which particles will be selected")
+
+parser.add_argument("-n",
+                    action="store", 
+                    dest="n", 
+                    metavar='INT', 
+                    type=int,
+                    default=None,
+                    help='feature ID')  
+
+                                  
+####################################################################
+# main
+####################################################################
+
+
+
+if __name__ == '__main__':
+  
+  opt = parser.parse_args()
+       
+  # open masks-file
+  hdul = fits.open(opt.masks_file)
+  image = hdul[0].data
+
+  # find the number of mask if not given in the command line
+  if opt.n is None:
+    nmasks = int(image.max())
+
+    if nmasks==0:
+      print("no mask found")
+      exit()
+      
+  else:
+    nmasks = opt.n
+
+  
+  # open the IDs file
+  mat = np.load(opt.file,allow_pickle=True)
+
+  if mat.shape != image.shape:
+    raise ValueError("the size of the numpy file %s is different than the one of the masks %s"%(mat.shape,image.shape))
+
+
+  for n in range(1,nmasks+1):
+
+    # define a grid
+    nx = mat.shape[0]
+    ny = mat.shape[1]
+    x = np.arange(nx)
+    y = np.arange(ny)
+    x,y = np.meshgrid(x,y)
+     
+    # keep only the mask with ID=opt.n
+    mask = np.where(image==n,True,False)
+    mask = mask.transpose()
+     
+    # ravel
+    mask = mask.ravel()
+    x    = x.ravel()
+    y    = y.ravel()
+     
+    # compress
+    x = np.compress(mask,x)
+    y = np.compress(mask,y)
+     
+     
+    # this will become the list of IDs
+    IDs = np.array([])
+     
+    for k in tqdm(range(len(x))):
+      ix = int(x[k])
+      iy = int(y[k])
+     
+      if mat[ix,iy] is None:
+        continue
+     
+      IDs = np.append(IDs,mat[ix,iy])
+     
+      
+    nb = None
+    if opt.nb_file is not None:
+      nb = Nbody(opt.nb_file)
+      nb = nb.selectp(lst=IDs)
+      
+     
+    # save or display
+    if opt.outputfilename:
+      if nb is not None:
+
+        if opt.n is None:
+          base, ext = os.path.splitext(opt.outputfilename)
+          outputfilename = "%s-%s%s"%(base,n,ext)
+          nb.write(outputfilename)
+          
+        else:  
+          nb.write(opt.outputfilename)
+
+
+
+
+
+

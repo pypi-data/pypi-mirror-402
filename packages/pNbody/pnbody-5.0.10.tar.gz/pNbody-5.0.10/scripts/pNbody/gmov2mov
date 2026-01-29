@@ -1,0 +1,681 @@
+#!/usr/bin/env python3
+###########################################################################################
+#  package:   pNbody
+#  file:      gmov2mov
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of pNbody.
+###########################################################################################
+
+import pNbody
+from pNbody import Movie
+from pNbody import *
+from pNbody.palette import *
+from pNbody import cosmo
+
+import string
+from numpy import *
+from PIL import Image
+from PIL import ImageDraw
+from PIL import ImageFont
+from PIL import ImagePalette
+from PIL import ImageTk
+from PIL import ImageFont
+import sys
+import os
+import string
+import getopt
+import math
+
+from optparse import OptionParser
+
+
+##########################################################################
+def parse_options():
+    ##########################################################################
+
+    usage = "usage: %prog [options] file"
+    parser = OptionParser(usage=usage)
+
+    parser.add_option("-q", "--quality",
+                      action="store",
+                      dest="quality",
+                      type="int",
+                      default=5,
+                      help="quality 1,2,3,4,5")
+
+    parser.add_option("-m", "--mode",
+                      action="store",
+                      dest="mode",
+                      type="string",
+                      default=None,
+                      help="image mode : L, P or RGB")
+
+    parser.add_option("--rgb",
+                      action="store_true",
+                      dest="rgb",
+                      default=False,
+                      help="rgb mode")
+
+    parser.add_option("-k", "--keep",
+                      action="store_true",
+                      dest="keep",
+                      default=False,
+                      help="keep png images")
+
+    parser.add_option(
+        "--only_film",
+        action="store_true",
+        dest="only_film",
+        default=False,
+        help="make movie from dir dir, without reading a gmov film")
+
+    parser.add_option("--info",
+                      action="store_true",
+                      dest="info",
+                      default=False,
+                      help="give info on film")
+
+    parser.add_option("--nofilm",
+                      action="store_true",
+                      dest="nofilm",
+                      default=False,
+                      help="do not create the film (extract image only)")
+
+    parser.add_option("--with_time",
+                      action="store_true",
+                      dest="with_time",
+                      default=False,
+                      help="add time label")
+
+    parser.add_option("--time_format",
+                      action="store",
+                      dest="time_format",
+                      default=None,
+                      help="time format")
+
+    parser.add_option("--time_x",
+                      action="store",
+                      type='float',
+                      dest="time_x",
+                      default=None,
+                      help="time relative position in x")
+
+    parser.add_option("--time_y",
+                      action="store",
+                      type='float',
+                      dest="time_y",
+                      default=None,
+                      help="time relative position in y")
+
+    parser.add_option("--text",
+                      action="store",
+                      dest="text",
+                      type="string",
+                      default=None,
+                      help="text")
+
+    parser.add_option("--text_x",
+                      action="store",
+                      type='float',
+                      dest="text_x",
+                      default=None,
+                      help="text relative position in x")
+
+    parser.add_option("--text_y",
+                      action="store",
+                      type='float',
+                      dest="text_y",
+                      default=None,
+                      help="text relative position in y")
+
+    parser.add_option("--text_size",
+                      action="store",
+                      dest="text_size",
+                      type="int",
+                      default=8,
+                      help="text size")
+
+    parser.add_option("--text_font",
+                      action="store",
+                      dest="text_font",
+                      type="string",
+                      default="kidprbol.ttf",
+                      help="text font")
+
+    parser.add_option("-o",
+                      action="store",
+                      dest="outputfile",
+                      type="string",
+                      default=None,
+                      help="output file name")
+
+    parser.add_option("--fps",
+                      action="store",
+                      dest="fps",
+                      type="int",
+                      default=24,
+                      help="frame per second")
+
+    parser.add_option("--istart",
+                      action="store",
+                      dest="istart",
+                      type="int",
+                      default=0,
+                      help="first number of frame")
+
+    parser.add_option("-s", "--step",
+                      action="store",
+                      dest="step",
+                      type="int",
+                      default=0,
+                      help="number of step to leep")
+
+    parser.add_option("-i", "--tinit",
+                      action="store",
+                      dest="tinit",
+                      type="float",
+                      default=0,
+                      help="initial time")
+
+    parser.add_option("-f", "--tfinal",
+                      action="store",
+                      dest="tfinal",
+                      type="float",
+                      default=1e100,
+                      help="final time")
+
+    parser.add_option("-z", "--zoom",
+                      action="store",
+                      dest="zoom",
+                      type="float",
+                      default=1,
+                      help="zoom factor")
+
+    parser.add_option("-p", "--palette",
+                      action="store",
+                      dest="palette",
+                      type="string",
+                      default="ramp",
+                      help="color palette")
+
+    parser.add_option("-d", "--dir",
+                      action="store",
+                      dest="dir",
+                      type="string",
+                      default="tmp",
+                      help="directory for png files")
+
+    parser.add_option("--text_color",
+                      action="store",
+                      dest="text_color",
+                      type="string",
+                      default=None,
+                      help="text color")
+
+    parser.add_option("--codec",
+                      action="store",
+                      dest="codec",
+                      type="string",
+                      default=None,
+                      help="msmpeg4v2, mpeg4, x264")
+
+    parser.add_option("--format",
+                      action="store",
+                      dest="format",
+                      type="string",
+                      default=None,
+                      help="film format")
+
+    parser.add_option("--ratio",
+                      action="store",
+                      dest="ratio",
+                      type="float",
+                      default=None,
+                      help="film ratio")
+
+    parser.add_option("--bitrate",
+                      action="store",
+                      dest="bitrate",
+                      type="int",
+                      default=None,
+                      help="bitrate in k")
+
+    parser.add_option("--pass",
+                      action="store",
+                      dest="passes",
+                      type="int",
+                      default=1,
+                      help="number of pass")
+
+    (options, args) = parser.parse_args()
+
+    if len(args) == 0:
+        if not options.only_film:
+            print("you must specify at least a filename")
+            sys.exit(0)
+
+    return args, options
+
+
+##########################################################################
+#
+#  MAIN
+#
+##########################################################################
+
+
+files, options = parse_options()
+
+
+FONT_PATH = os.path.join(PNBODYPATH, 'fonts')
+FFONT = os.path.join(FONT_PATH, options.text_font)
+
+
+if options.only_film:
+    options.keep = True
+
+
+if not options.only_film:
+
+    fname = files[0]
+
+    exec("options.text_color = %s" % (options.text_color))
+
+    if options.rgb:
+        mode = "image_rgb"
+
+        if options.text_color is None:
+            options.text_color = (255, 255, 255)
+
+    else:
+        mode = "image"
+
+        if options.text_color is None:
+            options.text_color = 255
+
+    # initial and final time
+
+    if (options.tfinal != 0):
+        if (options.tfinal < options.tinit):
+            print("number of final image must be larger than initial image !")
+            sys.exit(0)
+
+    #fname = xarguments[0]
+
+    if (fname == " "):
+        help_message()
+        sys.exit(0)
+
+    # verifie que le fichier existe
+
+    if (os.path.exists(fname) == 0):
+        print("Error : the file ", fname, " no not exist.")
+        sys.exit(0)
+
+    # output file
+    if options.outputfile is None:
+        options.outputfile = "%s.avi" % os.path.splitext(
+            os.path.basename(fname))[0]
+    else:
+        # find output format
+        ext = os.path.splitext(options.outputfile)[1]
+        options.format = ext[1:]
+
+    # ouvre le film
+    film = Movie.Movie(fname)
+    film.open()
+
+    if options.info:
+        film.info()
+        sys.exit(0)
+
+    # create a palette object
+    palette = Palette()
+    pth = os.path.join(PALETTEDIR, options.palette)
+    palette.read(pth)
+
+    if not os.path.exists(options.dir):
+        os.mkdir(options.dir)
+
+    ###################################################
+    # taille de l'image de sortie
+
+    # largeur de l'image
+    width = int(film.numByte * options.zoom)
+
+    # ----------------
+    # choix des font
+    # ----------------
+
+    # determination de la taille
+
+    fsize = int(12 * options.zoom - math.fmod(12 * options.zoom, 2))
+
+    if (fsize > 24):
+        fsize = 24
+    if (fsize < 8):
+        fsize = 8
+
+    if (fsize < 10):
+        size = '0' + repr(fsize)
+    else:
+        size = repr(fsize)
+
+    #fontbasename = os.path.basename(FFONT)
+    #fontdirname  = os.path.dirname(FFONT)+'/'
+    #fontname = fontdirname+fontbasename[:6]+size+ fontbasename[8:]
+    #font = ImageFont.load(fontname)
+
+    font = ImageFont.truetype(FFONT, options.text_size)
+
+    xy = font.getsize('-')
+
+    if options.with_time and (
+            options.time_x is None) and (
+            options.time_y is None):
+        dylab = int(1.5 * xy[1])
+    else:
+        dylab = 0
+
+    # hauteur de l'image
+    height = int((film.numLine) * options.zoom) + dylab
+    shapezoom = (width, height)
+
+    ###########################
+    # lecture de tout le film
+    ###########################
+
+    leap = 0
+    i = -1 + options.istart
+    while True:
+        #data = film.read_one()
+        #time,image = read_one_with_time()
+
+        i = i + 1
+
+        time, image = film.read_one_with_time(mode)
+
+        if time is None:
+            break
+
+        atime = film.current_time
+
+        if atime >= options.tinit and atime <= options.tfinal:
+
+            if leap == 0:
+
+                # zoom
+                if options.zoom != 1.:
+                    image = image.transform(
+                        shapezoom,
+                        Image.AFFINE,
+                        (1. / options.zoom,
+                         0.,
+                         0.,
+                         0.,
+                         1. / options.zoom,
+                         0),
+                        Image.BICUBIC)
+                if dylab != 0:
+                    image = image.transform(
+                        shapezoom, Image.AFFINE, (1, 0., 0., 0., 1, -dylab), Image.BICUBIC)
+
+                # add time
+                if options.with_time:
+
+                    if options.time_format is None:
+                        time = "%8.3f" % (atime)
+                    elif options.time_format == 'cGyr':
+                        a = atime
+                        t = cosmo.Age_a(a)
+                        time = "t = %4.1f Gyr" % (-t)
+                    elif options.time_format == 'caGyr':
+                        a = atime
+                        t = cosmo.Age_a(a)
+                        time = "a = %4.3f  t = %4.1f Gyr" % (a, -t)
+                    elif options.time_format == 'cazGyr':
+                        a = atime
+                        z = 1. / a - 1
+                        t = cosmo.Age_a(a)
+                        time = "a = %4.3f       z=%4.1f       t=%4.1f Gyr" % (
+                            a, z, -t)
+                    elif options.time_format == 'czGyr':
+                        a = atime
+                        z = 1. / a - 1
+                        t = cosmo.Age_a(a)
+                        time = "z=%4.1f    t=%4.1f Gyr" % (z, -t)
+                    elif options.time_format == 'ca':
+                        a = atime
+                        time = "a = %4.3f" % (a)
+                    elif options.time_format == 'cz':
+                        a = atime
+                        z = 1. / a - 1
+                        time = "z=%4.1f" % (z)
+                    elif options.time_format == 'Myr':
+                        a = atime
+                        time = "%04.0f Myr" % (a)
+                    else:
+                        exec(options.time_format)
+
+                    xy = font.getsize(time)
+
+                    # specific position
+                    if (options.time_x is not None) and (
+                            options.time_y is not None):
+                        xref = width - (width - xy[0]) / 2
+                        x = width * options.time_x - xy[0] / 2
+                        y = height - height * options.time_y - xy[1] / 2
+                        poslab = (x, y)
+                        draw = ImageDraw.Draw(image)
+                        draw.text(
+                            poslab, time, fill=options.text_color, font=font)
+
+                    # default position outisde movie
+                    else:
+                        xref = width - (width - xy[0]) / 2
+                        x = xref - xy[0]
+                        y = int(dylab / 4)
+                        poslab = (x, y)
+                        draw = ImageDraw.Draw(image)
+                        draw.rectangle((0, 0, width, dylab), fill=1)
+                        draw.text(
+                            poslab, time, fill=options.text_color, font=font)
+
+                # add a text
+                if options.text is not None:
+                    xy = font.getsize(options.text)
+
+                    if (options.text_x is not None) and (
+                            options.text_y is not None):
+                        x = width * options.text_x - xy[0] / 2
+                        y = height - height * options.text_y - xy[1] / 2
+                    else:
+                        x = 1 * xy[1]
+                        y = height - xy[1] - 1 * xy[1]
+
+                    postext = (x, y)
+                    draw = ImageDraw.Draw(image)
+                    draw.text(
+                        postext,
+                        options.text,
+                        fill=options.text_color,
+                        font=font)
+
+                # add borders
+                if options.ratio is not None:
+
+                    # read the geometry
+                    w = image.size[0]
+                    h = image.size[1]
+
+                    f = options.ratio * float(h) / float(w)
+                    dw = int(0.5 * w * (f - 1))
+                    image = image.transform(
+                        (dw + +dw + w, h), Image.AFFINE, (1, 0., -dw, 0., 1, 0), Image.BICUBIC)
+
+                # include the palette
+                if not options.rgb:
+                    image.putpalette(palette.palette)
+
+                if options.mode is not None:
+                    image = image.convert(options.mode)
+
+        ####################################
+        # en dessous, partie propre a mpeg
+        ####################################
+
+                # save it
+                bname = "%s/%08d" % (options.dir, i)
+                print(bname, atime)
+                image.save(bname + '.png')
+
+                if options.format == 'mp4':
+                    os.system(
+                        "convert -quality 100 %s %s " %
+                        (bname + '.png', bname + '.gif'))
+
+            leap = fmod(leap + 1, options.step)
+
+        else:
+            continue
+
+
+####################################
+# conversion into gif if needed
+####################################
+"""
+if options.format == 'mp4' and  options.only_film:
+
+  files = glob.glob(os.path.join(options.dir,'*.png'))
+
+  for file in files:
+    bname = os.path.splitext(file)[0]
+    cmd = "convert -quality 100 %s %s "%(bname+'.png',bname+'.gif')
+    print cmd
+    os.system(cmd)
+"""
+
+####################################
+# creation du film mpeg
+####################################
+
+"""
+#mencoder mf://tmp/*.png -mf type=png:fps=25  -ovc lavc -lavcopts vcodec=mpeg4 -oac copy -o film.mpg
+
+#tres basse qualite vbitrate=800
+mencoder mf://tmp/*.png -mf type=png:fps=25  -ovc lavc -lavcopts vcodec=mpeg4:vbitrate=256 -oac copy -o film.mpg
+
+
+#basse qualite vbitrate=800
+mencoder mf://tmp/*.png -mf type=png:fps=25  -ovc lavc -lavcopts vcodec=mpeg4 -oac copy -o film.mpg
+
+#basse qualite
+mencoder mf://tmp/*.png -mf type=png:fps=25  -ovc lavc -lavcopts vcodec=mpeg4:vbitrate=1600 -oac copy -o film.mpg
+
+tres bonne qualite
+mencoder mf://tmp/*.png -mf type=png:fps=25  -ovc lavc -lavcopts vcodec=mpeg4:vbitrate=2400:mbd=2:mv0:trell:v4mv:cbp:last_pred=3:predia=2:dia=2:vmax_b_frames=2:vb_strategy=1:precmp=2:cmp=2:subcmp=2:preme=2:qns=2 -oac copy -o film.mpg
+
+super qualite
+mencoder mf://tmp/*.png -mf type=png:fps=25  -ovc lavc -lavcopts vcodec=mpeg4:vbitrate=8000:vrc_buf_size=1835:vrc_maxrate=9800:keyint=15:trell:mbd=2:precmp=2:subcmp=2:cmp=2:dia=-10:predia=-10:cbp:mv0:vqmin=1:lmin=1:dc=10:vstrict=0 -oac copy -o film.mpg
+
+
+sans compresseion
+mencoder mf://tmp/*.png -mf type=png:fps=25  -ovc copy -oac copy -o film.avi
+"""
+
+
+# if options.format == 'mp4':
+#
+#  #ffmpeg -r 24 -b 16000k -i %08d.gif  qq.mp4
+#
+#  #cmd = """ffmpeg  -i %s/%%08d.gif  -r %d  -b 16000k  %s"""%(options.dir,options.fps,options.outputfile)
+#  cmd = """ffmpeg  -i %s/%%08d.png  -r %d  -b 16000k  %s"""%(options.dir,options.fps,options.outputfile)
+
+
+# read one file and find width height
+files = glob.glob(os.path.join(options.dir, '*.png'))
+img = Image.open(files[0])
+width = img.size[0]
+height = img.size[1]
+print("image size = %d x %d" % (width, height))
+
+
+oac = "-oac copy"
+ovco = ""
+
+if options.codec == 'msmpeg4v2':
+
+    ovco = "-ovc lavc -lavcopts"
+
+    if options.bitrate is not None:
+        vbitrate = options.bitrate
+    elif options.quality == 1:
+        vbitrate = 256
+    elif options.quality == 2:
+        vbitrate = 1600
+    elif options.quality == 3:
+        vbitrate = 2400
+    elif options.quality == 4:
+        vbitrate = 8000
+
+    ovc = "vcodec=%s:vbitrate=%d" % (options.codec, vbitrate)
+
+
+elif options.codec == 'x264':
+
+    # http://www.mplayerhq.hu/DOCS/HTML/en/menc-feat-x264.html
+
+    ovco = "-ovc x264 -x264encopts"
+
+    if options.bitrate is not None:
+        vbitrate = options.bitrate
+    else:
+        vbitrate = int(50 * options.fps * width * height / 256. / 1024.)
+
+    print("vbitrate=%d" % (vbitrate))
+
+    if options.quality == 1:
+        ovc = "subq=4:bframes=2:b_pyramid=normal:weight_b:bitrate=%d" % vbitrate
+    if options.quality == 2:
+        ovc = "subq=5:8x8dct:frameref=2:bframes=3:b_pyramid=normal:weight_b:bitrate=%d" % vbitrate
+    else:
+        ovc = "subq=6:partitions=all:8x8dct:me=umh:frameref=5:bframes=3:b_pyramid=normal:weight_b:bitrate=%d" % vbitrate
+
+
+else:
+    ovc = "-ovc copy"
+
+
+cmds = []
+if options.codec == 'x264':
+    for p in range(options.passes):
+        tmp = "%s pass=%s:%s" % (ovco, p + 1, ovc)
+        cmd = """mencoder mf://%s/*.png  -mf type=png:fps=%d %s %s -o %s""" % (
+            options.dir, options.fps, tmp, oac, options.outputfile)
+        cmds.append(cmd)
+else:
+    ovc = "%s %s" % (ovco, ovc)
+    cmd = """mencoder mf://%s/*.png  -mf type=png:fps=%d %s %s -o %s""" % (
+        options.dir, options.fps, ovc, oac, options.outputfile)
+    cmds.append(cmd)
+
+
+if not options.nofilm:
+
+    for cmd in cmds:
+        print("############################")
+        print(cmd)
+        print("############################")
+        os.system(cmd)
+
+else:
+    options.keep = True
+
+
+if not options.keep:
+    os.system('rm %s/*' % (options.dir))
+    os.removedirs('%s' % (options.dir))

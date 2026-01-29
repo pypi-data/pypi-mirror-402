@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+# -*- coding: iso-8859-1 -*-
+
+import sys
+import os
+import glob
+import shutil
+import pickle
+
+from PIL import Image
+from PIL import ImageDraw
+from PIL import ImageFont
+
+from optparse import OptionParser
+
+from pNbody.mtool import *
+
+
+
+##########################################################################
+def parse_options():
+    ##########################################################################
+
+    usage = "usage: %prog [options] file"
+    parser = OptionParser(usage=usage)
+
+    parser.add_option("-m", "--mode",
+                      action="store",
+                      dest="mode",
+                      type="string",
+                      default='RGB',
+                      help="image mode : L, P or RGB")
+
+    parser.add_option("-p", "--parameterfile",
+                      action="store",
+                      dest="parameterfile",
+                      type="string",
+                      default=None,
+                      help="parameter file")
+
+    parser.add_option("-o",
+                      action="store",
+                      dest="outputfile",
+                      type="string",
+                      default=None,
+                      help="output file name")
+
+    parser.add_option("-d", "--directory",
+                      action="store",
+                      dest="directory",
+                      type="string",
+                      default=None,
+                      help="image directory")
+
+    parser.add_option("--cmd",
+                      action="store",
+                      dest="cmd",
+                      type="string",
+                      default=None,
+                      help="execute command")
+
+    parser.add_option("-i", "--infofile",
+                      action="store",
+                      dest="infofile",
+                      type="string",
+                      default=None,
+                      help="info file")
+
+    (options, args) = parser.parse_args()
+
+    return args, options
+
+
+##########################################################################
+#
+#  MAIN
+#
+##########################################################################
+
+
+files, opt = parse_options()
+files = [files]
+opt.outputdirectory = None
+
+
+# check parameter file
+if opt.parameterfile is not None:
+    if not os.path.isfile(opt.parameterfile):
+        raise Exception("parameter file %s does not exits !" % opt.parameterfile)
+
+
+# read info file
+info_dict = None
+if opt.infofile is not None:
+    f = open(opt.infofile,'rb')
+    info_dict = pickle.load(f)
+    f.close()
+
+
+if opt.directory is not None:
+
+    opt.dicretories = str.split(opt.directory, ',')
+
+    files = []
+
+    for directory in opt.dicretories:
+        if not os.path.isdir(directory):
+            raise Exception("directory %s not exits !" % directory)
+
+        fls = sorted(glob.glob(os.path.join(directory, "*")))
+        print((directory, len(fls)))
+        files.append(fls)
+
+    if opt.outputfile is None:
+        raise Exception("you must specify an output directory, using the outputfile option")
+
+    opt.outputdirectory = opt.outputfile
+    if os.path.isdir(opt.outputdirectory):
+        shutil.rmtree(opt.outputdirectory)
+
+    os.mkdir(opt.outputdirectory)
+
+
+nd = len(files)		# number of directories
+n = len(files[0])  # number of files in first directory
+
+
+for i in range(n):
+
+    imgs = []
+
+    for d in range(nd):
+        file = files[d][i]
+
+        print(("%08d/%08d %s" % (i, n, file)))
+        
+        # open the images
+        img = Image.open(file)
+
+        # set the output type
+        if opt.mode is not None:
+            img = img.convert(opt.mode)
+
+        # add to the list
+        imgs.append(img)
+
+    # apply transformation
+    if opt.cmd is not None:
+        exec(opt.cmd)
+
+    # apply transformations
+    if opt.parameterfile is not None:
+        exec(compile(open(opt.parameterfile).read(), opt.parameterfile, 'exec'))
+
+    # save image
+    if opt.outputdirectory is not None:
+        img.save(os.path.join(opt.outputdirectory, "%08d.png" % i))
+
+    elif opt.outputfile is not None:
+        img.save(opt.outputfile)

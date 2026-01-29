@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+
+from pNbody import Nbody
+from pNbody import ctes
+from pNbody import plot
+import numpy as np
+import argparse
+
+
+####################################################################
+# option parser
+####################################################################
+
+description="""From a snapshot file, extract particles that are gravitationally bounded"""
+epilog     ="""
+Examples:
+--------
+snapshots_extract_gravbounded --eps 0.0001 snapshot.hdf5 -o output_snapshot.hdf5
+
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+plot.add_files_options(parser)
+plot.add_arguments_units(parser)
+plot.add_arguments_reduc(parser)
+plot.add_arguments_center(parser)
+plot.add_arguments_select(parser)
+plot.add_arguments_info(parser)
+plot.add_arguments_legend(parser)
+plot.add_arguments_icshift(parser)
+plot.add_arguments_cmd(parser)
+
+parser.add_argument(action="store", 
+                    dest="file", 
+                    metavar='FILE', 
+                    type=str,
+                    default=None,
+                    help='a file')                     
+
+
+parser.add_argument("-o",
+                    action="store",
+                    type=str,
+                    dest="outputfilename",
+                    default=None,
+                    help="Name of the output file")  
+
+
+parser.add_argument("--eps",
+                     action="store",
+                     dest="eps",
+                     type=float,
+                     default=0.1,
+                     help="smoothing length",
+                     metavar=" FLOAT")
+
+
+                       
+
+#######################################
+# MakePlot
+#######################################
+
+
+def Do(opt):
+
+  nb = Nbody(opt.file, ftype=opt.ftype)
+    
+  ################
+  # units
+  ################
+ 
+  # define local units
+  unit_params = plot.apply_arguments_units(opt)
+  nb.set_local_system_of_units(params=unit_params)
+   
+  # get G
+  system_of_units = nb.localsystem_of_units
+  G=ctes.GRAVITY.into(system_of_units)
+
+  # convert to proper units
+  nb.pos  = nb.Pos().astype(np.float32)
+  nb.vel  = nb.Vel().astype(np.float32)
+  nb.mass = nb.Mass().astype(np.float32)
+   
+  rmax = nb.rxyz().max()
+  eps  = rmax * 1e-5
+  nb.pos = nb.pos + np.random.uniform(-eps,eps,size=(nb.nbody,3))
+   
+  # compute the potential
+  U = G*nb.TreePot(nb.pos,eps=opt.eps)
+   
+  # compute kinetic energy
+  #nbs = nb.selectc(r<0.5*r.max())
+  nbs = nb
+  vxm = nbs.vx().mean()
+  vym = nbs.vy().mean()
+  vzm = nbs.vz().mean()
+  K = 0.5 *  ( (nb.vx()-vxm)**2 + (nb.vy()-vym)**2 + (nb.vz()-vzm)**2 )
+   
+  # compute total energy
+  E = U+K
+  nb.E = E
+   
+  # select only stars
+  #nb = nb.select('stars')
+  nb = nb.selectc(nb.E<0)
+   
+  r = nb.rxyz()
+  E = nb.E
+   
+  #from matplotlib import pylab as plt
+  #plt.scatter(r,E)
+  #plt.show()
+   
+  ids = nb.num
+
+  if opt.outputfilename:
+    nb = Nbody(opt.file)
+    nb = nb.selectp(lst=ids)
+    nb.write(opt.outputfilename)
+
+
+
+
+
+
+#################################
+# main
+#################################
+
+if __name__ == '__main__':  
+  
+  opt = parser.parse_args()
+  Do(opt)
+  
+
+
+
+
+
+
+
+
+
+
+

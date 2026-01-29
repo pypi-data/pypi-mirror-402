@@ -1,0 +1,125 @@
+#!/usr/bin/python3
+
+from pNbody import Nbody
+import argparse
+import os
+import glob
+import numpy as np
+import pickle
+
+####################################################################
+# option parser
+####################################################################
+
+description="""Loop over a set of snapshot and extract physical quantities.
+"""
+
+epilog     ="""
+Examples:
+--------¨
+
+
+multiple files
+---------------
+snapshots_extract_props snapshots/* 
+snapshots_extract_props snapshots/* -o output.pkl
+"""
+
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+parser.add_argument(action="store", 
+                    dest="files", 
+                    metavar='FILE', 
+                    type=str,
+                    default=None,
+                    nargs='*',
+                    help='a list of snapshots')       
+
+parser.add_argument('-o',
+                    dest="outputfile", 
+                    type=str,
+                    default=None,
+                    help='output file') 
+
+parser.add_argument('--do-not-skip-processed', 
+                    action="store_true",
+                    help='force processing all files, even the ones already processed') 
+
+parser.add_argument("--exec",
+                    action="store",
+                    type=str,
+                    default=None,
+                    help="give command to execute before")
+
+
+
+####################################################################
+# main
+####################################################################
+
+opt = parser.parse_args()
+
+
+StellarTotalMass_s = np.zeros(0)
+R12_s              = np.zeros(0)
+R12e_s             = np.zeros(0)
+sigmaLOS_s         = np.zeros(0)
+sigmaLOSe_s        = np.zeros(0)
+sigmaLOS1kpc_s     = np.zeros(0)
+sigmaLOS1kpce_s    = np.zeros(0)
+
+datas = {}
+
+for filename in opt.files:
+  
+  # open the file
+  nb = Nbody(filename)
+
+  # apply option  
+  if opt.exec is not None:
+    exec(opt.exec)
+
+
+  name = os.path.basename(filename)
+
+  print(name)
+    
+  #########################################  
+  # compute physical properties
+
+  data = {}
+
+  data["filename"] = filename
+
+  # total mass mass
+  TotalStellarMass = nb.TotalMass(units='Msol')
+  data["TotalStellarMass"] = TotalStellarMass
+  
+  # half light radius
+  HalfLightRadius,HalfLightRadius_e = nb.CylindricalHalfMass(nlos=32,Rmax=10)
+  data["HalfLightRadius"] = HalfLightRadius
+  data["HalfLightRadius_e"] = HalfLightRadius_e
+  
+  # velocity disp. in the half light radius
+  sigmaLOS,sigmaLOS_e = nb.CylindricalLOSVelocityDispertion(Rmax=HalfLightRadius,nlos=32)
+  data["sigmaLOS"] = sigmaLOS
+  data["sigmaLOS_e"] = sigmaLOS_e
+  
+  # velocity disp. in 1kpc
+  sigmaLOS1kpc,sigmaLOS1kpc_e = nb.CylindricalLOSVelocityDispertion(Rmax=1,nlos=32)
+  data["sigmaLOS1kpc"] = sigmaLOS1kpc
+  data["sigmaLOS1kpc_e"] = sigmaLOS1kpc_e    
+
+  # store
+  datas[name] = data
+  
+
+    
+  # save the file   
+  if opt.outputfile is not None:
+    with open(opt.outputfile, 'wb') as f:
+      pickle.dump(datas, f)
+    
+    
+  

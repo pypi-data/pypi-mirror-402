@@ -1,0 +1,365 @@
+#!/usr/bin/env python3
+
+import argparse
+
+from pNbody.mass_models import MWPotential2014 as MW
+from pNbody.mass_models import plummer
+from pNbody.mass_models import gen_2_slopes
+
+import numpy as np
+from astropy.cosmology import Planck18 as cosmo
+
+from astropy import units as u
+from astropy.constants import G as G_a
+
+from matplotlib import pylab as plt
+
+from scipy.optimize import root_scalar
+
+
+
+
+
+
+
+####################################################################
+# option parser
+####################################################################
+
+description = """Compute the tidal radius of a satellites orbiting a potential.
+
+The satellite is composed of a  generalized 2-slopes model (the dark halo) as well as a Plummer model (the stellar counterpart).
+The parameters are similar to the ones of the script ic_gen_2_slopes+plummer
+
+The Plummer is parametrized by :
+
+  Mtot : the total Plummer mass, in Msol 
+  a    : the scale radius, equivalent to the half light radius when projected, in kpc
+
+The generalized 2-slope model is parametrized either by:
+
+  rs    : the scale radius, in kpc
+  rho0  : the density at the scale radius, in Msol/kpc^3
+  alpha : the inner slope
+  beta  : the outer slope
+
+or:
+
+  M200  : the virial mass, in Msol
+  c     : the concentration parameter
+  alpha : the inner slope
+  beta  : the outer slope
+
+
+The host is either the MW2014 model or an NFW. In the latter case, the NFW is
+parameterized by :
+
+  M200_host  : the virial mass, in Msol
+  c_host     : the concentration parameter
+  alpha_host : the inner slope
+  beta_host  : the outer slope
+
+The tidal radius is defined by the solution of:
+
+  dPhi_host/dr|_Rc * Rc/RT = dPhi_sat/dr|_R
+
+which basically is the distance to the center of the Lagrange points (L4 and L5).
+
+
+
+"""
+epilog = """
+Examples:
+--------
+
+# use the MW2014 model
+orbit_getTidalRadius --M200 3.5e10 --c 11 --alpha 1 --beta 3 --Mtot 1e8 -a 2 --Rc 50
+
+# use an NFW model for the host
+orbit_getTidalRadius --M200 3.5e10 --c 11 --alpha 1 --beta 3 --Mtot 1e8 -a 2 --M200_host 1e12 --c_host 10 --Rc 50
+
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+
+
+parser.add_argument("--c",
+                    action="store",
+                    type=float,
+                    dest="c",
+                    default=None,
+                    help="concentration parameter")
+
+parser.add_argument("--M200",
+                    action="store",
+                    type=float,
+                    dest="M200",
+                    default=None,
+                    help="virial mass in Msol")
+
+parser.add_argument("--alpha",
+                    action="store",
+                    type=float,
+                    dest="alpha",
+                    default=1,
+                    help="Gen2slopes : alpha parameter")
+
+parser.add_argument("--beta",
+                    action="store",
+                    type=float,
+                    dest="beta",
+                    default=3,
+                    help="Gen2slopes : beta parameter")
+
+parser.add_argument("--c_host",
+                    action="store",
+                    type=float,
+                    dest="c_host",
+                    default=None,
+                    help="concentration parameter of the host")
+
+parser.add_argument("--M200_host",
+                    action="store",
+                    type=float,
+                    dest="M200_host",
+                    default=0,
+                    help="virial mass in Msol of the host. If 0, use the MW214 potential")
+
+
+parser.add_argument("--alpha_host",
+                    action="store",
+                    type=float,
+                    dest="alpha_host",
+                    default=1,
+                    help="Gen2slopes : alpha parameter for the host")
+
+
+parser.add_argument("--beta_host",
+                    action="store",
+                    type=float,
+                    dest="beta_host",
+                    default=3,
+                    help="Gen2slopes : beta parameter for the host")
+
+
+
+parser.add_argument("-a",
+                    action="store",
+                    type=float,
+                    dest="a",
+                    default=1,
+                    help="Plummer a parameter")
+
+parser.add_argument("--Mtot",
+                    action="store",
+                    type=float,
+                    dest="Mtot",
+                    default=1,
+                    help="Plummer total mass in solar mass")
+
+parser.add_argument("--Rc",
+                    action="store",
+                    type=float,
+                    dest="Rc",
+                    default=50,
+                    help="Radius of a circular orbit")
+
+
+
+def GalaxyPotentialGradient(R,opt):
+  '''
+  return the gradient of the specific potential of the galaxy
+  '''
+
+  # Defines the units (kpc, 10^10 M_sun, 0.98 Gyr)---------------------------
+  unit_length = 1*u.kpc
+  unit_length = unit_length.to(u.kpc)
+  unit_mass = u.M_sun*1e10
+  unit_mass = unit_mass.to(1e10*u.M_sun)
+  unit_velocity = 1*u.km/u.s
+  unit_velocity = unit_velocity.to(unit_velocity)
+  unit_time = unit_length/unit_velocity
+  unit_time = unit_time.to(u.Gyr)
+  unit_velocity = (unit_length/unit_time).to(u.cm/u.s)
+  unit_velocity = unit_velocity.to(u.km/u.s)
+  G = G_a.to(unit_length**3 * unit_mass**(-1) * unit_time**(-2))
+  G = G.value
+  
+  position = np.array([R,0.,0.])
+  t        = 0
+  
+  params =  MW.MWPotential2014_parameters()
+
+  rho_0     = params["rho_0"]
+  r_s       = params["r_s"]
+  M_disk    = params["M_disk"]
+  a         = params["a"]
+  b         = params["b"]
+  alpha     = params["alpha"]
+  r_c       = params["r_c"]
+  amplitude = params["amplitude"]
+  r_1       = params["r_1"]
+  f_1       = params["f_1"]
+  f_2       = params["f_2"]
+  f_3       = params["f_3"]
+  c         = params["c"]
+  M_200     = params["M_200"]
+  r_200     = params["r_200"]
+  rho_c     = params["rho_c"]
+  H_0       = params["H_0"]
+  
+  GradPot = MW.GradPot(rho_0, r_s, M_disk,a, b, alpha, r_c, amplitude, r_1, f_1, f_2,f_3, position, t, G)
+
+  return GradPot[0]
+
+
+def NFWPotentialGradient(R,opt):
+  '''
+  return the gradient of an NFW potential
+  '''
+
+  # Defines the units (kpc, 10^10 M_sun, 0.98 Gyr)---------------------------
+  unit_length = 1*u.kpc
+  unit_length = unit_length.to(u.kpc)
+  unit_mass = u.M_sun*1e10
+  unit_mass = unit_mass.to(1e10*u.M_sun)
+  unit_velocity = 1*u.km/u.s
+  unit_velocity = unit_velocity.to(unit_velocity)
+  unit_time = unit_length/unit_velocity
+  unit_time = unit_time.to(u.Gyr)
+  unit_velocity = (unit_length/unit_time).to(u.cm/u.s)
+  unit_velocity = unit_velocity.to(u.km/u.s)
+  G = G_a.to(unit_length**3 * unit_mass**(-1) * unit_time**(-2))
+  G = G.value
+  toMsol     = unit_mass.to(u.M_sun).value
+
+  
+  # NFW
+  M200     = opt.M200_host  # Msol
+  M200     = M200/toMsol    # to code units
+  c        = opt.c_host     # for MW
+  alpha    = opt.alpha_host
+  beta     = opt.beta_host
+
+  # this is redumdant...
+  u_Length   = 1* u.kpc
+  u_Mass     = 10**10 * u.M_sun
+  u_Velocity = 1* u.km/u.s
+  u_Time     = u_Length/u_Velocity 
+  
+  H0   = cosmo.H0.to(1/u_Time).value
+  gen2slopes = gen_2_slopes.GEN2SLOPES(alpha=alpha,beta=beta,c=c,M200=M200,G=G,H0=H0)
+
+  gen2slopesGradPot = gen2slopes.dPotential(R)
+  
+  return gen2slopesGradPot
+
+
+
+def SatellitePotentialGradient(R,opt):
+  '''
+  return the gradient of the specific potential of the satellite
+  '''
+
+  # Defines the units (kpc, 10^10 M_sun, 0.98 Gyr)---------------------------
+  unit_length = 1*u.kpc
+  unit_length = unit_length.to(u.kpc)
+  unit_mass = u.M_sun*1e10
+  unit_mass = unit_mass.to(1e10*u.M_sun)
+  unit_velocity = 1*u.km/u.s
+  unit_velocity = unit_velocity.to(unit_velocity)
+  unit_time = unit_length/unit_velocity
+  unit_time = unit_time.to(u.Gyr)
+  unit_velocity = (unit_length/unit_time).to(u.cm/u.s)
+  unit_velocity = unit_velocity.to(u.km/u.s)
+  G = G_a.to(unit_length**3 * unit_mass**(-1) * unit_time**(-2))
+  G = G.value
+  toMsol     = unit_mass.to(u.M_sun).value
+
+  
+  # NFW
+  M200     = opt.M200       # Msol
+  M200     = M200/toMsol    # to code units
+  c        = opt.c
+  alpha    = opt.alpha
+  beta     = opt.beta
+
+  # plummer
+  Mtot   = opt.Mtot         # Msol
+  Mtot   = Mtot/toMsol      # to code units
+  a      = opt.a
+  
+  plummerGradPot = plummer.dPotential(M=Mtot, a=a, r=R, G=G)
+
+
+  # this is redundant...
+  u_Length   = 1* u.kpc
+  u_Mass     = 10**10 * u.M_sun
+  u_Velocity = 1* u.km/u.s
+  u_Time     = u_Length/u_Velocity 
+  
+  H0   = cosmo.H0.to(1/u_Time).value
+  gen2slopes = gen_2_slopes.GEN2SLOPES(alpha=alpha,beta=beta,c=c,M200=M200,G=G,H0=H0)
+
+  gen2slopesGradPot = gen2slopes.dPotential(R)
+
+  # sum both components
+  totalGradPot = plummerGradPot + gen2slopesGradPot
+  
+  return totalGradPot
+  
+
+
+'''
+# compare the potential gradients
+
+Rs      = np.linspace(0,300,300)
+gradPot1 = np.zeros(len(Rs))
+gradPot2 = np.zeros(len(Rs))
+for i,R in enumerate(Rs):
+  gradPot1[i] = SatellitePotentialGradient(R)
+  gradPot2[i] = GalaxyPotentialGradient(R)
+  
+plt.plot(Rs,gradPot1)
+plt.plot(Rs,gradPot2)
+plt.semilogy()
+plt.show()
+
+'''
+
+########################################
+# main
+########################################
+
+opt = parser.parse_args()
+
+
+
+
+Rc = opt.Rc    # radius of the circular orbit
+
+def fctRT(R):
+  '''
+  the root of this function gives the tidal radius
+  '''
+  if opt.M200_host == 0:
+    dPhidR_host = GalaxyPotentialGradient(Rc,opt)
+  else:
+    dPhidR_host = NFWPotentialGradient(Rc,opt)
+  
+  dPhidR_sat  = SatellitePotentialGradient(R,opt)
+  return dPhidR_host*R/Rc - dPhidR_sat
+
+
+# Find the root
+result = root_scalar(fctRT, bracket=[1, 1000], method='brentq')
+
+if not result.converged:
+  print("Root finding did not converge.")
+
+print()
+print("Tidal Radius = {0:5.2f} kpc".format(result.root))
+
+
+

@@ -1,0 +1,187 @@
+#!/usr/bin/env python3
+
+import argparse
+import numpy as np
+from pNbody import *
+
+
+  
+####################################################################
+# option parser
+####################################################################
+
+description=""
+epilog     =""""""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+
+parser.add_argument(action="store", 
+                    dest="files", 
+                    metavar='FILE', 
+                    type=str,
+                    default=None,
+                    nargs='*',
+                    help='a file name') 
+
+parser.add_argument("-o",
+                    action="store",
+                    type=str,
+                    dest="outputfilename",
+                    default=None,
+                    help="Name of the output file")  
+                    
+parser.add_argument("--nngb",
+                    action="store",
+                    type=int,
+                    dest="nngb",
+                    default=5,
+                    help="Number of neighbouring particles to consider to compute RSP(==HSML)")  
+
+
+parser.add_argument("--do_not_compute_ages",
+                    action="store_true",
+                    default=False,
+                    help="do not compute ages") 
+
+parser.add_argument("--do_not_compute_rsp",
+                    action="store_true",
+                    default=False,
+                    help="do not compute rsp") 
+                    
+parser.add_argument("--do_not_compute_magnitudes",
+                    action="store_true",
+                    default=False,
+                    help="do not compute compute_magnitudes")                     
+
+parser.add_argument("--ftype",
+                    action="store",
+                    type=str,
+                    dest="ftype",
+                    default="arepo",
+                    help="type of file") 
+                    
+####################################################################
+# main
+####################################################################
+
+
+if __name__ == '__main__':
+  
+  opt = parser.parse_args()       
+
+  
+  for f in opt.files:
+    nb = Nbody(f,ftype=opt.ftype)
+    
+    
+    # remove doublets
+    u,idx = np.unique(nb.rxyz(),return_index=True)
+    nb = nb.selectp(lst=nb.num[idx])
+    
+    
+    ###################################
+    # Stellar ages
+    ###################################
+    if opt.do_not_compute_ages is False:
+      print("Compute ages...")
+      nb.age = nb.StellarAge(units="Gyr")
+      print("done.")
+  
+    ###################################
+    # compute Hsml
+    ###################################
+    if opt.do_not_compute_rsp is False:
+      print("Compute Rsp...")
+      #nb.set_tpe(0)
+      #nb.InitSphParameters(DesNumNgb=32, MaxNumNgbDeviation=2)
+      #nb.getTree()
+      #nb.rsp = nb.get_rsp_approximation()
+      #nb.set_tpe(4)
+      nb.ComputeRsp(opt.nngb)
+      print("done.")
+  
+    ###################################
+    # compute absolute Magnitudes
+    ###################################
+    if opt.do_not_compute_magnitudes is False:
+      
+      import stars_class
+      
+      print("Compute absolute magnitudes...")
+      MH = nb.MetalsH()
+      
+      # mass in Msol
+      mass = nb.Mass(units="Msol")
+      
+      # get the number of stars in each mass bin 
+      Nstars = stars_class.Stars_fun(mass,None,None, 'normed_3slope')
+      
+      ##############################
+      # F475X magnitude
+      
+      M = stars_class.HST475X_fun(None,nb.age,MH)
+      # convert to flux (ignore the zero point)
+      F = 10**(-M/2.5)
+      # sum the contribution of the mass bins
+      F = np.sum(F*Nstars, axis=0)
+      # compute the absolute magnitude in each pixel (as before we ignore the zero point)
+      M = - 2.5*np.log10(F)
+      nb.MagF475X = M
+      
+      ##############################
+      # VIS Euclid magnitude
+      
+      M = stars_class.VISeuclid_fun(None,nb.age,MH)
+      # convert to flux (ignore the zero point)
+      F = 10**(-M/2.5)
+      # sum the contribution of the mass bins
+      F = np.sum(F*Nstars, axis=0)
+      # compute the absolute magnitude in each pixel (as before we ignore the zero point)
+      M = - 2.5*np.log10(F)
+      nb.MagVISeuclid = M
+      
+      ##############################
+      # Y Euclid magnitude
+      
+      M = stars_class.Yeuclid_fun(None,nb.age,MH)
+      # convert to flux (ignore the zero point)
+      F = 10**(-M/2.5)
+      # sum the contribution of the mass bins
+      F = np.sum(F*Nstars, axis=0)
+      # compute the absolute magnitude in each pixel (as before we ignore the zero point)
+      M = - 2.5*np.log10(F)
+      nb.MagYeuclid = M
+      
+      ##############################
+      # J Euclid magnitude
+      
+      M = stars_class.Jeuclid_fun(None,nb.age,MH)
+      # convert to flux (ignore the zero point)
+      F = 10**(-M/2.5)
+      # sum the contribution of the mass bins
+      F = np.sum(F*Nstars, axis=0)
+      # compute the absolute magnitude in each pixel (as before we ignore the zero point)
+      M = - 2.5*np.log10(F)
+      nb.MagJeuclid = M    
+      
+      print("done.")
+  
+  
+    if opt.outputfilename:
+      nb.rename(opt.outputfilename)
+      nb.write()
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+               

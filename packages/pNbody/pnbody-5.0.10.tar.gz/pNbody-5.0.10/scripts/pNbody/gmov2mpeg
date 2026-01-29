@@ -1,0 +1,445 @@
+#!/usr/bin/env python3
+###########################################################################################
+#  package:   pNbody
+#  file:      gmov2mpeg
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of pNbody.
+###########################################################################################
+
+import pNbody
+from pNbody import Movie
+from pNbody import *
+from pNbody.palette import *
+
+import string
+from numpy import *
+from PIL import Image
+from PIL import ImageDraw
+from PIL import ImageFont
+from PIL import ImagePalette
+from PIL import ImageTk
+from PIL import ImageFont
+import sys
+import os
+import string
+import getopt
+import math
+
+
+FONT_PATH = os.path.join(PNBODYPATH, 'fonts')
+FFONT = os.path.join(FONT_PATH, 'helvBO10.pil')
+
+##########################################################################
+
+
+def help_message():
+    ##########################################################################
+    print("""Usage : gmov2mpeg -f file [options ...]
+  Options: -h	     -- this help message
+  	   -f	     -- input file
+  	   -o	     -- output file
+  	   -p	     -- name of a palette
+  	   -z	     -- zoom factor
+  	   -d	     -- pause between images (ms)
+  	   -b        -- number of initial image
+  	   -e        -- number of final image
+  	   -s        -- number of images to leap
+	   -l	     -- add the label (time)
+	   -i        -- gives information on the film
+	   -k	     -- keep temporary images
+	   -t        -- add a text
+	   --cosmo   -- cosmoligical option
+  	   --version -- displays version""")
+    sys.exit(0)
+
+
+##########################################################################
+# info film
+##########################################################################
+
+def infofilm(filename):
+
+    f = Movie.Movie(filename)
+    f.open()
+    f.info()
+
+
+##########################################################################
+#
+#  MAIN
+#
+##########################################################################
+
+
+try:
+    options, xarguments = getopt.getopt(
+        sys.argv[1:], 'f:o:p:z:d:b:e:s:t:ihlk', ['version', 'cosmo'])
+
+except getopt.error:
+    print("""Error: You tried to use an unknown option or
+  	   the argument for an option that requires it was missing.
+  	   Try `mov2gif -h\' for more information.""")
+    sys.exit(0)
+
+# examination des options
+
+# h : help message
+for a in options[:]:
+    if a[0] == '-h':
+        help_message()
+
+
+zoom = 1.
+fname = " "
+fout = " "
+delay = 10
+color = "ramp"
+tinit = 0
+tfinal = 0
+step = 0
+info = 0
+label = 0
+keep = 0
+text = None
+cosmo = 0
+
+
+# f : input file
+for a in options[:]:
+    if a[0] == '-f' and a[1] != '':
+        fname = a[1]
+        options.remove(a)
+        break
+
+    elif a[0] == '-f' and a[1] == '':
+        print('-f expects an argument')
+        sys.exit(0)
+
+# o : output file
+for a in options[:]:
+    if a[0] == '-o' and a[1] != '':
+        fout = a[1]
+        options.remove(a)
+        break
+
+    elif a[0] == '-o' and a[1] == '':
+        print('-o expects an argument')
+        sys.exit(0)
+
+# p : palette
+for a in options[:]:
+    if a[0] == '-p' and a[1] != '':
+        color = pth = os.path.join(PALETTEDIR, a[1])
+        options.remove(a)
+        break
+
+    elif a[0] == '-p' and a[1] == '':
+        print('-p expects an argument')
+        sys.exit(0)
+
+# z : zoom
+for a in options[:]:
+    if a[0] == '-z' and a[1] != '':
+        zoom = string.atof(a[1])
+        options.remove(a)
+        break
+
+    elif a[0] == '-z' and a[1] == '':
+        print('-z expects an argument')
+        sys.exit(0)
+
+# d : delay
+for a in options[:]:
+    if a[0] == '-d' and a[1] != '':
+        delay = string.atoi(a[1])
+        options.remove(a)
+        break
+
+    elif a[0] == '-d' and a[1] == '':
+        print('-d expects an argument')
+        sys.exit(0)
+
+# i : im init
+for a in options[:]:
+    if a[0] == '-b' and a[1] != '':
+        tinit = string.atof(a[1])
+        options.remove(a)
+        break
+
+    elif a[0] == '-b' and a[1] == '':
+        print('-b expects an argument')
+        sys.exit(0)
+
+# f : im init
+for a in options[:]:
+    if a[0] == '-e' and a[1] != '':
+        tfinal = string.atof(a[1])
+        options.remove(a)
+        break
+
+    elif a[0] == '-e' and a[1] == '':
+        print('-e expects an argument')
+        sys.exit(0)
+
+# s : im init
+for a in options[:]:
+    if a[0] == '-s' and a[1] != '':
+        step = string.atoi(a[1])
+        options.remove(a)
+        break
+
+    elif a[0] == '-s' and a[1] == '':
+        print('-s expects an argument')
+        sys.exit(0)
+
+# l : add label
+for a in options[:]:
+    if a[0] == '-l':
+        label = 1
+        options.remove(a)
+        break
+
+# t : text
+for a in options[:]:
+    if a[0] == '-t' and a[1] != '':
+        text = a[1]
+        options.remove(a)
+        break
+
+    elif a[0] == '-t' and a[1] == '':
+        print('-t expects an argument')
+        sys.exit(0)
+
+
+# k : add label
+for a in options[:]:
+    if a[0] == '-k':
+        keep = 1
+        options.remove(a)
+        break
+
+# i : info
+for a in options[:]:
+    if a[0] == '-i':
+        info = 1
+        options.remove(a)
+        break
+
+
+for a in options[:]:
+    if a[0] == '--version':
+        print('version 1.1.')
+        print("Copyright (C) 2001, Revaz corporation.")
+        sys.exit(0)
+
+for a in options[:]:
+    if a[0] == '--cosmo':
+        cosmo = 1
+
+if (tfinal != 0):
+    if (tfinal - tinit < 1):
+        print("number of final image must be larger than initial image !")
+        sys.exit(0)
+
+#fname = xarguments[0]
+
+if (fname == " "):
+    help_message()
+    sys.exit(0)
+
+if (fout == " "):
+    fout = fname + ".gif"
+
+
+# verifie que le fichier existe
+
+if (os.path.exists(fname) == 0):
+    print("Error : the file ", fname, " no not exist.")
+    sys.exit(0)
+
+
+# ouvre le film
+film = Movie.Movie(fname)
+film.open()
+
+if info:
+    film.info()
+    sys.exit(0)
+
+# create a palette object
+palette = Palette()
+pth = os.path.join(PALETTEDIR, color)
+palette.read(pth)
+
+if tfinal == 0:
+    tfinal = film.npic
+
+if not os.path.exists('tmp'):
+    os.mkdir('tmp')
+
+###################################################
+# taille de l'image de sortie
+
+# largeur de l'image
+width = int(film.numByte * zoom)
+
+# ----------------
+# choix des font
+# ----------------
+
+# determination de la taille
+
+fsize = int(12 * zoom - math.fmod(12 * zoom, 2))
+
+if (fsize > 24):
+    fsize = 24
+if (fsize < 8):
+    fsize = 8
+
+if (fsize < 10):
+    size = '0' + repr(fsize)
+else:
+    size = repr(fsize)
+
+fontbasename = os.path.basename(FFONT)
+fontdirname = os.path.dirname(FFONT) + '/'
+fontname = fontdirname + fontbasename[:6] + size + fontbasename[8:]
+
+font = ImageFont.load(fontname)
+
+# determination de l'offset en y
+xy = font.getsize('0000.00')
+
+xref = width - (width - xy[0]) / 2
+
+if label:
+    dylab = int(2 * xy[1])
+else:
+    dylab = 0
+
+
+# hauteur de l'image
+height = int((film.numLine) * zoom) + dylab
+shapezoom = (width, height)
+
+###########################
+# lecture de tout le film
+###########################
+
+listim = []
+leap = 0
+i = -1
+while True:
+    data = film.read_one()
+    if data is None:
+        break
+
+    i = i + 1
+
+    if i >= tinit and i <= tfinal:
+
+        if leap == 0:
+
+            # creation de l'image de sortie
+            image = film.get_img(data)
+            # zoom
+            image = image.transform(
+                shapezoom,
+                Image.AFFINE,
+                (1. / zoom,
+                 0.,
+                 0.,
+                 0.,
+                 1. / zoom,
+                 0),
+                Image.BICUBIC)
+            image = image.transform(
+                shapezoom, Image.AFFINE, (1, 0., 0., 0., 1, -dylab), Image.BICUBIC)
+
+            # put the label
+            if label:
+                if cosmo:
+                    film.current_time = 1. / film.current_time - 1
+
+                time = "%8.3f" % (film.current_time)
+                xy = font.getsize(time)
+                x = xref - xy[0]
+                y = int(dylab / 4)
+                poslab = (x, y)
+                draw = ImageDraw.Draw(image)
+                draw.rectangle((0, 0, width, dylab), fill=1)
+                draw.text(poslab, time, fill=256, font=font)
+
+            if text is not None:
+                xy = font.getsize(text)
+                x = xy[1]
+                y = height - 2 * xy[1]
+                postext = (x, y)
+
+                draw = ImageDraw.Draw(image)
+                draw.text(postext, text, fill=256, font=font)
+
+            # include the palette
+            image.putpalette(palette.palette)
+
+####################################
+# en dessous, partie propre a mpeg
+####################################
+
+            # save it
+            bname = "tmp/%000005d" % (i)
+            print(bname)
+            image.save(bname + '.gif')
+            os.system('convert %s.gif %s.ppm' % (bname, bname))
+            os.system('rm %s.gif' % (bname))
+            listim.append(bname + '.ppm')
+
+        leap = fmod(leap + 1, step + 1)
+
+    else:
+        break
+
+####################################
+# creation du film mpeg
+####################################
+
+if not keep:
+
+    line = """
+PATTERN IBBPBBPBBPBBPBB
+OUTPUT %s
+INPUT_DIR ./tmp
+INPUT
+*.ppm [%000005d-%000005d]
+END_INPUT
+BASE_FILE_FORMAT PPM
+INPUT_CONVERT *
+GOP_SIZE 8
+SLICES_PER_FRAME 1
+PIXEL HALF
+RANGE 12
+PSEARCH_ALG TWOLEVEL
+BSEARCH_ALG CROSS2
+PQSCALE 1
+IQSCALE 1
+BQSCALE 1
+REFERENCE_FRAME ORIGINAL
+ASPECT_RATIO 1
+FRAME_RATE 23.976
+  """ % (fout, 1, i)
+
+    f = open('param.mpg', 'w')
+    f.write(line)
+    f.close()
+
+    os.system('ppmtompeg param.mpg')
+
+    os.remove('param.mpg')
+    for file in listim:
+        os.remove(file)
+
+    os.rmdir('tmp')

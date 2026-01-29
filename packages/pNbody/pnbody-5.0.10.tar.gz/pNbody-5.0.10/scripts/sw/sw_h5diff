@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+
+import sys
+import numpy as np
+import h5py
+import argparse
+
+description="diff two h5files"
+epilog     ="""
+Examples:
+--------
+sw_h5diff file1.hdf5 file2.hdf5
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+
+parser.add_argument(action="store", 
+                    dest="files", 
+                    metavar='FILE', 
+                    type=str,
+                    default=None,
+                    nargs=2,
+                    help='files') 
+
+
+
+########################################################################
+# MAIN
+########################################################################
+
+
+
+opt = parser.parse_args()
+
+file1 = opt.files[0]
+file2 = opt.files[1]
+
+
+fd1 = h5py.File(file1, 'r')
+fd2 = h5py.File(file2, 'r')
+
+# first, check the list of datasets for each particle type
+ntype = 6
+
+
+dic = {}
+
+
+for itype in range(ntype):
+  PartType = "PartType%d"%itype
+  
+  datasets1 = None
+  datasets2 = None
+  
+  if PartType in fd1:
+    block = fd1[PartType]
+    datasets1 = list(block)
+    
+  if PartType in fd2:
+    block = fd2[PartType]
+    datasets2 = list(block)
+
+  if datasets1 is not None:
+    datasets1.sort()
+    
+  if datasets2 is not None:
+    datasets2.sort()
+    
+  if datasets1 != datasets2:
+
+    # add common datasets
+    # use sets to get the intersection
+    s1 = set(datasets1)
+    s2 = set(datasets2)
+    s  = list(s1&s2)
+    s.sort()
+    
+    s1o = list(s1 - s2)
+    s1o.sort()
+    s2o = list(s2 - s1)
+    s2o.sort()
+    
+    print()
+    print(PartType)
+    print()
+    print("common datasets :",s)
+    print("only in 1       :",s1o)
+    print("only in 2       :",s2o)
+    
+    
+    
+    
+    # store    
+    dic[PartType] = s
+    
+
+print()
+print()
+
+# now loop over common datasets
+for PartType in dic.keys():
+  print()
+  print(PartType)
+  print()
+  for name in dic[PartType]:
+    
+    data1 = fd1[PartType][name][()]
+    data2 = fd2[PartType][name][()]
+    
+    # if the dtype is different
+    if data1.dtype != data2.dtype:
+      print(name," : differ in their dtype")
+      print("  %s != %s"%(data1.dtype,data2.dtype))
+
+    # set same type
+    dtype = min(data1.dtype,data2.dtype)
+    data1 = data1.astype(dtype)
+    data2 = data2.astype(dtype)
+    
+    # if the arrays are differents
+    if not np.any(data1==data2):
+      print(name," : differ in their content")
+      print("  %s"%data1)
+      print("  %s"%data2)
+    
+    
+    
+    
+    
+

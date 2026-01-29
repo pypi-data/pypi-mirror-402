@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+
+import sys
+import numpy as np
+import h5py
+import argparse
+
+description="diff two h5files"
+epilog     ="""
+Examples:
+--------
+sw_mktimesteps -o output_list_txt --t_beg 0 --t_end 1 --dt 0.01
+sw_mktimesteps -o output_list_txt --t_beg 0 --t_end 1 -n 10
+sw_mktimesteps -o output_list_txt --t_beg 0 --dt 0.01 -n 10
+sw_mktimesteps -o output_list_txt --mode Redshift --z_beg 50 --z_end 0 --dz 1
+sw_mktimesteps -o output_list_txt --mode Redshift --z_beg 50 --z_end 0 -n 10
+sw_mktimesteps -o output_list_txt --mode Redshift --z_beg 50 --dz 0.1  -n 10
+sw_mktimesteps -o output_list_txt --mode ScaleFactor --a_beg 0.01 --a_end 1 --da 0.01
+sw_mktimesteps -o output_list_txt --mode ScaleFactor --a_beg 0.01 --a_end 1 -n 10
+sw_mktimesteps -o output_list_txt --mode ScaleFactor --a_beg 0.01 --da 0.01 -n 10
+sw_mktimesteps -o output_list_txt --mode ScaleFactor -p 5
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+
+parser.add_argument("-o",
+                    action="store",
+                    type=str,
+                    dest="outputfilename",
+                    default=None,
+                    help="Name of the output file")  
+                    
+parser.add_argument("--mode",
+                    action="store",
+                    type=str,
+                    default="Time",
+                    help="mode : Time, Scale, Redshift")                     
+
+parser.add_argument("--t_beg",
+                    action="store",
+                    type=float,
+                    default=0,
+                    help="initial time")
+                    
+parser.add_argument("--t_end",
+                    action="store",
+                    type=float,
+                    default=None,
+                    help="final time")                          
+                    
+parser.add_argument("--dt",
+                    action="store",
+                    type=float,
+                    default=0.01,
+                    help="time step")  
+                    
+
+parser.add_argument("--z_beg",
+                    action="store",
+                    type=float,
+                    default=100,
+                    help="initial redshift")
+                    
+parser.add_argument("--z_end",
+                    action="store",
+                    type=float,
+                    default=None,
+                    help="final redshift")                          
+                    
+parser.add_argument("--dz",
+                    action="store",
+                    type=float,
+                    default=1,
+                    help="redshift step") 
+
+
+
+parser.add_argument("--a_beg",
+                    action="store",
+                    type=float,
+                    default=0,
+                    help="initial scale factor")
+                    
+parser.add_argument("--a_end",
+                    action="store",
+                    type=float,
+                    default=None,
+                    help="final scale factor")                          
+                    
+parser.add_argument("--da",
+                    action="store",
+                    type=float,
+                    default=0.1,
+                    help="scale factor step") 
+                    
+                    
+                                        
+parser.add_argument("-n",
+                    action="store",
+                    type=int,
+                    default=None,
+                    help="number of outputs")
+                                                            
+parser.add_argument("-p",
+                    action="store",
+                    type=int,
+                    default=None,
+                    help="scale factor power 2 division")
+                    
+
+########################################################################
+# MAIN
+########################################################################
+
+
+opt = parser.parse_args()
+
+if opt.outputfilename is None:
+  exit()
+
+with open(opt.outputfilename,'w') as f:
+  
+  
+  if opt.mode == "Time":
+    
+    f.write("# Time\n")
+    
+    if   (opt.n is None) and (opt.t_end is not None) and (opt.dt is not None):
+      ts = np.arange(opt.t_beg,opt.t_end,opt.dt)
+      ts = np.concatenate((ts,[ts[-1]+opt.dt]))
+    
+    elif (opt.n is not None) and (opt.t_end is not None):
+      ts = np.linspace(opt.t_beg,opt.t_end,opt.n)
+    
+    elif (opt.n is not None) and (opt.dt is not None):
+      ts = np.ones(opt.n)*opt.t_beg  + np.arange(opt.n)*opt.dt
+    
+    
+    for t in ts:
+      f.write("%g\n"%t)
+      
+
+  elif opt.mode == "Redshift":
+
+    f.write("# Redshift\n")
+    
+    if   (opt.n is None) and (opt.z_end is not None) and (opt.dz is not None):
+      zs = np.arange(opt.z_end,opt.z_beg,opt.dz)
+      zs = np.concatenate((zs,[zs[-1]+opt.dz]))
+      zs = np.flip(zs)
+    
+    elif (opt.n is not None) and (opt.z_end is not None):
+      zs = np.linspace(opt.z_end,opt.z_beg,opt.n)
+      zs = np.flip(zs)
+    
+    elif (opt.n is not None) and (opt.dt is not None):
+      zs = np.ones(opt.n)*opt.z_beg  - np.arange(opt.n)*opt.dz
+      zs = np.compress(zs>=0,zs)
+    
+    
+    for z in zs:
+      f.write("%g\n"%z)
+ 
+
+
+  elif opt.mode == "ScaleFactor":
+
+
+    if opt.p is not None:
+      opt.a_end = 1
+      opt.da = 1. / (2.**opt.p)
+      opt.a_beg = opt.da
+      opt.n = None
+            
+
+    if   (opt.n is None) and (opt.a_end is not None) and (opt.da is not None):
+      a_s = np.arange(opt.a_beg,opt.a_end,opt.da)
+      a_s = np.concatenate((a_s,[a_s[-1]+opt.da]))
+    
+    elif (opt.n is not None) and (opt.a_end is not None):
+      a_s = np.linspace(opt.a_beg,opt.a_end,opt.n)
+      
+    
+    elif (opt.n is not None) and (opt.da is not None):
+      a_s = np.ones(opt.n)*opt.a_beg  + np.arange(opt.n)*opt.da
+
+
+
+
+
+    f.write("# Scale Factor\n")
+    
+    for a in a_s:
+      f.write("%g\n"%a)    
+    
+
+
+
+f.close()
+
+  
+  
+  
+  
+  
+      
+

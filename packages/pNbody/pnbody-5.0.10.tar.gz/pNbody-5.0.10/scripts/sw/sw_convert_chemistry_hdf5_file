@@ -1,0 +1,165 @@
+#!/usr/bin/env python3
+
+###########################################################################################
+#  package:   Gtools
+#  file:      pplot
+#  brief:     
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of Gtools.
+###########################################################################################
+
+
+from optparse import OptionParser
+import h5py
+import shutil
+
+def check_files_number(args, nber_file=-1):
+
+    if nber_file < 0 and len(args) < abs(nber_file):
+        raise Exception(
+            "you must specify at least %i filename" %
+            abs(nber_file))
+
+    if nber_file > 0 and len(args) != nber_file:
+        raise Exception("you must specify %i filename" % nber_file)
+
+
+def parse_options_hl(
+        usage=None,
+        options=None,
+        parser=None,
+        nber_file=-1,
+        default_params=None):
+    #################################
+    """
+    Parse the graph options.
+    :ref:`options` list of possible options (postscript, ftype, reduc, cmd, display, info,
+    limits, log, units and comoving), by default add all options.
+    :params str usage: Usage description (e.g. 'usage: %prog [options] file')
+    :params [str] options: List of option to add
+    :params OptionParser parser: Predefined parser if some other options are required
+    :params int nber_file: Number of file required to run the command (<0 means at least nber_file)
+    :params dict default_params: e.g. d['limits'] = {'xmin': 0, 'xmax': 14}}
+    """
+
+    if parser is None:
+        if usage is None:
+            usage = "usage: %prog [options] file"
+        parser = OptionParser(usage=usage)
+
+    if options is None:
+        options = dir()
+
+        def getName(fname):
+            if "add_" in fname and "_options" in fname:
+                i = fname[4:-8]
+                d = {'test': True,
+                     'i': i,
+                     'fname': fname}
+                return d
+            else:
+                return {'test': False}
+
+    else:
+        def getName(i):
+            fname = "add_" + i + "_options"
+            d = {'test': True,
+                 'i': i,
+                 'fname': fname}
+            return d
+
+    for j in options:
+        d = getName(j)
+        if d['test']:
+            i = d['i']
+            fname = d['fname']
+
+            d = {}
+            if default_params is not None and i in default_params:
+                d = default_params[i]
+            parser = globals()[fname](parser, **d)
+
+    (options, args) = parser.parse_args()
+
+    check_files_number(args, nber_file)
+
+    files = args
+
+    return files, options
+
+
+
+
+def parse_options():
+
+    usage = "usage: %prog [options] file"
+    parser = OptionParser(usage=usage)
+    
+    parser.add_option("-o",
+      action="store", 
+      dest="output",
+      type="string",
+      default = None,		    
+      help="output file name",       
+      metavar=" STRING")  
+
+
+    files, options = parse_options_hl(parser=parser, options=[])
+    
+    return files, options
+
+
+
+########################################################################
+# MAIN
+########################################################################
+
+
+if __name__ == '__main__':
+
+    files, opt = parse_options()
+    
+    if opt.output is not None:
+      
+      # copy the file
+      shutil.copyfile(files[0], opt.output)
+
+    
+      # open it
+      f = h5py.File(opt.output,'r+')
+      
+      # print
+      print("Data group contains:")
+      for k in f['Data']:
+        print("\t%s"%k)
+      
+      
+    
+      data_group = f['Data']
+      data_group.move('LiveTimes','LifeTimes')
+
+
+      # print
+      print("\nnow")
+      for k in f['Data']:
+        print("\t%s"%k)
+        
+      
+      print("\n%s saved."%opt.output)  
+
+      f.close()
+
+
+    
+                
+            
+            
+          
+        
+        
+
+

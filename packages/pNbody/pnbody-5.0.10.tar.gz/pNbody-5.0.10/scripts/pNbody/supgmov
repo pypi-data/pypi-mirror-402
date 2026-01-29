@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+###########################################################################################
+#  package:   pNbody
+#  file:      supgmov
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of pNbody.
+###########################################################################################
+
+import sys
+import os
+import string
+import getopt
+import math
+
+from pNbody import Movie
+from numpy import *
+
+
+##########################################################################
+def version():
+    ##########################################################################
+    print('version 1.0')
+    sys.exit(0)
+
+
+##########################################################################
+def help_message():
+    ##########################################################################
+    print("""Usage : supgmov -o outfilm film1 film2 film3...
+  Options: -h        -- this help message
+	   -o	     -- name of the output
+           --help    -- this help message
+           --version -- displays version
+
+  """)
+    sys.exit(0)
+
+
+##########################################################################
+def check_arguments(options, xarguments):
+    ##########################################################################
+
+    output = "out.mov"
+
+    for a in options[:]:
+        if a[0] == '-h':
+            help_message()
+
+        if a[0] == '--help':
+            help_message()
+
+        if a[0] == '--version':
+            version()
+
+        if a[0] == '-o':
+            if a[1] == '':
+                help_message()
+            else:
+                output = a[1]
+                continue
+
+    files = xarguments
+
+    return output, files
+
+
+##########################################################################
+#
+#  MAIN
+#
+##########################################################################
+
+
+try:
+    options, xarguments = getopt.getopt(
+        sys.argv[1:], 'o:h', ['help', 'version'])
+except getopt.error:
+    help_message()
+    sys.exit(0)
+
+
+# check arguments
+output, films = check_arguments(options, xarguments)
+
+nf = len(films)
+
+# check that both films exists
+for film in films:
+    if (os.path.exists(film) == 0):
+        print("Error : the file ", film, " do no not exist.")
+        sys.exit(0)
+
+# open films
+fs = []
+for film in films:
+    f = Movie.Movie(film)
+    f.open()
+    fs.append(f)
+
+npic = fs[0].npic
+numByte = fs[0].numByte
+numLine = fs[0].numLine
+
+for f in fs:
+    if f.npic != npic:
+        print("films have not the same number of frames")
+
+    if f.numByte != numByte:
+        print("films have not the same width")
+
+    if f.numLine != numLine:
+        print("films have not the same height")
+
+
+# create the newfilm
+fo = Movie.Movie(output)
+fo.new(numByte, numLine)
+
+# loop over the films
+
+for i in range(npic):
+
+    # read data
+    datas = []
+    n = 0
+    for f in fs:
+        data = f.read_one(mode='array')
+        data = data / 255. * (256. / nf) + (256. / nf) * n
+        datas.append(data)
+        n = n + 1
+
+    # add data
+    newdata = datas[0]
+    n = 1
+    for data in datas[1:]:
+        mask = (data > (256. / nf) * n + 1)
+        newdata = where(mask, data, newdata)
+        n = n + 1
+
+    # sup data2 to data1
+    newdata = newdata.astype('b')
+    data = newdata.tostring()
+
+    fo.write_pic(fs[0].current_time, data)
+    print(fs[0].current_time)
+
+
+fo.close()

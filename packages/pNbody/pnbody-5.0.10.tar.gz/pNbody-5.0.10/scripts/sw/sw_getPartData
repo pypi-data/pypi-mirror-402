@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+
+###########################################################################################
+#  package:   Gtools
+#  file:      pplot
+#  brief:     
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of Gtools.
+###########################################################################################
+
+
+import numpy as np
+import argparse
+import h5py
+
+
+description="Get a summary of particles present in the file"
+epilog     ="""
+Examples:
+--------
+sw_getPartData  file.hdf5
+sw_getPartData  file.hdf5 --list
+sw_getPartData  file.hdf5 --fields  Coordinates Masses
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+
+parser.add_argument(action="store", 
+                    dest="file", 
+                    metavar='FILE', 
+                    type=str,
+                    default=None,
+                    help='file') 
+
+parser.add_argument("--list",
+                    action="store_true", 
+                    dest="list", 
+                    default=False,
+                    help='list particles attributes')
+
+parser.add_argument("--fields",
+                    action="store", 
+                    dest="fields", 
+                    metavar='STRING', 
+                    required=False,
+                    type=str,
+                    default=None,
+                    nargs="*",
+                    help='name of fields to display')
+
+
+
+NTYPES = 7
+                   
+                   
+def list_particles_attributes(f):                   
+                   
+  part = f[name]                    
+  for d in part:
+    print("\t %s"%d)                    
+                 
+                 
+              
+                    
+############################
+#
+# main
+#
+############################
+
+
+if __name__ == '__main__':
+
+
+  opt = parser.parse_args()
+
+  with h5py.File(opt.file, "r") as f:
+  
+    for i in range(NTYPES):
+      name = "PartType%i" % i
+      if name not in f:
+          continue
+    
+      print("# %s"%name)
+  
+      
+      if opt.list:
+        list_particles_attributes(f)
+      
+      
+      else:
+        if opt.fields is not None:
+  
+          part = f[name]                    
+          
+          for field in opt.fields:
+            if field in part:
+              print(" - %s="%field)
+              data = part[field][0:3]
+              print("\t\t",data)
+              
+              
+
+
+
+
+
+
+
+
+
+
+
+
+
+

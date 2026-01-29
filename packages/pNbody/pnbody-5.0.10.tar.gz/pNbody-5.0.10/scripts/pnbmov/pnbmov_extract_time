@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+###########################################################################################
+#  package:   pNbody
+#  file:      pnbmov_extract_time
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Darwin Roduit <darwin.roduit@epfl.ch>
+#
+# This file is part of pNbody.
+###########################################################################################
+
+
+import numpy as np
+import os
+import argparse
+import h5py as h5
+from tqdm import tqdm
+
+#%% Parser object
+
+def parse_option():
+    description = """"
+Save the simulation time and scale-factor to an .npz file.
+    """
+    epilog = """
+Examples:
+--------
+pnbmov_extract_time snap/snapshot_*.hdf5 -o times.npz
+
+"""
+    parser = argparse.ArgumentParser(description=description, epilog=epilog)
+
+    parser.add_argument("files",
+                        nargs="+",
+                        type=str,
+                        help="File name(s).")
+
+    parser.add_argument("-o",
+                        action="store",
+                        type=str,
+                        dest="output_file",
+                        default="times.npz",
+                        help="Name of the output file.")
+
+    parser.parse_args()
+    args = parser.parse_args()
+    files = args.files
+
+    for f in files:
+        if not os.path.exists(f):
+            raise FileNotFoundError("You need to provide one file")
+
+    return args, files
+
+
+
+#%%
+
+args, files = parse_option()
+
+list_snap = files
+n_snap = len(list_snap)
+output_file = args.output_file
+
+# Create arrays of the right size
+scale_factor = np.zeros(n_snap)
+time = np.zeros(n_snap)
+
+# Grab the data in all snapshots
+for i in tqdm(range(n_snap)):
+    filename_snap = list_snap[i]
+
+    # Open the snap with h5py to only load the necessary data
+    data = h5.File(filename_snap)
+    header = data["Header"]
+
+    # Get time and scale-factor
+    time[i] = header.attrs["Time"][0]
+    scale_factor[i] = header.attrs["Scale-factor"][0]
+
+
+# Save the data
+np.savez(output_file, Time=time, ScaleFactor = scale_factor)

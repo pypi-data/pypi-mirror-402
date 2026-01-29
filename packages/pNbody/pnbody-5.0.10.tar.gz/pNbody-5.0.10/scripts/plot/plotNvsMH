@@ -1,0 +1,265 @@
+#!/usr/bin/python3
+###########################################################################################
+#  package:   pNbody
+#  file:      plotCylindricalProfile
+#  brief:     
+#  copyright: GPLv3
+#             Copyright (C) 2019 EPFL (Ecole Polytechnique Federale de Lausanne)
+#             LASTRO - Laboratory of Astrophysics of EPFL
+#  author:    Yves Revaz <yves.revaz@epfl.ch>
+#
+# This file is part of Gtools.
+###########################################################################################
+
+import os
+import numpy as np
+import argparse
+
+import matplotlib.pyplot as plt
+from pNbody import Nbody
+from pNbody import libgrid
+from pNbody import plot
+
+####################################################################
+# option parser
+####################################################################
+
+description="""plot the metallicity distribution"""
+epilog     ="""
+Examples:
+--------
+plotNvsMH                   snapshot.hdf5
+
+
+"""
+
+parser = argparse.ArgumentParser(description=description,epilog=epilog,formatter_class=argparse.RawDescriptionHelpFormatter)
+
+plot.add_files_options(parser)
+plot.add_arguments_units(parser)
+plot.add_arguments_reduc(parser)
+plot.add_arguments_center(parser)
+plot.add_arguments_select(parser)
+plot.add_arguments_info(parser)
+plot.add_comoving_options(parser)
+plot.add_arguments_legend(parser)
+plot.add_arguments_icshift(parser)
+plot.add_arguments_cmd(parser)
+
+
+parser.add_argument(action="store", 
+                    dest="files", 
+                    metavar='FILE', 
+                    type=str,
+                    default=None,
+                    nargs='*',
+                    help='a list of files')                     
+
+
+parser.add_argument("-o",
+                    action="store",
+                    type=str,
+                    dest="outputfilename",
+                    default=None,
+                    help="Name of the output file")  
+
+
+
+parser.add_argument('--xmin',
+                    action="store", 
+                    dest="xmin", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=-4,
+                    help='x min')
+
+parser.add_argument('--xmax',
+                    action="store", 
+                    dest="xmax", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=0.5,
+                    help='x max')
+
+
+parser.add_argument('--nx',
+                    action="store", 
+                    dest="nx", 
+                    metavar='INT', 
+                    type=int,
+                    default=40,
+                    help='number of bins in the x axis')
+
+parser.add_argument('--ymin',
+                    action="store", 
+                    dest="ymin", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=None,
+                    help='y min')
+
+parser.add_argument('--ymax',
+                    action="store", 
+                    dest="ymax", 
+                    metavar='FLOAT', 
+                    type=float,
+                    default=None,
+                    help='y max')
+
+                                        
+parser.add_argument('--log',
+                    action="store", 
+                    dest="log", 
+                    metavar='STR', 
+                    type=str,
+                    default=None,
+                    help='log scale (None,x,y,xy)')
+
+
+parser.add_argument("--colormap",
+                    action="store", 
+                    default='jet',
+                    help='matplotlib colormap name (e.g. mycmap, tab20c, Greys, jet, binary)') 
+
+
+
+#######################################
+# MakePlot
+#######################################
+
+
+def MakePlot(opt):
+  
+  params = {
+    "axes.labelsize": 14,
+    "axes.titlesize": 18,
+    "font.size": 12,
+    "legend.fontsize": 12,
+    "xtick.labelsize": 14,
+    "ytick.labelsize": 14,
+    "text.usetex": True,
+    "figure.subplot.left": 0.15,
+    "figure.subplot.right": 0.95,
+    "figure.subplot.bottom": 0.15,
+    "figure.subplot.top": 0.95,
+    "figure.subplot.wspace": 0.02,
+    "figure.subplot.hspace": 0.02,
+    "figure.figsize" : (8, 6),
+    "lines.markersize": 6,
+    "lines.linewidth": 2.0,
+  }
+  plt.rcParams.update(params)
+  
+  
+  # create the plot
+  fig = plt.gcf()
+  fig.set_size_inches(8,6)
+  ax  = plt.gca()
+
+
+  # get a list of color
+  colors = plot.ColorList(n=len(opt.files),colormap=opt.colormap)
+  
+  # list of points
+  datas = []
+
+  # number of files
+  nfiles = len(opt.files)
+  
+  
+  #################################
+  # loop over files
+  
+  for filename in opt.files:
+    
+    nb = Nbody(filename, ftype=opt.ftype)
+
+    # base name
+    bname = os.path.basename(filename)
+
+    ################
+    # keep only stars
+    ################
+
+    nb = nb.select("stars")
+    
+    ################
+    # units
+    ################
+    
+    # define local units
+    unit_params = plot.apply_arguments_units(opt)
+    nb.set_local_system_of_units(params=unit_params)
+    
+    ################
+    # apply options
+    ################
+    nb = plot.apply_arguments_icshift(nb, opt)
+    nb = plot.apply_arguments_comoving(nb, opt)
+    nb = plot.apply_arguments_reduc(nb, opt)
+    nb = plot.apply_arguments_select(nb, opt)
+    nb = plot.apply_arguments_center(nb, opt)
+    nb = plot.apply_arguments_cmd(nb, opt)
+    nb = plot.apply_arguments_info(nb, opt)
+    nb = plot.apply_arguments_display(nb, opt)
+
+
+    ################
+    # some info
+    ################
+    print("---------------------------------------------------------")
+    nb.localsystem_of_units.info()
+    nb.ComovingIntegrationInfo()
+    print("---------------------------------------------------------")
+
+    x = nb.MetalsH()
+    
+    # do the 1d histogram
+    G = libgrid.Generic_1d_Grid(opt.xmin, opt.xmax, opt.nx)
+    y = G.get_MassMap(x, np.ones(nb.nbody)) / nb.nbody
+    x = G.get_r()
+
+    # plot
+    if nfiles == 1:
+      ax.bar(x, y, width=1.0 * (x[1] - x[0]), alpha=0.75, color=colors.get(),edgecolor='k',linewidth=1,label=bname)
+    else:
+      ax.bar(x, y, width=1.0 * (x[1] - x[0]), alpha=1/nfiles+0.1,color=colors.get(),edgecolor='k',linewidth=0.1,label=bname)      
+      
+  xlabel = r'$\left[ \rm{M}/\rm{H} \right]$'
+  ylabel = r"Stellar\,Fraction"
+
+      
+  ##################
+  # finalize plot
+  ##################
+
+
+  # set the axis (the extention is done in the previous command)
+  plot.SetAxis(ax,opt.xmin,opt.xmax,opt.ymin,opt.ymax,opt.log,extend=True)
+  
+  # labels
+  ax.set_xlabel(xlabel)
+  ax.set_ylabel(ylabel)
+  
+  # legend
+  if opt.legend:
+    plt.legend()
+
+
+
+  # save or display
+  if opt.outputfilename:
+    plt.savefig(opt.outputfilename)
+  else:
+    plt.show()    
+      
+
+
+#################################
+# main
+#################################
+
+if __name__ == '__main__':  
+  
+  opt = parser.parse_args()
+  MakePlot(opt)
