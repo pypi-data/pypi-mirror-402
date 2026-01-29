@@ -1,0 +1,204 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sleap"
+description = "SLEAP (Social LEAP Estimates Animal Poses) is a deep learning framework for animal pose tracking."
+authors = [
+    {name = "Liezl Maree", email = "lmaree@salk.edu"},
+    {name = "Talmo Pereira", email = "talmo@salk.edu"}
+]
+license = {text = "BSD-3-Clause"}
+requires-python = ">=3.11,<3.14"
+keywords = ["deep learning", "pose estimation", "tracking", "neuroscience"]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
+dynamic = ["version", "readme"]
+dependencies = [
+    "attrs",
+    "click>=8.0",
+    "omegaconf",
+    "imageio",
+    "imageio-ffmpeg",
+    "jsonpickle",
+    "markupsafe",
+    "networkx",
+    "numpy",
+    "opencv-python",
+    "pandas",
+    "psutil",
+    "PySide6",
+    "python-rapidjson",
+    "pyyaml",
+    "rapidyaml",
+    "pyzmq",
+    "qtpy",
+    "rich",
+    "rich-click>=1.8",
+    "scikit-image",
+    "scikit-learn",
+    "scipy",
+    "seaborn",
+    "requests",
+    "matplotlib",
+    "sleap-io[all]>=0.6.2,<0.7.0",
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "sleap.version.__version__"}
+readme = {file = ["README.md"], content-type="text/markdown"}
+
+[project.optional-dependencies]
+jupyter = [
+    "jupyter",
+    "jupyterlab",
+]
+
+nn = [
+    "sleap-nn[torch]>=0.1.0a2"
+]
+
+nn-cpu = [
+    "sleap-nn[torch]>=0.1.0a2"
+]
+
+nn-cuda128 = [
+    "sleap-nn[torch]>=0.1.0a2"
+]
+
+nn-cuda118 = [
+    "sleap-nn[torch]>=0.1.0a2"
+]
+
+nn-cuda130 = [
+    "sleap-nn[torch]>=0.1.0a2"
+]
+
+[dependency-groups]
+# PEP 735: Dev-only dependencies (`dev` is installed automatically by `uv`)
+dev = [
+    # Testing
+    "pytest",
+    "pytest-cov",
+    "pytest-qt>=4.4.0",
+    "pytest-xvfb",
+    # Linting
+    "ruff",
+    # Docs
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocs-jupyter",
+    "mkdocstrings[python]",
+    "mkdocs-gen-files",
+    "mkdocs-literate-nav",
+    "mkdocs-section-index",
+    "mike",
+]
+
+[project.urls]
+Homepage = "https://sleap.ai"
+Documentation = "https://sleap.ai/"
+"Bug Tracker" = "https://github.com/talmolab/sleap/issues"
+"Source Code" = "https://github.com/talmolab/sleap"
+
+[project.scripts]
+sleap = "sleap.cli:cli"
+sleap-convert = "sleap.io.convert:main"
+sleap-render = "sleap.io.visuals:main"
+sleap-label = "sleap.gui.app:main"
+sleap-inspect = "sleap.info.labels:main"
+sleap-diagnostic = "sleap.diagnostic:main"
+sleap-train = "sleap.legacy_cli_adaptors:train_command"
+sleap-track = "sleap.legacy_cli_adaptors:track_command"
+sleap-nn-train = "sleap.nn_cli:train"
+sleap-nn-track = "sleap.nn_cli:track"
+# sleap-export = "sleap.legacy_cli_adaptors:export_cli"
+
+[tool.uv]
+index-url = "https://download.pytorch.org/whl/cu128"
+extra-index-url = ["https://pypi.org/simple"]
+conflicts = [
+    [
+        { extra = "nn-cpu" },
+        { extra = "nn-cuda118" },
+        { extra = "nn-cuda128" },
+        { extra = "nn-cuda130" }
+    ]
+]
+
+[tool.uv.sources]
+sleap-nn = [
+    { index = "pytorch-cpu", extra = "nn-cpu" },
+    { index = "pytorch-cu118", extra = "nn-cuda118" },
+    { index = "pytorch-cu128", extra = "nn-cuda128" },
+    { index = "pytorch-cu130", extra = "nn-cuda130" },
+]
+markupsafe = { index = "pypi" }
+# For sleap-io dev, uncomment ONE of the following:
+# sleap-io = { git = "https://github.com/talmolab/sleap-io", branch = "main" }
+# sleap-io = { path = "../sleap-io", editable = true }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://pypi.org/simple"
+index-url = "https://pypi.org/simple"
+extra-index-url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu118"
+url = "https://pypi.org/simple"
+index-url = "https://pypi.org/simple"
+extra-index-url = "https://download.pytorch.org/whl/cu118"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://pypi.org/simple"
+extra-index-url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://pypi.org/simple"
+extra-index-url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+explicit = true
+
+[tool.setuptools.packages.find]
+exclude = ["tests", "tests.*", "docs"]
+
+[tool.setuptools.package-data]
+"*" = ["*.ui", "*.txt", "*.md"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E721",  # Use isinstance() for type comparisons
+    "E731",  # Do not assign a lambda expression
+    "E741",  # Ambiguous variable name
+    "F405",  # May be undefined, or defined from star imports
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "E402"]
+"tests/*" = ["F403", "F405"]
