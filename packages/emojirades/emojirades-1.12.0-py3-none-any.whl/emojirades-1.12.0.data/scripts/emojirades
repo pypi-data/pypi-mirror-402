@@ -1,0 +1,112 @@
+#!python
+
+import argparse
+import logging
+import time
+import sys
+import os
+
+from emojirades.bot import EmojiradesBot, configure_parent_logger
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--verbose", action="count", default=0, help="Logging level")
+    parser.add_argument("--log-file", default=sys.stderr, help="File we will log to")
+
+    subparsers = parser.add_subparsers(help="Bot Mode", dest="mode")
+    subparsers.required = True
+
+    # Init Database
+    parser_init = subparsers.add_parser("init", help="Init Database")
+    parser_init.add_argument(
+        "--db-uri",
+        help="Database URI to init",
+        default=os.environ.get("DATABASE_URI"),
+        required="DATABASE_URI" not in os.environ,
+    )
+
+    # Populate Database
+    parser_populate = subparsers.add_parser("populate", help="Populate Database")
+    parser_populate.add_argument(
+        "--db-uri",
+        help="Database URI",
+        default=os.environ.get("DATABASE_URI"),
+        required="DATABASE_URI" not in os.environ,
+    )
+    parser_populate.add_argument("--table", help="Name of the table", required=True)
+    parser_populate.add_argument("--data-file", help="Filename we'll read from", required=True)
+
+    # Single Workspace
+    parser_single = subparsers.add_parser("single", help="Single Workspace")
+    parser_single.add_argument(
+        "--db-uri",
+        help="Database URI to store state",
+        default=os.environ.get("DATABASE_URI"),
+        required="DATABASE_URI" not in os.environ,
+    )
+    parser_single.add_argument(
+        "--auth-uri",
+        help="JSON file to store auth config",
+        default=os.environ.get("AUTHENTICATION_URI"),
+        required="AUTHENTICATION_URI" not in os.environ,
+    )
+
+    # Multiple Workspaces
+    parser_multiple = subparsers.add_parser("multiple", help="Multiple Workspaces")
+    parser_multiple.add_argument(
+        "--workspaces-uri",
+        help="URI we persist workspaces to",
+        default=os.environ.get("WORKSPACES_URI"),
+        required="WORKSPACES_URI" not in os.environ,
+    )
+    parser_multiple.add_argument("--workspace-id", dest="workspace_ids", action="append", help="Specific workspace IDs")
+    parser_multiple.add_argument(
+        "--db-uri",
+        help="Optionally override the workspace db_uri",
+        default=os.environ.get("DATABASE_URI"),
+    )
+    parser_multiple.add_argument(
+        "--onboarding-queue",
+        help="SQS queue containing new workspaces to onboard",
+        default=os.environ.get("ONBOARDING_URI"),
+    )
+
+    args = parser.parse_args()
+
+    if args.verbose >= 2:
+        log_level = logging.DEBUG
+    elif args.verbose >= 1:
+        log_level = logging.INFO
+    else:
+        log_level = logging.WARNING
+
+    logger = configure_parent_logger(log_level, "Emojirades")
+
+    bot = EmojiradesBot()
+
+    # Configure the bot mode
+    if args.mode == "init":
+        logger.debug("Running DB migrations")
+        bot.init_db(args.db_uri)
+    elif args.mode == "populate":
+        logger.debug("Running DB population")
+        bot.populate_db(args.db_uri, args.table, args.data_file)
+    else:
+        if args.mode == "single":
+            logger.debug("Configuring for Single Workspace mode")
+            bot.configure_workspace(args.db_uri, args.auth_uri)
+        elif args.mode == "multiple":
+            logger.debug("Configuring for Multiple Workspace mode")
+            bot.configure_workspaces(args.workspaces_uri, args.workspace_ids, args.onboarding_queue, db_uri=args.db_uri)
+        else:
+            parser.error("Unknown mode")
+
+        logger.info("Bot is listening for commands")
+        bot.listen_for_commands(blocking=False)
+
+        if args.onboarding_queue is not None:
+            bot.listen_for_onboarding(args.workspaces_uri, db_uri=args.db_uri)
+        else:
+            while True:
+                time.sleep(60)
