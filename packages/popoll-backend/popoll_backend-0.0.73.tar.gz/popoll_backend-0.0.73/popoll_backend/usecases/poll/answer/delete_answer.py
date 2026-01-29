@@ -1,0 +1,16 @@
+import sqlite3
+from popoll_backend.db.query.answer_queries import AnswerQueries
+from popoll_backend.model.output import EMPTY, Empty
+from popoll_backend.usecases.poll import PollQuery
+
+class DeleteAnswer(PollQuery):
+    
+    id: int
+    
+    def __init__(self, poll: str, id: int):
+        super().__init__(poll)
+        self.id = id
+    
+    def process(self, cursor: sqlite3.Cursor) -> Empty:
+        AnswerQueries().delete(cursor, self.id)
+        return EMPTY
