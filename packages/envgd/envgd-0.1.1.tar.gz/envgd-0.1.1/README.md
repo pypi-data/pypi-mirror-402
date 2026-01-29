@@ -1,0 +1,605 @@
+# EnvGuard
+
+**Secure environment variable management for Python applications.**
+
+EnvGuard provides a robust, type-safe way to handle environment variables with built-in security features including encryption, tamper detection, override protection, and secret manager integration.
+
+## Features
+
+- **Type Safety**: Automatic type validation and conversion
+- **Override Protection**: Prevents silent overrides of system environment variables
+- **Built-in Encryption**: Encrypt sensitive `.env` files with Fernet (AES-128)
+- **Tamper Detection**: SHA-256 hash verification to detect file modifications
+- **Secret Masking**: Automatically masks sensitive keys in status reports
+- **Scoped Access**: Restrict variable access to specific code sections
+- **Environment Locking**: Prevent running wrong environment configurations
+- **Multi-Environment Support**: Load environment-specific files (`.env.production`, `.env.development`)
+- **Variable Interpolation**: Reference variables with `${VAR}` syntax
+- **Template Validation**: Validate against template files with optional defaults
+- **Secret Manager Integration**: AWS Secrets Manager and HashiCorp Vault support
+- **Pydantic Integration**: Seamless integration with Pydantic models
+- **Zero External Dependencies**: Core functionality works without Pydantic
+
+## Installation
+
+```bash
+pip install envguard
+```
+
+**Optional dependencies:**
+
+```bash
+# For Pydantic support
+pip install envguard[pydantic]
+
+# For AWS Secrets Manager
+pip install envguard[aws]
+
+# For HashiCorp Vault
+pip install envguard[vault]
+
+# For all secret managers
+pip install envguard[secrets]
+```
+
+## Quick Start
+
+### Basic Usage
+
+```python
+from envguard import load
+
+# Load environment variables from .env file
+env = load(path=".env", schema={
+    "DATABASE_URL": str,
+    "API_KEY": str,
+    "DEBUG": bool,
+    "PORT": int
+})
+
+print(env.DATABASE_URL)
+print(env.PORT)
+```
+
+### Class-Based Configuration (Recommended)
+
+```python
+from envguard import BaseSettings, guard
+
+class Config(BaseSettings):
+    database_host: str
+    database_port: int
+    api_key: str
+    debug: bool = False
+    max_connections: int = 100
+
+# Load and validate configuration
+config = guard(Config, verbose=False)
+
+# Use your configuration
+print(config.database_host)
+print(config.database_port)
+```
+
+### Without Pydantic (Lightweight)
+
+```python
+from envguard import BaseConfig
+
+class Config(BaseConfig):
+    DATABASE_URL: str
+    API_KEY: str
+    DEBUG: bool
+    PORT: int
+
+config = Config.load()
+print(config.DATABASE_URL)
+```
+
+## Core Features
+
+### Multi-Environment File Support
+
+Load environment-specific files automatically based on your deployment environment:
+
+```python
+from envguard import load
+
+# Automatically loads .env.production if it exists
+# Falls back to .env if not found
+env = load(
+    path=".env",
+    environment="production",
+    fallback=".env",
+    schema={"API_KEY": str, "DATABASE_URL": str}
+)
+
+# File structure:
+# .env                 (base/default)
+# .env.production      (production overrides)
+# .env.development     (development overrides)
+# .env.staging         (staging overrides)
+```
+
+**Use case:** Different configurations for development, staging, and production without code changes.
+
+### Variable Interpolation
+
+Reference other variables within your environment files:
+
+```python
+from envguard import load
+
+# .env file:
+# BASE_URL=https://api.example.com
+# API_URL=${BASE_URL}/v1
+# VERSION=2.0
+# FULL_URL=${API_URL}?version=${VERSION}
+
+env = load(path=".env")
+print(env.FULL_URL)  # https://api.example.com/v1?version=2.0
+```
+
+**Supported syntax:**
+- `${VAR}` - Reference another variable
+- `${VAR:-default}` - Use default value if variable not found
+- Variables are resolved from: file variables → system environment → default
+
+**Example with defaults:**
+```bash
+# .env
+DATABASE_HOST=${DB_HOST:-localhost}
+DATABASE_PORT=${DB_PORT:-5432}
+DATABASE_URL=postgresql://${DATABASE_HOST}:${DATABASE_PORT}/mydb
+```
+
+**Use case:** Build complex URLs and connection strings from simpler components.
+
+### Environment Variable Templates
+
+Use template files to document and validate required variables:
+
+```python
+from envguard import load
+
+# .env.template file:
+# DATABASE_URL=postgresql://localhost/dbname
+# API_KEY=your-api-key-here
+# DEBUG=false
+
+# .env file (your actual values)
+# DATABASE_URL=postgresql://prod/db
+# API_KEY=secret-key-123
+
+# Validate against template
+env = load(path=".env", template=".env.template")
+# Raises error if variables from template are missing
+
+# Or use template defaults for missing variables
+env = load(
+    path=".env",
+    template=".env.template",
+    use_template_defaults=True
+)
+```
+
+**Benefits:**
+- Document required variables for your team
+- Validate configuration completeness
+- Provide sensible defaults for development
+- Onboard new developers faster
+
+### Encrypted Environment Files
+
+Encrypt your `.env` file for secure storage in version control:
+
+```bash
+# Encrypt .env file
+envguard encrypt .env
+
+# The key will be displayed - save it securely!
+# Set it as an environment variable:
+export SAFEENV_KEY="your-encryption-key-here"
+```
+
+Load encrypted files in your application:
+
+```python
+from envguard import load
+
+# Automatically decrypts using SAFEENV_KEY environment variable
+env = load(path=".env.enc", encrypted=True, schema={"API_KEY": str})
+
+# Works with multi-environment support too
+env = load(
+    path=".env",
+    environment="production",
+    encrypted=True,
+    schema={"API_KEY": str}
+)
+# Loads .env.production.enc
+```
+
+**Use case:** Store encrypted secrets in Git repositories safely.
+
+### Secret Manager Integration
+
+Load secrets directly from cloud secret managers without storing them in files.
+
+#### AWS Secrets Manager
+
+```python
+from envguard import load_with_secrets
+
+# Load from AWS Secrets Manager
+env = load_with_secrets(
+    provider="aws",
+    secret_name="prod/database",
+    region="us-east-1",
+    schema={"DATABASE_URL": str, "API_KEY": str}
+)
+
+print(env.DATABASE_URL)
+```
+
+**Installation:**
+```bash
+pip install envguard[aws]
+# or
+pip install boto3
+```
+
+**AWS Credentials:** Uses standard AWS credential chain (environment variables, IAM roles, etc.)
+
+#### HashiCorp Vault
+
+```python
+from envguard import load_with_secrets
+
+# Load from HashiCorp Vault
+env = load_with_secrets(
+    provider="vault",
+    secret_path="secret/data/app",
+    vault_url="https://vault.example.com",
+    vault_token="your-token",
+    schema={"DATABASE_URL": str, "API_KEY": str}
+)
+```
+
+**Installation:**
+```bash
+pip install envguard[vault]
+# or
+pip install hvac
+```
+
+**Environment Variables:**
+- `VAULT_ADDR` - Vault server URL (alternative to `vault_url`)
+- `VAULT_TOKEN` - Vault authentication token (alternative to `vault_token`)
+- `AWS_DEFAULT_REGION` - AWS region (alternative to `region` parameter)
+
+**Use case:** Production deployments where secrets are managed centrally.
+
+### Scoped Access Control
+
+Restrict access to sensitive variables to specific code sections:
+
+```python
+from envguard import load
+
+env = load(path=".env", scoped=True, schema={"SECRET_KEY": str})
+
+# This will raise AccessError
+# secret = env.SECRET_KEY
+
+# Access only within scope
+with env.scope():
+    secret = env.SECRET_KEY
+    # Use secret here
+    process_secret(secret)
+
+# Outside scope, access is denied again
+```
+
+**Use case:** Prevent accidental exposure of sensitive variables in logs or error messages.
+
+### Environment Locking
+
+Prevent accidental use of wrong environment configuration:
+
+```python
+from envguard import load
+
+env = load(path=".env", schema={"APP_ENV": str})
+env.lock("production")  # Raises error if APP_ENV != "production"
+```
+
+**Use case:** Ensure production code never runs with development configuration.
+
+### Tamper Detection
+
+Verify file integrity to detect unauthorized modifications:
+
+```python
+from envguard import load
+
+env = load(path=".env", schema={"API_KEY": str})
+
+# Later, verify file hasn't been modified
+env.verify()  # Raises TamperError if file was changed
+```
+
+**Use case:** Security audits and compliance requirements.
+
+### Status Report
+
+View security status and configuration summary:
+
+```python
+from envguard import guard, BaseSettings
+
+class Config(BaseSettings):
+    api_key: str
+    database_url: str
+
+config = guard(Config, verbose=True)
+# Prints security report with masked secrets:
+# EnvGuard Security Report
+# ----------------------------------------
+# Source: .env
+# Items Protected: 2
+#   - api_key: ********
+#   - database_url: postgresql://...
+# Tamper Protection: Active
+# ----------------------------------------
+```
+
+## Command Line Interface
+
+### Encrypt a File
+
+```bash
+# Generate new key and encrypt
+envguard encrypt .env
+
+# Use existing key
+envguard encrypt .env --key YOUR_KEY
+
+# Keep original file
+envguard encrypt .env --keep
+```
+
+### Decrypt a File
+
+```bash
+# Decrypt using environment variable
+export SAFEENV_KEY="your-key"
+envguard decrypt .env.enc
+
+# Or provide key directly
+envguard decrypt .env.enc --key YOUR_KEY
+```
+
+## Complete Examples
+
+### Production-Ready Configuration
+
+```python
+from envguard import BaseSettings, guard
+import os
+
+class ProductionConfig(BaseSettings):
+    database_url: str
+    redis_url: str
+    api_key: str
+    secret_key: str
+    debug: bool = False
+    log_level: str = "INFO"
+
+# Load based on environment
+env_name = os.getenv("APP_ENV", "development")
+config = guard(
+    ProductionConfig,
+    _environment=env_name,
+    _template=".env.template",
+    verbose=False
+)
+
+# Lock to production if in production
+if env_name == "production":
+    config._env_guard.lock("production")
+```
+
+### Using Secret Managers in Production
+
+```python
+from envguard import load_with_secrets
+
+# Production: Use AWS Secrets Manager
+if os.getenv("ENVIRONMENT") == "production":
+    env = load_with_secrets(
+        provider="aws",
+        secret_name="prod/app-secrets",
+        region="us-east-1",
+        schema={
+            "DATABASE_URL": str,
+            "REDIS_URL": str,
+            "API_KEY": str,
+        }
+    )
+else:
+    # Development: Use local .env file
+    from envguard import load
+    env = load(path=".env", schema={
+        "DATABASE_URL": str,
+        "REDIS_URL": str,
+        "API_KEY": str,
+    })
+```
+
+### Complex Variable Interpolation
+
+```python
+from envguard import load
+
+# .env file:
+# PROTOCOL=https
+# DOMAIN=api.example.com
+# VERSION=v1
+# BASE_URL=${PROTOCOL}://${DOMAIN}
+# API_URL=${BASE_URL}/${VERSION}
+# TIMEOUT=30
+# FULL_URL=${API_URL}?timeout=${TIMEOUT}
+
+env = load(path=".env")
+print(env.FULL_URL)
+# https://api.example.com/v1?timeout=30
+```
+
+### Custom Validators
+
+```python
+from envguard import load
+
+def validate_url(value: str) -> str:
+    if not value.startswith(("http://", "https://")):
+        raise ValueError("Invalid URL format")
+    return value
+
+def validate_port(value: str) -> int:
+    port = int(value)
+    if not (1024 <= port <= 65535):
+        raise ValueError("Port must be between 1024 and 65535")
+    return port
+
+env = load(
+    path=".env",
+    schema={
+        "API_URL": validate_url,
+        "PORT": validate_port,
+        "TIMEOUT": int,
+    }
+)
+```
+
+## API Reference
+
+### `load(path, schema, encrypted, scoped, environment, fallback, template, use_template_defaults)`
+
+Load environment variables from a file.
+
+**Parameters:**
+- `path` (str): Path to environment file (default: `.env`)
+- `schema` (dict | type): Validation schema or class
+- `encrypted` (bool): Whether file is encrypted (default: `False`)
+- `scoped` (bool): Enable scoped access (default: `False`)
+- `environment` (str, optional): Environment name for multi-environment support.
+  Loads `path.environment` (e.g., `.env.production`)
+- `fallback` (str, optional): Fallback path if environment file not found.
+  Defaults to `path` if not specified
+- `template` (str, optional): Path to template file for validation
+- `use_template_defaults` (bool): Use template values as defaults (default: `False`)
+
+**Returns:** `Env` object
+
+### `load_with_secrets(provider, schema, secret_name, secret_path, region, vault_url, vault_token, scoped)`
+
+Load environment variables from a secret manager.
+
+**Parameters:**
+- `provider` (str): Secret manager provider ("aws" or "vault")
+- `schema` (dict | type, optional): Validation schema or class
+- `secret_name` (str, optional): AWS Secrets Manager secret name
+- `secret_path` (str, optional): Vault secret path
+- `region` (str, optional): AWS region
+- `vault_url` (str, optional): Vault server URL
+- `vault_token` (str, optional): Vault authentication token
+- `scoped` (bool): Enable scoped access (default: `False`)
+
+**Returns:** `Env` object
+
+### `guard(schema, verbose, **kwargs)`
+
+Primary entry point for creating secured environment.
+
+**Parameters:**
+- `schema`: Optional schema or class for validation
+- `verbose` (bool): Print security status report (default: `True`)
+- `**kwargs`: Arguments passed to `load()` (path, encrypted, scoped, environment, fallback, template, use_template_defaults)
+
+**Returns:** `Env` object or Pydantic model instance
+
+### `BaseSettings`
+
+Pydantic-based settings class with automatic environment loading.
+
+### `BaseConfig`
+
+Lightweight base class without Pydantic dependency.
+
+## Error Handling
+
+```python
+from envguard import (
+    load,
+    SafeEnvError,
+    MissingEnvError,
+    ValidationError,
+    AccessError,
+    TamperError,
+    EnvironmentLockError,
+)
+
+try:
+    env = load(path=".env", schema={"API_KEY": str})
+except MissingEnvError as e:
+    print(f"Required variable missing: {e}")
+except ValidationError as e:
+    print(f"Validation failed: {e}")
+except TamperError as e:
+    print(f"File tampering detected: {e}")
+except SafeEnvError as e:
+    print(f"Configuration error: {e}")
+```
+
+## Comparison
+
+| Feature | python-dotenv | pydantic-settings | EnvGuard |
+| :--- | :---: | :---: | :---: |
+| Type Safety | No | Yes | Yes |
+| Override Protection | No | No | Yes |
+| Built-in Encryption | No | No | Yes |
+| Tamper Detection | No | No | Yes |
+| Secret Masking | No | No | Yes |
+| Scoped Access | No | No | Yes |
+| Environment Locking | No | No | Yes |
+| Multi-Environment Files | No | No | Yes |
+| Variable Interpolation | No | No | Yes |
+| Template Validation | No | No | Yes |
+| Secret Manager Integration | No | No | Yes |
+| Zero Dependencies | Yes | No | Yes* |
+
+*Core functionality works without Pydantic
+
+## Security Best Practices
+
+1. **Never commit plain text `.env` files** - Use encryption or secret managers
+2. **Store encryption keys securely** - Use secret management systems or environment variables
+3. **Enable scoped access** - For highly sensitive variables
+4. **Use environment locking** - In production deployments
+5. **Verify file integrity** - Periodically check for tampering
+6. **Use templates** - Document required variables and validate configurations
+7. **Use secret managers in production** - Avoid storing secrets in files
+8. **Mask secrets in logs** - EnvGuard does this automatically in status reports
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+MIT License - see LICENSE file for details.
+
+---
+
+**EnvGuard** - Bulletproof environment management for professional Python applications.
