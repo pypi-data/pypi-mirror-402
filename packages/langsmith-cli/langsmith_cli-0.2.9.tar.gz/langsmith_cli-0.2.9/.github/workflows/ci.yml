@@ -1,0 +1,511 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags-ignore:
+      - '**'  # Skip CI on tag pushes (Publish workflow handles testing)
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel in-progress runs when a new workflow on the same PR is triggered
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write  # For PR comments
+
+env:
+  FORCE_COLOR: "1"  # Force colored output in CI logs
+
+jobs:
+  # Linting and formatting checks
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: false  # Disable cache for fast lint job
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run Ruff linter
+        run: uv run ruff check . --output-format=github
+
+      - name: Check Ruff formatting
+        run: uv run ruff format --check .
+
+      - name: Run Pyright type checker
+        run: uv run pyright
+
+  # Unit and integration tests with coverage
+  test:
+    name: Test Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.12", "3.13"]
+        include:
+          # Test on macOS and Windows with latest Python only
+          - os: macos-latest
+            python-version: "3.13"
+          - os: windows-latest
+            python-version: "3.13"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run tests with coverage
+        run: uv run pytest --cov=src --cov-report=term-missing --cov-report=xml --cov-report=html --cov-report=json --cov-report=lcov --junit-xml=pytest-report.xml -v --durations=20 --durations-min=0.5
+
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Generate AI-friendly coverage summary
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: |
+          uv run python - <<'PYTHON_SCRIPT'
+          import json
+          from pathlib import Path
+
+          # Load coverage.json
+          with open("coverage.json") as f:
+              cov = json.load(f)
+
+          # Build structured summary optimized for AI consumption
+          summary = {
+              "schema_version": "1.0",
+              "format": "langsmith-cli-coverage",
+              "totals": {
+                  "statements": cov["totals"]["num_statements"],
+                  "missing": cov["totals"]["missing_lines"],
+                  "covered": cov["totals"]["covered_lines"],
+                  "percent": round(cov["totals"]["percent_covered"], 2),
+                  "threshold": 89.0,
+                  "status": "pass" if cov["totals"]["percent_covered"] >= 90.0 else "fail"
+              },
+              "files": []
+          }
+
+          # Process each file
+          for filepath, data in cov["files"].items():
+              file_summary = {
+                  "path": filepath,
+                  "statements": data["summary"]["num_statements"],
+                  "missing": data["summary"]["missing_lines"],
+                  "covered": data["summary"]["covered_lines"],
+                  "percent": round(data["summary"]["percent_covered"], 2),
+                  "missing_lines": data["missing_lines"][:50],  # Limit to first 50 for readability
+                  "missing_lines_truncated": len(data["missing_lines"]) > 50
+              }
+              summary["files"].append(file_summary)
+
+          # Sort by coverage % ascending (worst first)
+          summary["files"].sort(key=lambda x: x["percent"])
+
+          # Add recommendations for low-coverage files
+          recommendations = []
+          for f in summary["files"]:
+              if f["percent"] < 80:
+                  recommendations.append({
+                      "file": f["path"],
+                      "current": f["percent"],
+                      "target": 80,
+                      "missing_count": f["missing"],
+                      "priority": "high" if f["percent"] < 70 else "medium"
+                  })
+
+          summary["recommendations"] = recommendations
+
+          # Write structured summary
+          with open("coverage-summary.json", "w") as f:
+              json.dump(summary, f, indent=2)
+
+          # Generate markdown summary for humans and AI
+          md_lines = [
+              "# Coverage Summary",
+              "",
+              f"**Total Coverage: {summary['totals']['percent']}%** ({summary['totals']['status'].upper()})",
+              f"- Statements: {summary['totals']['statements']}",
+              f"- Covered: {summary['totals']['covered']}",
+              f"- Missing: {summary['totals']['missing']}",
+              f"- Threshold: {summary['totals']['threshold']}%",
+              "",
+              "## Per-File Coverage (sorted by coverage, lowest first)",
+              "",
+              "| File | Coverage | Missing | Lines |",
+              "|------|----------|---------|-------|",
+          ]
+
+          for f in summary["files"]:
+              short_path = f["path"].replace("src/langsmith_cli/", "")
+              missing_preview = ",".join(map(str, f["missing_lines"][:5]))
+              if len(f["missing_lines"]) > 5:
+                  missing_preview += "..."
+              md_lines.append(f"| `{short_path}` | {f['percent']}% | {f['missing']} | {missing_preview} |")
+
+          if recommendations:
+              md_lines.extend([
+                  "",
+                  "## Recommendations",
+                  "",
+                  "Files needing attention:",
+                  ""
+              ])
+              for rec in recommendations:
+                  short_path = rec["file"].replace("src/langsmith_cli/", "")
+                  md_lines.append(f"- **{short_path}**: {rec['current']}% → target {rec['target']}% ({rec['missing_count']} lines, {rec['priority']} priority)")
+
+          md_content = "\n".join(md_lines)
+
+          with open("coverage-summary.md", "w") as f:
+              f.write(md_content)
+
+          print(md_content)
+          PYTHON_SCRIPT
+
+      - name: Write GitHub Actions job summary
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: |
+          cat coverage-summary.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload coverage artifacts
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.json
+            coverage.xml
+            coverage.lcov
+            coverage-summary.json
+            coverage-summary.md
+            htmlcov/
+          retention-days: 30
+
+      - name: Upload pytest results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results-${{ matrix.os }}-${{ matrix.python-version }}
+          path: pytest-report.xml
+          retention-days: 30
+
+      - name: Generate test timing summary
+        if: always() && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: |
+          uv run python - <<'PYTHON_SCRIPT'
+          import xml.etree.ElementTree as ET
+          import json
+
+          try:
+              tree = ET.parse('pytest-report.xml')
+              root = tree.getroot()
+
+              total_tests = int(root.attrib.get('tests', 0))
+              total_time = float(root.attrib.get('time', 0))
+              failures = int(root.attrib.get('failures', 0))
+              errors = int(root.attrib.get('errors', 0))
+              skipped = int(root.attrib.get('skipped', 0))
+
+              # Collect all test cases with timing
+              test_cases = []
+              for testcase in root.findall('.//testcase'):
+                  name = testcase.attrib.get('name', 'unknown')
+                  classname = testcase.attrib.get('classname', '')
+                  time = float(testcase.attrib.get('time', 0))
+                  test_cases.append({
+                      "name": name,
+                      "classname": classname,
+                      "time": time,
+                      "full_name": f"{classname}::{name}"
+                  })
+
+              # Sort by time descending
+              test_cases.sort(key=lambda x: x["time"], reverse=True)
+
+              # Build structured summary
+              summary = {
+                  "total_tests": total_tests,
+                  "total_time": round(total_time, 2),
+                  "failures": failures,
+                  "errors": errors,
+                  "skipped": skipped,
+                  "passed": total_tests - failures - errors - skipped,
+                  "avg_time": round(total_time / max(total_tests, 1), 3),
+                  "slowest_tests": [t for t in test_cases[:20] if t["time"] >= 0.1]
+              }
+
+              with open("test-timing.json", "w") as f:
+                  json.dump(summary, f, indent=2)
+
+              # Generate markdown
+              md_lines = [
+                  "## Test Timing Summary",
+                  "",
+                  f"**Total Tests:** {total_tests} | **Passed:** {summary['passed']} | **Failed:** {failures} | **Errors:** {errors} | **Skipped:** {skipped}",
+                  f"**Total Time:** {total_time:.2f}s | **Average:** {summary['avg_time']:.3f}s",
+                  "",
+                  "### Slowest Tests (≥0.1s)",
+                  "",
+                  "| Test | Time |",
+                  "|------|------|",
+              ]
+
+              slow_tests = [t for t in test_cases if t["time"] >= 0.5][:10]
+              if slow_tests:
+                  for t in slow_tests:
+                      md_lines.append(f"| `{t['full_name'][:80]}` | {t['time']:.3f}s |")
+              else:
+                  md_lines.append("| No slow tests (≥0.5s) | - |")
+
+              md_content = "\n".join(md_lines)
+
+              with open("test-timing.md", "w") as f:
+                  f.write(md_content)
+
+              print(md_content)
+
+          except Exception as e:
+              print(f"Error parsing test timing: {e}")
+              with open("test-timing.md", "w") as f:
+                  f.write("## Test Timing Summary\n\nFailed to parse test results.")
+          PYTHON_SCRIPT
+
+      - name: Write test timing to job summary
+        if: always() && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat test-timing.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload test timing summary
+        if: always() && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-timing
+          path: |
+            test-timing.json
+            test-timing.md
+          retention-days: 30
+
+      - name: Check coverage threshold
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: |
+          COVERAGE=$(uv run python -c "import json; print(json.load(open('coverage.json'))['totals']['percent_covered'])")
+          echo "Current coverage: $COVERAGE%"
+
+          THRESHOLD=89.0
+          RESULT=$(uv run python -c "print('pass' if $COVERAGE >= $THRESHOLD else 'fail')")
+
+          if [ "$RESULT" = "fail" ]; then
+            echo "❌ Coverage $COVERAGE% is below threshold $THRESHOLD%"
+            exit 1
+          else
+            echo "✅ Coverage $COVERAGE% meets threshold $THRESHOLD%"
+          fi
+
+  # Coverage report as PR comment
+  coverage-comment:
+    name: Post Coverage Comment
+    runs-on: ubuntu-latest
+    needs: test
+    if: always() && github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+
+      - name: Comment PR with coverage
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+
+            // Read the AI-friendly summary
+            const coverageSummary = JSON.parse(fs.readFileSync('coverage-summary.json', 'utf8'));
+            const markdownSummary = fs.readFileSync('coverage-summary.md', 'utf8');
+
+            const statusEmoji = coverageSummary.totals.status === 'pass' ? '✅' : '⚠️';
+
+            const body = `## 📊 Coverage Report
+
+            ${statusEmoji} **Total Coverage: ${coverageSummary.totals.percent}%** (threshold: ${coverageSummary.totals.threshold}%)
+
+            | Metric | Value |
+            |--------|-------|
+            | Statements | ${coverageSummary.totals.statements} |
+            | Covered | ${coverageSummary.totals.covered} |
+            | Missing | ${coverageSummary.totals.missing} |
+
+            <details>
+            <summary>📋 Per-File Coverage (click to expand)</summary>
+
+            ${markdownSummary.split('## Per-File Coverage')[1] || 'No per-file data available'}
+
+            </details>
+
+            <details>
+            <summary>🤖 AI-Parseable Data (JSON)</summary>
+
+            \`\`\`json
+            ${JSON.stringify(coverageSummary, null, 2)}
+            \`\`\`
+
+            </details>
+            `;
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Coverage Report')
+            );
+
+            // Update or create comment
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+  # E2E tests (run separately, require API key)
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    # Only run E2E tests on main branch or when explicitly triggered
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run E2E tests
+        env:
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+        run: uv run pytest tests/test_e2e.py tests/test_smoke.py -v --junit-xml=e2e-report.xml
+        continue-on-error: true  # Don't fail CI if E2E tests fail
+
+      - name: Upload E2E test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: e2e-report.xml
+          retention-days: 7
+
+  # Build package verification
+  build:
+    name: Build Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build package
+        run: uv build
+
+      - name: Check distribution
+        run: |
+          uv pip install --system twine
+          twine check dist/*
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 30
+
+  # Final status check (all jobs must pass)
+  all-checks:
+    name: All Checks Passed
+    runs-on: ubuntu-latest
+    needs: [lint, test, build]
+    if: always()
+    steps:
+      - name: Check all jobs
+        run: |
+          if [ "${{ needs.lint.result }}" != "success" ] || \
+             [ "${{ needs.test.result }}" != "success" ] || \
+             [ "${{ needs.build.result }}" != "success" ]; then
+            echo "❌ Some checks failed"
+            exit 1
+          else
+            echo "✅ All checks passed"
+          fi
