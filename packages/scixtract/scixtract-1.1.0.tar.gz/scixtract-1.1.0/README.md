@@ -1,0 +1,186 @@
+# scixtract
+
+[![Python](https://img.shields.io/pypi/pyversions/scixtract.svg)](https://pypi.org/project/scixtract/)
+[![PyPI version](https://img.shields.io/pypi/v/scixtract.svg)](https://pypi.org/project/scixtract/)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://github.com/retospect/scixtract/blob/main/LICENSE.txt)
+[![Tests](https://github.com/retospect/scixtract/actions/workflows/test.yml/badge.svg)](https://github.com/retospect/scixtract/actions/workflows/test.yml)
+
+AI-powered PDF text extraction for scientific papers. Removes artifacts, preserves formatting like chemical formulas and citations.
+
+## Usage
+
+```bash
+# First run creates directory structure
+scixtract extract
+
+# Put PDFs in pdf/ directory
+# Run extraction
+scixtract extract
+
+# Clean markdown files appear in md/ directory
+```
+
+**Output:** Markdown files with page numbers preserved and extraction artifacts removed.
+
+**Directory structure:**
+```
+your-project/sources/
+├── pdf/         # Input PDFs
+├── md/          # Output markdown
+└── working/     # Intermediate files
+```
+
+## What it does
+
+For each PDF, scixtract:
+
+1. **Extracts text** from PDF using `unstructured` library
+2. **Processes each page** with AI (qwen3:8b via Ollama):
+   - Removes spacing artifacts and broken words
+   - Fixes line breaks and hyphenation
+   - Preserves chemical formulas (H₂O, CO₂)
+   - Preserves citations and references
+   - Maintains paragraph structure
+3. **Extracts metadata**: Title, authors, keywords
+4. **Generates summary** of the document
+5. **Outputs**:
+   - `md/filename.md` - Clean markdown with page markers
+   - `working/filename_ai_extraction.json` - Structured data
+   - `working/filename_ai_processed.md` - Full processed text
+
+Page numbers are preserved as `[Page X]` markers in the markdown.
+
+## Prerequisites
+
+Before using scixtract, you need to install and set up Ollama:
+
+### 1. Install Ollama
+
+**macOS:**
+```bash
+brew install ollama
+```
+
+**Linux:**
+```bash
+curl -fsSL https://ollama.ai/install.sh | sh
+```
+
+**Windows:**
+Download from [ollama.ai](https://ollama.ai/download)
+
+### 2. Start Ollama service
+
+```bash
+ollama serve
+```
+
+### 3. Install a model
+
+For scientific PDFs:
+
+```bash
+# Default model (4.7GB)
+ollama pull qwen3:8b
+```
+
+## Installation
+
+```bash
+pip install scixtract
+```
+
+## Single file processing
+
+```bash
+# Extract a single PDF to custom location
+scixtract extract paper.pdf
+
+# Specify output directory
+scixtract extract paper.pdf --output-dir results/
+```
+
+### Python API
+
+```python
+from scixtract import AdvancedPDFProcessor
+from pathlib import Path
+
+# Initialize processor
+processor = AdvancedPDFProcessor(
+    model="qwen3:8b"
+)
+
+# Process PDF
+result = processor.process_pdf(Path("paper.pdf"))
+
+# Access cleaned text
+print(f"Title: {result.metadata.title}")
+print(f"Authors: {', '.join(result.metadata.authors)}")
+
+# Get page content
+for page in result.pages:
+    print(f"Page {page.page_number}: {page.content[:200]}...")
+```
+
+## Text cleanup utility
+
+Removes hyphenation artifacts and reflows paragraphs:
+
+```bash
+scixtract text-fix extracted.txt --output cleaned.txt
+cat messy.txt | scixtract text-fix - > clean.txt
+```
+
+## Knowledge management
+
+```bash
+# Extract and index
+scixtract extract paper.pdf --bib-file references.bib --update-knowledge
+
+# Search
+scixtract knowledge --search "catalysis"
+scixtract knowledge --stats
+```
+
+## Output
+
+- **Markdown**: Clean text with page numbers preserved
+- **JSON**: Structured data with metadata and keywords
+- **SQLite database**: Searchable index across documents
+
+## System requirements
+
+- **Python**: 3.10 or higher
+- **Memory**: 8GB RAM minimum (16GB+ recommended for large models)
+- **Storage**: 20GB+ free space for AI models
+- **Ollama**: Required for AI processing
+
+## Help and setup
+
+Use the built-in setup helper:
+
+```bash
+# Check if Ollama is properly configured
+scixtract-setup-ollama --check-only
+
+# List available models
+scixtract-setup-ollama --list-models
+
+# Complete setup with default model
+scixtract-setup-ollama --model qwen3:8b
+```
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE.txt](LICENSE.txt) file for details.
+
+## Support
+
+For technical documentation, API reference, and development information, see [MAINTAINER_README.md](MAINTAINER_README.md).
+
+For issues and questions, please visit the [GitHub repository](https://github.com/retospect/scixtract).
+
+---
+
+Built with [Windsurf](https://codeium.com/windsurf).

@@ -1,0 +1,187 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[project]
+name = "scixtract"
+version = "1.1.0"
+description = "AI-assisted scientific PDF text extraction using local Ollama models"
+readme = "README.md"
+license = {text = "GPL-3.0-or-later"}
+authors = [
+    {name = "Reto Stamm", email = "reto.stamm@example.com"}
+]
+maintainers = [
+    {name = "Reto Stamm", email = "reto.stamm@example.com"}
+]
+keywords = ["pdf", "extraction", "ai", "ollama", "academic", "research", "knowledge", "indexing"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Text Processing",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.25.0",
+    "PyMuPDF>=1.20.0",
+    "bibtexparser>=1.4.0",
+    "pdfplumber>=0.7.0",
+    "unstructured<1.0.0,>=0.11.0",
+    "python-magic>=0.4.0",
+    "tomli>=2.0.0; python_version<'3.11'",
+]
+
+[project.urls]
+Homepage = "https://github.com/retostamm/scixtract"
+Repository = "https://github.com/retostamm/scixtract"
+"Bug Tracker" = "https://github.com/retostamm/scixtract/issues"
+Documentation = "https://github.com/retostamm/scixtract#readme"
+
+[project.scripts]
+scixtract = "scixtract.cli:main"
+scixtract-setup-ollama = "scixtract.setup:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0,<9.0.0",
+    "pytest-cov>=4.1.0,<6.0.0",
+    "black==26.1.0",
+
+    "isort>=5.12.0,<6.0.0",
+    "flake8>=6.0.0,<8.0.0",
+    "mypy>=1.5.0,<2.0.0",
+    "pre-commit>=3.4.0,<4.0.0",
+    "tox>=4.11.0,<5.0.0",
+    "bandit>=1.7.5,<2.0.0",
+    "types-PyYAML>=6.0.0",
+    "types-requests>=2.25.0",
+    "bump-my-version>=0.15.0",
+]
+test = [
+    "pytest>=7.4.0,<9.0.0",
+    "pytest-cov>=4.1.0,<6.0.0",
+    "pytest-mock>=3.12.0,<4.0.0",
+]
+
+[tool.poetry]
+packages = [{include = "scixtract", from = "src"}]
+
+[tool.black]
+line-length = 88
+target-version = ['py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  \.eggs
+  | \.git
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["scixtract"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[tool.pytest.ini_options]
+minversion = "7.4.0"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--tb=short",
+    "-ra",
+    "--cov=src/scixtract",
+    "--cov-report=term-missing:skip-covered",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-k \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+
+[tool.bumpversion]
+current_version = "1.1.0"
+commit = true
+tag = true
+tag_name = "v{new_version}"
+message = "🔖 Bump version: {current_version} → {new_version}"
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "src/scixtract/__init__.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
+
+
+[tool.bandit]
+exclude_dirs = ["tests", "build", "dist"]
+skips = [
+    "B101",  # Skip assert_used test
+    "B601",  # Skip paramiko calls
+    "B404",  # Skip subprocess import warnings
+    "B603",  # Skip subprocess without shell=True warnings
+    "B607",  # Skip partial executable path warnings
+    "B110",  # Skip try/except/pass warnings
+]
