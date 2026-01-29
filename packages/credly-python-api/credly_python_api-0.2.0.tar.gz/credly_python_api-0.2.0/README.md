@@ -1,0 +1,673 @@
+# Credly Python API Client
+
+A clean, resource-based Python SDK for Credly's API v1.
+
+## Features
+
+- Clean, intuitive interface for all Credly API v1 endpoints
+- **Dot notation access** for resource properties (e.g., `badge.id` instead of `badge['id']`)
+- Backward compatible with bracket notation
+- Automatic pagination support with iterators
+- Comprehensive error handling with custom exceptions
+- Type hints for better IDE support
+- Full support for all major resources:
+  - Organizations
+  - Badge Templates
+  - Issued Badges
+  - Employees
+  - Authorization Tokens
+  - Issuer Authorizations
+
+## Installation
+
+### Using pip
+
+```bash
+pip install credly-python-api
+```
+
+### From source
+
+```bash
+git clone https://github.com/kallewesterling/credly-python-api.git
+cd credly-python-api
+pip install -e .
+```
+
+## Quick Start
+
+```python
+from credly import Client
+
+# Initialize the client with your API key
+client = Client(api_key="your_api_key_here")
+
+# List all organizations - use clean dot notation
+for org in client.organizations.list():
+    print(org.name, org.id)
+
+# Get a specific organization
+org = client.organizations.get("org_id")
+print(org.name)  # Dot notation (recommended)
+print(org['name'])  # Bracket notation (also works)
+
+# List badge templates with pagination
+for template in client.badge_templates.list("org_id", per=10):
+    print(template.name)
+```
+
+## Authentication
+
+The Credly API uses Basic Authentication. You need an API key from your Credly account.
+
+### Getting Your API Key
+
+1. Log in to your Credly account
+2. Navigate to Settings > API Keys
+3. Generate a new API key
+
+### Using the API Key
+
+```python
+from credly import Client
+
+# Method 1: Direct initialization
+client = Client(api_key="your_api_key")
+
+# Method 2: Using environment variables
+import os
+client = Client(api_key=os.getenv("CREDLY_API_KEY"))
+```
+
+### Environment Variables
+
+Create a `.env` file in your project root:
+
+```bash
+CREDLY_API_KEY=your_api_key_here
+CREDLY_BASE_URL=https://api.credly.com
+```
+
+Then use it in your code:
+
+```python
+import os
+from dotenv import load_dotenv
+from credly import Client
+
+load_dotenv()
+client = Client(api_key=os.getenv("CREDLY_API_KEY"))
+```
+
+## Accessing Resource Properties
+
+All resources returned by the API support both **dot notation** and **bracket notation** for accessing properties.
+
+### Dot Notation (Recommended)
+
+The cleaner, more Pythonic way to access resource properties:
+
+```python
+badge = client.badges.get(org_id, badge_id)
+
+# Access properties with dot notation
+print(badge.id)
+print(badge.recipient_email)
+print(badge.state)
+print(badge.issued_at)
+```
+
+### Bracket Notation (Backward Compatible)
+
+Traditional dictionary-style access still works:
+
+```python
+badge = client.badges.get(org_id, badge_id)
+
+# Access properties with bracket notation
+print(badge['id'])
+print(badge['recipient_email'])
+print(badge['state'])
+```
+
+### Additional Methods
+
+```python
+# Get with default value
+email = badge.get('recipient_email', 'unknown@example.com')
+
+# Check if property exists
+if 'expired_at' in badge:
+    print(f"Expired: {badge.expired_at}")
+
+# Convert to plain dictionary
+badge_dict = badge.to_dict()
+
+# Works with iteration too
+for org in client.organizations.list():
+    print(f"{org.name} - {org.id}")
+```
+
+## Usage
+
+### Organizations
+
+```python
+# List all organizations
+for org in client.organizations.list():
+    print(org.name)
+
+# Get a specific organization
+org = client.organizations.get("org_id")
+print(org.name, org.id)
+
+# Update an organization
+org = client.organizations.update(
+    "org_id",
+    name="New Name",
+    description="New description"
+)
+```
+
+### Badge Templates
+
+```python
+# List badge templates with filtering and sorting
+for template in client.badge_templates.list(
+    "org_id",
+    filter="active",
+    sort="name",
+    per=20
+):
+    print(template.name)
+
+# Get a specific template
+template = client.badge_templates.get("org_id", "template_id")
+
+# Create a new badge template
+template = client.badge_templates.create(
+    "org_id",
+    name="Python Expert",
+    description="Awarded for Python expertise",
+    image="https://example.com/badge.png",
+    skills=["Python", "Django", "FastAPI"]
+)
+
+# Update a template
+template = client.badge_templates.update(
+    "org_id",
+    "template_id",
+    description="Updated description"
+)
+
+# Delete a template
+client.badge_templates.delete("org_id", "template_id")
+```
+
+### Issued Badges
+
+```python
+# List issued badges
+for badge in client.badges.list("org_id", per=50):
+    print(badge.recipient_email)
+
+# Get a specific badge
+badge = client.badges.get("org_id", "badge_id")
+print(badge.id, badge.state)
+
+# Issue a new badge
+badge = client.badges.issue(
+    "org_id",
+    badge_template_id="template_id",
+    recipient_email="user@example.com",
+    issued_at="2024-01-15",
+    expires_at="2025-01-15"
+)
+
+# Revoke a badge
+badge = client.badges.revoke(
+    "org_id",
+    "badge_id",
+    reason="No longer valid"
+)
+
+# Replace a badge
+badge = client.badges.replace(
+    "org_id",
+    "old_badge_id",
+    badge_template_id="new_template_id",
+    recipient_email="user@example.com"
+)
+
+# Bulk search for badges
+results = client.badges.bulk_search(
+    "org_id",
+    badge_template_id="template_id",
+    state="accepted"
+)
+
+# Delete a badge
+client.badges.delete("org_id", "badge_id")
+```
+
+### Employees
+
+```python
+# List employees
+for employee in client.employees.list("org_id"):
+    print(employee.email)
+
+# Get a specific employee
+employee = client.employees.get("org_id", "employee_id")
+print(employee.first_name, employee.last_name)
+
+# Get employee data
+data = client.employees.get_data("org_id", "employee_id")
+
+# Create an employee
+employee = client.employees.create(
+    "org_id",
+    email="user@example.com",
+    first_name="John",
+    last_name="Doe"
+)
+
+# Update an employee
+employee = client.employees.update(
+    "org_id",
+    "employee_id",
+    first_name="Jane"
+)
+
+# Send invitations
+response = client.employees.send_invitations(
+    "org_id",
+    employee_ids=["emp1", "emp2"],
+    message="Join our platform!"
+)
+
+# List external badges
+for badge in client.employees.external_badges("org_id"):
+    print(badge.name)
+
+# List employee skills
+for skill in client.employees.skills("org_id"):
+    print(skill.name)
+
+# Delete an employee
+client.employees.delete("org_id", "employee_id")
+```
+
+### Authorization Tokens
+
+```python
+# List authorization tokens
+for token in client.authorization_tokens.list("org_id"):
+    print(token.name)
+
+# Create a new token
+token = client.authorization_tokens.create(
+    "org_id",
+    name="API Token",
+    scopes=["read", "write"]
+)
+
+# Rotate tokens
+response = client.authorization_tokens.rotate(
+    "org_id",
+    token_id="token_id"
+)
+```
+
+### Issuer Authorizations
+
+```python
+# List issuer authorizations
+for auth in client.issuer_authorizations.list("org_id"):
+    print(auth['id'])
+
+# Get grantors
+grantors = client.issuer_authorizations.get_grantors("org_id")
+
+# Delete an authorization
+client.issuer_authorizations.delete("org_id", "auth_id")
+```
+
+## Pagination
+
+The SDK supports automatic pagination for list operations:
+
+```python
+# Automatic pagination - iterates through all pages
+for template in client.badge_templates.list("org_id"):
+    print(template['name'])
+
+# Manual pagination - get specific page
+for template in client.badge_templates.list("org_id", page=2, per=20):
+    print(template['name'])
+
+# Control items per page
+for badge in client.badges.list("org_id", per=100):
+    print(badge['id'])
+```
+
+## Error Handling
+
+The SDK provides specific exceptions for different error cases:
+
+```python
+from credly import (
+    Client,
+    NotFoundError,
+    ValidationError,
+    UnauthorizedError,
+    ForbiddenError,
+    RateLimitError,
+    CredlyAPIError
+)
+
+client = Client(api_key="your_api_key")
+
+try:
+    template = client.badge_templates.get("org_id", "template_id")
+except NotFoundError as e:
+    print(f"Template not found: {e.message}")
+except ValidationError as e:
+    print(f"Validation error: {e.message}")
+    print(f"Response: {e.response}")
+except UnauthorizedError as e:
+    print(f"Authentication failed: {e.message}")
+except ForbiddenError as e:
+    print(f"Access forbidden: {e.message}")
+except RateLimitError as e:
+    print(f"Rate limit exceeded: {e.message}")
+except CredlyAPIError as e:
+    print(f"API error: {e.message} (status: {e.status_code})")
+```
+
+## Examples
+
+Check the `examples/` directory for more detailed examples:
+
+- `basic_usage.py` - Basic operations with the SDK
+- `badge_management.py` - Complete badge lifecycle management
+
+To run the examples:
+
+```bash
+# Copy the example environment file
+cp .env.example .env
+
+# Edit .env and add your API key
+# Then run an example
+python examples/basic_usage.py
+```
+
+## Project Structure
+
+```
+credly-python-api/
+├── credly/                          # Main package
+│   ├── __init__.py                  # Package exports (Client + exceptions)
+│   ├── client.py                    # Main Client class
+│   ├── http.py                      # HTTP client with auth & error handling
+│   ├── exceptions.py                # Custom exception classes
+│   └── resources/                   # API resource modules
+│       ├── __init__.py              # Resource exports
+│       ├── base.py                  # Base resource class with pagination
+│       ├── organizations.py         # Organizations resource
+│       ├── badge_templates.py       # Badge Templates resource
+│       ├── badges.py                # Issued Badges resource
+│       ├── employees.py             # Employees resource
+│       ├── authorization_tokens.py  # Authorization Tokens resource
+│       └── issuer_authorizations.py # Issuer Authorizations resource
+├── examples/                        # Usage examples
+│   ├── basic_usage.py               # Basic SDK operations
+│   └── badge_management.py          # Badge lifecycle management
+├── setup.py                         # Package configuration
+├── requirements.txt                 # Project dependencies
+├── tests/                           # Test suite
+│   ├── __init__.py                  # Test package init
+│   ├── test_client.py               # Client tests
+│   ├── test_http.py                 # HTTP client tests
+│   ├── test_exceptions.py           # Exception tests
+│   └── test_resources.py            # Resource tests
+├── .env.example                     # Example environment variables
+├── .gitignore                       # Git ignore rules
+├── LICENSE                          # MIT License
+└── README.md                        # This file
+```
+
+### Core Components
+
+#### `credly/client.py`
+The main `Client` class that initializes all resource endpoints and manages the HTTP client instance. This is the primary entry point for users of the SDK.
+
+#### `credly/http.py`
+HTTP client wrapper that handles:
+- Basic Authentication (Base64 encoded `token:` format)
+- Request methods (GET, POST, PUT, DELETE)
+- Response parsing
+- Error handling and exception raising based on status codes
+
+#### `credly/exceptions.py`
+Custom exception hierarchy:
+- `CredlyAPIError` - Base exception
+- `UnauthorizedError` (401)
+- `ForbiddenError` (403)
+- `NotFoundError` (404)
+- `ValidationError` (422)
+- `RateLimitError` (429)
+
+#### `credly/resources/base.py`
+Base resource class providing:
+- Common CRUD patterns
+- Automatic pagination with iterator support
+- URL building helpers
+
+#### `credly/resources/*.py`
+Individual resource classes implementing specific API endpoints for each resource type (Organizations, Badge Templates, Badges, etc.). Each resource class inherits from `BaseResource`.
+
+## Requirements
+
+- Python 3.7+
+- requests >= 2.25.0
+
+## API Coverage
+
+This SDK covers all major Credly API v1 endpoints:
+
+- ✅ Organizations (list, get, update)
+- ✅ Badge Templates (CRUD + filtering/sorting)
+- ✅ Issued Badges (CRUD + replace, revoke, bulk search)
+- ✅ Employees (CRUD + invitations, external badges, skills)
+- ✅ Authorization Tokens (list, create, rotate)
+- ✅ Issuer Authorizations (list, delete, grantors)
+
+## Development
+
+### Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/kallewesterling/credly-python-api.git
+cd credly-python-api
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Install in development mode
+pip install -e .
+```
+
+### Running Tests
+
+The project uses pytest for testing:
+
+```bash
+# Install test dependencies
+pip install -r requirements.txt
+
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=credly
+
+# Run specific test file
+pytest tests/test_client.py
+
+# Run with verbose output
+pytest -v
+```
+
+### Code Quality & Pre-commit Hooks
+
+This project uses pre-commit hooks to maintain code quality. The hooks run automatically before each commit and check:
+
+- **Black**: Code formatting
+- **isort**: Import sorting
+- **Flake8**: Linting and style checking
+- **mypy**: Type checking
+- **pytest**: All tests must pass
+
+#### Setting up pre-commit hooks
+
+```bash
+# Install pre-commit
+pip install pre-commit
+
+# Install the git hooks
+pre-commit install
+
+# (Optional) Run against all files
+pre-commit run --all-files
+```
+
+Once installed, the hooks will run automatically on `git commit`. If any hook fails, the commit will be rejected and you'll need to fix the issues.
+
+#### Running linters manually
+
+```bash
+# Format code with black
+black credly/ tests/
+
+# Sort imports with isort
+isort credly/ tests/
+
+# Check with flake8
+flake8 credly/ tests/
+
+# Type check with mypy
+mypy credly/
+
+# Run all checks
+pre-commit run --all-files
+```
+
+### Running Examples
+
+```bash
+# Set up your environment variables
+cp .env.example .env
+# Edit .env with your API key
+
+# Run examples
+python examples/basic_usage.py
+python examples/badge_management.py
+```
+
+## Contributing
+
+Contributions are welcome! Here's how you can help:
+
+### Getting Started
+
+1. Fork the repository
+2. Clone your fork: `git clone https://github.com/kallewesterling/credly-python-api.git`
+3. Install dependencies: `pip install -r requirements.txt`
+4. Set up pre-commit hooks: `pre-commit install`
+5. Create a feature branch: `git checkout -b feature/your-feature-name`
+6. Make your changes
+7. Run tests: `pytest`
+8. Commit your changes (pre-commit hooks will run automatically)
+9. Push to your fork: `git push origin feature/your-feature-name`
+10. Open a Pull Request
+
+### Adding New Resources
+
+To add a new API resource:
+
+1. Create a new file in `credly/resources/` (e.g., `new_resource.py`)
+2. Create a class that inherits from `BaseResource`
+3. Implement the resource methods using `self.http.get()`, `self.http.post()`, etc.
+4. Add pagination support using `self._paginate()` for list methods
+5. Export the class in `credly/resources/__init__.py`
+6. Add the resource to the `Client` class in `credly/client.py`
+7. Update the README with usage examples
+
+### Code Style
+
+This project uses automated tools to maintain code quality:
+
+- **Black** for code formatting (line length: 100)
+- **isort** for import sorting
+- **Flake8** for linting
+- **mypy** for type checking
+
+These tools run automatically via pre-commit hooks. You can also run them manually:
+
+```bash
+# Format code
+black credly/ tests/
+
+# Check linting
+flake8 credly/ tests/
+
+# Type check
+mypy credly/
+```
+
+Additional guidelines:
+- Use type hints where appropriate
+- Include docstrings for all public methods
+- Keep methods focused and single-purpose
+
+### Testing
+
+When adding new features, please ensure:
+- All tests pass: `pytest`
+- Pre-commit hooks pass (they run automatically on commit)
+- Add tests for new functionality in the appropriate test file
+- Test coverage remains high: `pytest --cov=credly`
+- Code is formatted and linted: `pre-commit run --all-files`
+- Examples demonstrate the new functionality
+- Error cases are handled appropriately
+
+## License
+
+MIT License - see LICENSE file for details
+
+## Support
+
+For issues and questions:
+- GitHub Issues: https://github.com/kallewesterling/credly-python-api/issues
+- Credly API Documentation: https://www.credly.com/docs/api
+
+## Changelog
+
+### 0.2.0 (2026-01-20)
+- **New Feature**: Added dot notation access for resource properties
+  - Access properties using `badge.id` instead of `badge['id']`
+  - Fully backward compatible with bracket notation
+  - Works with all resource types and paginated results
+- Added `ResourceData` wrapper class for enhanced property access
+- Added comprehensive tests for dot notation functionality
+- Updated documentation with dot notation examples
+
+### 0.1.0 (2026-01-20)
+- Initial release
+- Support for all major Credly API v1 endpoints
+- Automatic pagination
+- Comprehensive error handling
+- Full documentation and examples
