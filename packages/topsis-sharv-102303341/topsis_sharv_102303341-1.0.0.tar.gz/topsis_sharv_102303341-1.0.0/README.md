@@ -1,0 +1,46 @@
+# Topsis-Sharv-102303341
+
+A Python package to implement TOPSIS (Technique for Order of Preference by Similarity to Ideal Solution) method.
+
+## Installation
+
+```bash
+pip install Topsis-Sharv-102303341
+```
+
+## Usage
+
+### Command Line
+
+```bash
+topsis <InputDataFile> <Weights> <Impacts> <ResultFileName>
+```
+
+**Example:**
+
+```bash
+topsis data.csv "1,1,1,1" "+,+,+,-" result.csv
+```
+
+### Input File Format
+
+The input file should be a CSV or Excel file where:
+- The first column contains the names/labels of the alternatives.
+- The remaining columns contain numeric values for the criteria.
+
+| Alternative | C1 | C2 | C3 | C4 |
+|-------------|----|----|----|----|
+| M1          | 250| 16 | 12 | 5  |
+| M2          | 200| 16 | 8  | 3  |
+| M3          | 300| 32 | 16 | 4  |
+
+### Arguments
+
+1.  **InputDataFile**: Path to the input CSV or Excel file.
+2.  **Weights**: Comma-separated weights for the criteria (e.g., "0.25,0.25,0.25,0.25").
+3.  **Impacts**: Comma-separated impacts ('+' for beneficial, '-' for non-beneficial) (e.g., "+,+,+,-").
+4.  **ResultFileName**: Path to save the output file (CSV).
+
+## License
+
+MIT License
