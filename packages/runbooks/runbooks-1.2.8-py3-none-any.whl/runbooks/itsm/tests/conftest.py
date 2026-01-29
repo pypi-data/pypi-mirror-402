@@ -1,0 +1,323 @@
+"""
+Pytest configuration and fixtures for ITSM test suite.
+
+Provides reusable test fixtures for:
+- Sample configurations
+- Sample ticket data
+- Temporary directories
+- Mock DataFrames
+"""
+
+import tempfile
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Dict, Any
+
+import pandas as pd
+import pytest
+
+from runbooks.itsm.config import (
+    DataSourceConfig,
+    SLAConfig,
+    DesignSystemConfig,
+    VisualizationConfig,
+    ITSMConfig,
+)
+from runbooks.itsm.models.ticket import (
+    TicketSource,
+    TicketType,
+    TicketStatus,
+    TicketPriority,
+    AWSTicket,
+    AzureTicket,
+    TicketCollection,
+)
+
+
+# ============================================================================
+# Configuration Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def sample_config() -> ITSMConfig:
+    """Create sample ITSMConfig instance for testing."""
+    return ITSMConfig()
+
+
+@pytest.fixture
+def sample_data_source_config() -> DataSourceConfig:
+    """Create sample DataSourceConfig instance."""
+    return DataSourceConfig(
+        data_dir=Path("test_data"),
+        aws_file="test_aws.xlsx",
+        azure_file="test_azure.xlsx",
+        pricing_file="test_pricing.xlsx",
+    )
+
+
+@pytest.fixture
+def sample_sla_config() -> SLAConfig:
+    """Create sample SLAConfig instance."""
+    return SLAConfig(p1_hours=4, p2_hours=8, p3_hours=24, p4_hours=48)
+
+
+@pytest.fixture
+def sample_design_config() -> DesignSystemConfig:
+    """Create sample DesignSystemConfig instance."""
+    return DesignSystemConfig()
+
+
+@pytest.fixture
+def sample_visualization_config() -> VisualizationConfig:
+    """Create sample VisualizationConfig instance."""
+    return VisualizationConfig(theme="plotly_dark", use_sample_data=True)
+
+
+# ============================================================================
+# Ticket Model Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def sample_aws_ticket() -> AWSTicket:
+    """Create sample AWSTicket with known values."""
+    return AWSTicket(
+        issue_key="AWS-00001",
+        issue_type=TicketType.INCIDENT,
+        status=TicketStatus.CLOSED,
+        priority=TicketPriority.P2,
+        summary="EC2 instance unresponsive in ap-southeast-2",
+        team_name="Cloud Team",
+        assignee="John Doe",
+        reporter="Jane Smith",
+        created=datetime(2024, 1, 15, 10, 0, 0),
+        updated=datetime(2024, 1, 15, 18, 0, 0),
+        resolved=datetime(2024, 1, 15, 18, 0, 0),
+        source=TicketSource.AWS,
+    )
+
+
+@pytest.fixture
+def sample_azure_ticket() -> AzureTicket:
+    """Create sample AzureTicket with known values."""
+    return AzureTicket(
+        issue_key="AZ-00001",
+        issue_type=TicketType.CHANGE,
+        status=TicketStatus.DONE,
+        priority=TicketPriority.P3,
+        summary="Azure VM scaling configuration update",
+        team_name="Datacom Service Desk",
+        assignee="Bob Wilson",
+        reporter="Alice Brown",
+        created=datetime(2024, 2, 1, 14, 0, 0),
+        updated=datetime(2024, 2, 2, 10, 0, 0),
+        resolved=datetime(2024, 2, 2, 10, 0, 0),
+        source=TicketSource.AZURE,
+    )
+
+
+@pytest.fixture
+def sample_ticket_collection(sample_aws_ticket, sample_azure_ticket) -> TicketCollection:
+    """Create sample TicketCollection with AWS and Azure tickets."""
+    # Create additional tickets for better test coverage
+    aws_tickets = [
+        sample_aws_ticket,
+        AWSTicket(
+            issue_key="AWS-00002",
+            issue_type=TicketType.SERVICE_REQUEST,
+            status=TicketStatus.OPEN,
+            priority=TicketPriority.P4,
+            summary="Request access to S3 bucket",
+            created=datetime(2024, 1, 20, 9, 0, 0),
+            updated=datetime(2024, 1, 20, 9, 0, 0),
+            resolved=None,
+        ),
+        AWSTicket(
+            issue_key="AWS-00003",
+            issue_type=TicketType.INCIDENT,
+            status=TicketStatus.RESOLVED,
+            priority=TicketPriority.P1,
+            summary="Critical outage - RDS database down",
+            created=datetime(2024, 1, 10, 8, 0, 0),
+            updated=datetime(2024, 1, 10, 11, 30, 0),
+            resolved=datetime(2024, 1, 10, 11, 30, 0),  # 3.5 hours
+        ),
+    ]
+
+    azure_tickets = [
+        sample_azure_ticket,
+        AzureTicket(
+            issue_key="AZ-00002",
+            issue_type=TicketType.INCIDENT,
+            status=TicketStatus.PENDING,
+            priority=TicketPriority.P2,
+            summary="Azure Function timeout errors",
+            created=datetime(2024, 2, 5, 15, 0, 0),
+            updated=datetime(2024, 2, 5, 16, 0, 0),
+            resolved=None,
+        ),
+    ]
+
+    return TicketCollection(
+        aws_tickets=aws_tickets,
+        azure_tickets=azure_tickets,
+        load_timestamp=datetime(2024, 10, 15, 12, 0, 0),
+        data_source="Test data generated by conftest.py",
+    )
+
+
+# ============================================================================
+# DataFrame Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def sample_aws_dataframe() -> pd.DataFrame:
+    """Create sample AWS tickets DataFrame for testing."""
+    return pd.DataFrame(
+        {
+            "Issue key": ["AWS-00001", "AWS-00002", "AWS-00003"],
+            "Issue Type": ["Incident", "Service request", "Incident"],
+            "Status": ["Closed", "Open", "Resolved"],
+            "Priority": ["P2", "P4", "P1"],
+            "Summary": ["EC2 instance unresponsive", "Request S3 access", "RDS database down"],
+            "Team Name": ["Cloud Team", "Cloud Team", "Database Team"],
+            "Assignee": ["John Doe", "Jane Smith", "Bob Wilson"],
+            "Reporter": ["User A", "User B", "User C"],
+            "Created": pd.to_datetime(["2024-01-15 10:00:00", "2024-01-20 09:00:00", "2024-01-10 08:00:00"]),
+            "Updated": pd.to_datetime(["2024-01-15 18:00:00", "2024-01-20 09:00:00", "2024-01-10 11:30:00"]),
+            "Resolved": pd.to_datetime(["2024-01-15 18:00:00", pd.NaT, "2024-01-10 11:30:00"]),
+        }
+    )
+
+
+@pytest.fixture
+def sample_azure_dataframe() -> pd.DataFrame:
+    """Create sample Azure tickets DataFrame for testing."""
+    return pd.DataFrame(
+        {
+            "Issue key": ["AZ-00001", "AZ-00002"],
+            "Issue Type": ["Change", "Incident"],
+            "Status": ["Done", "Pending"],
+            "Priority": ["P3", "P2"],
+            "Summary": ["VM scaling update", "Function timeout errors"],
+            "Team Name": ["Datacom Service Desk", "Cloud Team"],
+            "Assignee": ["Bob Wilson", "Alice Brown"],
+            "Reporter": ["User X", "User Y"],
+            "Created": pd.to_datetime(["2024-02-01 14:00:00", "2024-02-05 15:00:00"]),
+            "Updated": pd.to_datetime(["2024-02-02 10:00:00", "2024-02-05 16:00:00"]),
+            "Resolved": pd.to_datetime(["2024-02-02 10:00:00", pd.NaT]),
+        }
+    )
+
+
+@pytest.fixture
+def sample_pricing_dataframe() -> pd.DataFrame:
+    """Create sample pricing DataFrame for testing."""
+    return pd.DataFrame(
+        {
+            "Month": ["Jan", "Feb", "Mar"],
+            "Existing_Cost": [42171, 60248, 73558],
+            "New_Model_Cost": [52687, 52687, 52687],
+        }
+    )
+
+
+@pytest.fixture
+def sample_dataframe_row() -> Dict[str, Any]:
+    """Create sample DataFrame row as dictionary for from_dataframe_row testing."""
+    return {
+        "Issue key": "AWS-TEST-001",
+        "Issue Type": "Incident",
+        "Status": "Resolved",
+        "Priority": "P2",
+        "Summary": "Test incident summary",
+        "Team Name": "Test Team",
+        "Assignee": "Test Assignee",
+        "Reporter": "Test Reporter",
+        "Created": pd.Timestamp("2024-01-15 10:00:00"),
+        "Updated": pd.Timestamp("2024-01-15 14:00:00"),
+        "Resolved": pd.Timestamp("2024-01-15 16:00:00"),
+    }
+
+
+# ============================================================================
+# Temporary Directory Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def temp_data_directory():
+    """Create temporary directory for file operation tests."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        yield Path(temp_dir)
+
+
+@pytest.fixture
+def temp_excel_files(temp_data_directory):
+    """Create temporary Excel files for data loader testing."""
+    # Create sample AWS Excel file
+    aws_df = pd.DataFrame(
+        {
+            "Issue key": ["AWS-00001"],
+            "Issue Type": ["Incident"],
+            "Status": ["Closed"],
+            "Priority": ["P1"],
+            "Summary": ["Test AWS ticket"],
+            "Team Name": ["Test Team"],
+            "Assignee": ["Test User"],
+            "Reporter": ["Test Reporter"],
+            "Created": [datetime(2024, 1, 1, 10, 0, 0)],
+            "Updated": [datetime(2024, 1, 1, 14, 0, 0)],
+            "Resolved": [datetime(2024, 1, 1, 14, 0, 0)],
+        }
+    )
+
+    aws_file = temp_data_directory / "AWS-Tickets.xlsx"
+    aws_df.to_excel(aws_file, sheet_name="AWS-Tickets", index=False)
+
+    # Create sample Azure Excel file
+    azure_df = pd.DataFrame(
+        {
+            "Issue key": ["AZ-00001"],
+            "Issue Type": ["Change"],
+            "Status": ["Done"],
+            "Priority": ["P3"],
+            "Summary": ["Test Azure ticket"],
+            "Team Name": ["Test Team"],
+            "Assignee": ["Test User"],
+            "Reporter": ["Test Reporter"],
+            "Created": [datetime(2024, 2, 1, 10, 0, 0)],
+            "Updated": [datetime(2024, 2, 1, 16, 0, 0)],
+            "Resolved": [datetime(2024, 2, 1, 16, 0, 0)],
+        }
+    )
+
+    azure_file = temp_data_directory / "Azure-Tickets.xlsx"
+    azure_df.to_excel(azure_file, sheet_name="Azure-Tickets", index=False)
+
+    # Create sample pricing Excel file
+    pricing_df = pd.DataFrame(
+        {
+            "Month": ["Jan", "Feb", "Mar"],
+            "Existing_Cost": [42171, 60248, 73558],
+            "New_Model_Cost": [52687, 52687, 52687],
+        }
+    )
+
+    pricing_file = temp_data_directory / "pricing.xlsx"
+    pricing_df.to_excel(pricing_file, sheet_name="Bluecurrent", index=False)
+
+    return {"aws_file": aws_file, "azure_file": azure_file, "pricing_file": pricing_file}
+
+
+# ============================================================================
+# Utility Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def reference_date():
+    """Fixed reference date for time-based testing."""
+    return datetime(2024, 10, 15, 12, 0, 0)
