@@ -1,0 +1,170 @@
+name: Docs
+
+on:
+  # Trigger when CI completes successfully on master
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  actions: read
+
+concurrency:
+  group: docs
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install dependencies
+        run: uv sync --group docs
+
+      - name: Build docs
+        run: uv run sphinx-build -b html docs docs/_build/html
+
+      - name: Upload docs artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: docs-latest
+          path: docs/_build/html/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download docs artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docs-latest
+          path: deploy/latest/
+
+      # Download CI reports from the workflow that triggered us
+      - name: Download coverage report
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v7
+        with:
+          name: coverage-report
+          path: deploy/reports/coverage/
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Download mypy report
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v7
+        with:
+          name: mypy-report
+          path: deploy/reports/mypy/
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Create reports index
+        if: github.event_name == 'workflow_run'
+        run: |
+          cat > deploy/reports/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>kdbxtool Reports</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+              h1 { color: #333; }
+              a { display: block; padding: 15px; margin: 10px 0; background: #f5f5f5; border-radius: 8px; text-decoration: none; color: #0066cc; }
+              a:hover { background: #e8e8e8; }
+            </style>
+          </head>
+          <body>
+            <h1>kdbxtool Reports</h1>
+            <a href="coverage/htmlcov/">Test Coverage Report</a>
+            <a href="mypy/">Type Coverage Report (mypy)</a>
+          </body>
+          </html>
+          EOF
+
+      - name: Create root redirect
+        run: |
+          cat > deploy/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head><meta http-equiv="refresh" content="0; url=latest/"></head>
+          <body><a href="latest/">Redirect to latest docs</a></body>
+          </html>
+          EOF
+
+      - name: Download existing pages (preserve versions)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Get the latest pages artifact to preserve other versions
+          ARTIFACT_ID=$(gh api repos/${{ github.repository }}/actions/artifacts \
+            --jq '[.artifacts[] | select(.name == "github-pages")] | first | .id' 2>/dev/null || echo "")
+
+          if [ -n "$ARTIFACT_ID" ] && [ "$ARTIFACT_ID" != "null" ]; then
+            echo "Downloading existing pages artifact..."
+            gh api repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip > existing.zip || true
+            if [ -f existing.zip ]; then
+              unzip -o existing.zip -d existing_tar/ || true
+              if [ -f existing_tar/artifact.tar ]; then
+                mkdir -p existing/
+                tar -xf existing_tar/artifact.tar -C existing/ || true
+                # Copy versioned docs (not latest or reports, we're replacing those)
+                for dir in existing/*/; do
+                  dirname=$(basename "$dir")
+                  if [ "$dirname" != "latest" ] && [ "$dirname" != "reports" ]; then
+                    cp -r "$dir" deploy/ 2>/dev/null || true
+                  fi
+                done
+                # Copy existing versions.json to merge with
+                if [ -f existing/versions.json ]; then
+                  cp existing/versions.json deploy/versions.json.old || true
+                fi
+              fi
+              rm -rf existing_tar existing existing.zip
+            fi
+          fi
+
+      - name: Update versions.json
+        run: |
+          # Start with existing versions or empty array
+          if [ -f deploy/versions.json.old ]; then
+            VERSIONS=$(cat deploy/versions.json.old)
+          else
+            VERSIONS='[]'
+          fi
+
+          # Ensure "latest" is in the list (at the top)
+          VERSIONS=$(echo "$VERSIONS" | jq 'if any(.version == "latest") then . else [{"name": "latest (dev)", "version": "latest"}] + . end')
+
+          echo "$VERSIONS" | jq '.' > deploy/versions.json
+          rm -f deploy/versions.json.old
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: deploy/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
