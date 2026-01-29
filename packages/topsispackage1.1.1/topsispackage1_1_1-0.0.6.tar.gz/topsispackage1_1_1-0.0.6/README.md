@@ -1,0 +1,120 @@
+\# TOPSIS-102303670
+
+
+
+\*\*for:\*\* Project-1 (UCS633)  
+
+\*\*submitted by:\*\* Karanveer Singh  
+
+\*\*Roll No:\*\* 102303670  
+
+\*\*Group:\*\* 3C45  
+
+
+
+`topsispackage1.1.1` is a Python library for solving \*\*Multiple Criteria Decision Making (MCDM)\*\* problems using the  
+
+\*\*Technique for Order of Preference by Similarity to Ideal Solution (TOPSIS).\*\*
+
+
+
+---
+
+
+
+\## Installation
+
+
+
+Use the package manager \*\*pip\*\* to install this package:
+
+
+
+```bash
+
+pip install topsispackage1.1.1
+
+
+
+
+
+\## usage
+
+
+
+This package takes a CSV file as input, along with weights and impacts, and generates a result CSV file
+
+containing Topsis Score and Rank.
+
+
+
+Input Rules
+
+
+
+The dataset must be a .csv file
+
+
+
+The first column should contain names/IDs (non-numeric)
+
+
+
+All columns from 2nd onwards must be numeric
+
+
+
+The file must contain at least 3 columns
+
+
+
+Number of weights and impacts must match the number of numeric columns
+
+
+
+Impacts must contain only + or -
+
+
+
+
+
+Python Function Usage
+
+
+
+from topsis import topsis
+
+
+
+topsis(
+
+&nbsp;   "102303670-data.csv",
+
+&nbsp;   "1,1,1,1,2",
+
+&nbsp;   "+,+,-,+,+",
+
+&nbsp;   "102303670-result.csv"
+
+
+
+)
+
+Input File
+
+
+
+<img width="491" height="312" alt="image" src="https://github.com/user-attachments/assets/93aa4a71-883b-47b1-a22a-52d7eb5b2617" />
+
+
+
+Output File
+
+
+
+<img width="662" height="249" alt="image" src="https://github.com/user-attachments/assets/2a5edb06-1763-49af-af4e-1aad8d4c285f" />
+
+
+
+
+
