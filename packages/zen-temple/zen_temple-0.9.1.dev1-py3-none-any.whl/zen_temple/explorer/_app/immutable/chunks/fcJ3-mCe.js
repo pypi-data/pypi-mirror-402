@@ -1,0 +1,1 @@
+import{s as a,b as r,c as s,g as t}from"./sdSGCPHU.js";let e=a(r(localStorage.theme||"system"));function o(){return t(e)==="system"?window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light":t(e)}function c(){s(e,o()==="dark"?"light":"dark",!0),localStorage.theme=t(e)}export{o as g,c as t};
