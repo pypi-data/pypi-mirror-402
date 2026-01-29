@@ -1,0 +1,124 @@
+{% extends "common/base.html" %}
+
+{% block title %}Feedback Request - {{ feedback_request.prompt }}{% endblock %}
+
+{% block content %}
+<article>
+    <header>
+        <h2>Feedback Request</h2>
+    </header>
+
+    <section>
+        <p><strong>Prompt:</strong></p>
+        <p>{{ feedback_request.prompt }}</p>
+
+        {% if feedback_request.metadata and feedback_request.metadata.get('checkpoint_id') %}
+        <details open>
+            <summary>💾 Checkpoint Information</summary>
+            <table>
+                <tbody>
+                    <tr>
+                        <th>Checkpoint ID:</th>
+                        <td><code>{{ feedback_request.metadata.get('checkpoint_id', 'N/A') }}</code></td>
+                    </tr>
+                    <tr>
+                        <th>Created At:</th>
+                        <td>{{ feedback_request.metadata.get('checkpoint_created_at', 'N/A')[:19].replace('T', ' ') }}</td>
+                    </tr>
+                    <tr>
+                        <th>Execution Steps:</th>
+                        <td>{{ feedback_request.metadata.get('checkpoint_steps', 'N/A') }}</td>
+                    </tr>
+                    <tr>
+                        <th>Checkpoint Path:</th>
+                        <td><small><code>{{ feedback_request.metadata.get('checkpoint_path', 'N/A') }}</code></small></td>
+                    </tr>
+                    <tr>
+                        <th>Reason:</th>
+                        <td>{{ feedback_request.metadata.get('checkpoint_reason', 'N/A') }}</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p><small><em>The workflow has been checkpointed and is waiting for your feedback. After you submit your response, the workflow can be resumed from this checkpoint.</em></small></p>
+        </details>
+        {% endif %}
+
+        {% if feedback_request.metadata %}
+        <details>
+            <summary>Additional Information (Raw)</summary>
+            <pre>{{ feedback_request.metadata | tojson(indent=2) }}</pre>
+        </details>
+        {% endif %}
+    </section>
+
+    <section>
+        <form method="POST" action="/ui/feedback/{{ feedback_request.feedback_id }}/submit">
+            {% if feedback_request.feedback_type.value == "approval" %}
+                <!-- Approval Form -->
+                <fieldset>
+                    <legend>Your Decision</legend>
+                    <label>
+                        <input type="radio" name="approved" value="true" required>
+                        Approve
+                    </label>
+                    <label>
+                        <input type="radio" name="approved" value="false" required>
+                        Reject
+                    </label>
+                </fieldset>
+
+                <label for="reason">Reason (optional):</label>
+                <textarea id="reason" name="reason" rows="3" placeholder="Enter your reason..."></textarea>
+
+            {% elif feedback_request.feedback_type.value == "text" %}
+                <!-- Text Input Form -->
+                <label for="text">Your Response:</label>
+                <textarea id="text" name="text" rows="5" required placeholder="Enter your response..."></textarea>
+
+            {% elif feedback_request.feedback_type.value == "selection" %}
+                <!-- Selection Form -->
+                <fieldset>
+                    <legend>Select an Option</legend>
+                    {% for option in feedback_request.options %}
+                    <label>
+                        <input type="radio" name="selected" value="{{ option }}" required>
+                        {{ option }}
+                    </label>
+                    {% endfor %}
+                </fieldset>
+
+            {% elif feedback_request.feedback_type.value == "multi_selection" %}
+                <!-- Multi-Selection Form -->
+                <fieldset>
+                    <legend>Select Options (multiple allowed)</legend>
+                    {% for option in feedback_request.options %}
+                    <label>
+                        <input type="checkbox" name="selected_multiple" value="{{ option }}">
+                        {{ option }}
+                    </label>
+                    {% endfor %}
+                </fieldset>
+
+            {% elif feedback_request.feedback_type.value == "custom" %}
+                <!-- Custom Form -->
+                <label for="custom_data">Custom Data (JSON):</label>
+                <textarea id="custom_data" name="custom_data" rows="5" required placeholder='{"key": "value"}'></textarea>
+
+            {% endif %}
+
+            <!-- Common Fields -->
+            <label for="responded_by">Your Name/Email (optional):</label>
+            <input type="text" id="responded_by" name="responded_by" placeholder="john@example.com">
+
+            <button type="submit">Submit Feedback</button>
+        </form>
+    </section>
+
+    <footer>
+        <small>Request ID: {{ feedback_request.feedback_id }}</small>
+        {% if feedback_request.expires_at %}
+        <br><small>Expires at: {{ feedback_request.expires_at }}</small>
+        {% endif %}
+    </footer>
+</article>
+{% endblock %}

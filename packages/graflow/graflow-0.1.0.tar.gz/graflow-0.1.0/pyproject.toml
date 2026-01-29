@@ -1,0 +1,172 @@
+[project]
+name = "graflow"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "typing-extensions>=4.5.0",
+    "networkx>=3.4.2",
+    "requests>=2.32.4",
+    "cloudpickle>=3.1.1",
+    "cachetools>=5.3.2",
+    "jinja2>=3.1.6",
+    "python-dotenv>=1.1.1",
+    "litellm>=1.79.1", # 1.72.6+ required for langfuse_otel callback
+    "pydantic>=2.10.0",
+    "pyyaml>=6.0.3",
+]
+
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[dependency-groups]
+dev = [
+    "pandas>=2.3.1",
+    "pytest>=8.4.1",
+    "pytest-cov>=5.0.0",
+    "pytest-mock>=3.14.1",
+    "ruff>=0.12.2",
+    "redis>=6.2.0",
+    "grandalf>=0.8",
+    "matplotlib>=3.10.3",
+    "docker>=7.1.0",
+    # ADK
+    "google-adk>=1.17.0",
+    "nest-asyncio>=1.6.0",  # required by google-adk for nested event loops
+    "wrapt>=1.17.3",        # required for ADK monkey patches
+    "openinference-instrumentation-google-adk>=0.1.0",
+    # pydantic-ai
+    "pydantic-ai-slim[openai]>=1.33.0",
+    "griffe>=1.0.0",  # Required by pydantic-ai-slim
+    # prompt management module
+    "langfuse>=3.10.6",
+]
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+]
+visualization = [
+    "matplotlib>=3.10.3",
+    "grandalf>=0.8",
+    "pygraphviz>=1.14",
+]
+adk = [
+    "google-adk>=1.17.0",
+    "nest-asyncio>=1.6.0",  # required by google-adk for nested event loops
+    "wrapt>=1.17.3",        # required for ADK monkey patches
+    "openinference-instrumentation-google-adk>=0.1.0",
+]
+pydantic-ai = [
+    # Slim version without logfire (to avoid opentelemetry-sdk conflict with google-adk)
+    # OpenAI is required for openai compatible models and LiteLLM provider
+    "pydantic-ai-slim[openai]>=1.33.0",
+    "griffe>=1.0.0",  # Required by pydantic-ai-slim
+]
+tracing = [
+    "opentelemetry-api>=1.37.0",
+    "opentelemetry-exporter-otlp>=1.37.0",
+    "opentelemetry-sdk>=1.37.0",
+    "langfuse>=3.8.1",
+]
+docker = [
+    "docker>=7.1.0",
+]
+redis = [
+    "redis>=6.2.0",
+]
+standard = [    
+    "graflow[api]",
+    "graflow[visualization]",
+    "graflow[tracing]",
+    "graflow[docker]",
+    "graflow[redis]",
+    "graflow[adk]",
+]
+all = [    
+    "graflow[standard]",
+    "graflow[pydantic-ai]"
+]
+
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.sdist]
+only-include = [
+    "graflow",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["graflow"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = [
+    ".git",
+    ".ruff_cache",
+    ".mypy_cache",
+    ".pytest_cache",
+    "venv",
+    "env",
+    ".venv",
+    ".env",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "N", "UP", "B", "RUF", "C90", "PL", "PD", "YTT", "TID"]
+ignore = [
+    "ANN101", "ANN102", "ANN401", "B008",
+    "UP035", "UP006", "UP007",
+    # UP045: Use `X | None` for type annotationsRuff
+    "UP045",
+    "PLR0913", "C901", "RUF010",
+    "PD901",    # https://docs.astral.sh/ruff/rules/pandas-df-variable-name/
+    "PLR2004",  # https://docs.astral.sh/ruff/rules/magic-value-comparison/
+    "N802",     # https://docs.astral.sh/ruff/rules/invalid-function-name/
+    "PLC0415",  # https://docs.astral.sh/ruff/rules/import-outside-top-level/
+    "PLR0915",  # https://docs.astral.sh/ruff/rules/too-many-statements/
+    "E501",     # https://docs.astral.sh/ruff/rules/line-too-long/
+    "B904",     # https://docs.astral.sh/ruff/rules/raise-without-from-inside-except/
+    "B027",     # https://docs.astral.sh/ruff/rules/empty-method-without-abstract-decorator/
+    # Tracer hooks are intentionally empty by default (Template Method pattern); see graflow.trace.* for design.
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["graflow"]
+
+[tool.ruff.lint.pylint]
+max-returns = 9
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+strict_optional = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
