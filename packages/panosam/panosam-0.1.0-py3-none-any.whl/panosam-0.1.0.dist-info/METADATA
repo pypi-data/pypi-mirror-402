@@ -1,0 +1,130 @@
+Metadata-Version: 2.4
+Name: panosam
+Version: 0.1.0
+Summary: PanoSAM is a Python library for running SAM3 segmentation on equirectangular panorama images with automatic perspective projection and deduplication.
+Project-URL: Homepage, https://github.com/yz3440/panosam
+Project-URL: Repository, https://github.com/yz3440/panosam
+Project-URL: Issues, https://github.com/yz3440/panosam/issues
+Author-email: Yufeng Zhao <yufeng-zhao@outlook.com>
+License: MIT
+License-File: LICENSE
+Keywords: 360,computer-vision,equirectangular,panorama,sam3,segmentation
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Scientific/Engineering :: Image Processing
+Requires-Python: >=3.11
+Requires-Dist: geopandas>=0.14.0
+Requires-Dist: numpy>=1.24.0
+Requires-Dist: pillow>=10.0.0
+Requires-Dist: py360convert>=0.1.0
+Requires-Dist: shapely>=2.0.0
+Requires-Dist: tqdm>=4.60.0
+Provides-Extra: docs
+Requires-Dist: mkdocs-terminal>=4.6.0; extra == 'docs'
+Requires-Dist: mkdocs>=1.5.0; extra == 'docs'
+Requires-Dist: mkdocstrings[python]>=0.24.0; extra == 'docs'
+Requires-Dist: pymdown-extensions>=10.0.0; extra == 'docs'
+Provides-Extra: full
+Requires-Dist: accelerate>=0.25.0; extra == 'full'
+Requires-Dist: matplotlib>=3.7.0; extra == 'full'
+Requires-Dist: opencv-python>=4.8.0; extra == 'full'
+Requires-Dist: torch>=2.0.0; extra == 'full'
+Requires-Dist: torchvision>=0.15.0; extra == 'full'
+Requires-Dist: transformers>=5.0.0rc1; extra == 'full'
+Provides-Extra: sam
+Requires-Dist: accelerate>=0.25.0; extra == 'sam'
+Requires-Dist: opencv-python>=4.8.0; extra == 'sam'
+Requires-Dist: torch>=2.0.0; extra == 'sam'
+Requires-Dist: torchvision>=0.15.0; extra == 'sam'
+Requires-Dist: transformers>=5.0.0rc1; extra == 'sam'
+Provides-Extra: viz
+Requires-Dist: matplotlib>=3.7.0; extra == 'viz'
+Requires-Dist: opencv-python>=4.8.0; extra == 'viz'
+Description-Content-Type: text/markdown
+
+# PanoSAM
+
+SAM3 segmentation for equirectangular panorama images.
+
+Handles perspective projection, coordinate conversion, and mask deduplication.
+
+https://github.com/user-attachments/assets/61a546ac-3fce-4c26-b87c-3e09b0e4c331
+
+
+## Installation
+
+```bash
+pip install "panosam @ git+https://github.com/yz3440/panosam.git"
+```
+
+| Extra    | Dependencies                                    | Use Case              |
+| -------- | ----------------------------------------------- | --------------------- |
+| (none)   | pillow, numpy, geopandas, shapely, py360convert | Bring your own engine |
+| `[sam]`  | + torch, transformers, opencv                   | SAM3 segmentation     |
+| `[viz]`  | + opencv, matplotlib                            | Visualization         |
+| `[full]` | sam + viz                                       | All features          |
+
+SAM3 requires HuggingFace authentication:
+
+```bash
+huggingface-cli login
+```
+
+## Usage
+
+```python
+import panosam as ps
+from panosam.engines.sam3 import SAM3Engine
+
+engine = SAM3Engine()
+client = ps.PanoSAM(engine=engine, views=ps.PerspectivePreset.DEFAULT)
+result = client.segment("panorama.jpg", prompt="car")
+
+for mask in result.masks:
+    print(f"{mask.label}: yaw={mask.center_yaw:.1f}, pitch={mask.center_pitch:.1f}")
+
+result.save_json("results.panosam.json")
+```
+
+## Custom Engine
+
+Any class with a matching `segment()` method works:
+
+```python
+class MyEngine:
+    def segment(
+        self,
+        image: Image.Image,
+        text_prompt: str,
+        threshold: float = 0.5,
+        mask_threshold: float = 0.5,
+        simplify_tolerance: float = 0.005,
+    ) -> list[ps.FlatMaskResult]:
+        ...
+
+client = ps.PanoSAM(engine=MyEngine())
+```
+
+## Perspective Presets
+
+| Preset       | FOV   | Resolution | Perspectives |
+| ------------ | ----- | ---------- | ------------ |
+| `DEFAULT`    | 45°   | 2048x2048  | 16           |
+| `ZOOMED_IN`  | 22.5° | 1024x1024  | 32           |
+| `ZOOMED_OUT` | 60°   | 2500x2500  | 12           |
+| `WIDEANGLE`  | 90°   | 2500x2500  | 8            |
+
+## Documentation
+
+See [yz3440.github.io/panosam](https://yz3440.github.io/panosam/) for full API reference and examples.
+
+## License
+
+MIT
