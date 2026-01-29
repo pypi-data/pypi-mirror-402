@@ -1,0 +1,1 @@
+"""Tests the yaml module"""
