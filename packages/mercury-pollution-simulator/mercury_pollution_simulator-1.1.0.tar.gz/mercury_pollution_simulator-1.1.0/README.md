@@ -1,0 +1,406 @@
+# Mercury Pollution Monte Carlo Simulator
+
+A comprehensive Python package for simulating mercury pollution transport, accumulation, and risk assessment in water and soil systems using Monte Carlo methods. Features **4 different model implementations** to suit various data availability and application needs.
+
+## Features
+
+- **Multiple Model Types**: Choose from 4 different model implementations:
+  - **Empirical Model** (default): Data-driven, best fit when calibration data available
+  - **Mechanistic Model**: Physics-based using transport equations
+  - **Compartmental Model**: Multi-compartment box model
+  - **Simplified Model**: Quick assessments with limited data
+- **Monte Carlo Simulation**: Probabilistic assessment of mercury transport and accumulation
+- **Custom Data Support**: Calibrate any model with your own field observation data
+- **Risk Assessment**: Calculate exceedance probabilities for regulatory thresholds
+- **Sensitivity Analysis**: Identify key drivers of risk
+- **Comprehensive Visualizations**: Generate publication-ready plots and reports
+- **Easy to Use**: Simple API for both programmatic and command-line usage
+
+## Installation
+
+### From Source
+
+```bash
+# Clone or download the package
+cd mercury_package
+
+# Install in development mode
+pip install -e .
+
+# Or install normally
+pip install .
+```
+
+### Dependencies
+
+The package requires:
+- Python >= 3.8
+- numpy >= 1.21.0
+- scipy >= 1.7.0
+- pandas >= 1.3.0
+- matplotlib >= 3.4.0
+- openpyxl >= 3.0.0
+
+All dependencies are automatically installed when you install the package.
+
+## Quick Start
+
+### Command Line Usage
+
+```bash
+# Run with default Pra River data
+mercury-sim
+
+# Run with custom options
+mercury-sim --iterations 50000 --output ./my_results
+
+# Run without plots (faster)
+mercury-sim --no-plots
+```
+
+### Python API Usage
+
+#### Basic Usage (Default Data)
+
+```python
+from mercury_package import run_simulation
+
+# Run simulation with default settings
+results = run_simulation(
+    n_iterations=10000,
+    output_dir="./results",
+    generate_plots=True
+)
+
+# Access results
+print(f"Water concentration: {results['water'][-1, :].mean():.4f} mg/L")
+print(f"Sediment concentration: {results['sediment'][-1, :].mean():.2f} mg/kg")
+print(f"Hazard Quotient: {results['hazard_quotient'][-1, :].mean():.2f}")
+```
+
+#### Using Custom Data
+
+```python
+from mercury_package import MercurySimulator, ObservedData
+import numpy as np
+
+# Create custom observation data
+my_data = ObservedData(
+    water_times=np.array([0, 180, 365, 1095, 1825]),  # days
+    water_conc=np.array([0.001, 0.05, 0.04, 0.025, 0.015]),  # mg/L
+    sed_times=np.array([0, 180, 365, 1095, 1825]),
+    sed_conc=np.array([0.3, 2.5, 4.0, 5.5, 6.5]),  # mg/kg
+    topsoil_times=np.array([0, 365, 1825]),
+    topsoil_conc=np.array([0.10, 1.5, 2.5]),  # mg/kg
+    subsoil_times=np.array([0, 365, 1825]),
+    subsoil_conc=np.array([0.03, 0.4, 0.8])  # mg/kg
+)
+
+# Create simulator with default empirical model
+simulator = MercurySimulator(observed_data=my_data)
+results = simulator.run_full_simulation(
+    n_iterations=10000,
+    output_dir="./results"
+)
+```
+
+#### Using Different Model Types
+
+```python
+# Use mechanistic model
+simulator = MercurySimulator(
+    observed_data=my_data,
+    model_type="mechanistic"
+)
+
+# Use compartmental model
+simulator = MercurySimulator(
+    observed_data=my_data,
+    model_type="compartmental"
+)
+
+# Use simplified model (good for quick assessments)
+simulator = MercurySimulator(
+    observed_data=my_data,
+    model_type="simplified"
+)
+
+# Or use directly in run_simulation()
+from mercury_package import run_simulation
+results = run_simulation(
+    observed_data=my_data,
+    model_type="mechanistic",
+    n_iterations=10000
+)
+```
+
+## Package Structure
+
+```
+mercury_package/
+├── mercury_package/
+│   ├── __init__.py          # Main package API
+│   ├── simulator.py         # Main simulator class
+│   ├── cli.py               # Command-line interface
+│   ├── visualization.py     # Plotting functions
+│   ├── reporting.py         # Report generation
+│   └── models/
+│       ├── __init__.py
+│       ├── base_model.py         # Base model interface
+│       ├── empirical_model.py    # Empirical model (default)
+│       ├── mechanistic_model.py  # Physics-based model
+│       ├── compartmental_model.py # Compartmental box model
+│       └── simplified_model.py    # Simplified exponential model
+├── examples/                # Usage examples
+│   ├── basic_usage.py
+│   ├── custom_data.py
+│   ├── programmatic_usage.py
+│   └── compare_models.py
+├── setup.py                 # Package setup
+├── pyproject.toml          # Modern package config
+└── README.md               # This file
+```
+
+## API Reference
+
+### Main Functions
+
+#### `run_simulation(observed_data=None, model_type="empirical", n_iterations=10000, seed=42, output_dir="./results", generate_plots=True, time_points=None, **model_kwargs)`
+
+Convenience function to run a complete simulation.
+
+**Parameters:**
+- `observed_data` (ObservedData, optional): Field observation data. If None, uses default Pra River data.
+- `model_type` (str): Model type to use. Options: `"empirical"` (default), `"mechanistic"`, `"compartmental"`, or `"simplified"`
+- `n_iterations` (int): Number of Monte Carlo iterations (default: 10000)
+- `seed` (int): Random seed for reproducibility (default: 42)
+- `output_dir` (str): Directory to save results (default: "./results")
+- `generate_plots` (bool): Whether to generate visualization plots (default: True)
+- `time_points` (array-like, optional): Time points for simulation in days
+- `**model_kwargs`: Additional keyword arguments passed to model constructor (e.g., `flow_rate=25.0` for mechanistic model)
+
+**Returns:**
+- `dict`: Dictionary containing simulation results
+
+### Classes
+
+#### `MercurySimulator(observed_data=None, model_type="empirical", seed=42, **model_kwargs)`
+
+Main class for running mercury pollution simulations.
+
+**Parameters:**
+- `observed_data` (ObservedData, optional): Field observation data. If None, uses default Pra River data.
+- `model_type` (str or BaseMercuryModel): Model type string or model instance. Options: `"empirical"` (default), `"mechanistic"`, `"compartmental"`, `"simplified"`
+- `seed` (int): Random seed for reproducibility (default: 42)
+- `**model_kwargs`: Additional keyword arguments for model constructor
+
+**Methods:**
+- `run_simulation(n_iterations, time_points=None)`: Run Monte Carlo simulation
+- `run_full_simulation(n_iterations, output_dir, generate_plots, time_points)`: Run complete simulation with plots/reports
+- `get_validation()`: Get model validation metrics (R², RMSE for each compartment)
+
+#### `ObservedData`
+
+Data class for providing field observations.
+
+**Attributes:**
+- `water_times`: Array of time points for water measurements (days)
+- `water_conc`: Array of water mercury concentrations (mg/L)
+- `sed_times`: Array of time points for sediment measurements (days)
+- `sed_conc`: Array of sediment mercury concentrations (mg/kg)
+- `topsoil_times`: Array of time points for topsoil measurements (days)
+- `topsoil_conc`: Array of topsoil mercury concentrations (mg/kg)
+- `subsoil_times`: Array of time points for subsoil measurements (days)
+- `subsoil_conc`: Array of subsoil mercury concentrations (mg/kg)
+
+## Output Files
+
+When `generate_plots=True`, the following files are created in the output directory:
+
+### Visualizations
+- `01_model_validation.png`: Model fit vs. observed data
+- `02_transport_diagram.png`: Mercury transport pathways
+- `03_accumulation_timeseries.png`: Concentration over time with uncertainty
+- `04_risk_dashboard.png`: Comprehensive risk assessment
+- `05_sensitivity_analysis.png`: Parameter importance (tornado chart)
+- `06_comprehensive_summary.png`: Executive summary figure
+
+### Data Files
+- `simulation_results.xlsx`: All numerical results in Excel format
+  - `Time_Series`: Mean and percentiles over time
+  - `Validation`: Model predictions vs observations
+  - `Risk_Probabilities`: Threshold exceedance probabilities
+  - `Sensitivity`: Parameter correlation coefficients
+  - `MC_Samples_Year5`: Raw Monte Carlo samples
+- `evaluation_report.txt`: Text summary report
+
+## Examples
+
+See the `examples/` directory for more detailed usage examples:
+- `basic_usage.py`: Simple example with default data
+- `custom_data.py`: Using custom field observations
+- `programmatic_usage.py`: Programmatic access without plots
+- `compare_models.py`: Comparing different model types and their validation metrics
+
+## Model Selection Guide
+
+**Choose Empirical Model when:**
+- ✅ You have field observation data for calibration
+- ✅ You want the best fit to your data
+- ✅ You need accurate predictions
+- **→ This is the default and recommended choice**
+
+**Choose Mechanistic Model when:**
+- ✅ Physical parameters are well-known
+- ✅ You want to understand transport processes
+- ✅ You need to vary physical conditions
+
+**Choose Compartmental Model when:**
+- ✅ You want to understand inter-compartment exchanges
+- ✅ You need to model mass transfer explicitly
+
+**Choose Simplified Model when:**
+- ✅ Limited data available
+- ✅ Quick screening assessment needed
+- ✅ Fast execution required
+
+For detailed model information, see `MODELS_GUIDE.md`.
+
+## Model Types
+
+The package provides **four different model implementations**, each suited for different scenarios:
+
+### 1. Empirical Model (Default) ⭐ Recommended
+
+**Type**: `"empirical"`  
+**Class**: `EmpiricalMercuryModel`
+
+Data-driven model that fits field observation data using regression-based approaches:
+- **Water**: Pulse-decay kinetics (release then flushing)
+- **Sediment**: Asymptotic accumulation (approaching equilibrium)
+- **Soil**: Linear accumulation with depth attenuation
+- Automatically calibrates to your observed data
+- **Best for**: When you have good calibration data (recommended for most cases)
+
+**Usage**:
+```python
+simulator = MercurySimulator(model_type="empirical")  # or default
+```
+
+### 2. Mechanistic Model
+
+**Type**: `"mechanistic"`  
+**Class**: `MechanisticMercuryModel`
+
+Physics-based model using advection-dispersion-reaction equations:
+- Based on physical transport principles
+- Solves ODE system for transport
+- Uses parameters: flow rate, velocity, dispersion, settling velocity, flood rate, decay rate
+- **Best for**: When physical parameters are well-known, research applications
+
+**Usage**:
+```python
+simulator = MercurySimulator(
+    model_type="mechanistic",
+    flow_rate=25.0,      # m³/s
+    velocity=0.6,        # m/s
+    settling_rate=0.0015 # m/s
+)
+```
+
+### 3. Compartmental Model
+
+**Type**: `"compartmental"`  
+**Class**: `CompartmentalMercuryModel`
+
+Multi-compartment box model treating each environmental compartment as well-mixed:
+- Mass transfer between compartments follows first-order kinetics
+- Matrix exponential solution approach
+- Good for understanding inter-compartment exchanges
+- **Best for**: Understanding mass transfer processes, educational purposes
+
+**Usage**:
+```python
+simulator = MercurySimulator(
+    model_type="compartmental",
+    k_water_sed=0.015,   # 1/day
+    k_water_soil=0.008   # 1/day
+)
+```
+
+### 4. Simplified Model
+
+**Type**: `"simplified"`  
+**Class**: `SimplifiedMercuryModel`
+
+Simple exponential decay model for quick assessments:
+- Uses exponential functions for all compartments
+- Minimal calibration required
+- Fast execution
+- **Best for**: Quick screening assessments, limited data scenarios
+
+**Usage**:
+```python
+simulator = MercurySimulator(
+    model_type="simplified",
+    water_half_life=150.0,        # days
+    sediment_equilibrium=7.0      # mg/kg
+)
+```
+
+### Model Comparison
+
+| Model | Data Requirements | Fit Quality | Speed | Best Use Case |
+|-------|------------------|-------------|-------|---------------|
+| **Empirical** | High (calibration data) | ⭐⭐⭐⭐⭐ | Medium | Best fit to observations |
+| **Mechanistic** | Medium (physical params) | ⭐⭐⭐⭐ | Slow | Physical understanding |
+| **Compartmental** | Medium | ⭐⭐⭐ | Medium | Mass transfer analysis |
+| **Simplified** | Low | ⭐⭐ | Fast | Quick screening |
+
+All models:
+- ✅ Support custom observation data
+- ✅ Perform Monte Carlo simulation for uncertainty
+- ✅ Provide validation metrics (R², RMSE)
+- ✅ Use the same API interface
+- ✅ Generate risk assessments
+
+**See `MODELS_GUIDE.md` for detailed model documentation.**
+
+## Regulatory Thresholds
+
+The package includes built-in regulatory thresholds for:
+- Water: WHO (0.001 mg/L), EPA MCL (0.002 mg/L)
+- Sediment: TEC (0.18 mg/kg), PEC (1.06 mg/kg), SEC (2.0 mg/kg)
+- Soil: Agricultural (1.0 mg/kg), Residential (23 mg/kg)
+- Fish: EPA (0.3 mg/kg), FDA (1.0 mg/kg)
+- Health: Hazard Quotient (HQ) thresholds
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues or pull requests.
+
+## License
+
+MIT License - see LICENSE file for details
+
+## Documentation
+
+- **README.md** (this file): Main documentation and quick start
+- **MODELS_GUIDE.md**: Detailed guide on all model types
+- **INSTALLATION.md**: Installation instructions
+- **USAGE_GUIDE.md**: Comprehensive usage guide with examples
+- **PACKAGE_SUMMARY.md**: Package overview and distribution guide
+
+## Citation
+
+If you use this package in your research, please cite:
+
+```
+Mercury Pollution Monte Carlo Simulator
+Version 1.1.0
+Multiple model implementations for mercury transport simulation
+```
+
+## Support
+
+For questions or issues, please open an issue on the GitHub repository.
