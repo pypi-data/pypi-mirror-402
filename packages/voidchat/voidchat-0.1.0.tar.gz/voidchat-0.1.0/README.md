@@ -1,0 +1,180 @@
+# voidchat
+
+基于 Python 的 CLI/REPL 智能体，支持 MCP 工具调用与 Skills 指令包。
+
+## 功能
+
+- MCP 工具发现与调用（stdio / sse）
+- Skills 目录加载（SKILL.md）
+- 连续对话与线程持久化（本地 JSONL）
+- OpenAI 兼容接口（可配置 base_url / api_key）
+- 流式输出（可关闭）
+
+## 安装
+
+```bash
+python -m pip install -e .
+```
+
+## 初始化（推荐）
+
+在项目根目录生成 `.voidchat/`（mcp.json/memory/workspace/skills）与 `.env.example`：
+（注意：`skills/` 目录可能为空；请通过 `--skills-dir/--skills-group` 指向你自己的 skills）
+
+```bash
+voidchat init
+```
+
+## 使用
+
+```bash
+voidchat repl
+voidchat chat "你好"
+```
+
+## 保存 SVG / MD（fenced code block）到文件（推荐）
+
+当你希望 assistant 同时输出“说明文字 + ```svg``` 代码块”，并把该代码块落盘时：
+
+```bash
+voidchat chat "请解释设计哲学并输出一个极简svg代码块" \
+  --allow-write --fs-root . \
+  --save-fence svg:out.svg --save-overwrite
+```
+
+在 REPL 中也可以在输出后保存上一条 assistant 的 fenced block：
+
+```text
+:save svg out.svg --overwrite
+```
+
+## 线程（对话）管理
+
+- 默认每次启动 `repl/chat` 都会创建一个新线程文件（避免历史污染）
+- 用 `--resume` 继续最近一次对话，或用 `--thread` 指定某个线程
+
+```bash
+voidchat threads
+voidchat show 2026-01-16_12:34:56-1a2b3c4.jsonl
+voidchat title 2026-01-16_12:34:56-1a2b3c4.jsonl "讨论主题：xxx"
+voidchat rename 2026-01-16_12:34:56-1a2b3c4.jsonl demo.jsonl
+```
+
+## 常用环境变量
+
+- `VOIDCHAT_API_KEY` / `OPENAI_API_KEY`
+- `VOIDCHAT_BASE_URL`（默认 `https://api.openai.com/v1`）
+- `VOIDCHAT_MODEL`（默认 `gpt-5-mini`）
+- `VOIDCHAT_EMBEDDING_MODEL`
+- `VOIDCHAT_MCP_CONFIG`（默认 `./.voidchat/mcp.json`）
+- `VOIDCHAT_SKILLS_DIR`（支持 `:` 分隔多个路径）
+- `VOIDCHAT_SKILLS_INDEX`（可选：skills index 模板；仅显式设置时使用，不再默认向上查找 `AGENTS.md`）
+- `VOIDCHAT_SKILLS_PRIORITY`
+- `VOIDCHAT_SKILLS_GROUPS`（多套 skills，格式：`2=/path/a,1=/path/b`）
+- `VOIDCHAT_MEMORY_DIR`（默认 `./.voidchat/memory`）
+- `VOIDCHAT_FS_ROOT`（本地文件工具根目录，默认 `.`）
+- `VOIDCHAT_ALLOW_WRITE`（允许本地写盘工具，默认 `0/false`）
+- `VOIDCHAT_ALLOW_SCRIPTS`（允许运行“已注册脚本”，默认 `0/false`）
+- `VOIDCHAT_ALLOW_SHELL`（允许受控 shell 工具，默认 `0/false`）
+- `VOIDCHAT_SHELL_ALLOWLIST`（受控 shell allowlist，例：`rg git`）
+- `OPENAI_IMITATORS`（兼容接口选择规则）
+- `VOIDCHAT_SYSTEM_PROMPT`
+- `VOIDCHAT_CONTEXT_MAX_TOKENS`
+- `VOIDCHAT_SUMMARY_RATIO`
+- `VOIDCHAT_CONTEXT_KEEP_LAST`
+- `VOIDCHAT_DEBUG`
+
+当未显式提供 `VOIDCHAT_*` 时，会按以下约定读取兼容接口配置：
+
+- `OPENAI_BASE_URL` / `OPENAI_API_KEY`
+- `QWEN_BASE_URL` / `QWEN_API_KEY`
+- `DEEPSEEK_BASE_URL` / `DEEPSEEK_API_KEY`
+- `ZHIPU_BASE_URL` / `ZHIPU_API_KEY`
+- `GOOGLE_BASE_URL` / `GOOGLE_API_KEY`
+- `ANTHROPIC_BASE_URL` / `ANTHROPIC_API_KEY`
+
+模型默认值可通过 `*_COMPLETION_MODEL` / `*_EMBEDDING_MODEL` 指定。
+若填写多个（逗号或空格分隔），默认取第一个。
+
+`OPENAI_IMITATORS` 支持两种格式（统一支持逗号/空格分隔）：
+- 数字：`2` 表示按默认顺序选前 2 个可用厂商
+- 列表：`QWEN, OPENAI` 表示按顺序优先选择
+
+当使用 `--imitator` 时，将强制覆盖 `VOIDCHAT_*` 相关配置，确保实际切换。
+
+## MCP 配置示例（官方 mcpServers 格式）
+
+```json
+{
+  "mcpServers": {
+    "search": {
+      "command": "python",
+      "args": ["-m", "my_mcp_server"]
+    }
+  }
+}
+```
+
+## Skills 目录
+
+默认会自动探测当前目录向上寻找 `/.claude/skills`。
+若通过 `--skills-index` 或 `VOIDCHAT_SKILLS_INDEX` 指定模板文件，将作为技能索引模板。
+若模板缺失 `<usage>`，会使用内置的默认 usage 文本。
+
+默认情况下，为了减少上下文消耗，voidchat 只注入 skills 索引（name/description），不会注入每个 skill 的完整正文。
+如需强制使用某个 skill，请使用 `--use-skill/--require-skill`。
+模型在需要时也可以通过内置工具 `voidchat_skills_read` 获取 skill 正文。
+
+## 多套 skills 与优先级
+
+```bash
+voidchat repl --skills-group 2=/path/skills-a --skills-group 1=/path/skills-b
+```
+
+环境变量：
+
+```
+VOIDCHAT_SKILLS_GROUPS=2=/path/skills-a,1=/path/skills-b
+```
+
+## 查看配置
+
+打印当前解析后的配置（以 env 为主，含覆盖与脱敏 key）：
+
+```bash
+voidchat config
+```
+
+## 查看当前加载的 skills
+
+```bash
+voidchat skills
+voidchat skills --verbose
+```
+
+## 显式指定使用某个 skill（避免自动选择）
+
+你可以在每次调用时显式指定只注入某个/某些 skills：
+
+```bash
+voidchat chat "把下面CSV转成xlsx并给出格式建议：..." --use-skill xlsx
+voidchat chat "生成10页路演大纲" --require-skill pptx
+```
+
+也支持环境变量：
+
+```
+VOIDCHAT_USE_SKILLS=xlsx
+VOIDCHAT_REQUIRE_SKILLS=pptx
+```
+
+## 初始化脚本
+
+`voidchat init` 已内置初始化流程；如需脚本版，也可以参考 `./scripts/init_voidchat.sh`。
+
+遵循 Agent Skills 规范（`SKILL.md` + YAML frontmatter），详见：
+https://agentskills.io/specification
+
+## .env 说明
+
+运行时会在当前目录向上查找 `.env` 并加载（不覆盖已存在环境变量）。
