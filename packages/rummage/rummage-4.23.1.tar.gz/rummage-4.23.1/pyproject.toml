@@ -1,0 +1,186 @@
+[build-system]
+requires = [
+    "hatchling>=0.21.0",
+]
+build-backend = "hatchling.build"
+
+[project]
+name = "rummage"
+description = "A GUI search and replace app."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+    { name = "Isaac Muse", email = "Isaac.Muse@gmail.com" },
+]
+keywords = [
+    "grep",
+    "search",
+    "find",
+    "replace",
+    "gui"
+]
+dynamic = [
+    "classifiers",
+    "dependencies",
+    "version",
+    "gui-scripts",
+    "optional-dependencies"
+]
+
+[project.urls]
+Homepage = "https://github.com/facelessuser/Rummage"
+
+[tool.hatch.build]
+artifacts = [
+  "*.mo"
+]
+
+[tool.hatch.metadata.hooks.custom]
+
+[tool.hatch.build.targets.wheel.hooks.custom]
+dependencies = [
+  "babel",
+  "setuptools; python_version >= '3.12'"
+]
+
+[tool.hatch.version]
+source = "code"
+path = "rummage/lib/__meta__.py"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/rummage/**/*.py",
+    "/rummage/lib/gui/data/**/*.md",
+    "/rummage/lib/gui/data/**/*.png",
+    "/rummage/lib/gui/data/**/*.gif",
+    "/rummage/lib/gui/data/**/*.js",
+    "/rummage/lib/gui/data/**/*.css",
+    "/rummage/lib/gui/data/**/*.html",
+    "/rummage/lib/gui/data/**/*.svg",
+    "/rummage/lib/gui/data/**/*.ico",
+    "/rummage/lib/gui/data/**/*.icns",
+    "/tests/**/*.py",
+    "/tools/**/*.py",
+    "/rummage/lib/gui/localization/locale/**/*.po",
+    "/docs/src/markdown/**/*.md",
+    "/docs/src/markdown/**/*.png",
+    "/docs/src/markdown/**/*.svg",
+    "/docs/src/markdown/**/*.gif",
+    "/docs/src/markdown/**/*.js",
+    "/docs/src/markdown/**/*.css",
+    "/docs/src/markdown/**/*.html",
+    "/docs/src/markdown/**/*.svg",
+    "/docs/theme/**/*.js",
+    "/docs/theme/**/*.html",
+    "/docs/theme/**/*.css",
+    "/requirements/*.txt",
+    "/gui.fbp",
+    "/mkdocs.yml",
+    "/mkdocs-internal.yml",
+    "/.coveragerc",
+    "/LICENSE.md"
+]
+
+[tool.hatch.build.targets.wheel]
+include = [
+    "/rummage"
+]
+
+[tool.hatch.envs.locale]
+skip_install = true
+dependencies = [
+  "pip>=22.0.4",
+  "babel",
+  "setuptools; python_version >= '3.12'"
+]
+
+[tool.hatch.envs.locale.scripts]
+extract = "pybabel extract --input-dirs=rummage --output-file=rummage/lib/gui/localization/locale/rummage.pot"
+init = "pybabel init --domain=rummage --input-file=rummage/lib/gui/localization/locale/rummage.pot --output-dir=rummage/lib/gui/localization/locale"
+update = "pybabel update --domain=rummage --input-file=rummage/lib/gui/localization/locale/rummage.pot --output-dir=rummage/lib/gui/localization/locale"
+compile = "pybabel compile --domain=rummage --directory=rummage/lib/gui/localization/locale"
+
+[tool.ruff]
+line-length = 120
+
+extend-exclude = [
+    "rummage/lib/gui/gui.py",
+    "tests/encodings/*",
+    "*tiger.py",
+    "*whirlpool.py",
+    "*png.py"
+]
+
+lint.select = [
+    "A",    # flake8-builtins
+    "B",    # flake8-bugbear
+    "D",    # pydocstyle
+    "C4",   # flake8-comprehensions
+    "N",    # pep8-naming
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "PGH",  # pygrep-hooks
+    "RUF",  # ruff
+    # "UP",   # pyupgrade
+    "W",    # pycodestyle
+    "YTT",  # flake8-2020,
+    "PERF"  # Perflint
+]
+
+lint.ignore = [
+    "B034",
+    "E741",
+    "D202",
+    "D401",
+    "D212",
+    "D203",
+    "D417",
+    "N802",
+    "N801",
+    "N803",
+    "N806",
+    "N818",
+    "RUF012",
+    "RUF005",
+    "PGH004",
+    "RUF100",
+    "RUF022"
+]
+
+[tool.tox]
+legacy_tox_ini = """
+[tox]
+skipsdist=true
+envlist=
+    {py39,py310,py311,py312,py313,py314},
+    lint
+
+[testenv]
+passenv = *
+deps=
+    -r requirements/test-project.txt
+    -r requirements/extras.txt
+    -r requirements/test.txt
+commands=
+    {envbindir}/py.test --cov rummage --cov-append tests
+    {envbindir}/coverage html -d {envtmpdir}/coverage
+    {envbindir}/coverage xml
+    {envbindir}/coverage report --show-missing
+
+[testenv:lint]
+passenv = *
+deps=
+    -r requirements/lint.txt
+commands=
+    "{envbindir}"/ruff check .
+
+[testenv:documents]
+passenv = *
+deps =
+    -rrequirements/docs.txt
+commands =
+    {envbindir}/zensical build -f zensical.yml --clean --strict
+    pyspelling -j 0
+    {envpython} {toxinidir}/tools/gen_docs.py --verbose --test
+"""
