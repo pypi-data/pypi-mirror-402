@@ -1,0 +1,62 @@
+# celux/__init__.py
+
+
+# start delvewheel patch
+def _delvewheel_patch_1_11_2():
+    import os
+    if os.path.isdir(libs_dir := os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, 'nelux.libs'))):
+        os.add_dll_directory(libs_dir)
+
+
+_delvewheel_patch_1_11_2()
+del _delvewheel_patch_1_11_2
+# end delvewheel patch
+
+import os
+import sys
+
+# On Windows, we must add the package directory to the DLL search path
+# so that the bundled DLLs (ffmpeg, libyuv, etc.) can be found.
+if os.name == "nt":
+    package_dir = os.path.dirname(os.path.abspath(__file__))
+    if hasattr(os, "add_dll_directory"):
+        os.add_dll_directory(package_dir)
+    else:
+        os.environ["PATH"] = package_dir + ";" + os.environ["PATH"]
+
+import torch
+from ._celux import (
+    __version__,
+    __cuda_support__,
+    VideoReader as _VideoReaderBase,
+    VideoEncoder,
+    Audio,
+    set_log_level,
+    LogLevel,
+)
+from .batch import BatchMixin
+
+
+# Create enhanced VideoReader with batch support
+class VideoReader(BatchMixin, _VideoReaderBase):
+    """
+    VideoReader with batch frame reading support.
+    
+    Inherits from BatchMixin to provide efficient batch decoding capabilities
+    while maintaining all original VideoReader functionality.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Store decoder reference for batch operations
+        self._decoder = self
+
+
+__all__ = [
+    "__version__",
+    "__cuda_support__",
+    "VideoReader",
+    "VideoEncoder",
+    "Audio",
+    "set_log_level",
+    "LogLevel",
+]
