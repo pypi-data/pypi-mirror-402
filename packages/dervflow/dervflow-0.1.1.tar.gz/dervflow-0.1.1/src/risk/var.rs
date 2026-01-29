@@ -1,0 +1,735 @@
+// Copyright (c) 2025 Soumyadip Sarkar.
+// All rights reserved.
+//
+// This source code is licensed under the Apache-style license found in the
+// LICENSE file in the root directory of this source tree.
+
+//! Value at Risk (VaR) calculations
+//!
+//! Provides multiple methods for calculating Value at Risk:
+//! - Historical simulation
+//! - Parametric (variance-covariance)
+//! - Monte Carlo simulation
+//!
+//! Also includes Conditional VaR (CVaR/Expected Shortfall) calculations.
+
+use crate::common::error::{DervflowError, Result};
+use crate::numerical::random::RandomGenerator;
+use std::f64::consts::PI;
+
+/// VaR calculation method
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VaRMethod {
+    /// Historical simulation using empirical distribution
+    Historical,
+    /// Parametric variance-covariance method (assumes normal distribution)
+    VarianceCovariance,
+    /// Parametric with Cornish-Fisher expansion (accounts for skewness and kurtosis)
+    CornishFisher,
+    /// Monte Carlo simulation
+    MonteCarlo,
+    /// Exponentially weighted moving average
+    Ewma,
+}
+
+/// Result of a VaR calculation
+#[derive(Debug, Clone, Copy)]
+pub struct VaRResult {
+    /// Value at Risk (loss amount at specified confidence level)
+    pub value_at_risk: f64,
+    /// Confidence level (e.g., 0.95 for 95%)
+    pub confidence_level: f64,
+    /// Method used for calculation
+    pub method: VaRMethod,
+}
+
+impl VaRResult {
+    /// Create a new VaRResult
+    pub fn new(value_at_risk: f64, confidence_level: f64, method: VaRMethod) -> Self {
+        Self {
+            value_at_risk,
+            confidence_level,
+            method,
+        }
+    }
+}
+
+/// Calculate Value at Risk using historical simulation
+///
+/// # Arguments
+/// * `returns` - Historical returns data (negative values represent losses, positive values represent gains)
+/// * `confidence_level` - Confidence level (e.g., 0.95 for 95%)
+///
+/// # Returns
+/// VaR value (positive number representing potential loss at the given confidence level)
+pub fn historical_var(returns: &[f64], confidence_level: f64) -> Result<f64> {
+    let (values, _tail_count, target_index) = prepare_historical_tail(returns, confidence_level)?;
+
+    // VaR is the negative of the return at this percentile (to express as a positive loss)
+    let var = -values[target_index];
+
+    Ok(var.max(0.0))
+}
+
+/// Calculate Conditional Value at Risk (CVaR/Expected Shortfall) using historical simulation
+///
+/// CVaR is the expected loss given that the loss exceeds VaR
+///
+/// # Arguments
+/// * `returns` - Historical returns data (negative values represent losses, positive values represent gains)
+/// * `confidence_level` - Confidence level (e.g., 0.95 for 95%)
+///
+/// # Returns
+/// CVaR value (positive number representing expected loss in the tail beyond VaR)
+pub fn historical_cvar(returns: &[f64], confidence_level: f64) -> Result<f64> {
+    let (values, tail_count, target_index) = prepare_historical_tail(returns, confidence_level)?;
+
+    // CVaR is the average of all returns worse than VaR
+    let tail_sum: f64 = values[..tail_count].iter().sum();
+    let cvar = -tail_sum / tail_count as f64;
+    let var = -values[target_index];
+
+    let var_clamped = var.max(0.0);
+    Ok(cvar.max(var_clamped).max(0.0))
+}
+
+/// Calculate Value at Risk using parametric variance-covariance method
+///
+/// Assumes returns are normally distributed
+///
+/// # Arguments
+/// * `returns` - Historical returns data
+/// * `confidence_level` - Confidence level (e.g., 0.95 for 95%)
+///
+/// # Returns
+/// VaR value (positive number representing potential loss)
+pub fn parametric_var(returns: &[f64], confidence_level: f64) -> Result<f64> {
+    validate_confidence_level(confidence_level)?;
+    let (mean, std_dev) = mean_std_dev(returns)?;
+
+    // Get the z-score for the confidence level
+    let alpha = 1.0 - confidence_level;
+    let z_score = inverse_normal_cdf(alpha)?;
+
+    // VaR = -(mean + z_score * std_dev)
+    // Since z_score is negative for left tail, this gives a positive VaR
+    let var = -(mean + z_score * std_dev);
+
+    Ok(var)
+}
+
+/// Calculate Conditional Value at Risk (CVaR) using parametric variance-covariance method
+///
+/// Assumes returns are normally distributed and uses the closed-form expected shortfall.
+///
+/// # Arguments
+/// * `returns` - Historical returns data
+/// * `confidence_level` - Confidence level (e.g., 0.95 for 95%)
+///
+/// # Returns
+/// CVaR value (positive number representing expected loss in the tail)
+pub fn parametric_cvar(returns: &[f64], confidence_level: f64) -> Result<f64> {
+    validate_confidence_level(confidence_level)?;
+    let (mean, std_dev) = mean_std_dev(returns)?;
+
+    let alpha = 1.0 - confidence_level;
+    let z = inverse_normal_cdf(alpha)?;
+    let pdf = (-0.5 * z * z).exp() / (2.0 * PI).sqrt();
+
+    let cvar = -(mean - std_dev * (pdf / alpha));
+
+    Ok(cvar)
+}
+
+/// Calculate Value at Risk using Cornish-Fisher expansion
+///
+/// Accounts for skewness and kurtosis in the return distribution
+///
+/// # Arguments
+/// * `returns` - Historical returns data
+/// * `confidence_level` - Confidence level (e.g., 0.95 for 95%)
+///
+/// # Returns
+/// VaR value (positive number representing potential loss)
+pub fn cornish_fisher_var(returns: &[f64], confidence_level: f64) -> Result<f64> {
+    if returns.len() < 4 {
+        return Err(DervflowError::InvalidInput(
+            "At least four observations are required for Cornish-Fisher VaR".to_string(),
+        ));
+    }
+
+    validate_confidence_level(confidence_level)?;
+
+    // Calculate moments
+    let n = returns.len() as f64;
+    let (mean, std_dev) = mean_std_dev(returns)?;
+
+    if std_dev == 0.0 {
+        return Ok(-mean);
+    }
+
+    // Calculate skewness and excess kurtosis
+    let skewness: f64 = returns
+        .iter()
+        .map(|r| ((r - mean) / std_dev).powi(3))
+        .sum::<f64>()
+        / n;
+
+    let kurtosis: f64 = returns
+        .iter()
+        .map(|r| ((r - mean) / std_dev).powi(4))
+        .sum::<f64>()
+        / n;
+    let excess_kurtosis = kurtosis - 3.0;
+
+    // Get the z-score for the confidence level
+    let alpha = 1.0 - confidence_level;
+    let z = inverse_normal_cdf(alpha)?;
+
+    // Cornish-Fisher expansion
+    let z_cf =
+        z + (z.powi(2) - 1.0) * skewness / 6.0 + (z.powi(3) - 3.0 * z) * excess_kurtosis / 24.0
+            - (2.0 * z.powi(3) - 5.0 * z) * skewness.powi(2) / 36.0;
+
+    // VaR with Cornish-Fisher adjustment
+    let var = -(mean + z_cf * std_dev);
+
+    Ok(var)
+}
+
+/// Calculate Value at Risk using Monte Carlo simulation
+///
+/// # Arguments
+/// * `mean` - Expected return
+/// * `std_dev` - Standard deviation of returns
+/// * `num_simulations` - Number of Monte Carlo paths to simulate
+/// * `confidence_level` - Confidence level (e.g., 0.95 for 95%)
+/// * `seed` - Optional random seed for reproducibility
+///
+/// # Returns
+/// VaR value (positive number representing potential loss)
+pub fn monte_carlo_var(
+    mean: f64,
+    std_dev: f64,
+    num_simulations: usize,
+    confidence_level: f64,
+    seed: Option<u64>,
+) -> Result<f64> {
+    if num_simulations == 0 {
+        return Err(DervflowError::InvalidInput(
+            "Number of simulations must be positive".to_string(),
+        ));
+    }
+
+    if confidence_level <= 0.0 || confidence_level >= 1.0 {
+        return Err(DervflowError::InvalidInput(format!(
+            "Confidence level must be between 0 and 1, got {}",
+            confidence_level
+        )));
+    }
+
+    if std_dev < 0.0 {
+        return Err(DervflowError::InvalidInput(format!(
+            "Standard deviation must be non-negative, got {}",
+            std_dev
+        )));
+    }
+
+    // Generate simulated returns
+    let mut rng = if let Some(s) = seed {
+        RandomGenerator::new(s)
+    } else {
+        RandomGenerator::from_entropy()
+    };
+
+    let mut simulated_returns = Vec::with_capacity(num_simulations);
+    for _ in 0..num_simulations {
+        let z = rng.standard_normal();
+        let return_val = mean + std_dev * z;
+        simulated_returns.push(return_val);
+    }
+
+    // Use historical VaR on simulated returns
+    historical_var(&simulated_returns, confidence_level)
+}
+
+/// Calculate CVaR using Monte Carlo simulation
+///
+/// # Arguments
+/// * `mean` - Expected return
+/// * `std_dev` - Standard deviation of returns
+/// * `num_simulations` - Number of Monte Carlo paths to simulate
+/// * `confidence_level` - Confidence level (e.g., 0.95 for 95%)
+/// * `seed` - Optional random seed for reproducibility
+///
+/// # Returns
+/// CVaR value (positive number representing expected loss in tail)
+pub fn monte_carlo_cvar(
+    mean: f64,
+    std_dev: f64,
+    num_simulations: usize,
+    confidence_level: f64,
+    seed: Option<u64>,
+) -> Result<f64> {
+    if num_simulations == 0 {
+        return Err(DervflowError::InvalidInput(
+            "Number of simulations must be positive".to_string(),
+        ));
+    }
+
+    if confidence_level <= 0.0 || confidence_level >= 1.0 {
+        return Err(DervflowError::InvalidInput(format!(
+            "Confidence level must be between 0 and 1, got {}",
+            confidence_level
+        )));
+    }
+
+    if std_dev < 0.0 {
+        return Err(DervflowError::InvalidInput(format!(
+            "Standard deviation must be non-negative, got {}",
+            std_dev
+        )));
+    }
+
+    // Generate simulated returns
+    let mut rng = if let Some(s) = seed {
+        RandomGenerator::new(s)
+    } else {
+        RandomGenerator::from_entropy()
+    };
+
+    let mut simulated_returns = Vec::with_capacity(num_simulations);
+    for _ in 0..num_simulations {
+        let z = rng.standard_normal();
+        let return_val = mean + std_dev * z;
+        simulated_returns.push(return_val);
+    }
+
+    // Use historical CVaR on simulated returns
+    historical_cvar(&simulated_returns, confidence_level)
+}
+
+/// Calculate Value at Risk using the RiskMetrics 1996 EWMA volatility model
+///
+/// The RiskMetrics approach estimates the conditional volatility using an
+/// exponentially weighted moving average (EWMA) with decay factor ``lambda``.
+/// The VaR forecast assumes zero mean returns and a normal distribution.
+///
+/// # Arguments
+/// * `returns` - Historical return observations (negative values are losses)
+/// * `confidence_level` - Tail confidence level (e.g., 0.95 for 95%)
+/// * `decay` - EWMA decay factor in the half-open interval [0, 1)
+///
+/// # Returns
+/// VaR estimate expressed as a positive loss amount
+pub fn riskmetrics_var(returns: &[f64], confidence_level: f64, decay: f64) -> Result<f64> {
+    validate_confidence_level(confidence_level)?;
+    let sigma = compute_ewma_sigma(returns, decay)?;
+    let alpha = 1.0 - confidence_level;
+    let z = inverse_normal_cdf(alpha)?;
+    let var = -z * sigma;
+
+    Ok(var.max(0.0))
+}
+
+/// Calculate Conditional VaR using the RiskMetrics 1996 EWMA volatility model
+///
+/// The RiskMetrics CVaR assumes normally distributed, zero-mean returns with
+/// volatility estimated via the EWMA filter. The closed-form expression for the
+/// expected shortfall of a normal distribution is utilised to avoid numerical
+/// integration.
+pub fn riskmetrics_cvar(returns: &[f64], confidence_level: f64, decay: f64) -> Result<f64> {
+    validate_confidence_level(confidence_level)?;
+    let sigma = compute_ewma_sigma(returns, decay)?;
+    let alpha = 1.0 - confidence_level;
+    let z = inverse_normal_cdf(alpha)?;
+    let pdf = (-0.5 * z * z).exp() / (2.0 * PI).sqrt();
+    let var = -z * sigma;
+    let cvar = sigma * (pdf / alpha);
+
+    Ok(cvar.max(var).max(0.0))
+}
+
+fn validate_confidence_level(confidence_level: f64) -> Result<()> {
+    if confidence_level <= 0.0 || confidence_level >= 1.0 {
+        return Err(DervflowError::InvalidInput(format!(
+            "Confidence level must be between 0 and 1, got {}",
+            confidence_level
+        )));
+    }
+    Ok(())
+}
+
+fn validate_historical_inputs(returns: &[f64], confidence_level: f64) -> Result<()> {
+    if returns.is_empty() {
+        return Err(DervflowError::InvalidInput(
+            "Returns array cannot be empty".to_string(),
+        ));
+    }
+
+    if !returns.iter().all(|value| value.is_finite()) {
+        return Err(DervflowError::InvalidInput(
+            "Returns must contain only finite values".to_string(),
+        ));
+    }
+
+    validate_confidence_level(confidence_level)
+}
+
+fn historical_tail_count(length: usize, confidence_level: f64) -> usize {
+    let alpha = 1.0 - confidence_level;
+    let tail_count = (alpha * length as f64).ceil() as usize;
+    tail_count.max(1).min(length)
+}
+
+fn prepare_historical_tail(
+    returns: &[f64],
+    confidence_level: f64,
+) -> Result<(Vec<f64>, usize, usize)> {
+    validate_historical_inputs(returns, confidence_level)?;
+    let tail_count = historical_tail_count(returns.len(), confidence_level);
+    let target_index = tail_count.saturating_sub(1);
+
+    let mut values = returns.to_vec();
+    values.select_nth_unstable_by(target_index, |a, b| a.total_cmp(b));
+
+    Ok((values, tail_count, target_index))
+}
+
+fn mean_std_dev(returns: &[f64]) -> Result<(f64, f64)> {
+    if returns.len() < 2 {
+        return Err(DervflowError::InvalidInput(
+            "At least two observations are required".to_string(),
+        ));
+    }
+
+    if !returns.iter().all(|value| value.is_finite()) {
+        return Err(DervflowError::InvalidInput(
+            "Returns must contain only finite values".to_string(),
+        ));
+    }
+
+    let mut mean = 0.0;
+    let mut m2 = 0.0;
+    let mut count = 0.0;
+
+    for &value in returns {
+        count += 1.0;
+        let delta = value - mean;
+        mean += delta / count;
+        let delta2 = value - mean;
+        m2 += delta * delta2;
+    }
+
+    if count < 2.0 {
+        return Err(DervflowError::InvalidInput(
+            "At least two observations are required".to_string(),
+        ));
+    }
+
+    let variance = m2 / (count - 1.0);
+    if !variance.is_finite() || variance < 0.0 {
+        return Err(DervflowError::NumericalError(
+            "Invalid standard deviation calculated".to_string(),
+        ));
+    }
+
+    Ok((mean, variance.sqrt()))
+}
+
+fn compute_ewma_sigma(returns: &[f64], decay: f64) -> Result<f64> {
+    if returns.is_empty() {
+        return Err(DervflowError::InvalidInput(
+            "Returns array cannot be empty".to_string(),
+        ));
+    }
+
+    if !(0.0..1.0).contains(&decay) {
+        return Err(DervflowError::InvalidInput(format!(
+            "Decay factor must be in [0, 1), got {}",
+            decay
+        )));
+    }
+
+    if !returns.iter().all(|value| value.is_finite()) {
+        return Err(DervflowError::InvalidInput(
+            "Returns must contain only finite values".to_string(),
+        ));
+    }
+
+    let mut variance = returns[0] * returns[0];
+    let weight = 1.0 - decay;
+
+    for &ret in returns.iter().skip(1) {
+        variance = decay * variance + weight * ret * ret;
+    }
+
+    if !variance.is_finite() || variance < 0.0 {
+        return Err(DervflowError::NumericalError(
+            "Failed to compute EWMA variance".to_string(),
+        ));
+    }
+
+    Ok(variance.sqrt())
+}
+
+/// Inverse normal cumulative distribution function (quantile function)
+///
+/// Approximation using Beasley-Springer-Moro algorithm
+fn inverse_normal_cdf(p: f64) -> Result<f64> {
+    if p <= 0.0 || p >= 1.0 {
+        return Err(DervflowError::InvalidInput(format!(
+            "Probability must be between 0 and 1, got {}",
+            p
+        )));
+    }
+
+    // Coefficients for the approximation
+    #[allow(clippy::excessive_precision)]
+    let a = [
+        -3.969683028665376e+01,
+        2.209460984245205e+02,
+        -2.759285104469687e+02,
+        1.383577518672690e+02,
+        -3.066479806614716e+01,
+        2.506628277459239e+00,
+    ];
+
+    #[allow(clippy::excessive_precision)]
+    let b = [
+        -5.447609879822406e+01,
+        1.615_858_368_580_409e2,
+        -1.556_989_798_598_866e2,
+        6.680_131_188_771_972e1,
+        -1.328_068_155_288_572e1,
+    ];
+
+    let c = [
+        -7.784_894_002_430_293e-3,
+        -3.223_964_580_411_365e-1,
+        -2.400_758_277_161_838,
+        -2.549_732_539_343_734,
+        4.374_664_141_464_968,
+        2.938_163_982_698_783,
+    ];
+
+    let d = [
+        7.784_695_709_041_462e-3,
+        3.224_671_290_700_398e-1,
+        2.445_134_137_142_996,
+        3.754_408_661_907_416,
+    ];
+
+    // Define break-points
+    let p_low = 0.02425;
+    let p_high = 1.0 - p_low;
+
+    let x: f64;
+
+    if p < p_low {
+        // Rational approximation for lower region
+        let q = (-2.0 * p.ln()).sqrt();
+        x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5])
+            / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1.0);
+    } else if p <= p_high {
+        // Rational approximation for central region
+        let q = p - 0.5;
+        let r = q * q;
+        x = (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q
+            / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1.0);
+    } else {
+        // Rational approximation for upper region
+        let q = (-2.0 * (1.0 - p).ln()).sqrt();
+        x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5])
+            / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1.0);
+    }
+
+    Ok(x)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_historical_var() {
+        let returns = vec![-0.05, -0.03, -0.01, 0.0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06];
+        let var = historical_var(&returns, 0.95).unwrap();
+        // At 95% confidence, we expect the 5th percentile (worst 5%)
+        // With 10 observations, 5% is 0.5, so we take the 1st worst observation
+        assert!(var > 0.0);
+        assert!(var <= 0.05); // Should be around the worst return
+    }
+
+    #[test]
+    fn test_historical_cvar() {
+        let returns = vec![-0.05, -0.03, -0.01, 0.0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06];
+        let cvar = historical_cvar(&returns, 0.95).unwrap();
+        // CVaR should be at least as large as VaR
+        let var = historical_var(&returns, 0.95).unwrap();
+        assert!(cvar >= var);
+    }
+
+    #[test]
+    fn test_parametric_var() {
+        // Create normally distributed returns
+        let returns = vec![
+            0.01, -0.01, 0.02, -0.02, 0.0, 0.01, -0.01, 0.015, -0.015, 0.005,
+        ];
+        let var = parametric_var(&returns, 0.95).unwrap();
+        assert!(var > 0.0);
+    }
+
+    #[test]
+    fn test_parametric_cvar_matches_closed_form() {
+        let returns = vec![
+            0.01, -0.01, 0.02, -0.02, 0.0, 0.01, -0.01, 0.015, -0.015, 0.005,
+        ];
+        let confidence = 0.95;
+        let cvar = parametric_cvar(&returns, confidence).unwrap();
+        let var = parametric_var(&returns, confidence).unwrap();
+
+        let n = returns.len() as f64;
+        let mean: f64 = returns.iter().sum::<f64>() / n;
+        let variance: f64 = returns.iter().map(|r| (r - mean).powi(2)).sum::<f64>() / (n - 1.0);
+        let std_dev = variance.sqrt();
+        let alpha = 1.0 - confidence;
+        let z = inverse_normal_cdf(alpha).unwrap();
+        let pdf = (-0.5 * z * z).exp() / (2.0 * std::f64::consts::PI).sqrt();
+        let expected = -(mean - std_dev * (pdf / alpha));
+
+        assert!((cvar - expected).abs() < 1e-10);
+        assert!(cvar >= var);
+    }
+
+    #[test]
+    fn test_cornish_fisher_var() {
+        let returns = vec![
+            0.01, -0.01, 0.02, -0.02, 0.0, 0.01, -0.01, 0.015, -0.015, 0.005,
+        ];
+        let var = cornish_fisher_var(&returns, 0.95).unwrap();
+        assert!(var > 0.0);
+    }
+
+    #[test]
+    fn test_monte_carlo_var() {
+        let var = monte_carlo_var(0.0, 0.02, 10000, 0.95, Some(42)).unwrap();
+        assert!(var > 0.0);
+        // For normal distribution with mean 0 and std 0.02, 95% VaR should be around 1.645 * 0.02
+        assert!((var - 0.0329).abs() < 0.005); // Allow some tolerance
+    }
+
+    #[test]
+    fn test_monte_carlo_cvar() {
+        let cvar = monte_carlo_cvar(0.0, 0.02, 10000, 0.95, Some(42)).unwrap();
+        let var = monte_carlo_var(0.0, 0.02, 10000, 0.95, Some(42)).unwrap();
+        assert!(cvar >= var);
+    }
+
+    #[test]
+    fn test_riskmetrics_var() {
+        let returns = [0.01, -0.015, 0.02, -0.005, 0.012];
+        let var = riskmetrics_var(&returns, 0.95, 0.94).unwrap();
+        assert!((var - 0.018_059_277_868).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_riskmetrics_cvar_matches_closed_form() {
+        let returns = [0.01, -0.015, 0.02, -0.005, 0.012];
+        let confidence = 0.975;
+        let decay = 0.93;
+
+        let var = riskmetrics_var(&returns, confidence, decay).unwrap();
+        let cvar = riskmetrics_cvar(&returns, confidence, decay).unwrap();
+
+        assert!(cvar >= var);
+
+        let mut variance = returns[0] * returns[0];
+        for &value in returns.iter().skip(1) {
+            variance = decay * variance + (1.0 - decay) * value * value;
+        }
+        let sigma = variance.sqrt();
+        let alpha = 1.0 - confidence;
+        let z = inverse_normal_cdf(alpha).unwrap();
+        let pdf = (-0.5 * z * z).exp() / (2.0 * std::f64::consts::PI).sqrt();
+        let expected_cvar = sigma * (pdf / alpha);
+
+        assert!((cvar - expected_cvar).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_riskmetrics_var_invalid_decay() {
+        let returns = [0.01, -0.02, 0.015];
+        assert!(riskmetrics_var(&returns, 0.95, 1.0).is_err());
+        assert!(riskmetrics_var(&returns, 0.95, -0.1).is_err());
+    }
+
+    #[test]
+    fn test_riskmetrics_cvar_invalid_inputs() {
+        let returns = [0.01, -0.02, 0.015];
+        assert!(riskmetrics_cvar(&returns, 0.95, 1.0).is_err());
+        assert!(riskmetrics_cvar(&returns, 0.0, 0.94).is_err());
+        assert!(riskmetrics_cvar(&[], 0.95, 0.94).is_err());
+    }
+
+    #[test]
+    fn test_inverse_normal_cdf() {
+        // Test some known values
+        let z_005 = inverse_normal_cdf(0.05).unwrap();
+        assert!((z_005 + 1.645).abs() < 0.01); // Should be approximately -1.645
+
+        let z_05 = inverse_normal_cdf(0.5).unwrap();
+        assert!(z_05.abs() < 0.001); // Should be approximately 0
+
+        let z_095 = inverse_normal_cdf(0.95).unwrap();
+        assert!((z_095 - 1.645).abs() < 0.01); // Should be approximately 1.645
+    }
+
+    #[test]
+    fn test_var_invalid_inputs() {
+        let returns = vec![0.01, -0.01, 0.02];
+        let returns_with_nan = vec![0.01, f64::NAN, -0.02];
+        let returns_with_inf = vec![0.01, f64::INFINITY, -0.02];
+
+        // Empty returns
+        assert!(historical_var(&[], 0.95).is_err());
+        assert!(historical_cvar(&[], 0.95).is_err());
+
+        // Invalid confidence level
+        assert!(historical_var(&returns, 0.0).is_err());
+        assert!(historical_var(&returns, 1.0).is_err());
+        assert!(historical_var(&returns, 1.5).is_err());
+        assert!(historical_cvar(&returns, 0.0).is_err());
+        assert!(historical_cvar(&returns, 1.0).is_err());
+
+        // Parametric methods require at least two observations
+        assert!(parametric_var(&[0.01], 0.95).is_err());
+        assert!(parametric_cvar(&[0.01], 0.95).is_err());
+
+        // Cornish-Fisher requires enough observations for higher moments
+        assert!(cornish_fisher_var(&[0.01, -0.01, 0.02], 0.95).is_err());
+
+        // Historical methods reject non-finite values
+        assert!(historical_var(&returns_with_nan, 0.95).is_err());
+        assert!(historical_cvar(&returns_with_nan, 0.95).is_err());
+        assert!(historical_var(&returns_with_inf, 0.95).is_err());
+        assert!(historical_cvar(&returns_with_inf, 0.95).is_err());
+    }
+
+    #[test]
+    fn test_historical_var_cvar_non_negative_for_positive_returns() {
+        let returns = vec![0.01, 0.02, 0.03, 0.015, 0.025];
+        let var = historical_var(&returns, 0.95).unwrap();
+        let cvar = historical_cvar(&returns, 0.95).unwrap();
+        assert!(var >= 0.0);
+        assert!(cvar >= var);
+    }
+
+    #[test]
+    fn test_var_result_creation() {
+        let result = VaRResult::new(0.05, 0.95, VaRMethod::Historical);
+        assert_eq!(result.value_at_risk, 0.05);
+        assert_eq!(result.confidence_level, 0.95);
+        assert_eq!(result.method, VaRMethod::Historical);
+    }
+}
