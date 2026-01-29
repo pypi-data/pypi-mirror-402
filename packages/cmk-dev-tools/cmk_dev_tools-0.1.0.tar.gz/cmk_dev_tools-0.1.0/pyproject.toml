@@ -1,0 +1,194 @@
+[project]
+name = "cmk-dev-tools"
+version = "0.1.0"
+description = "Checkmk Dev Tools"
+authors = [
+    {name = "Benedikt Seidl", email = "benedikt.seidl@checkmk.com"},
+    {name = "Frans Fürst", email = "frans.fuerst@checkmk.com"},
+]
+
+readme = "Readme.md"
+requires-python =  ">=3.10.4,<4"  # build nodes still run on Python 3.10.4
+dependencies = [
+    "python-jenkins>=1.8.3",
+    "pydantic>=2",
+    "rich",
+    "trickkiste>=0.3.4",
+    "aiohttp>=3.12.15",
+    "textual>=6.6.0",
+]
+
+[project.scripts]
+cmk-dev-tools = 'cmk_dev.cli:main'
+devboard = 'cmk_dev.devboard:main'
+
+# see https://docs.astral.sh/uv/concepts/projects/dependencies/
+[dependency-groups]
+dev = [
+    "pytest",
+    "mypy",
+    "ruff>=0.6",
+    "yamllint",
+    "pytest-cov",
+    "types-pyyaml",
+    "pre-commit",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+#ignore-vcs = true
+packages = ["cmk_dev"]
+
+[tool.pytest.ini_options]
+markers = [
+    "unit: Unit tests (deselect with '-m \"not unit\"')",
+    "system: Tests involving an attached device (deselect with '-m \"not system\"')",
+]
+testpaths = ["cmk_dev", "test"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+# see https://docs.astral.sh/ruff/linter/
+# https://github.com/astral-sh/ruff-pre-commit
+select = [
+    "ALL",  # all available linting checks
+    "B",    # flake8-bugbear: reports potential bugs
+    "C90",  # Complexity: violations of 90th percentile of cyclomatic complexity
+    "C",    # Complexity: general code complexity issues
+    "E",    # pycodestyle: check PEP 8 style guidelines
+    "F",    # pyflakes: detects potential errors like undefined/unused symbols
+    "I",    # isort: check for proper import sorting
+    "PL",   # pylint: Reports issues related to Pylint checks.
+    "SIM",  # flake8-simplify: Suggests simplifications in code (e.g., replacing complex expressions with simpler ones).
+    "UP",   # pyupgrade: Checks and suggests improvements to modernize Python code (e.g., f-strings).
+    "W",    # Warning: General warnings or potentially problematic code patterns.
+]
+ignore = [
+    # These should be fixed eventually
+    "A004",     # Import `print` is shadowing a Python builtin
+    "ARG001",   # Unused function argument: `mock_settings_env_vars`
+    "ASYNC109", # Async function definition with a `timeout` parameter
+    # "ASYNC251", # Async functions should not call `time.sleep`
+    "B005",     # Using `.strip()` with multi-character strings is misleading
+    "B008",     # Do not perform function call `datetime.now` in argument defaults;
+    "B011",     # Do not `assert False`
+    "B018",     # Found useless expression.
+    "B905",     # `zip()` without an explicit `strict=` parameter
+    "BLE001",   # Do not catch blind exception: `Exception`
+    "C401",     # Unnecessary generator
+    "C417",     # Unnecessary "map" usage
+    "C901",     # .. is too complex
+    "D100",     # Missing docstring in public module
+    "D101",     # Missing docstring in public class
+    "D102",     # Missing docstring in public method
+    "D103",     # Missing docstring in public function
+    "D105",     # Missing docstring in magic method
+    "D105",     # Missing docstring in magic method
+    "D107",     # Missing docstring in `__init__`
+    "D210",     # No whitespaces allowed surrounding docstring text
+    "D301",     # Use `r"""` if any backslashes in a docstring
+    "DTZ001",   # `datetime.datetime()` called without a `tzinfo` argument
+    "DTZ005",   # `datetime.datetime.now()` called without a `tz` argument
+    "DTZ006",   # `datetime.datetime.fromtimestamp()` called without a `tz` argument
+    "DTZ007",   # Naive datetime constructed using `datetime.datetime.strptime()` without %z
+    "DTZ007",   # Naive datetime constructed using `datetime.datetime.strptime()` without %z
+    "E501",     # line too long
+    "ERA001",   # commented out code
+    "FBT001",   # Boolean-typed positional argument in function definition
+    "FBT002",   # Boolean default positional argument in function definition
+    "FIX001",   # Line contains FIXME, consider resolving the issue
+    "FIX002",   # Line contains TODO, consider resolving the issue
+    "FURB163",  # Prefer `math.log2(filecount)` over `math.log` with a redundant base
+    "G004",     # Logging statement uses f-string
+    "N806",     # Variable `MAX_RETRIES` in function should be lowercase
+    "N815",     # Variable `lastCompletedBuild` in class scope should not be mixedCase
+    "N818",     # Exception name `Fatal` should be named with an Error suffix
+    "PERF403",  # Use a dictionary comprehension instead of a for-loop
+    "PIE810",   # Call `startswith` once with a `tuple`
+    "PLC0415",  # `import` should be at the top-level of a file
+    "PLR0911",  # Too many return statements
+    "PLR0912",  # Too many branches
+    "PLR0913",  # Too many arguments in function definition
+    "PLR0915",  # Too many statements
+    "PLR2004",  #  Magic value used in comparison
+    "PT003",    # `scope='function'` is implied in `@pytest.fixture()`
+    "PT015",    # Assertion always fails, replace with `pytest.fail()`
+    "PTH123",   # `open()` should be replaced by `Path.open()`
+    "PTH201",   # Do not pass the current directory explicitly to `Path`
+    "PTH205",   # `os.path.getctime` should be replaced by `Path.stat().st_ctime`
+    "PYI025",   # Use `from collections.abc import Set as AbstractSet` to avoid confusion with the `set` builtin
+    "PYI041",   # Use `float` instead of `int | float`
+    "RET505",   # Unnecessary `else` after `return` statement
+    "RSE102",   # Unnecessary parentheses on raised exception
+    "RUF005",   # Consider `[CI_ARTIFACTS_COMMAND, *LOG_COMMAND]` instead of concatenation
+    "RUF010",   # Use explicit conversion flag
+    "RUF021",   # Parenthesize `a and b` expressions when chaining `and` and `or` together, to make the precedence clear
+    "RUF100",   # Unused `noqa` directive (non-enabled: `PLR2004`)
+    "S302",     # Deserialization with the `marshal` module is possibly dangerous
+    "S506",     # Probable use of unsafe loader `BaseLoader` with `yaml.load`. Allows instantiation of arbitrary objects. Consider `yaml.safe_load`.
+    "S603",     # `subprocess` call: check for execution of untrusted input
+    "S607",     # Starting a process with a partial executable path
+    "SIM102",   # Use a single `if` statement instead of nested `if` statements
+    "SIM105",   # Use `contextlib.suppress(ProcessLookupError)` instead of `try`-`except`-`pass`
+    "SIM118",   # Use `key in dict` instead of `key in dict.keys()`
+    "SIM201",   # Use `whoami != username`
+    "SIM210",   # Remove unnecessary `True if ... else False`
+    "SIM223",   # Use `False` instead of `False and ...`
+    "SLF001",   # Private member accessed: `_session`
+    "T203",     # `pprint` found
+    "TC006",    # Add quotes to type expression in `typing.cast()`
+    "TD002",    # Missing author in TODO; try: `# TODO(<author_name>): ...` or `# TODO @<author_name>: ...`
+    "TD006",    # Invalid TODO capitalization: `Todo` should be `TODO`
+    "TRY300",   # Consider moving this statement to an `else` block
+    "TRY301",   # Abstract `raise` to an inner function
+    "UP006",    # Use `dict` instead of `Dict` for type annotation
+    "UP007",    # Use `X | Y` for type annotations
+    "UP017",    # Use `datetime.UTC` alias
+    "UP035",    # Import from `collections.abc` instead: `Sequence`
+    "YTT204",   # `sys.version_info.minor` compared to integer (python4), compare `sys.version_info` to tuple
+
+    # These are ignored on purpose
+    "ASYNC230", # Async functions should not open files with blocking methods like `open`
+    "COM812",   # missing-trailing-comma
+    "D202",     # No blank lines allowed after function docstring (no-blank-line-before-class)
+    "D203",     # incorrect-blank-line-before-class, conflicts with D211
+    "D205",     # 1 blank line required between summary line and description
+    "D209",     # Multi-line docstring closing quotes should be on a separate line
+    #"D211",     # conflicts: no-blank-line-before-class, conflicts with D203
+    "D212",     # Multi-line docstring summary should start at the first line
+    "D213",     # Multi-line docstring
+    "D400",     # First line should end with a period
+    "D401",     # First line of docstring should be in imperative mood
+    "D403",     # First word of the docstring should be capitalized: `def` -> `Def`
+    "D413",     # Missing blank line after last section
+    "D415",     # First line should end with a period, question mark, or exclamation point
+    "EM101",    # Exception must not use a string literal, assign to variable first
+    "EM102",    # Exception must not use an f-string literal, assign to variable first
+    "EXE001",   # Shebang is present but file is not executable
+    "PT018",    # Assertion should be broken down into multiple parts
+    "S101",     # Use of `assert` detected
+    "SIM117",   # Use single `with`
+    "T201",     # `print` found
+    "TD001",    # Invalid TODO tag: `Fixme`
+    "TD003",    # Missing issue link for this TODO
+    "TRY003",   # Avoid specifying long messages outside the exception class
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict=true
+disallow_untyped_defs=true
+disallow_any_unimported=true
+no_implicit_optional=true
+check_untyped_defs=true
+warn_return_any=true
+warn_unused_ignores=true
+show_error_codes=true
+mypy_path = "typeshed"
+exclude = '^(\\.venv)'
