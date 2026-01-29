@@ -1,0 +1,37 @@
+image: "harbor.local.clusters/bp/lmsysorg/sglang:deepep_main_51cdd81f_mooncake_0.3.2.post1"
+cmd:
+  - bash /gpfs/users/sunpeng/sync_ip.sh && export MASTER_IP=`cat /gpfs/users/sunpeng/tmp/.ips/${MASTER_ADDR}.ip` && echo $MASTER_IP &&
+  - rm /sgl-workspace/sglang/python/sglang/srt/models/mimo.py &&
+  - cp /gpfs/users/sunpeng/code/opensource/sgl-project/sglang/python/sglang/srt/layers/moe/ep_moe/token_dispatcher.py /sgl-workspace/sglang/python/sglang/srt/layers/moe/ep_moe/token_dispatcher.py &&
+  - MC_TE_METRIC=true SGLANG_TBO_DEBUG=1 python3
+  - -m
+  - sglang.launch_server
+  - --model-path={{MODEL_PATH}}
+  - --trust-remote-code
+  - --served-model-name={{SERVED_MODEL_NAME}}
+  - --disaggregation-ib-device=mlx5_bond_0
+  - --disaggregation-mode=decode
+  - --dist-init-addr=${MASTER_IP}:5757
+  - --nnodes={{TOTAL_REPLICAS}}
+  - --node-rank=${RANK}
+  - --tp-size=$(({{TOTAL_REPLICAS}}*{{GPUS_PER_POD}}))
+  - --dp-size=$(({{TOTAL_REPLICAS}}*{{GPUS_PER_POD}}))
+  - --enable-dp-attention
+  - --decode-log-interval=1
+  - --enable-deepep-moe
+  - --page-size=1
+  - --dtype=bfloat16
+  - --host=0.0.0.0
+  - --port=30000
+  - --moe-dense-tp-size=1
+  - --enable-dp-lm-head
+  - --watchdog-timeout=1000000
+  - --enable-two-batch-overlap
+  - --deepep-mode=low_latency
+  - --mem-fraction-static=0.7
+  - --max-running-requests=4096
+  - --context-length=131072
+  - --cuda-graph-bs=128
+  - --enable-metrics
+livenessPath: "/health"
+readinessPath: "/health"

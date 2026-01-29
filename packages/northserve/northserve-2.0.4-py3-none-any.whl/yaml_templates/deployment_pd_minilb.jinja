@@ -1,0 +1,267 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: {{APP_NAME}}-minilb
+  name: {{APP_NAME}}-minilb
+  namespace: {{NAMESPACE}}
+spec:
+  replicas: {{MINILB_REPLICAS}}
+  selector:
+    matchLabels:
+      app: {{APP_NAME}}-minilb
+  template:
+    metadata:
+      labels:
+        app: {{APP_NAME}}-minilb
+        model: {{SERVED_MODEL_NAME}}
+        cluster: {{CLUSTER_NAME}}
+        north-job-type: serving
+      annotations:
+        reclaimableByVolcano: "{{RECLAIMABLEBYVOLCANO}}"
+    spec:
+      priorityClassName: {{PRIORITYCLASSNAME}}
+      containers:
+      - command:
+        - /bin/bash
+        - --norc
+        - -c
+        - |
+          echo "Waiting for prefill and decode head IPs..."
+          PREFILL_IP_FILE="/gpfs/users/{{USER_NAME}}/tmp/.ips/{{DEPLOYMENT_UUID}}-prefill-head.ip"
+          DECODE_IP_FILE="/gpfs/users/{{USER_NAME}}/tmp/.ips/{{DEPLOYMENT_UUID}}-decode-head.ip"
+
+          while [ ! -f "$PREFILL_IP_FILE" ] || [ ! -f "$DECODE_IP_FILE" ]; do
+            echo "Waiting for IP files to be ready..."
+            sleep 5
+          done
+
+          export PREFILL_HEAD_IP=$(cat $PREFILL_IP_FILE)
+          export DECODE_HEAD_IP=$(cat $DECODE_IP_FILE)
+
+          echo "Prefill head IP: $PREFILL_HEAD_IP"
+          echo "Decode head IP: $DECODE_HEAD_IP"
+
+          {{MINILB_CMDLINE}} 2>&1 | tee -a /var/log/minilb.log; echo $? > /var/log/exit
+        image: {{MINILB_IMAGE}}
+        imagePullPolicy: IfNotPresent
+        name: minilb
+        env:
+        - name: PYTHONNOUSERSITE
+          value: "1"
+        - name: USER
+          value: {{USER_NAME}}
+        - name: DEPLOYMENT_UUID
+          value: {{DEPLOYMENT_UUID}}
+        - name: REDIS_HOST
+          valueFrom:
+            secretKeyRef:
+              name: north-llm-api-secret
+              key: REDIS_HOST
+        - name: REDIS_PORT
+          valueFrom:
+            secretKeyRef:
+              name: north-llm-api-secret
+              key: REDIS_PORT
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: north-llm-api-secret
+              key: REDIS_PASSWORD
+        - name: REDIS_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: north-llm-api-secret
+              key: REDIS_USERNAME
+{%- if HAS_EXTRA_ENVS %}
+        {%- for key, value in EXTRA_ENVS.items() %}
+        - name: {{key}}
+          value: "{{value}}"
+        {%- endfor -%}
+{%- endif %}
+        ports:
+        - containerPort: 8000
+          protocol: TCP
+        resources:
+          limits:
+            cpu: "2"
+            memory: 16Gi
+          requests:
+            cpu: "2"
+            memory: 16Gi
+        volumeMounts:
+        - mountPath: /gpfs
+          name: gpfs
+{% if NAMESPACE == 'qiji' %}
+        - name: log-collector-config
+          mountPath: /usr/local/container/filebeat-7.12.0/etc/
+          readOnly: true
+        - name: shared-log-path
+          mountPath: /var/log
+        - name: log-collector-data
+          mountPath: /usr/local/container/filebeat-7.12.0/data
+{%- endif %}
+        - name: tmp-dir
+          mountPath: /tmp
+      - name: nla-sidecar
+        image: harbor.local.clusters/bp/nla-sidecar:v0.2.2
+        imagePullPolicy: IfNotPresent
+        env:
+          # 主容器与 sidecar 同 Pod，使用 Pod IP 作为上报 IP
+          - name: NLA_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+
+          # 主容器对外端口 - minilb 使用 8000 端口
+          - name: NLA_PORT
+            value: "8000"
+
+          # Redis 连接（与主容器一致）
+          - name: REDIS_HOST
+            valueFrom:
+              secretKeyRef:
+                name: north-llm-api-secret
+                key: REDIS_HOST
+          - name: REDIS_PORT
+            valueFrom:
+              secretKeyRef:
+                name: north-llm-api-secret
+                key: REDIS_PORT
+          - name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: north-llm-api-secret
+                key: REDIS_PASSWORD
+          - name: REDIS_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: north-llm-api-secret
+                key: REDIS_USERNAME
+
+          # 业务标识
+          - name: NLA_MODEL_NAME
+            value: "{{SERVED_MODEL_NAME}}"
+          - name: NLA_MODEL_VERSION
+            value: "v1.0.0"
+          - name: NLA_REGISTER_INTERVAL_SEC
+            value: "5"
+          - name: NLA_API_COMPAT
+            value: "{{PROTOCOL}}"
+
+          # sidecar 自身健康服务配置
+          - name: NLA_HEALTH_PORT
+            value: "18080"
+          - name: NLA_HEALTH_PATH
+            value: "/health"
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 18080
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 2
+          successThreshold: 1
+          failureThreshold: 3
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 18080
+            scheme: HTTP
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 6
+
+        resources:
+          limits:
+            memory: "512Mi"
+          requests:
+            memory: "512Mi"
+{% if NAMESPACE == 'qiji' %}
+      - name: logcollector
+        image: harbor.local.clusters/bp/volces/logcollector:20241231-2
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/bash
+        args:
+          - -c
+          - bash /root/check_filebeat.sh
+        resources:
+          limits:
+            cpu: '1'
+            memory: 2Gi
+          requests:
+            cpu: '1'
+            memory: 2Gi
+        volumeMounts:
+          - name: log-collector-config
+            mountPath: /usr/local/container/filebeat-7.12.0/etc/
+            readOnly: true
+          - name: shared-log-path
+            mountPath: /var/log
+          - name: log-collector-data
+            mountPath: /usr/local/container/filebeat-7.12.0/data
+          - name: log-collector-logs
+            mountPath: /usr/local/container/filebeat-7.12.0/logs
+        env:
+          - name: "LOG_COLLECTOR_ENV_TAGS"
+            value: "__pod_name__|__pod_ip__|__namespace__|__node_name__|__node_ip__"
+          - name: "__pod_name__"
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: "__pod_ip__"
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: "__namespace__"
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: "__job_name__"
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['jobname']
+          - name: "__node_name__"
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          - name: "__node_ip__"
+            valueFrom:
+              fieldRef:
+                fieldPath: status.hostIP
+          - name: MAX_MEM
+            valueFrom:
+             resourceFieldRef:
+               containerName: logcollector
+               resource: limits.memory
+{%- endif %}
+      tolerations:
+      - key: "north.serving"
+        operator: "Exists"
+        effect: "NoSchedule"
+      restartPolicy: Always
+      terminationGracePeriodSeconds: {{TERMINATIONGRACEPERIODSECONDS}}
+      volumes:
+      - name: gpfs
+        hostPath:
+          path: /gpfs
+          type: Directory
+{% if NAMESPACE == 'qiji' %}
+      - name: log-collector-config
+        configMap:
+          defaultMode: 420
+          name: north-serving-log-collector-config
+      - name: shared-log-path
+        emptyDir: { }
+      - name: log-collector-data
+        emptyDir: { }
+      - name: log-collector-logs
+        emptyDir: { }
+{%- endif %}
+      - name: tmp-dir
+        emptyDir: { }

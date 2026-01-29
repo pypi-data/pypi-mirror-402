@@ -1,0 +1,22 @@
+image: "harbor.local.clusters/bp/lmsysorg/sglang:v0.5.3rc1-cu126-patch9"
+cmd:
+  - sed -i 's/for logprob, _, token_text in token_logprobs:/for logprob, token_id, token_text in token_logprobs:/g' /workspace/sglang/python/sglang/srt/entrypoints/openai/utils.py && sed -i 's/ret_logprobs.tokens.append(token_text)/ret_logprobs.tokens.append(str(token_id))/g' /workspace/sglang/python/sglang/srt/entrypoints/openai/utils.py &&
+  - OUTLINES_CACHE_DIR=/tmp/.outlines python3
+  - -m
+  - sglang.launch_server
+  - --model-path='{{MODEL_PATH}}'
+  - --trust-remote-code
+  - --tensor-parallel-size={{ (GPUS_PER_POD | int) * (PODS_PER_JOB | int) }}
+  - --served-model-name={{SERVED_MODEL_NAME}}
+  - --nccl-init-addr="$MASTER_ADDR:6379"
+  - --nnodes={{TOTAL_REPLICAS}}
+  - --node-rank="$RANK"
+  - --mem-fraction-static=0.85
+  - --chunked-prefill-size=8192
+  - --max-running-requests=2048
+  - --max-prefill-tokens=16384
+  - --enable-metrics
+  - --port 8000
+  - --host 0.0.0.0
+livenessPath: "/health"
+readinessPath: "/health"
