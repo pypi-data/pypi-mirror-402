@@ -1,0 +1,1838 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{% if entity %}Edit{% else %}New{% endif %} {{ content_type.label }} - Focomy{% endblock %}
+{% block header_title %}{% if entity %}Edit{% else %}New{% endif %} {{ content_type.label }}{% endblock %}
+
+{# フィールドレンダリングマクロ #}
+{% macro render_field(field, entity) %}
+<div class="form-group">
+    <label class="form-label" for="{{ field.name }}">
+        {{ field.label or field.name }}
+        {% if field.required %}<span style="color: var(--error);">*</span>{% endif %}
+    </label>
+
+    {% if field.type == 'text' or field.type == 'string' %}
+        <input
+            type="text"
+            id="{{ field.name }}"
+            name="{{ field.name }}"
+            class="form-input"
+            value="{{ entity.get(field.name, '') if entity else '' }}"
+            {% if field.required %}required{% endif %}
+        >
+
+    {% elif field.type == 'email' %}
+        <input
+            type="email"
+            id="{{ field.name }}"
+            name="{{ field.name }}"
+            class="form-input"
+            value="{{ entity.get(field.name, '') if entity else '' }}"
+            {% if field.required %}required{% endif %}
+        >
+
+    {% elif field.type == 'password' %}
+        <input
+            type="password"
+            id="{{ field.name }}"
+            name="{{ field.name }}"
+            class="form-input"
+            {% if not entity %}required{% endif %}
+        >
+        {% if entity %}
+        <p class="form-hint">Leave empty to keep current password</p>
+        {% endif %}
+
+    {% elif field.type == 'slug' %}
+        <input
+            type="text"
+            id="{{ field.name }}"
+            name="{{ field.name }}"
+            class="form-input"
+            value="{{ entity.get(field.name, '') if entity else '' }}"
+            pattern="[-a-z0-9]+"
+            {% if field.required %}required{% endif %}
+        >
+        <p class="form-hint">URL-friendly identifier (lowercase letters, numbers, hyphens)</p>
+
+    {% elif field.type == 'textarea' or field.type == 'richtext' %}
+        <textarea
+            id="{{ field.name }}"
+            name="{{ field.name }}"
+            class="form-textarea"
+            {% if field.required %}required{% endif %}
+        >{{ entity.get(field.name, '') if entity else '' }}</textarea>
+
+    {% elif field.type == 'blocks' %}
+        <!-- プレビューコントロール (105) -->
+        <div class="ep-controls">
+            <div class="ep-layout-group">
+                <button type="button" class="ep-layout-btn active" data-layout="editor-only" title="エディタのみ">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                </button>
+                <button type="button" class="ep-layout-btn" data-layout="split" title="分割表示">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+                </button>
+                <button type="button" class="ep-layout-btn" data-layout="preview-only" title="プレビューのみ">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                </button>
+            </div>
+            <div class="ep-device-group">
+                <button type="button" class="ep-device-btn active" data-device="desktop" title="デスクトップ (1200px)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                </button>
+                <button type="button" class="ep-device-btn" data-device="tablet" title="タブレット (768px)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>
+                </button>
+                <button type="button" class="ep-device-btn" data-device="mobile" title="モバイル (375px)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Editor.js用 hidden input -->
+        <input type="hidden" id="{{ field.name }}" name="{{ field.name }}" value='{{ entity.get(field.name, '') | tojson if entity and entity.get(field.name) else "" }}'>
+
+        <!-- 分割レイアウト (105) -->
+        <div class="ep-wrapper" data-layout="editor-only" data-field="{{ field.name }}">
+            <div class="ep-editor">
+                <div class="editor-container" id="editor-{{ field.name }}" data-editor="{{ field.name }}"></div>
+            </div>
+            <div class="ep-preview">
+                <iframe id="ep-iframe-{{ field.name }}" class="ep-iframe" data-device="desktop"></iframe>
+            </div>
+        </div>
+
+    {% elif field.type == 'number' or field.type == 'integer' %}
+        <input
+            type="number"
+            id="{{ field.name }}"
+            name="{{ field.name }}"
+            class="form-input"
+            value="{{ entity.get(field.name, '') if entity else '' }}"
+            {% if field.min is defined %}min="{{ field.min }}"{% endif %}
+            {% if field.max is defined %}max="{{ field.max }}"{% endif %}
+            {% if field.required %}required{% endif %}
+        >
+
+    {% elif field.type == 'float' %}
+        <input
+            type="number"
+            step="any"
+            id="{{ field.name }}"
+            name="{{ field.name }}"
+            class="form-input"
+            value="{{ entity.get(field.name, '') if entity else '' }}"
+            {% if field.required %}required{% endif %}
+        >
+
+    {% elif field.type == 'boolean' %}
+        <label class="checkbox-label">
+            <input
+                type="checkbox"
+                id="{{ field.name }}"
+                name="{{ field.name }}"
+                value="true"
+                {% if entity and entity.get(field.name) %}checked{% endif %}
+            >
+            <span>{{ field.description or '' }}</span>
+        </label>
+
+    {% elif field.type == 'select' %}
+        <select
+            id="{{ field.name }}"
+            name="{{ field.name }}"
+            class="form-select"
+            {% if field.required %}required{% endif %}
+        >
+            <option value="">-- Select --</option>
+            {% for option in field.options %}
+            {% set opt_value = option.value if option is mapping else option %}
+            {% set opt_label = option.label if option is mapping else option %}
+            <option value="{{ opt_value }}" {% if entity and entity.get(field.name) == opt_value %}selected{% endif %}>
+                {{ opt_label }}
+            </option>
+            {% endfor %}
+        </select>
+
+    {% elif field.type == 'datetime' %}
+        <input
+            type="datetime-local"
+            id="{{ field.name }}"
+            name="{{ field.name }}"
+            class="form-input"
+            value="{{ entity.get(field.name, '')[:16] if entity and entity.get(field.name) else '' }}"
+            {% if field.required %}required{% endif %}
+        >
+
+    {% elif field.type == 'date' %}
+        <input
+            type="date"
+            id="{{ field.name }}"
+            name="{{ field.name }}"
+            class="form-input"
+            value="{{ entity.get(field.name, '')[:10] if entity and entity.get(field.name) else '' }}"
+            {% if field.required %}required{% endif %}
+        >
+
+    {% elif field.type == 'image' or field.type == 'file' or field.type == 'media' %}
+        {% if entity and entity.get(field.name) %}
+        <div class="media-preview">
+            <img src="{{ entity.get(field.name) }}" alt="">
+        </div>
+        {% endif %}
+        <input
+            type="file"
+            id="{{ field.name }}"
+            name="{{ field.name }}"
+            class="form-input"
+            {% if field.type == 'image' or field.accept %}accept="{{ field.accept or 'image/*' }}"{% endif %}
+        >
+
+    {% elif field.type == 'url' %}
+        <input
+            type="url"
+            id="{{ field.name }}"
+            name="{{ field.name }}"
+            class="form-input"
+            value="{{ entity.get(field.name, '') if entity else '' }}"
+            {% if field.required %}required{% endif %}
+        >
+
+    {% elif field.type == 'json' %}
+        {% if field.name == 'fields_config' %}
+        {# === Visual Form Builder for fields_config === #}
+        <input type="hidden" id="{{ field.name }}" name="{{ field.name }}" value='{{ entity.get(field.name, "[]") | tojson if entity and entity.get(field.name) else "[]" }}'>
+
+        <div class="form-builder" id="form-builder">
+            <div class="form-builder-toolbar">
+                <button type="button" class="btn btn-primary btn-sm" onclick="FormBuilder.showAddModal()">
+                    + フィールド追加
+                </button>
+            </div>
+            <ul class="form-builder-list" id="form-builder-list">
+                {# Fields rendered by JavaScript #}
+            </ul>
+            <div class="form-builder-empty" id="form-builder-empty" style="display: none;">
+                <p class="text-muted">フィールドがありません。「フィールド追加」をクリックして追加してください。</p>
+            </div>
+        </div>
+
+        {# Field Edit Modal #}
+        <div id="field-modal" class="modal" style="display: none;">
+            <div class="modal-overlay" onclick="FormBuilder.hideModal()"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="field-modal-title">フィールド追加</h3>
+                    <button type="button" class="modal-close" onclick="FormBuilder.hideModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="field-edit-index" value="-1">
+
+                    <div class="form-group">
+                        <label class="form-label" for="field-name">フィールド名 <span style="color: var(--error);">*</span></label>
+                        <input type="text" id="field-name" class="form-input" pattern="[a-z0-9_]+">
+                        <p class="form-hint">英小文字、数字、アンダースコアのみ</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="field-label">表示ラベル</label>
+                        <input type="text" id="field-label" class="form-input">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="field-type">タイプ</label>
+                        <select id="field-type" class="form-select" onchange="FormBuilder.toggleOptionsEditor()">
+                            <option value="text">テキスト</option>
+                            <option value="email">メールアドレス</option>
+                            <option value="tel">電話番号</option>
+                            <option value="textarea">テキストエリア</option>
+                            <option value="select">セレクトボックス</option>
+                            <option value="radio">ラジオボタン</option>
+                            <option value="checkbox">チェックボックス</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="field-required">
+                            <span>必須項目</span>
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="field-placeholder">プレースホルダー</label>
+                        <input type="text" id="field-placeholder" class="form-input">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="field-hint">ヘルプテキスト</label>
+                        <input type="text" id="field-hint" class="form-input">
+                    </div>
+
+                    <div class="form-group" id="field-checkbox-label-group" style="display: none;">
+                        <label class="form-label" for="field-checkbox-label">チェックボックスラベル</label>
+                        <input type="text" id="field-checkbox-label" class="form-input">
+                    </div>
+
+                    {# Options Editor for select/radio #}
+                    <div id="options-editor" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label">選択肢</label>
+                            <div id="options-list"></div>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="FormBuilder.addOption()" style="margin-top: 0.5rem;">
+                                + 選択肢追加
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="FormBuilder.hideModal()">キャンセル</button>
+                    <button type="button" class="btn btn-primary" onclick="FormBuilder.saveField()">保存</button>
+                </div>
+            </div>
+        </div>
+        {% elif field.name == 'steps' %}
+        {# === Visual Step Builder for steps === #}
+        <input type="hidden" id="{{ field.name }}" name="{{ field.name }}" value='{{ entity.get(field.name, "[]") | tojson if entity and entity.get(field.name) else "[]" }}'>
+
+        <div class="step-builder" id="step-builder">
+            <p class="form-hint" style="margin-bottom: 0.75rem;">
+                複数ステップに分けるとウィザード形式のフォームになります。空の場合は1ページ形式です。
+            </p>
+            <div class="step-builder-toolbar">
+                <button type="button" class="btn btn-primary btn-sm" onclick="StepBuilder.showAddModal()">
+                    + ステップ追加
+                </button>
+            </div>
+            <ul class="step-builder-list" id="step-builder-list">
+                {# Steps rendered by JavaScript #}
+            </ul>
+            <div class="step-builder-empty" id="step-builder-empty" style="display: none;">
+                <p class="text-muted">ステップがありません。1ページ形式で表示されます。</p>
+            </div>
+        </div>
+
+        {# Step Edit Modal #}
+        <div id="step-modal" class="modal" style="display: none;">
+            <div class="modal-overlay" onclick="StepBuilder.hideModal()"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="step-modal-title">ステップ追加</h3>
+                    <button type="button" class="modal-close" onclick="StepBuilder.hideModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="step-edit-index" value="-1">
+
+                    <div class="form-group">
+                        <label class="form-label" for="step-title">ステップタイトル <span style="color: var(--error);">*</span></label>
+                        <input type="text" id="step-title" class="form-input" placeholder="例: 基本情報">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">このステップに含めるフィールド</label>
+                        <div id="step-fields-selector" class="step-fields-selector">
+                            <p class="text-muted" id="step-no-fields">先にフィールドを追加してください</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="StepBuilder.hideModal()">キャンセル</button>
+                    <button type="button" class="btn btn-primary" onclick="StepBuilder.saveStep()">保存</button>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <textarea
+            id="{{ field.name }}"
+            name="{{ field.name }}"
+            class="form-textarea"
+            style="font-family: monospace;"
+            {% if field.required %}required{% endif %}
+        >{{ entity.get(field.name, '{}') | tojson if entity else '{}' }}</textarea>
+        <p class="form-hint">JSON format</p>
+        {% endif %}
+
+    {% else %}
+        <input
+            type="text"
+            id="{{ field.name }}"
+            name="{{ field.name }}"
+            class="form-input"
+            value="{{ entity.get(field.name, '') if entity else '' }}"
+            {% if field.required %}required{% endif %}
+        >
+    {% endif %}
+
+    {% if field.hint %}
+    <p class="form-hint">{{ field.hint }}</p>
+    {% endif %}
+    {% if field.description and field.type != 'boolean' %}
+    <p class="form-hint">{{ field.description }}</p>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% block content %}
+<form method="POST" action="{{ form_action }}" enctype="multipart/form-data" class="entity-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <!-- ヘッダーバー (B4: ボタン右上) -->
+    <div class="form-header">
+        <div class="form-header-left">
+            {% if entity %}
+            <div id="autosave-status" class="autosave-status"></div>
+            {% endif %}
+        </div>
+        <div class="form-header-right">
+            <a href="{{ cancel_url }}" class="btn btn-secondary">Cancel</a>
+            {% if entity %}
+            <button type="button" class="btn btn-secondary" onclick="toggleRevisions()">History</button>
+            <button type="button" class="btn btn-secondary" onclick="openPreview()">Preview</button>
+            {% endif %}
+            <button type="submit" class="btn btn-primary">
+                {% if entity %}Update{% else %}Create{% endif %}
+            </button>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    {% if message %}
+    <div class="alert alert-success">{{ message }}</div>
+    {% endif %}
+
+    <!-- 2カラムレイアウト (B3) -->
+    <div class="form-layout">
+        <!-- メインカラム -->
+        <div class="form-main">
+            <div class="card">
+                {% for field in content_type.fields %}
+                    {% if not field.admin_hidden and not field.sidebar %}
+                        {{ render_field(field, entity) }}
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- サイドバー -->
+        <div class="form-sidebar">
+            <!-- ステータス・公開設定 -->
+            {% set has_sidebar_fields = namespace(value=false) %}
+            {% for field in content_type.fields %}
+                {% if not field.admin_hidden and field.sidebar %}
+                    {% set has_sidebar_fields.value = true %}
+                {% endif %}
+            {% endfor %}
+
+            {% if has_sidebar_fields.value %}
+            <div class="card sidebar-card">
+                <h4 class="sidebar-title">公開設定</h4>
+                {% for field in content_type.fields %}
+                    {% if not field.admin_hidden and field.sidebar and field.name in ['status', 'published_at'] %}
+                        {{ render_field(field, entity) }}
+                    {% endif %}
+                {% endfor %}
+            </div>
+
+            <!-- アイキャッチ -->
+            {% for field in content_type.fields %}
+                {% if not field.admin_hidden and field.sidebar and field.name == 'featured_image' %}
+                <div class="card sidebar-card">
+                    <h4 class="sidebar-title">アイキャッチ</h4>
+                    {{ render_field(field, entity) }}
+                </div>
+                {% endif %}
+            {% endfor %}
+            {% endif %}
+
+            <!-- Relations -->
+            {% if relations %}
+            <div class="card sidebar-card">
+                <h4 class="sidebar-title">リレーション</h4>
+                {% for rel in relations %}
+                <div class="form-group">
+                    <label class="form-label" for="rel_{{ rel.name }}">
+                        {{ rel.label or rel.name }}
+                    </label>
+                    <select
+                        id="rel_{{ rel.name }}"
+                        name="rel_{{ rel.name }}"
+                        class="form-select"
+                        {% if rel.multiple %}multiple style="min-height: 80px;"{% endif %}
+                    >
+                        {% if not rel.multiple %}
+                        <option value="">-- Select --</option>
+                        {% endif %}
+                        {% for option in rel.options %}
+                        <option value="{{ option.id }}" {% if option.selected %}selected{% endif %}>
+                            {{ option.label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- SEO設定 (折りたたみ) -->
+            {% set has_seo_fields = namespace(value=false) %}
+            {% for field in content_type.fields %}
+                {% if not field.admin_hidden and field.sidebar and field.name.startswith('seo_') %}
+                    {% set has_seo_fields.value = true %}
+                {% endif %}
+            {% endfor %}
+
+            {% if has_seo_fields.value %}
+            <details class="card sidebar-card sidebar-collapsible">
+                <summary class="sidebar-title">SEO設定</summary>
+                <div class="sidebar-content">
+                    {% for field in content_type.fields %}
+                        {% if not field.admin_hidden and field.sidebar and field.name.startswith('seo_') %}
+                            {{ render_field(field, entity) }}
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </details>
+            {% endif %}
+
+            <!-- OG設定 (折りたたみ) -->
+            {% set has_og_fields = namespace(value=false) %}
+            {% for field in content_type.fields %}
+                {% if not field.admin_hidden and field.sidebar and field.name.startswith('og_') %}
+                    {% set has_og_fields.value = true %}
+                {% endif %}
+            {% endfor %}
+
+            {% if has_og_fields.value %}
+            <details class="card sidebar-card sidebar-collapsible">
+                <summary class="sidebar-title">SNS設定</summary>
+                <div class="sidebar-content">
+                    {% for field in content_type.fields %}
+                        {% if not field.admin_hidden and field.sidebar and field.name.startswith('og_') %}
+                            {{ render_field(field, entity) }}
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </details>
+            {% endif %}
+
+            <!-- その他のサイドバーフィールド -->
+            {% set other_sidebar_fields = [] %}
+            {% for field in content_type.fields %}
+                {% if not field.admin_hidden and field.sidebar and field.name not in ['status', 'published_at', 'featured_image'] and not field.name.startswith('seo_') and not field.name.startswith('og_') %}
+                    {% set _ = other_sidebar_fields.append(field) %}
+                {% endif %}
+            {% endfor %}
+
+            {% if other_sidebar_fields %}
+            <div class="card sidebar-card">
+                <h4 class="sidebar-title">その他</h4>
+                {% for field in other_sidebar_fields %}
+                    {{ render_field(field, entity) }}
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</form>
+
+{% if entity %}
+<!-- Revision History Panel -->
+<div id="revisions-panel" class="revisions-panel" style="display: none;">
+    <div class="revisions-header">
+        <h3>Version History</h3>
+        <button type="button" class="btn-close" onclick="toggleRevisions()">&times;</button>
+    </div>
+    <div class="revisions-list" id="revisions-list">
+        <p class="text-muted">Loading...</p>
+    </div>
+</div>
+{% endif %}
+
+<style>
+/* === 2カラムレイアウト (B3) === */
+.entity-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.form-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.form-header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.form-header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.form-layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 1.5rem;
+    align-items: start;
+}
+
+@media (max-width: 1024px) {
+    .form-layout {
+        grid-template-columns: 1fr;
+    }
+    .form-sidebar {
+        order: -1;
+    }
+}
+
+.form-main .card {
+    padding: 1.5rem;
+}
+
+.form-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    position: sticky;
+    top: 4rem;
+}
+
+.sidebar-card {
+    padding: 1rem;
+}
+
+.sidebar-card .form-group {
+    margin-bottom: 0.75rem;
+}
+
+.sidebar-card .form-group:last-child {
+    margin-bottom: 0;
+}
+
+.sidebar-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 0.75rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.sidebar-collapsible {
+    cursor: pointer;
+}
+
+.sidebar-collapsible summary {
+    list-style: none;
+    cursor: pointer;
+}
+
+.sidebar-collapsible summary::-webkit-details-marker {
+    display: none;
+}
+
+.sidebar-collapsible summary::after {
+    content: '+';
+    float: right;
+    font-size: 1.25rem;
+    line-height: 1;
+    color: var(--text-muted);
+}
+
+.sidebar-collapsible[open] summary::after {
+    content: '−';
+}
+
+.sidebar-collapsible .sidebar-content {
+    padding-top: 0.75rem;
+}
+
+/* メディアプレビュー */
+.media-preview {
+    margin-bottom: 0.5rem;
+}
+
+.media-preview img {
+    max-width: 100%;
+    max-height: 150px;
+    border-radius: 0.25rem;
+    border: 1px solid var(--border);
+}
+
+/* チェックボックスラベル */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.checkbox-label input {
+    width: auto;
+}
+
+.checkbox-label span {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+/* === Autosave Status === */
+.autosave-status {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+.autosave-status.saving {
+    color: var(--warning);
+}
+.autosave-status.saved {
+    color: var(--success);
+}
+.autosave-status.error {
+    color: var(--error);
+}
+
+/* === Revisions Panel === */
+.revisions-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 400px;
+    height: 100vh;
+    background: var(--card);
+    border-left: 1px solid var(--border);
+    z-index: 1000;
+    box-shadow: -4px 0 16px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+}
+.revisions-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+.revisions-header h3 {
+    margin: 0;
+}
+.btn-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+.btn-close:hover {
+    color: var(--text);
+}
+.revisions-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+}
+.revision-item {
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.revision-item:hover {
+    border-color: var(--primary);
+    background: rgba(var(--primary-rgb), 0.05);
+}
+.revision-item .revision-title {
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+.revision-item .revision-meta {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+.revision-item .revision-type {
+    display: inline-block;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-size: 0.625rem;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+.revision-type.manual { background: var(--info); color: white; }
+.revision-type.publish { background: var(--success); color: white; }
+.revision-type.autosave { background: var(--warning); color: white; }
+
+/* === Editor Preview (105) === */
+.ep-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    padding: 0.5rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem 0.5rem 0 0;
+}
+.ep-layout-group, .ep-device-group {
+    display: flex;
+    gap: 0.25rem;
+}
+.ep-layout-btn, .ep-device-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--border);
+    background: var(--card);
+    border-radius: 0.25rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.15s;
+}
+.ep-layout-btn:hover, .ep-device-btn:hover {
+    background: var(--bg);
+    color: var(--text);
+}
+.ep-layout-btn.active, .ep-device-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+.ep-wrapper {
+    display: grid;
+    gap: 1rem;
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 0.5rem 0.5rem;
+    overflow: visible;
+}
+.ep-wrapper[data-layout="editor-only"] {
+    grid-template-columns: 1fr;
+}
+.ep-wrapper[data-layout="split"] {
+    grid-template-columns: 1fr 1fr;
+}
+.ep-wrapper[data-layout="preview-only"] {
+    grid-template-columns: 1fr;
+}
+.ep-wrapper[data-layout="editor-only"] .ep-preview {
+    display: none;
+}
+.ep-wrapper[data-layout="preview-only"] .ep-editor {
+    display: none;
+}
+.ep-editor {
+    min-height: 400px;
+}
+.ep-preview {
+    background: #f5f5f5;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 1rem;
+    min-height: 400px;
+}
+.ep-iframe {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    width: 100%;
+    height: 600px;
+    transition: max-width 0.3s ease;
+}
+.ep-iframe[data-device="desktop"] {
+    max-width: 100%;
+}
+.ep-iframe[data-device="tablet"] {
+    max-width: 768px;
+}
+.ep-iframe[data-device="mobile"] {
+    max-width: 375px;
+}
+
+/* === Form Builder Styles === */
+.form-builder {
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--bg);
+}
+.form-builder-toolbar {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+    border-radius: 0.5rem 0.5rem 0 0;
+}
+.form-builder-list {
+    list-style: none;
+    padding: 0.75rem;
+    margin: 0;
+    min-height: 100px;
+}
+.form-builder-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    margin-bottom: 0.5rem;
+}
+.form-builder-item:last-child {
+    margin-bottom: 0;
+}
+.form-builder-item.sortable-ghost {
+    opacity: 0.4;
+}
+.form-builder-item.sortable-chosen {
+    border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.form-builder-drag {
+    cursor: grab;
+    color: var(--text-muted);
+    font-size: 1rem;
+}
+.form-builder-drag:active {
+    cursor: grabbing;
+}
+.form-builder-info {
+    flex: 1;
+    min-width: 0;
+}
+.form-builder-label {
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.form-builder-label .required-badge {
+    font-size: 0.625rem;
+    padding: 0.125rem 0.375rem;
+    background: var(--error);
+    color: white;
+    border-radius: 0.25rem;
+    text-transform: uppercase;
+}
+.form-builder-meta {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+.form-builder-type {
+    display: inline-block;
+    padding: 0.125rem 0.375rem;
+    background: var(--bg);
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+.form-builder-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+.form-builder-empty {
+    padding: 2rem;
+    text-align: center;
+}
+
+/* Options Editor */
+.option-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    align-items: center;
+}
+.option-row input {
+    flex: 1;
+}
+.option-row .btn-icon {
+    padding: 0.375rem;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+.option-row .btn-icon:hover {
+    background: var(--error);
+    border-color: var(--error);
+    color: white;
+}
+
+/* Modal body padding */
+.modal-body {
+    padding: 1.5rem;
+}
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border);
+}
+
+/* === Step Builder Styles === */
+.step-builder {
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--bg);
+}
+.step-builder-toolbar {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+    border-radius: 0.5rem 0.5rem 0 0;
+}
+.step-builder-list {
+    list-style: none;
+    padding: 0.75rem;
+    margin: 0;
+    min-height: 60px;
+}
+.step-builder-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    margin-bottom: 0.5rem;
+}
+.step-builder-item:last-child {
+    margin-bottom: 0;
+}
+.step-builder-item.sortable-ghost {
+    opacity: 0.4;
+}
+.step-builder-item.sortable-chosen {
+    border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.step-builder-drag {
+    cursor: grab;
+    color: var(--text-muted);
+    font-size: 1rem;
+}
+.step-builder-drag:active {
+    cursor: grabbing;
+}
+.step-builder-info {
+    flex: 1;
+    min-width: 0;
+}
+.step-builder-title {
+    font-weight: 500;
+}
+.step-builder-fields {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+.step-builder-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+.step-builder-empty {
+    padding: 1.5rem;
+    text-align: center;
+}
+.step-fields-selector {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    padding: 0.5rem;
+}
+.step-field-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.5rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+}
+.step-field-option:hover {
+    background: var(--bg);
+}
+.step-field-option input {
+    width: auto;
+}
+</style>
+
+{% set has_blocks = namespace(value=false) %}
+{% for field in content_type.fields %}
+    {% if field.type == 'blocks' %}
+        {% set has_blocks.value = true %}
+    {% endif %}
+{% endfor %}
+
+{% if has_blocks.value %}
+{% include "admin/components/editor.html" %}
+{% endif %}
+
+<script>
+// Unsaved changes warning
+(function() {
+    console.log('[DEBUG] Script started');
+    const form = document.querySelector('form');
+    console.log('[DEBUG] form element:', form);
+    if (!form) {
+        console.log('[DEBUG] form not found, returning');
+        return;
+    }
+
+    let formChanged = false;
+    let isSubmitting = false;
+
+    // Track changes on all form inputs
+    form.addEventListener('input', function() {
+        formChanged = true;
+    });
+
+    form.addEventListener('change', function() {
+        formChanged = true;
+    });
+
+    // フォーム送信（onChangeで既にhidden inputに値が入っているのでそのまま送信）
+    form.addEventListener('submit', function(e) {
+        isSubmitting = true;
+    });
+
+    // Warning before leaving page
+    window.addEventListener('beforeunload', function(e) {
+        if (formChanged && !isSubmitting) {
+            e.preventDefault();
+            e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+            return e.returnValue;
+        }
+    });
+
+    // Handle cancel button clicks
+    document.querySelectorAll('a.btn-secondary').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            if (formChanged) {
+                if (!confirm('You have unsaved changes. Are you sure you want to leave?')) {
+                    e.preventDefault();
+                }
+            }
+        });
+    });
+
+    // Ctrl+S / Cmd+S to save (104)
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            saveEditorsAndSubmit();
+        }
+    });
+})();
+
+{% if entity %}
+// Autosave functionality
+(function() {
+    const AUTOSAVE_INTERVAL = 30000; // 30 seconds
+    const entityId = '{{ entity.id }}';
+    const statusEl = document.getElementById('autosave-status');
+    let lastSavedData = null;
+
+    function getFormData() {
+        const form = document.querySelector('form');
+        const formData = new FormData(form);
+        const data = {};
+        for (const [key, value] of formData.entries()) {
+            if (!key.startsWith('csrf_') && !key.startsWith('rel_')) {
+                data[key] = value;
+            }
+        }
+        return data;
+    }
+
+    function showStatus(message, type) {
+        if (statusEl) {
+            statusEl.textContent = message;
+            statusEl.className = 'autosave-status ' + type;
+        }
+    }
+
+    async function autosave() {
+        // Editor.jsのデータを先に保存してhidden inputを更新
+        if (window.editors) {
+            for (const [fieldName, editor] of Object.entries(window.editors)) {
+                try {
+                    const data = await editor.save();
+                    const input = document.getElementById(fieldName);
+                    if (input) {
+                        input.value = JSON.stringify(data);
+                    }
+                } catch (e) {
+                    console.error('Autosave: Failed to save editor:', fieldName, e);
+                }
+            }
+        }
+
+        const currentData = getFormData();
+        const dataStr = JSON.stringify(currentData);
+
+        // Skip if no changes
+        if (dataStr === lastSavedData) return;
+
+        showStatus('Saving...', 'saving');
+
+        try {
+            const response = await fetch('/api/revisions/autosave', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    entity_id: entityId,
+                    data: currentData
+                })
+            });
+
+            if (response.ok) {
+                lastSavedData = dataStr;
+                const now = new Date().toLocaleTimeString();
+                showStatus('Autosaved at ' + now, 'saved');
+            } else {
+                showStatus('Autosave failed', 'error');
+            }
+        } catch (error) {
+            showStatus('Autosave failed', 'error');
+        }
+    }
+
+    // Start autosave timer
+    setInterval(autosave, AUTOSAVE_INTERVAL);
+
+    // Initial save of current state
+    lastSavedData = JSON.stringify(getFormData());
+})();
+
+// Revision history
+function toggleRevisions() {
+    const panel = document.getElementById('revisions-panel');
+    if (panel.style.display === 'none') {
+        panel.style.display = 'flex';
+        loadRevisions();
+    } else {
+        panel.style.display = 'none';
+    }
+}
+
+// Preview in new tab
+async function openPreview() {
+    const entityId = '{{ entity.id if entity else "" }}';
+    if (!entityId) {
+        alert('Please save the content first before previewing.');
+        return;
+    }
+
+    try {
+        const response = await fetch('/admin/api/preview/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ entity_id: entityId })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            alert('Preview error: ' + (error.detail || 'Unknown error'));
+            return;
+        }
+
+        const data = await response.json();
+        window.open(data.url, '_blank');
+    } catch (e) {
+        alert('Preview error: ' + e.message);
+    }
+}
+
+async function loadRevisions() {
+    const entityId = '{{ entity.id }}';
+    const list = document.getElementById('revisions-list');
+
+    try {
+        const response = await fetch('/api/revisions/' + entityId + '?include_autosaves=true&limit=30');
+        const data = await response.json();
+
+        if (data.revisions.length === 0) {
+            list.innerHTML = '<p class="text-muted">No revision history yet.</p>';
+            return;
+        }
+
+        list.innerHTML = data.revisions.map(function(rev) {
+            const date = new Date(rev.created_at).toLocaleString();
+            return `
+                <div class="revision-item" onclick="restoreRevision('${rev.id}')">
+                    <div class="revision-title">${rev.title || 'Untitled'}</div>
+                    <div class="revision-meta">
+                        <span class="revision-type ${rev.revision_type}">${rev.revision_type}</span>
+                        ${date}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        list.innerHTML = '<p class="text-muted">Failed to load revisions.</p>';
+    }
+}
+
+async function restoreRevision(revisionId) {
+    if (!confirm('Restore this version? Current changes will be saved as a revision first.')) {
+        return;
+    }
+
+    const entityId = '{{ entity.id }}';
+
+    try {
+        const response = await fetch('/api/revisions/' + entityId + '/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ revision_id: revisionId })
+        });
+
+        if (response.ok) {
+            showToast('Revision restored. Reloading...', 'success');
+            setTimeout(function() {
+                window.location.reload();
+            }, 1000);
+        } else {
+            showToast('Failed to restore revision', 'error');
+        }
+    } catch (error) {
+        showToast('Failed to restore revision', 'error');
+    }
+}
+{% endif %}
+</script>
+
+{# Load SortableJS for form builder #}
+{% if type_name == 'form' %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+{% endif %}
+
+<script>
+// === Form Builder ===
+const FormBuilder = (function() {
+    let fields = [];
+    const typeLabels = {
+        text: 'テキスト',
+        email: 'メール',
+        tel: '電話番号',
+        textarea: 'テキストエリア',
+        select: 'セレクト',
+        radio: 'ラジオ',
+        checkbox: 'チェックボックス'
+    };
+
+    function init() {
+        const input = document.getElementById('fields_config');
+        if (!input) return;
+
+        // Parse existing data
+        try {
+            const data = JSON.parse(input.value || '[]');
+            fields = Array.isArray(data) ? data : [];
+        } catch (e) {
+            console.error('Failed to parse fields_config:', e);
+            fields = [];
+        }
+
+        render();
+        initSortable();
+    }
+
+    function initSortable() {
+        const list = document.getElementById('form-builder-list');
+        if (!list || typeof Sortable === 'undefined') return;
+
+        new Sortable(list, {
+            animation: 150,
+            handle: '.form-builder-drag',
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            onEnd: function() {
+                // Reorder fields based on DOM order
+                const items = list.querySelectorAll('.form-builder-item');
+                const newFields = [];
+                items.forEach(item => {
+                    const index = parseInt(item.dataset.index);
+                    if (fields[index]) {
+                        newFields.push(fields[index]);
+                    }
+                });
+                fields = newFields;
+                save();
+                render();
+            }
+        });
+    }
+
+    function render() {
+        const list = document.getElementById('form-builder-list');
+        const empty = document.getElementById('form-builder-empty');
+        if (!list) return;
+
+        if (fields.length === 0) {
+            list.innerHTML = '';
+            if (empty) empty.style.display = 'block';
+            return;
+        }
+
+        if (empty) empty.style.display = 'none';
+
+        list.innerHTML = fields.map((field, index) => `
+            <li class="form-builder-item" data-index="${index}">
+                <span class="form-builder-drag">&#9776;</span>
+                <div class="form-builder-info">
+                    <div class="form-builder-label">
+                        ${escapeHtml(field.label || field.name)}
+                        ${field.required ? '<span class="required-badge">必須</span>' : ''}
+                    </div>
+                    <div class="form-builder-meta">
+                        <span class="form-builder-type">${typeLabels[field.type] || field.type}</span>
+                        <span style="margin-left: 0.5rem; opacity: 0.7;">${escapeHtml(field.name)}</span>
+                    </div>
+                </div>
+                <div class="form-builder-actions">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="FormBuilder.editField(${index})">編集</button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="FormBuilder.deleteField(${index})">削除</button>
+                </div>
+            </li>
+        `).join('');
+
+        // Re-init sortable after render
+        initSortable();
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;');
+    }
+
+    function save() {
+        const input = document.getElementById('fields_config');
+        if (input) {
+            input.value = JSON.stringify(fields);
+        }
+    }
+
+    function showAddModal() {
+        document.getElementById('field-modal-title').textContent = 'フィールド追加';
+        document.getElementById('field-edit-index').value = '-1';
+        resetModalForm();
+        document.getElementById('field-modal').style.display = 'flex';
+    }
+
+    function editField(index) {
+        const field = fields[index];
+        if (!field) return;
+
+        document.getElementById('field-modal-title').textContent = 'フィールド編集';
+        document.getElementById('field-edit-index').value = index;
+
+        document.getElementById('field-name').value = field.name || '';
+        document.getElementById('field-label').value = field.label || '';
+        document.getElementById('field-type').value = field.type || 'text';
+        document.getElementById('field-required').checked = !!field.required;
+        document.getElementById('field-placeholder').value = field.placeholder || '';
+        document.getElementById('field-hint').value = field.hint || '';
+        document.getElementById('field-checkbox-label').value = field.checkbox_label || '';
+
+        toggleOptionsEditor();
+
+        // Load options
+        if (field.options && field.options.length > 0) {
+            const optionsList = document.getElementById('options-list');
+            optionsList.innerHTML = '';
+            field.options.forEach(opt => {
+                const value = typeof opt === 'object' ? opt.value : opt;
+                const label = typeof opt === 'object' ? opt.label : opt;
+                addOptionRow(value, label);
+            });
+        }
+
+        document.getElementById('field-modal').style.display = 'flex';
+    }
+
+    function resetModalForm() {
+        document.getElementById('field-name').value = '';
+        document.getElementById('field-label').value = '';
+        document.getElementById('field-type').value = 'text';
+        document.getElementById('field-required').checked = false;
+        document.getElementById('field-placeholder').value = '';
+        document.getElementById('field-hint').value = '';
+        document.getElementById('field-checkbox-label').value = '';
+        document.getElementById('options-list').innerHTML = '';
+        toggleOptionsEditor();
+    }
+
+    function hideModal() {
+        document.getElementById('field-modal').style.display = 'none';
+    }
+
+    function toggleOptionsEditor() {
+        const type = document.getElementById('field-type').value;
+        const optionsEditor = document.getElementById('options-editor');
+        const checkboxLabelGroup = document.getElementById('field-checkbox-label-group');
+
+        if (type === 'select' || type === 'radio') {
+            optionsEditor.style.display = 'block';
+        } else {
+            optionsEditor.style.display = 'none';
+        }
+
+        if (type === 'checkbox') {
+            checkboxLabelGroup.style.display = 'block';
+        } else {
+            checkboxLabelGroup.style.display = 'none';
+        }
+    }
+
+    function addOption(value, label) {
+        addOptionRow(value || '', label || '');
+    }
+
+    function addOptionRow(value, label) {
+        const list = document.getElementById('options-list');
+        const row = document.createElement('div');
+        row.className = 'option-row';
+        row.innerHTML = `
+            <input type="text" class="form-input option-value" placeholder="値" value="${escapeHtml(value)}">
+            <input type="text" class="form-input option-label" placeholder="表示名" value="${escapeHtml(label)}">
+            <button type="button" class="btn-icon" onclick="this.parentElement.remove()">&times;</button>
+        `;
+        list.appendChild(row);
+    }
+
+    function saveField() {
+        const name = document.getElementById('field-name').value.trim();
+        if (!name) {
+            alert('フィールド名は必須です');
+            return;
+        }
+
+        // Validate field name format
+        if (!/^[a-z0-9_]+$/.test(name)) {
+            alert('フィールド名は英小文字、数字、アンダースコアのみ使用できます');
+            return;
+        }
+
+        const editIndex = parseInt(document.getElementById('field-edit-index').value);
+        const type = document.getElementById('field-type').value;
+
+        // Check for duplicate names (except when editing same field)
+        const isDuplicate = fields.some((f, i) => f.name === name && i !== editIndex);
+        if (isDuplicate) {
+            alert('同じフィールド名が既に存在します');
+            return;
+        }
+
+        const field = {
+            name: name,
+            type: type,
+            label: document.getElementById('field-label').value.trim() || name,
+            required: document.getElementById('field-required').checked
+        };
+
+        const placeholder = document.getElementById('field-placeholder').value.trim();
+        if (placeholder) field.placeholder = placeholder;
+
+        const hint = document.getElementById('field-hint').value.trim();
+        if (hint) field.hint = hint;
+
+        if (type === 'checkbox') {
+            const checkboxLabel = document.getElementById('field-checkbox-label').value.trim();
+            if (checkboxLabel) field.checkbox_label = checkboxLabel;
+        }
+
+        // Collect options for select/radio
+        if (type === 'select' || type === 'radio') {
+            const options = [];
+            document.querySelectorAll('#options-list .option-row').forEach(row => {
+                const value = row.querySelector('.option-value').value.trim();
+                const label = row.querySelector('.option-label').value.trim();
+                if (value) {
+                    options.push({ value: value, label: label || value });
+                }
+            });
+            if (options.length > 0) {
+                field.options = options;
+            }
+        }
+
+        if (editIndex >= 0) {
+            fields[editIndex] = field;
+        } else {
+            fields.push(field);
+        }
+
+        save();
+        render();
+        hideModal();
+    }
+
+    function deleteField(index) {
+        if (!confirm('このフィールドを削除しますか？')) return;
+        fields.splice(index, 1);
+        save();
+        render();
+    }
+
+    // Initialize on DOM ready
+    document.addEventListener('DOMContentLoaded', init);
+
+    // Close modal on escape
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const modal = document.getElementById('field-modal');
+            if (modal && modal.style.display === 'flex') {
+                hideModal();
+            }
+        }
+    });
+
+    return {
+        showAddModal,
+        editField,
+        deleteField,
+        hideModal,
+        toggleOptionsEditor,
+        addOption,
+        saveField,
+        getFields: function() { return fields; }
+    };
+})();
+
+// === Step Builder ===
+const StepBuilder = (function() {
+    let steps = [];
+
+    function init() {
+        const input = document.getElementById('steps');
+        if (!input) return;
+
+        // Parse existing data
+        try {
+            const data = JSON.parse(input.value || '[]');
+            steps = Array.isArray(data) ? data : [];
+        } catch (e) {
+            console.error('Failed to parse steps:', e);
+            steps = [];
+        }
+
+        render();
+        initSortable();
+    }
+
+    function initSortable() {
+        const list = document.getElementById('step-builder-list');
+        if (!list || typeof Sortable === 'undefined') return;
+
+        new Sortable(list, {
+            animation: 150,
+            handle: '.step-builder-drag',
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            onEnd: function() {
+                const items = list.querySelectorAll('.step-builder-item');
+                const newSteps = [];
+                items.forEach(item => {
+                    const index = parseInt(item.dataset.index);
+                    if (steps[index]) {
+                        newSteps.push(steps[index]);
+                    }
+                });
+                steps = newSteps;
+                save();
+                render();
+            }
+        });
+    }
+
+    function render() {
+        const list = document.getElementById('step-builder-list');
+        const empty = document.getElementById('step-builder-empty');
+        if (!list) return;
+
+        if (steps.length === 0) {
+            list.innerHTML = '';
+            if (empty) empty.style.display = 'block';
+            return;
+        }
+
+        if (empty) empty.style.display = 'none';
+
+        list.innerHTML = steps.map((step, index) => {
+            const fieldLabels = getFieldLabels(step.fields || []);
+            return `
+                <li class="step-builder-item" data-index="${index}">
+                    <span class="step-builder-drag">&#9776;</span>
+                    <div class="step-builder-info">
+                        <div class="step-builder-title">ステップ${index + 1}: ${escapeHtml(step.title)}</div>
+                        <div class="step-builder-fields">フィールド: ${fieldLabels || '(なし)'}</div>
+                    </div>
+                    <div class="step-builder-actions">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="StepBuilder.editStep(${index})">編集</button>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="StepBuilder.deleteStep(${index})">削除</button>
+                    </div>
+                </li>
+            `;
+        }).join('');
+
+        initSortable();
+    }
+
+    function getFieldLabels(fieldNames) {
+        if (!fieldNames || fieldNames.length === 0) return '';
+        const fields = typeof FormBuilder !== 'undefined' ? FormBuilder.getFields() : [];
+        return fieldNames.map(name => {
+            const field = fields.find(f => f.name === name);
+            return field ? (field.label || field.name) : name;
+        }).join(', ');
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;');
+    }
+
+    function save() {
+        const input = document.getElementById('steps');
+        if (input) {
+            input.value = JSON.stringify(steps);
+        }
+    }
+
+    function showAddModal() {
+        document.getElementById('step-modal-title').textContent = 'ステップ追加';
+        document.getElementById('step-edit-index').value = '-1';
+        document.getElementById('step-title').value = '';
+        renderFieldSelector([]);
+        document.getElementById('step-modal').style.display = 'flex';
+    }
+
+    function editStep(index) {
+        const step = steps[index];
+        if (!step) return;
+
+        document.getElementById('step-modal-title').textContent = 'ステップ編集';
+        document.getElementById('step-edit-index').value = index;
+        document.getElementById('step-title').value = step.title || '';
+        renderFieldSelector(step.fields || []);
+        document.getElementById('step-modal').style.display = 'flex';
+    }
+
+    function renderFieldSelector(selectedFields) {
+        const selector = document.getElementById('step-fields-selector');
+        const noFields = document.getElementById('step-no-fields');
+        const fields = typeof FormBuilder !== 'undefined' ? FormBuilder.getFields() : [];
+
+        if (fields.length === 0) {
+            selector.innerHTML = '<p class="text-muted">先にフィールドを追加してください</p>';
+            return;
+        }
+
+        selector.innerHTML = fields.map(field => {
+            const checked = selectedFields.includes(field.name) ? 'checked' : '';
+            return `
+                <label class="step-field-option">
+                    <input type="checkbox" value="${escapeHtml(field.name)}" ${checked}>
+                    <span>${escapeHtml(field.label || field.name)}</span>
+                </label>
+            `;
+        }).join('');
+    }
+
+    function hideModal() {
+        document.getElementById('step-modal').style.display = 'none';
+    }
+
+    function saveStep() {
+        const title = document.getElementById('step-title').value.trim();
+        if (!title) {
+            alert('ステップタイトルは必須です');
+            return;
+        }
+
+        const editIndex = parseInt(document.getElementById('step-edit-index').value);
+
+        // Collect selected fields
+        const selectedFields = [];
+        document.querySelectorAll('#step-fields-selector input[type="checkbox"]:checked').forEach(cb => {
+            selectedFields.push(cb.value);
+        });
+
+        const step = {
+            title: title,
+            fields: selectedFields
+        };
+
+        if (editIndex >= 0) {
+            steps[editIndex] = step;
+        } else {
+            steps.push(step);
+        }
+
+        save();
+        render();
+        hideModal();
+    }
+
+    function deleteStep(index) {
+        if (!confirm('このステップを削除しますか？')) return;
+        steps.splice(index, 1);
+        save();
+        render();
+    }
+
+    // Initialize on DOM ready
+    document.addEventListener('DOMContentLoaded', init);
+
+    // Close modal on escape
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const modal = document.getElementById('step-modal');
+            if (modal && modal.style.display === 'flex') {
+                hideModal();
+            }
+        }
+    });
+
+    return {
+        showAddModal,
+        editStep,
+        deleteStep,
+        hideModal,
+        saveStep
+    };
+})();
+</script>
+{% endblock %}
