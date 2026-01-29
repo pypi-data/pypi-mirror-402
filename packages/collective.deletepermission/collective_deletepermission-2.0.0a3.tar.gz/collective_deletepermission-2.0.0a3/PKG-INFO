@@ -1,0 +1,296 @@
+Metadata-Version: 2.4
+Name: collective.deletepermission
+Version: 2.0.0a3
+Summary: Implements a new permission 'Delete portal content'
+Author-email: "Mathias Leimgruber (webcloud7 ag)" <m.leimgruber@webcloud7.ch>
+License-Expression: GPL-2.0-only
+Project-URL: Homepage, https://github.com/collective/collective.deletepermission
+Project-URL: Repository, https://github.com/collective/collective.deletepermission
+Project-URL: Issues, https://github.com/collective/collective.deletepermission/issues
+Keywords: collective,deletepermission,webcloud7,plone
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Framework :: Plone
+Classifier: Framework :: Plone :: 6.1
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.11
+Description-Content-Type: text/x-rst
+Requires-Dist: AccessControl
+Requires-Dist: Acquisition
+Requires-Dist: Products.CMFCore
+Requires-Dist: Products.CMFPlone
+Requires-Dist: Products.GenericSetup
+Requires-Dist: Products.PythonScripts
+Requires-Dist: ZODB
+Requires-Dist: Zope
+Requires-Dist: collective.monkeypatcher
+Requires-Dist: setuptools
+Requires-Dist: zope.container
+Requires-Dist: zope.event
+Requires-Dist: zope.lifecycleevent
+Provides-Extra: test
+Requires-Dist: AccessControl; extra == "test"
+Requires-Dist: Products.CMFCore; extra == "test"
+Requires-Dist: Products.GenericSetup; extra == "test"
+Requires-Dist: Products.statusmessages; extra == "test"
+Requires-Dist: Zope; extra == "test"
+Requires-Dist: beautifulsoup4; extra == "test"
+Requires-Dist: plone.api>=1.3.0; extra == "test"
+Requires-Dist: plone.app.contenttypes; extra == "test"
+Requires-Dist: plone.app.dexterity; extra == "test"
+Requires-Dist: plone.app.portlets; extra == "test"
+Requires-Dist: plone.app.testing; extra == "test"
+Requires-Dist: plone.autoform; extra == "test"
+Requires-Dist: requests; extra == "test"
+Requires-Dist: transaction; extra == "test"
+Requires-Dist: zExceptions; extra == "test"
+Requires-Dist: zope.interface; extra == "test"
+
+collective.deletepermission
+===========================
+
+The default Plone permission for deleting content does not allow to delete
+content from a folder without being able to delete the folder itself.
+
+The ``collective.deletepermission`` package introduces an additional permission
+``Delete portal content``. By separating the permission ``Delete portal
+content`` (I can delete this content object) from the permission ``Delete
+objects`` (I can delete something IN this folder), we now can allow a
+``Contributor`` to delete content he created (``Owner`` role) without letting
+him delete folders and objects belonging to other users - even in a nested
+environment.
+
+
+How it works
+------------
+
+The ``Delete portal content`` permission is required on the object you want
+to delete. On parent objects the ``Delete objects`` permission is still required.
+This gives more flexibility and makes it possible for a contributor to
+delete his own content but nothing else.
+
+Example with the default permission settings (deletable by Contributor1)::
+
+  - Rootfolder of Admin (not deletable)
+    '- Document of Contributor1 (deletable)
+    '- Subfolder of Admin (not deletable)
+      '- Document of Contributor1 (deletable)
+      '- Document of Contributor2 (not deletable)
+
+In default Plone the same structure would look like this::
+
+  - Rootfolder of Admin (not deletable)
+    '- Document of Contributor1 (deletable)
+    '- Subfolder of Admin (deletable)
+      '- Document of Contributor1 (deletable)
+      '- Document of Contributor2 (deletable)
+
+This is caused by the fact that in default Plone the same permission is required
+on the parent and the object. If we have two levels where we should be able to
+delete some files, we always end up with the user being able to delete the
+container of the second level.
+
+
+Default role mappings
+---------------------
+
+The package configures the following default role mappings:
+
+**Delete portal content** (new permission):
+  - Manager
+  - Site Administrator
+  - Owner
+  - Editor
+
+**Delete objects** (existing Zope permission):
+  - Manager
+  - Site Administrator
+  - Contributor
+  - Editor
+
+
+Implementation details
+----------------------
+
+This package uses ``collective.monkeypatcher`` to patch the following methods:
+
+**Delete operations:**
+
+- ``manage_delObjects`` on ``plone.dexterity.content.Container`` - checks both
+  ``Delete objects`` on the parent and ``Delete portal content`` on each item
+  being deleted
+
+**Cut/Paste operations:**
+
+- ``cb_userHasCopyOrMovePermission`` on ``OFS.CopySupport.CopySource`` - requires
+  both ``Copy or Move`` and ``Delete portal content`` permissions for cutting
+
+- ``manage_cutObjects__roles__`` on ``plone.dexterity.content.Container`` - sets
+  the required permission to ``Delete objects``
+
+- ``manage_pasteObjects__roles__`` on ``plone.dexterity.content.Container`` - sets
+  the required permission to ``Delete objects``
+
+**Copy operations:**
+
+- ``cb_isCopyable`` on ``OFS.CopySupport.CopySource`` - ensures copying does not
+  require ``Delete portal content`` (only ``Copy or Move`` is needed)
+
+**Rename operations:**
+
+- ``manage_renameObject`` on ``OFS.CopySupport.CopyContainer`` - allows renaming
+  without requiring ``Delete portal content``
+
+The package also customizes the ``cut``, ``rename``, and ``delete`` actions in
+``portal_actions/object_buttons`` to use the appropriate permission checks.
+
+
+Compatibility
+-------------
+
+- Plone 6.0 (version 2.x)
+- Python 3.11+
+
+For Plone 4.x and 5.x support, use version 1.x of this package.
+
+
+Installation
+------------
+
+Add ``collective.deletepermission`` to your buildout configuration::
+
+    [instance]
+    eggs +=
+        collective.deletepermission
+
+Then install the "collective.deletepermission" add-on via the Plone control panel
+or by running the Generic Setup import profile.
+
+
+Upgrading from 1.x
+------------------
+
+Version 2.0 is a complete rewrite for Plone 6. When upgrading:
+
+- Archetypes support has been removed (Dexterity only)
+- The CMF skins layer has been removed
+- No automatic upgrade steps are provided
+- You may need to manually remove obsolete skins and actions
+
+
+Links
+-----
+
+- Github: https://github.com/collective/collective.deletepermission
+- Issues: https://github.com/collective/collective.deletepermission/issues
+- PyPI: https://pypi.python.org/pypi/collective.deletepermission
+
+
+Copyright
+---------
+
+This package is copyright by `webcloud7 <https://www.webcloud7.ch/>`_.
+
+The original package was developed and maintained by 4teamwork (until version 1.x).
+
+``collective.deletepermission`` is licensed under GNU General Public License,
+version 2.
+
+Changelog
+=========
+
+2.0.0a3 (2026-01-20)
+--------------------
+
+- Add uninstall profile. [maethu]
+
+
+2.0.0a1 (2026-01-20)
+--------------------
+
+- Complete rewrite for Plone 6 [maethu]
+
+  - No upgrade steps
+  - Remove skins and actions manually if necessary
+
+
+1.5.0 (2019-09-09)
+------------------
+
+- Add Plone 5.1 support. [mbaechtold]
+- Drop Plone 4.1 support. [jone]
+
+
+1.4.0 (2016-09-22)
+------------------
+
+- Let Site Administrators delete foreign content on site root. [jone]
+
+
+1.3.0 (2016-09-02)
+------------------
+
+- Also patch manage_pasteObjects security deceleration the same way as manage_cutObjects.
+  This way it's possible to paste objects in a container, without Modify portal content
+  permission on the container itself.
+  [mathias.leimgruber]
+
+
+1.2.1 (2015-08-12)
+------------------
+
+- Remove dependency to ftw.upgrade.
+  [jone]
+
+
+1.2.0 (2015-02-17)
+------------------
+
+- Support dexterity objects.
+  [erral, libargutxi]
+
+
+1.1.3 (2014-03-03)
+------------------
+
+- Fix protection of manage_delObjects with "Delete objects".
+  In certain situations, when only having the permission to delete the
+  content ("Delete portal content") but not the permission to delete from the
+  the parent container ("Delete objects" on the parent) deleting was possible
+  even though it shouldn't have been.
+  [jone]
+
+
+1.1.2 (2013-10-17)
+------------------
+
+- Copy no longer requires "Delete portal content".
+  Requiring "Delete portal content" was introduced accidentally
+  for copying because of a patch for cutting.
+  [jone]
+
+
+1.1.1 (2013-06-04)
+------------------
+
+- Only show "Delete" action with "Delete objects" on the container.
+  [jone]
+
+
+1.1 (2013-05-24)
+----------------
+
+- Do not require 'Delete portal content' permission when renaming an object.
+  [buchi]
+
+
+1.0 (2013-01-24)
+----------------
+
+- Init release
+  [mathias.leimgruber]
