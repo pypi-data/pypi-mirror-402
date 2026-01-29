@@ -1,0 +1,244 @@
+Metadata-Version: 2.4
+Name: pydartsnut
+Version: 1.0.1
+Summary: dartsnut python package
+Project-URL: Homepage, https://github.com/Dartsnut/pydartsnut
+Project-URL: Bug Tracker, https://github.com/Dartsnut/pydartsnut/issues
+Requires-Python: >=3.1
+Description-Content-Type: text/markdown
+
+# pydartsnut
+
+Python module for interfacing with Dartsnut hardware. Provides dart position tracking, button state monitoring, display control, and event-based input handling.
+
+## Installation
+
+```bash
+pip install pydartsnut
+```
+
+## Requirements
+
+- Python >= 3.1
+- PIL/Pillow (for image handling, optional)
+
+## Usage
+
+### Initialize the module
+
+```python
+from pydartsnut import Dartsnut
+
+dartsnut = Dartsnut()
+```
+
+The `Dartsnut` class accepts command-line arguments:
+- `--params`: JSON string for widget parameters (default: `"{}"`)
+- `--shm`: Shared memory name for display (default: `"pdishm"`)
+- `--data-store`: Path to data store directory (defaults to script directory)
+
+Example:
+```python
+# When running from command line:
+# python your_script.py --params '{"city": "New York"}' --shm pdishm --data-store /path/to/data
+```
+
+### Retrieve user input parameters
+
+```python
+params = dartsnut.widget_params
+# Returns a dictionary of current widget parameters.
+print(params)
+
+# Safely get the city name from params
+city_name = ""
+if params is not None:
+    city_name = params.get("city", "")
+if city_name == "":
+    # TODO: assign default value or show a warning image
+    pass
+```
+
+### Update the frame buffer for display
+
+```python
+from PIL import Image
+
+# Using a PIL Image
+image = Image.open("your_image.png")
+dartsnut.update_frame_buffer(image)
+
+# Or using a bytearray (RGB888 format)
+dartsnut.update_frame_buffer(bytearray_data)
+```
+
+The `update_frame_buffer()` method returns `True` if the frame was successfully updated, `False` if the display buffer is busy or in an invalid state.
+
+### Get dart positions (polling)
+
+```python
+darts = dartsnut.get_darts()
+# Returns a list of 12 [x, y] coordinates.
+# [-1, -1] means the dart is not present.
+# Coordinates are in range 0-127 for both x and y.
+```
+
+### Get dart hits (event-based)
+
+```python
+dart_hits = dartsnut.get_dart_hits()
+# Returns a list of tuples (dart_index, x, y) for new dart hits.
+# Only registers hits when a dart transitions from invalid to valid position.
+# Each dart index is blocked after detection to prevent duplicate events.
+# Darts are automatically unblocked after 0.5 seconds of invalid state.
+
+for dart_index, x, y in dart_hits:
+    print(f"Dart {dart_index} hit at ({x}, {y})")
+```
+
+### Get active darts (all current darts)
+
+```python
+active_darts = dartsnut.get_active_darts()
+# Returns a list of tuples (dart_index, x, y) for ALL active darts.
+# Useful for continuous tracking regardless of blocking state.
+
+for dart_index, x, y in active_darts:
+    print(f"Dart {dart_index} is at ({x}, {y})")
+```
+
+### Reset dart blocking state
+
+```python
+dartsnut.reset_blocking_state()
+# Clears all blocked dart indices, allowing all darts to be eligible for event detection again.
+```
+
+### Get button states (polling)
+
+```python
+buttons = dartsnut.get_buttons()
+# Returns a dictionary with current button states (with 30ms debouncing):
+# {
+#     "btn_a": False,
+#     "btn_b": False,
+#     "btn_up": False,
+#     "btn_right": False,
+#     "btn_left": False,
+#     "btn_down": False,
+#     "btn_home": False,
+#     "btn_reserved": False,
+# }
+```
+
+### Get button events (event-based)
+
+```python
+button_events = dartsnut.get_button_events()
+# Returns a dictionary where buttons are True only on press (transition from False to True).
+# This provides event-based button detection rather than continuous state polling.
+
+if button_events["btn_a"]:
+    print("Button A was just pressed!")
+```
+
+### Set display brightness
+
+```python
+dartsnut.set_brightness(50)  # Brightness level between 10 and 100
+```
+
+### Data persistence
+
+The module provides methods to store and retrieve data in a JSON file:
+
+```python
+# Store a value
+dartsnut.set_value("player_name", "John Doe")
+dartsnut.set_value("high_score", 180)
+dartsnut.set_value("settings", {"theme": "dark", "sound": True})
+
+# Retrieve a value
+player_name = dartsnut.get_value("player_name", "Unknown")
+high_score = dartsnut.get_value("high_score", 0)
+settings = dartsnut.get_value("settings", {})
+```
+
+Data is stored atomically to prevent corruption during writes. The default storage location is the script directory, but can be customized with the `--data-store` argument.
+
+### Running state management
+
+```python
+# Check if the application should continue running
+while dartsnut.running:
+    # Your main loop
+    dart_hits = dartsnut.get_dart_hits()
+    # ... process events ...
+    
+# The running flag is automatically set to False on SIGINT (Ctrl+C)
+```
+
+## Complete Example
+
+```python
+from pydartsnut import Dartsnut
+from PIL import Image, ImageDraw
+
+dartsnut = Dartsnut()
+
+# Create a simple image
+img = Image.new('RGB', (128, 128), color='black')
+draw = ImageDraw.Draw(img)
+
+while dartsnut.running:
+    # Check for dart hits
+    dart_hits = dartsnut.get_dart_hits()
+    for dart_index, x, y in dart_hits:
+        print(f"Dart {dart_index} hit at ({x}, {y})")
+        # Draw a circle at the hit position
+        draw.ellipse([x-2, y-2, x+2, y+2], fill='red')
+    
+    # Check for button presses
+    button_events = dartsnut.get_button_events()
+    if button_events["btn_a"]:
+        print("Button A pressed!")
+        # Clear the image
+        img = Image.new('RGB', (128, 128), color='black')
+        draw = ImageDraw.Draw(img)
+    
+    # Update display
+    dartsnut.update_frame_buffer(img)
+    
+    # Small delay to prevent excessive CPU usage
+    import time
+    time.sleep(0.01)
+```
+
+## API Reference
+
+### Dartsnut Class
+
+#### Attributes
+- `running`: Boolean flag indicating if the application should continue running
+- `widget_params`: Dictionary of widget parameters parsed from command line
+
+#### Methods
+- `update_frame_buffer(frame)`: Update display frame buffer (returns bool)
+- `get_darts()`: Get current dart positions (returns list of 12 [x, y] coordinates)
+- `get_dart_hits()`: Get new dart hits as events (returns list of (dart_index, x, y) tuples)
+- `get_active_darts()`: Get all currently active darts (returns list of (dart_index, x, y) tuples)
+- `reset_blocking_state()`: Reset dart blocking state
+- `get_buttons()`: Get current button states with debouncing (returns dict)
+- `get_button_events()`: Get button press events (returns dict)
+- `set_brightness(brightness)`: Set display brightness (10-100)
+- `set_value(key, value)`: Store a value in the data store
+- `get_value(key, default=None)`: Retrieve a value from the data store
+
+## License
+
+See the project repository for license information.
+
+## Links
+
+- [Homepage](https://github.com/Dartsnut/pydartsnut)
+- [Bug Tracker](https://github.com/Dartsnut/pydartsnut/issues)
