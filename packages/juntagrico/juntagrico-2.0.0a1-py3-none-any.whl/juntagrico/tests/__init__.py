@@ -1,0 +1,501 @@
+import datetime
+
+from django.conf import settings
+from django.test import TestCase, override_settings
+from django.utils import timezone
+from django.core import mail
+
+from juntagrico.entity.contact import EmailContact, TextContact, MemberContact, PhoneContact
+from juntagrico.entity.delivery import Delivery, DeliveryItem
+from juntagrico.entity.depot import Depot, Tour, DepotSubscriptionTypeCondition, DepotCoordinator
+from juntagrico.entity.jobs import ActivityArea, JobType, RecuringJob, Assignment, OneTimeJob, JobExtraType, JobExtra
+from juntagrico.entity.location import Location
+from juntagrico.entity.mailing import MailTemplate
+from juntagrico.entity.member import Member
+from juntagrico.entity.share import Share
+from juntagrico.entity.subs import Subscription, SubscriptionPart
+from juntagrico.entity.subtypes import SubscriptionProduct, SubscriptionBundle, SubscriptionType, SubscriptionCategory, \
+    ProductSize, SubscriptionBundleProductSize
+
+
+@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+class JuntagricoTestCase(TestCase):
+    fixtures = ['test/members', 'test/areas']
+    with_extra_subs = True
+
+    _count_sub_types = 0
+
+    @classmethod
+    def setUpTestData(cls):
+        # load from fixtures
+        cls.load_members()
+        cls.default_member = cls.member
+        cls.load_areas()
+        # setup other objects
+        cls.set_up_job()
+        cls.set_up_depots()
+        cls.set_up_sub_types()
+        cls.set_up_sub()
+        if cls.with_extra_subs:
+            cls.set_up_extra_sub_types()
+            cls.set_up_extra_sub()
+        cls.set_up_mail_template()
+        cls.set_up_deliveries()
+        # Use this command here to create fixtures fast:
+        # from django.core.management import call_command
+        # call_command('dumpdata', 'juntagrico.{model to export}', '-o', 'juntagrico/fixtures/test/data.json',
+        #              '--indent', '4', '--natural-primary', '--natural-foreign')
+
+    @classmethod
+    def load_members(cls):
+        cls.member, cls.member2, cls.member3, cls.member4, cls.member5, cls.member6 = Member.objects.order_by('id')[:6]
+        cls.inactive_member = Member.objects.get(email='inactive_member@email.org')
+        cls.admin = Member.objects.get(email='admin@email.org')
+
+    @classmethod
+    def load_areas(cls):
+        cls.area_admin = Member.objects.get(email='areaadmin@email.org')
+        (cls.area_admin_modifier, cls.area_admin_viewer,
+         cls.area_admin_contact, cls.area_admin_remover,
+         cls.area_admin_job_modifier, cls.area_admin_assignment_modifier) = Member.objects.filter(email__startswith='area_admin').order_by('id')
+        cls.area, cls.area2 = ActivityArea.objects.order_by('id')[:2]
+
+    @staticmethod
+    def create_member(email, **kwargs):
+        member_data = {'first_name': 'first_name',
+                       'last_name': 'last_name',
+                       'email': email,
+                       'addr_street': 'addr_street',
+                       'addr_zipcode': '1234',
+                       'addr_location': 'addr_location',
+                       'phone': 'phone',
+                       'mobile_phone': 'phone',
+                       'confirmed': True,
+                       }
+        member_data.update(kwargs)
+        return Member.objects.create(**member_data)
+
+    @staticmethod
+    def create_paid_share(member, **kwargs):
+        if settings.ENABLE_SHARES:
+            return Share.objects.create(
+                member=member,
+                paid_date='2017-03-27',
+                issue_date='2017-03-27',
+                **kwargs
+            )
+
+    @classmethod
+    def create_paid_and_canceled_share(cls, member, **kwargs):
+        return cls.create_paid_share(
+            member=member,
+            booking_date='2017-12-27',
+            cancelled_date='2017-12-27',
+            termination_date='2017-12-27',
+            **kwargs
+        )
+
+    @staticmethod
+    def create_location(name='location1', **kwargs):
+        location_data = {'name': name,
+                         'latitude': '12.513',
+                         'longitude': '1.314',
+                         'addr_street': 'Fakestreet 123',
+                         'addr_zipcode': '1000',
+                         'addr_location': 'Faketown',
+                         'description': 'Place to be'}
+        location_data.update(kwargs)
+        return Location.objects.create(**location_data)
+
+    @classmethod
+    def set_up_job(cls):
+        """
+        job_type
+        """
+        job_type_data = {'name': 'nameot',
+                         'activityarea': cls.area,
+                         'default_duration': 2,
+                         'location': cls.create_location('area_location1')}
+        cls.job_type = JobType.objects.create(**job_type_data)
+        job_type_data2 = {'name': 'nameot2',
+                          'activityarea': cls.area2,
+                          'default_duration': 4,
+                          'location': cls.create_location('area_location2')}
+        cls.job_type2 = JobType.objects.create(**job_type_data2)
+        cls.job_type2.contact_set.add(MemberContact(member=cls.member4, display=MemberContact.DISPLAY_EMAIL),
+                                             bulk=False)
+        """
+        job_extra
+        """
+        job_extra_type_data = {'name': 'jet',
+                               'display_empty': 'empty',
+                               'display_full': 'full'}
+        cls.job_extra_type = JobExtraType.objects.create(**job_extra_type_data)
+        job_extra_data = {'recuring_type': cls.job_type,
+                          'extra_type': cls.job_extra_type}
+        cls.job_extra = JobExtra.objects.create(**job_extra_data)
+        """
+        jobs
+        """
+        time = timezone.now() + timezone.timedelta(hours=2)
+        job_data = {'slots': 1,
+                    'time': time,
+                    'type': cls.job_type}
+        job_data2 = {'slots': 6,
+                     'time': time,
+                     'type': cls.job_type}
+        job_data3 = {'slots': 5,
+                     'time': time,
+                     'type': cls.job_type}
+        cls.job1 = RecuringJob.objects.create(**job_data)
+        cls.job2 = RecuringJob.objects.create(**job_data)
+        cls.job3 = RecuringJob.objects.create(**job_data)
+        cls.job4 = RecuringJob.objects.create(**job_data2)
+        cls.job5 = RecuringJob.objects.create(**job_data)
+        cls.job6 = RecuringJob.objects.create(**job_data3)
+        cls.past_job = RecuringJob.objects.create(
+            slots=2,
+            time=timezone.now() - timezone.timedelta(hours=2),
+            type=cls.job_type
+        )
+        cls.past_core_job = RecuringJob.objects.create(
+            slots=2,
+            time=timezone.now() - timezone.timedelta(hours=2),
+            type=cls.job_type2
+        )
+        cls.infinite_job = RecuringJob.objects.create(**{
+            'infinite_slots': True,
+            'time': time,
+            'type': cls.job_type
+        })
+        """
+        one time jobs
+        """
+        time = timezone.now() + timezone.timedelta(hours=2)
+        one_time_job_data = {'name': 'name',
+                             'activityarea': cls.area,
+                             'default_duration': 2,
+                             'slots': 1,
+                             'time': time,
+                             'location': cls.create_location('job_location1')}
+        cls.one_time_job1 = OneTimeJob.objects.create(**one_time_job_data)
+        one_time_job_data.update(name='name2', time=timezone.now() - timezone.timedelta(hours=2))
+        cls.past_one_time_job = OneTimeJob.objects.create(**one_time_job_data)
+        """
+        assignment
+        """
+        cls.assignment = cls.create_assignment(cls.job2, cls.member)
+        # needed to test assignment widget fully
+        cls.create_assignment(cls.past_job, cls.member)
+        cls.create_assignment(cls.past_core_job, cls.member)
+        cls.create_assignment(cls.past_job, cls.member3)
+        cls.create_assignment(cls.past_core_job, cls.member3)
+
+    @staticmethod
+    def create_assignment(job, member, amount=1, **kwargs):
+        return Assignment.objects.create(job=job, member=member, amount=amount, **kwargs)
+
+    @classmethod
+    def set_up_depots(cls):
+        """
+        depots
+        """
+        cls.tour = Tour.objects.create(name='Tour1', description='Tour1 description')
+        cls.depot_coordinator = cls.create_member('depot_coordinator@email.org')
+        location = cls.create_location('depot_location')
+        depot_data = {
+            'name': 'depot',
+            'tour': cls.tour,
+            'weekday': 1,
+            'location': location,
+        }
+        cls.depot = Depot.objects.create(**depot_data)
+        depot_coordinator = {
+            'depot': cls.depot,
+            'member': cls.depot_coordinator,
+            'can_modify_depot': True,
+            'can_view_member': True,
+            'can_contact_member': True,
+        }
+        DepotCoordinator.objects.create(**depot_coordinator)
+        depot_data = {
+            'name': 'depot2',
+            'weekday': 1,
+            'pickup_time': datetime.time(9, 0),
+            'pickup_duration': 48,
+            'tour': cls.tour,
+            'location': location,
+            'fee': 55.0,
+        }
+        cls.depot2 = Depot.objects.create(**depot_data)
+        depot_coordinator['depot'] = cls.depot2
+        depot_coordinator['member'] = cls.member
+        DepotCoordinator.objects.create(**depot_coordinator)
+        EmailContact.objects.create(
+            content_object=cls.depot2,
+            email='emailcontact@example.org',
+        )
+        TextContact.objects.create(
+            content_object=cls.depot2,
+            text='free text',
+        )
+        mail.outbox = []
+
+    @staticmethod
+    def create_bundle(long_name, category=None, description='', **kwargs):
+        return SubscriptionBundle.objects.create(
+            long_name=long_name,
+            category=category,
+            description=description,
+            **kwargs
+        )
+
+    @staticmethod
+    def create_sub_type(bundle, shares=1, visible=True, required_assignments=10, required_core_assignments=3,
+                        price=1000, **kwargs):
+        JuntagricoTestCase._count_sub_types += 1
+        name = kwargs.get('name', None)
+        long_name = kwargs.get('long_name', 'sub_type_long_name')
+        return SubscriptionType.objects.create(
+            name=name or 'sub_type_name' + str(JuntagricoTestCase._count_sub_types),
+            long_name=long_name,
+            bundle=bundle,
+            shares=shares,
+            visible=visible,
+            required_assignments=required_assignments,
+            required_core_assignments=required_core_assignments,
+            price=price,
+            **kwargs
+        )
+
+    @classmethod
+    def set_up_products(cls):
+        # products
+        cls.sub_product = SubscriptionProduct.objects.create(name='product')
+        cls.unused_product = SubscriptionProduct.objects.create(name='unused product')
+        # product sizes
+        cls.product_size = ProductSize.objects.create(
+            name='product size',
+            product=cls.sub_product,
+            units=1.0
+        )
+        cls.invisible_product_size = ProductSize.objects.create(
+            name='invisible product size',
+            product=cls.sub_product,
+            show_on_depot_list=False,
+        )
+        cls.unused_product_size = ProductSize.objects.create(
+            name='unused product size',
+            product=cls.unused_product
+        )
+
+    @classmethod
+    def set_up_sub_types(cls):
+        """
+        subscription categories, bundles, types and products
+        """
+        cls.set_up_products()
+        # category
+        sub_category_data = {
+            'name': 'category'
+        }
+        cls.sub_category = SubscriptionCategory.objects.create(**sub_category_data)
+        # bundle
+        cls.bundle = cls.create_bundle('bundle', cls.sub_category, description='sub_desc')
+        SubscriptionBundleProductSize.objects.create(bundle=cls.bundle, product_size=cls.product_size)
+        SubscriptionBundleProductSize.objects.create(bundle=cls.bundle, product_size=cls.invisible_product_size)
+        cls.unused_bundle = cls.create_bundle('unused bundle', description='unused bundle description')
+        SubscriptionBundleProductSize.objects.create(bundle=cls.unused_bundle, product_size=cls.product_size)
+        # types
+        cls.sub_type = cls.create_sub_type(cls.bundle)
+        cls.sub_type2 = cls.create_sub_type(cls.bundle, shares=2)
+        cls.sub_type3 = cls.create_sub_type(cls.bundle, shares=0)
+        DepotSubscriptionTypeCondition.objects.create(
+            depot=cls.depot,
+            subscription_type=cls.sub_type,
+            fee=100
+        )
+        DepotSubscriptionTypeCondition.objects.create(
+            depot=cls.depot2,
+            subscription_type=cls.sub_type2,
+            fee=50
+        )
+
+    @staticmethod
+    def create_sub(depot, parts, activation_date=None, **kwargs):
+        if 'deactivation_date' in kwargs and 'cancellation_date' not in kwargs:
+            kwargs['cancellation_date'] = activation_date
+        sub = Subscription.objects.create(
+            depot=depot,
+            activation_date=activation_date,
+            creation_date='2017-03-27',
+            start_date='2018-01-01',
+            **kwargs
+        )
+        if isinstance(parts, SubscriptionType):
+            parts = [parts]
+        for part in parts:
+            SubscriptionPart.objects.create(
+                subscription=sub,
+                type=part,
+                activation_date=activation_date,
+                cancellation_date=kwargs.get('cancellation_date', None),
+                deactivation_date=kwargs.get('deactivation_date', None)
+            )
+        return sub
+
+    @classmethod
+    def create_sub_now(cls, depot, parts=None, **kwargs):
+        if not parts:
+            parts = [cls.sub_type]
+        return cls.create_sub(depot, parts, datetime.date.today(), **kwargs)
+
+    @classmethod
+    def set_up_sub(cls):
+        """
+        subscription
+        """
+        today = datetime.date.today()
+        # sub 3 (inactive)
+        cls.sub3 = cls.create_sub(cls.depot, cls.sub_type3)
+        cls.member3.join_subscription(cls.sub3, True)
+        cls.sub3.activate(today - datetime.timedelta(3))
+        cls.sub3.deactivate(today - datetime.timedelta(1))
+        # sub (active, 2 members)
+        cls.sub = cls.create_sub_now(cls.depot)
+        cls.member.join_subscription(cls.sub, True)
+        cls.member3.join_subscription(cls.sub)
+        # sub2 (waiting)
+        cls.sub2 = cls.create_sub(cls.depot, cls.sub_type2)
+        cls.member2.join_subscription(cls.sub2, True)
+        # canceled_sub
+        cls.canceled_sub = cls.create_sub_now(cls.depot, cancellation_date=today)
+        cls.member6.join_subscription(cls.canceled_sub, True)
+        # inconsistent sub
+        cls.inconsistent_sub = Subscription.objects.create(depot=cls.depot)
+
+    @classmethod
+    def set_up_extra_sub_types(cls):
+        """
+        subscription extra types
+        """
+        extrasub_type_data = {
+            'name': 'extrasub_type_name',
+            'long_name': 'sub_type_long_name',
+            'is_extra': True,
+            'bundle': cls.bundle,
+            'shares': 0,
+            'visible': True,
+            'required_assignments': 10,
+            'price': 1000,
+            'description': 'sub_type_desc'}
+        cls.extrasub_type = SubscriptionType.objects.create(**extrasub_type_data)
+
+    @classmethod
+    def set_up_extra_sub(cls):
+        '''
+        extra subscription
+        '''
+        esub_data = {'subscription': cls.sub2,
+                     'type': cls.extrasub_type}
+        cls.esub = SubscriptionPart.objects.create(**esub_data)
+        cls.esub2 = SubscriptionPart.objects.create(**esub_data)
+
+    @classmethod
+    def set_up_mail_template(cls):
+        mail_template_data = {'name': 'MailTemplate'}
+        cls.mail_template = MailTemplate.objects.create(**mail_template_data)
+
+    @classmethod
+    def set_up_deliveries(cls):
+        delivery_data = {'delivery_date': '2017-03-27',
+                         'tour': cls.tour,
+                         'subscription_bundle': cls.bundle}
+        cls.delivery1 = Delivery.objects.create(**delivery_data)
+        delivery_data['delivery_date'] = '2017-03-28'
+        cls.delivery2 = Delivery.objects.create(**delivery_data)
+        DeliveryItem.objects.create(delivery=cls.delivery1)
+
+    def assertGet(self, url, code=200, member=None, data=None):
+        login_member = member or self.default_member
+        self.client.force_login(login_member.user)
+        response = self.client.get(url, data)
+        self.assertEqual(response.status_code, code, msg=f'url: {url}, data: {data}')
+        return response
+
+    def assertPost(self, url, data=None, code=200, member=None):
+        login_member = member or self.default_member
+        self.client.force_login(login_member.user)
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, code, msg=f'url: {url}, data: {data}')
+        return response
+
+
+class JuntagricoTestCaseWithShares(JuntagricoTestCase):
+    fixtures = JuntagricoTestCase.fixtures + (['test/shares'] if getattr(settings, 'ENABLE_SHARES', False) else [])
+
+
+class JuntagricoJobTestCase(JuntagricoTestCase):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        # create complex job type
+        cls.complex_job_type = JobType.objects.create(
+            name='complex_job_type',
+            displayed_name='complex_job_type_name',
+            description='complex_job_type_description',
+            activityarea=cls.area2,
+            default_duration=4,
+            location=cls.create_location('complex_location'),
+        )
+        cls.job_type_contact = PhoneContact(phone='01233556')
+        cls.complex_job_type.contact_set.add(cls.job_type_contact, bulk=False)
+        JobExtra.objects.create(
+            recuring_type=cls.complex_job_type,
+            extra_type=cls.job_extra_type,
+        )
+
+        # create complex recurring job
+        time = timezone.now() + timezone.timedelta(hours=2)
+        cls.complex_job_data = {
+            'slots': 1,
+            'time': time,
+            'type': cls.complex_job_type,
+            'infinite_slots': True,
+            'multiplier': 2,
+            'additional_description': 'Extra Description',
+            'duration_override': 6
+        }
+        cls.complex_job = RecuringJob.objects.create(**cls.complex_job_data)
+        cls.email_contact = EmailContact(email='test@test.org')
+        cls.complex_job.contact_set.add(cls.email_contact, bulk=False)
+        cls.member_contact = MemberContact(member=cls.member2, display=MemberContact.DISPLAY_EMAIL)
+        cls.complex_job.contact_set.add(cls.member_contact, bulk=False)
+        Assignment.objects.create(job=cls.complex_job, member=cls.member2, amount=1.2)
+
+        # create complex one_time_job
+        time = timezone.now() + timezone.timedelta(hours=2)
+        cls.other_location = cls.create_location('other_location')
+        cls.complex_one_time_job_data = {
+            'name': 'one_time_job',
+            'activityarea': cls.area,
+            'description': 'one_time_job_description',
+            'default_duration': 3,
+            'location': cls.create_location('one_time_location'),
+            'slots': 1,
+            'time': time,
+            'infinite_slots': True,
+            'multiplier': 2,
+        }
+        cls.complex_one_time_job = OneTimeJob.objects.create(**cls.complex_one_time_job_data)
+        cls.complex_one_time_job.contact_set.add(EmailContact(email='test@test.org'), bulk=False)
+        cls.complex_one_time_job.contact_set.add(
+            MemberContact(member=cls.member3, display=MemberContact.DISPLAY_EMAIL),
+            bulk=False
+        )
+        JobExtra.objects.create(
+            onetime_type=cls.complex_one_time_job,
+            extra_type=cls.job_extra_type,
+            per_member=True,
+        )
+        Assignment.objects.create(job=cls.complex_one_time_job, member=cls.member, amount=1.3)
