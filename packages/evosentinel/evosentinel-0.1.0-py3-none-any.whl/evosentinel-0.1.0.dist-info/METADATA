@@ -1,0 +1,386 @@
+Metadata-Version: 2.4
+Name: evosentinel
+Version: 0.1.0
+Summary: Advanced Python Runtime Guard & Self-Healing Engine
+Author-email: Daksha Dubey <your.email@example.com>
+License: MIT
+Project-URL: Homepage, https://github.com/dakshdubey/evoSentinel
+Project-URL: Documentation, https://github.com/dakshdubey/evoSentinel#readme
+Project-URL: Repository, https://github.com/dakshdubey/evoSentinel
+Project-URL: Issues, https://github.com/dakshdubey/evoSentinel/issues
+Keywords: reliability,fault-tolerance,circuit-breaker,self-healing,runtime-guard,sre,resilience
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Topic :: System :: Monitoring
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Dynamic: license-file
+
+# evoSentinel
+
+**Advanced Python Runtime Guard & Self-Healing Engine**
+
+**Author**: Daksha Dubey
+
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+> *"Failures are signals, not exceptions. evoSentinel reasons about them before acting."*
+
+## Overview
+
+evoSentinel is a production-grade Python SDK that provides **multi-layer runtime defense** and **self-healing** capabilities for mission-critical applications. Unlike simple retry libraries or circuit breakers, evoSentinel uses **probabilistic decision-making**, **adaptive control systems**, and **behavioral modeling** to protect your services from cascading failures.
+
+This SDK is designed for **senior-level system reliability engineering** and reflects the kind of internal tooling used at companies like Google, Stripe, and Netflix.
+
+---
+
+## Why evoSentinel?
+
+### This is NOT a Simple Retry Library
+
+Traditional approaches treat failures as binary events:
+- ❌ Fixed retry counts
+- ❌ Static timeouts
+- ❌ Binary circuit breaker states
+
+**evoSentinel is different:**
+- ✅ **Continuous risk scoring** (0.0 - 1.0)
+- ✅ **Probabilistic retries** based on system health
+- ✅ **Adaptive quarantine** with exponential decay
+- ✅ **Multi-layer defense** with coordinated decision-making
+- ✅ **Self-healing** through behavioral modeling
+
+---
+
+## Architecture
+
+### Four-Layer Defense Stack
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Layer 4: Decision & Control Plane                      │
+│  • Converts risk → actions (ALLOW, THROTTLE, BLOCK)     │
+│  • Hysteresis prevents flapping                         │
+└─────────────────────────────────────────────────────────┘
+                          ▲
+┌─────────────────────────────────────────────────────────┐
+│  Layer 3: Risk Scoring Engine                           │
+│  • Computes continuous risk score (0.0 - 1.0)           │
+│  • Factors: baseline deviation, failure momentum        │
+└─────────────────────────────────────────────────────────┘
+                          ▲
+┌─────────────────────────────────────────────────────────┐
+│  Layer 2: Behavioral Modeling                           │
+│  • EWMA-based statistical profiling                     │
+│  • Latency baselines, variance analysis                 │
+│  • Adaptive decay for self-healing                      │
+└─────────────────────────────────────────────────────────┘
+                          ▲
+┌─────────────────────────────────────────────────────────┐
+│  Layer 1: Signal Capture                                │
+│  • Execution time, exception types, call frequency      │
+│  • Pure observation (no decision logic)                 │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Health State Machine
+
+```
+HEALTHY → DEGRADED → CRITICAL → QUARANTINED
+   ↑                                 ↓
+   └─────────── (recovery) ──────────┘
+```
+
+Transitions are **atomic**, **auditable**, and **reversible**.
+
+---
+
+## Installation
+
+```bash
+pip install evosentinel
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/yourusername/evoSentinel.git
+cd evoSentinel
+pip install -e .
+```
+
+---
+
+## Quick Start
+
+### Basic Usage
+
+```python
+from evosentinel import sentinel
+
+@sentinel.guard("payment.charge")
+def charge_card(amount):
+    # Your critical business logic
+    return payment_gateway.charge(amount)
+
+# evoSentinel will:
+# 1. Evaluate risk before execution
+# 2. Block if risk is too high
+# 3. Retry probabilistically on failure
+# 4. Quarantine if failures persist
+# 5. Self-heal when stability returns
+```
+
+### Custom Configuration
+
+```python
+from evosentinel import Sentinel
+
+sentinel = Sentinel(
+    observation_window=120,      # Time window for metrics
+    risk_decay=0.92,             # Decay rate for risk momentum
+    max_risk=0.85,               # Maximum acceptable risk
+    quarantine_threshold=0.95,   # Risk level triggering quarantine
+    recovery_confidence=0.75     # Confidence needed for recovery
+)
+
+@sentinel.guard("critical.operation")
+def critical_operation():
+    # Protected execution
+    pass
+```
+
+### Observability Hooks
+
+```python
+@sentinel.on_risk_change
+def handle_risk(func_id, risk_score):
+    logger.info(f"{func_id} risk: {risk_score:.4f}")
+
+@sentinel.on_state_transition
+def handle_transition(func_id, old_state, new_state):
+    metrics.gauge(f"{func_id}.state", new_state.value)
+
+@sentinel.on_quarantine
+def handle_quarantine(func_id):
+    alerts.send(f"Function {func_id} quarantined!")
+
+@sentinel.on_recovery
+def handle_recovery(func_id):
+    alerts.send(f"Function {func_id} recovered!")
+```
+
+---
+
+## Core Algorithms
+
+### 1. Exponentially Weighted Moving Average (EWMA)
+
+Used for tracking latency and failure rate baselines:
+
+```
+V_new = α × V_current + (1 - α) × V_previous
+```
+
+### 2. Risk Momentum Calculation
+
+Tracks recent failure intensity with exponential decay:
+
+```
+V(t) = V₀ × (decay_rate ^ elapsed_time)
+```
+
+### 3. Probabilistic Retry Decision
+
+```
+P(retry) = (1 - risk_score)²
+```
+
+Higher risk = lower retry probability. **Infinite retry loops are mathematically impossible.**
+
+### 4. Adaptive Backoff
+
+```
+backoff = base_backoff × (1 / (1 - risk_score)) × jitter
+```
+
+Backoff increases with risk, preventing thundering herd.
+
+---
+
+## Error Handling
+
+evoSentinel uses **typed exceptions** that never mask user errors:
+
+```python
+from evosentinel.errors import (
+    SentinelBlockedError,      # Execution blocked due to high risk
+    SentinelQuarantinedError,  # Function is quarantined
+    SentinelOverloadError      # System overload detected
+)
+
+try:
+    result = protected_function()
+except SentinelBlockedError:
+    # evoSentinel prevented execution
+    return fallback_response()
+except Exception as e:
+    # Your application error (not masked)
+    handle_error(e)
+```
+
+---
+
+## Concurrency Safety
+
+evoSentinel is **fully thread-safe** and supports:
+
+- ✅ `threading`
+- ✅ `asyncio`
+- ✅ `concurrent.futures`
+
+```python
+import asyncio
+from evosentinel import sentinel
+
+@sentinel.guard("async.operation")
+async def async_operation():
+    await external_api_call()
+    return "success"
+
+# Works seamlessly with async/await
+await async_operation()
+```
+
+---
+
+## Performance
+
+- **O(1) execution path** - constant time overhead
+- **Constant memory** per guarded function
+- **No unbounded data structures**
+- **Zero external dependencies** for core functionality
+
+---
+
+## Production Tuning Guide
+
+### High-Throughput Services
+
+```python
+sentinel = Sentinel(
+    risk_decay=0.98,           # Slower decay for stability
+    max_risk=0.90,             # Higher tolerance
+    quarantine_threshold=0.98  # Quarantine only severe cases
+)
+```
+
+### Latency-Sensitive Services
+
+```python
+sentinel = Sentinel(
+    risk_decay=0.85,           # Faster decay
+    max_risk=0.70,             # Lower tolerance
+    quarantine_threshold=0.85  # Quarantine earlier
+)
+```
+
+### Financial/Critical Systems
+
+```python
+sentinel = Sentinel(
+    risk_decay=0.95,           # Balanced decay
+    max_risk=0.75,             # Conservative threshold
+    quarantine_threshold=0.90, # Aggressive quarantine
+    recovery_confidence=0.85   # High confidence for recovery
+)
+```
+
+---
+
+## Design Philosophy
+
+### 1. Failures as Signals
+
+Traditional systems treat failures as discrete events. evoSentinel models them as **continuous signals** that evolve over time.
+
+### 2. Probabilistic Over Deterministic
+
+Instead of "retry 3 times," evoSentinel asks: *"Given the current system state, what's the probability this retry will succeed?"*
+
+### 3. Adaptive Control
+
+Static thresholds break under changing conditions. evoSentinel **adapts** to your system's baseline behavior.
+
+### 4. Defense in Depth
+
+Multiple independent layers provide redundancy. If one layer fails, others compensate.
+
+---
+
+## Comparison
+
+| Feature | evoSentinel | Circuit Breaker | Retry Library |
+|---------|-------------|-----------------|---------------|
+| Risk Modeling | ✅ Continuous (0.0-1.0) | ❌ Binary (open/closed) | ❌ None |
+| Adaptive Behavior | ✅ Yes | ⚠️ Limited | ❌ No |
+| Probabilistic Retries | ✅ Yes | ❌ No | ❌ Fixed count |
+| Self-Healing | ✅ Automatic | ⚠️ Timer-based | ❌ No |
+| Behavioral Profiling | ✅ EWMA baselines | ❌ No | ❌ No |
+| Quarantine System | ✅ Adaptive cooldown | ⚠️ Fixed timeout | ❌ No |
+
+---
+
+## Demo
+
+Run the included demo to see self-healing in action:
+
+```bash
+python demo.py
+```
+
+You'll see:
+1. **Quarantine** when failures spike
+2. **Risk decay** over time
+3. **State transitions** (HEALTHY → DEGRADED → CRITICAL → QUARANTINED)
+4. **Recovery** when stability returns
+
+---
+
+## Contributing
+
+Contributions are welcome! Please ensure:
+
+- Code passes all tests
+- Algorithms are documented
+- Performance characteristics are maintained (O(1) execution)
+- No external dependencies added to core
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+---
+
+## Acknowledgments
+
+Inspired by production reliability systems at:
+- Google's SRE practices
+- Netflix's Hystrix (but evolved beyond circuit breakers)
+- Stripe's internal fault tolerance tooling
+
+---
+
+**Built with ❤️ for production reliability engineers who understand that failure is not an exception—it's a signal.**
