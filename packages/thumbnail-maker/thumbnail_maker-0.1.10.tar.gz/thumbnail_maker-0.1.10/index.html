@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="ko" x-data="thumbnailApp()" x-init="init()">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>퀵썸네일 Canvas + DSL</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Alpine.js -->
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        
+        .canvas-wrap {
+            border: 1px solid #ccc;
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 12px;
+        }
+        
+        textarea,
+        input[type="text"],
+        select,
+        input[type="color"] {
+            width: 100%;
+            margin-top: 4px;
+            box-sizing: border-box;
+        }
+        
+        textarea {
+            font-family: monospace;
+        }
+        
+        .form-label {
+            margin-top: 10px;
+        }
+        
+        .dsl-panel textarea {
+            min-height: 200px;
+        }
+        
+        .canvas-wrap {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 300px;
+        }
+    </style>
+    <style x-text="fontFaceStyles()"></style>
+</head>
+
+<body class="bg-light">
+    <div class="container py-4">
+        <h2 class="mb-4 fw-bold text-primary">퀵썸네일 Canvas 미리보기 + DSL</h2>
+        <div class="row g-4">
+            <!-- Canvas Preview -->
+            <div class="col-md-6">
+                <div class="canvas-wrap shadow-sm bg-white">
+                    <canvas x-ref="canvas"></canvas>
+                </div>
+            </div>
+            <!-- Controls -->
+            <div class="col-md-4">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h3 class="h5 mb-0">설정</h3>
+                            <button class="btn btn-outline-primary btn-sm" @click="prepareEditableDsl()" data-bs-toggle="modal" data-bs-target="#dslModal">DSL
+                보기</button>
+                        </div>
+                        <div class="accordion" id="settingsAccordion">
+                            <!-- 배경 설정 -->
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingBg">
+                                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBg" aria-expanded="true" aria-controls="collapseBg">
+                    배경 설정
+                  </button>
+                                </h2>
+                                <div id="collapseBg" class="accordion-collapse collapse show" aria-labelledby="headingBg" data-bs-parent="#settingsAccordion">
+                                    <div class="accordion-body">
+                                        <!-- Resolution Mode Radio Buttons -->
+                                        <div class="mb-3">
+                                            <label class="form-label">크기 모드</label>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" value="preset" x-model="resolutionMode" @change="onResolutionModeChange()" id="resModePreset">
+                                                <label class="form-check-label" for="resModePreset">Preset</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" value="fixedRatio" x-model="resolutionMode" @change="onResolutionModeChange()" id="resModeFixed">
+                                                <label class="form-check-label" for="resModeFixed">Fixed Ratio</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" value="custom" x-model="resolutionMode" @change="onResolutionModeChange()" id="resModeCustom">
+                                                <label class="form-check-label" for="resModeCustom">Custom</label>
+                                            </div>
+                                        </div>
+                                        <!-- Aspect Ratio Dropdown (Modified) -->
+                                        <div class="mb-3">
+                                            <label class="form-label">해상도</label>
+                                            <select class="form-select" x-model="currentAspectRatio" @change="onAspectRatioChange()" :disabled="resolutionMode === 'custom'">
+                                                <option value="16:9">16:9</option>
+                                                <option value="9:16">9:16</option>
+                                                <option value="4:3">4:3</option>
+                                                <option value="1:1">1:1</option>
+                                            </select>
+                                        </div>
+                                        <!-- Width Input -->
+                                        <div class="mb-3 row">
+                                            <label class="col-sm-2 col-form-label">너비</label>
+                                            <div class="col-sm-10">
+                                                <input type="number" class="form-control" x-model.number="inputWidth" @input="onDimensionInputChange('width')" @focus="fixedRatioDrivingInput = 'width'" :disabled="resolutionMode === 'preset'">
+                                            </div>
+                                        </div>
+                                        <!-- Height Input -->
+                                        <div class="mb-3 row">
+                                            <label class="col-sm-2 col-form-label">높이</label>
+                                            <div class="col-sm-10">
+                                                <input type="number" class="form-control" x-model.number="inputHeight" @input="onDimensionInputChange('height')" @focus="fixedRatioDrivingInput = 'height'" :disabled="resolutionMode === 'preset'">
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">배경 색상</label>
+                                            <input type="color" class="form-control form-control-color" x-model="bgColor" @input="update()">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">배경 이미지 URL</label>
+                                            <input type="text" class="form-control" x-model="bgImageUrl" @change="update()" placeholder="URL 입력">
+                                        </div>
+                                        <!-- Background Image Opacity Slider -->
+                                        <div class="mb-3">
+                                            <label class="form-label">배경 이미지 투명도 <span x-text="bgImageOpacity.toFixed(2)"></span></label>
+                                            <input type="range" class="form-range" x-model.number="bgImageOpacity" min="0" max="1" step="0.05" @input="update()" :disabled="!bgImageUrl">
+                                        </div>
+                                        <!-- Background Image Blur Slider -->
+                                        <div class="mb-3">
+                                            <label class="form-label">배경 이미지 블러 <span x-text="bgImageBlur + 'px'"></span></label>
+                                            <input type="range" class="form-range" x-model.number="bgImageBlur" min="0" max="20" step="1" @input="update()" :disabled="!bgImageUrl">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 폰트 설정 -->
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingFont">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFont" aria-expanded="false" aria-controls="collapseFont">
+                    폰트 설정
+                  </button>
+                                </h2>
+                                <div id="collapseFont" class="accordion-collapse collapse" aria-labelledby="headingFont" data-bs-parent="#settingsAccordion">
+                                    <div class="accordion-body">
+                                        <div class="mb-3">
+                                            <label class="form-label">Custom @font-face CSS</label>
+                                            <textarea class="form-control" x-model="newFontCss" rows="3" placeholder="@font-face { ... }"></textarea>
+                                            <button class="btn btn-outline-secondary btn-sm mt-2" @click="parseAndAddFontFace()">폰트
+                        추가</button>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">적용 폰트</label>
+                                            <select class="form-select" x-model="fontFamily" @change="update()">
+                        <template x-for="f in fontFaces" :key="f.name">
+                          <option x-text="f.name" :value="f.name"></option>
+                        </template>
+                      </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 텍스트 설정 -->
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingText">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseText" aria-expanded="false" aria-controls="collapseText">
+                    텍스트 설정
+                  </button>
+                                </h2>
+                                <div id="collapseText" class="accordion-collapse collapse" aria-labelledby="headingText" data-bs-parent="#settingsAccordion">
+                                    <div class="accordion-body">
+                                        <div class="mb-3">
+                                            <label class="form-label">제목 텍스트</label>
+                                            <textarea class="form-control" x-model="titleText" @input="update()"></textarea>
+                                        </div>
+                                        <div class="row g-2 mb-3">
+                                            <div class="col">
+                                                <label class="form-label">제목 색상</label>
+                                                <input type="color" class="form-control form-control-color" x-model="titleColor" @input="update()">
+                                            </div>
+                                            <div class="col d-flex align-items-end">
+                                                <div class="form-check ms-2">
+                                                    <input class="form-check-input" type="checkbox" x-model="titleOutline" @change="update()" id="titleOutlineCheck">
+                                                    <label class="form-check-label" for="titleOutlineCheck">외곽선</label>
+                                                </div>
+                                                <input type="number" min="1" max="20" class="form-control ms-2" style="width:70px" x-model.number="titleOutlineThickness" :disabled="!titleOutline" @input="update()">
+                                                <span class="ms-1" style="font-size:0.9em;">px</span>
+                                            </div>
+                                        </div>
+                                        <!-- Title Font Style Controls -->
+                                        <div class="row g-2 mb-3">
+                                            <div class="col">
+                                                <label class="form-label">굵기</label>
+                                                <select class="form-select" x-model="titleFontWeight" @change="update()">
+                                                    <option value="normal">Normal</option>
+                                                    <option value="bold">Bold</option>
+                                                </select>
+                                            </div>
+                                            <div class="col">
+                                                <label class="form-label">스타일</label>
+                                                <select class="form-select" x-model="titleFontStyle" @change="update()">
+                                                    <option value="normal">Normal</option>
+                                                    <option value="italic">Italic</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <!-- Title Grid Position Dropdown -->
+                                        <div class="mb-3">
+                                            <label class="form-label">위치 (9 그리드)</label>
+                                            <select class="form-select" x-model="titleGridPosition" @change="update()">
+                                                <option value="tl">Top-Left</option>
+                                                <option value="tc">Top-Center</option>
+                                                <option value="tr">Top-Right</option>
+                                                <option value="ml">Middle-Left</option>
+                                                <option value="mc">Middle-Center</option>
+                                                <option value="mr">Middle-Right</option>
+                                                <option value="bl">Bottom-Left</option>
+                                                <option value="bc">Bottom-Center</option>
+                                                <option value="br">Bottom-Right</option>
+                                            </select>
+                                        </div>
+                                        <!-- Title Line Height Input -->
+                                        <div class="mb-3">
+                                            <label class="form-label">줄간격</label>
+                                            <input type="number" class="form-control" x-model.number="titleLineHeight" @input="update()" min="0.5" max="3" step="0.1">
+                                        </div>
+                                        <!-- Title Word Wrap Checkbox -->
+                                        <div class="form-check mb-3">
+                                            <input class="form-check-input" type="checkbox" x-model="titleWordWrap" @change="update()" id="titleWordWrapCheck">
+                                            <label class="form-check-label" for="titleWordWrapCheck">
+                                                자동 줄바꿈 (Word Wrap)
+                                            </label>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">부제목 텍스트</label>
+                                            <textarea class="form-control" x-model="subtitleText" @input="update()"></textarea>
+                                        </div>
+                                        <div class="row g-2 mb-3">
+                                            <div class="col">
+                                                <label class="form-label">부제목 색상</label>
+                                                <input type="color" class="form-control form-control-color" x-model="subtitleColor" @input="update()">
+                                            </div>
+                                            <div class="col d-flex align-items-end">
+                                                <div class="form-check ms-2">
+                                                    <input class="form-check-input" type="checkbox" x-model="subtitleVisible" @change="update()" id="subtitleVisibleCheck">
+                                                    <label class="form-check-label" for="subtitleVisibleCheck">부제목 표시</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <!-- Subtitle Font Family Dropdown -->
+                                        <div class="mb-3">
+                                            <label class="form-label">폰트</label>
+                                            <select class="form-select" x-model="subtitleFontFamily" @change="update()">
+                                                <template x-for="f in fontFaces" :key="f.name">
+                                                    <option x-text="f.name" :value="f.name"></option>
+                                                </template>
+                                            </select>
+                                        </div>
+                                        <!-- Subtitle Font Size Input -->
+                                        <div class="mb-3">
+                                            <label class="form-label">폰트 크기</label>
+                                            <input type="number" class="form-control" x-model.number="subtitleFontSize" @input="update()" min="8" max="100">
+                                        </div>
+                                        <!-- Subtitle Outline Controls -->
+                                        <div class="row g-2 mb-3">
+                                            <div class="col d-flex align-items-center">
+                                                <input class="form-check-input" type="checkbox" x-model="subtitleOutline" @change="update()" id="subtitleOutlineCheck">
+                                                <label class="form-check-label ms-2" for="subtitleOutlineCheck">외곽선</label>
+                                            </div>
+                                            <div class="col d-flex align-items-center">
+                                                <input type="number" min="1" max="20" class="form-control ms-2" style="width:70px" x-model.number="subtitleOutlineThickness" :disabled="!subtitleOutline" @input="update()">
+                                                <span class="ms-1" style="font-size:0.9em;">px</span>
+                                            </div>
+                                        </div>
+                                        <!-- Subtitle Font Style Controls -->
+                                        <div class="row g-2 mb-3">
+                                            <div class="col">
+                                                <label class="form-label">굵기</label>
+                                                <select class="form-select" x-model="subtitleFontWeight" @change="update()">
+                                                    <option value="normal">Normal</option>
+                                                    <option value="bold">Bold</option>
+                                                </select>
+                                            </div>
+                                            <div class="col">
+                                                <label class="form-label">스타일</label>
+                                                <select class="form-select" x-model="subtitleFontStyle" @change="update()">
+                                                    <option value="normal">Normal</option>
+                                                    <option value="italic">Italic</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <!-- Subtitle Grid Position Dropdown -->
+                                        <div class="mb-3">
+                                            <label class="form-label">위치 (9 그리드)</label>
+                                            <select class="form-select" x-model="subtitleGridPosition" @change="update()">
+                                                <option value="tl">Top-Left</option>
+                                                <option value="tc">Top-Center</option>
+                                                <option value="tr">Top-Right</option>
+                                                <option value="ml">Middle-Left</option>
+                                                <option value="mc">Middle-Center</option>
+                                                <option value="mr">Middle-Right</option>
+                                                <option value="bl">Bottom-Left</option>
+                                                <option value="bc">Bottom-Center</option>
+                                                <option value="br">Bottom-Right</option>
+                                            </select>
+                                        </div>
+                                        <!-- Subtitle Line Height Input -->
+                                        <div class="mb-3">
+                                            <label class="form-label">줄간격</label>
+                                            <input type="number" class="form-control" x-model.number="subtitleLineHeight" @input="update()" min="0.5" max="3" step="0.1">
+                                        </div>
+                                        <!-- Subtitle Word Wrap Checkbox -->
+                                        <div class="form-check mb-3">
+                                            <input class="form-check-input" type="checkbox" x-model="subtitleWordWrap" @change="update()" id="subtitleWordWrapCheck">
+                                            <label class="form-check-label" for="subtitleWordWrapCheck">
+                                                자동 줄바꿈 (Word Wrap)
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- DSL Modal -->
+    <div class="modal fade" id="dslModal" tabindex="-1" aria-labelledby="dslModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="dslModalLabel">DSL (JSON)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <textarea class="form-control" x-model="editableDsl" style="min-height:300px"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" @click="applyAndCloseDslModal()">Apply & Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS (for modal, etc. if needed) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="thumbnailRenderer.js"></script>
+    <script>
+        function thumbnailApp() {
+            return {
+                resolution: '16:9',
+                bgColor: '#a3e635',
+                bgImageUrl: '',
+                fontFaces: [],
+                newFontCss: '',
+                fontFamily: '',
+                titleText: '10초만에\n썸네일 만드는 법',
+                titleColor: '#4ade80',
+                titleOutline: true,
+                titleOutlineThickness: 7,
+                subtitleText: '쉽고 빠르게 썸네일을 만드는 법\n= 퀵썸네일 쓰기',
+                subtitleColor: '#ffffff',
+                subtitleVisible: true,
+                titleFontWeight: 'bold',
+                titleFontStyle: 'normal',
+                titleTextAlign: 'left',
+                titleLineHeight: 1.1,
+                subtitleFontWeight: 'normal',
+                subtitleFontStyle: 'normal',
+                subtitleTextAlign: 'left',
+                subtitleLineHeight: 1.1,
+                bgImageOpacity: 1.0,
+                bgImageBlur: 0,
+                currentAspectRatio: '16:9', // Renamed from resolution
+                resolutionMode: 'preset',
+                inputWidth: 480, // Default, will be updated by init
+                inputHeight: 270, // Default, will be updated by init
+                fixedRatioDrivingInput: 'width', // Or null
+                titleGridPosition: 'tl',
+                subtitleGridPosition: 'bl',
+                subtitleFontFamily: '', // New
+                subtitleFontSize: 24,    // New
+                subtitleOutline: false,  // New
+                subtitleOutlineThickness: 5, // New
+                titleWordWrap: false, // New
+                subtitleWordWrap: false, // New
+                editableDsl: '', // New
+                dsl: '',
+                dslObj: null,
+                bgImageObj: null,
+                init() {
+                    this.updateDimensionsFromPreset(); // Call new method
+                    this.fontFaces = [{
+                        name: 'SBAggroB',
+                        url: 'https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2108@1.1/SBAggroB.woff',
+                        weight: 'normal',
+                        style: 'normal'
+                    }];
+                    this.fontFamily = this.fontFaces[0].name;
+                    this.subtitleFontFamily = this.fontFamily; // Initialize subtitle font
+                    this.update();
+                },
+                prepareEditableDsl() {
+                    this.editableDsl = this.dsl; // Copy current DSL to the editable model
+                },
+                applyAndCloseDslModal() {
+                    this.applyImportedDsl();
+                    // Assuming Bootstrap 5 modal instance management
+                    const dslModalElement = document.getElementById('dslModal');
+                    if (dslModalElement) {
+                        const modalInstance = bootstrap.Modal.getInstance(dslModalElement);
+                        if (modalInstance) {
+                            modalInstance.hide();
+                        }
+                    }
+                },
+                applyImportedDsl() {
+                    let importedDslObj;
+                    try {
+                        importedDslObj = JSON.parse(this.editableDsl);
+                    } catch (e) {
+                        alert('Error: Invalid JSON format in DSL input.');
+                        console.error('DSL Parsing Error:', e);
+                        return;
+                    }
+
+                    if (!importedDslObj || !importedDslObj.Thumbnail) {
+                        alert('Error: Invalid DSL structure. Missing "Thumbnail" root object.');
+                        return;
+                    }
+
+                    const thumb = importedDslObj.Thumbnail;
+
+                    // Update Resolution
+                    if (thumb.Resolution) {
+                        const res = thumb.Resolution;
+                        this.resolutionMode = res.type || 'preset';
+                        if (res.type === 'preset') {
+                            this.currentAspectRatio = res.value || '16:9';
+                            // this.updateDimensionsFromPreset(); // Call this later after all properties potentially affecting it are set
+                        } else if (res.type === 'custom') {
+                            this.inputWidth = parseInt(res.width, 10) || 480;
+                            this.inputHeight = parseInt(res.height, 10) || 270;
+                        } else if (res.type === 'fixedRatio') {
+                            this.currentAspectRatio = res.ratioValue || '16:9';
+                            this.inputWidth = parseInt(res.width, 10); // Will be NaN if undefined, handled later
+                            this.inputHeight = parseInt(res.height, 10); // Will be NaN if undefined, handled later
+                            if (res.width != null && res.height == null) {
+                                this.fixedRatioDrivingInput = 'width';
+                            } else if (res.height != null && res.width == null) {
+                                this.fixedRatioDrivingInput = 'height';
+                            } else {
+                                this.fixedRatioDrivingInput = 'width';
+                            }
+                        }
+                    }
+
+                    // Update Background
+                    if (thumb.Background) {
+                        const bg = thumb.Background;
+                        if (bg.type === 'solid') {
+                            this.bgColor = bg.color || '#ffffff';
+                            this.bgImageUrl = '';
+                        } else if (bg.type === 'image') {
+                            this.bgImageUrl = bg.imagePath || '';
+                            this.bgColor = '#ffffff';
+                            this.bgImageOpacity = (typeof bg.imageOpacity === 'number') ? bg.imageOpacity : 1.0;
+                            this.bgImageBlur = parseInt(bg.imageBlur, 10) || 0;
+                        }
+                    }
+
+                    const defaultTextProps = {
+                        content: '', color: '#000000', fontSize: 48, gridPosition: 'tl',
+                        fontWeight: 'normal', fontStyle: 'normal', lineHeight: 1.1,
+                        outline: false, outlineThickness: 3, fontFamily: this.fontFamily
+                    };
+
+                    const titleDsl = thumb.Texts && thumb.Texts.find(t => t.type === 'title');
+                    if (titleDsl) {
+                        this.titleText = titleDsl.content || defaultTextProps.content;
+                        this.fontFamily = titleDsl.font ? (titleDsl.font.name || this.fontFamily) : this.fontFamily;
+                        this.titleColor = titleDsl.color || defaultTextProps.color;
+                        this.titleGridPosition = titleDsl.gridPosition || defaultTextProps.gridPosition;
+                        this.titleFontWeight = titleDsl.fontWeight || defaultTextProps.fontWeight;
+                        this.titleFontStyle = titleDsl.fontStyle || defaultTextProps.fontStyle;
+                        this.titleLineHeight = titleDsl.lineHeight || defaultTextProps.lineHeight;
+                        this.titleOutline = !!titleDsl.outline;
+                        this.titleOutlineThickness = titleDsl.outline ? (titleDsl.outline.thickness || defaultTextProps.outlineThickness) : defaultTextProps.outlineThickness;
+                    } else {
+                        this.titleText = defaultTextProps.content; this.titleColor = defaultTextProps.color;
+                        this.fontFamily = defaultTextProps.fontFamily; this.titleGridPosition = defaultTextProps.gridPosition;
+                        this.titleFontWeight = defaultTextProps.fontWeight; this.titleFontStyle = defaultTextProps.fontStyle;
+                        this.titleLineHeight = defaultTextProps.lineHeight; this.titleOutline = defaultTextProps.outline;
+                        this.titleOutlineThickness = defaultTextProps.outlineThickness;
+                    }
+
+                    const subtitleDsl = thumb.Texts && thumb.Texts.find(t => t.type === 'subtitle');
+                    this.subtitleVisible = !!subtitleDsl && (subtitleDsl.enabled !== false);
+                    if (subtitleDsl && this.subtitleVisible) {
+                        this.subtitleText = subtitleDsl.content || defaultTextProps.content;
+                        this.subtitleFontFamily = subtitleDsl.font ? (subtitleDsl.font.name || this.subtitleFontFamily) : this.subtitleFontFamily;
+                        this.subtitleFontSize = subtitleDsl.fontSize || 24;
+                        this.subtitleColor = subtitleDsl.color || defaultTextProps.color;
+                        this.subtitleGridPosition = subtitleDsl.gridPosition || 'bl';
+                        this.subtitleFontWeight = subtitleDsl.fontWeight || defaultTextProps.fontWeight;
+                        this.subtitleFontStyle = subtitleDsl.fontStyle || defaultTextProps.fontStyle;
+                        this.subtitleLineHeight = subtitleDsl.lineHeight || defaultTextProps.lineHeight;
+                        this.subtitleOutline = !!subtitleDsl.outline;
+                        this.subtitleOutlineThickness = subtitleDsl.outline ? (subtitleDsl.outline.thickness || defaultTextProps.outlineThickness) : defaultTextProps.outlineThickness;
+                    } else {
+                        this.subtitleText = defaultTextProps.content; this.subtitleFontFamily = this.fontFamily;
+                        this.subtitleFontSize = 24; this.subtitleColor = defaultTextProps.color;
+                        this.subtitleGridPosition = 'bl'; this.subtitleFontWeight = defaultTextProps.fontWeight;
+                        this.subtitleFontStyle = defaultTextProps.fontStyle; this.subtitleLineHeight = defaultTextProps.lineHeight;
+                        this.subtitleOutline = defaultTextProps.outline; this.subtitleOutlineThickness = defaultTextProps.outlineThickness;
+                    }
+
+                    if (this.resolutionMode === 'preset') {
+                        this.updateDimensionsFromPreset();
+                    } else if (this.resolutionMode === 'fixedRatio') {
+                        this.recalculateFixedDimensions();
+                        this.update();
+                    } else {
+                        this.update();
+                    }
+                },
+                parseAndAddFontFace() {
+                    const css = this.newFontCss;
+                    const nameMatch = css.match(/font-family\s*:\s*['"]([^'"]+)['"]/);
+                    const urlMatch = css.match(/src\s*:\s*url\(['"]?([^'")]+)['"]?\)/);
+                    const weightMatch = css.match(/font-weight\s*:\s*(\w+)/);
+                    const styleMatch = css.match(/font-style\s*:\s*(\w+)/);
+                    if (nameMatch && urlMatch) {
+                        this.fontFaces.push({
+                            name: nameMatch[1],
+                            url: urlMatch[1],
+                            weight: weightMatch ? weightMatch[1] : 'normal',
+                            style: styleMatch ? styleMatch[1] : 'normal'
+                        });
+                        this.fontFamily = nameMatch[1];
+                        this.newFontCss = '';
+                        this.update();
+                    }
+                },
+                fontFaceStyles() {
+                    return this.fontFaces.map(f =>
+                        `@font-face { font-family: '${f.name}'; src: url('${f.url}') format('woff2'); font-weight: ${f.weight}; font-style: ${f.style}; }`
+                    ).join('\n');
+                },
+                async draw() {
+                    const cv = this.$refs.canvas;
+                    const ctx = cv.getContext('2d');
+                    if (!this.dslObj) return;
+                    // drawOnCanvas가 비동기이므로 await 호출
+                    await window.thumbnailRenderer.ThumbnailRenderer.drawOnCanvas(ctx, this.dslObj);
+                },
+                async update() {
+                    this.dsl = this.generateDSL();
+                    this.dslObj = JSON.parse(this.dsl);
+
+                    if (this.fontFamily && typeof document !== 'undefined' && document.fonts) { // Check for document.fonts support
+                        try {
+                            const fontString = `12px "${this.fontFamily}"`; // Use a common size for checking
+                            // console.log('Currently selected font:', this.fontFamily); // Debugging
+                            if (!document.fonts.check(fontString)) {
+                                // console.log(`Font "${this.fontFamily}" not immediately ready, attempting to load...`);
+                                await document.fonts.load(fontString);
+                                // console.log(`Font "${this.fontFamily}" loaded successfully.`);
+                            } else {
+                                // console.log(`Font "${this.fontFamily}" is already loaded/available.`);
+                            }
+                        } catch (error) {
+                            console.error(`Error loading font "${this.fontFamily}":`, error);
+                            // Optionally, handle the error, e.g., by selecting a default font or showing a message
+                            // For now, we'll just log it and proceed, potentially with a fallback font rendered by the browser.
+                        }
+                    }
+                    // draw()만 호출 (renderer가 모든 환경에서 이미지 처리)
+                    this.draw();
+                },
+                getPresetDimensions(ratioString) {
+                    const presets = {
+                        '16:9': { w: 480, h: 270 },
+                        '9:16': { w: 270, h: 480 },
+                        '4:3': { w: 480, h: 360 },
+                        '1:1': { w: 360, h: 360 }
+                    };
+                    return presets[ratioString];
+                },
+                updateDimensionsFromPreset() {
+                    const dims = this.getPresetDimensions(this.currentAspectRatio);
+                    if (dims) {
+                        this.inputWidth = dims.w;
+                        this.inputHeight = dims.h;
+                    }
+                    this.update(); // Refresh DSL/canvas
+                },
+                onResolutionModeChange() {
+                    if (this.resolutionMode === 'preset') {
+                        this.updateDimensionsFromPreset(); // This will also call this.update()
+                    } else if (this.resolutionMode === 'fixedRatio') {
+                        // When switching to fixedRatio, recalculate based on current aspect ratio and inputWidth
+                        // This ensures consistency if user was previously in 'custom' or 'preset'
+                        this.fixedRatioDrivingInput = 'width'; // Default to driving by width
+                        this.recalculateFixedDimensions();
+                        this.update();
+                    } else { // custom mode
+                        // No specific action needed other than enabling inputs, which is handled by :disabled
+                        this.update();
+                    }
+                },
+                onAspectRatioChange() {
+                    if (this.resolutionMode === 'preset') {
+                        this.updateDimensionsFromPreset(); // This calls this.update()
+                    } else if (this.resolutionMode === 'fixedRatio') {
+                        this.recalculateFixedDimensions();
+                        this.update();
+                    }
+                    // No update() needed if custom, as aspect ratio dropdown is disabled
+                },
+                onDimensionInputChange(changedInput) {
+                    this.fixedRatioDrivingInput = changedInput;
+                    if (this.resolutionMode === 'fixedRatio') {
+                        this.recalculateFixedDimensions();
+                    }
+                    this.update();
+                },
+                recalculateFixedDimensions() {
+                    if (!this.currentAspectRatio) return;
+                    const ratioParts = this.currentAspectRatio.split(':');
+                    if (ratioParts.length !== 2) return;
+                    const aspectNum = parseFloat(ratioParts[0]) / parseFloat(ratioParts[1]);
+                    if (isNaN(aspectNum) || aspectNum <= 0) return;
+
+                    if (this.fixedRatioDrivingInput === 'width' && this.inputWidth != null) {
+                        this.inputHeight = Math.round(this.inputWidth / aspectNum);
+                    } else if (this.fixedRatioDrivingInput === 'height' && this.inputHeight != null) {
+                        this.inputWidth = Math.round(this.inputHeight * aspectNum);
+                    }
+                    // No this.update() here, called by initiator
+                },
+                generateDSL() {
+                    // 배경 설정
+                    const bg = this.bgImageUrl ? {
+                        type: 'image',
+                        imagePath: this.bgImageUrl,
+                        imageOpacity: this.bgImageOpacity,
+                        imageBlur: this.bgImageBlur
+                    } : {
+                        type: 'solid',
+                        color: this.bgColor
+                    };
+
+                    // 텍스트 설정
+                    const texts = [
+                        // 메인 타이틀
+                        {
+                            type: 'title',
+                            content: this.titleText,
+                            gridPosition: this.titleGridPosition,
+                            font: {
+                                name: this.fontFamily,
+                                faces: this.fontFaces
+                            },
+                            fontSize: 48,
+                            color: this.titleColor,
+                            fontWeight: this.titleFontWeight,
+                            fontStyle: this.titleFontStyle,
+                            lineHeight: this.titleLineHeight,
+                            wordWrap: this.titleWordWrap, // New
+                            outline: this.titleOutline ? {
+                                thickness: this.titleOutlineThickness,
+                                color: '#000'
+                            } : null,
+                            enabled: true
+                        }
+                    ];
+
+                    // 서브타이틀이 보이는 경우 추가
+                    if (this.subtitleVisible) {
+                        texts.push({
+                            type: 'subtitle',
+                            content: this.subtitleText,
+                            gridPosition: this.subtitleGridPosition,
+                            font: {
+                                name: this.subtitleFontFamily, // Changed
+                                faces: this.fontFaces
+                            },
+                            fontSize: this.subtitleFontSize, // Changed
+                            color: this.subtitleColor,
+                            fontWeight: this.subtitleFontWeight,
+                            fontStyle: this.subtitleFontStyle,
+                            lineHeight: this.subtitleLineHeight,
+                            wordWrap: this.subtitleWordWrap, // New
+                            outline: this.subtitleOutline ? { thickness: this.subtitleOutlineThickness, color: '#000' } : null, // Changed
+                            enabled: true
+                        });
+                    }
+
+                    // DSL 객체 생성 및 JSON 문자열로 변환
+                    let resolutionDSL;
+                    // Assume this.resolutionMode, this.currentAspectRatio, this.inputWidth, this.inputHeight will be available from thumbnailApp scope.
+                    // These properties will be properly defined and managed in the next plan step.
+                    const mode = this.resolutionMode || 'preset'; // Default to 'preset' if undefined for now
+                    const aspectRatio = this.currentAspectRatio || '16:9'; // Default
+                    const width = this.inputWidth;
+                    const height = this.inputHeight;
+
+                    if (mode === 'preset') {
+                        resolutionDSL = {
+                            type: 'preset',
+                            value: aspectRatio // Uses the existing aspect ratio string like '16:9'
+                        };
+                    } else if (mode === 'fixedRatio') {
+                        resolutionDSL = {
+                            type: 'fixedRatio',
+                            ratioValue: aspectRatio, // e.g., '16:9'
+                            // In a complete implementation, logic would ensure either width or height is present
+                            // For this step, we just structure it; actual values depend on future UI state
+                        };
+                        if (this.fixedRatioDrivingInput === 'width' && width != null) {
+                            resolutionDSL.width = parseInt(width, 10);
+                        } else if (this.fixedRatioDrivingInput === 'height' && height != null) {
+                            resolutionDSL.height = parseInt(height, 10);
+                        } else if (width != null) { // Default to width if driving input not specified or if it leads to no value
+                            resolutionDSL.width = parseInt(width, 10);
+                        } else if (height != null) {
+                            resolutionDSL.height = parseInt(height, 10);
+                        } else { // Fallback: if no dimension is set, use preset width from current aspect ratio
+                            const presetDims = this.getPresetDimensions(aspectRatio);
+                            if(presetDims) resolutionDSL.width = presetDims.w;
+                        }
+
+                    } else if (mode === 'custom') {
+                        resolutionDSL = {
+                            type: 'custom',
+                            width: parseInt(width, 10),
+                            height: parseInt(height, 10)
+                        };
+                    } else { // Fallback to preset if mode is unknown
+                         resolutionDSL = {
+                            type: 'preset',
+                            value: aspectRatio
+                        };
+                    }
+
+                    return JSON.stringify({
+                        Thumbnail: {
+                            Resolution: resolutionDSL, // Use the new structure
+                            Background: bg,
+                            Texts: texts
+                        },
+                        TemplateMeta: {
+                            name: '',
+                            shareable: false
+                        }
+                    }, null, 2);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
