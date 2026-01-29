@@ -1,0 +1,76 @@
+Metadata-Version: 2.4
+Name: fattrace
+Version: 0.0.3
+Summary: Informative Stacktrace that shows everything on the stack
+Author-email: Masataro Asai <guicho271828@gmail.com>
+License-Expression: MIT
+Project-URL: Homepage, https://github.com/guicho271828/fattrace
+Project-URL: Issues, https://github.com/guicho271828/fattrace/issues
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Environment :: Console
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: ansicolors
+Provides-Extra: dev
+Requires-Dist: pdm>=2.24.0; extra == "dev"
+Requires-Dist: mypy; extra == "dev"
+Requires-Dist: mypy-extensions; extra == "dev"
+Requires-Dist: build; extra == "dev"
+Requires-Dist: twine; extra == "dev"
+Dynamic: license-file
+
+
+# Fattrace
+
+Provides an informative (fat) stacktrace that shows everything on the stack.
+
+## Examples
+
+Before:
+
+<img src="imgs/std.png">
+
+After:
+
+<img src="imgs/fat.png">
+
+
+## Highlights
+
+* Removes the need for printf and debugger
+* Special handling for array-like objects which have members that are named one of:
+  * dtype
+  * shape
+  * device
+  * layout
+* Similar to [tbvaccine](https://github.com/skorokithakis/tbvaccine), optionally ignores frames from external libraries
+
+## Usage
+
+Run `fattrace.install()` anywhere to replace the standard stack-trace hook ([`sys.excepthook`](https://docs.python.org/3/library/sys.html#sys.excepthook)).
+
+Customization is done by the keyword arguments:
+
+``` python
+def install(threshold:int=3,
+            include_self:bool=True,
+            include_private:bool=False,
+            include_external:bool=False,
+            ignore:set[str]={},
+            ignore_type:set[type]={},
+            ):
+    ...
+```
+
+* `threshold` : the maximum number of elements to print in a list, tuple, dict, etc.
+* `include_self` : in a method call, whether to print the members of `self`.
+* `include_private` : If true, private variables and members whose names start with "__" are excluded from the trace.
+* `include_external` : if false (default), include assignments only if the code is under the current directory.
+* `ignore` : A set of strings. Variables and members matching any of the names are excluded from the trace.
+* `ignore_type` : A set of types. Variables and members matching any of the types are excluded from the trace.
+
+## License
+
+MIT
