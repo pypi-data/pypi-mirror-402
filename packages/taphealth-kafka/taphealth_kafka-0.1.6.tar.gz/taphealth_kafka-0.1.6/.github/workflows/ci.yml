@@ -1,0 +1,157 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [master]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      publish_to:
+        description: "Publish target"
+        required: true
+        default: "testpypi"
+        type: choice
+        options:
+          - testpypi
+          - pypi
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Run Ruff linter
+        run: ruff check .
+
+      - name: Run Ruff formatter check
+        run: ruff format --check .
+
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for setuptools_scm
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build pytest
+          pip install -e .
+
+      - name: Verify package imports
+        run: |
+          python -c "from taphealth_kafka import KafkaClient, KafkaConsumer, KafkaProducer, Topics; print('All imports successful')"
+
+      - name: Build package
+        run: python -m build
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+        continue-on-error: true
+
+  build:
+    name: Build distribution
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for setuptools_scm
+          ref: ${{ github.event.release.tag_name || github.ref }}
+
+      - name: Fetch all tags
+        run: git fetch --tags --force
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build setuptools_scm
+
+      - name: Verify version
+        run: |
+          echo "Git describe: $(git describe --tags --always)"
+          python -m setuptools_scm
+
+      - name: Build package
+        run: python -m build
+
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+  publish-testpypi:
+    name: Publish to TestPyPI
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish_to == 'testpypi'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/taphealth-kafka
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  publish-pypi:
+    name: Publish to PyPI
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_to == 'pypi')
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/taphealth-kafka
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
