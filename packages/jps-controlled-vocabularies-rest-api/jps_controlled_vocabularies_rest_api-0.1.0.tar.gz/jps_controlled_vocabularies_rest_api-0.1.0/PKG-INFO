@@ -1,0 +1,405 @@
+Metadata-Version: 2.4
+Name: jps-controlled-vocabularies-rest-api
+Version: 0.1.0
+Summary: A lightweight REST service that exposes controlled vocabularies and terms over HTTP for programmatic retrieval and validation.
+Author-email: Jaideep Sundaram <jai.python3@gmail.com>
+License: MIT
+Project-URL: Homepage, https://github.com/jai-python3/jps-controlled-vocabularies-rest-api
+Project-URL: Repository, https://github.com/jai-python3/jps-controlled-vocabularies-rest-api
+Project-URL: Issues, https://github.com/jai-python3/jps-controlled-vocabularies-rest-api/issues
+Keywords: cookiecutter,bootstrap,project-generator,automation
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: typer>=0.12.3
+Requires-Dist: fastapi>=0.115.0
+Requires-Dist: uvicorn[standard]>=0.32.0
+Requires-Dist: pydantic>=2.9.0
+Requires-Dist: pydantic-settings>=2.6.0
+Requires-Dist: pyyaml>=6.0.2
+Requires-Dist: httpx>=0.27.0
+Provides-Extra: test
+Requires-Dist: pytest>=8.0.0; extra == "test"
+Provides-Extra: dev
+Requires-Dist: flake8>=7.0.0; extra == "dev"
+Requires-Dist: black>=24.0.0; extra == "dev"
+Requires-Dist: build>=1.2.1; extra == "dev"
+Requires-Dist: twine>=5.0.0; extra == "dev"
+Requires-Dist: pytest>=8.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=5.0.0; extra == "dev"
+Requires-Dist: isort>=5.13.0; extra == "dev"
+Requires-Dist: codecov>=2.1.13; extra == "dev"
+Requires-Dist: autoflake>=2.3.1; extra == "dev"
+Requires-Dist: pre-commit>=3.8.0; extra == "dev"
+Requires-Dist: bandit>=1.7.9; extra == "dev"
+Requires-Dist: vulture>=2.11; extra == "dev"
+Requires-Dist: flynt>=1.0.1; extra == "dev"
+Requires-Dist: pydocstyle>=6.3.0; extra == "dev"
+Requires-Dist: darglint>=1.8.1; extra == "dev"
+Requires-Dist: mypy>=1.12.1; extra == "dev"
+Requires-Dist: bump-my-version>=1.0.1; extra == "dev"
+Requires-Dist: git-changelog>=2.7.0; extra == "dev"
+Dynamic: license-file
+
+# jps-controlled-vocabularies-rest-api
+
+![Build](https://github.com/jai-python3/jps-controlled-vocabularies-rest-api/actions/workflows/test.yml/badge.svg)
+![Publish to PyPI](https://github.com/jai-python3/jps-controlled-vocabularies-rest-api/actions/workflows/publish-to-pypi.yml/badge.svg)
+[![codecov](https://codecov.io/gh/jai-python3/jps-controlled-vocabularies-rest-api/branch/main/graph/badge.svg)](https://codecov.io/gh/jai-python3/jps-controlled-vocabularies-rest-api)
+
+A lightweight REST service that exposes controlled vocabularies and terms over HTTP for programmatic retrieval and validation.
+
+## 🚀 Overview
+
+`jps-controlled-vocabularies-rest-api` is a FastAPI-based REST service designed to provide programmatic access to controlled vocabularies and terminology. It serves as a stable API layer for consuming vocabulary data from various backend sources including YAML files and PostgreSQL databases.
+
+### Key Features
+
+- **RESTful API** - Clean, well-documented endpoints for vocabulary and term operations
+- **Pluggable Backends** - Support for YAML files (built-in) and PostgreSQL (via plugin)
+- **Search & Validation** - Full-text search across terms and value validation capabilities
+- **OpenAPI Documentation** - Automatic Swagger UI and ReDoc documentation
+- **Container-Ready** - Docker and docker-compose configurations included
+- **Type-Safe** - Full type hints with Pydantic models
+- **Production-Ready** - Health checks, structured logging, and graceful error handling
+
+### Use Cases
+
+1. **Frontend Integration** - Provide drop-down values and definitions for UI components
+2. **Service Integration** - Enable backend services to validate terminology consistently
+3. **Data Validation** - ETL pipelines can validate data against controlled vocabularies
+4. **CI/CD Validation** - Ensure vocabulary definitions are valid before deployment
+
+### Architecture
+
+```
+┌─────────────────┐
+│   FastAPI App   │
+│   (Routers)     │
+└────────┬────────┘
+         │
+         ▼
+┌────────────────────┐
+│  VocabularyStore   │
+│   (Abstraction)    │
+└────────┬───────────┘
+         │
+    ┌────┴─────┐
+    ▼          ▼
+┌─────────┐  ┌──────────────┐
+│ YAML    │  │ PostgreSQL   │
+│ Store   │  │ Store        │
+│ (Built) │  │ (Plugin)     │
+└─────────┘  └──────────────┘
+```
+
+## 📦 Installation
+
+### Option 1: Install from PyPI (coming soon)
+
+```bash
+pip install jps-controlled-vocabularies-rest-api
+```
+
+### Option 2: Install from Source
+
+```bash
+git clone https://github.com/jai-python3/jps-controlled-vocabularies-rest-api.git
+cd jps-controlled-vocabularies-rest-api
+pip install -e .
+```
+
+### Option 3: Using Docker
+
+```bash
+docker-compose up -d
+```
+
+## 🚀 Quick Start
+
+### 1. Configure Environment
+
+```bash
+cp .env.example .env
+# Edit .env with your configuration
+```
+
+Minimal configuration for YAML backend:
+```bash
+VOCAB_BACKEND=yaml
+VOCAB_YAML_PATH=./vocabularies
+```
+
+### 2. Prepare Vocabulary Files
+
+Place your YAML vocabulary files in the `vocabularies/` directory:
+
+```yaml
+# vocabularies/my_vocab.yaml
+vocabulary_id: my_vocabulary
+schema_version: "1.0"
+title: My Vocabulary
+description: Example vocabulary
+
+terms:
+  - key: term1
+    name: Term One
+    description: First term
+    metadata:
+      allowed_values: ["value1", "value2", "value3"]
+```
+
+### 3. Run the Service
+
+#### Using Python directly:
+```bash
+python -m jps_controlled_vocabularies_rest_api.main
+```
+
+#### Using Uvicorn:
+```bash
+uvicorn jps_controlled_vocabularies_rest_api.main:app --host 0.0.0.0 --port 8000
+```
+
+#### Using Docker:
+```bash
+docker-compose up
+```
+
+### 4. Access the API
+
+- **API Base**: http://localhost:8000
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+- **OpenAPI Spec**: http://localhost:8000/openapi.json
+
+## 📚 API Endpoints
+
+### Health & Readiness
+
+- `GET /healthz` - Simple health check
+- `GET /readyz` - Detailed readiness check with backend status
+
+### Vocabularies
+
+- `GET /v1/vocabularies` - List all vocabularies
+- `GET /v1/vocabularies/{vocabulary_id}` - Get vocabulary details
+- `GET /v1/vocabularies/{vocabulary_id}/terms` - List terms (with pagination)
+- `GET /v1/vocabularies/{vocabulary_id}/terms/{term_key}` - Get specific term
+
+### Search
+
+- `GET /v1/search?q={query}` - Search terms across vocabularies
+  - Optional: `vocabulary_id` - Filter by vocabulary
+  - Optional: `limit`, `offset` - Pagination
+
+### Validation
+
+- `POST /v1/validate/value` - Validate a value against a term
+- `POST /v1/validate/registry` - Validate the entire registry
+
+## 💡 Example Usage
+
+### List Vocabularies
+
+```bash
+curl http://localhost:8000/v1/vocabularies
+```
+
+Response:
+```json
+[
+  {
+    "vocabulary_id": "workflow.system_terminology",
+    "schema_version": "1.0",
+    "title": "Workflow and System Terminology",
+    "description": "Core terms used across JPSHealth EHR workflow services",
+    "term_count": 4
+  }
+]
+```
+
+### Get Vocabulary Details
+
+```bash
+curl http://localhost:8000/v1/vocabularies/workflow.system_terminology
+```
+
+### Search Terms
+
+```bash
+curl "http://localhost:8000/v1/search?q=ready"
+```
+
+### Validate a Value
+
+```bash
+curl -X POST http://localhost:8000/v1/validate/value \
+  -H "Content-Type: application/json" \
+  -d '{
+    "vocabulary_id": "workflow.system_terminology",
+    "term_key": "readiness_status",
+    "value": "Almost Ready"
+  }'
+```
+
+Response:
+```json
+{
+  "is_valid": true,
+  "normalized_value": "Almost Ready",
+  "reasons": ["Value is in the list of allowed values"],
+  "allowed_values": ["Ready", "Almost Ready", "Not Ready"],
+  "pattern": null
+}
+```
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VOCAB_BACKEND` | `yaml` | Backend type: `yaml` or `postgres` |
+| `VOCAB_YAML_PATH` | - | Path to YAML file or directory (required for yaml backend) |
+| `VOCAB_YAML_RELOAD` | `false` | Enable hot-reload of YAML vocabularies |
+| `VOCAB_SEARCH_CASE_SENSITIVE` | `false` | Case-sensitive search |
+| `UVICORN_HOST` | `0.0.0.0` | Server host |
+| `UVICORN_PORT` | `8000` | Server port |
+| `POSTGRES_DSN` | - | PostgreSQL connection string (for postgres backend) |
+| `CORS_ALLOW_ORIGINS` | - | Comma-separated list of allowed CORS origins |
+| `LOG_REQUEST_BODIES` | `false` | Enable request body logging |
+
+### PostgreSQL Backend
+
+To use PostgreSQL backend (requires plugin):
+
+1. Install the plugin:
+```bash
+pip install jps-controlled-vocabularies-postgresql
+```
+
+2. Configure environment:
+```bash
+VOCAB_BACKEND=postgres
+POSTGRES_DSN=postgresql://user:pass@localhost:5432/dbname
+```
+
+## 🧪 Development
+
+### Setup Development Environment
+
+```bash
+# Install with dev dependencies
+make install
+
+# Or manually
+pip install -e ".[dev]"
+```
+
+### Run Tests
+
+```bash
+# Run all tests
+make test
+
+# Run with coverage
+pytest --cov=src --cov-report=html
+
+# Run specific test file
+pytest tests/test_health.py
+```
+
+### Code Quality
+
+```bash
+# Format code
+make format
+
+# Run linters
+make lint
+
+# Fix auto-fixable issues
+make fix
+
+# Type checking
+mypy src/
+```
+
+### Pre-commit Hooks
+
+```bash
+pre-commit install
+pre-commit run --all-files
+```
+
+## 🐳 Docker Deployment
+
+### Build Image
+
+```bash
+docker build -t jps-vocab-api:latest .
+```
+
+### Run Container
+
+```bash
+docker run -d \
+  -p 8000:8000 \
+  -e VOCAB_BACKEND=yaml \
+  -e VOCAB_YAML_PATH=/app/vocabularies \
+  -v $(pwd)/vocabularies:/app/vocabularies:ro \
+  --name jps-vocab-api \
+  jps-vocab-api:latest
+```
+
+### Using Docker Compose
+
+```bash
+docker-compose up -d
+docker-compose logs -f
+docker-compose down
+```
+
+## 📖 Documentation
+
+- [Software Requirements Specification (SRS)](SRS.md)
+- [Development SOP](docs/Development_SOP.md)
+- [Release SOP](docs/Release_SOP.md)
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Run tests and linters (`make test && make lint`)
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+## 📝 Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
+## 📜 License
+
+MIT License © Jaideep Sundaram
+
+See [LICENSE](LICENSE) for details.
+
+## 🔗 Related Projects
+
+- `jps-controlled-vocabularies-utils` - Core vocabulary utilities
+- `jps-controlled-vocabularies-postgresql` - PostgreSQL backend plugin
+
+## 📧 Contact
+
+Jaideep Sundaram - jai.python3@gmail.com
+
+Project Link: https://github.com/jai-python3/jps-controlled-vocabularies-rest-api
+
