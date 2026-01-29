@@ -1,0 +1,74 @@
+send_anonymous_usage_stats: true
+project_id: tap-airlines-arg
+requires_meltano: '>=4.0'
+
+default_environment: dev
+
+environments:
+- name: dev
+- name: prod
+
+plugins:
+  extractors:
+  - name: tap-airlines-arg
+    namespace: tap_airlines
+    pip_url: -e .
+    executable: tap-airlines-arg
+    capabilities:
+    - state
+    - catalog
+    - discover
+    - about
+    - stream-maps
+    - structured-logging
+
+    settings:
+    - name: api_url
+      kind: string
+      label: API URL
+      description: Base URL del API (sin /all-flights).
+
+    - name: api_key
+      kind: string
+      label: API Key
+      description: Valor del header 'Key'.
+      sensitive: true
+
+    - name: origin
+      kind: string
+      label: Origin
+      description: Header Origin para el request.
+
+    - name: language
+      kind: string
+      label: Accept-Language
+      description: Header Accept-Language (default es-AR).
+
+    - name: airports
+      kind: array
+      label: Airports (IATA)
+      description: Lista de aeropuertos IATA, ej ["AEP","EZE"].
+
+    - name: days_back
+      kind: integer
+      label: Days Back
+      description: Cuántos días hacia atrás consultar (1 = hoy + ayer).
+
+    - name: user_agent
+      kind: string
+      label: User Agent
+      description: Header User-Agent.
+
+      # Defaults no-sensibles (OK en git)
+    config:
+      api_key: HieGcY2nFreIsNLuo5EbXCwE7g0aRzTN
+      api_url: https://webaa-api-h4d5amdfcze7hthn.a02.azurefd.net/web-prod/v1/api-aa
+      origin: https://www.aeropuertosargentina.com
+      language: es-AR
+      airports: [AEP, EZE]
+      days_back: 1
+      user_agent: Mozilla/5.0
+  loaders:
+  - name: target-jsonl
+    variant: andyh1203
+    pip_url: target-jsonl
