@@ -1,0 +1,206 @@
+Metadata-Version: 2.4
+Name: opencode-analyzer
+Version: 0.1.0
+Summary: A comprehensive tool to analyze opencode logs and provide insights into development activity
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+Requires-Dist: click>=8.0.0
+Requires-Dist: rich>=13.0.0
+Requires-Dist: jsonschema>=4.0.0
+Requires-Dist: python-dateutil>=2.8.0
+Requires-Dist: pathlib2>=2.3.7
+Requires-Dist: pytest>=9.0.2
+Requires-Dist: orjson>=3.11.5
+Requires-Dist: pytz>=2025.2
+
+# Opencode Analyzer
+
+A comprehensive Python tool to analyze opencode logs and provide insights into development activity, patterns, and productivity metrics.
+
+## Features
+
+- **Session Analysis**: Parse and reconstruct session timelines with full message history
+- **Tool Usage Statistics**: Track tool frequency, distribution, and success rates
+- **Token Usage Analytics**: Monitor input, output, and reasoning token consumption across models
+- **Content Theme Analysis**: Identify themes, keywords, and patterns in development work
+- **Activity Patterns**: Analyze hourly, daily, and weekly activity trends
+- **Progress Tracking**: Track project evolution with trend analysis and milestone detection
+- **Error Analysis**: Detect tool errors and debugging session patterns
+- **Search & Discovery**: Full-text search across all prompts and responses
+- **Multiple Output Formats**: Rich terminal tables, JSON, Markdown, and CSV
+- **Interactive CLI**: Feature-rich command-line interface with 7 commands
+
+## Requirements
+
+- Python 3.13+
+- [uv](https://github.com/astral-sh/uv) package manager
+
+## Installation
+
+```bash
+cd /path/to/opencode_analyzer
+uv sync
+```
+
+## Usage
+
+### Commands
+
+```bash
+# Show summary dashboard of all sessions
+uv run opencode-analyzer overview
+
+# List all sessions in reverse chronological order
+uv run opencode-analyzer list
+
+# Deep dive into a specific session
+uv run opencode-analyzer analyze <session-id>
+
+# Search through prompts and responses
+uv run opencode-analyzer search "<query>"
+
+# Generate time-based reports
+uv run opencode-analyzer report --period today|week|month|all
+
+# Show detailed statistics and metrics
+uv run opencode-analyzer stats
+
+# Output all JSON data for a session
+uv run opencode-analyzer cat <session-id>
+```
+
+### Global Options
+
+All commands support these options:
+
+| Option | Description |
+|--------|-------------|
+| `--format` | Output format: `table` (default), `json`, or `markdown` |
+| `--verbose` / `-v` | Enable verbose output for debugging |
+| `--opencode-dir` | Custom opencode data directory (default: `~/.local/share/opencode`) |
+
+### Examples
+
+```bash
+# Overview with JSON output
+uv run opencode-analyzer overview --format json
+
+# Search with markdown output
+uv run opencode-analyzer search "error handling" --format markdown
+
+# Generate weekly report
+uv run opencode-analyzer report --period week
+
+# Analyze session with verbose output
+uv run opencode-analyzer analyze abc123 --verbose
+
+# Use custom data directory
+uv run opencode-analyzer stats --opencode-dir /path/to/opencode
+```
+
+## Project Structure
+
+```
+opencode_analyzer/
+├── src/opencode_analyzer/
+│   ├── __init__.py        # Package initialization
+│   ├── cli.py             # Rich CLI interface (7 commands)
+│   ├── data_parser.py     # Data parsing with caching
+│   ├── analyzer.py        # Core analysis engines
+│   ├── reporter.py        # Multi-format report generation
+│   └── utils.py           # 40+ utility functions
+├── tests/
+│   ├── conftest.py        # Pytest fixtures
+│   ├── unit/              # Component-specific tests
+│   │   ├── test_data_parser.py
+│   │   ├── test_analyzer.py
+│   │   ├── test_cli.py
+│   │   └── test_utils.py
+│   └── integration/
+│       └── test_end_to_end.py
+├── pyproject.toml         # Project configuration
+└── uv.lock                # Dependency lock file
+```
+
+## Data Source
+
+This tool analyzes opencode data stored in `~/.local/share/opencode/`:
+
+| Directory | Contents |
+|-----------|----------|
+| `log/` | Timestamped service log files (`.log`) |
+| `storage/message/` | Session messages organized by session ID |
+| `storage/part/` | Message parts (reasoning, text, tool calls) |
+
+## Analysis Capabilities
+
+### Session Metrics
+- Total sessions, messages, and average metrics
+- Model usage distribution
+- Project correlation
+- Time span and duration calculations
+
+### Tool Analysis
+- Tool frequency and usage distribution
+- Success and error rates per tool
+- Sessions with specific tool patterns
+
+### Content Analysis
+- Keyword extraction (top words and bigrams)
+- Theme identification in prompts
+- Response pattern analysis
+- Reasoning content extraction
+
+### Activity Analysis
+- Hourly, daily, weekly breakdowns
+- Peak activity identification
+- Session length distribution
+- Productivity metrics
+
+### Progress Tracking
+- Timeline reconstruction
+- Cumulative metrics tracking
+- Trend analysis (increasing/decreasing)
+- Milestone identification
+
+## Dependencies
+
+### Core
+- `click` - CLI framework
+- `rich` - Terminal formatting and display
+- `orjson` - Fast JSON parsing
+- `jsonschema` - JSON validation
+- `python-dateutil` - Date/time utilities
+- `pytz` - Timezone support
+
+### Development
+- `pytest` - Test framework
+- `pytest-cov` - Coverage reporting
+- `pytest-mock` - Mocking utilities
+
+## Development
+
+```bash
+# Run all tests
+uv run pytest
+
+# Run with coverage
+uv run pytest --cov=src/opencode_analyzer
+
+# Run specific test file
+uv run pytest tests/unit/test_data_parser.py
+
+# Run integration tests
+uv run pytest tests/integration/
+```
+
+## Performance
+
+- **Caching**: LRU cache for message parsing (max 1000 items)
+- **Parallel Processing**: ThreadPoolExecutor for session parsing (up to 4 workers)
+- **Fast JSON**: Uses orjson for optimized JSON parsing
+- **Streaming**: Handles large datasets efficiently
+
+## License
+
+MIT
