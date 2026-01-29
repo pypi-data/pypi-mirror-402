@@ -1,0 +1,48 @@
+- implementation: nodestream_akamai.netstorage_account:AkamaiNetstorageAccountExtractor
+  arguments:
+    base_url: !config 'base_url'
+    client_token: !config 'client_token'
+    client_secret: !config 'client_secret'
+    access_token: !config 'access_token'
+    account_key: !config 'account_key'
+- implementation: nodestream.interpreting:Interpreter
+  arguments:
+    interpretations:
+    - type: source_node
+      node_type: AkamaiNetstorageAccount
+      normalization:
+        do_remove_trailing_dots: true
+      key:
+        upload_account_id: !jmespath 'uploadAccountId'
+    - type: properties
+      properties:
+        storage_group_name: !jmespath 'storageGroupName'
+        ftp_enabled: !jmespath 'ftpEnabled'
+        ssh_enabled: !jmespath 'sshEnabled'
+        rsync_enabled: !jmespath 'rsyncEnabled'
+        aspera_enabled: !jmespath 'asperaEnabled'
+        has_file_manager_access: !jmespath 'hasFileManagerAccess'
+        has_http_api_access: !jmespath 'hasHttpApiAccess'
+        rule_set_id: !jmespath 'ruleSetId'
+    - type: relationship
+      node_type: AkamaiNetstorageGroup
+      relationship_type: ACCESSES
+      key_normalization:
+        do_remove_trailing_dots: true
+      node_key:
+        storage_group_id: !jmespath 'storageGroupId'
+      outbound: true
+    - type: relationship
+      node_type: AkamaiNetstorageKey
+      relationship_type: AUTHORIZED_BY
+      key_normalization:
+        do_remove_trailing_dots: true
+      node_key:
+        id: !jmespath 'id'
+      iterate_on: !jmespath 'combinedKeys[*]'
+      node_properties:
+        type: !jmespath 'type'
+        http_sha256: !jmespath 'http_sha256'
+        last_modified_by: !jmespath 'lastModifiedBy'
+        last_modified_date: !jmespath 'lastModifiedDate'
+        is_active: !jmespath 'isActive'
