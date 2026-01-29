@@ -1,0 +1,260 @@
+[build-system]
+build-backend = "uv_build"
+requires = ["uv_build>=0.9.11,<0.10.0"]
+
+[dependency-groups]
+lint = [
+    "ruff>=0.8.0",
+    "ty>=0.0.1a27",
+]
+test = [
+    "pytest>=8.1.1",
+    "pytest-asyncio>=0.23.6",
+    "pytest-cov>=4.1.0",
+]
+docs = [
+    "sphinx>=7.0",
+    "shibuya>=2024.0",
+    "sphinx-copybutton>=0.5",
+    "sphinx-design>=0.5",
+    "sphinx-autobuild>=2024.0",
+    "myst-parser>=2.0",
+]
+dev = [
+    {include-group = "lint"},
+    {include-group = "test"},
+    {include-group = "docs"},
+]
+
+[project]
+name = "dpo-reader"
+version = "0.1.0"
+description = "Convert Discourse threads to multi-voice audio using TTS"
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+license = {text = "MIT"}
+authors = [
+    {name = "Jacob Coffee", email = "jacob@z7x.org"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+]
+keywords = [
+    "discourse",
+    "tts",
+    "text-to-speech",
+    "audio",
+    "bark",
+    "piper",
+]
+dependencies = [
+    "httpx>=0.27",
+    "beautifulsoup4>=4.12",
+    "scipy>=1.11",
+    "numpy>=1.24",
+    "rich>=13.0",
+    "typer>=0.12",
+    "textual>=0.50",
+    "sounddevice>=0.4",
+    "bark>=0.1",
+]
+
+[project.optional-dependencies]
+piper = [
+    "piper-tts>=1.2",
+]
+all = [
+    "dpo-reader[piper]",
+]
+
+[project.scripts]
+dpo-reader = "dpo_reader.cli:app"
+
+[project.urls]
+Repository = "https://github.com/JacobCoffee/dpo-reader"
+Documentation = "https://jacobcoffee.github.io/dpo-reader"
+"Issue Tracker" = "https://github.com/JacobCoffee/dpo-reader/issues"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = ["-v", "--strict-markers", "--tb=short"]
+
+[tool.ruff]
+fix = true
+line-length = 120
+src = ["src/dpo_reader", "tests"]
+target-version = "py310"
+
+[tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = 88
+indent-style = "space"
+quote-style = "double"
+
+[tool.ruff.lint]
+fixable = ["ALL"]
+ignore = [
+    "ERA001",   # Commented-out code
+    "TD",       # TODOs
+    "FIX002",   # Line contains TODO
+    "COM812",   # Missing trailing comma (conflicts with formatter)
+    "ISC001",   # Single-line string concatenation (conflicts with formatter)
+    "ANN401",   # Dynamically typed Any
+    "ANN001",   # Missing type annotation for argument
+    "ANN201",   # Missing return type for public functions
+    "ANN202",   # Missing return type for private functions
+    "ANN204",   # Missing return type for __init__
+    "EM101",    # Exception string literal
+    "EM102",    # Exception f-string literal
+    "TRY003",   # Long exception message
+    "TRY002",   # Raise vanilla Exception
+    "D100",     # Missing docstring in public module
+    "D102",     # Missing docstring in public method
+    "D104",     # Missing docstring in public package
+    "TC003",    # Move stdlib imports to TYPE_CHECKING
+    "PLC0415",  # Import not at top of file (needed for optional deps)
+    "PLR0913",  # Too many arguments (CLI commands need them)
+    "B008",     # Function call in default argument (required for Typer)
+    "B904",     # Raise from in except (not always needed)
+    "BLE001",   # Blind exception catch (needed for CLI error handling)
+    "FBT001",   # Boolean positional argument
+    "FBT002",   # Boolean default argument
+    "FBT003",   # Boolean positional value
+    "SIM108",   # Use ternary (readability preference)
+    "RET504",   # Unnecessary assignment before return
+    "T201",     # Print found (needed for download progress)
+    "S310",     # Audit URL open (we control the URLs)
+    "B007",     # Unused loop variable
+    "PLR2004",  # Magic values (acceptable for small constants)
+    "PLR0915",  # Too many statements (CLI commands are complex)
+    "S603",     # Subprocess call security (we control the commands)
+    "S607",     # Partial path subprocess (system audio players)
+    "S110",     # Try-except-pass (valid in UI update loops)
+    "S112",     # Try-except-continue (valid in UI update loops)
+    "TC002",    # Move third-party imports to TYPE_CHECKING
+    "D107",     # Missing docstring in __init__
+    "TID252",   # Relative imports from parent modules
+    "C901",     # Too complex
+    "PLR0912",  # Too many branches
+    "E402",     # Module level import not at top (needed for dotenv loading)
+    "E501",     # Line too long (formatter handles this)
+    "PLW2901",  # Loop variable overwritten
+    "TRY300",   # Return in try block
+    "PERF203",  # Try-except in loop (needed for retry logic)
+    "DTZ005",   # Datetime.now() without tz (display only)
+    "ANN002",   # Missing type annotation for *args
+    "ANN003",   # Missing type annotation for **kwargs
+]
+select = ["ALL"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["dpo_reader", "tests"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.*" = [
+    "ANN",
+    "ARG",
+    "D",
+    "PLR",
+    "S101",
+    "SLF001",
+]
+"docs/conf.py" = [
+    "INP001",   # Missing __init__.py (not needed for docs)
+    "PTH100",   # os.path.abspath (standard for Sphinx conf)
+    "A001",     # Variable shadowing builtin (copyright is Sphinx standard)
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ty]
+
+[tool.ty.environment]
+python = ".venv"
+
+[tool.ty.rules]
+deprecated = "warn"
+
+[tool.ty.src]
+exclude = ["tests/"]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.git-cliff.changelog]
+header = """
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+"""
+body = """
+{% if version %}\
+    {% if previous.version %}\
+## [{{ version | trim_start_matches(pat="v") }}]($REPO/compare/{{ previous.version }}..{{ version }}) - {{ timestamp | date(format="%Y-%m-%d") }}
+    {% else %}\
+## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+    {% endif %}\
+{% else %}\
+## [unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+
+### {{ group | striptags | trim | upper_first }}
+
+{% for commit in commits
+| filter(attribute="scope")
+| sort(attribute="scope") %}
+- **({{commit.scope}})** {{ commit.message }} - ([{{ commit.id | truncate(length=7, end="") }}]($REPO/commit/{{ commit.id }}))
+{%- endfor -%}
+{%- for commit in commits %}
+{%- if commit.scope -%}
+{% else %}
+- {{ commit.message }} - ([{{ commit.id | truncate(length=7, end="") }}]($REPO/commit/{{ commit.id }}))
+{% endif -%}
+{% endfor -%}
+{% endfor %}
+"""
+footer = """
+---
+*dpo-reader Changelog*
+"""
+output = "docs/changelog.md"
+postprocessors = [
+  {pattern = '\$REPO', replace = "https://github.com/JacobCoffee/dpo-reader"},
+]
+trim = true
+
+[tool.git-cliff.git]
+commit_parsers = [
+  {message = "^feat", group = "Features"},
+  {message = "^fix", group = "Bug Fixes"},
+  {message = "^doc", group = "Documentation"},
+  {message = "^perf", group = "Performance"},
+  {message = "^refactor", group = "Refactoring"},
+  {message = "^style", group = "Style"},
+  {message = "^revert", group = "Revert"},
+  {message = "^test", group = "Tests"},
+  {message = "^chore\\(version\\):", skip = true},
+  {message = "^chore", group = "Miscellaneous Chores"},
+]
+conventional_commits = true
+filter_unconventional = true
+sort_commits = "oldest"
+tag_pattern = "v[0-9].*"
