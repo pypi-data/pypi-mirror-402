@@ -1,0 +1,339 @@
+[build-system]
+requires = [
+    "scikit-build-core>=0.11.5",
+    "pybind11>=3.0.0",
+    # Add numpy to build requirements for headers
+    "numpy>=2.0.2",
+    # patchelf is needed during install to set RPATH on Linux
+    "patchelf>=0.17.2.4; sys_platform == 'linux'",
+]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "mmgpy"
+version = "0.5.1"
+description = "Python bindings for the MMG software"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "meshio>=5.3.5",
+    "numpy>=2.0.2",
+    "patchelf>=0.17.2.4; sys_platform == 'linux'",
+    "pyvista>=0.46.4",
+    "rich>=13.0.0",
+    "scipy>=1.11.0,<1.17",
+    "typing-extensions>=4.0.0; python_version < '3.11'",
+]
+authors = [{ name = "Kevin Marchais", email = "kevinmarchais@gmail.com" }]
+license = { text = "MIT" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+# Optional dependencies for pip/uvx users (e.g., pip install mmgpy[ui])
+# Note: dependency-groups below are for local dev with uv sync --group <name>
+[project.optional-dependencies]
+ui = [
+    "pywebview>=6.1",
+    "trame>=3.12.0",
+    "trame-vtk>=2.10.2",
+    "trame-vtklocal>=0.16.0",
+    "trame-vuetify>=3.2.0",
+]
+
+[tool.mmgpy]
+mmg_version = "5.8.0"
+vtk_version = "9.5.2"
+
+[tool.uv]
+# Allow editable installs without --no-build-isolation flag
+no-build-isolation-package = ["mmgpy"]
+
+[tool.scikit-build]
+# Build configuration
+build.verbose = true
+cmake.version = ">=3.15"
+cmake.args = ["-DCMAKE_BUILD_TYPE=Release"]
+cmake.define = { BUILD_TESTING = "OFF", BUILD_SHARED_LIBS = "ON", MMGPY_SKIP_EXECUTABLES = "OFF" }
+
+build-dir = "build"
+
+# Editable install configuration (auto-rebuild when C++ files change)
+editable.rebuild = true
+editable.verbose = false
+
+# Wheel configuration
+wheel.packages = ["src/mmgpy"]
+
+# Source distribution
+sdist.include = ["CMakeLists.txt", "src/*", "extern/*", "scripts/*"]
+sdist.exclude = ["vtk*/**", "vtk*.tar.gz", "*.mesh", "*.sol", "*.vtk"]
+
+# Scripts entry points - wrappers that find and run native MMG executables.
+# Native executables (mmg3d_O3, mmg2d_O3, mmgs_O3) are installed to mmgpy/bin/
+# and symlinked to venv/bin/ by CMake. These wrapper entry points provide
+# shorter command names (mmg3d, mmg2d, mmgs) and the unified 'mmg' command.
+[project.scripts]
+mmgpy = "mmgpy:_run_mmg"
+mmg = "mmgpy:_run_mmg"
+mmg2d = "mmgpy:_run_mmg2d"
+mmg3d = "mmgpy:_run_mmg3d"
+mmgs = "mmgpy:_run_mmgs"
+
+[project.entry-points."mmgpy.ui"]
+ui = "mmgpy.ui:run_ui"
+
+[project.gui-scripts]
+mmgpy-ui = "mmgpy.ui.__main__:main"
+
+[dependency-groups]
+dev = [
+    # Build dependencies (needed for editable installs without build isolation)
+    "scikit-build-core>=0.11.5",
+    "pybind11>=3.0.0",
+    "numpy>=2.0.2",
+    # Dev tools
+    "build>=1.4.0",
+    "imageio>=2.37.2",
+    "mypy>=1.19.1",
+    "pre-commit>=4.0.1",
+    "pytest>=8.3.4",
+    "pytest-benchmark>=5.0.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.14.10",
+]
+docs = [
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.24.0",
+]
+ui = [
+    "pywebview>=6.1",
+    "trame>=3.12.0",
+    "trame-vtk>=2.10.2",
+    "trame-vtklocal>=0.16.0",
+    "trame-vuetify>=3.2.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py", "bench_*.py"]
+markers = [
+    "benchmark: marks tests as benchmarks (deselect with '-m \"not benchmark\"')",
+]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "D203",   # incompatible with D211 (no-blank-line-before-class)
+    "D213",   # incompatible with D212 (multi-line-summary-first-line)
+    "COM812", # conflicts with formatter
+]
+
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/**/*.py" = [
+    "S101",    # asserts allowed in tests
+    "T201",    # print statements allowed in tests for debugging
+    "SLF001",  # accessing private members allowed in tests
+    "BLE001",  # broad exception catching allowed in tests
+    "PLC0415", # imports inside functions are intentional for fixtures
+    "N806",    # uppercase variable names for matrices (M, D, H) standard in math
+    "PLR2004", # magic values allowed in tests
+    "PLR0913", # many arguments allowed in test helper functions
+    "S603",    # subprocess calls allowed in tests
+    "S607",    # partial executable paths allowed in tests
+    "TC003",   # pathlib import in runtime allowed for test fixtures
+    "ANN",     # type annotations not required for tests
+]
+".github/scripts/**/*.py" = [
+    "INP001",  # CI scripts are not a package
+    "T201",    # print statements needed for CI output
+    "PLR2004", # magic values (like argument counts) are fine in scripts
+    "C901",    # complex wheel optimization function is acceptable
+    "PLR0912", # many branches in wheel optimization is acceptable
+    "PLR0915", # many statements in wheel optimization is acceptable
+]
+"src/mmgpy/metrics.py" = [
+    "N806",    # uppercase variable names for matrices (M, D, H) standard in math
+    "N803",    # uppercase argument names for matrices standard in math
+    "PLR2004", # magic values (2, 3, 6) are dimension constants in math code
+    "C901",    # complex functions acceptable for mathematical algorithms
+]
+"examples/**/*.py" = [
+    "T201",    # print statements essential for example output
+    "PLR0913", # many arguments allowed for clarity in examples
+    "PLR0915", # long functions allowed for comprehensive examples
+    "PERF401", # list comprehensions not required in examples (readability first)
+    "PTH123",  # open() is fine for simple examples
+    "PLR2004", # magic values allowed in examples
+    "N806",    # uppercase variable names for matrices in examples
+]
+"scripts/**/*.py" = [
+    "INP001",  # scripts are not a package
+    "T201",    # print statements allowed in scripts
+    "EXE001",  # shebang is fine in scripts
+    "PLR2004", # magic values allowed in scripts
+    "S603",    # subprocess calls are safe (calling our own executables)
+]
+"benchmarks/**/*.py" = [
+    "S101",    # asserts allowed in benchmarks
+    "PLR2004", # magic values allowed in benchmarks
+    "INP001",  # benchmarks directory is not a package
+    "TC002",   # third-party imports in runtime for type annotations
+    "TC003",   # stdlib imports in runtime for type annotations
+    "S603",    # subprocess calls are safe (calling our own executables)
+    "S607",    # partial executable paths are intentional for benchmarks
+    "PLC0415", # imports in functions are fine for benchmarks
+    "T201",    # print statements used for timing reports
+]
+"src/mmgpy/__init__.py" = [
+    "S603",   # subprocess calls with absolute paths to system tools are safe
+    "E402",   # imports inside functions are intentional for lazy loading
+    "D417",   # self parameter doesn't need documenting for methods
+    "PLR0915", # wrapper functions that patch multiple mesh classes have many statements
+]
+"src/mmgpy/_logging.py" = [
+    "PLC0415", # imports inside functions for optional Rich dependency
+]
+"src/mmgpy/_progress.py" = [
+    "PLC0415", # imports inside functions for optional Rich dependency
+]
+"src/mmgpy/_mmgpy.pyi" = [
+    "PYI021",  # Docstrings intentionally included for IDE support (issue #111)
+    "D418",    # Docstrings in @overload methods intentional for IDE support
+]
+"src/mmgpy/interactive/*.py" = [
+    "PLC0415", # imports inside functions to avoid circular imports
+]
+"src/mmgpy/ui/**/*.py" = [
+    # Trame/UI patterns
+    "PLC0415", # imports inside functions for lazy loading
+    "ARG002",  # unused kwargs in callbacks (trame pattern)
+    "ANN",     # type annotations not required for UI callbacks
+    "FBT",     # boolean positional args for debug flag
+    "SIM117",  # nested withs for trame context managers
+    "E501",    # long lines in UI strings (tooltips, JS expressions)
+    # Complexity (parser and validation logic)
+    "C901",    # complex functions in parsers and remeshing
+    "PLR0911", # many returns in recursive AST evaluator
+    "PLR0912", # many branches in parser and validation logic
+    "PLR0915", # many statements in sol file parser
+    "PLR2004", # magic values (MMG solution types, VTK cell types)
+    # Error handling
+    "BLE001",  # broad exception catching for UI error handling
+    "S110",    # try-except-pass for optional features
+    "SIM105",  # try-except-pass for optional feature detection
+    # Exception messages
+    "TRY003",  # exception messages are user-facing
+    "TRY301",  # simple raises in validation code
+    "EM101",   # string literals in exceptions for clarity
+    "EM102",   # f-string in exceptions for user messages
+    # Other
+    "RUF001",  # unicode multiplication sign intentional (×)
+    "RUF046",  # int(floor()) is explicit for significant figures
+    "PLW2901", # loop variable reassignment in parsers.py
+    "SIM102",  # nested ifs clearer in samples.py triangulate check
+    "T201",    # print used for debug HTML output
+]
+
+[tool.ty.src]
+# Exclude tests, scripts, examples, and certain modules from type checking
+# Progress module uses union types that cause complex type inference issues
+# Interactive module uses PyVista types that have incomplete stubs
+# UI module uses trame which has no type stubs
+exclude = ["tests/**", "scripts/**", "examples/**", "src/mmgpy/_progress.py", "src/mmgpy/interactive/**", "src/mmgpy/ui/**"]
+
+[tool.ty.rules]
+# Ignore unresolved imports for C++ extension module that isn't available at type-check time
+unresolved-import = "ignore"
+
+[tool.cibuildwheel]
+build-frontend = "build[uv]"
+build = "cp310-* cp311-* cp312-* cp313-*"
+# Skip 32-bit builds and musllinux (VTK doesn't provide musllinux wheels)
+skip = "*-win32 *-manylinux_i686 *-musllinux*"
+test-command = 'python -c "import mmgpy"'
+build-verbosity = 1
+
+[[tool.cibuildwheel.overrides]]
+select = "*-macosx_x86_64"
+environment = { MACOSX_DEPLOYMENT_TARGET = "10.15" }
+
+[[tool.cibuildwheel.overrides]]
+select = "*-macosx_arm64"
+environment = { MACOSX_DEPLOYMENT_TARGET = "11.0" }
+
+[[tool.cibuildwheel.overrides]]
+select = "*-macosx*"
+inherit.environment = "append"
+environment = { "VTK_DIR" = "/tmp/vtk/cmake/vtk-9.5", "CMAKE_PREFIX_PATH" = "/tmp/vtk:/tmp", "CMAKE_IGNORE_PATH" = "/opt/homebrew:/opt/homebrew/lib:/opt/homebrew/include:/usr/local:/usr/local/lib:/usr/local/include" }
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64", "aarch64"]
+before-all = [
+    'echo "AUDITWHEEL_PLAT=${AUDITWHEEL_PLAT}"',
+    # Use pre-downloaded VTK from CI cache, or download if not available (local dev)
+    'if [ -d "/project/vtk-cache/vtk" ]; then echo "Using cached VTK from /project/vtk-cache/vtk"; cp -r /project/vtk-cache/vtk /tmp/vtk; else echo "Downloading VTK..."; /project/.github/scripts/download_vtk.sh linux $(uname -m) /tmp && mv /tmp/vtk-cache/vtk /tmp/vtk; fi',
+    # Set up symlinks expected by CMake
+    'rm -rf /tmp/lib64 && ln -s /tmp/vtk/lib64 /tmp/lib64',
+    'rm -rf /tmp/lib && ln -s /tmp/vtk/lib64 /tmp/lib',
+    'ln -sf /tmp/vtk/bin /tmp/bin || true',
+    'ln -sf /tmp/vtk/include /tmp/include || true',
+    'echo "VTK ready: $(ls /tmp/vtk/lib64/libvtk*.so 2>/dev/null | wc -l) libraries"',
+]
+environment = { "VTK_DIR" = "/tmp/vtk/cmake/vtk-9.5", "CMAKE_PREFIX_PATH" = "/tmp/vtk:/tmp", "CMAKE_IGNORE_PATH" = "/usr/lib:/usr/local/lib:/opt" }
+environment-pass = ["VTK_VERSION"]
+# Run auditwheel with full VTK (needs all deps), then optimize_wheels.py filters after
+repair-wheel-command = "LD_LIBRARY_PATH=/tmp/vtk/lib64:$LD_LIBRARY_PATH auditwheel repair -w {dest_dir} --exclude libmmg2d.so.5 --exclude libmmg3d.so.5 --exclude libmmgs.so.5 {wheel} && python3 /project/.github/scripts/optimize_wheels.py {dest_dir}/*.whl && for whl in {dest_dir}/*.whl; do size=$(stat -c%s \"$whl\"); if [ \"$size\" -gt 104857600 ]; then echo \"ERROR: Wheel exceeds 100MB PyPI limit: $whl ($size bytes)\"; exit 1; fi; done"
+
+[tool.cibuildwheel.macos]
+archs = ["arm64"]
+before-all = [
+    # Use pre-downloaded VTK from CI cache, or download if not available (local dev)
+    'if [ -d "./vtk-cache/vtk" ]; then echo "Using cached VTK from ./vtk-cache/vtk"; cp -r ./vtk-cache/vtk /tmp/vtk; else echo "Downloading VTK..."; ./.github/scripts/download_vtk.sh macos $(uname -m) /tmp && mv /tmp/vtk-cache/vtk /tmp/vtk; fi',
+    # Set up symlinks expected by CMake
+    'ln -sf /tmp/vtk/lib /tmp/lib || true',
+    'ln -sf /tmp/vtk/bin /tmp/bin || true',
+    'ln -sf /tmp/vtk/include /tmp/include || true',
+    'echo "VTK ready: $(ls /tmp/vtk/lib/libvtk*.dylib 2>/dev/null | wc -l) libraries"',
+]
+environment = { "VTK_DIR" = "/tmp/vtk/cmake/vtk-9.5", "CMAKE_PREFIX_PATH" = "/tmp/vtk:/tmp", "CMAKE_IGNORE_PATH" = "/opt/homebrew:/opt/homebrew/lib:/opt/homebrew/include:/usr/local:/usr/local/lib:/usr/local/include", "MACOSX_DEPLOYMENT_TARGET" = "10.15" }
+# Skip delocate due to VTK install_name issues; optimize wheel and copy
+repair-wheel-command = "python3 $PWD/.github/scripts/optimize_wheels.py {wheel} && cp {wheel} {dest_dir}/"
+
+[tool.cibuildwheel.windows]
+archs = ["AMD64"]
+before-all = [
+    "powershell -Command \"$VTK_VERSION = $env:VTK_VERSION; $RELEASE_TAG = 'VTK-' + $VTK_VERSION + '-shared'; $VTK_FILE = 'vtk-Windows-x86_64.tar.gz'; $VTK_URL = 'https://github.com/sanguinariojoe/vtk-builds/releases/download/' + $RELEASE_TAG + '/' + $VTK_FILE; Invoke-WebRequest -Uri $VTK_URL -OutFile vtk.tar.gz; New-Item -Path 'C:/vtk' -ItemType Directory -Force; tar -xzf vtk.tar.gz -C C:/vtk --strip-components=1\"",
+    "powershell -Command \"New-Item -Path 'C:/lib' -ItemType Directory -Force; New-Item -Path 'C:/bin' -ItemType Directory -Force; New-Item -Path 'C:/include' -ItemType Directory -Force; Move-Item 'C:/vtk/*.lib' 'C:/lib/' -Force; Move-Item 'C:/vtk/*.dll' 'C:/bin/' -Force; Move-Item 'C:/vtk/*.exe' 'C:/bin/' -Force; Move-Item 'C:/vtk/vtk-9.5' 'C:/include/vtk-9.5' -Force\"",
+]
+environment = { VTK_DIR = "C:/vtk/cmake/vtk-9.5" }
+repair-wheel-command = "uvx delvewheel repair -w {dest_dir} {wheel} --add-path C:/bin --ignore-in-wheel && powershell -Command \"Get-ChildItem '{dest_dir}/*.whl' | ForEach-Object { if ($_.Length -gt 104857600) { throw ('Wheel exceeds 100MB PyPI limit: ' + $_.Name + ' (' + $_.Length + ' bytes)') } }\""
+
+[tool.coverage.run]
+source = ["src/mmgpy"]
+branch = true
+omit = [
+    "*/_mmgpy*",
+    "*/interactive/*",  # PyVista UI code requires display, hard to test in CI
+    "*/ui/__init__.py", # UI entry points require trame server
+    "*/ui/__main__.py", # Entry point for UI
+    "*/ui/app.py",      # Trame UI app requires browser
+    "*/ui/viewer.py",   # Trame viewer mixin requires browser
+    "*/ui/remeshing.py", # Trame remeshing mixin requires browser
+]
+
+[tool.coverage.report]
+fail_under = 70
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@overload",
+]
