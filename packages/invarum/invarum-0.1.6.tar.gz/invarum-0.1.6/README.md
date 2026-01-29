@@ -1,0 +1,248 @@
+# ⚡ Invarum CLI 
+
+**Prompt it. Measure it. Fix it. Prove it. Bring certainty to LLM quality—and evidence.**
+
+The Invarum CLI is a thin, fast client for the Invarum Cloud Engine. Use it to run quantitative LLM evaluations, generate **audit-ready evidence bundles**, and enforce **policy gates** in CI/CD—without leaving the command line.
+
+> **Get started:** You need an Invarum account and API key.
+> Sign up at **[app.invarum.com](https://app.invarum.com)**.
+
+---
+
+## 📦 Features
+
+### 1) Headless Invarum Engine
+
+Submit prompts to the Invarum Cloud, where they’re evaluated with the deterministic **4D Energy Model**.
+
+* **Live status:** stream progress and view the final response in your terminal
+* **Scoring:** get immediate **α / β / γ / δ** scores in a readable table
+
+### 2) Audit-Ready Evidence
+
+Export forensic artifacts for any run—ready to attach to an **incident review** or internal audit packet.
+
+* **JSON evidence bundle:** machine-readable export containing scores, policy outcomes, metadata, and **SHA-256** integrity hashes
+* **PDF report:** download a formatted audit report via the CLI
+
+### 3) CI/CD Gating
+
+Stop bad prompts from reaching production.
+
+* Use `--strict` to return **exit code 1** when a run fails policy gates
+* Ideal for GitHub Actions, GitLab CI, and regression test suites
+
+### 4) Enterprise Observability (OTel)
+
+Invarum is **OpenTelemetry (OTel) native**.
+
+* Each run can emit standard OTel traces
+* Connect Datadog, Honeycomb, or New Relic to view quality signals alongside operational telemetry
+
+---
+
+## ⚛️ The Invarum Engine
+
+Unlike “LLM-as-a-judge” tools that depend on subjective model opinions, Invarum evaluates outputs using a deterministic pipeline and returns **repeatable scores**, **policy gate decisions**, and **audit-ready evidence bundles** suitable for **incident review** and internal governance.
+
+### The 4D Energy Model
+
+We measure LLM behavior along four orthogonal axes:
+
+| Metric                | Signal                     | What it Measures                                                                                                             |
+| :-------------------- | :------------------------- | :--------------------------------------------------------------------------------------------------------------------------- |
+| **α TaskScore**       | **Task alignment**         | Did the output follow the request and constraints (format, requirements, and reference match when provided)?                 |
+| **β Coherence**       | **Semantic continuity**    | Did the response stay on-track—logically consistent, well-structured, and free of drift or contradiction?                    |
+| **γ Entropy / Order** | **Variance & determinism** | Is output variability appropriate for the domain and task (stable for scientific/legal; broader for creative/brainstorming)? |
+| **δ Efficiency**      | **Cost-to-value**          | How much useful information was delivered per token (and time), relative to the expected structure and verbosity?            |
+
+> The physics analogy is intentional: scores behave like measurable state variables, and policy gates define what “stable” looks like for a given domain.
+
+### Policy-as-Code Gating
+
+Runs are evaluated against a selected **Policy Profile** (internal governance by default). The engine returns:
+
+* **Gate results** (must-pass requirements and scored thresholds)
+* An overall verdict plus an explicit decision state:
+  **pass / pass_with_advisory / fail_with_advisory / fail**
+* Structured **advisories** with recommended remediation steps
+
+### Security & Privacy
+
+Invarum is designed for auditability without unnecessary data retention:
+
+1. **BYOK:** your LLM API keys are encrypted at rest and never exposed in plaintext.
+2. **Configurable I/O retention:** prompts and responses can be stored temporarily for debugging or minimized/redacted depending on workspace policy.
+3. **Immutable evidence:** evidence bundles retain **SHA-256** hashes and run metadata for integrity verification—even when raw text retention is minimized.
+
+---
+
+## 🚀 Installation
+
+Install directly via pip:
+
+```bash
+pip install git+https://github.com/Invarum/invarum-cli.git@v0.1.5
+```
+
+*Requires Python 3.9+*
+
+---
+
+## ⚡ Quickstart
+
+### 1) Get an API Key
+
+Log in to the dashboard: **Settings → Developer Access Keys**.
+
+### 2) Authenticate
+
+Save your key locally. This persists until you revoke it.
+
+```bash
+invarum login --key inv_sk_your_secret_key_here
+```
+
+### 3) Run an Evaluation
+
+```bash
+invarum run "Summarize the main findings of this abstract in 5 bullets." --domain scientific
+```
+
+**Example Output:**
+
+```text
+Running evaluation...
+Run ID: run_a1b2c3d4
+
+╭─ LLM Response ──────────────────────────────────────╮
+│ 1. The study establishes a correlation between...   │
+│ 2. Methodology involved a double-blind trial...     │
+│ ...                                                 │
+╰─────────────────────────────────────────────────────╯
+
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━┓
+┃ Metric             ┃ Score ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━┩
+│ Alpha (Task)       │ 0.892 │
+│ Beta (Coherence)   │ 0.910 │
+│ Gamma (Entropy)    │ 0.450 │
+│ Delta (Efficiency) │ 0.780 │
+└────────────────────┴───────┘
+
+Decision: PASS_WITH_ADVISORY
+Policy Profile: internal_governance_default
+View details: https://app.invarum.com/runs/run_a1b2c3d4
+```
+
+> Tip: Open “View details” to inspect diagnostics, sensitivity analysis, and operator traces in the dashboard.
+
+---
+
+## 🛠 Advanced Usage
+
+### Reference-Based Grading
+
+Provide a gold-standard answer to enable higher-fidelity grading when appropriate.
+
+```bash
+invarum run "Explain quantum entanglement" --reference "Quantum entanglement is a phenomenon where..."
+```
+
+Load from files:
+
+```bash
+invarum run -f prompt.txt --reference-file ground_truth.txt
+```
+
+### Task, Domain, and Generation Overrides
+
+Help classification or tune generation.
+
+```bash
+# Specify task and domain
+invarum run "extract dates from this contract" --task extract --domain legal
+
+# Override model temperature
+invarum run "Write a creative poem" --temp 0.9
+```
+
+### Export Evidence (Incident Review / Audit Packet)
+
+```bash
+# Export JSON evidence bundle
+invarum export run_a1b2c3d4 --format json --output evidence.json
+
+# Export formatted PDF audit report
+invarum export run_a1b2c3d4 --format pdf --output report.pdf
+```
+
+### CI/CD Integration
+
+The CLI supports environment variables for automation.
+
+```bash
+export INVARUM_API_KEY="inv_sk_..."
+
+# --strict forces a non-zero exit code on policy failure
+invarum run -f prompt.txt --strict --json > results.json
+```
+
+---
+
+## 🧠 Architecture
+
+Invarum uses a thin client architecture:
+
+1. **CLI (this repo):** auth, file IO, request formatting, and rendering. No proprietary scoring logic runs locally.
+2. **Cloud engine:** prompts are evaluated by the PBPEF pipeline, producing scores, policy outcomes, traces, and evidence artifacts.
+
+```
+[CLI] → [API Gateway] → [PBPEF Pipeline] → [Run Record + Evidence]
+  ↑                                                  ↓
+  └────────────── summarized results ────────────────┘
+```
+
+---
+
+## ❓ Troubleshooting
+
+**"Command not found" after installation?**
+
+If you ran `pip install` but typing `invarum` gives an error, your computer's Python script directory might not be in your system PATH.
+
+You can fix this by adding the path to your environment variables, OR simply run the tool using `python -m`:
+
+```bash
+python -m invarum login
+python -m invarum run "Test prompt"
+
+---
+## 🔬 Roadmap
+
+**MVP (Live Now):**
+
+* [x] Cloud-based energy scoring (α/β/γ/δ)
+* [x] Policy gating & exit codes
+* [x] Web dashboard sync
+* [x] Evidence export (JSON & PDF)
+
+**Coming Soon:**
+
+* [ ] Batch processing (CSV input)
+* [ ] `invarum check` regression suites
+* [ ] Automated drift detection between runs
+
+---
+
+## 🧑‍🔬 Author
+
+**Lucretius Coleman**
+PhD in Physics | Computational Methods | Quantum Systems & Prompt Engineering
+[lacolem1@invarum.com](mailto:lacolem1@invarum.com)
+
+---
+
+## 📄 License
+
+MIT — see `LICENSE`.
