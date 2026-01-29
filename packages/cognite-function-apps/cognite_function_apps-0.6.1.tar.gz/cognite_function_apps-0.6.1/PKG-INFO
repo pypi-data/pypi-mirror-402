@@ -1,0 +1,228 @@
+Metadata-Version: 2.4
+Name: cognite-function-apps
+Version: 0.6.1
+Summary: FastAPI-style framework for building composable Function Apps for Cognite Functions with automatic OpenAPI schema generation and MCP integration
+License-File: LICENSE
+Requires-Python: >=3.10
+Requires-Dist: cognite-sdk>=7.87.0
+Requires-Dist: pydantic>=2.10.5
+Requires-Dist: typing-extensions>=4.11.0
+Provides-Extra: cli
+Requires-Dist: typer>=0.9.0; extra == 'cli'
+Requires-Dist: uvicorn>=0.37.0; extra == 'cli'
+Provides-Extra: tracing
+Requires-Dist: opentelemetry-api>=1.20.0; extra == 'tracing'
+Requires-Dist: opentelemetry-exporter-otlp>=1.20.0; extra == 'tracing'
+Requires-Dist: opentelemetry-sdk>=1.20.0; extra == 'tracing'
+Description-Content-Type: text/markdown
+
+# Function Apps
+
+> **⚠️ IMPORTANT: This project has been renamed**
+>
+> Previously known as **Cognite Typed Functions** (`cognite-typed-functions`)
+>
+> **What changed:**
+>
+> - Package name: `cognite-typed-functions` → `cognite-function-apps`
+> - Import path: `from cognite_typed_functions` → `from cognite_function_apps`
+> - CLI command: `ctf` → `fun`
+>
+> **For existing users:** Update your dependencies and change all imports. All class names and APIs remain unchanged.
+
+Enterprise-grade framework for building composable Function Apps for Cognite Functions with automatic validation, built-in introspection, and AI integration.
+
+## Why Function Apps?
+
+Standard [Cognite Functions](https://docs.cognite.com/cdf/functions/) require a simple `handle(client, data)` function, which becomes unwieldy for complex APIs. This framework provides composable architecture, automatic validation, and built-in introspection.
+
+**Standard Cognite Function:**
+
+```python
+def handle(client, data):
+    try:
+        asset_no = int(data["assetNo"])  # Manual validation
+        include_tax = data.get("includeTax", "false").lower() == "true"  # Manual parsing
+        # Handle routing manually based on data
+        if data.get("action") == "get_item":
+            # Implementation here
+        elif data.get("action") == "create_item":
+            # Different implementation
+    except Exception as e:
+        return {"error": str(e)}  # Basic error handling
+```
+
+**With Function Apps:**
+
+```python
+@app.get("/items/{item_id}")
+def get_item(client: CogniteClient, item_id: int, include_tax: bool = False) -> ItemResponse:
+    """Retrieve an item by ID"""
+    # Type validation and coercion handled automatically
+    # Clear function signature with proper types
+    # Automatic error handling and response formatting
+```
+
+## Key Features
+
+- **[Type-safe routing](docs/type-safety.md)** - Decorator-based syntax with automatic validation
+- **[Async/await support](docs/async-support.md)** - Write both sync and async handlers
+- **[Error handling](docs/error-handling.md)** - Comprehensive error handling with structured responses
+- **[Logging](docs/logging.md)** - Enterprise logging with dependency injection
+- **[Distributed tracing](docs/tracing.md)** - OpenTelemetry-based tracing
+- **[Dependency injection](docs/dependency-injection.md)** - Inject custom dependencies
+- **[Introspection](docs/introspection.md)** - Built-in schema, routes, health endpoints
+- **[Model Context Protocol](docs/mcp.md)** - Native AI tool exposure
+- **[Local development server](docs/dev-server.md)** - Test locally with interactive API docs
+- **[Function client](docs/function-client.md)** - Notebook-first client for exploring functions
+
+## Installation
+
+**Requirements:**
+
+- Python 3.10 or higher
+- uv (recommended) or pip
+
+```bash
+# Install the package
+pip install cognite-function-apps
+
+# Optional: Install with CLI support for dev server
+pip install cognite-function-apps[cli]
+
+# Optional: Install with tracing support
+pip install cognite-function-apps[tracing]
+```
+
+## Quick Start
+
+```python
+from cognite.client import CogniteClient
+from pydantic import BaseModel
+from cognite_function_apps import FunctionApp, create_function_service
+
+# Create your app
+app = FunctionApp(title="My API", version="1.0.0")
+
+# Define your models
+class Item(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float | None = None
+
+class ItemResponse(BaseModel):
+    id: int
+    item: Item
+    total_price: float
+
+# Define your endpoints
+@app.get("/items/{item_id}")
+def get_item(
+    client: CogniteClient,
+    item_id: int,
+    include_tax: bool = False
+) -> ItemResponse:
+    """Retrieve an item by ID"""
+    item = Item(
+        name=f"Item {item_id}",
+        price=100.0,
+        tax=10.0 if include_tax else None
+    )
+    total = item.price + (item.tax or 0)
+    return ItemResponse(id=item_id, item=item, total_price=total)
+
+@app.post("/items/")
+def create_item(client: CogniteClient, item: Item) -> ItemResponse:
+    """Create a new item"""
+    new_id = 12345  # Your creation logic here
+    total = item.price + (item.tax or 0)
+    return ItemResponse(id=new_id, item=item, total_price=total)
+
+# Export the handler for Cognite Functions
+handle = create_function_service(app)
+```
+
+## Test Locally
+
+Install with CLI support and run the development server:
+
+```bash
+pip install cognite-function-apps[cli]
+fun serve examples/
+```
+
+Visit `http://localhost:8000/docs` for interactive API documentation.
+
+See the [Local Development Server guide](docs/dev-server.md) for detailed setup instructions.
+
+## Documentation
+
+> **Note:** Documentation is currently served locally only. We're working on deploying to GitHub Pages for easier access. Until then, you can browse the documentation files directly in this repository or build them locally with `mkdocs serve`.
+
+**Browse the documentation:**
+
+### Getting Started
+
+- [Quick Start & Installation](docs/index.md) - Get up and running
+- [Examples](examples/) - Complete working examples
+
+### Core Features
+
+- [Error Handling](docs/error-handling.md) - Structured error responses
+- [Logging](docs/logging.md) - Enterprise-grade logging
+- [Type Safety](docs/type-safety.md) - Automatic validation and type conversion
+- [Dependency Injection](docs/dependency-injection.md) - Custom dependencies
+- [Async Support](docs/async-support.md) - Concurrent handlers with async/await
+- [Introspection](docs/introspection.md) - Built-in schema and health endpoints
+- [Model Context Protocol](docs/mcp.md) - AI tool integration
+- [Distributed Tracing](docs/tracing.md) - OpenTelemetry observability
+
+### Development Tools
+
+- [Local Dev Server](docs/dev-server.md) - Test functions locally with interactive docs
+- [Function Client](docs/function-client.md) - Notebook-first client for exploring functions
+
+### Advanced Topics
+
+- [App Composition](docs/app-composition.md) - Build modular services
+- [Architecture](docs/architecture.md) - Framework design and internals
+
+### Reference
+
+- [API Reference](docs/api-reference.md) - Complete API documentation
+- [Changelog](docs/changelog.md) - Release notes and version history
+- [Release Process](docs/release-process.md) - How we release new versions
+- [Contributing](docs/contributing.md) - Development and contribution guide
+
+**For the best experience**, build and serve the docs locally with `mkdocs serve` to get the full MkDocs experience with navigation, search, and auto-generated API docs.
+
+## Examples
+
+The framework includes a complete example in `examples/handler.py` demonstrating:
+
+- Type-safe routing with decorator syntax
+- MCP integration for AI tool exposure
+- Built-in introspection endpoints
+- Async handler support
+- Composable app architecture
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](docs/contributing.md) for:
+
+- Development setup
+- Code style guidelines
+- Testing guidelines
+- Documentation guidelines
+- Pull request process
+
+## License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Built specifically for [Cognite Data Fusion](https://www.cognite.com/) [Functions](https://docs.cognite.com/cdf/functions/) platform
+- Decorator routing syntax inspired by [FastAPI](https://fastapi.tiangolo.com/)
+- Data validation powered by [Pydantic](https://pydantic-docs.helpmanual.io/)

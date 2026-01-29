@@ -1,0 +1,44 @@
+# This workflow publishes a Python Package to PyPI when release-please creates a release
+
+name: Publish Package
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/cognite_function_apps/_version.py'
+
+# Scoped permissions for security
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  publish:
+    # Only run if this is a version bump commit from release-please by matching
+    # 'chore(main):' anywhere in the commit message (handles merge commits)
+    if: contains(github.event.head_commit.message, 'chore(main):')
+    runs-on: ubuntu-latest
+    name: "Publish library"
+    environment: CD
+    steps:
+      - name: Check out
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          token: "${{ secrets.GITHUB_TOKEN }}"
+          fetch-depth: 0
+
+      - name: Setup Python Env
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: pipx install uv
+
+      - name: Build package
+        run: uv build
+
+      - name: Release to PyPI
+        run: |
+          uv publish -u __token__ -p ${{ secrets.PYPI_API_TOKEN }} || echo 'Version exists'

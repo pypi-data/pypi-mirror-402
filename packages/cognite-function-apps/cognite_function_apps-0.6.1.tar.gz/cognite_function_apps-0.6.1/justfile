@@ -1,0 +1,80 @@
+# Justfile for cognite-function-apps
+# https://github.com/casey/just
+
+# List available commands
+default:
+    @just --list
+
+# Install dependencies
+install:
+    uv sync --group dev
+
+# Run all tests
+test:
+    uv run pytest
+
+# Run tests with coverage
+test-cov:
+    uv run pytest --cov=cognite_function_apps --cov-report=html
+
+# Run type checker
+typecheck:
+    uv run pyright
+
+# Run linter
+lint:
+    uv run ruff check .
+
+# Format code
+format:
+    uv run ruff format .
+
+# Run pre-commit hooks
+pre-commit:
+    pre-commit run --all-files
+
+# Convert all Python docs to Markdown
+docs-convert:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Converting Python docs to Markdown..."
+    for file in docs-src/*.py; do
+        if [ -f "$file" ]; then
+            echo "Converting $file..."
+            basename=$(basename "$file")
+            uv run jupytext --to md "$file" -o "docs/${basename%.py}.md"
+        fi
+    done
+
+# Convert a single doc file (usage: just docs-convert-file docs-src/error-handling.py)
+docs-convert-file FILE:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Converting {{FILE}}..."
+    basename=$(basename "{{FILE}}")
+    uv run jupytext --to md "{{FILE}}" -o "docs/${basename%.py}.md"
+
+# Serve docs locally (converts Python files first)
+docs-serve: docs-convert
+    uv run mkdocs serve
+
+# Build docs (converts Python files first)
+docs-build: docs-convert
+    uv run mkdocs build
+
+# Clean generated markdown files from Python sources
+docs-clean:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Cleaning generated markdown files..."
+    for file in docs-src/*.py; do
+        if [ -f "$file" ]; then
+            basename=$(basename "$file")
+            md_file="docs/${basename%.py}.md"
+            if [ -f "$md_file" ]; then
+                echo "Removing $md_file"
+                rm -f "$md_file"
+            fi
+        fi
+    done
+

@@ -1,0 +1,120 @@
+"""Generated Python client for {{ app_title }}.
+
+This client was automatically generated from the function's introspection endpoint.
+It includes all Pydantic models and typed methods for calling the function.
+
+Supports both local devserver and deployed Cognite Functions.
+"""
+
+from typing import Any
+
+from cognite_function_apps import BaseFunctionClient, HTTPMethod
+
+{% for import_stmt in imports %}
+{{ import_stmt }}  # type: ignore[reportUnusedImport]
+{% endfor %}
+
+
+{% if models %}
+# ===== Model Definitions =====
+
+{% for model in models %}
+{{ model.source }}
+
+{% endfor %}
+{% endif %}
+
+# ===== Client Implementation =====
+
+class {{ class_name }}(BaseFunctionClient):
+    """Generated client for {{ app_title }}.
+
+    Inherits from BaseFunctionClient which provides infrastructure for:
+    - HTTP calls to devserver (via httpx)
+    - SDK calls to deployed functions (via CogniteClient)
+    - Response unwrapping and error handling
+    - Model deserialization
+
+    Supports two modes:
+    1. Local devserver: Pass base_url (requires httpx)
+    2. Deployed function: Pass cognite_client and function_external_id or function_id
+
+    Example:
+        # Local devserver
+        client = {{ class_name }}(base_url="http://localhost:8000")
+
+        # Deployed function
+        from cognite.client import CogniteClient
+        cognite = CogniteClient(...)
+        client = {{ class_name }}(cognite_client=cognite, function_external_id="my-function")
+    """
+
+{% for method in methods %}
+    def {{ method.name }}(
+        self
+{%- for param in method.parameters -%}
+, {{ param.name }}: {{ param.type }}{% if param.default is defined %} = {{ param.default }}{% endif %}
+{%- endfor -%}
+) -> {{ method.return_type }}:
+        """{{ method.description | indent(8, first=False) }}"""
+        # Build URL with path parameters
+        path = "{{ method.path }}"
+{% for p_name in method.path_params %}
+        path = path.replace("{{'{' + p_name + '}'}}", str({{ p_name }}))
+{% endfor %}
+{% if method.http_method in ["POST", "PUT"] %}
+
+        # Build request body
+        body: dict[str, Any] = {}
+{% for param in method.parameters %}
+{% if param.type.startswith('list[') %}
+        # Serialize list parameter {{ param.name }}
+        body['{{ param.name }}'] = [
+            item.model_dump() if hasattr(item, 'model_dump') else item
+            for item in {{ param.name }}
+        ]
+{% else %}
+        # Serialize {{ param.name }}
+        body['{{ param.name }}'] = (
+            {{ param.name }}.model_dump() if hasattr({{ param.name }}, 'model_dump')
+            else {{ param.name }}
+        )
+{% endif %}
+{% endfor %}
+
+        data = self._call_method(path, HTTPMethod.{{ method.http_method }}, body=body)
+{% else %}
+{% set path_params = method.path_params %}
+{% set query_params = [] %}
+{% for param in method.parameters %}
+{% if param.name not in path_params %}
+{% set _ = query_params.append(param) %}
+{% endif %}
+{% endfor %}
+{% if query_params %}
+
+        # Build query parameters
+        params: dict[str, Any] = {}
+{% for param in query_params %}
+{% if param.required %}
+        params['{{ param.name }}'] = {{ param.name }}
+{% elif param.default == "None" %}
+        if {{ param.name }} is not None:
+            params['{{ param.name }}'] = {{ param.name }}
+{% else %}
+        params['{{ param.name }}'] = {{ param.name }}
+{% endif %}
+{% endfor %}
+
+        data = self._call_method(path, HTTPMethod.{{ method.http_method }}, params=params)
+{% else %}
+
+        data = self._call_method(path, HTTPMethod.{{ method.http_method }})
+{% endif %}
+{% endif %}
+
+        # Deserialize response into Pydantic model if return type is a model
+        return self._deserialize_response(data, "{{ method.return_type }}")
+
+{% endfor %}
+

@@ -1,0 +1,58 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: Python package
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Scoped permissions for security
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write  # Allow posting test results as PR comments
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          pipx install uv
+          uv sync --all-extras
+
+      - name: Check formatting
+        run: |
+          uv run ruff format --check .
+
+      - name: Code checks
+        run: |
+          SKIP=ruff-format uv run pre-commit run --all-files --show-diff-on-failure
+
+      - name: Test with pytest
+        run: |
+          uv run pytest --cov=src/cognite_typed_functions --cov-report=xml --cov-report=term
+
+      - name: Upload coverage reports to Codecov
+        if: matrix.python-version == '3.13'
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: cognitedata/cognite-typed-functions
