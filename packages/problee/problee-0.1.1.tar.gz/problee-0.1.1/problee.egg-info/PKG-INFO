@@ -1,0 +1,209 @@
+Metadata-Version: 2.1
+Name: problee
+Version: 0.1.1
+Summary: Official Python SDK for the Problee prediction market API
+Author-email: Problee <dev@problee.com>
+License: MIT
+Project-URL: Homepage, https://problee.com
+Project-URL: Documentation, https://problee.com/developer/docs
+Project-URL: Repository, https://github.com/problee/problee-python
+Project-URL: Changelog, https://github.com/problee/problee-python/blob/main/CHANGELOG.md
+Keywords: problee,prediction-market,api,sdk,trading,world-chain
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Typing :: Typed
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: requests>=2.28.0
+Provides-Extra: websocket
+Requires-Dist: websockets>=10.0; extra == "websocket"
+Provides-Extra: all
+Requires-Dist: websockets>=10.0; extra == "all"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.21.0; extra == "dev"
+Requires-Dist: mypy>=1.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+Requires-Dist: responses>=0.23.0; extra == "dev"
+
+# Problee Python SDK
+
+Official Python SDK for the Problee prediction market API.
+
+## Installation
+
+```bash
+pip install problee
+```
+
+For WebSocket support:
+
+```bash
+pip install problee[websocket]
+```
+
+## Quick Start
+
+```python
+from problee import ProbClient
+
+# Initialize client with your API key
+client = ProbClient(api_key="pk_live_...")
+
+# List open markets
+markets = client.markets.list(status="open")
+for market in markets.markets:
+    print(f"{market.question}")
+    print(f"  YES: {market.prices.yes:.2%}")
+    print(f"  NO:  {market.prices.no:.2%}")
+```
+
+## Features
+
+- **Markets API**: List, filter, and get market details
+- **Positions API**: Check wallet positions
+- **Quotes API**: Get trade quotes and build transactions
+- **SSE Streaming**: Real-time price updates via Server-Sent Events
+- **WebSocket**: Real-time market updates via WebSocket
+
+## Usage Examples
+
+### List Markets
+
+```python
+# List all open markets
+markets = client.markets.list(status="open")
+
+# Filter by category
+crypto_markets = client.markets.list(category="crypto")
+
+# Sort by volume
+trending = client.markets.list(sort="volume_24h")
+```
+
+### Get Market Details
+
+```python
+# Get single market
+market = client.markets.get("0x1234...")
+print(f"Question: {market.question}")
+print(f"Status: {market.status}")
+print(f"YES Price: {market.prices.yes}")
+
+# Get price history
+history = client.markets.get_history("0x1234...", interval="1h")
+
+# Get recent trades
+trades = client.markets.get_trades("0x1234...", limit=50)
+```
+
+### Get Quote
+
+```python
+# Get quote to buy YES shares
+quote = client.quotes.get(
+    market_id="0x1234...",
+    side="buy",
+    outcome="yes",
+    amount="1000000000000000000",  # 1 USDC in wei
+)
+
+print(f"Price: {quote.price:.4f}")
+print(f"Shares: {quote.shares_out}")
+print(f"Price Impact: {quote.price_impact:.2%}")
+print(f"Quote ID: {quote.quote_id}")
+```
+
+### Check Positions
+
+```python
+# Get all positions for a wallet
+positions = client.positions.list("0xYourWallet...")
+for pos in positions.positions:
+    print(f"Market: {pos.market_address}")
+    print(f"YES Shares: {pos.yes_shares}")
+    print(f"NO Shares: {pos.no_shares}")
+```
+
+### Stream Prices (SSE)
+
+```python
+# Stream real-time price updates
+for update in client.stream.prices():
+    if update.event_type == "price":
+        print(f"Price: YES={update.data['yes']}, NO={update.data['no']}")
+    elif update.event_type == "tokenPrice":
+        print(f"Token: {update.data['symbol']} = ${update.data['price']}")
+```
+
+### WebSocket Streaming
+
+```python
+import asyncio
+
+async def stream_updates():
+    async with client.ws.connect() as ws:
+        # Subscribe to market updates
+        await ws.subscribe("market", "0x1234...")
+
+        async for msg in ws:
+            if msg.type == "price_update":
+                print(f"Price: {msg.data['prices']}")
+            elif msg.type == "trade":
+                print(f"Trade: {msg.data}")
+
+asyncio.run(stream_updates())
+```
+
+## Error Handling
+
+```python
+from problee import ProbClient
+from problee.exceptions import (
+    AuthenticationError,
+    RateLimitError,
+    NotFoundError,
+    ValidationError,
+)
+
+client = ProbClient(api_key="pk_live_...")
+
+try:
+    market = client.markets.get("0xinvalid")
+except NotFoundError:
+    print("Market not found")
+except AuthenticationError:
+    print("Invalid API key")
+except RateLimitError as e:
+    print(f"Rate limited. Retry after {e.retry_after} seconds")
+except ValidationError as e:
+    print(f"Invalid request: {e.errors}")
+```
+
+## Builder Attribution
+
+If you're building an app on Problee, you can include your builder ID:
+
+```python
+client = ProbClient(
+    api_key="pk_live_...",
+    builder_id="your-builder-id",
+)
+```
+
+## API Documentation
+
+For full API documentation, visit: https://problee.com/developer/docs
+
+## License
+
+MIT License - see LICENSE file for details.
