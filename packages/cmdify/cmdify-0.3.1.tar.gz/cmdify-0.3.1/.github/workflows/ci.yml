@@ -1,0 +1,38 @@
+name: CI & Dev Release
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  check-and-publish-dev:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Run pre-commit
+        run: |
+          uv tool run --with pre-commit pre-commit run --all-files
+
+      - name: Set unique dev version
+        run: |
+          uv version --bump patch --bump dev=${{ github.run_number }} --frozen
+
+      - name: Build
+        run: |
+          uv build --no-sources
+
+      - name: Publish Dev Release
+        run: |
+          uv publish
