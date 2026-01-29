@@ -1,0 +1,277 @@
+Metadata-Version: 2.4
+Name: jobextractor
+Version: 0.1.0
+Summary: Professional job description extraction using multiple LLM providers
+Home-page: https://github.com/oelbourki/JobExtractor
+Author: Otmane El Bourki
+Author-email: Otmane El Bourki <otmane.elbourki@gmail.com>
+License: MIT
+Project-URL: Homepage, https://github.com/oelbourki/JobExtractor
+Project-URL: Documentation, https://github.com/oelbourki/JobExtractor#readme
+Project-URL: Repository, https://github.com/oelbourki/JobExtractor
+Project-URL: Issues, https://github.com/oelbourki/JobExtractor/issues
+Keywords: job-extraction,llm,nlp,structured-data,litellm,openai,anthropic,gemini,ollama
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Topic :: Text Processing :: Linguistic
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: litellm>=1.0.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+Requires-Dist: build>=0.10.0; extra == "dev"
+Requires-Dist: twine>=4.0.0; extra == "dev"
+Provides-Extra: docs
+Requires-Dist: sphinx>=5.0.0; extra == "docs"
+Requires-Dist: sphinx-rtd-theme>=1.0.0; extra == "docs"
+Dynamic: author
+Dynamic: home-page
+Dynamic: license-file
+Dynamic: requires-python
+
+# JobExtractor
+
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PyPI version](https://badge.fury.io/py/jobextractor.svg)](https://badge.fury.io/py/jobextractor)
+
+**Professional job description extraction using multiple LLM providers**
+
+JobExtractor is a production-ready Python package that extracts structured information from unstructured job descriptions using various Large Language Models (LLMs). It supports 100+ LLM providers through LiteLLM, including OpenAI, Anthropic, Google, and local models via Ollama.
+
+## Features
+
+- 🔌 **Multi-Provider Support**: Works with OpenAI, Anthropic, Google, Ollama, and 100+ other providers via LiteLLM
+- 🏠 **Local Models**: Support for local models via Ollama
+- 📦 **Batch Processing**: Process single or multiple job descriptions efficiently
+- ✅ **Type-Safe**: Built with Pydantic for robust data validation
+- 🚀 **Production-Ready**: Comprehensive error handling, logging, and retry logic
+- 📊 **Flexible Output**: Export to JSON or formatted text
+- 🔧 **Easy Integration**: Simple API, extensive documentation
+
+## Installation
+
+```bash
+pip install jobextractor
+```
+
+For development:
+```bash
+pip install jobextractor[dev]
+```
+
+## Quick Start
+
+### Basic Usage
+
+```python
+from jobextractor import JobExtractor
+
+# Initialize with OpenAI
+extractor = JobExtractor(
+    provider="openai",
+    api_key="sk-your-api-key"
+)
+
+# Extract from a single job description
+job_description = """
+We are looking for a Senior Software Engineer with 5+ years of experience...
+"""
+
+result = extractor.extract(job_description)
+
+if result:
+    print(f"Job Title: {result.job_title}")
+    print(f"Company: {result.company_name}")
+    print(f"Skills: {result.skills}")
+```
+
+### Using Different Providers
+
+```python
+# Anthropic Claude
+extractor = JobExtractor(
+    provider="anthropic",
+    api_key="sk-ant-your-key",
+    model="claude-sonnet-4.5-20250929"  # Latest Claude Sonnet 4.5
+)
+
+# Google Gemini
+extractor = JobExtractor(
+    provider="google",
+    api_key="your-gemini-key",
+    model="gemini/gemini-3-flash"  # Latest Gemini 3 Flash
+)
+
+# Local Ollama (no API key needed)
+extractor = JobExtractor(
+    provider="ollama",
+    model="llama3.3",  # Latest Llama 3.3 (70B, 128K context)
+    base_url="http://localhost:11434"  # Optional, defaults to this
+)
+```
+
+### Batch Processing
+
+```python
+# Process multiple job descriptions
+descriptions = [
+    "Job description 1...",
+    "Job description 2...",
+    "Job description 3...",
+]
+
+results = extractor.extract_batch(descriptions)
+
+# Filter successful extractions
+successful = [r for r in results if r is not None]
+print(f"Successfully extracted {len(successful)} jobs")
+```
+
+### Export Results
+
+```python
+from jobextractor import generate_txt_file, generate_json_file
+
+# Generate formatted text
+txt_output = generate_txt_file(result)
+with open("output.txt", "w") as f:
+    f.write(txt_output)
+
+# Generate JSON
+json_output = generate_json_file(result)
+with open("output.json", "w") as f:
+    f.write(json_output)
+```
+
+## Supported Providers
+
+JobExtractor supports all providers available through LiteLLM:
+
+- **OpenAI**: GPT-4o, GPT-4o-mini, GPT-4.1, GPT-5, GPT-5.2
+- **Anthropic**: Claude Sonnet 4.5, Claude Opus 4.5, Claude Sonnet 4
+- **Google**: Gemini 3 Flash, Gemini 3 Pro, Gemini 2.0 Flash
+- **Ollama**: Local models (llama3.3, llama3.2, mistral, codellama, etc.)
+- **Groq**: Fast inference with Llama models (Llama 3.3, Llama 4)
+- **Cohere**: Command A, Command R Plus, Command R
+- **And 100+ more** via LiteLLM
+
+See [LiteLLM documentation](https://docs.litellm.ai/) for the complete list.
+
+## API Reference
+
+### JobExtractor
+
+#### `__init__(provider, api_key=None, model=None, base_url=None, timeout=60, max_retries=3, **kwargs)`
+
+Initialize the extractor.
+
+**Parameters:**
+- `provider` (str): LLM provider name (e.g., 'openai', 'anthropic', 'google', 'ollama')
+- `api_key` (str, optional): API key for the provider
+- `model` (str, optional): Model name (defaults to provider's default)
+- `base_url` (str, optional): Custom base URL for local deployments
+- `timeout` (int): Request timeout in seconds (default: 60)
+- `max_retries` (int): Maximum retries on failure (default: 3)
+
+#### `extract(job_description, model=None, **kwargs) -> Optional[JobInformation]`
+
+Extract structured information from a single job description.
+
+**Parameters:**
+- `job_description` (str): Raw job description text
+- `model` (str, optional): Override model for this extraction
+- `**kwargs`: Additional LLM parameters
+
+**Returns:** `JobInformation` object or `None` if extraction fails
+
+#### `extract_batch(job_descriptions, model=None, show_progress=True, **kwargs) -> List[Optional[JobInformation]]`
+
+Extract information from multiple job descriptions.
+
+**Parameters:**
+- `job_descriptions` (List[str]): List of job description texts
+- `model` (str, optional): Override model for this batch
+- `show_progress` (bool): Log progress (default: True)
+- `**kwargs`: Additional LLM parameters
+
+**Returns:** List of `JobInformation` objects (may include `None` for failures)
+
+## Data Model
+
+The `JobInformation` model includes:
+
+- `job_title` (str): Job title or position name
+- `company_name` (str, optional): Company name
+- `department` (str, optional): Department or team
+- `seniority_level` (str, optional): Seniority level
+- `years_of_experience` (str, optional): Experience requirements
+- `work_type` (str, optional): Remote/Hybrid/On-site
+- `location` (str, optional): Job location
+- `salary` (str, optional): Compensation information
+- `required_criteria` (List[str]): Required qualifications
+- `preferred_qualifications` (List[str]): Preferred qualifications
+- `scope_of_responsibilities` (List[str]): Key responsibilities
+- `skills` (List[str]): Technical skills and technologies
+- `education_requirements` (str, optional): Education requirements
+- `benefits` (List[str]): Benefits and perks
+- `additional_info` (str, optional): Additional information
+
+## Examples
+
+See the `examples/` directory for more detailed examples.
+
+## Development
+
+```bash
+# Clone the repository
+git clone https://github.com/oelbourki/JobExtractor.git
+cd jobextractor
+
+# Install in development mode
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Format code
+black jobextractor/
+
+# Lint
+ruff check jobextractor/
+```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+MIT License - see LICENSE file for details.
+
+## Support
+
+- **Documentation**: [Read the docs](https://jobextractor.readthedocs.io)
+- **Issues**: [GitHub Issues](https://github.com/oelbourki/JobExtractor/issues)
+- **Email**: otmane.elbourki@gmail.com
+
+## Acknowledgments
+
+- Built with [LiteLLM](https://github.com/BerriAI/litellm) for multi-provider support
+- Uses [Pydantic](https://pydantic.dev/) for data validation
+- Inspired by the need for structured job market data
