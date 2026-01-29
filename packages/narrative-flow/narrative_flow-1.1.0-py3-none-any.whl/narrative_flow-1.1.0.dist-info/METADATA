@@ -1,0 +1,381 @@
+Metadata-Version: 2.4
+Name: narrative-flow
+Version: 1.1.0
+Summary: Human-readable LLM conversation workflows
+Project-URL: Homepage, https://github.com/hpowers/narrative-flow
+Project-URL: Documentation, https://github.com/hpowers/narrative-flow#readme
+Project-URL: Repository, https://github.com/hpowers/narrative-flow
+Project-URL: Issues, https://github.com/hpowers/narrative-flow/issues
+Author-email: Hunter Powers <hunter@wiretheplanet.com>
+License: MIT License
+        
+        Copyright (c) 2026 Hunter Powers
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+License-File: LICENSE
+Keywords: ai,automation,chatgpt,claude,conversation,gemini,llm,openrouter,workflow
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Typing :: Typed
+Requires-Python: >=3.10
+Requires-Dist: httpx>=0.27
+Requires-Dist: jinja2>=3.1
+Requires-Dist: pydantic>=2.0
+Requires-Dist: python-frontmatter>=1.0.0
+Requires-Dist: pyyaml>=6.0
+Provides-Extra: dev
+Requires-Dist: pre-commit>=4.0; extra == 'dev'
+Requires-Dist: pytest-httpx>=0.30; extra == 'dev'
+Requires-Dist: pytest>=8.0; extra == 'dev'
+Requires-Dist: ruff>=0.14; extra == 'dev'
+Description-Content-Type: text/markdown
+
+# Narrative Flow
+
+Human-readable LLM conversation workflows that can be automated with Python.
+
+## Overview
+
+Narrative Flow lets you define multi-turn LLM conversations in a simple Markdown format, then run them programmatically. This is useful when you've developed a workflow interactively (in ChatGPT, Claude, Google AI Studio, etc.) and want to automate it.
+
+**Key features:**
+
+- 📝 **Human-readable format** - Workflows are Markdown files with YAML frontmatter
+- 🔄 **Multi-turn conversations** - Build up context across multiple messages
+- 📤 **Variable substitution** - Insert input values into prompts
+- 🎯 **Extraction** - Pull specific values from responses using a separate LLM call
+- 📊 **Execution logs** - Full conversation history saved as Markdown
+- 🚀 **Release automation** - Versioning and changelogs managed with release-please on main via promotion PRs and merge-commit back-merges for develop
+
+## Installation
+
+```bash
+pip install narrative-flow
+```
+
+Or with uv:
+
+```bash
+uv add narrative-flow
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/hpowers/narrative-flow
+cd narrative-flow
+uv sync
+```
+
+## Quick Start
+
+### 1. Set your OpenRouter API key
+
+```bash
+export OPENROUTER_API_KEY="your-api-key"
+```
+
+### 2. Create a workflow file
+
+Create `my_workflow.workflow.md`:
+
+```markdown
+---
+name: greeting_workflow
+description: A simple example workflow
+
+models:
+  conversation: openai/gpt-4o
+  extraction: openai/gpt-4o-mini
+
+inputs:
+  - name: topic
+    description: The topic to discuss
+
+outputs:
+  - name: summary
+    description: A summary of the discussion
+    type: string
+---
+
+## Initial Question
+
+Tell me three interesting facts about {{ topic }}.
+
+## Follow Up
+
+Which of those facts do you think is most surprising to most people, and why?
+
+## Extract: summary
+
+Summarize the most surprising fact in one sentence.
+```
+
+### 3. Run your workflow
+
+**From Python:**
+
+```python
+from narrative_flow import parse_workflow, execute_workflow, save_log
+
+# Parse the workflow
+workflow = parse_workflow("my_workflow.workflow.md")
+
+# Execute with inputs
+result = execute_workflow(workflow, {"topic": "octopuses"})
+
+# Check results
+if result.success:
+    print(result.outputs["summary"])
+else:
+    print(f"Error: {result.error}")
+
+# Save the execution log
+save_log(result, output_dir="logs")
+```
+
+**From command line:**
+
+```bash
+# Run with inline inputs
+narrative-flow run my_workflow.workflow.md --input topic="octopuses"
+
+# Run with inputs from JSON file
+narrative-flow run my_workflow.workflow.md --inputs-file inputs.json
+
+# Validate a workflow without running it
+narrative-flow validate my_workflow.workflow.md
+```
+
+**Debug logging:**
+
+```bash
+# Enable debug logging for a single run
+narrative-flow --debug run my_workflow.workflow.md --input topic="octopuses"
+
+# Or set an explicit log level
+narrative-flow --log-level WARNING run my_workflow.workflow.md
+
+# Write debug logs to a file alongside execution logs
+narrative-flow --log-file run my_workflow.workflow.md --input topic="octopuses"
+
+# Include prompt/response payloads (redacted and truncated)
+narrative-flow --log-payloads --debug run my_workflow.workflow.md --input topic="octopuses"
+
+# Environment variable overrides CLI flags
+NARRATIVE_FLOW_LOG_LEVEL=DEBUG narrative-flow run my_workflow.workflow.md
+```
+
+**Debug logging from Python:**
+
+```python
+from narrative_flow import configure_logging
+
+configure_logging(
+    log_level="DEBUG",
+    log_file="logs/workflow.debug.log",
+    log_payloads=True,
+)
+```
+
+Environment variables:
+
+- `NARRATIVE_FLOW_LOG_LEVEL` (e.g., `DEBUG`)
+- `NARRATIVE_FLOW_LOG_PAYLOADS` (`true`/`false`)
+- `NARRATIVE_FLOW_LOG_FILE` (path to log file)
+- `NARRATIVE_FLOW_LOG_PAYLOAD_MAX_CHARS` (default: 2000)
+
+## Workflow File Format
+
+### Frontmatter
+
+```yaml
+---
+name: workflow_name # Required: identifier
+description: What it does # Optional
+
+models:
+  conversation: model/id # Required: for main conversation
+  extraction: model/id # Required: for extracting values
+
+retries: 3 # Optional: retry count (default: 3)
+
+inputs:
+  - name: var_name # Required
+    description: What it is # Optional
+    required: true # Optional (default: true)
+    default: fallback # Optional
+
+outputs:
+  - name: var_name # Must match an Extract step
+    description: What it is # Optional
+    type: string # Optional: string | string_list (default: string)
+---
+```
+
+### Message Steps
+
+Any `##` heading that doesn't start with `Extract:` is a message step:
+
+```markdown
+## Step Name
+
+Your message content here. Use {{ variable }} for substitution.
+
+You can use **any** Markdown formatting—it gets sent to the model as-is.
+```
+
+You can also make roles explicit:
+
+```markdown
+## User
+
+Ask the model a question.
+
+## Assistant
+
+Provide a few-shot assistant response.
+```
+
+`## User` and `## Assistant` steps are treated as explicit roles. Other non-`Extract:` headings are treated as user messages for backward compatibility.
+
+### Extraction Steps
+
+`## Extract: variable_name` extracts a value from the last assistant response:
+
+```markdown
+## Extract: result_var
+
+Natural language instruction for what to extract.
+Return only the extracted value, no explanation.
+```
+
+The extracted value is stored and can be used in subsequent steps as `{{ result_var }}`.
+
+### Output Types
+
+Outputs are typed so extraction is deterministic (the extractor enforces JSON formatting automatically):
+
+- `string` -> extraction must return a JSON string (e.g., `"value"`)
+- `string_list` -> extraction must return a JSON array of strings (e.g., `["a", "b"]`)
+
+### Template Strictness
+
+Undefined `{{ variables }}` raise an error to fail fast. Missing required inputs and undefined variables result in a failed `WorkflowResult` with a clear error message.
+
+## API Reference
+
+### `parse_workflow(source: str | Path) -> WorkflowDefinition`
+
+Parse a workflow from a file path or string content.
+
+### `execute_workflow(workflow, inputs, api_key=None) -> WorkflowResult`
+
+Execute a workflow with the given inputs.
+
+- `workflow`: A `WorkflowDefinition` from `parse_workflow()`
+- `inputs`: Dict of input variable values
+- `api_key`: Optional OpenRouter API key (defaults to `OPENROUTER_API_KEY` env var)
+
+This function returns a `WorkflowResult` on both success and failure. Check `result.success` and `result.error` instead of relying on exceptions.
+
+### `save_log(result, output_dir=".", filename=None) -> Path`
+
+Save execution results as a Markdown log file.
+
+### `generate_log(result) -> str`
+
+Generate log content as a string without saving.
+
+## WorkflowResult
+
+The result object contains:
+
+```python
+result.success           # bool: whether execution succeeded
+result.error             # str | None: error message if failed
+result.outputs           # dict: extracted output values (str or list[str])
+result.inputs            # dict: input values used
+result.conversation_history  # list[Message]: full conversation
+result.step_results      # list[StepResult]: per-step details
+```
+
+## OpenRouter Models
+
+This library uses [OpenRouter](https://openrouter.ai/) to access various LLMs. Some popular model IDs:
+
+- `openai/gpt-4o` - GPT-4o
+- `openai/gpt-4o-mini` - GPT-4o Mini
+- `anthropic/claude-sonnet-4.5` - Claude 4.5 Sonnet
+- `google/gemini-2.5-pro` - Gemini 2.5 Pro
+- `google/gemini-2.5-flash` - Gemini 2.5 Flash
+
+See [OpenRouter Models](https://openrouter.ai/models) for the full list.
+
+## Examples
+
+See the `examples/` directory for complete workflow examples:
+
+| Example                            | Description                                                                | Inputs                                   |
+| ---------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------- |
+| `topic_explainer.workflow.md`      | Explore any topic and extract key insights                                 | `topic`                                  |
+| `blog_post_generator.workflow.md`  | Full blog post with iterative refinement—shows mid-conversation extraction | `subject`, `audience`, `tone`            |
+| `key_takeaways_list.workflow.md`   | Extract a list of concise takeaways                                        | `topic`                                  |
+| `youtube_short_titler.workflow.md` | Generate titles/descriptions using MrBeast's principles                    | `short_transcript`, `episode_transcript` |
+| `few_shot_assistant.workflow.md`   | Demonstrate explicit User/Assistant steps with few-shot prompting          | `product`                                |
+
+```bash
+# Try the simple example
+narrative-flow run examples/topic_explainer.workflow.md --input topic="black holes"
+
+# Try the advanced example
+narrative-flow run examples/blog_post_generator.workflow.md \
+  --input subject="productivity for developers" \
+  --input audience="software engineers"
+```
+
+## Contributing and Release Flow
+
+For the short, practical guide to feature branches, squash merges, promotion PRs, and release-please, see `CONTRIBUTING.md`.
+
+## Development
+
+```bash
+# Install dev dependencies
+uv sync --extra dev
+
+# Run tests
+uv run pytest
+
+# Run linting
+pre-commit run --all-files
+```
+
+## License
+
+MIT
