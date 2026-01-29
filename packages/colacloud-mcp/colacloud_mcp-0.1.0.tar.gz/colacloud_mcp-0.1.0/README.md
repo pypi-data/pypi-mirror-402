@@ -1,0 +1,106 @@
+# colacloud-mcp
+
+MCP server for [COLA Cloud](https://colacloud.us) - access US alcohol label data from AI assistants.
+
+Query 2.5M+ Certificate of Label Approval (COLA) records from the TTB (Alcohol and Tobacco Tax and Trade Bureau) directly from Claude, ChatGPT, or other MCP-compatible AI tools.
+
+## Installation
+
+```bash
+# Using uvx (recommended, no install required)
+uvx colacloud-mcp
+
+# Or install with pip
+pip install colacloud-mcp
+```
+
+## Configuration
+
+### Claude Desktop
+
+Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+
+```json
+{
+  "mcpServers": {
+    "colacloud": {
+      "command": "uvx",
+      "args": ["colacloud-mcp"],
+      "env": {
+        "COLA_API_KEY": "your-api-key-here"
+      }
+    }
+  }
+}
+```
+
+### Other MCP Clients
+
+Set the `COLA_API_KEY` environment variable and run:
+
+```bash
+export COLA_API_KEY="your-api-key-here"
+colacloud-mcp
+```
+
+## Getting an API Key
+
+1. Create an account at [app.colacloud.us](https://app.colacloud.us)
+2. Go to Dashboard > API Keys
+3. Create a new API key
+
+Free tier includes 500 requests/month.
+
+## Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `search_colas` | Search and filter COLA records by brand, product type, origin, dates, ABV |
+| `get_cola` | Get detailed info for a specific COLA by TTB ID |
+| `search_permittees` | Search permit holders (alcohol producers/importers) |
+| `get_permittee` | Get permit holder details with recent COLAs |
+| `lookup_barcode` | Find COLAs by product barcode (UPC/EAN) |
+| `get_api_usage` | Check your API usage and rate limits |
+
+## Example Queries
+
+Once configured, you can ask Claude things like:
+
+- "Search for Tito's vodka labels"
+- "Find wine labels from Napa Valley approved in 2024"
+- "Look up the product with barcode 080686001010"
+- "Show me recent labels from permit holder CA-I-123"
+- "What craft beers have an IBU over 60?"
+
+## Data Available
+
+Each COLA record includes:
+
+- **Basic info**: Brand name, product name, product type, origin
+- **Dates**: Application, approval, expiration dates
+- **Label images**: Front, back, neck, strip labels (1-2 per record)
+- **Extracted data**: ABV, volume, barcodes (via OCR/computer vision)
+- **AI enrichment**: Category, tasting notes, product descriptions
+
+## Development
+
+```bash
+# Clone and install
+git clone https://github.com/cola-cloud-us/colacloud-mcp
+cd colacloud-mcp
+uv sync --dev
+
+# Run locally
+export COLA_API_KEY="your-key"
+uv run colacloud-mcp
+
+# Run tests
+uv run pytest
+
+# Lint
+uv run ruff check .
+```
+
+## License
+
+MIT
