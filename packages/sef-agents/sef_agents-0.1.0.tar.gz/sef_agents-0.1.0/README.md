@@ -1,0 +1,302 @@
+# SEF Agents
+
+![Security Scan](https://github.com/Mishtert/sef-agents/actions/workflows/security-scan.yml/badge.svg)
+![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)
+
+**AI-Powered Guidance for the Synchronous Engineering Framework**
+
+SEF Agents provides agent-based AI guidance, codebase mapping, and quality enforcement for the Synchronous Engineering Framework (SEF).
+
+> *Built on [Anthropic's Model Context Protocol (MCP)](https://modelcontextprotocol.io/) for universal AI assistant compatibility.*
+
+---
+
+## Table of Contents
+
+- [What This Does](#what-this-does)
+- [Features](#features)
+- [Security](#security)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Local Development](#local-development)
+- [Quick Start](#quick-start)
+- [Contributing](#contributing)
+- [About](#about)
+- [License](#license)
+
+---
+
+## What This Does
+
+SEF Agents is an **MCP server** that connects to your AI assistant (Cursor, Claude Desktop, Windsurf). Once connected, it provides:
+
+1. **Agent-based prompts** — Specialized guidance for 13 agents (10 SDLC + 3 utility)
+2. **Quality enforcement tools** — Scan code for compliance, debt, security
+3. **Workflow orchestration** — Track story state, dependencies, handoffs
+
+**Important:** This is not a standalone app. It requires an MCP-compatible AI assistant.
+
+---
+
+## Features
+
+### Agent-Based Guidance (13 Agents)
+
+#### SDLC Workflow Agents (10)
+
+| Agent | Function |
+|------|----------|
+| `discovery` | Brownfield codebase scanning, CODE_MAP generation |
+| `product_manager` | Requirements, acceptance criteria |
+| `qa_lead` | Validates AC *before* development begins |
+| `architect` | System design, boundaries, integration points |
+| `developer` | Elite Code Quality Protocol enforcement |
+| `tester` | Test standards, real-execution tests |
+| `pr_reviewer` | PR review, AI anti-pattern detection |
+| `scrum_master` | Process orchestration, handoff tracking |
+| `security_owner` | Security audit, vulnerability scanning |
+| `test_designer` | Conceptual test design, BDD architecture |
+
+#### Utility Agents (3) — On-Demand
+
+| Agent | Function |
+|------|----------|
+| `forensic_engineer` | Incident investigation, 5 Whys, post-mortems |
+| `strategist` | Solution brainstorming, trade-off analysis |
+| `platform_engineer` | DevEx, health scanning, code quality enforcement |
+
+### Quality Tools
+
+| Tool | What It Does |
+|------|--------------|
+| `generate_codemap` | Auto-document directory structure |
+| `validate_compliance` | Check code against SEF standards |
+| `detect_ai_patterns` | Find AI-generated code smells |
+| `scan_debt` | Detect technical debt (TODOs, bare exceptions, etc.) |
+| `scan_external_dependencies` | Find env vars, API clients, external URLs |
+| `scan_code_quality` | AST-based pe_rules enforcement (bare except, types, logging) |
+| `scan_health` | Unified health report across all quality dimensions |
+
+### Workflow Tools
+
+| Tool | What It Does |
+|------|--------------|
+| `init_workflow` | Start tracking a story |
+| `get_workflow_state` | See current phase, blockers, artifacts |
+| `suggest_next_agent` | Auto-suggest agent transitions |
+| `generate_story_dependency_graph` | Visualize story dependencies |
+| `detect_flow_gaps` | Find broken E2E flows |
+
+---
+
+## Security
+
+SEF Agents is designed with security as a core principle:
+
+- ✅ **No Network Calls**: Contains no HTTP clients, sockets, or external communication
+- ✅ **No Data Exfiltration**: All operations are local-only
+- ✅ **No Hardcoded Secrets**: Scanned for credentials and API keys
+- ✅ **Audited Dependencies**: All dependencies use permissive OSS licenses
+- ✅ **Stdio Transport Only**: Communication via standard input/output streams
+
+### Run Security Audit
+
+Enterprise customers can verify these claims:
+
+```bash
+# Run full security audit
+uv run python -m sef_agents.security_scan
+
+# Output JSON for CI/CD
+uv run python -m sef_agents.security_scan --format json
+```
+
+See [SECURITY.md](SECURITY.md) for full security policy and architecture details.
+
+---
+
+## Installation
+
+### Prerequisites
+- `uv` or `uvx` ([Install uv](https://docs.astral.sh/uv/getting-started/installation/))
+
+### Client Compatibility
+SEF Agents uses **stdio** transport (Standard Input/Output). It works with:
+- Claude Desktop
+- Cursor
+- Windsurf
+- Any MCP-compatible client supporting `stdio`
+
+> **Note**: Gemini and GitHub Copilot do not currently support MCP.
+
+---
+
+## Configuration
+
+**Simple installation** — works like Playwright MCP. No cloning required.
+
+### Cursor (Recommended)
+
+Add to `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project-local):
+
+```json
+{
+  "mcpServers": {
+    "sef-agents": {
+      "command": "uvx",
+      "args": ["sef-agents"]
+    }
+  }
+}
+```
+
+**Via UI:**
+1. Settings → MCP → + Add New MCP Server
+2. Name: `sef-agents`
+3. Type: `command`
+4. Command: `uvx sef-agents`
+
+### Claude Desktop
+
+Add to `claude_desktop_config.json`:
+
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "sef-agents": {
+      "command": "uvx",
+      "args": ["sef-agents"]
+    }
+  }
+}
+```
+
+### Windsurf
+
+Add to `~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "sef-agents": {
+      "command": "uvx",
+      "args": ["sef-agents"]
+    }
+  }
+}
+```
+
+### Install from GitHub (Development/Unpublished)
+
+If not yet published to PyPI, use GitHub:
+
+```json
+{
+  "mcpServers": {
+    "sef-agents": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/Mishtert/sef-agents",
+        "sef-agents"
+      ]
+    }
+  }
+}
+```
+
+---
+
+## Local Development
+
+For contributors or local testing:
+
+```bash
+git clone https://github.com/Mishtert/sef-agents.git
+cd sef-agents
+uv sync
+uv run sef-agents
+```
+
+---
+
+## Quick Start
+
+### 1. Verify Connection
+
+After adding the config, restart your AI assistant. In Cursor:
+- Open Settings → MCP
+- Look for `sef-agents` with a green status indicator
+
+### 2. Try These Commands
+
+Type these in your AI assistant to verify it's working:
+
+```
+"What SEF agents are available?"
+```
+**Expected:** List of 13 agents with descriptions.
+
+```
+"Set my agent to developer"
+```
+**Expected:** Elite Code Quality Protocol injected. AI now enforces coding standards.
+
+```
+"Generate a codemap for this directory"
+```
+**Expected:** CODE_MAP.md structure with files, purposes, dependencies.
+
+```
+"Scan this directory for technical debt"
+```
+**Expected:** Report of TODOs, bare exceptions, missing types, long functions.
+
+### 3. Full Workflow Example
+
+```
+1. "Set agent to discovery" → Scans codebase, generates documentation
+2. "Set agent to product_manager" → Write requirements with testable AC
+3. "Set agent to qa_lead" → Validate AC before development
+4. "Set agent to developer" → Implement with quality enforcement
+5. "Set agent to pr_reviewer" → Review for compliance + AI patterns
+```
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| MCP not connecting | Restart AI assistant after config change |
+| `uvx` not found | Install uv: `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+| Tools not appearing | Check MCP status in settings; verify JSON syntax |
+| Agent not activating | Use exact agent name: `developer` |
+
+---
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
+
+- Code of conduct
+- Development setup
+- PR submission guidelines
+- Testing requirements
+
+**Version History:** See [GitHub Releases](https://github.com/Mishtert/sef-agents/releases) for changelog.
+
+---
+
+## About
+
+SEF Agents implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/), an open standard developed by Anthropic for connecting AI assistants to external tools and data sources. This ensures compatibility with a wide ecosystem of AI development tools.
+
+**SEF Agents** is part of the **Synchronous Engineering Framework (SEF)** — a methodology for collapsing the software delivery lifecycle through intelligent parallelism and agent orchestration.
+
+---
+
+## License
+
+Proprietary. All rights reserved.

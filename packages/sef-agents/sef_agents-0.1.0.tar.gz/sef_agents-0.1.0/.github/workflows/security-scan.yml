@@ -1,0 +1,51 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run Security Scan
+        run: uv run python -m sef_agents.security_scan --format json > security_results.json
+
+      - name: Check Security Results
+        run: |
+          if grep -q '"passed": false' security_results.json; then
+            echo "❌ Security scan failed!"
+            cat security_results.json
+            exit 1
+          else
+            echo "✅ Security scan passed!"
+            cat security_results.json
+          fi
+
+      - name: Upload Security Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: sef-reports/security/
+          if-no-files-found: ignore
+
+      - name: Run Tests
+        run: uv run pytest tests/test_security_scan.py -v

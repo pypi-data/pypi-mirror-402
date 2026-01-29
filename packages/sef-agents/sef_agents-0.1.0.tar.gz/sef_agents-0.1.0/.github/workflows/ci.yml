@@ -1,0 +1,108 @@
+name: Elite Quality Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # STAGE 1: LINT
+  lint:
+    name: 1. Lint & Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python
+        run: uv python install
+      - name: Validate Python Version
+        run: uv run python scripts/validate_python_version.py
+      - name: Install Dependencies
+        run: uv sync --all-extras --dev
+      - name: Lint (Ruff)
+        run: uv run ruff check .
+      - name: Format Check (Ruff)
+        run: uv run ruff format --check .
+
+  # STAGE 2: SECURITY
+  security:
+    name: 2. Security Scan
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python
+        run: uv python install
+      - name: Install Dependencies
+        run: uv sync --all-extras --dev
+      - name: Secrets Scan (detect-secrets)
+        run: |
+            uv tool install detect-secrets
+            uv tool run detect-secrets scan --baseline .secrets.baseline .
+      - name: Dependency Audit (pip-audit)
+        run: |
+            uv tool install pip-audit
+            uv tool run pip-audit .
+      - name: Policy Scan (make audit)
+        run: |
+           uv run python -m sef_agents.security_scan --format json
+
+  # STAGE 3: TEST
+  test:
+    name: 3. Test & Coverage
+    runs-on: ubuntu-latest
+    needs: security
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python
+        run: uv python install
+      - name: Install Dependencies
+        run: uv sync --all-extras --dev
+      - name: Run Tests (Pytest)
+        run: uv run pytest --cov=src/sef_agents --cov-report=xml --cov-fail-under=0
+
+  # STAGE 4: BUILD
+  build:
+    name: 4. Build Artifacts
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python
+        run: uv python install
+      - name: Build Wheel & Sdist
+        run: uv build
+      - name: Archive Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-dist
+          path: dist/
+
+  # STAGE 5: DEPLOY (Dry Run)
+  deploy:
+    name: 5. Deploy (Dry Run)
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-package-dist
+          path: dist/
+      - name: Simulate Deployment
+        run: |
+          echo "🚀 SIMULATING DEPLOYMENT..."
+          ls -R dist/
+          echo "✅ Ready to publish to PyPI"
