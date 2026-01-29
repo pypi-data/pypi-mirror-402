@@ -1,0 +1,67 @@
+Metadata-Version: 2.4
+Name: oryn
+Version: 2.1
+Requires-Python: ~=3.12
+Summary: PEP 517-compliant build backend
+Requires-Dist: packaging==25.0
+License-Expression: EUPL-1.2
+Project-URL: Repository, https://github.com/slietar/oryn
+Description-Content-Type: text/markdown
+
+# Oryn
+
+Oryn is a PEP 517-compliant build backend for Python projects.
+
+For now, Oryn only supports pure Python wheels and just recursively copies files from the project root into the wheel, making sure to ignore certain files. It also copies the appropriate metadata from `pyproject.toml` into the wheel's metadata.
+
+Oryn supports Python 3.12 and later.
+
+
+## Usage
+
+Add the following to your `pyproject.toml`:
+
+```toml
+[build-system]
+requires = ["oryn~=1.0"]
+build-backend = "oryn"
+
+[tool.oryn]
+# 1. Add inclusion roots
+# Only the last part of the path is retained in the wheel. Paths are relative
+# to the project root despite the absence of a leading slash.
+
+# For a src layout
+include = ["src/foo/"]
+include = ["src/*/"]
+
+# For a flat layout
+include = ["foo/"]
+
+# 2. Add ignored files, using patterns similar to .gitignore.
+ignore = [
+  "*.pyc",
+]
+
+# 3. Optionally reuse existing .gitignore rules.
+use-gitignore = true
+
+[[tool.oryn.distributions]]
+abi = "abi3"
+interpreter = "cp311"
+platform = "macosx_14_0_arm64"
+
+# 4. Optionally override specific files in the wheel.
+overrides = { "src/foo.so": "builds/linux-cp311.so" }
+```
+
+The following files are ignored by default:
+
+- `__pycache__/`
+- `.DS_Store`
+- `.git/`
+- `.gitignore`
+- `.venv/`
+- `*.egg-info/`
+
+To show which files will be included, install Oryn and run `python -m oryn`. If using uv, run `uv run --with oryn python -m oryn`
