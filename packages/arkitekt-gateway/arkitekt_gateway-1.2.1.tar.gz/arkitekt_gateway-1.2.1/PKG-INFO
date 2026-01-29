@@ -1,0 +1,278 @@
+Metadata-Version: 2.4
+Name: arkitekt-gateway
+Version: 1.2.1
+Summary: Add your description here
+Author-email: Your Name <your.email@example.com>
+Keywords: arkitekt,gateway
+Classifier: Development Status :: 4 - Beta
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.11
+Requires-Dist: aiohttp>=3.12.14
+Requires-Dist: typer>=0.16.0
+Description-Content-Type: text/markdown
+
+# Arkitekt Gateway
+
+A Python library for managing a Tailscale-based sidecar proxy. Arkitekt Gateway bundles a Go binary that handles secure networking via Tailscale, with full Python control over the process lifecycle, signal handling, and log streaming.
+
+## Features
+
+- 🚀 **Multi-platform support** - Pre-built binaries for Linux, macOS, and Windows (x86_64 and ARM64)
+- 🔄 **Async-first API** - Full asyncio support with context managers
+- 📡 **Signal handling** - Send SIGINT, SIGTERM, or any signal to the sidecar
+- 📝 **Log streaming** - Async iterator and callback-based log access
+- 🖥️ **CLI included** - Typer-based command-line interface
+- 🔒 **Lifecycle management** - Python controls when the sidecar starts and stops
+
+## Installation
+
+```bash
+pip install arkitekt-gateway
+```
+
+Or with uv:
+
+```bash
+uv add arkitekt-gateway
+```
+
+## Quick Start
+
+### Command Line
+
+```bash
+# Run the sidecar proxy
+arkitekt-gateway run \
+  --authkey tskey-auth-xxxxx \
+  --coordserver https://your-coordination-server.com \
+  --hostname my-proxy \
+  --port 8080
+
+# Check binary info
+arkitekt-gateway info
+```
+
+Environment variables are also supported:
+
+```bash
+export TS_AUTHKEY="tskey-auth-xxxxx"
+export TS_COORDSERVER="https://your-coordination-server.com"
+arkitekt-gateway run
+```
+
+### Python API
+
+#### Basic Usage
+
+```python
+import asyncio
+from arkitekt_gateway import Sidecar, SidecarConfig
+
+async def main():
+    config = SidecarConfig(
+        authkey="tskey-auth-xxxxx",
+        coordserver="https://your-coordination-server.com",
+        hostname="my-proxy",
+        port="8080",
+    )
+    
+    async with Sidecar(config) as sidecar:
+        # Wait for the proxy to be ready
+        proxy_url = await sidecar.wait_ready()
+        print(f"Proxy ready at: {proxy_url}")
+        
+        # Get status and peer info
+        status = await sidecar.get_status()
+        print(f"Connected peers: {len(status.peers)}")
+        
+        # Keep running...
+        await asyncio.sleep(60)
+    
+    # Sidecar is automatically stopped when exiting the context
+
+asyncio.run(main())
+```
+
+#### Streaming Logs
+
+```python
+async def main():
+    config = SidecarConfig(
+        authkey="tskey-auth-xxxxx",
+        coordserver="https://your-coordination-server.com",
+    )
+    
+    async with Sidecar(config) as sidecar:
+        async for log in sidecar.logs():
+            print(f"[{log.stream}] {log.line}")
+
+asyncio.run(main())
+```
+
+#### Using Log Callbacks
+
+```python
+from arkitekt_gateway import Sidecar, SidecarConfig, LogLine
+
+async def log_handler(log: LogLine):
+    if "error" in log.line.lower():
+        print(f"ERROR: {log.line}")
+
+async def main():
+    config = SidecarConfig(
+        authkey="tskey-auth-xxxxx",
+        coordserver="https://your-coordination-server.com",
+    )
+    
+    sidecar = Sidecar(config)
+    sidecar.on_log(log_handler)
+    
+    await sidecar.start()
+    try:
+        await sidecar.wait()
+    finally:
+        if sidecar.is_running:
+            await sidecar.stop()
+
+asyncio.run(main())
+```
+
+#### Sending Signals
+
+```python
+import signal
+
+async def main():
+    config = SidecarConfig(
+        authkey="tskey-auth-xxxxx",
+        coordserver="https://your-coordination-server.com",
+    )
+    
+    async with Sidecar(config) as sidecar:
+        # Do some work...
+        await asyncio.sleep(5)
+        
+        # Send interrupt signal
+        await sidecar.interrupt()
+        
+        # Or send any signal
+        await sidecar.send_signal(signal.SIGTERM)
+
+asyncio.run(main())
+```
+
+## API Reference
+
+### `SidecarConfig`
+
+Configuration dataclass for the sidecar process.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `authkey` | `str` | *required* | Tailscale authentication key |
+| `coordserver` | `str` | *required* | Coordination server URL |
+| `hostname` | `str` | `"ts-proxy"` | Hostname in the Tailnet |
+| `port` | `str` | `"8080"` | Port to listen on |
+| `statedir` | `str` | `""` | State directory for Tailscale data |
+| `mode` | `ProxyMode` | `ProxyMode.HTTP` | Proxy mode (`HTTP` or `SOCKS5`) |
+| `statusport` | `str` | `"9090"` | Port for the status API |
+| `verbose` | `bool` | `False` | Enable verbose logging |
+
+### `Sidecar`
+
+Async wrapper for the Go sidecar binary.
+
+#### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `is_running` | `bool` | Whether the sidecar process is running |
+| `pid` | `int \| None` | Process ID of the sidecar |
+| `exit_code` | `int \| None` | Exit code if the process has terminated |
+
+#### Methods
+
+| Method | Description |
+|--------|-------------|
+| `await start()` | Start the sidecar process |
+| `await stop(timeout=5.0)` | Stop the sidecar gracefully (SIGTERM, then SIGKILL) |
+| `await wait()` | Wait for the sidecar to exit |
+| `await wait_ready(timeout=30.0)` | Wait for the sidecar to emit READY signal, returns proxy URL |
+| `await wait_for_signal(signal, timeout)` | Wait for a specific IPC signal |
+| `await get_status()` | Get status from the status API (peers, connection info) |
+| `await health_check()` | Check if the status API is healthy |
+| `await interrupt()` | Send SIGINT to the sidecar |
+| `await send_signal(sig)` | Send any signal to the sidecar |
+| `async for log in logs()` | Async iterator for log lines |
+| `on_log(callback)` | Register an async callback for log lines |
+
+### `LogLine`
+
+Represents a log line from the sidecar.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `stream` | `str` | Either `"stdout"` or `"stderr"` |
+| `line` | `str` | The log message |
+| `event` | `SidecarEvent \| None` | Parsed IPC signal if present |
+
+### `SidecarSignal`
+
+IPC signals emitted by the sidecar.
+
+| Signal | Description |
+|--------|-------------|
+| `STARTING` | Sidecar is initializing |
+| `CONNECTING` | Connecting to Tailnet |
+| `CONNECTED` | Successfully connected (includes IPs) |
+| `LISTENING` | Proxy is listening |
+| `READY` | Fully ready to accept connections |
+| `ERROR` | An error occurred |
+| `SHUTDOWN` | Graceful shutdown |
+| `AUTH_REQUIRED` | Authentication required |
+
+### `SidecarStatus`
+
+Status information from the status API.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `self_info` | `SelfInfo` | Information about this node |
+| `peers` | `list[PeerInfo]` | List of peers in the Tailnet |
+| `backend_state` | `str` | Backend state (e.g., "Running") |
+
+## Development
+
+### Local Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/jhnnsrs/arkitekt-gateway.git
+cd arkitekt-gateway
+
+# Install dependencies
+uv sync --all-extras --dev
+
+# Download the sidecar binary for local development
+python dev.py
+
+# Run tests
+uv run pytest tests -v
+```
+
+### Building
+
+The package uses hatchling with a custom build hook that downloads the appropriate platform-specific binary during wheel building.
+
+```bash
+uv build
+```
+
+## License
+
+## License
+
+MIT
