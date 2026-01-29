@@ -1,0 +1,178 @@
+Metadata-Version: 2.4
+Name: tailjlogs
+Version: 1.0.2
+Summary: Tail and follow JSONL log files with pretty formatting
+Project-URL: Homepage, https://github.com/brianoflondon/tailjlogs
+Project-URL: Repository, https://github.com/brianoflondon/tailjlogs
+Project-URL: Bug Tracker, https://github.com/brianoflondon/tailjlogs/issues
+Project-URL: Changelog, https://github.com/brianoflondon/tailjlogs/releases
+License-File: LICENSE
+Requires-Python: >=3.13
+Requires-Dist: aiofiles>=24.1.0
+Requires-Dist: single-source>=0.4.0
+Requires-Dist: typer>=0.15.0
+Requires-Dist: watchdog>=6.0.0
+Description-Content-Type: text/markdown
+
+# TailJLogs
+
+[![PyPI](https://img.shields.io/pypi/v/tailjlogs.svg)](https://pypi.org/project/tailjlogs/)
+[![Tests](https://github.com/brianoflondon/tailjlogs/actions/workflows/tests.yml/badge.svg)](https://github.com/brianoflondon/tailjlogs/actions/workflows/tests.yml)
+
+A command line tool to tail and follow JSONL log files with pretty formatting.
+
+## Features
+
+- 📋 Display JSONL logs in a clean, readable format similar to `docker logs`
+- 🔄 Follow mode (`-f`) for real-time log monitoring
+- 🎨 Colorized output by log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+- 🔍 Filter by log level (`-l WARNING`)
+- 🔎 Grep pattern matching (`-g "error|failed"`)
+- 🚫 Exclude patterns (`-G "healthcheck"`)
+- 📁 Directory support - merge multiple log files by timestamp
+- ⚡ Async file reading for performance
+
+## Installation
+
+### Standalone Installation (Recommended)
+
+Install TailJLogs from PyPI (recommended):
+
+```bash
+# Using pip
+pip install tailjlogs
+
+# Install a specific version
+pip install tailjlogs==1.0.1
+
+# Using pipx (isolated CLI install)
+pipx install tailjlogs
+
+# Using uv
+uv tool install tailjlogs
+```
+
+After installation, `tailjlogs` will be available in your PATH.
+
+If you prefer to install from GitHub (for development or edge builds), use:
+
+```bash
+# From source (development)
+git clone https://github.com/brianoflondon/tailjlogs.git
+cd tailjlogs
+uv sync
+uv pip install -e .
+```
+
+### From Source (for development)
+
+```bash
+git clone https://github.com/brianoflondon/tailjlogs.git
+cd tailjlogs
+uv sync
+
+# Run directly
+uv run tailjlogs --help
+
+# Or install in editable mode
+uv pip install -e .
+```
+
+### Updating
+
+```bash
+# Using uv
+uv tool upgrade tailjlogs
+
+# Using pipx
+pipx upgrade tailjlogs
+```
+
+### Uninstalling
+
+```bash
+# Using uv
+uv tool uninstall tailjlogs
+
+# Using pipx
+pipx uninstall tailjlogs
+```
+
+## Usage
+
+```bash
+# Show last 50 lines and follow
+tailjlogs logs/app.jsonl -f
+
+# Show last 100 lines with WARNING or higher
+tailjlogs logs/app.jsonl -n 100 -l WARNING
+
+# Filter by regex pattern and follow
+tailjlogs logs/app.jsonl -f -g "error|failed"
+
+# Exclude health check logs
+tailjlogs logs/app.jsonl -f -G "healthcheck"
+
+# Tail a directory (merges all .jsonl files by timestamp)
+tailjlogs logs/ -n 100 -f
+
+# Show version
+tailjlogs --version
+```
+
+## Options
+
+| Option           | Short | Description                                                          |
+| ---------------- | ----- | -------------------------------------------------------------------- |
+| `--follow`       | `-f`  | Follow the log file for new entries (like tail -f)                   |
+| `--tail`         | `-n`  | Number of lines to show from the end (default: 50)                   |
+| `--level`        | `-l`  | Minimum log level to display (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
+| `--grep`         | `-g`  | Filter messages by regex pattern (include matches)                   |
+| `--grep-exclude` | `-G`  | Exclude messages matching regex pattern                              |
+| `--no-color`     |       | Disable colored output                                               |
+| `--verbose`      | `-v`  | Use verbose output format                                            |
+| `--extras`       | `-e`  | Show extra fields in log entries                                     |
+| `--version`      | `-V`  | Show version and exit                                                |
+
+## Expected JSONL Format
+
+TailJLogs expects log entries in JSONL format with the following fields:
+
+```json
+{
+  "timestamp": "2025-01-16T10:30:45.123456Z",
+  "level": "INFO",
+  "message": "User logged in",
+  "module": "auth",
+  "line": 42,
+  "logger": "app.auth",
+  "function": "login"
+}
+```
+
+## Development
+
+### Setup
+
+```bash
+git clone https://github.com/brianoflondon/tailjlogs.git
+cd tailjlogs
+uv sync
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+uv run pytest
+
+# Run with verbose output
+uv run pytest -v
+
+# Run specific test file
+uv run pytest tests/test_formatting.py
+```
+
+## License
+
+MIT
