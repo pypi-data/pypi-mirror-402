@@ -1,0 +1,136 @@
+[project]
+description = ""
+name = "porringer"
+authors = [
+    { name = "Synodic Software", email = "contact@synodic.software" },
+]
+readme = "README.md"
+dynamic = []
+requires-python = ">=3.14"
+dependencies = [
+    "typer[all]>=0.21.1",
+    "pydantic>=2.12.5",
+    "platformdirs>=4.5.1",
+    "userpath>=1.9.2",
+    "packaging>=25.0",
+]
+version = "0.1.1.dev11"
+
+[project.license]
+text = "MIT"
+
+[project.urls]
+homepage = "https://github.com/synodic/porringer"
+repository = "https://github.com/synodic/porringer"
+
+[project.entry-points."porringer.environment"]
+pip = "porringer.plugin.pip.plugin:PipEnvironment"
+pipx = "porringer.plugin.pipx.plugin:PipxEnvironment"
+winget = "porringer.plugin.winget.plugin:WingetEnvironment"
+uv = "porringer.plugin.uv.plugin:UvEnvironment"
+npm = "porringer.plugin.npm.plugin:NpmEnvironment"
+
+[project.scripts]
+porringer = "porringer.console.entry:app"
+
+[dependency-groups]
+lint = [
+    "ruff>=0.14.13",
+    "pyrefly>=0.48.2",
+]
+test = [
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "pytest-mock>=3.15.1",
+]
+docs = [
+    "zensical>=0.0.16",
+]
+
+[tool.pytest.ini_options]
+log_cli = true
+testpaths = [
+    "tests",
+]
+
+[tool.mypy]
+exclude = "__pypackages__"
+plugins = [
+    "pydantic.mypy",
+]
+strict = true
+
+[tool.ruff]
+line-length = 120
+preview = true
+
+[tool.ruff.lint]
+ignore = [
+    "D206",
+    "D300",
+    "D415",
+    "E111",
+    "E114",
+    "E117",
+]
+select = [
+    "D",
+    "F",
+    "I",
+    "PL",
+    "UP",
+    "E",
+    "B",
+    "SIM",
+    "PT",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"porringer/console/command/update.py" = [
+    "PLR0913",
+    "PLR0917",
+]
+
+[tool.ruff.format]
+docstring-code-format = true
+indent-style = "space"
+quote-style = "single"
+
+[tool.coverage.report]
+skip_empty = true
+
+[tool.pyrefly]
+project-excludes = [
+    "examples",
+]
+
+[tool.pdm]
+plugins = [
+    "-e file:///${PROJECT_ROOT}",
+]
+
+[tool.pdm.version]
+source = "scm"
+
+[tool.pdm.scripts]
+analyze = "ruff check porringer tests"
+format = "ruff format"
+test = "pytest --cov=porringer --verbose tests"
+type-check = "pyrefly check"
+serve = "zensical serve"
+
+[tool.pdm.scripts.lint]
+composite = [
+    "analyze",
+    "format",
+    "type-check",
+]
+
+[build-system]
+build-backend = "pdm.backend"
+requires = [
+    "pdm.backend",
+]
