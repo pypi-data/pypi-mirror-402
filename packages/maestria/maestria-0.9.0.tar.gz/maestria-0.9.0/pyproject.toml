@@ -1,0 +1,166 @@
+[project]
+name = "maestria"
+version = "0.9.0"
+description = "A Maven-inspired Python project management tool - bringing Java's build tool mastery to Python"
+authors = [{name = "Maestria Contributors"}]
+maintainers = [{name = "Rui Kong", email = "rui.kong@gmail.com"}]
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Build Tools",
+]
+dependencies = [
+    "uv>=0.1.0",
+    "click>=8.1.0",
+    "rich>=13.0.0",
+    "pydantic>=2.0.0",
+    "GitPython>=3.1.0",
+    "importlib-metadata>=6.0,<8.8.0",
+    "build>=1.0.3",
+    "twine>=4.0.2",
+    "bump2version>=1.0.1",
+    "tomli-w>=1.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+dev = [
+    "black>=23.0.0",
+    "mypy>=1.0.0",
+    "ruff>=0.1.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pip-audit>=2.0.0",
+    "bandit>=1.7.0",
+    "bump2version>=1.0.1",
+    "build>=1.0.3",
+    "twine>=4.0.2",
+]
+
+[project.scripts]
+maestria = "maestria.cli:main"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["maestria*"]
+
+[tool.setuptools.package-data]
+"maestria" = ["scripts/*", "templates/**/*"]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["__pycache__", "__pycache__/*", "*.pyc", "*.pyo"]
+
+[tool.maestria.scripts]
+test = "pytest"
+lint = "black ."
+typecheck = "mypy --exclude 'templates' ."
+
+[tool.maestria]
+# Maestria-specific configuration
+src_layout = false
+template_registry = { basic = { type = "local", path = "basic" } }
+
+[tool.maestria.hooks]
+pre_command = []
+post_command = []
+
+[tool.maestria.constants]
+# pypi_repo = "your-repo-name"
+# docker_hub_account = "your-account"
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+exclude = '''
+(
+  /(
+    \.git
+    | \.venv
+    | build
+    | workspace
+  )/
+  | maestria/templates/
+)
+'''
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = false
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = false
+ignore_missing_imports = true
+follow_imports = "silent"
+warn_redundant_casts = false
+warn_unused_ignores = false
+warn_no_return = false
+warn_unreachable = false
+allow_redefinition = true
+exclude = ['maestria/templates/.*', 'build/.*', 'workspace/.*']
+disable_error_code = ["assignment", "return-value", "attr-defined", "union-attr", "call-arg", "misc", "dict-item"]
+
+[[tool.mypy.overrides]]
+module = "maestria.plugins.*"
+ignore_missing_imports = true
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = "maestria.templates.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "maestria.commands.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "setup"
+ignore_errors = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "maestria/templates/",
+    "build/",
+    "workspace/",
+]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+# Enable flake8-bugbear (B) rules for better code quality
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "B",   # flake8-bugbear (includes B018 for useless expressions)
+    "I",   # isort
+]
+ignore = [
+    "E501",  # line-too-long (handled by Black)
+    "B024",  # abstract-base-class-without-abstract-method
+    "B027",  # empty-method-without-abstract-decorator
+]
