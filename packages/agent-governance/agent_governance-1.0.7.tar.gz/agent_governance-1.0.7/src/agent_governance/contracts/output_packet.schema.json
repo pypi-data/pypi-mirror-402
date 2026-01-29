@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OutputPacket",
+  "type": "object",
+  "required": [
+    "task_id",
+    "role",
+    "run_id",
+    "status",
+    "changes",
+    "diff",
+    "commands_run",
+    "command_outputs"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "description": "Must match TaskPacket.id"
+    },
+    "role": {
+      "type": "string",
+      "description": "Role that produced this output"
+    },
+    "run_id": {
+      "type": "string",
+      "description": "Unique identifier for this execution/run"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "fail", "blocked"]
+    },
+    "changes": {
+      "type": "object",
+      "required": ["files_changed"],
+      "properties": {
+        "files_changed": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "diff": {
+      "type": "string",
+      "description": "Unified diff inline or a path reference"
+    },
+    "commands_run": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "Exact commands executed"
+    },
+    "command_outputs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "Captured logs or paths to command outputs"
+    },
+    "remaining_issues": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "If status != success, what is still broken"
+    },
+    "next_step": {
+      "type": "string",
+      "description": "If status != success, the smallest next actionable step"
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "success" } } },
+      "then": {
+        "not": {
+          "anyOf": [
+            { "required": ["next_step"] }
+          ]
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "enum": ["fail", "blocked"] } } },
+      "then": {
+        "required": ["remaining_issues", "next_step"]
+      }
+    }
+  ],
+  "additionalProperties": false
+}
