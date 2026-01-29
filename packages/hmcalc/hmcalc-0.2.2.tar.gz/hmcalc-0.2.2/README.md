@@ -1,0 +1,177 @@
+# hmcalc - Human-Centered Math for Python
+
+Python is excellent at **performing raw calculations**.  
+`hmcalc` excels at **contextualizing those numbers for human decision-making**.
+
+`hmcalc` bridges the gap between machine precision and human intent.
+
+It provides **opinionated, safe, human-semantic math primitives** for everyday decisions in analytics, business logic, monitoring, experiments, and reports.
+
+---
+
+## Install
+
+```bash
+pip install hmcalc
+```
+
+No dependencies. Works with standard Python.
+
+## Why hmcalc exists
+
+Every Python developer repeatedly writes manual logic to interpret data:
+
+```python
+diff = new - old
+
+if old != 0:
+    pct = (diff / old) * 100
+else:
+    pct = None
+
+if diff > 0:
+    direction = "increase"
+elif diff < 0:
+    direction = "decrease"
+else:
+    direction = "same"
+```
+
+While functional, this approach often leads to:
+
+- Redundant code written across different files.
+- Inconsistencies in how teams label data.
+- Manual handling of edge cases like division by zero.
+- Cognitive load when reading logs or test results.
+
+Python provides the raw math; humans need the meaningful interpretation.
+
+`hmcalc` encodes the logic humans already use in their heads-change, growth, decline, closeness, stability-into a reliable, reusable API.
+
+## What hmcalc does differently
+
+While traditional tools focus on the mathematical result, `hmcalc` focuses on the meaning behind the result. It returns decision-ready answers, not just floating-point numbers.
+
+## Core Concepts (with examples)
+
+### 1. Change (Growth / Decline)
+
+```python
+from hmcalc import change
+
+change(120, 150)
+# Returns:
+# {
+#   "absolute": 30,
+#   "percent": 25.0,
+#   "direction": "increase"
+# }
+```
+
+Automates boundary checks and provides clear semantic labels.
+
+### 2. Percent (Safe by Default)
+
+```python
+from hmcalc import percent
+
+percent(23, 0)
+# Returns: None
+```
+
+By centralizing policy for undefined percentages, you prevent crashes and ensure data integrity across your stack.
+
+### 3. Comparison (Human-Readable)
+
+```python
+from hmcalc import compare
+
+compare(98, 100)
+# Returns:
+# {
+#   "difference": -2,
+#   "percent_diff": -2.0,
+#   "close": true
+# }
+```
+
+Perfect for monitoring, threshold checks, and writing tests that read like English.
+
+### 4. Trend (Lightweight)
+
+```python
+from hmcalc import trend
+
+trend([10, 12, 15, 18])
+# Returns:
+# {
+#   "trend": "upward",
+#   "strength": "strong",
+#   "change_percent": 80.0
+# }
+```
+
+A zero-dependency way to identify patterns in logs and small datasets.
+
+### 5. Human Rounding
+
+```python
+from hmcalc import round_human
+
+round_human(1234.567, sig=3)
+# Returns: 1230
+```
+
+Presents numbers exactly how humans report them, emphasizing significant figures over machine precision.
+
+## Extended Human Math Primitives
+
+| Feature | Description | Use Case |
+|---------|-------------|----------|
+| Closeness | Quantifies how "near" two numbers are. | Identifying duplicates or matching values. |
+| Stability | Analyzes variation in a sequence. | Monitoring system health or metric volatility. |
+| Normalize | Positions a value on a scale (0.0 - 1.0). | Building scorecards and dashboards. |
+| Delta Category | Classifies the size of a change. | Automated executive summaries. |
+| Range Summary | Summarizes the spread of data. | Quick visibility into data distribution. |
+
+## How hmcalc complements existing tools
+
+`hmcalc` is designed to sit alongside your favorite libraries. While numpy or pandas handle massive datasets and high-precision computation, `hmcalc` handles the final layer of interpretation.
+
+| Traditional Tools | hmcalc |
+|-------------------|--------|
+| Focus on precision | Focus on meaning |
+| Raw numbers | Structured answers |
+| Low-level math | Intent-level math |
+| Developer decides semantics | Semantics are standardized |
+| Calculation-oriented | Decision-oriented |
+
+## Design Principles
+
+- **Opinionated defaults:** Reducing the need for boilerplate logic.
+- **Safe by default:** Built-in protection against common errors like `ZeroDivisionError`.
+- **No dependencies:** Keep your environment light and fast.
+- **Predictable return shapes:** Functions return consistent dictionaries for easy parsing.
+- **Human-readable labels:** Output is ready for logs, UI, or reports.
+
+## Who should use hmcalc
+
+If you find yourself manually checking if a number is "close enough" or calculating percent changes in multiple places, this library is for you. It is ideal for:
+
+- Data & Analytics Engineers building reports.
+- Backend Engineers writing business logic or alerts.
+- Founders moving quickly to turn data into product features.
+
+## Stability & API guarantees
+
+- All functions return dictionaries for extensibility.
+- Keys and labels are stable and documented.
+- New features are strictly additive.
+
+## License
+
+MIT License
+
+---
+
+Python already knows how to calculate; `hmcalc` knows how humans reason.
