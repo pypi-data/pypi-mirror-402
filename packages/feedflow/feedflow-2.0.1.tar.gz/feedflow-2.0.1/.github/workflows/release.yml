@@ -1,0 +1,41 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get Version Content
+        id: get_text
+        run: |
+          # 1. Extract version from tag (e.g., v2.0.0 -> 2.0.0)
+          VERSION="${GITHUB_REF_NAME#v}"
+          
+          # 2. Extract specific section from CHANGELOG.md
+          # It searches from "## [VERSION]" until the next "## [" header
+          # Then removes the first line (the version header) and the last line (the next header)
+          sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '1d;$d' > release_notes.txt
+          
+          # 3. Debug: display the extracted content in the Action logs for verification
+          echo "--- Release Notes Extracted ---"
+          cat release_notes.txt
+          echo "-------------------------------"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          # Use the temporary file generated in the previous step as the release body
+          body_path: release_notes.txt
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
