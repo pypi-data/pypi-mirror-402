@@ -1,0 +1,182 @@
+Metadata-Version: 2.4
+Name: pollinations-ru
+Version: 1.0.0
+Summary: Легкая Python библиотека для работы с Pollinations AI
+Author-email: Nikita <your.email@example.com>
+Project-URL: Homepage, https://github.com/yourusername/pollinations-simple
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: requests>=2.25.0
+Dynamic: license-file
+
+# 🌸 Pollinations AI - Python библиотека
+
+Простая и удобная библиотека для работы с текстовыми моделями Pollinations AI.
+
+## ✨ Возможности
+
+- 🚀 Простой запрос одной функцией `ask()`
+- 💬 Чат с историей сообщений
+- 🔄 Стриминг ответов в реальном времени
+- 🎯 Поддержка разных моделей (Gemini, Mistral, OpenAI)
+- 📝 JSON режим для структурированных ответов
+- 🆓 Бесплатно без API ключа
+
+## 📦 Установка
+
+```bash
+# Зависимость только requests
+pip install requests
+```
+
+Скопируйте папку `pollinations/` в ваш проект.
+
+## 🚀 Быстрый старт
+
+### Самый простой способ
+
+```python
+from pollinations import ask
+
+answer = ask("Что такое Python?")
+print(answer)
+```
+
+### Использование клиента
+
+```python
+from pollinations import PollinationsClient
+
+client = PollinationsClient(
+    model="gemini",  # модель по умолчанию
+    system_prompt="Отвечай кратко"
+)
+
+response = client.ask("Объясни рекурсию")
+print(response)
+```
+
+### Чат с историей
+
+```python
+from pollinations import PollinationsClient, Message
+
+client = PollinationsClient()
+
+messages = [
+    Message("system", "Ты полезный ассистент"),
+    Message("user", "Меня зовут Никита"),
+    Message("assistant", "Привет, Никита!"),
+    Message("user", "Как меня зовут?"),
+]
+
+response = client.chat(messages)
+print(response.content)  # "Тебя зовут Никита"
+```
+
+### Стриминг
+
+```python
+from pollinations import PollinationsClient
+
+client = PollinationsClient()
+
+for chunk in client.stream("Напиши историю"):
+    print(chunk, end="", flush=True)
+```
+
+### JSON режим
+
+```python
+from pollinations import ask
+
+data = ask(
+    "Верни JSON с полями: name, age, city",
+    json_mode=True
+)
+print(data)  # {"name": "...", "age": 25, "city": "..."}
+```
+
+## 🔧 API
+
+### PollinationsClient
+
+```python
+client = PollinationsClient(
+    api_key=None,          # Опционально, для повышенных лимитов
+    model="openai",        # Модель по умолчанию
+    system_prompt=None,    # Системный промпт по умолчанию
+    timeout=60,            # Таймаут в секундах
+)
+```
+
+#### Методы
+
+| Метод | Описание |
+|-------|----------|
+| `ask(prompt)` | Простой запрос → строка |
+| `chat(messages)` | Чат с историей → ChatResponse |
+| `stream(prompt)` | Стриминг → итератор |
+| `quick(prompt)` | Быстрый GET запрос → строка |
+| `get_models()` | Список моделей → List[Model] |
+
+### Message
+
+```python
+from pollinations import Message
+
+msg = Message(
+    role="user",     # "user", "assistant", "system"
+    content="Текст"
+)
+```
+
+Также можно использовать обычные словари:
+
+```python
+messages = [
+    {"role": "system", "content": "..."},
+    {"role": "user", "content": "..."}
+]
+```
+
+### ChatResponse
+
+```python
+response = client.chat(messages)
+
+response.content       # Текст ответа
+response.text          # Алиас для content
+response.model         # Использованная модель
+response.finish_reason # Причина завершения
+response.usage         # Статистика токенов
+response.raw_response  # Полный ответ API
+```
+
+## 🤖 Доступные модели
+
+| Модель | Описание | Особенности |
+|--------|----------|-------------|
+| `openai` | GPT-OSS 20B | Reasoning |
+| `gemini` | Gemini 2.5 Flash | Vision |
+| `mistral` | Mistral 3.2 24B | Tools |
+
+Получить актуальный список:
+
+```python
+client = PollinationsClient()
+for model in client.get_models():
+    print(f"{model.name}: {model.description}")
+```
+
+## 📝 Примеры
+
+Смотрите файл `examples.py` для полных примеров.
+
+## 📄 Лицензия
+
+MIT
