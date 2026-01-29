@@ -1,0 +1,219 @@
+Metadata-Version: 2.4
+Name: gemini-gen-mcp
+Version: 0.0.2
+Summary: MCP Server for Gemini Image and Audio generation
+Project-URL: Homepage, https://github.com/ServiceStack/gemini-gen-mcp
+Project-URL: Repository, https://github.com/ServiceStack/gemini-gen-mcp
+Author-email: ServiceStack <team@servicestack.net>
+License: MIT
+License-File: LICENSE
+Keywords: ai,audio-generation,gemini,image-generation,mcp,tts
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.10
+Requires-Dist: fastmcp>=0.1.0
+Requires-Dist: google-genai>=1.0.0
+Description-Content-Type: text/markdown
+
+# Gemini Gen MCP
+
+[![PyPI version](https://badge.fury.io/py/gemini-gen-mcp.svg)](https://badge.fury.io/py/gemini-gen-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+MCP Server for Gemini Image and Audio generation using Google's Gemini AI models.
+
+## Features
+
+This MCP server provides tools to:
+- **Generate images from text** using Gemini's Flash Image model
+- **Generate audio from text** using Gemini 2.5 Flash Preview TTS model
+
+## Installation
+
+### From PyPI
+
+```bash
+pip install gemini-gen-mcp
+```
+
+### From Source
+
+```bash
+git clone https://github.com/ServiceStack/gemini-gen-mcp.git
+cd gemini-gen-mcp
+pip install -e .
+```
+
+## Prerequisites
+
+You need a Google Gemini API key to use this server. Get one from [Google AI Studio](https://aistudio.google.com/apikey).
+
+## Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `GEMINI_API_KEY` | Yes | - | Your Google Gemini API key |
+| `GEMINI_DOWNLOAD_PATH` | No | `/tmp/gemini_gen_mcp` | Directory where generated files are saved |
+
+Set the environment variables:
+
+```bash
+export GEMINI_API_KEY='your-api-key-here'
+export GEMINI_DOWNLOAD_PATH='/path/to/downloads'  # optional
+```
+
+Generated files are organized by type and date:
+- Images: `$GEMINI_DOWNLOAD_PATH/images/YYYY-MM-DD/`
+- Audio: `$GEMINI_DOWNLOAD_PATH/audios/YYYY-MM-DD/`
+
+Each generated file includes a companion `.info.json` file with generation metadata.
+
+## Usage
+
+### Running the Server
+
+Run the MCP server directly:
+
+```bash
+gemini-gen-mcp
+```
+
+Or as a Python module:
+
+```bash
+python -m gemini_gen_mcp.server
+```
+
+### Using with Claude Desktop
+
+See [CLAUDE_CONFIG.md](CLAUDE_CONFIG.md) for detailed instructions.
+
+Add this to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "gemini-gen": {
+      "command": "gemini-gen-mcp",
+      "env": {
+        "GEMINI_API_KEY": "your-api-key-here"
+      }
+    }
+  }
+}
+```
+
+### Available Tools
+
+#### text_to_image
+
+Generate images from text descriptions using Gemini's image generation models.
+
+**Parameters:**
+- `prompt` (string, required): Text description of the image to generate
+- `model` (string, optional): Gemini model to use
+  - `gemini-2.5-flash-image` (default)
+  - `gemini-3-pro-image-preview`
+- `aspect_ratio` (string, optional): Aspect ratio for the generated image (default: "1:1")
+  - Supported: `1:1`, `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9`
+- `temperature` (float, optional): Sampling temperature for image generation (default: 1.0)
+- `top_p` (float, optional): Nucleus sampling parameter (optional)
+
+**Example:**
+```json
+{
+  "prompt": "A serene mountain landscape at sunset with a lake",
+  "model": "gemini-2.5-flash-image",
+  "aspect_ratio": "16:9",
+  "temperature": 1.0
+}
+```
+
+#### text_to_audio
+
+Generate audio/speech from text using Gemini's TTS models. Output is saved as WAV format.
+
+**Parameters:**
+- `text` (string, required): Text to convert to speech
+- `model` (string, optional): Gemini TTS model to use
+  - `gemini-2.5-flash-preview-tts` (default)
+  - `gemini-2.5-pro-preview-tts`
+- `voice` (string, optional): Voice to use for speech generation (default: "Kore")
+
+**Available Voices:**
+
+| Voice     | Style      | Voice         | Style         | Voice        | Style       |
+|-----------|------------|---------------|---------------|--------------|-------------|
+| Zephyr    | Bright     | Puck          | Upbeat        | Charon       | Informative |
+| Kore      | Firm       | Fenrir        | Excitable     | Leda         | Youthful    |
+| Orus      | Firm       | Aoede         | Breezy        | Callirrhoe   | Easy-going  |
+| Autonoe   | Bright     | Enceladus     | Breathy       | Iapetus      | Clear       |
+| Umbriel   | Easy-going | Algieba       | Smooth        | Despina      | Smooth      |
+| Erinome   | Clear      | Algenib       | Gravelly      | Rasalgethi   | Informative |
+| Laomedeia | Upbeat     | Achernar      | Soft          | Alnilam      | Firm        |
+| Schedar   | Even       | Gacrux        | Mature        | Pulcherrima  | Forward     |
+| Achird    | Friendly   | Zubenelgenubi | Casual        | Vindemiatrix | Gentle      |
+| Sadachbia | Lively     | Sadaltager    | Knowledgeable | Sulafat      | Warm        |
+
+**Example:**
+```json
+{
+  "text": "Hello, this is a test of the Gemini text to speech system.",
+  "model": "gemini-2.5-flash-preview-tts",
+  "voice": "Kore"
+}
+```
+
+## Development
+
+### Setup Development Environment
+
+```bash
+# Clone the repository
+git clone https://github.com/ServiceStack/gemini-gen-mcp.git
+cd gemini-gen-mcp
+
+# Install in editable mode with dependencies
+pip install -e .
+```
+
+### Running Tests
+
+```bash
+# Install test dependencies
+pip install pytest pytest-asyncio
+
+# Run tests
+```bash
+# uv run pytest tests -v
+npm test
+```
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Support
+
+For issues and questions, please use the [GitHub Issues](https://github.com/ServiceStack/gemini-gen-mcp/issues) page.
+
+## Acknowledgments
+
+- Built with [FastMCP](https://github.com/jlowin/fastmcp)
+- Powered by [Google Gemini AI](https://ai.google.dev/)
+
+## Links
+
+- [PyPI Package](https://pypi.org/project/gemini-gen-mcp/)
+- [GitHub Repository](https://github.com/ServiceStack/gemini-gen-mcp)
+- [Google AI Studio](https://aistudio.google.com/)
+- [MCP Documentation](https://modelcontextprotocol.io/)
