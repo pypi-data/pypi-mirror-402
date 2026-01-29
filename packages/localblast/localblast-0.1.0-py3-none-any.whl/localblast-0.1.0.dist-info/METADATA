@@ -1,0 +1,582 @@
+Metadata-Version: 2.4
+Name: localblast
+Version: 0.1.0
+Summary: NCBI BLAST+ wrapper with automatic binary downloading and caching.
+Requires-Python: >=3.10
+Requires-Dist: biopython>=1.83
+Description-Content-Type: text/markdown
+
+# LocalBLAST
+
+NCBI BLAST+ wrapper with automatic binary downloading and caching.
+
+## Quick Start
+
+```bash
+pip install localblast
+```
+
+```python
+from localblast import blastn, makeblastdb
+
+# Create a BLAST database (binaries auto-download on first use)
+# makeblastdb creates multiple files with a shared prefix, e.g.:
+#   - db/mydb.nsq, db/mydb.nhr, db/mydb.nin (for nucleotide)
+#   - db/mydb.psq, db/mydb.phr, db/mydb.pin (for protein)
+# The "out" parameter is the file prefix (NOT the directory path).
+# Using "db/mydb" creates files in the "db/" directory with prefix "mydb".
+makeblastdb("sequences.fasta", dbtype="nucl", out="db/mydb", title="My Sequences")
+
+# Run BLAST search
+# Use the same file prefix as the db parameter
+# Result is always a list (one record per query sequence in the FASTA file)
+result = blastn("query.fasta", "db/mydb", evalue=0.001, num_threads=4)  # Use 4 CPU threads
+
+# Access results
+for record in result:  # Iterate over results (one per query sequence)
+    for alignment in record.alignments:
+        for hsp in alignment.hsps:
+            print(f"{alignment.hit_id}: e-value={hsp.expect}")
+```
+
+## Features
+
+- **Automatic binary management**: Downloads BLAST+ 2.17.0+ binaries to `.localblast/bin/` on first use
+- **Cross-platform**: Supports Windows, macOS, and Linux (x86_64 and aarch64)
+- **BioPython integration**: Returns BioPython Blast record objects for easy result parsing
+- **Cache management**: Version-aware caching with manual control
+- **Environment override**: Use custom binaries via `LOCALBLAST_*` environment variables
+- **Custom cache location**: Control binary cache directory with `LOCALBLAST_CACHE_DIR`
+
+## Common Workflows
+
+### Complete blastn Workflow
+
+Here's a comprehensive example showing the full workflow from database creation to result processing:
+
+```python
+from localblast import blastn, makeblastdb, get_version, get_bin_cache_dir, clear_bin_cache
+import os
+
+# ============================================================================
+# STEP 1: Optional - Binary Cache Management
+# ============================================================================
+# Check BLAST+ version
+version = get_version()
+print(f"Using BLAST+ version: {version}")
+
+# View cache location (defaults to .localblast/bin/)
+cache_dir = get_bin_cache_dir()
+print(f"Binary cache: {cache_dir}")
+
+# Force re-download if needed (e.g., corrupted binaries)
+# clear_bin_cache()
+
+# ============================================================================
+# STEP 2: Optional - Use System-Installed BLAST+
+# ============================================================================
+# If you have BLAST+ already installed, set environment variables:
+# os.environ["LOCALBLAST_BLASTN"] = "/usr/local/bin/blastn"
+# os.environ["LOCALBLAST_MAKEBLASTDB"] = "/usr/local/bin/makeblastdb"
+
+# Or set custom cache directory:
+# os.environ["LOCALBLAST_CACHE_DIR"] = "/path/to/cache"
+
+# ============================================================================
+# STEP 3: Create BLAST Database
+# ============================================================================
+# BLAST databases consist of multiple files with a shared prefix.
+# For nucleotide databases (dbtype="nucl"):
+#   - {prefix}.nsq = sequence data
+#   - {prefix}.nhr = header data
+#   - {prefix}.nin = index data
+#
+# The makeblastdb function returns the database prefix path.
+
+db_path = makeblastdb(
+    input="sequences.fasta",           # Required: input FASTA file
+    dbtype="nucl",                      # Required: "nucl" or "prot"
+    out="my_db",                        # Optional: database prefix (default: input stem)
+    title="My Custom Database",         # Optional: database title
+    parse_seqids=True,                  # Optional: parse sequence IDs (default: True)
+    # Additional BLAST+ arguments:
+    hash_index=True,                    # Create hash index for faster queries
+    # ... any other makeblastdb parameter
+)
+# Returns: "my_db"
+# Creates: my_db.nsq, my_db.nhr, my_db.nin
+
+# ============================================================================
+# STEP 4: Run BLAST Search
+# ============================================================================
+# Run BLAST and get parsed BioPython results
+result = blastn(
+    # Required parameters
+    query="query.fasta",                # Query FASTA file path
+    db=db_path,                         # Database prefix (from step 3)
+
+    # Common optional parameters
+    evalue=0.001,                       # E-value threshold (default: 10.0)
+    max_target_seqs=10,                 # Max number of hits to keep (default: 10)
+    num_threads=4,                      # Number of CPU threads (default: 1)
+
+    # Optional: Save to file instead of parsing in-memory
+    # out="results.xml",                 # Output file path
+    # outfmt=5,                          # Output format (5 = XML)
+
+    # Additional BLAST+ arguments (underscore → hyphen conversion)
+    word_size=11,                       # Word size for initial matches
+    gapopen=5,                          # Gap opening penalty
+    gapextend=2,                        # Gap extension penalty
+    reward=2,                           # Match reward score
+    penalty=-3,                         # Mismatch penalty score
+    strand="both",                      # Query strand to search ("plus", "minus", "both")
+    # ... any other blastn parameter
+)
+
+# If `out` is specified, returns None and writes to file
+# If `out` is not specified, returns list of BioPython Blast record objects (one per query sequence)
+
+# ============================================================================
+# STEP 5: Process Results
+# ============================================================================
+# Result is always a list (one element per query sequence in FASTA)
+for record in result:
+    # Access query information
+    print(f"Query: {record.query}")
+    print(f"Query length: {record.query_length}")
+
+    # Iterate through hits (alignments)
+    for alignment in record.alignments:
+        hit_id = alignment.hit_id           # Hit sequence ID
+        hit_def = alignment.hit_def         # Hit definition/description
+        hit_length = alignment.length       # Hit sequence length
+
+        # Each hit may have multiple HSPs (High-scoring Segment Pairs)
+        for hsp in alignment.hsps:
+            evalue = hsp.expect             # E-value (lower = better)
+            bitscore = hsp.bits             # Bit score (higher = better)
+            identity_pct = (hsp.identities / hsp.align_length) * 100
+
+            print(f"{hit_id}: {identity_pct:.1f}% identity, "
+                  f"e-value={evalue:.2e}, bitscore={bitscore:.1f}")
+```
+
+**Key points:**
+- BLAST databases are created once and reused for multiple queries
+- The database prefix (`db_path` from `makeblastdb`) is passed to BLAST functions
+- Results are always returned as a list (one element per query sequence in the input FASTA)
+- Set `out` parameter to save results to file instead of parsing in-memory
+- Underscores in parameter names are automatically converted to hyphens for BLAST+
+
+### Other BLAST Programs
+
+The interface is identical across all BLAST programs. Only the function name and typical use cases differ:
+
+```python
+from localblast import blastp, blastx, tblastn, tblastx
+
+# blastp: Protein vs Protein
+result = blastp(
+    query="proteins.fasta",
+    db="protein_db",
+    evalue=1e-5,
+    max_target_seqs=50
+)
+# Result is always a list (one per query sequence)
+for record in result:
+    print(f"Query: {record.query}")
+
+# blastx: Translated nucleotide query vs protein database
+# Use: Find potential proteins in nucleotide sequences
+result = blastx(
+    query="transcripts.fasta",
+    db="protein_db",
+    evalue=0.001
+)
+
+# tblastn: Protein query vs translated nucleotide database
+# Use: Find encoding genes for a protein in a genome
+result = tblastn(
+    query="protein.fasta",
+    db="genome_db",
+    evalue=0.001
+)
+
+# tblastx: Translated query vs translated database
+# Use: Compare coding sequences when frame shifts are likely
+result = tblastx(
+    query="transcripts.fasta",
+    db="transcriptome_db",
+    evalue=0.001
+)
+```
+
+### Saving and Loading Results
+
+```python
+from localblast import blastn
+from localblast.parsers import parse_xml_file
+
+# Save to file (doesn't parse in-memory)
+blastn(
+    query="query.fasta",
+    db="my_db",
+    out="results.xml",      # Output file path
+    outfmt=5                # XML format
+)
+
+# Parse saved file later
+result = parse_xml_file("results.xml")
+
+# Or parse XML string directly
+from localblast.parsers import parse_xml
+with open("results.xml") as f:
+    result = parse_xml(f.read())
+```
+
+### Custom Cache Directory
+
+Control where BLAST+ binaries are cached using the `LOCALBLAST_CACHE_DIR` environment variable:
+
+**Default behavior:**
+- Binaries are cached in `.localblast/bin/` in the current working directory
+
+**Custom cache location:**
+```bash
+# Set custom cache directory (bash/zsh)
+export LOCALBLAST_CACHE_DIR=/opt/blast-cache
+
+# Or in Python
+import os
+os.environ["LOCALBLAST_CACHE_DIR"] = "/opt/blast-cache"
+from localblast import blastn
+```
+
+**Use cases:**
+- **Shared cache**: Point to a network drive or shared directory for team environments
+- **Limited disk space**: Redirect to a partition with more space
+- **Testing/isolation**: Use temporary directories to avoid polluting project directories
+- **CI/CD**: Set to a consistent location across build environments
+
+**Note:** The cache directory must exist and be writable. If `LOCALBLAST_CACHE_DIR` is not set, the default `.localblast` directory is used.
+
+## API Reference
+
+### BLAST Search Functions
+
+#### `blastn(query, db, *, out=None, evalue=10.0, max_target_seqs=10, num_threads=1, **kwargs)`
+
+Run nucleotide BLAST search.
+
+**Parameters:**
+- `query` (str | Path): Path to query FASTA file
+- `db` (str | Path): Path to BLAST database (prefix)
+- `out` (str | Path, optional): Output file path. If not provided, returns parsed results
+- `evalue` (float): Expectation value threshold (default: 10.0)
+- `max_target_seqs` (int): Maximum number of aligned sequences to keep (default: 10)
+- `num_threads` (int): Number of threads (default: 1)
+- `**kwargs`: Additional BLAST+ arguments (e.g., `word_size`, `gapopen`, `gapextend`)
+
+**Returns:**
+- `list[BioPython Blast record]` if `out` is None (one record per query sequence)
+- None if `out` is specified
+
+**Example:**
+```python
+result = blastn("query.fasta", "nt_db", evalue=0.001, word_size=11)
+# result is a list - iterate over it
+for record in result:
+    for alignment in record.alignments:
+        ...
+```
+
+#### `blastp(query, db, *, out=None, evalue=10.0, max_target_seqs=10, num_threads=1, **kwargs)`
+
+Run protein BLAST search.
+
+**Parameters:** Same as `blastn`
+
+**Returns:** Same as `blastn`
+
+#### `blastx(query, db, *, out=None, evalue=10.0, max_target_seqs=10, num_threads=1, **kwargs)`
+
+Run translated query BLAST (nucleotide query → protein database).
+
+**Parameters:** Same as `blastn`
+
+**Returns:** Same as `blastn`
+
+#### `tblastn(query, db, *, out=None, evalue=10.0, max_target_seqs=10, num_threads=1, **kwargs)`
+
+Run translated database BLAST (protein query → nucleotide database).
+
+**Parameters:** Same as `blastn`
+
+**Returns:** Same as `blastn`
+
+#### `tblastx(query, db, *, out=None, evalue=10.0, max_target_seqs=10, num_threads=1, **kwargs)`
+
+Run translated query vs translated database BLAST.
+
+**Parameters:** Same as `blastn`
+
+**Returns:** Same as `blastn`
+
+### Database Creation
+
+#### `makeblastdb(input, *, dbtype="nucl", out=None, title=None, parse_seqids=True, **kwargs)`
+
+Create a BLAST database from input sequences.
+
+**Parameters:**
+- `input` (str | Path): Path to input FASTA file
+- `dbtype` (str): Database type - "nucl" or "prot" (default: "nucl")
+- `out` (str | Path, optional): Output database name/prefix (default: input stem)
+- `title` (str, optional): Database title
+- `parse_seqids` (bool): Parse sequence IDs (default: True)
+- `**kwargs`: Additional makeblastdb arguments
+
+**Returns:**
+- str: Database prefix path (relative or absolute)
+
+**Note**: BLAST databases consist of multiple files with extensions like `.nsq`,
+`.nhr`, `.nin` (for nucleotide) or `.psq`, `.phr`, `.pin` (for protein). The
+returned value is the prefix shared by all these files. Use this prefix as the
+`db` parameter in BLAST search functions.
+
+**Example:**
+```python
+db_path = makeblastdb(
+    "sequences.fasta",
+    dbtype="nucl",
+    title="My Custom Database",
+    hash_index=True  # Additional argument
+)
+```
+
+### Utility Functions
+
+#### `get_exe(name)`
+
+Get path to a BLAST+ executable, downloading if needed.
+
+**Parameters:**
+- `name` (str): Executable name (e.g., "blastn", "makeblastdb")
+
+**Returns:**
+- str: Full path to the executable
+
+**Raises:**
+- `ValueError`: If executable name is unknown
+- `RuntimeError`: If executable cannot be found
+
+#### `get_version()`
+
+Get BLAST+ version from cached/system binary.
+
+**Returns:**
+- str: Version string (e.g., "2.17.0+")
+
+**Raises:**
+- `RuntimeError`: If version cannot be determined
+
+#### `get_bin_cache_dir()`
+
+Get the binary cache directory for BLAST+ executables.
+
+**Returns:**
+- Path: Binary cache directory path
+
+**Environment Variables:**
+- `LOCALBLAST_CACHE_DIR`: Override the default cache directory location
+
+**Example:**
+```python
+import os
+os.environ["LOCALBLAST_CACHE_DIR"] = "/custom/cache/path"
+from localblast import get_bin_cache_dir
+cache_dir = get_bin_cache_dir()  # Returns /custom/cache/path
+```
+
+#### `clear_bin_cache()`
+
+Clear the cached BLAST+ binaries (forces re-download on next use).
+
+**Example:**
+```python
+from localblast import clear_bin_cache
+clear_bin_cache()  # Prints "Cleared cache: .localblast/bin"
+```
+
+### Parsers
+
+#### `parse_xml(xml_text)`
+
+Parse BLAST XML output string using BioPython.
+
+**Parameters:**
+- `xml_text` (str): BLAST XML output string (outfmt=5)
+
+**Returns:**
+- BioPython Blast record object
+
+**Example:**
+```python
+from localblast.parsers import parse_xml
+result = parse_xml(xml_string)
+```
+
+#### `parse_xml_file(file_path)`
+
+Parse BLAST XML file using BioPython.
+
+**Parameters:**
+- `file_path` (str): Path to BLAST XML output file
+
+**Returns:**
+- BioPython Blast record object
+
+**Example:**
+```python
+from localblast.parsers import parse_xml_file
+result = parse_xml_file("blast_output.xml")
+```
+
+## Working with BioPython Results
+
+All BLAST functions return a list of BioPython Blast record objects (one per query sequence). Key attributes:
+
+### Record Level
+```python
+# Result is always a list - iterate over query results
+for record in result:
+    record.query          # Query sequence ID
+    record.query_length   # Query sequence length
+    record.application    # BLAST program name
+    record.version        # BLAST version
+    record.date           # Run date
+```
+
+### Alignments (Hits)
+```python
+for record in result:
+    for alignment in record.alignments:
+        alignment.hit_id      # Hit sequence ID
+        alignment.hit_def     # Hit definition
+        alignment.length      # Hit sequence length
+        alignment.accession   # Accession number
+```
+
+### High-Scoring Pairs (HSPs)
+```python
+for record in result:
+    for alignment in record.alignments:
+        for hsp in alignment.hsps:
+            hsp.expect           # E-value
+            hsp.bits             # Bit score
+            hsp.score            # Raw score
+            hsp.identities       # Number of identical positions
+            hsp.positives        # Number of positive-scoring positions
+            hsp.align_length     # Alignment length
+            hsp.query            # Query sequence string
+            hsp.sbjct            # Subject (hit) sequence string
+            hsp.query_start      # Start position in query
+            hsp.query_end        # End position in query
+            hsp.sbjct_start      # Start position in subject
+            hsp.sbjct_end        # End position in subject
+```
+
+### Example: Extract Top Hits
+```python
+result = blastn("query.fasta", "nt_db", evalue=0.001)
+
+# Process all query results
+top_hits = []
+for record in result:
+    for alignment in record.alignments:
+        best_hsp = alignment.hsps[0]  # First HSP is best
+        top_hits.append({
+            "query": record.query,
+            "id": alignment.hit_id,
+            "evalue": best_hsp.expect,
+            "bitscore": best_hsp.bits,
+            "identity_pct": (best_hsp.identities / best_hsp.align_length) * 100
+        })
+
+# Sort by e-value
+top_hits.sort(key=lambda x: x["evalue"])
+```
+
+## Additional BLAST Arguments
+
+Pass any BLAST+ argument via `**kwargs`. Underscores are converted to dashes:
+
+```python
+result = blastn(
+    "query.fasta",
+    "nt_db",
+    evalue=0.001,
+    # Additional arguments (underscore → dash conversion):
+    word_size=11,
+    gapopen=5,
+    gapextend=2,
+    reward=2,
+    penalty=-3,
+    dust="yes"  # Enable dust filtering
+)
+```
+
+Common arguments:
+- `task`: "blastn", "blastn-short", "megablast", "dc-megablast"
+- `strand`: "plus", "minus", "both"
+- `query_loc`: "start-stop" range on query
+- `db_soft_mask`: Filtering algorithm for database
+- `db_hard_mask`: Filtering algorithm for database
+- `matrix`: Substitution matrix (for protein searches)
+- `gapopen`, `gapextend`: Gap penalties
+
+## Platform Support
+
+| Platform | Architecture | Status |
+|----------|--------------|--------|
+| Windows | x86_64 | Supported |
+| Linux | x86_64 | Supported |
+| macOS | x86_64 | Supported |
+| macOS | aarch64 (Apple Silicon) | Supported |
+| Linux | aarch64 | Supported |
+
+## Troubleshooting
+
+### Binaries not found
+
+If BLAST+ executables cannot be found:
+1. Check binary cache directory: `.localblast/bin/`
+2. Clear cache and re-download: `from localblast import clear_bin_cache; clear_bin_cache()`
+3. Set environment variable to custom binary: `export LOCALBLAST_BLASTN=/path/to/blastn`
+4. Set custom cache location: `export LOCALBLAST_CACHE_DIR=/path/to/cache`
+
+### Download fails
+
+If download from NCBI FTP fails:
+1. Check internet connection
+2. Verify NCBI FTP is accessible: https://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/
+3. Manually download and extract to `.localblast/bin/`
+
+### ImportError for BioPython
+
+If you see `ImportError: No module named 'Bio'`:
+```bash
+pip install biopython
+# or
+uv add biopython
+```
+
+## License
+
+This package provides a wrapper for NCBI BLAST+. BLAST+ is in the public domain.
+
+## References
+
+- [NCBI BLAST+ User Manual](https://ftp.ncbi.nlm.nih.gov/blast/documents/blast+-user-manual.pdf)
+- [BioPython Documentation](https://biopython.org/docs/)
