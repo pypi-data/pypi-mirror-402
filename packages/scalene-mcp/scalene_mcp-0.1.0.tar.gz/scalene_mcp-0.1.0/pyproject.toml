@@ -1,0 +1,115 @@
+[project]
+name = "scalene-mcp"
+version = "0.1.0"
+description = "FastMCP server providing LLM-optimized access to Scalene profiler"
+authors = [{ name = "Paul", email = "paul@example.com" }]
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = ["mcp", "scalene", "profiler", "performance", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+dependencies = [
+    "fastmcp>=2.0.0,<3.0.0",
+    "scalene>=1.5.45",
+    "pydantic>=2.11.7",
+    "pydantic-settings>=2.0.0",
+    "rich>=13.9.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.3",
+    "pytest-asyncio>=1.2.0",
+    "pytest-cov>=6.1.1",
+    "pytest-timeout>=2.4.0",
+    "pytest-xdist>=3.6.1",
+    "dirty-equals>=0.9.0",
+    "inline-snapshot[dirty-equals]>=0.27.2",
+    "ruff>=0.12.8",
+    "mypy>=1.11.0",
+]
+
+[project.scripts]
+scalene-mcp = "scalene_mcp.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--cov=scalene_mcp",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+markers = [
+    "integration: integration tests (may be slower)",
+    "slow: slow tests",
+]
+timeout = 5
+filterwarnings = [
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+fail_under = 100
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "PL"]
+ignore = [
+    "PLR0913",  # Too many arguments - acceptable for profiler config
+    "PLR0912",  # Too many branches - acceptable for profiler logic
+    "PLR0915",  # Too many statements - acceptable for profiler setup
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "PLR2004",  # Magic numbers in tests are fine
+    "E501",     # Line length in tests can be longer
+    "F841",     # Unused variables in tests are sometimes intentional
+]
+"src/scalene_mcp/profiler.py" = [
+    "PLR2004",  # Default values are magic but documented
+    "B904",     # Timeout exceptions don't need chaining
+]
+"src/scalene_mcp/storage.py" = [
+    "PLC0415",  # time import is intentionally deferred
+]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+strict = true
