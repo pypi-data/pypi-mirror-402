@@ -1,0 +1,117 @@
+# Changes in online interface:
+# - Set build schedule to "0 3 * * *" for nightly builds.
+#skip_commits:
+#  # Do not build on commits. Only nightly builds (web interface)
+#  author: /.*/
+
+# Do not use shallow_clone, because coveralls needs a git repository
+#shallow_clone: true
+# Use large clone depth so that a tag is included for versioning
+clone_depth: 256
+
+notifications:
+  - provider: Email
+    on_build_success: false
+    on_build_failure: false
+    on_build_status_changed: false
+
+environment:
+  PYPI_USR: ci_fcs
+  PYPI_PWD:
+    secure: EKcG8PgUSje7gsGc7AT7+Hk7c5MRH8nVgqIA9JvBV0oW0uU5FlxGjw5S+dUk1X1D
+  matrix:
+    - PYTHON: "C:\\Miniconda36-x64"
+      PYTHON_VERSION: "3.10"
+      PYTHON_ARCH: "64"
+
+cache:
+  # data files for testing
+  - tests\data
+
+init:
+  - "ECHO %PYTHON% %PYTHON_VERSION% %PYTHON_ARCH%"
+
+install:
+  # Install InnoSetup and add to path
+  # Copied from
+  # https://github.com/Phonations/Joker/blob/master/appveyor.yml
+  - appveyor-retry choco install -y InnoSetup
+
+  # Determine platform
+  - '%PYTHON%/python -c "import platform; print(platform.uname())"'
+  - '%PYTHON%/python -c "import sys; print(sys.version)"'
+
+  # Prepend newly installed Python to the PATH of this build (this cannot be
+  # done from inside the powershell script as it would require to restart
+  # the parent CMD process).
+  - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
+
+  # Check that we have the expected version and architecture for Python
+  - "python --version"
+
+  # Install package-specific libraries
+  # CONDA installs
+  # Pinned versions are defined in .appveyor\pinned
+  - xcopy .appveyor\pinned %PYTHON%\conda-meta\ /Y
+  - "appveyor-retry conda install --yes --quiet matplotlib numpy pip scipy wxpython"
+  # PIP installs
+  # Install the build dependencies of the project. 
+  - "pip install cython wheel"
+  # Install package-specific libraries  
+  - "pip install simplejson sympy"
+  - "pip install lmfit==0.9.2"
+  # Install pyinstaller (includes dependency for pywin32)
+  - "pip install pyinstaller==3.3.1"
+  # Run develop (installs yet missing packages and runs cython)
+  - "pip install -e ."
+
+  # Show the installed packages
+  - "pip freeze"
+
+build: off
+
+test_script:
+  - 'python -c "import pycorrfit; print(pycorrfit.__version__)"'
+  - "pip install coverage"
+  - "pip install codecov"
+  - "coverage run --source=pycorrfit -m pytest tests"
+  - "coverage report -m"
+  - "codecov || exit 0"
+
+after_test:
+  # If tests are successful, create a whl package for the project.
+  - "appveyor-retry pip install twine wheel"
+  - "python setup.py bdist_wheel"
+  - "python setup.py sdist"
+  - ps: "ls dist"
+  # Setup PyPI credentials
+  - cmd: "echo [pypi] > %USERPROFILE%\\.pypirc"
+  - cmd: "echo username: %PYPI_USR% >> %USERPROFILE%\\.pypirc"
+  - cmd: "echo password: %PYPI_PWD% >> %USERPROFILE%\\.pypirc"
+  # Run pyinstaller
+  # This will create the "win7_innosetup.iss" file
+  - "pyinstaller -y --log-level=WARN build-recipes\\win_PyCorrFit_win7.spec"
+  # Create InnoSetup installers
+  # Set InnoSetup path here, because Cython complained about it.
+  - set PATH=%PATH%;"C:\\Program Files (x86)\\Inno Setup 5"
+  - iscc /Q win7_innosetup.iss
+
+artifacts:
+  # Archive the generated wheel package in the ci.appveyor.com build report.
+  - path: dist\*
+  # InnoSetup files
+  - path: Output\*
+
+on_success:
+  - cmd: "if [%APPVEYOR_REPO_TAG%]==[true] twine upload --skip-existing dist\\*.whl"
+  - cmd: "if [%APPVEYOR_REPO_TAG%]==[true] twine upload --skip-existing dist\\*.tar.gz"
+
+deploy:
+  provider: GitHub
+  auth_token:
+    secure: u94ePbzUmuyh5jZU+1xvST73Ueuxepu86/XQsGx/15AnSd4NhQHKE1UXIe1vBIwf
+  artifact: /.*\.exe/
+  draft: true
+  prerelease: true
+  on:
+    appveyor_repo_tag: true        # deploy on tag push only
