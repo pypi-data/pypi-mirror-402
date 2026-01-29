@@ -1,0 +1,78 @@
+name: Release to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_run:
+    workflows: ["Auto-create Release Tag"]
+    types:
+      - completed
+
+jobs:
+  release:
+    # Only run if triggered by tag push, or if auto-tag workflow succeeded
+    if: github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    environment: pypi  # Must match PyPI trusted publisher environment name
+    permissions:
+      contents: read
+      id-token: write  # For Trusted Publishing
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Extract version from tag or find latest tag
+        id: version
+        run: |
+          # If triggered by tag push, extract from GITHUB_REF
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            # If triggered by workflow_run, find the latest CalVer tag
+            git fetch --tags --force
+            LATEST_TAG=$(git tag -l 'v*' --sort=-version:refname | head -n 1 | sed 's/^v//')
+            if [[ -z "$LATEST_TAG" ]]; then
+              echo "Error: No CalVer tag found"
+              exit 1
+            fi
+            VERSION=$LATEST_TAG
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          # Validate CalVer format: YYYY.MM.DD.MICRO
+          if ! [[ "$VERSION" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[0-9]+$ ]]; then
+            echo "Error: Invalid CalVer format: $VERSION"
+            echo "Expected format: YYYY.MM.DD.MICRO (e.g., 2024.01.18.1)"
+            exit 1
+          fi
+          echo "Validated version: $VERSION"
+
+      - name: Set version in VERSION file
+        run: |
+          echo "__version__ = \"${{ steps.version.outputs.version }}\"" > src/hatch_calvar_sample/VERSION
+          cat src/hatch_calvar_sample/VERSION
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install hatch hatchling build twine
+
+      - name: Build package
+        run: hatch build
+
+      - name: Check package
+        run: twine check dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
