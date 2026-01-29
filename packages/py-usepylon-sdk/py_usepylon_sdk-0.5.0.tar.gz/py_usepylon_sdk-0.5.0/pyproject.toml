@@ -1,0 +1,145 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "py-usepylon-sdk"
+dynamic = ["version"]
+description = "A modern Python SDK for the Pylon customer support API"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "Matthew G. Monteleone", email = "matthewm@augmentcode.com" },
+]
+keywords = [
+    "pylon",
+    "api",
+    "sdk",
+    "customer-support",
+    "helpdesk",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "httpx>=0.25.0",
+    "pydantic>=2.0",
+    "tenacity>=8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "respx>=0.20.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+]
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.24.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/mgmonteleone/py-usepylon-sdk"
+Documentation = "https://github.com/mgmonteleone/py-usepylon-sdk#readme"
+Repository = "https://github.com/mgmonteleone/py-usepylon-sdk.git"
+Issues = "https://github.com/mgmonteleone/py-usepylon-sdk/issues"
+Changelog = "https://github.com/mgmonteleone/py-usepylon-sdk/blob/main/CHANGELOG.md"
+
+[tool.hatch.version]
+path = "src/pylon/_version.py"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pylon"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # do not perform function calls in argument defaults
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["pylon"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+    "-ra",
+    "-q",
+    "--strict-markers",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+
+[tool.coverage.run]
+source = ["src/pylon"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
+
