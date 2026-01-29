@@ -1,0 +1,450 @@
+# heare-stats-client
+
+A Python client library for publishing telemetry metrics (counters, timers, gauges, histograms) from heare applications and services. Inspired by StatsD, this library provides a flexible interface for sending metrics to a metrics collection service.
+
+## Installation
+
+```bash
+pip install heare-stats-client
+```
+
+## Quick Start
+
+```python
+from heare.stats.client import StatsClientSettings
+
+# Load configuration from environment, CLI args, or config files
+settings = StatsClientSettings.load()
+
+# Create the client
+client = settings.create_client()
+
+# Use with pipelining (recommended)
+with client.pipeline() as pipe:
+    pipe.incr('requests.total')
+    pipe.time('response.time', 125.5)
+    pipe.gauge('active.connections', 42)
+    pipe.hist('request.size', 1024)
+```
+
+## Recommended Usage
+
+**⚠️ Important: The HTTP client with pipelining is the recommended approach.**
+
+The HTTP client with pipelining provides:
+- **Batching**: Multiple metrics are aggregated and sent in a single HTTP request
+- **Reliability**: HTTPS support with authentication
+- **Efficiency**: Reduces network overhead by combining metrics
+- **Resilience**: Automatic error handling without blocking your application
+
+### Example: HTTP Client with Pipelining
+
+```python
+from heare.stats.client import HttpClient
+
+# Initialize the HTTP client
+client = HttpClient(
+    host='metrics.example.com',
+    port=443,
+    secret='your-secret-key',
+    prefix='myapp'
+)
+
+# Always use the pipeline context manager
+with client.pipeline() as pipe:
+    # Increment counters
+    pipe.incr('api.requests')
+    pipe.incr('api.success', 5)
+    
+    # Decrement counters
+    pipe.decr('queue.size', 3)
+    
+    # Record timing data (in milliseconds)
+    pipe.time('db.query.duration', 45.2)
+    pipe.time('api.response.time', 123.8)
+    
+    # Set gauge values
+    pipe.gauge('memory.usage', 85.5)
+    pipe.gauge('cpu.percent', 42.1)
+    
+    # Record histogram data
+    pipe.hist('request.payload.size', 2048)
+    pipe.hist('response.payload.size', 512)
+
+# Metrics are automatically sent when exiting the context manager
+```
+
+## Configuration
+
+### Using StatsClientSettings (Recommended)
+
+The `StatsClientSettings` class integrates with the [`heare-config`](https://github.com/heare-io/heare-config) library for declarative configuration. Configuration values are loaded from command-line arguments, environment variables, or config files:
+
+```python
+from heare.stats.client import StatsClientSettings
+
+# Load configuration (reads from env vars, CLI args, or config files)
+settings = StatsClientSettings.load()
+
+# Create the configured client
+client = settings.create_client()
+```
+
+**Configuration example:**
+
+```bash
+# Via environment variables
+export STATS_CLIENT_SETTINGS__PROTOCOL=http
+export STATS_CLIENT_SETTINGS__DEST_HOST=metrics.example.com
+export STATS_CLIENT_SETTINGS__DEST_PORT=443
+export STATS_CLIENT_SETTINGS__SECRET=your-secret-key
+export STATS_CLIENT_SETTINGS__PREFIX=myapp
+```
+
+For detailed configuration options (CLI arguments, config files, precedence rules), see the [heare-config documentation](https://github.com/heare-io/heare-config).
+
+### Direct Client Initialization
+
+You can also instantiate clients directly:
+
+```python
+from heare.stats.client import HttpClient
+
+client = HttpClient(
+    host='metrics.example.com',
+    port=443,
+    secret='your-secret-key',
+    prefix='myapp'  # Optional
+)
+```
+
+### Configuration Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `protocol` | str | No | Protocol to use: `http` (recommended), `tcp`, `udp`, `ws` |
+| `dest_host` | str | Yes | Hostname or IP of the metrics server |
+| `dest_port` | int | Yes | Port number (use 443 for HTTPS) |
+| `secret` | str | No* | Authentication secret (*required for HTTP/WS) |
+| `prefix` | str | No | Optional prefix prepended to all metric names |
+
+## API Reference
+
+### Metric Types
+
+#### Counters
+
+Counters track the number of occurrences of an event. They can be incremented or decremented.
+
+```python
+with client.pipeline() as pipe:
+    pipe.incr('page.views')           # Increment by 1
+    pipe.incr('api.calls', 5)         # Increment by 5
+    pipe.decr('active.connections')    # Decrement by 1
+    pipe.decr('queue.items', 3)       # Decrement by 3
+```
+
+#### Timers
+
+Timers measure the duration of operations. Values are typically in milliseconds.
+
+```python
+import time
+
+with client.pipeline() as pipe:
+    start = time.time()
+    # ... perform operation ...
+    duration_ms = (time.time() - start) * 1000
+    pipe.time('operation.duration', duration_ms)
+```
+
+#### Gauges
+
+Gauges represent a value at a specific point in time. Each gauge update sets the value (doesn't accumulate).
+
+```python
+with client.pipeline() as pipe:
+    pipe.gauge('temperature.celsius', 23.5)
+    pipe.gauge('memory.usage.percent', 67.8)
+    pipe.gauge('active.users', 142)
+```
+
+#### Histograms
+
+Histograms track the distribution of values over time.
+
+```python
+with client.pipeline() as pipe:
+    pipe.hist('request.size.bytes', 1024)
+    pipe.hist('response.size.bytes', 2048)
+```
+
+### Pipeline Context Manager
+
+The pipeline aggregates metrics in memory and sends them as a batch when the context exits:
+
+```python
+with client.pipeline() as pipe:
+    # All metrics recorded here are batched
+    pipe.incr('counter1')
+    pipe.time('timer1', 100)
+    pipe.gauge('gauge1', 50)
+# HTTP request is sent here
+```
+
+**Benefits of pipelining:**
+- Reduces network overhead (one request for multiple metrics)
+- Aggregates counter increments automatically
+- Non-blocking error handling
+- Cleaner code with context manager pattern
+
+## Protocol Support
+
+While multiple protocols are available, **HTTP with pipelining is strongly recommended** for production use.
+
+### HTTP Client (Recommended) ✅
+
+```python
+from heare.stats.client import HttpClient
+
+client = HttpClient(host='metrics.example.com', port=443, secret='key')
+```
+
+**Advantages:**
+- HTTPS support for secure transmission
+- Authentication via secret key
+- Efficient batching with pipelining
+- Reliable delivery
+- Works through firewalls and proxies
+
+### Other Protocols (Not Recommended)
+
+<details>
+<summary>UDP Client (Legacy)</summary>
+
+```python
+from heare.stats.client import UdpClient
+
+client = UdpClient(host='metrics.example.com', port=8125, secret=None)
+```
+
+⚠️ **Limitations**: No delivery guarantees, no authentication, fire-and-forget
+</details>
+
+<details>
+<summary>TCP Client (Legacy)</summary>
+
+```python
+from heare.stats.client import TcpClient
+
+client = TcpClient(host='metrics.example.com', port=8125, secret=None)
+```
+
+⚠️ **Limitations**: Connection management overhead, no authentication
+</details>
+
+<details>
+<summary>WebSocket Client (Experimental)</summary>
+
+```python
+from heare.stats.client import WsClient
+
+client = WsClient(host='metrics.example.com', port=443, secret='key')
+```
+
+⚠️ **Status**: Experimental, not fully implemented
+</details>
+
+## Best Practices
+
+### 1. Always Use Pipelining
+
+```python
+# ✅ GOOD: Use pipeline for batching
+with client.pipeline() as pipe:
+    pipe.incr('counter')
+    pipe.time('duration', 100)
+
+# ❌ AVOID: Individual metrics create separate requests
+client.incr('counter')  # Separate request
+client.time('duration', 100)  # Another request
+```
+
+### 2. Use Meaningful Metric Names
+
+```python
+# ✅ GOOD: Descriptive, hierarchical names
+pipe.incr('api.users.login.success')
+pipe.time('db.queries.user.select.duration')
+
+# ❌ AVOID: Vague or flat names
+pipe.incr('count1')
+pipe.time('query')
+```
+
+### 3. Set a Prefix for Your Application
+
+```python
+client = HttpClient(
+    host='metrics.example.com',
+    port=443,
+    secret='key',
+    prefix='myapp'  # All metrics will be prefixed with 'myapp.'
+)
+
+with client.pipeline() as pipe:
+    pipe.incr('requests')  # Sent as 'myapp.requests'
+```
+
+### 4. Handle Errors Gracefully
+
+The client handles errors internally to avoid disrupting your application:
+
+```python
+with client.pipeline() as pipe:
+    pipe.incr('counter')
+    # Even if metrics submission fails, your app continues
+    # Errors are logged but not raised
+```
+
+### 5. Batch Related Metrics
+
+```python
+with client.pipeline() as pipe:
+    # Group related metrics in the same pipeline
+    pipe.incr('api.requests.total')
+    pipe.incr('api.requests.success')
+    pipe.time('api.response.time', duration)
+    pipe.gauge('api.active.connections', active_count)
+```
+
+## Examples
+
+### Web Application Metrics
+
+```python
+from heare.stats.client import HttpClient
+import time
+
+client = HttpClient(
+    host='metrics.example.com',
+    port=443,
+    secret='your-secret',
+    prefix='webapp'
+)
+
+def handle_request(request):
+    start = time.time()
+    
+    with client.pipeline() as pipe:
+        pipe.incr('requests.total')
+        pipe.incr(f'requests.method.{request.method}')
+    
+    try:
+        response = process_request(request)
+        
+        with client.pipeline() as pipe:
+            pipe.incr('requests.success')
+            pipe.time('response.time', (time.time() - start) * 1000)
+            pipe.hist('response.size', len(response.body))
+        
+        return response
+        
+    except Exception as e:
+        with client.pipeline() as pipe:
+            pipe.incr('requests.error')
+            pipe.incr(f'requests.error.{type(e).__name__}')
+        raise
+```
+
+### Background Job Metrics
+
+```python
+def process_job(job):
+    with client.pipeline() as pipe:
+        pipe.incr('jobs.started')
+        pipe.gauge('jobs.queue.size', get_queue_size())
+    
+    start = time.time()
+    
+    try:
+        result = execute_job(job)
+        duration_ms = (time.time() - start) * 1000
+        
+        with client.pipeline() as pipe:
+            pipe.incr('jobs.completed')
+            pipe.time('jobs.duration', duration_ms)
+            pipe.hist('jobs.items.processed', result.item_count)
+        
+        return result
+        
+    except Exception:
+        with client.pipeline() as pipe:
+            pipe.incr('jobs.failed')
+        raise
+```
+
+### Database Query Metrics
+
+```python
+def execute_query(query):
+    with client.pipeline() as pipe:
+        pipe.incr('db.queries.total')
+        pipe.incr(f'db.queries.{query.table}')
+    
+    start = time.time()
+    result = db.execute(query)
+    duration_ms = (time.time() - start) * 1000
+    
+    with client.pipeline() as pipe:
+        pipe.time('db.query.duration', duration_ms)
+        pipe.hist('db.rows.returned', len(result))
+    
+    return result
+```
+
+
+
+## Troubleshooting
+
+### Metrics Not Appearing
+
+1. **Check connectivity**: Ensure the metrics server is reachable
+2. **Verify credentials**: Confirm the secret key is correct
+3. **Check port**: Use 443 for HTTPS, other ports may be blocked
+4. **Review logs**: Errors are logged via Python's logging module
+
+### Performance Issues
+
+1. **Use pipelining**: Always batch metrics with the pipeline context manager
+2. **Avoid excessive metrics**: Don't send metrics in tight loops
+3. **Consider sampling**: For high-frequency events, sample a percentage
+
+### Authentication Errors
+
+```python
+# Ensure the secret is provided for HTTP/WS clients
+client = HttpClient(
+    host='metrics.example.com',
+    port=443,
+    secret='your-secret-key'  # Required!
+)
+```
+
+## Contributing
+
+Contributions are welcome! Please submit issues and pull requests on GitHub.
+
+**Repository**: https://github.com/heare-io/heare-stats-client
+
+## License
+
+This project is licensed under the GNU Lesser General Public License v3 (LGPLv3).
+
+## Support
+
+For bug reports and feature requests, please use the [GitHub issue tracker](https://github.com/heare-io/heare-stats-client/issues).
+
+## Changelog
+
+See the [releases page](https://github.com/heare-io/heare-stats-client/releases) for version history and changes.
