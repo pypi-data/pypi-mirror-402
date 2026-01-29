@@ -1,0 +1,552 @@
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  annotations:
+    remark: ""
+  labels:
+    reclaimableByVolcano: "{{RECLAIMABLEBYVOLCANO}}"
+    # volcano.sh/job-type: pytorch
+    app: {{APP_NAME}}
+  name: {{APP_NAME}}
+  namespace: {{NAMESPACE}}
+spec:
+  maxRetry: 9999
+  minAvailable: {{TOTAL_REPLICAS}}
+  plugins:
+    env: []
+    pytorch:
+    - --master=master
+    - --worker=worker
+    - --port=6379
+{%- if BACKEND in ['sglang', 'vllm'] %}
+    - --port-skip-container=logcollector,nla-sidecar
+{%- else %}
+    - --port-skip-container=logcollector
+{%- endif %}
+    ssh: []
+  policies:
+  - action: RestartJob
+    events:
+    - PodEvicted
+    - PodFailed
+  priorityClassName: {{PRIORITYCLASSNAME}}
+  queue: {{QUEUE}}
+  schedulerName: volcano
+  tasks:
+    - name: master
+      minAvailable: 1
+      replicas: 1
+      template:
+        metadata:
+          labels:
+            app: {{APP_NAME}}
+            model: {{SERVED_MODEL_NAME}}
+            cluster: {{CLUSTER_NAME}}
+            north-job-type: serving
+        spec:
+          initContainers:
+          - name: drop-cache
+            image: {{IMAGE}}
+            command:
+              - /bin/bash
+              - -c
+              - |
+                sync;
+                echo 1 > /proc/sys/vm/drop_caches;
+                echo "Cache dropped successfully";
+            securityContext:
+              privileged: true
+              runAsNonRoot: false
+              runAsUser: 0
+              runAsGroup: 0
+          containers:
+          - command:
+            - /bin/bash
+            - --norc
+            - -c
+            - set -o pipefail && {{MULTI_NODE_HEAD_INIT_CMDS}} {{CMDLINE}} 2>&1 | tee -a /var/log/vllm.log; echo $? > /var/log/exit
+            image: {{IMAGE}}
+            imagePullPolicy: IfNotPresent
+            name: master
+            env:
+            - name: PYTHONNOUSERSITE
+              value: "1"
+            - name: SERVED_MODEL_NAME
+              value: {{SERVED_MODEL_NAME}}
+            - name: HF_MODULES_CACHE
+              value: "/tmp/hf_cache"
+            - name: HF_HOME
+              value: "/tmp/hf_home"
+            - name: TRITON_CACHE_DIR
+              value: "/tmp/triton"
+            - name: VLLM_CACHE_ROOT
+              value: "/tmp/vllm"
+            - name: VLLM_CONFIG_ROOT
+              value: "/tmp/vllm_config"
+            - name: REDIS_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: north-llm-api-secret
+                  key: REDIS_HOST
+            - name: REDIS_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: north-llm-api-secret
+                  key: REDIS_PORT
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: north-llm-api-secret
+                  key: REDIS_PASSWORD
+            - name: REDIS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: north-llm-api-secret
+                  key: REDIS_USERNAME
+            - name: NLA_UPDATE_WEIGHTS_TIMEOUT
+              value: "600"
+{%- if HAS_EXTRA_ENVS %}
+            {%- for key, value in EXTRA_ENVS.items() %}
+            - name: {{key}}
+              value: "{{value}}"
+            {%- endfor -%}
+{%- endif %}
+{%- if MULTI_PODS %}
+            - name: NCCL_IB_QPS_PER_CONNECTION
+              value: "2"
+            - name: NCCL_SOCKET_IFNAME
+              value: "bond0"
+            - name: NCCL_IB_TIMEOUT
+              value: "22"
+            - name: "UCX_NET_DEVICES"
+              value: "mlx5_0:1"
+            - name: NCCL_IB_GID_INDEX
+              value: "3"
+            - name: NCCL_CUMEM_ENABLE
+              value: "0"
+{%- endif %}
+            # livenessProbe:
+            #   exec:
+            #     command:
+            #     - /bin/sh
+            #     - -c
+            #     - 'curl --connect-timeout 600 --max-time 600 http://localhost:8000/v1/completions -H "Content-Type: application/json" -H "Authorization: Bearer {{API_KEY | default('EMPTY')}}" -d ''{"model": "{{SERVED_MODEL_NAME}}", "prompt": "Say this is a test", "temperature": 0, "max_tokens": 1}'' | grep ''"object":"text_completion"'''
+            #   initialDelaySeconds: 120
+            #   periodSeconds: 60
+            #   successThreshold: 1
+            #   failureThreshold: 100
+            #   timeoutSeconds: 10
+            # ports:
+            # - containerPort: 8000
+            #   protocol: TCP
+            # readinessProbe:
+            #   exec:
+            #     command:
+            #     - /bin/sh
+            #     - -c
+            #     - 'curl --connect-timeout 600 --max-time 600 http://localhost:8000/v1/completions -H "Content-Type: application/json" -H "Authorization: Bearer {{API_KEY | default('EMPTY')}}" -d ''{"model": "{{SERVED_MODEL_NAME}}", "prompt": "Say this is a test", "temperature": 0, "max_tokens": 1}'' | grep ''"object":"text_completion"'''
+            #   initialDelaySeconds: 120
+            #   periodSeconds: 30
+            #   successThreshold: 1
+            #   failureThreshold: 100
+            #   timeoutSeconds: 10
+            resources:
+              limits:
+                nvidia.com/{{GPU_TYPE}}: "{{GPUS_PER_POD}}"
+{%- if MULTI_PODS %}
+                rdma/hca_shared_devices: "1"
+                memory: "1200Gi"
+{%- endif %}
+              requests:
+                nvidia.com/{{GPU_TYPE}}: "{{GPUS_PER_POD}}"
+{%- if MULTI_PODS %}
+                rdma/hca_shared_devices: "1"
+                memory: "1200Gi"
+{%- endif %}
+            volumeMounts:
+            - mountPath: /gpfs
+              name: gpfs
+            - mountPath: /data
+              name: local-data
+            - mountPath: /dev/shm
+              name: dshm
+            - name: log-collector-config
+              mountPath: /usr/local/container/filebeat-7.12.0/etc/
+              readOnly: true
+            - name: shared-log-path
+              mountPath: /var/log
+            - name: log-collector-data
+              mountPath: /usr/local/container/filebeat-7.12.0/data
+            - name: tmp-dir
+              mountPath: /tmp
+{%- if BACKEND in ['sglang', 'vllm'] %}
+          - name: nla-sidecar
+            image: harbor.local.clusters/bp/nla-sidecar:v0.2.2
+            imagePullPolicy: IfNotPresent
+            env:
+              # 主容器与 sidecar 同 Pod，使用 Pod IP 作为上报 IP
+              - name: NLA_HOST
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+
+              # 主容器对外端口
+              - name: NLA_PORT
+                value: "8000"
+
+              # Redis 连接（与主容器一致）
+              - name: REDIS_HOST
+                valueFrom:
+                  secretKeyRef:
+                    name: north-llm-api-secret
+                    key: REDIS_HOST
+              - name: REDIS_PORT
+                valueFrom:
+                  secretKeyRef:
+                    name: north-llm-api-secret
+                    key: REDIS_PORT
+              - name: REDIS_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: north-llm-api-secret
+                    key: REDIS_PASSWORD
+              - name: REDIS_USERNAME
+                valueFrom:
+                  secretKeyRef:
+                    name: north-llm-api-secret
+                    key: REDIS_USERNAME
+
+              # 业务标识
+              - name: NLA_MODEL_NAME
+                value: "{{SERVED_MODEL_NAME}}"
+              - name: NLA_MODEL_VERSION
+                value: "v1.0.0"
+              - name: NLA_REGISTER_INTERVAL_SEC
+                value: "5"
+              - name: NLA_API_COMPAT
+                value: "{{PROTOCOL}}"
+
+              # sidecar 自身健康服务配置
+              - name: NLA_HEALTH_PORT
+                value: "18080"
+              - name: NLA_HEALTH_PATH
+                value: "/health"
+
+            readinessProbe:
+              httpGet:
+                path: /health
+                port: 18080
+                scheme: HTTP
+              initialDelaySeconds: 5
+              periodSeconds: 5
+              timeoutSeconds: 2
+              successThreshold: 1
+              failureThreshold: 3
+
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: 18080
+                scheme: HTTP
+              initialDelaySeconds: 20
+              periodSeconds: 10
+              timeoutSeconds: 2
+              failureThreshold: 6
+
+            resources:
+              limits:
+                memory: "512Mi"
+              requests:
+                memory: "512Mi"
+{%- endif %}
+          - name: logcollector
+            image: harbor.local.clusters/bp/volces/logcollector:20241231-2
+            imagePullPolicy: IfNotPresent
+            command:
+            - /bin/bash
+            args:
+              - -c
+              - bash /root/check_filebeat.sh
+            # livenessProbe:
+            #   initialDelaySeconds: 120
+            #   periodSeconds: 10
+            #   exec:
+            #     command:
+            #       - sh
+            #       - -c
+            #       - |
+            #         filebeat_num=`ps -ef 2>/dev/null | grep "filebeat" | grep -v "grep" | wc -l`
+            #         if [ $filebeat_num -eq 0 ]; then
+            #           return 1
+            #         fi
+            resources:
+              limits:
+                cpu: '1'
+                memory: 2Gi
+              requests:
+                cpu: '1'
+                memory: 2Gi
+            volumeMounts:
+              - name: log-collector-config
+                mountPath: /usr/local/container/filebeat-7.12.0/etc/
+                readOnly: true
+              - name: shared-log-path
+                mountPath: /var/log
+              - name: log-collector-data
+                mountPath: /usr/local/container/filebeat-7.12.0/data
+              - name: log-collector-logs
+                mountPath: /usr/local/container/filebeat-7.12.0/logs
+            env:
+              - name: "LOG_COLLECTOR_ENV_TAGS"
+                value: "__pod_name__|__pod_ip__|__namespace__|__node_name__|__node_ip__"
+              - name: "__pod_name__"
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.name
+              - name: "__pod_ip__"
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              - name: "__namespace__"
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.namespace
+              - name: "__job_name__"
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.labels['jobname']
+              - name: "__node_name__"
+                valueFrom:
+                  fieldRef:
+                    fieldPath: spec.nodeName
+              - name: "__node_ip__"
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.hostIP
+              - name: MAX_MEM
+                valueFrom:
+                 resourceFieldRef:
+                   containerName: logcollector
+                   resource: limits.memory
+          tolerations:
+          - key: "north.serving"
+            operator: "Exists"
+            effect: "NoSchedule"
+          restartPolicy: Never
+          terminationGracePeriodSeconds: {{TERMINATIONGRACEPERIODSECONDS}}
+{%- if MULTI_PODS %}
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet
+{%- endif %}
+          volumes:
+          - name: gpfs
+            hostPath:
+              path: /gpfs
+              type: Directory
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: "32Gi"
+          - name: log-collector-config
+            configMap:
+              defaultMode: 420
+              name: north-serving-log-collector-config
+          - name: shared-log-path
+            emptyDir: {}
+          - name: log-collector-data
+            emptyDir: {}
+          - name: log-collector-logs
+            emptyDir: {}
+          - name: tmp-dir
+            emptyDir: {}
+          - name: local-data
+            hostPath:
+              path: /data
+              type: Directory
+{%- if MULTI_PODS %}
+    - name: worker
+      minAvailable: {{TOTAL_REPLICAS - 1}}
+      replicas: {{TOTAL_REPLICAS - 1}}
+      template:
+        spec:
+          initContainers:
+          - name: drop-cache
+            image: {{IMAGE}}
+            command:
+              - /bin/bash
+              - -c
+              - |
+                sync;
+                echo 1 > /proc/sys/vm/drop_caches;
+                echo "Cache dropped successfully";
+            securityContext:
+              privileged: true
+              runAsNonRoot: false
+              runAsUser: 0
+              runAsGroup: 0
+          containers:
+          - command:
+            - /bin/bash
+            - --norc
+            - -c
+            - set -o pipefail && {{MULTI_NODE_WORKER_INIT_CMDS}} 2>&1 | tee -a /var/log/vllm.log; echo $? > /var/log/exit
+            image: {{IMAGE}}
+            imagePullPolicy: IfNotPresent
+            name: worker
+            env:
+            - name: PYTHONNOUSERSITE
+              value: "1"
+            - name: HF_MODULES_CACHE
+              value: "/tmp/hf_cache"
+            - name: HF_HOME
+              value: "/tmp/hf_home"
+            - name: TRITON_CACHE_DIR
+              value: "/tmp/triton"
+            - name: VLLM_CACHE_ROOT
+              value: "/tmp/vllm"
+            - name: VLLM_CONFIG_ROOT
+              value: "/tmp/vllm_config"
+            - name: NCCL_IB_QPS_PER_CONNECTION
+              value: "2"
+            - name: NCCL_SOCKET_IFNAME
+              value: "bond0"
+            - name: NCCL_IB_TIMEOUT
+              value: "22"
+            - name: "UCX_NET_DEVICES"
+              value: "mlx5_0:1"
+            - name: NCCL_IB_GID_INDEX
+              value: "3"
+            - name: NCCL_CUMEM_ENABLE
+              value: "0"
+            - name: NLA_UPDATE_WEIGHTS_TIMEOUT
+              value: "600"
+{%- if HAS_EXTRA_ENVS %}
+            {%- for key, value in EXTRA_ENVS.items() %}
+            - name: {{key}}
+              value: "{{value}}"
+            {%- endfor -%}
+{%- endif %}
+            resources:
+              limits:
+                nvidia.com/{{GPU_TYPE}}: "{{GPUS_PER_POD}}"
+                rdma/hca_shared_devices: "1"
+                memory: "1200Gi"
+              requests:
+                nvidia.com/{{GPU_TYPE}}: "{{GPUS_PER_POD}}"
+                rdma/hca_shared_devices: "1"
+                memory: "1200Gi"
+            volumeMounts:
+            - mountPath: /gpfs
+              name: gpfs
+            - mountPath: /data
+              name: local-data
+            - mountPath: /dev/shm
+              name: dshm
+            - name: log-collector-config
+              mountPath: /usr/local/container/filebeat-7.12.0/etc/
+              readOnly: true
+            - name: shared-log-path
+              mountPath: /var/log
+            - name: log-collector-data
+              mountPath: /usr/local/container/filebeat-7.12.0/data
+            - name: tmp-dir
+              mountPath: /tmp
+          - name: logcollector
+            image: harbor.local.clusters/bp/volces/logcollector:20241231-2
+            imagePullPolicy: IfNotPresent
+            command:
+            - /bin/bash
+            args:
+              - -c
+              - bash /root/check_filebeat.sh
+            resources:
+              limits:
+                cpu: '1'
+                memory: 2Gi
+              requests:
+                cpu: '1'
+                memory: 2Gi
+            volumeMounts:
+              - name: log-collector-config
+                mountPath: /usr/local/container/filebeat-7.12.0/etc/
+                readOnly: true
+              - name: shared-log-path
+                mountPath: /var/log
+              - name: log-collector-data
+                mountPath: /usr/local/container/filebeat-7.12.0/data
+              - name: log-collector-logs
+                mountPath: /usr/local/container/filebeat-7.12.0/logs
+            env:
+              - name: "LOG_COLLECTOR_ENV_TAGS"
+                value: "__pod_name__|__pod_ip__|__namespace__|__node_name__|__node_ip__"
+              - name: "__pod_name__"
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.name
+              - name: "__pod_ip__"
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              - name: "__namespace__"
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.namespace
+              - name: "__job_name__"
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.labels['jobname']
+              - name: "__node_name__"
+                valueFrom:
+                  fieldRef:
+                    fieldPath: spec.nodeName
+              - name: "__node_ip__"
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.hostIP
+              - name: MAX_MEM
+                valueFrom:
+                 resourceFieldRef:
+                   containerName: logcollector
+                   resource: limits.memory
+            volumeMounts:
+              - name: log-collector-config
+                mountPath: /usr/local/container/filebeat-7.12.0/etc/
+                readOnly: true
+              - name: shared-log-path
+                mountPath: /var/log
+              - name: log-collector-data
+                mountPath: /usr/local/container/filebeat-7.12.0/data
+              - name: log-collector-logs
+                mountPath: /usr/local/container/filebeat-7.12.0/logs
+{%- if MULTI_PODS %}
+          dnsPolicy: ClusterFirstWithHostNet
+          hostNetwork: true
+{%- endif %}
+          restartPolicy: Never
+          terminationGracePeriodSeconds: {{TERMINATIONGRACEPERIODSECONDS}}
+          volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: "32Gi"
+          - name: gpfs
+            hostPath:
+              path: /gpfs
+              type: Directory
+          - name: local-data
+            hostPath:
+              path: /data
+              type: Directory
+          - name: log-collector-config
+            configMap:
+              defaultMode: 420
+              name: north-serving-log-collector-config
+          - name: shared-log-path
+            emptyDir: {}
+          - name: log-collector-data
+            emptyDir: {}
+          - name: log-collector-logs
+            emptyDir: {}
+          - name: tmp-dir
+            emptyDir: {}
+{%- endif %}

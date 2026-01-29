@@ -1,0 +1,34 @@
+# Used for sglang router to access pods in the same namespace
+# already created in qiji namespace, this yaml is for reference.
+# ref: https://docs.sglang.ai/advanced_features/router.html#service-discovery-kubernetes
+# kubectl get role sglang-router-pod-access -n qiji
+# kubectl get rolebinding sglang-router-pod-access-binding -n qiji
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sglang-router
+  namespace: qiji
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sglang-router-pod-access
+  namespace: qiji
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sglang-router-pod-access-binding
+  namespace: qiji
+subjects:
+- kind: ServiceAccount
+  name: sglang-router
+  namespace: qiji
+roleRef:
+  kind: Role
+  name: sglang-router-pod-access
+  apiGroup: rbac.authorization.k8s.io
