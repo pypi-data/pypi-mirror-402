@@ -1,0 +1,158 @@
+Metadata-Version: 2.4
+Name: dbt-cloud-run-runner
+Version: 0.2.0
+Summary: A client library for running dbt projects on Google Cloud Run
+License: Proprietary
+Project-URL: Homepage, https://github.com/delphiio/dbt-runners
+Project-URL: Bug Tracker, https://github.com/delphiio/dbt-runners/issues
+Keywords: dbt,cloud-run,gcp,bigquery,data-engineering
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: google-cloud-storage>=2.0.0
+Requires-Dist: google-cloud-run>=0.10.0
+Requires-Dist: pyyaml>=6.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+
+# dbt-cloud-run-runner
+
+A Python client library for running dbt projects on Google Cloud Run.
+
+## Installation
+
+```bash
+pip install dbt-cloud-run-runner
+```
+
+## Usage
+
+```python
+from dbt_cloud_run_runner import Client
+
+# Service account for GCS and Cloud Run operations
+# This service account needs:
+# - Storage Admin on the GCS bucket
+# - Cloud Run Admin in the project
+gcp_service_account_key = {"type": "service_account", ...}
+
+# Initialize the client
+client = Client(
+    gcp_project="your-gcp-project",
+    gcs_bucket="your-gcs-bucket",
+    service_account_key=gcp_service_account_key,  # Required: for GCS and Cloud Run
+    region="us-central1",  # optional, defaults to us-central1
+)
+
+# Prepare a dbt project for BigQuery
+# This method performs several side effects:
+# 1. Generates a profiles.yml file for BigQuery
+# 2. Zips your local dbt project (excluding target/ directory)
+# 3. Uploads profiles.yml, the dbt project zip, and service account credentials to GCS
+# 4. Generates pre-signed URLs (valid for 2 hours by default) for the Cloud Run job
+#
+# Returns: DbtCloudRunSetup object containing:
+#   - GCS blob paths (gs://bucket/path format) for all uploaded files
+#   - Pre-signed URLs for downloading inputs and uploading outputs
+#   - The Docker image to use
+#
+# Note: The service_account_key here is different from the one passed to Client.
+# This one is used for BigQuery access inside the dbt container.
+setup = client.prepare_bigquery(
+    service_account_key={"type": "service_account", ...},  # For BigQuery access
+    target_project="your-bigquery-project",
+    target_dataset="your_dataset",
+    path_to_local_dbt_project="./path/to/dbt/project",
+    image="us-docker.pkg.dev/delphiio-prod/public-images/dbt-runner:v0.1.1",
+    url_expiration_hours=2,  # Optional: override default 2-hour URL expiration
+)
+
+# Run the dbt project on Cloud Run
+execution_id = client.run(setup)
+print(f"Execution started: {execution_id}")
+
+# Wait for completion
+status = client.wait_for_completion(execution_id)
+print(f"Execution finished with state: {status.state.value}")
+
+# Or poll status manually
+status = client.get_status(execution_id)
+print(f"Current state: {status.state.value}")
+```
+
+## `prepare_bigquery()` Method
+
+The `prepare_bigquery()` method prepares your dbt project for execution on Cloud Run. It performs several operations with side effects:
+
+### Side Effects
+
+1. **Generates `profiles.yml`**: Creates a BigQuery profile configuration file that will be used by dbt inside the container.
+
+2. **Zips the dbt project**: Packages your local dbt project directory into a zip file, automatically excluding the `target/` directory (which contains compiled artifacts).
+
+3. **Uploads to GCS**: Uploads three files to Google Cloud Storage:
+   - `profiles.yml` - The dbt profile configuration
+   - `dbt_project.zip` - Your zipped dbt project
+   - `credentials.json` - Your service account key (for BigQuery authentication)
+
+4. **Generates pre-signed URLs**: Creates time-limited signed URLs (default: 2 hours) that allow the Cloud Run container to:
+   - Download the dbt project and profiles.yml
+   - Upload the compiled output (`target/` directory) and logs
+
+### Return Value
+
+Returns a `DbtCloudRunSetup` object containing:
+
+- **Blob paths** (in `gs://bucket/path` format):
+  - `profiles_yml_blob` - Location of the uploaded profiles.yml
+  - `dbt_project_blob` - Location of the uploaded dbt project zip
+  - `credentials_blob` - Location of the uploaded service account key
+  - `output_blob` - Where the compiled dbt output will be stored
+  - `logs_blob` - Where the execution logs will be stored
+
+- **Pre-signed URLs**:
+  - `profiles_yml_url` - URL to download profiles.yml
+  - `dbt_project_url` - URL to download the dbt project zip
+  - `credentials_url` - URL to download the service account key
+  - `output_url` - URL to upload the compiled output (PUT request)
+  - `logs_url` - URL to upload execution logs (PUT request)
+
+- **Image**: The Docker image identifier to use for the Cloud Run job
+
+### Important Notes
+
+- **URL Expiration**: Pre-signed URLs expire after 2 hours by default (configurable via `url_expiration_hours` parameter). Make sure to call `client.run(setup)` before the URLs expire.
+
+- **GCS Storage**: Files are uploaded to `gs://{bucket}/dbt-runs/{run_id}/` where `run_id` is a unique identifier generated for each call to `prepare_bigquery()`.
+
+- **Idempotency**: Each call to `prepare_bigquery()` creates a new run with a unique ID, so you can safely call it multiple times without conflicts.
+
+## Features
+
+- **Automatic GCS setup**: Uploads your dbt project and credentials to GCS with signed URLs
+- **Cloud Run job management**: Creates and manages Cloud Run jobs automatically
+- **BigQuery integration**: Generates `profiles.yml` for BigQuery targets
+- **Status monitoring**: Track execution status with polling or wait for completion
+
+## Requirements
+
+- Python 3.9+
+- Google Cloud project with Cloud Run and GCS enabled
+- **Two service accounts** (can be the same, but often different):
+  1. **GCS/Cloud Run service account** (passed to `Client()`):
+     - Cloud Run Admin (`roles/run.admin`) in the project
+     - Storage Admin (`roles/storage.admin`) on the GCS bucket
+     - Must have a private key (for signing URLs)
+  2. **BigQuery service account** (passed to `prepare_bigquery()`):
+     - BigQuery access for the target project/dataset
+     - This is the account that dbt will use to query BigQuery
