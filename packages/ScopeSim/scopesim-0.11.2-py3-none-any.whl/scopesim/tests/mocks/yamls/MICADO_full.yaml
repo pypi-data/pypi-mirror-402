@@ -1,0 +1,247 @@
+### SIMULATION PARAMETERS
+object : simulation
+name : default_simulation_config
+alias : SIM
+description : simulation confiugration parameters
+
+yaml :
+    general     : None
+    simulation  : default_simulation_config
+    observation : default_observation
+    atmosphere  : armazones
+    telescope   : ELT
+    relay_optics: default_ro
+    instrument  : MICADO_LRI
+    detector    : micado_detector_array
+
+properties :
+    wave_min : 1.8
+    wave_mid : 2.2
+    wave_max : 2.5
+    chunk_size : 512
+    max_segment_size : 1.1E6
+    oversampling : 1
+    pixel_threshold : 1
+    minimum_throughput : 1E-6
+    spline_order : 1
+    spectral_resolution : 1E-4
+    flux_accuracy : 1E-3
+    sub_pixel_flag : False
+    sub_pixel_fraction : 1
+    random_seed : 42
+
+---
+
+### OBSERVATION PARAMETERS
+object : observation
+name : default_observation
+alias : OBS
+description : observation parameters
+
+properties :
+    airmass : 1
+    pupil_angle : 0
+    field_rotation : 0
+    dit : 60
+    ndit : 1
+    filter_name : TC_filter_Ks.dat
+
+---
+
+### LOCATION ARMAZONES
+object : atmosphere
+name : armazones
+alias : ATMO
+description : Atmosphere and location details for Cerro Armazones
+
+properties :
+    altitude : 3060
+    longitude : -70.1918
+    latitude : -24.5899
+    airmass : !OBS.airmass
+    temperature : 0
+    humidity : 0.6
+    pressure : 0.6
+    pwv : 2.5
+    pupil_angle : !OBS.pupil_angle
+
+effects :
+-   name : atmo_ter_curve
+    description : atmospheric emission and transmission
+    class : SkycalcTERCurve
+    kwargs :
+        skycalc_params : {}
+
+-   name : atmo_dispersion
+    description : atmospheric dispersion
+    class : AtmosphericDispersion
+    kwargs :
+        central_wavelength : !SIM.wave_mid
+        pixel_scale : !INST.pixel_scale
+
+---
+
+### ELT TELESCOPE
+object : telescope
+name : ELT
+alias : TEL
+
+properties :
+    temperature : !ATMO.temperature
+
+effects :
+-   name: scope_surface_list
+    description : list of ELT surfaces
+    class : SurfaceList
+    kwargs:
+        filename: LIST_mirrors_ELT.tbl
+
+-   name : scope_vibration
+    description : residual vibration of telescope
+    class : VibrationPSF
+    kwargs :
+        fwhm : 0.001
+
+---
+
+### MORFEO RELAY OPTICS
+object : relay_optics
+name : MORFEO
+alias : RO
+description : MORFEO AO relay module
+
+properties :
+    temperature : !ATMO.temperature
+
+effects :
+-   name : relay_psf
+    description : MCAO PSF
+    class : FieldVaryingPSF
+    kwargs:
+        filename : None
+        field_rotation : !OBS.field_rotation
+
+effects :
+-   name: relay_surface_list
+    description : list of surfaces in MORFEO
+    class: SurfaceList
+    kwargs:
+        filename: LIST_mirrors_MCAO_MORFEO.tbl
+
+---
+
+### STANDALONE RELAY OPTICS
+object : relay_optics
+name : default_ro
+alias : RO
+description : Simple stand-alone relay optics module
+
+properties :
+    temperature : !ATMO.temperature
+
+effects :
+-   name : relay_psf
+    description : SCAO PSF
+    class : AnisocadoPSF
+    kwargs:
+        anisocado_params : {}
+        field_rotation : !OBS.field_rotation
+
+effects :
+-   name: relay_surface_list
+    description : list of surfaces in the relay optics
+    class: SurfaceList
+    kwargs:
+        filename: LIST_mirrors_SCAO_relay.tbl
+
+---
+
+### MICADO INSTRUMENT WIDE FIELD MODE
+object : instrument
+name : MICADO_LRI
+alias : INST
+description : wide field mode of MICADO
+
+properties :
+    temperature : -190
+    pixel_scale : 0.004
+
+effects :
+-   name: wide_mode_surface_list
+    description : surfaces list for wide field optics
+    class: SurfaceList
+    kwargs:
+        filename: LIST_mirrors_MICADO_Wide.tbl
+
+-   name: filter
+    description : transmission curve for filter
+    class: TERCurve
+    kwargs:
+        filename: !OBS.filter_name
+
+-   name: adc_3D_shift
+    description : atmospheric disperson corrector
+    class: AtmosphericDispersionCorrection
+    kwargs:
+        altitude : !ATMO.altitude
+        longitude : !ATMO.longitude
+        latitude : !ATMO.latitude
+        airmass : !OBS.airmass
+        temperature : !ATMO.temperature
+        humidity : !ATMO.humidity
+        pressure : !ATMO.pressure
+        pupil_angle : !OBS.pupil_angle
+        efficiency: 1
+
+-   name : ncpas_psf
+    description : Effective NCPA induced PSF kernel
+    class : NonCommonPathAberration
+    kwargs :
+        filename : INST_wfe.tbl
+
+---
+
+### H4RG DETECTOR
+object : detector
+name : micado_detector_array
+alias : DET
+description : A set of 9 H4RG detectors
+
+properties :
+    temperature : -230
+
+effects :
+-   name: detector_array_list
+    description : MICADO detector array list
+    class: DetectorList
+    kwargs:
+        filename : FPA_array_layout.dat
+
+-   name : qe_curve
+    description : Quantum efficiency curves for each detector
+    class : QuantumEfficiencyCurve
+    kwargs :
+        filename : QE_detector_H2RG.dat
+
+-   name: dark_current
+    description : MICADO dark current
+    class: DarkCurrent
+    # [e-/s] level of dark current for each detector
+    kwargs:
+        value: 0.1
+
+-   name: detector_linearity
+    description : Linearity characteristics of H4RG chips
+    class: LinearityCurve
+    kwargs:
+        filename : FPA_linearity.dat
+
+-   name: shot_noise
+    description : apply poisson shot noise to images
+    class: ShotNoise
+
+-   name : readout_noise
+    description : Readout noise frames
+    class : ReadoutNoise
+    kwargs :
+        filename : FPA_noise.fits
