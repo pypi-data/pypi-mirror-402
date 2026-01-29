@@ -1,0 +1,32 @@
+# dev-excuse-gen
+
+A tiny CLI tool that generates realistic programming excuses inspired by real production incidents.
+
+## Installation
+
+```bash
+pip install dev-excuse-gen
+```
+
+## Usage 
+
+```bash
+excuse-gen
+excuse-gen --context prod
+excuse-gen --context backend
+```
+
+## Example output:
+```
+Root Cause identified.
+A race condition surfaced under production load and delayed detection.
+Fix is trivial. Confidence is high.
+```
+
+## Why this exists
+
+- Because production never fail for obvious reasons.
+
+
+Author: Manish Tiwari(manish.tiwari.09@zohomail.in)
+
