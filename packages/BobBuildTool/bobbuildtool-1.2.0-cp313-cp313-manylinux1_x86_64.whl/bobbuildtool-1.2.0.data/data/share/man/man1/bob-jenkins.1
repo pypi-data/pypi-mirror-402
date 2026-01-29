@@ -1,0 +1,705 @@
+.\" Man page generated from reStructuredText
+.\" by the Docutils 0.22.4 manpage writer.
+.
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.TH "BOB-JENKINS" "1" "Jan 17, 2026" "1.2.0" "Bob"
+.SH NAME
+bob-jenkins \- Configure Jenkins server
+.SH SYNOPSIS
+.sp
+Generic command format:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+bob jenkins [\-h] [\-c NAME] subcommand ...
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Available sub\-commands:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+bob jenkins add [\-h] [\-n NODES] [\-o OPTIONS]
+                [\-\-host\-platform {linux,msys,win32}] [\-w] [\-p PREFIX]
+                [\-r ROOT] [\-D DEFINES] [\-\-keep] [\-\-download] [\-\-upload]
+                [\-\-sandbox | \-\-slim\-sandbox | \-\-dev\-sandbox | \-\-strict\-sandbox | \-\-no\-sandbox]
+                [\-\-credentials CREDENTIALS] [\-\-clean | \-\-incremental]
+                [\-\-shortdescription | \-\-longdescription]
+                name url
+bob jenkins export [\-h] name dir
+bob jenkins graph [\-h] name
+bob jenkins ls [\-h] [\-v]
+bob jenkins prune [\-h] [\-\-obsolete | \-\-intermediate] [\-\-no\-ssl\-verify]
+                  [\-\-user USER] [\-\-password PASSWORD] [\-q] [\-v]
+                  name
+bob jenkins push [\-h] [\-f] [\-\-no\-ssl\-verify] [\-\-no\-trigger]
+                 [\-\-user USER] [\-\-password PASSWORD] [\-q] [\-v]
+                 name
+bob jenkins rm [\-h] [\-f] name
+bob jenkins set\-options [\-h] [\-\-reset] [\-n NODES] [\-o OPTIONS]
+                        [\-\-host\-platform {linux,msys,win32}]
+                        [\-p PREFIX] [\-\-add\-root ADD_ROOT]
+                        [\-\-del\-root DEL_ROOT] [\-D DEFINES]
+                        [\-U UNDEFINES] [\-\-credentials CREDENTIALS]
+                        [\-\-authtoken AUTHTOKEN]
+                        [\-\-shortdescription | \-\-longdescription]
+                        [\-\-keep | \-\-no\-keep]
+                        [\-\-download | \-\-no\-download]
+                        [\-\-upload | \-\-no\-upload]
+                        [\-\-sandbox | \-\-slim\-sandbox | \-\-dev\-sandbox | \-\-strict\-sandbox | \-\-no\-sandbox]
+                        [\-\-clean | \-\-incremental]
+                        name
+bob jenkins set\-url [\-h] name url
+.EE
+.UNINDENT
+.UNINDENT
+.SH DESCRIPTION
+.sp
+The \fBbob jenkins\fP command can be used to build a project on a Jenkins server
+remotely. Bob will create the necessary Jenkins jobs on the server, configure
+them and queue their build. If recipes or configuration options are updated,
+the Jenkins jobs will be updated incrementally as needed.
+.sp
+For the most common usage two steps are necessary: add a Jenkins configuration
+under an alias name and push this configuration to the server. A Jenkins
+configuration is created by \fBbob jenkins add\fP which can later be updated by
+\fBbob jenkins set\-options\fP or \fBset\-url\fP\&. To push the current configuration
+to the server use \fBbob jenkins push\fP\&. As a rule of thumb Bob will create one
+job for each built recipe.
+.sp
+For more details and an overview about the required Jenkins configuration,
+please read the Jenkins Tutorial \%<#\:tut-jenkins>\&.
+.SH OPTIONS
+.INDENT 0.0
+.TP
+.B \fB\-\-add\-root ADD_ROOT\fP
+Add new root package. See the \fB\-\-root\fP option below for its detailed
+description.
+.TP
+.B \fB\-\-authtoken AUTHTOKEN\fP
+Add an authentication token to restrict remote build triggers.
+.sp
+A job build can be scheduled by sending a HTTP POST request to
+\fB$JENKINS_URL/job/$JOB/build\fP\&. To allow unauthenticated scripts to be
+able to trigger builds too, a secret authentication token can be added to
+all jobs and the build can be started by POSTing to
+\fB$JENKINS_URL/job/$JOB/build?token=AUTHTOKEN\fP\&. Note that you have to keep
+the token secret because anyone who has the right to view the job
+configuration will be able to trigger a build.
+.TP
+.B \fB\-\-clean\fP
+Do clean builds. This is the default.
+.sp
+Whenever a Jenkins job is triggered, the workspace is erased first. This
+will cause a fresh checkout of the sources and a clean (re)build of all
+packages in the job.
+.sp
+Use this option to ensure reproducibility at the expense of speed.
+Enabled by default. See \fB\-\-incremental\fP for the opposite switch.
+.TP
+.B \fB\-\-credentials CREDENTIALS\fP
+Credentials ID for git/svn SCM checkouts.
+.sp
+By default SCM checkouts of Git and Subversion modules are done
+anonymously. This might be insufficient if the Jenkins build nodes lack
+the proper credentials to access the repositories. Jenkins has a built\-in
+credentials store (\(dqManage Jenkins » Credentials\(dq) where passwords and
+SSH keys can be managed. Add the required credentials there and use the
+\(dqID\(dq field of the required entry here as \fBCREDENTIALS\fP parameter. Usually
+the ID will be a UUID but Jenkins allows any unique identifier to be used.
+.sp
+All jobs of an alias will be configured with the same credentials. If a
+more fine grained credentials configurations is required, a plugin must be
+used. See the \(dqJenkins job mangling\(dq \%<#\:extending-plugins-jenkins>
+section in the manual for more information.
+.TP
+.B \fB\-D DEFINES\fP
+Override default environment variable.
+.TP
+.B \fB\-\-del\-root DEL_ROOT\fP
+Remove existing root package.
+.TP
+.B \fB\-\-dev\-sandbox\fP
+Enable development sandboxing.
+.sp
+Always build packages in an isolated environment where only declared
+dependencies are visible. If a sandbox image is available, it is used.
+Otherwise the host paths are made read\-only.
+.TP
+.B \fB\-\-download\fP
+Enable downloads from binary archive. Disabled by default. There must
+be at least one binary archive in the user configuration
+archive \%<#\:configuration-config-archive> section that is enabled
+for Jenkins builds.
+.TP
+.B \fB\-f, \-\-force\fP
+Force the operation, potentially with loss of information. The exact
+semantics depend on the sub\-command where the switch is used:
+.INDENT 7.0
+.TP
+.B \fBpush\fP
+Overwrite existing jobs.
+.sp
+By default, Bob will refuse to overwrite jobs that were not created by
+himself. If you are sure that the existing jobs are safe to be
+overwritten, you can use this switch. Otherwise the jobs must be either
+deleted manually or by the \fBprune\fP command of the project that
+created the them in the first place. Additionally all job
+configurations are written, even if they have not changed. This
+overwrites any possible manual changes made to the jobs.
+.TP
+.B \fBrm\fP
+Remove the Jenkins alias, even if there are active jobs. You will have
+to delete the jobs manually.
+.UNINDENT
+.TP
+.B \fB\-\-host\-platform\fP
+Jenkins host platform type. May be any of \fBlinux\fP, \fBmsys\fP or \fBwin32\fP\&.
+.sp
+This specifies the host operating system where the Jenkins master and the
+build slaves are running. By default this is the type of the current
+operating system.
+.TP
+.B \fB\-\-incremental\fP
+Reuse workspace for incremental builds.
+.sp
+Bob will still apply the internal heuristics to make clean builds where
+recipes or any of the dependencies were changed. Use \fB\-\-clean\fP to always
+force clean builds of packages.
+.TP
+.B \fB\-\-intermediate\fP
+Delete everything except root jobs.
+.sp
+Use this switch if you want to delete a project from the Jenkins server
+but want to keep the jobs with the final artifacts. The root jobs will
+be disabled because their dependencies are deleted. You can push an alias
+again to re\-create all jobs and re\-enable the root jobs.
+.TP
+.B \fB\-\-keep\fP
+Keep obsolete jobs by disabling them instead of deleting.
+.sp
+If the recipes or configuration of a project is changed, some of the
+previously required packages could become unnecessary. By default Bob will
+delete the corresponding jobs. By using the \fB\-\-keep\fP switch these jobs
+will merely be disabled. This retains the build logs and artifacts.
+.sp
+You can use \fBbob jenkins prune \-\-obsolete\fP to delete disabled jobs
+manually. See \fB\-\-no\-keep\fP for the inverse option.
+.TP
+.B \fB\-\-longdescription\fP
+Display all paths of all packages in the job description.
+.sp
+Note that the number of displayed package paths of (content wise) identical
+packages is still limited. Nonetheless it is computationally expensive to
+calculate every possible package path in the first place. Except for
+trivial projects this might cause a noticeable delays in the Jenkins
+configuration. See \fB\-\-shortdescription\fP on how to disable this behaviour.
+.TP
+.B \fB\-n NODES, \-\-nodes NODES\fP
+Label expression for Jenkins slave. If empty, the jobs can be scheduled on
+any slave.
+.sp
+In the Jenkins configuration every build node can be assigned one or more
+label. The expression given in \fBNODES\fP restricts on which build nodes
+the jobs can be scheduled. It can either be a single label or a boolean
+expression of labels. The \(dqbuilt\-in\(dq label is pre\-defined and identifies
+the Jenkins master. Expressions can use parentheses \(dq(expression)\(dq, negation \(dq!\(dq,
+logical AND \(dq&&\(dq and logical OR \(dq||\(dq.
+.sp
+Examples:
+.INDENT 7.0
+.IP \(bu 2
+\fBwin32\fP
+.IP \(bu 2
+\fBlinux && 64bit\fP
+.IP \(bu 2
+\fB!win32 || (vm && mysql)\fP
+.UNINDENT
+.TP
+.B \fB\-\-no\-download\fP
+Disable binary archive downloads. This is the default. See \fB\-\-download\fP
+for the enabling counterpart.
+.TP
+.B \fB\-\-no\-keep\fP
+Delete obsolete jobs. This is the default.
+.sp
+Jobs that are not required any more will be deleted. Use \fB\-\-keep\fP if
+you instead want to just disable such jobs.
+.TP
+.B \fB\-\-no\-sandbox\fP
+Disable sandboxing during builds.
+.sp
+Unless required by the project, it is discouraged to disable the sandbox
+feature. See \fB\-\-sandbox\fP, \fB\-\-slim\-sandbox\fP, \fB\-\-dev\-sandbox\fP or
+\fB\-\-strict\-sandbox\fP for the opposite switches.
+.TP
+.B \fB\-\-no\-ssl\-verify\fP
+Disable HTTPS certificate checking.
+.sp
+By default only secure connections are allowed to HTTPS Jenkins servers. If
+this option is given then any certificate error is ignored. This was the
+default before Bob 0.15.
+.TP
+.B \fB\-\-no\-trigger\fP
+Do not trigger build for updated jobs.
+.sp
+You have to manually schedule the build of all changed jobs. Triggering
+only a subset of the affected jobs can lead to build errors because of
+unbuilt dependencies. Use with caution.
+.TP
+.B \fB\-\-no\-upload\fP
+Disable binary archive uploads. This is the default. See \fB\-\-upload\fP
+for the enabling counterpart.
+.TP
+.B \fB\-o OPTIONS\fP
+Set extended Jenkins options. This option expects a \fBkey=value\fP pair to
+set one particular extended configuration parameter. May be specified
+multiple times. See Extended Options for the list of
+available options. Setting an empty value deletes the option.
+.TP
+.B \fB\-\-obsolete\fP
+Delete obsolete jobs that are currently not needed according to the
+recipes. Use this switch with the \fBprune\fP command to delete jobs that
+are left disabled due to \fB\-\-keep\fP being active.
+.TP
+.B \fB\-p PREFIX, \-\-prefix PREFIX\fP
+Prefix for job names.
+.sp
+By default the job names are derived from the recipe and package names. If
+you want to build the same project with different configurations on the
+same server you will have to use unique prefixes for each. Otherwise the
+jobs names will collide and configuration will fail.
+.TP
+.B \fB\-\-password\fP
+Set password for Jenkins authentication.
+.sp
+You can also set the user name and password persistently by encoding it
+into the Jenkins url directly, e.g. \fIhttps:://user:password@host/\fP\&.
+.sp
+\fBAttention:\fP
+.INDENT 7.0
+.INDENT 3.5
+On Linux users can usually see the program arguments of processes from
+other users. By using the \fB\-\-password\fP you could inadvertently reveal
+the password to untrusted other users that have access to the same
+machine.  It is safer to either enter the password manually or to pipe
+it through stdin.
+.UNINDENT
+.UNINDENT
+.TP
+.B \fB\-q, \-\-quiet\fP
+Decrease verbosity (may be specified multiple times).
+.TP
+.B \fB\-r ROOT, \-\-root ROOT\fP
+Root package to build (may be specified multiple times).
+.sp
+Specify the root packages that are built. All dependencies are added
+implicitly. Jobs building the root packages are treated a bit differently
+in that their logs and artifacts will be retained indefinitely by default.
+See the \fBjobs.gc.*\fP extended options on how to tweak this behavior.
+.TP
+.B \fB\-\-reset\fP
+Reset all options to their default.
+.sp
+Use this option to revert all configuration options back to their default
+state. This option is applied before all other options of the
+\fBset\-options\fP sub\-command. Use it to configure an alias without relying
+on the previous state.
+.TP
+.B \fB\-\-sandbox\fP
+Enable partial sandboxing. This is the default.
+.sp
+Build packages in an ephemeral container if a sandbox image is available
+for the package. Inside the sandbox, stable execution paths are used. In
+absence of a sandbox image, no isolation is performed.
+.TP
+.B \fB\-\-shortdescription\fP
+Do not calculate every possible path of each package in a job for the
+description. This leads to shorter job descriptions and, depending on the
+project complexity, might reduce the configuration time considerably. The
+drawback is that not all packages are then listed in the job description.
+For each unique package only one example path will be shown.
+.TP
+.B \fB\-\-slim\-sandbox\fP
+Enable slim sandboxing.
+.sp
+Build packages in an isolated mount namespace. Most of the host paths
+are available read\-only. Other workspaces are hidden when building a
+package unless they are a declared dependency. An optionally available
+sandbox image is \fInot\fP used.
+.TP
+.B \fB\-\-strict\-sandbox\fP
+Enable strict sandboxing.
+.sp
+Always build packages in an isolated environment where only declared
+dependencies are visible. If a sandbox image is available, it is used.
+Otherwise the host paths are made read\-only. The build path is always
+a reproducible, stable path.
+.TP
+.B \fB\-U UNDEFINES\fP
+Undefine environment variable override. This removes a variable previously
+defined with \fB\-D\fP\&.
+.TP
+.B \fB\-\-upload\fP
+Upload to binary archives. Disabled by default. There must
+be at least one binary archive in the user configuration
+archive \%<#\:configuration-config-archive> section that is enabled
+for Jenkins builds.
+.sp
+If the upload fails the respective job will fail too, unless the \fBnofail\fP
+option was set on the archive entry in the configuration.
+.TP
+.B \fB\-\-user\fP
+Set user name for Jenkins authentication.
+.sp
+You can also set the user name persistently by encoding it into the Jenkins
+url directly, e.g. \fIhttps:://user@host/\fP\&.
+.TP
+.B \fB\-v, \-\-verbose\fP
+Show additional information. Can be given multiple times to further
+increase the output verbosity.
+.TP
+.B \fB\-w, \-\-windows\fP
+Jenkins is running on Windows with an MSYS2 environment. This option has
+been deprecated in favour of \fB\-\-host\-platform msys\fP switch.
+.UNINDENT
+.SH COMMANDS
+.INDENT 0.0
+.TP
+.B add
+Add an alias for a Jenkins configuration.
+.sp
+The alias will hold the URL of the Jenkins, the desired configuration (e.g.
+what packages should be built) and the state of the last uploaded
+configuration. The state will be stored in the current project workspace.
+Any number of aliases can be added.
+.sp
+Adding an alias is the first step required to build a project on a Jenkins
+server. The configuration for this alias can be later updated by the
+\fBset\-options\fP and \fBset\-url\fP commands. To remove an alias use the \fBrm\fP
+command.
+.TP
+.B export
+Write the Jenkins configuration of an alias to a directory.
+.sp
+For each job, the generated config.xml file will be created in the output
+directory. This is mainly a debugging aid and can be used to inspect the
+generated configuration. It is \fInot\fP intended to upload these configuration
+files to a Jenkins server. Use \fBpush\fP for that.
+.TP
+.B graph
+Generate a Graphviz dot graph.
+.sp
+Feed the generated graph through the \fBdot\fP tool to get a visualization
+about the jobs and their dependencies.
+.TP
+.B ls
+List all configured Jenkins aliases and their configuration.
+.sp
+Without any further options, only the list of Jenkins aliases is shown. By
+adding the \fB\-v\fP option the configuration of each alias is displayed too.
+A 2nd \fB\-v\fP will additionally show all currently configured jobs.
+.TP
+.B prune
+Prune jobs from Jenkins server.
+.sp
+By default all jobs managed by the Jenkins alias will be deleted. If the
+\fB\-\-keep\fP option is enabled for this alias, you may use the \fB\-\-obsolete\fP
+option to delete only currently disabled (obsolete) jobs. Alternatively you
+may delete all intermediate jobs and keep only the root jobs by using
+\fB\-\-intermediate\fP\&. This will disable the root jobs because they cannot run
+anyway without failing.
+.TP
+.B push
+Push current configuration of an alias to the Jenkins server.
+.sp
+This will create or update all necessary jobs and schedule their build. By
+default obsolete jobs will be deleted unless the \fB\-\-keep\fP option has been
+enabled. If you just want to create or update the jobs without scheduling
+their build, use the \fB\-\-no\-trigger\fP option. Bob won\(aqt overwrite jobs that
+were not created by Bob for the Jenkins alias itself unless the \fB\-f\fP
+option is given.
+.sp
+Existing jobs will be updated as necessary. In the default configuration
+this happens always because the job description displays the state of the
+recipes and the time of the \fBbob jenkins push\fP operation. Use one of the
+other modes of the \fBjobs.update\fP extended option to speed up the push
+operation at the expense of slightly outdated job descriptions.
+.TP
+.B rm
+Remove Jenkins alias.
+.sp
+The alias will not be removed if jobs are still existing. It is thus
+usually required to run the \fBprune\fP command before to delete all jobs of
+an alias. Alternatively the \fB\-f\fP switch may be used to remove the alias
+even though the state indicates that there are still existing jobs. This is
+useful e.g. if the Jenkins server is not running any more or the jobs have
+already been deleted externally.
+.TP
+.B set\-options
+Change configuration of an alias.
+.sp
+Can update all options of an alias except the server URL. The new
+configuration can then be synchronized to the Jenkins server by a
+subsequent \fBpush\fP command. To revert the whole configuration to its
+default state use \fB\-\-reset\fP\&. This is done as the first step so that you
+can combine \fB\-\-reset\fP with all other options to fully control all
+options.
+.TP
+.B set\-url
+Update server URL of an alias.
+.UNINDENT
+.SH EXTENDED OPTIONS
+.sp
+The following extended Jenkins options are available. Any unrecognized options
+will be rejected.
+.INDENT 0.0
+.TP
+.B artifacts.copy
+This options selects the way of sharing archives between workspaces.
+Possible values are:
+.INDENT 7.0
+.TP
+.B jenkins
+Store the result and Build\-Id \%<#\:term-Build-Id> of the job on the Jenkins master.
+Subsequently the downstream job will be configured to use the copy
+artifact plugin to copy the artifact into it\(aqs workspace. This is the
+default.
+.TP
+.B archive
+Only store the Build\-Id \%<#\:term-Build-Id> on the Jenkins master and use a
+separate binary archive for sharing artifacts. Must be used together
+with \fB\-\-upload\fP and \fB\-\-download\fP\&.
+.UNINDENT
+.TP
+.B audit.meta.<var>
+Assign the meta variable \fB<var>\fP to the given value in the audit trail.
+The variable can later be matched by bob archive \%<#\:manpage-archive> as
+\fBmeta.<var>\fP to select artifacts built by this project. Variables that are
+defined by Bob itself (e.g. \fBmeta.jenkins\-node\fP) cannot be redefined!
+.TP
+.B jobs.clean.post\-build
+Controls whether the workspace of the Jenkins jobs should be cleaned after a
+job was run. By default, the workspace is kept (\fBnever\fP). Use the other
+values to reduce disk usage. This most probably makes sense if the
+\fB\-\-clean\fP option is active because the workspace is erased before the
+build anyway.
+.INDENT 7.0
+.TP
+.B never
+Always retain the workspace after building a job. This is the default.
+.TP
+.B on\-success
+Clean the workspace after a successful build. If a job fails, the
+workspace is retained.
+.TP
+.B on\-failure
+Clean the workspace if a job failed. If a job succeeds, the workspace
+is kept.
+.TP
+.B always
+Always clean the workspace after a job was built.
+.UNINDENT
+.TP
+.B jobs.gc.deps.artifacts
+The number of build artifacts that are retained of intermediate or leaf
+jobs. Only useful for \fBartifacts.copy=jenkins\fP\&. Protocols and build logs
+are not affected and will still be kept. Defaults to \fB1\fP\&. If set to 0 all
+artifacts will be retained.
+.TP
+.B jobs.gc.deps.builds
+Configure the number of builds that are retained of intermediate and leaf
+jobs. Logs and artifacts of old builds exceeding this threshold are deleted
+automatically by Jenkins. A separate binary archive
+(\fBartifacts.copy=archive\fP) is not affected and must be separately managed
+with bob archive \%<#\:manpage-archive>\&. If not set, all Jenkins builds
+will be kept.
+.TP
+.B jobs.gc.root.artifacts
+The number of build artifacts that are retained of root\-jobs. Only useful
+for \fBartifacts.copy=jenkins\fP\&. Protocols and build logs are not affected
+and will still be kept. By default everything will be retained.
+.TP
+.B jobs.gc.root.builds
+Configure the number of builds that are retained of root\-jobs. These are
+jobs that build packages that were given by the \fB\-r\fP option. Logs and
+artifacts of old builds exceeding this threshold are deleted automatically
+by Jenkins. A separate binary archive (\fBartifacts.copy=archive\fP) is not
+affected but must be separately managed with bob archive \%<#\:manpage-archive>\&.  If not set, all Jenkins builds will be kept.
+.TP
+.B jobs.isolate
+Regular expression that is matching package names. Any package that is
+matched is put into a separate job. Multiple variants of the same package
+are still kept in the same job, though.
+.sp
+This option might be used to single out specific packages into dedicated
+Jenkins jobs that are unrelated to other jobs in the recipe. Typical use
+cases are documentation and testing \fBmultiPackage\fP that should not
+prevent other packages from building if they fail. The obvious draw back is
+that common checkout and build steps might be duplicated to multiple jobs,
+though.
+.TP
+.B jobs.policy
+Controls how downstream jobs are triggered and which artifacts of the
+upstream jobs are used. By default only stable jobs trigger further
+downstream builds. The following settings are available:
+.INDENT 7.0
+.TP
+.B stable
+Downstream jobs are triggered only if the build was stable. Likewise,
+only the artifacts of stable upstream builds are used. This is the
+default.
+.TP
+.B unstable
+Downstream jobs are triggered on successful builds, that is stable and
+unstable builds. The downstream jobs will also use the last build that
+succeeded, even if that build was unstable.
+.TP
+.B always
+Downstream jobs are triggered regardless of the build result, even on
+failed builds. The artifacts are taken from the last completed build of
+the upstream job which might not necessarily have published one because
+it failed before archiving them.
+.UNINDENT
+.TP
+.B jobs.update
+Whenever the recipes are changed Bob has to update the individual Jenkins
+jobs that are affected by the change. This switch controls how the
+description and audit trail information is updated if only these are
+affected by the change. Their update may be deferred unless strictly
+necessary and still generate a correct build result at the expense of the
+freshness of this information.
+.INDENT 7.0
+.TP
+.B always
+Always update the description and audit trail information if they
+change. This is the default. Note that \fBbob jenkins push\fP will always
+update the description because the date and time of the update is part
+of the job description.
+.TP
+.B description
+Keep the description up\-to\-date but defer audit trail updates unless
+strictly necessary. This may provide marginal speed gains but will
+still update all jobs because the description contains the recipe
+version and update time.
+.TP
+.B lazy
+Only update a job if it will build a different artifact than before.
+The description and audit trail information will be left unchanged
+otherwise. This will provide considerable speed improvements at the
+expense of an outdated description of the unchanged jobs.
+.UNINDENT
+.TP
+.B scm.always\-checkout
+Boolean option (possible values: \(aq0\(aq or \(aqfalse\(aq resp. \(aq1\(aq or \(aqtrue\(aq) that
+forces the execution of checkout steps. This option is enabled by default.
+If disabled, the checkout might be skipped if a matching binary artifact
+can be found.
+.sp
+Disabling this option can increase the build speed. On the other hand, it
+might hide problems in recipes where the checkout step is not
+deterministic. Note that git and svn SCMs are checked out regardless of
+this option. For release builds it is best to keep the option enabled.
+.TP
+.B scm.git.shallow
+Instruct the Jenkins git plugin to create shallow clones with a history
+truncated to the specified number of commits. If the parameter is unset
+or \(dq0\(dq the full history will be cloned.
+.sp
+\fBWarning:\fP
+.INDENT 7.0
+.INDENT 3.5
+Setting this parameter too small may prevent the creation of a proper
+change log. Jenkins will not be able to find the reference commit of
+the last run if the branch advanced by more commits than were cloned.
+.UNINDENT
+.UNINDENT
+.TP
+.B scm.git.timeout
+Instruct the Jenkins git plugin to use the given timeout (minutes) for clone
+and fetch operations.
+.TP
+.B scm.ignore\-hooks
+Boolean option (possible values: \(aq0\(aq or \(aqfalse\(aq resp. \(aq1\(aq or \(aqtrue\(aq) to set
+the \(dqIgnore post\-commit hooks\(dq option on all jobs. This instructs Jenkins
+to ignore changes notified by SCM post\-commit hooks if enabled. You should
+probably set a sensible polling interval with the \fBscm.poll\fP option
+unless you want to trigger the generated jobs manually.
+.TP
+.B scm.poll
+Without this option the Jenkins server is dependent on external commit
+hooks to be notified of changes in the source code repositories. While this
+is the preferred solution it might be necessary to fall back to polling in
+some setups. Set this option to a Jenkins flavoured cron line \%<https://\:www\:.jenkins\:.io/\:doc/\:book/\:pipeline/\:syntax/#\:cron-syntax>, e.g.
+\fBH/15 * * * *\fP\&.
+.TP
+.B shared.dir
+Any packages that are marked as shared \%<#\:configuration-recipes-shared>
+(\fBshared: True\fP) are installed upon usage on a Jenkins slave in a shared
+location. By default this is \fB${JENKINS_HOME}/bob\fP\&. To use another
+directory set this option to an absolute path.
+.sp
+\fBAttention:\fP
+.INDENT 7.0
+.INDENT 3.5
+The string is subject to string substitution \%<#\:configuration-principle-subst>\&.  It is possbile to substitute
+envirionment variables that are set in the Jenkins execution environment.
+Make sure that any meta characters are properly escaped. Because
+backslash is such a character, special care must be taken on Windows. It
+is best to always use forward slashes, even on Windows, to evade any
+escaping issues.
+.UNINDENT
+.UNINDENT
+.TP
+.B shared.quota
+Set a limit to the amount of disk space that is used for the shared
+location on each build node. By default there is no limit. The size is
+given in bytes with optional magnitude suffix. The standard IEC units are
+supported (\fBKiB\fP, \fBMiB\fP, \fBGiB\fP and \fBTiB\fP) which can optionally be
+abbreviated by leaving out the \fBiB\fP suffix (e.g. \fBG\fP for \fBGiB\fP). SI
+units (base 1000) are supported too (\fBKB\fP,  \fBMB\fP, \fBGB\fP, and \fBTB\fP).
+.sp
+\fBNote:\fP
+.INDENT 7.0
+.INDENT 3.5
+Only unused packages will be deleted when the quota is reached. If there
+are no unused shared packages, e.g. because the workspaces of obsolte
+jobs were not deleted, it is still possible that the disk usage is above
+the quota.
+.UNINDENT
+.UNINDENT
+.UNINDENT
+.SH Author
+Jan Klötzke
+.SH Copyright
+2016-2026, The BobBuildTool Contributors
+.\" End of generated man page.
