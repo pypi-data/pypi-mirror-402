@@ -1,0 +1,139 @@
+Metadata-Version: 2.4
+Name: cdantic
+Version: 0.1.9
+Summary: Type-safe Ctypes bindings using Pydantic models.
+Author-email: Pytron Team <dev@pytron.io>
+License: MIT
+Project-URL: Homepage, https://github.com/pytron-org/cdantic
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: pydantic>=2.0.0
+
+# C-Dantic 
+
+**Type-Safe Foreign Function Interface for Python (Pydantic + ctypes)**
+
+> "It would’ve been a segfault, it’s now a Pydantic error."
+
+C-Dantic is a production-grade safety layer that bridges Python's Pydantic data modeling with standard `ctypes`. It transforms the fragile "trust me" nature of FFI into a robust, validated, and ABI-faithful engineering discipline.
+
+## Born from Fire 
+
+C-Dantic was extracted from a high-stakes native integration for the `pytron` engine—an environment involving opaque handles, cross-thread callbacks, and sensitive memory layouts. In such environments, a single misaligned byte or an early-garbage-collected callback doesn't just throw an exception; it **crashes the entire process**.
+
+C-Dantic places a Pydantic-powered protection at the Python-C boundary to stop these crashes before they happen.
+
+## Why C-Dantic?
+
+*   **Runtime Integrity**: Pydantic validates data types *before* they touch C memory.
+*   **ABI Fidelity**: Precise control over memory layout with `__pack__` and `__align__`.
+*   **Execution Safety**: Detects null pointers, symbol misses, and unbound libraries before they cause Access Violations.
+*   **Lifetime Management**: Automatically pins Python callbacks to memory so they aren't garbage collected while the C side is still using them.
+*   **Modern Ergonomics**: Use `Annotated` and standard type hints instead of arcane `ctypes` syntax.
+
+---
+
+## Core Features
+
+### 1. Type-Safe Structures (`CStruct`)
+Define memory-mapped structures using Pydantic. Use `Annotated` to provide ABI-level representation.
+
+```python
+from typing import Annotated
+from cdantic import CStruct
+import ctypes
+
+class PackedData(CStruct):
+    __pack__ = 1  # Force byte-alignment (Pragma Pack)
+    id: Annotated[int, ctypes.c_byte]
+    value: Annotated[int, ctypes.c_int]
+
+# ABI Introspection
+print(f"Size: {PackedData.sizeof()} bytes")      # Outputs: 5
+print(f"Offset.id: {PackedData.offsetof('id')}") # Outputs: 0
+print(f"Offset.val: {PackedData.offsetof('value')}") # Outputs: 1
+```
+
+### 2. Binding Safety (`CFunction`)
+Define signatures on methods and enforce library binding. Calling a native function before the library is bound raises a descriptive `LibraryNotBoundError` instead of a crash.
+
+```python
+from cdantic import CFunction, bind_library
+
+class NativeEngine:
+    @CFunction(func_name="webview_create")
+    def create(self, debug: int, window: int) -> int: ...
+
+engine = NativeEngine()
+# engine.create(0, 0) -> Raises LibraryNotBoundError
+
+bind_library(engine, "webview.dll")
+engine.create(0, 0) # Now safe to call
+```
+
+### 3. Protected Callbacks (`CCallback`)
+Convert Python functions to C-compatible pointers. C-Dantic automatically pins these callbacks to a global registry to prevent early garbage collection.
+
+```python
+from cdantic import CCallback
+
+@CCallback
+def on_event(msg: str) -> int:
+    print(f"Received: {msg}")
+    return 1
+```
+
+### 4. Handle Ergonomics
+Simplified NULL checks for pointers and opaque handles.
+
+```python
+from cdantic import is_null, assert_not_null
+
+handle = lib.create_entity()
+if is_null(handle):
+    logger.error("Failed to create entity")
+
+# Or enforce with an exception
+assert_not_null(handle, "EntityHandle") # Raises ValidationBoundaryError if NULL
+```
+
+---
+
+## The "Safety Shield" in Action
+
+Without C-Dantic, this mistake crashes your interpreter:
+
+```python
+# Raw ctypes would likely segfault here
+lib.webview_create(debug="yes", window="oops") 
+```
+
+With C-Dantic, you get a clean, actionable validation report:
+
+```text
+pydantic_core._pydantic_core.ValidationError: 2 validation errors for create
+debug
+  Input should be a valid integer [type=int_parsing, input_value='yes', input_type=str]
+window
+  Input should be a valid integer [type=int_parsing, input_value='oops', input_type=str]
+```
+
+## Production Error Hierarchy
+
+*   `LibraryNotBoundError`: Called a function before its library was loaded.
+*   `SymbolNotFoundError`: Function name doesn't exist in the DLL/SO.
+*   `ValidationBoundaryError`: Access Violations (e.g., NULL pointer dereference attempts).
+*   `CallbackLifetimeError`: Callback GC protection failure.
+
+## Installation
+
+```bash
+pip install cdantic
+```
+
+## License
+
+MIT License.
