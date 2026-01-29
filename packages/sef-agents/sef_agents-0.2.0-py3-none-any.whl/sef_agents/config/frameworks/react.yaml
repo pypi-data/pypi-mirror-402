@@ -1,0 +1,111 @@
+# React Framework Configuration for SEF Agents
+# Extends: typescript.yaml or javascript.yaml
+
+framework: react
+base_language: typescript  # or javascript
+
+# React-specific debt patterns
+debt_patterns:
+  missing_key_prop:
+    description: "List items should have unique key props"
+    severity: high
+    pattern: "map\\s*\\([^)]+\\)\\s*=>\\s*<(?!.*key=)"
+    suggestion: "Add key prop to list items"
+
+  inline_styles:
+    description: "Inline styles block theming, caching, and responsive design"
+    severity: medium
+    pattern: "style=\\{\\{"
+    suggestion: "Use CSS modules, styled-components, or Tailwind"
+
+  direct_dom_manipulation:
+    description: "Direct DOM manipulation bypasses React"
+    severity: high
+    pattern: "document\\.(getElementById|querySelector|getElementsBy)"
+    suggestion: "Use refs and React state"
+
+  missing_dependency:
+    description: "useEffect missing dependencies"
+    severity: high
+    pattern: "useEffect\\([^,]+,\\s*\\[\\s*\\]\\)"
+    suggestion: "Add all dependencies or use useCallback/useMemo"
+
+  state_mutation:
+    description: "Direct state mutation"
+    severity: critical
+    pattern: "this\\.state\\.\\w+\\s*="
+    suggestion: "Use setState or useState setter"
+
+  prop_drilling:
+    description: "Props passed through many components"
+    severity: medium
+    pattern: "props\\.\\w+.*props\\.\\w+"
+    suggestion: "Use Context API or state management"
+
+  anonymous_function_prop:
+    description: "Anonymous functions cause unnecessary re-renders on every parent render"
+    severity: medium
+    pattern: "on\\w+=\\{\\([^)]*\\)\\s*=>"
+    suggestion: "Extract to useCallback for stable references"
+
+  missing_error_boundary:
+    description: "Error boundaries catch rendering errors"
+    severity: medium
+    pattern: "class.*extends.*Component(?!.*componentDidCatch)"
+    suggestion: "Add error boundary for graceful error handling"
+
+  deprecated_lifecycle:
+    description: "Deprecated lifecycle methods"
+    severity: high
+    pattern: "componentWillMount|componentWillReceiveProps|componentWillUpdate"
+    suggestion: "Use componentDidMount, getDerivedStateFromProps, getSnapshotBeforeUpdate"
+
+# React naming conventions
+naming:
+  generic_names:
+    - data
+    - result
+    - temp
+    - handler
+    - state
+    - props
+    - item
+    - val
+
+  conventions:
+    components: PascalCase
+    hooks: camelCase (use prefix)
+    utils: camelCase
+    constants: UPPER_SNAKE_CASE
+    files: PascalCase for components
+
+# React-specific thresholds (production-grade)
+thresholds:
+  complexity: 10          # Lower than backend - JSX adds visual complexity
+  function_length: 50     # Components should be focused and testable
+  nesting_depth: 3
+  file_length: 200        # Encourages component extraction
+  component_props: 5      # >5 props = prop drilling smell
+  hooks_per_component: 4  # >4 hooks = component doing too much
+
+# React anti-patterns (production-grade)
+anti_patterns:
+  prop_drilling:
+    description: "Props passed through too many levels"
+    max_levels: 2
+    severity: medium
+
+  large_component:
+    description: "Component is too large - split into smaller, testable units"
+    max_lines: 100  # Stricter than before
+    severity: medium
+
+  too_many_hooks:
+    description: "Too many hooks = component doing too much"
+    max_hooks: 4
+    severity: medium
+
+  too_many_props:
+    description: "Too many props indicates component needs decomposition"
+    max_props: 5
+    severity: medium
