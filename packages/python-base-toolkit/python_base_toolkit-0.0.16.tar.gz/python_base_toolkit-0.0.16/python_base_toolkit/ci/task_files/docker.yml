@@ -1,0 +1,64 @@
+version: "3"
+
+tasks:
+  docker_build:
+    desc: "Build Docker image for the project"
+    params:
+      IMAGE_NAME:
+        default: "myproject:latest"
+    cmds:
+      - echo "Building Docker image {{.IMAGE_NAME}}..."
+      - docker build -t {{.IMAGE_NAME}} .
+      - echo "Docker image built - {{.IMAGE_NAME}}"
+
+  docker_run:
+    desc: "Run Docker container"
+    params:
+      IMAGE_NAME:
+        default: "myproject:latest"
+      CONTAINER_NAME:
+        default: "myproject_container"
+      PORT:
+        default: "8000"
+    cmds:
+      - echo "Running Docker container {{.CONTAINER_NAME}}..."
+      - docker run -d --name {{.CONTAINER_NAME}} -p {{.PORT}}:{{.PORT}} {{.IMAGE_NAME}}
+      - echo "Container {{.CONTAINER_NAME}} is running on port {{.PORT}}"
+
+  docker_clean_all:
+    desc: "Remove old Docker containers and images"
+    cmds:
+      - echo "Stopping all running containers..."
+      - docker ps -q | xargs -r docker stop
+      - echo "Removing all containers..."
+      - docker ps -aq | xargs -r docker rm
+      - echo "Removing all images..."
+      - docker images -q | xargs -r docker rmi
+      - echo "Docker cleanup completed."
+
+  docker_clean_project:
+    desc: "Clean Docker resources for a specific project"
+    params:
+      PROJECT_NAME:
+        default: "myapp"
+    cmds:
+      - echo "Stopping and removing containers for project {{.PROJECT_NAME}}..."
+      - docker ps -aq --filter "name={{.PROJECT_NAME}}" | xargs -r docker stop
+      - docker ps -aq --filter "name={{.PROJECT_NAME}}" | xargs -r docker rm
+      - echo "Removing images for project {{.PROJECT_NAME}}..."
+      - docker images {{.PROJECT_NAME}}* -q | xargs -r docker rmi
+      - echo "Removing volumes for project {{.PROJECT_NAME}}..."
+      - docker volume ls -q --filter "name={{.PROJECT_NAME}}" | xargs -r docker volume rm
+      - echo "Project cleanup completed."
+
+  docker_clean_old:
+    desc: "Clean old/inactive Docker containers and images"
+    params:
+      AGE_HOURS:
+        default: "720"
+    cmds:
+      - echo "Cleaning containers inactive for more than {{.AGE_HOURS}} hours..."
+      - docker ps -aq --filter "status=exited" --filter "until={{.AGE_HOURS}}h" | xargs -r docker rm
+      - echo "Cleaning images older than {{.AGE_HOURS}} hours..."
+      - docker images -q --filter "until={{.AGE_HOURS}}h" | xargs -r docker rmi
+      - echo "Old resources cleanup completed."
