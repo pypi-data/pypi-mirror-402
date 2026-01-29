@@ -1,0 +1,30 @@
+- [x] Search
+- [x] Download
+- [x] Play
+- [x] Name Episode
+- [x] All language
+- [x] Order Episode
+- [x] Separate backend
+- [x] Fallback on other players
+- [x] Retry players
+- [x] Config
+- [ ] Tests (ie: search that doesn't exist)
+- [x] Make a package
+- [ ] Implement all NotImplemented
+- [x] Auto detect download folder and config folder, see https://stackoverflow.com/questions/35851281/python-finding-the-users-downloads-folder and appdirs (pypi)
+- [ ] Add new {} for episode_path
+- [x] Select a range of seasons to download
+- [ ] Take args in cli
+- [ ] Cache players link for offline use
+- [ ] Nix?
+- [ ] Auto-download at start-up & queue download
+- [ ] Do all TODO (present in .py files)
+- [ ] Menu
+- [ ] Planning
+- [ ] Ani-skip
+- [ ] Resume play (history)
+- [ ] MAL sync
+- [ ] Play from download
+- [ ] Discord presence
+
+- [ ] Seven deadly sins S1 EP 26 "Episode 26 interrupted (ERROR: unable to download video data: HTTP Error 416: Requested Range Not Satisfiable). Retrying in 256s."
