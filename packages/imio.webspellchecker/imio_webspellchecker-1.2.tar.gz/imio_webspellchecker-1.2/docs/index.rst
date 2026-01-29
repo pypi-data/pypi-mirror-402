@@ -1,0 +1,5 @@
+====================
+imio.webspellchecker
+====================
+
+User documentation
