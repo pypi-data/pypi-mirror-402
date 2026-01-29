@@ -1,0 +1,67 @@
+[workspace]
+members = ["umadb-dcb", "umadb-proto", "umadb-client", "umadb-python"]
+resolver = "2"
+
+exclude = [
+  "umadb-python",
+  "tests-integration",
+  "umadb-benches",
+]
+[workspace.package]
+version = "0.3.2"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/umadb-io/umadb"
+homepage = "https://umadb.io"
+
+[workspace.dependencies]
+async-trait = "0.1.89"
+futures = "0.3.31"
+libc = "0.2.174"
+tempfile = "3.23.0"
+thiserror = "2.0.17"
+tonic = { version = "0.14.2", features = ["server", "tls-native-roots", "tls-aws-lc"] }
+# TODO: How to enable the optional FIPS support?
+tonic-health = "0.14.2"
+tokio = { version = "1.48.0", features = ["full"] }
+uuid = { version = "1.18.1", features = ["v4", "v5"] }
+serial_test = "3.2.0"
+
+[workspace.metadata.release]
+push = false
+tag = false
+rate-limit.new-packages = 6
+
+[profile.test]
+## Keep DWARF info so perf/dtrace can unwind and symbolize
+debug = true        # or: debug = 2 (both are accepted; true == 2)
+#
+## Ensure nothing strips symbols
+strip = "none"      # requires a sufficiently recent Rust toolchain
+#
+## Where to store debug info
+## - Linux: keep in the binary (off)
+## - macOS: emit a .dSYM bundle (unpacked) so Instruments/dtrace can find it
+##split-debuginfo = "off"       # Linux
+split-debuginfo = "unpacked" # macOS
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.release-with-debug]
+inherits = "release"
+
+## Keep DWARF info so perf/dtrace can unwind and symbolize
+debug = true        # or: debug = 2 (both are accepted; true == 2)
+#
+## Ensure nothing strips symbols
+strip = "none"      # requires a sufficiently recent Rust toolchain
+#
+## Where to store debug info
+## - Linux: keep in the binary (off)
+## - macOS: emit a .dSYM bundle (unpacked) so Instruments/dtrace can find it
+##split-debuginfo = "off"       # Linux
+split-debuginfo = "unpacked" # macOS
+
