@@ -1,0 +1,354 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": {
+        "command": {
+            "type": "string",
+            "not": {
+                "pattern": "\\{seed.*\\{seed"
+            }
+        },
+        "config": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "random_salt": {
+                    "type": "string"
+                },
+                "solution": {
+                    "type": "string",
+                    "$ref": "#/$defs/path",
+                    "pattern": "^/"
+                }
+            }
+        },
+        "data_dict": {
+            "type": "object",
+            "additionalProperties": false,
+            "patternProperties": {
+                "^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,254}$": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/test_group"
+                        },
+                        {
+                            "$ref": "#/$defs/test_case"
+                        }
+                    ]
+                }
+            }
+        },
+        "data_list": {
+            "type": "object",
+            "additionalProperties": true
+        },
+        "path": {
+            "type": "string",
+            "pattern": "^/?([a-zA-Z0-9_][a-zA-Z0-9_.-]{0,254}/)*[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,254}$"
+        },
+        "test_case": {
+            "anyOf": [
+                {
+                    "type": "string",
+                    "$ref": "#/$defs/command",
+                    "not": {
+                        "pattern": "^/"
+                    }
+                },
+                {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "properties": {
+                        "copy": {
+                            "type": "string",
+                            "$ref": "#/$defs/path",
+                            "not": {
+                                "pattern": "^/"
+                            }
+                        },
+                        "count": {
+                            "type": "array",
+                            "items": {
+                                "type": "integer"
+                            },
+                            "anyOf": [
+                                {
+                                    "type": "integer"
+                                },
+                                {
+                                    "type": "array"
+                                },
+                                {
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "generate": {
+                            "type": "string",
+                            "$ref": "#/$defs/command",
+                            "not": {
+                                "pattern": "^/"
+                            }
+                        },
+                        "interaction": {
+                            "type": "string",
+                            "pattern": "^([<>][^\\n]*\\n)+$"
+                        },
+                        "match": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "ans": {
+                                            "anyOf": [
+                                                {
+                                                    "type": "string"
+                                                },
+                                                {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        "in": {
+                                            "anyOf": [
+                                                {
+                                                    "type": "string"
+                                                },
+                                                {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        "yaml": {
+                            "$ref": "#/$defs/test_case_configuration"
+                        }
+                    },
+                    "$ref": "#/$defs/config",
+                    "required": [
+                        "count"
+                    ]
+                }
+            ]
+        },
+        "test_case_configuration": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "hint": {
+                    "type": "string"
+                }
+            },
+            "$ref": "#/$defs/test_case_or_group_configuration"
+        },
+        "test_case_or_group_configuration": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "args": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "full_feedback": {
+                    "type": "boolean"
+                },
+                "input_validator_args": {
+                    "anyOf": [
+                        {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "input_visualizer_args": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "output_validator_args": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "output_visualizer_args": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "test_data_group": {
+            "type": "string",
+            "pattern": "secret/[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,254}$"
+        },
+        "test_group": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "data": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/data_dict"
+                        },
+                        {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/$defs/data_list"
+                            }
+                        }
+                    ]
+                },
+                "include": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/path"
+                    }
+                }
+            },
+            "$ref": "#/$defs/test_group_config"
+        },
+        "test_group_config": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "test_group.yaml": {
+                    "$ref": "#/$defs/test_group_configuration"
+                }
+            },
+            "$ref": "#/$defs/config"
+        },
+        "test_group_configuration": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "max_score": {
+                    "anyOf": [
+                        {
+                            "allOf": [
+                                {
+                                    "type": "number"
+                                },
+                                {
+                                    "type": "integer",
+                                    "minimum": 0
+                                }
+                            ]
+                        },
+                        {
+                            "const": "unbounded"
+                        }
+                    ]
+                },
+                "require_pass": {
+                    "anyOf": [
+                        {
+                            "const": "sample"
+                        },
+                        {
+                            "$ref": "#/$defs/test_data_group"
+                        },
+                        {
+                            "type": "array",
+                            "items": {
+                                "anyOf": [
+                                    {
+                                        "const": "sample"
+                                    },
+                                    {
+                                        "$ref": "#/$defs/test_data_group"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "score_aggregation": {
+                    "enum": [
+                        "pass-fail",
+                        "sum",
+                        "min"
+                    ]
+                },
+                "static_validation_score": {
+                    "anyOf": [
+                        {
+                            "allOf": [
+                                {
+                                    "type": "number"
+                                },
+                                {
+                                    "type": "integer",
+                                    "minimum": 0
+                                }
+                            ]
+                        },
+                        {
+                            "const": "pass-fail"
+                        }
+                    ]
+                }
+            },
+            "$ref": "#/$defs/test_case_or_group_configuration"
+        }
+    },
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+        "data": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/data_dict"
+                },
+                {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/data_list"
+                    }
+                }
+            ]
+        },
+        "include": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/path"
+            }
+        }
+    },
+    "$ref": "#/$defs/test_group_config"
+}
