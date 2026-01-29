@@ -1,0 +1,105 @@
+Plaintext
+# Pinterest_ApiMX 🚀
+
+Una librería profesional y robusta para extraer imágenes de Pinterest en alta calidad. Diseñada para ingeniería de datos, permite descargar desde Búsquedas, Home Feed y Tableros (incluyendo tableros privados o con bloqueos comunes) imitando el comportamiento de un navegador real.
+
+## 📦 Instalación
+
+```bash
+pip install Pinterest_ApiMX
+```
+
+🍪 Requisito Indispensable: Cookies
+Para que la librería funcione, necesitas "engañar" a Pinterest haciéndole creer que eres un usuario real. Para esto necesitamos tus cookies en formato JSON.
+
+Instala la extensión Cookie-Editor en tu navegador: Descargar Cookie-Editor para Chrome
+
+Abre la extensión, haz clic en el botón "Export" (Exportar) y selecciona "Export as JSON".
+
+Guarda ese contenido en un archivo llamado cookies.json en la misma carpeta de tu script.
+
+⚡ Uso Rápido
+
+1. Inicializar
+
+```Python
+from Pinterest_ApiMX import PinterestPro
+# Carga tus credenciales
+api = PinterestPro("cookies.json")
+```
+
+2. Buscar Pines (Search)
+Busca términos específicos tal como lo harías en la barra de búsqueda.
+
+```Python
+# Busca 50 pines sobre "Batman"
+pines_busqueda = api.search("Batman concept art", limit=50)
+```
+3. Obtener tu Home Feed (Recomendaciones)
+Descarga las recomendaciones personalizadas de tu inicio.
+
+```Python
+# Trae 20 pines de tu feed personal
+pines_home = api.get_home_feed(limit=20)
+```
+
+4. Descargar un Tablero (Boards)
+Puede descargar tableros completos usando la URL. La librería se encarga de encontrar el ID interno automáticamente.
+
+```Python
+# Solo pega la URL del tablero (público o tuyo)
+url_tablero = "[https://mx.pinterest.com/Scarlex69/vianey-gomez/](https://mx.pinterest.com/Scarlex69/vianey-gomez/)"
+pines_tablero = api.get_board(url_tablero, limit=200)
+```
+
+💾 Guardar Imágenes y Resoluciones
+La función download es el corazón de la librería. Convierte automáticamente a JPG de alta velocidad y permite efectos visuales.
+
+Modo Original (Velocidad Máxima)
+Descarga la imagen tal cual viene de Pinterest.
+
+```Python
+if pines_tablero:
+    api.download(pines_tablero, output_folder="mis_fotos", mode="original") 
+```
+
+Crea imágenes cuadradas perfectas agregando un fondo difuminado (blur) si la imagen original no es cuadrada.
+
+```Python
+# Crea imágenes cuadradas con el tamaño máximo disponible
+api.download(pines_tablero, output_folder="dataset_cuadrado", mode="1:1")
+```
+
+Resolución Personalizada (Solo Modo 1:1)
+Puedes forzar un tamaño específico (ej. 512x512, 1024x1024) útil para entrenar IAs.
+
+```Python
+# Redimensiona todas las imágenes a 768x768 píxeles
+api.download(
+    pines_tablero, 
+    output_folder="dataset_ia", 
+    mode="1:1", 
+    resolution=768
+)
+```
+
+🔇 Consola Limpia (Verbose)
+Si vas a ejecutar esto en un servidor o no quieres ver las barras de progreso, puedes silenciar la salida usando verbose=False.
+
+```Python
+# Ejecución silenciosa (sin barras de carga)
+pines = api.search("Cars", limit=100, verbose=False)
+api.download(pines, output_folder="autos", verbose=False)
+```
+
+🛠️ Características Técnicas
+Anti-Bloqueo 403: Utiliza headers dinámicos (x-pinterest-pws-handler) para imitar la navegación real en tableros.
+
+Soporte Total: Compatible con Pines estáticos, Videos y Story Pins (Idea Pins).
+
+Turbo JPG: Convierte automáticamente imágenes PNG/WebP con transparencia a JPG con fondo blanco para evitar errores y reducir peso.
+
+Inventario Automático: Busca IDs de tableros en el inventario de usuario si el scraping HTML falla.
+
+📄 Licencia
+MIT License
