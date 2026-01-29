@@ -1,0 +1,137 @@
+# Shieldmind Client SDK
+
+Легковесный Python SDK для валидации LLM запросов через Shieldmind API.
+
+Этот SDK содержит только методы для проверки безопасности запросов к LLM API и получения информации о лимитах.
+
+## Установка
+
+```bash
+pip install shieldmind-client-sdk
+```
+
+## Использование
+
+### Базовая валидация запроса
+
+```python
+from shieldmind_client_sdk import ShieldmindClient
+
+# Инициализация клиента
+client = ShieldmindClient(
+    base_url="https://api.shieldmind.pro",  # URL вашего Shieldmind API
+    api_key="your-api-key"  # Опционально, можно использовать публичный доступ
+)
+
+# Проверка запроса на угрозы
+result = client.check_llm(
+    api_url="https://api.openai.com/v1/chat/completions",
+    request_body={
+        "messages": [
+            {"role": "user", "content": "Привет, как дела?"}
+        ]
+    }
+)
+
+# Проверка результата
+if result.isSafe:
+    print(f"✅ Запрос безопасен! Оценка: {result.score}/100")
+else:
+    print(f"⚠️ Обнаружены угрозы:")
+    for threat in result.threats:
+        print(f"  - {threat.type}: {threat.description} (severity: {threat.severity})")
+
+# Информация о лимитах
+print(f"Осталось проверок: {result.remaining}/{result.limit}")
+```
+
+### Получение информации об оставшихся проверках
+
+```python
+remaining = client.get_remaining_checks()
+print(f"Осталось проверок: {remaining.remaining}/{remaining.limit}")
+print(f"Окно лимита: {remaining.window}")
+```
+
+## API
+
+### `ShieldmindClient`
+
+#### Конструктор
+
+```python
+ShieldmindClient(
+    base_url: str = "http://localhost:3001",
+    api_key: Optional[str] = None
+)
+```
+
+#### Методы
+
+##### `check_llm(api_url, request_body, api_key=None, model=None) -> ValidationResult`
+
+Проверяет запрос к LLM API на угрозы безопасности.
+
+**Параметры:**
+- `api_url` (str): URL LLM API
+- `request_body` (dict): Тело запроса к LLM API
+- `api_key` (str, optional): API ключ LLM (если требуется для проверки ответа)
+- `model` (str, optional): Название модели
+
+**Возвращает:** `ValidationResult` с результатами проверки
+
+##### `get_remaining_checks() -> RemainingChecks`
+
+Получает информацию об оставшихся проверках.
+
+**Возвращает:** `RemainingChecks` с информацией о лимитах
+
+## Модели данных
+
+### `ValidationResult`
+
+Результат валидации запроса.
+
+- `isSafe` (bool): Безопасен ли запрос
+- `threats` (List[Threat]): Список обнаруженных угроз
+- `score` (int): Оценка безопасности (0-100, где 100 - полностью безопасно)
+- `remaining` (int, optional): Оставшееся количество проверок
+- `limit` (int, optional): Лимит проверок
+- `window` (str, optional): Окно лимита ('day' | 'second')
+- `similarPrompts` (List[dict], optional): Похожие промпты
+
+### `Threat`
+
+Описание угрозы.
+
+- `type` (str): Тип угрозы
+- `severity` (str): Уровень серьезности ('low' | 'medium' | 'high' | 'critical')
+- `description` (str): Описание угрозы
+- `foundIn` (str): Где обнаружена ('request' | 'response')
+- `details` (dict, optional): Дополнительные детали
+
+### `RemainingChecks`
+
+Информация об оставшихся проверках.
+
+- `remaining` (int): Оставшееся количество проверок
+- `limit` (int): Лимит проверок
+- `window` (str): Окно лимита ('day' | 'second')
+
+## Исключения
+
+- `ShieldmindException`: Базовое исключение
+- `ShieldmindAuthError`: Ошибка аутентификации
+- `ShieldmindAPIError`: Ошибка API
+- `ShieldmindRateLimitError`: Превышен лимит запросов
+- `ShieldmindValidationError`: Ошибка валидации данных
+
+## Отличия от основного SDK
+
+Этот SDK содержит только методы для валидации запросов. Он не включает:
+- Методы управления аккаунтом (регистрация, вход)
+- Методы управления API-ключами
+- Методы проксирования запросов
+- Методы управления проектами и политиками
+
+Для полного функционала используйте основной `shieldmind-sdk`.
