@@ -1,0 +1,183 @@
+Metadata-Version: 2.4
+Name: wardy-utils
+Version: 0.5.0
+Summary: General Utilities
+Author: Wardy
+Author-email: Wardy <wardy3+gitlab@gmail.com>
+License-Expression: MIT
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.14
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Typing :: Typed
+Requires-Dist: pydantic-settings>=2.12.0
+Requires-Dist: loguru>=0.7.3 ; extra == 'log'
+Requires-Dist: hishel[httpx]>=1.1.8 ; extra == 'web'
+Requires-Dist: httpx[brotli,http2,zstd]>=0.28.1 ; extra == 'web'
+Requires-Python: >=3.14
+Provides-Extra: log
+Provides-Extra: web
+Description-Content-Type: text/markdown
+
+# Wardy Utils
+
+**Wardy Utils** is a collection of general-purpose utilities designed to simplify and enhance your Python scripting experience. This library provides reusable components that can be integrated into your projects to save time and effort.
+
+## Installation
+
+```bash
+pip install wardy-utils
+```
+
+The base package only includes `pydantic-settings`. Install extras for additional functionality:
+
+```bash
+# Logging with Loguru
+pip install wardy-utils[log]
+
+# HTTP client with caching
+pip install wardy-utils[web]
+
+# Both
+pip install wardy-utils[log,web]
+```
+
+## Features
+
+### Logging (`wardy-utils[log]`)
+
+Flexible logging setup using [Loguru](https://github.com/Delgan/loguru), with optional [Logfire](https://logfire.pydantic.dev/) integration for cloud logging and metrics.
+
+**Key features:**
+
+- Simple setup for rotating file and stderr logging
+- Intercepts standard Python logging and redirects to Loguru
+- Optional Logfire integration for cloud log aggregation
+- Automatic instrumentation of available libraries (system-metrics, psycopg, httpx, sqlalchemy, redis, asyncpg)
+
+**Basic usage:**
+
+```python
+from wardy_utils.log import configure_logging, logger
+
+# Set up logging to both stderr and a rotating file
+configure_logging("myapp")
+
+logger.info("Hello from Loguru!")
+
+# Standard logging is also intercepted:
+import logging
+logging.warning("This will also go to Loguru!")
+```
+
+**With Logfire cloud logging:**
+
+```python
+from wardy_utils.log import configure_logging, logger
+
+# service_name defaults to the current working directory name
+configure_logging("my-app")
+
+# Or specify explicitly
+configure_logging("my-app", service_name="my-app", environment="prod")
+
+logger.info("This goes to Logfire too!")
+```
+
+Set `WARDY_UTILS_LOG_LOGFIRE_TOKEN` to enable Logfire. You must have `logfire` installed separately:
+
+```bash
+pip install logfire[system-metrics,psycopg,httpx]  # with desired extras
+```
+
+**Customization:**
+
+```python
+from wardy_utils.log import configure_logging, LogConfig
+
+config = LogConfig(
+    file_level="INFO",
+    standard_format="[{time}] {level} - {message}",
+    detail_format="{time} {file}:{line} {level} {message}",
+    rotation="1 hour",
+    retention="14 days",
+)
+
+configure_logging("my-app", service_name="my-app", config=config)
+```
+
+**Environment variables:**
+
+| Variable                               | Description                     | Default    |
+| -------------------------------------- | ------------------------------- | ---------- |
+| `WARDY_UTILS_LOG_LOGFIRE_TOKEN`        | Token for Logfire cloud logging | (disabled) |
+| `WARDY_UTILS_LOG_LOGFIRE_SERVICE_NAME` | Service name for Logfire        | (cwd name) |
+| `WARDY_UTILS_LOG_LOGFIRE_ENVIRONMENT`  | Environment name for Logfire    | (cascaded) |
+
+Cascade behavior when not explicitly set:
+
+- `LOGFIRE_SERVICE_NAME`: Falls back to the current working directory name (e.g. `beer-cloud`)
+- `LOGFIRE_ENVIRONMENT`: Falls back to `APP_ENVIRONMENT` → `REFLEX_ENV_MODE` → `NODE_ENV` → `ENVIRONMENT`
+
+### HTTP Client (`wardy-utils[web]`)
+
+A high-level HTTP client built on [httpx](https://www.python-httpx.org/) and [hishel](https://hishel.com/) with built-in caching.
+
+**Basic usage:**
+
+```python
+from wardy_utils.web import cached_client
+
+client = cached_client()
+response = client.get("https://example.com")
+print(response.text)
+```
+
+**Pre-configured singletons:**
+
+```python
+from wardy_utils.web import sync_client, async_client
+
+# Sync client with default settings
+response = sync_client.get("https://example.com")
+
+# Or use async
+async def fetch():
+    response = await async_client.get("https://example.com")
+```
+
+Available singletons:
+
+- `sync_client`: Default sync client
+- `sync_force_client`: Sync client that ignores origin cache headers
+- `async_client`: Default async client
+- `async_force_client`: Async client that ignores origin cache headers
+
+**Environment variables:**
+
+| Variable                         | Description                                    | Default          |
+| -------------------------------- | ---------------------------------------------- | ---------------- |
+| `WARDY_UTILS_WEB_CACHE_DIR`      | Directory for the sqlite cache file            | In-memory        |
+| `WARDY_UTILS_WEB_CACHE_FILENAME` | Filename for the sqlite cache file             | `wardy_cache.db` |
+| `WARDY_UTILS_WEB_CACHE_TTL`      | Cache TTL in seconds                           | `1800` (30 min)  |
+| `WARDY_UTILS_WEB_TIMEOUT`        | Request timeout in seconds                     | `45`             |
+| `WARDY_UTILS_WEB_FORCE_CACHE`    | If truthy, ignore origin cache-control headers | Disabled         |
+| `WARDY_UTILS_WEB_HTTP2`          | Enable or disable HTTP/2                       | Enabled          |
+
+**Proxy support:** The client inherits proxy settings from standard `http_proxy`, `https_proxy`, and `all_proxy` environment variables.
+
+## Requirements
+
+- Python 3.14 or higher
+
+## License
+
+This project is licensed under the MIT License.
+
+## Author
+
+Created by **Wardy**
+Email: [wardy3+gitlab@gmail.com](mailto:wardy3+gitlab@gmail.com)
