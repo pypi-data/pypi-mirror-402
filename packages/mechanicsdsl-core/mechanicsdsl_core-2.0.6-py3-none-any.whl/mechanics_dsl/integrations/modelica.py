@@ -1,0 +1,401 @@
+"""
+Modelica integration for MechanicsDSL.
+
+Export to and import from Modelica models for standards-based simulation.
+"""
+
+import re
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+try:
+    import sympy as sp
+    from sympy.printing import ccode
+    SYMPY_AVAILABLE = True
+except ImportError:
+    sp = None
+    ccode = None
+    SYMPY_AVAILABLE = False
+
+
+def sympy_to_modelica(expr: Any) -> str:
+    """
+    Convert a sympy expression to Modelica code.
+    
+    Args:
+        expr: Sympy expression to convert
+        
+    Returns:
+        Modelica code string representing the expression
+    """
+    if expr is None:
+        return "0"
+    
+    if not SYMPY_AVAILABLE:
+        return "0 /* sympy not available */"
+    
+    try:
+        # Convert to C code first (syntactically similar to Modelica)
+        c_code = ccode(expr)
+        
+        # Replace C math functions with Modelica equivalents
+        replacements = [
+            ('sin(', 'Modelica.Math.sin('),
+            ('cos(', 'Modelica.Math.cos('),
+            ('tan(', 'Modelica.Math.tan('),
+            ('asin(', 'Modelica.Math.asin('),
+            ('acos(', 'Modelica.Math.acos('),
+            ('atan(', 'Modelica.Math.atan('),
+            ('atan2(', 'Modelica.Math.atan2('),
+            ('sqrt(', 'sqrt('),  # Modelica has built-in sqrt
+            ('pow(', '^('),  # Modelica uses ^ for power - handle specially
+            ('exp(', 'exp('),
+            ('log(', 'log('),
+            ('abs(', 'abs('),
+            ('fabs(', 'abs('),
+            ('M_PI', 'Modelica.Constants.pi'),
+        ]
+        
+        for old, new in replacements:
+            c_code = c_code.replace(old, new)
+        
+        # Handle pow(a, b) -> a^b conversion
+        import re as regex
+        c_code = regex.sub(r'\^\(([^,]+),\s*([^)]+)\)', r'(\1)^(\2)', c_code)
+        
+        return c_code
+        
+    except Exception as e:
+        return f"0 /* Error: {str(e)[:50]} */"
+
+
+class ModelicaGenerator:
+    """
+    Generate Modelica model files from MechanicsDSL.
+
+    Creates standard Modelica text files (.mo) compatible with
+    OpenModelica, Dymola, and other Modelica tools.
+
+    Example:
+        gen = ModelicaGenerator(compiler)
+        gen.generate('Pendulum.mo')
+    """
+
+    @property
+    def target_name(self) -> str:
+        return "modelica"
+
+    @property
+    def file_extension(self) -> str:
+        return ".mo"
+
+    def __init__(self, compiler=None):
+        self.compiler = compiler
+        self.equations: Dict[str, Any] = {}
+        
+        if compiler:
+            self.system_name = getattr(compiler, "system_name", "PhysicsSystem")
+            self.coordinates: List[str] = getattr(compiler.simulator, "coordinates", [])
+            self.parameters: Dict[str, float] = dict(getattr(compiler.simulator, "parameters", {}))
+            self.initial_conditions: Dict[str, float] = dict(getattr(compiler.simulator, "initial_conditions", {}))
+            self._extract_equations(compiler)
+        else:
+            self.system_name = "PhysicsSystem"
+            self.coordinates = []
+            self.parameters = {}
+            self.initial_conditions = {}
+    
+    def _extract_equations(self, compiler) -> None:
+        """
+        Extract acceleration equations from the compiler.
+        """
+        if hasattr(compiler, 'accelerations') and compiler.accelerations:
+            self.equations = dict(compiler.accelerations)
+            return
+            
+        if hasattr(compiler, 'simulator') and hasattr(compiler.simulator, 'equations'):
+            eqs = compiler.simulator.equations
+            if isinstance(eqs, dict):
+                self.equations = eqs
+                return
+            elif isinstance(eqs, list) and SYMPY_AVAILABLE:
+                for i, eq in enumerate(eqs):
+                    if i < len(self.coordinates):
+                        self.equations[self.coordinates[i]] = eq
+                return
+        
+        if hasattr(compiler, 'equations_of_motion') and compiler.equations_of_motion:
+            eom = compiler.equations_of_motion
+            if isinstance(eom, dict):
+                self.equations = eom
+            elif isinstance(eom, list) and SYMPY_AVAILABLE:
+                for i, eq in enumerate(eom):
+                    if i < len(self.coordinates):
+                        self.equations[self.coordinates[i]] = eq
+
+    def generate(self, output_file: Optional[str] = None) -> str:
+        """Generate Modelica model."""
+        model_name = self._to_modelica_name(self.system_name)
+
+        code = f"""model {model_name}
+  "Generated from MechanicsDSL"
+  
+  // Parameters
+{self._generate_parameters()}
+
+  // State variables (generalized coordinates)
+{self._generate_state_variables()}
+
+  // Kinematic relations
+{self._generate_kinematic_relations()}
+
+equation
+  // Equations of motion
+{self._generate_equations()}
+
+  annotation(
+    Documentation(info="<html>
+      <h1>{model_name}</h1>
+      <p>Physics model generated by MechanicsDSL.</p>
+      <h2>Coordinates</h2>
+      <ul>
+{self._generate_doc_coords()}
+      </ul>
+      <h2>Parameters</h2>
+      <ul>
+{self._generate_doc_params()}
+      </ul>
+    </html>")
+  );
+
+end {model_name};
+"""
+
+        if output_file:
+            with open(output_file, "w") as f:
+                f.write(code)
+
+        return code
+
+    def _to_modelica_name(self, name: str) -> str:
+        """Convert to valid Modelica identifier."""
+        # CamelCase
+        return "".join(word.capitalize() for word in name.split("_"))
+
+    def _generate_parameters(self) -> str:
+        """Generate Modelica parameter declarations."""
+        lines = []
+        for name, value in self.parameters.items():
+            unit = self._infer_unit(name)
+            if unit:
+                lines.append(
+                    f'  parameter Real {name}(unit="{unit}") = {value} "Parameter {name}";'
+                )
+            else:
+                lines.append(f'  parameter Real {name} = {value} "Parameter {name}";')
+        return "\n".join(lines) if lines else "  // No parameters"
+
+    def _generate_state_variables(self) -> str:
+        """Generate Modelica state variable declarations."""
+        lines = []
+        for coord in self.coordinates:
+            ic = self.initial_conditions.get(coord, 0)
+            ic_dot = self.initial_conditions.get(f"{coord}_dot", 0)
+
+            lines.append(f'  Real {coord}(start={ic}, fixed=true) "Coordinate {coord}";')
+            lines.append(f'  Real {coord}_dot(start={ic_dot}, fixed=true) "Velocity of {coord}";')
+            lines.append(f'  Real {coord}_ddot "Acceleration of {coord}";')
+            lines.append("")
+        return "\n".join(lines) if lines else "  // No state variables"
+
+    def _generate_kinematic_relations(self) -> str:
+        """Generate kinematic relations (velocity = derivative of position)."""
+        lines = []
+        for coord in self.coordinates:
+            lines.append(f"  // Kinematic relation for {coord}")
+        return "\n".join(lines) if lines else ""
+
+    def _generate_equations(self) -> str:
+        """
+        Generate Modelica equations from sympy expressions.
+        
+        Produces kinematic relations (der(x) = v) and dynamic equations
+        (acceleration) converted from sympy to Modelica syntax.
+        """
+        lines = []
+
+        for coord in self.coordinates:
+            # Kinematic equations
+            lines.append(f"  der({coord}) = {coord}_dot;")
+            lines.append(f"  der({coord}_dot) = {coord}_ddot;")
+
+            # Dynamic equation (acceleration)
+            if coord in self.equations and self.equations[coord] is not None:
+                modelica_expr = sympy_to_modelica(self.equations[coord])
+                lines.append(f"  {coord}_ddot = {modelica_expr};")
+            elif f"{coord}_ddot" in self.equations:
+                modelica_expr = sympy_to_modelica(self.equations[f"{coord}_ddot"])
+                lines.append(f"  {coord}_ddot = {modelica_expr};")
+            else:
+                lines.append(f"  {coord}_ddot = 0 /* Warning: No equation for {coord} */;")
+            lines.append("")
+
+        return "\n".join(lines) if lines else "  // No equations"
+
+    def _generate_doc_coords(self) -> str:
+        """Generate documentation for coordinates."""
+        lines = []
+        for coord in self.coordinates:
+            lines.append(f"        <li>{coord}</li>")
+        return "\n".join(lines) if lines else "        <li>None</li>"
+
+    def _generate_doc_params(self) -> str:
+        """Generate documentation for parameters."""
+        lines = []
+        for name, value in self.parameters.items():
+            lines.append(f"        <li>{name} = {value}</li>")
+        return "\n".join(lines) if lines else "        <li>None</li>"
+
+    def _infer_unit(self, name: str) -> Optional[str]:
+        """Infer Modelica unit from parameter name."""
+        unit_map = {
+            "m": "kg",
+            "l": "m",
+            "g": "m/s2",
+            "k": "N/m",
+            "b": "N.s/m",
+            "omega": "rad/s",
+            "theta": "rad",
+        }
+        return unit_map.get(name.lower())
+
+
+class ModelicaImporter:
+    """
+    Import Modelica models to MechanicsDSL.
+
+    Parses Modelica .mo files and converts to MDSL syntax.
+
+    Example:
+        importer = ModelicaImporter()
+        mdsl_code = importer.import_file('Pendulum.mo')
+    """
+
+    def __init__(self):
+        self.model_name = ""
+        self.parameters = {}
+        self.variables = {}
+        self.equations = []
+
+    def import_file(self, file_path: str) -> str:
+        """
+        Import Modelica file and convert to MDSL.
+
+        Args:
+            file_path: Path to .mo file
+
+        Returns:
+            MechanicsDSL code string
+
+        Raises:
+            ValueError: If file path is invalid or has wrong extension
+        """
+        # Validate file path
+        resolved = Path(file_path).resolve()
+
+        # Only allow .mo extension
+        if resolved.suffix.lower() != ".mo":
+            raise ValueError(f"Invalid file extension: {resolved.suffix}. Expected .mo")
+
+        if not resolved.exists():
+            raise FileNotFoundError(f"Modelica file not found: {file_path}")
+
+        with open(resolved, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        return self.parse(content)
+
+    def parse(self, modelica_code: str) -> str:
+        """
+        Parse Modelica code and convert to MDSL.
+
+        Args:
+            modelica_code: Modelica source code
+
+        Returns:
+            MechanicsDSL code string
+        """
+        # Extract model name
+        model_match = re.search(r"model\s+(\w+)", modelica_code)
+        if model_match:
+            self.model_name = model_match.group(1)
+
+        # Extract parameters
+        for match in re.finditer(
+            r"parameter\s+Real\s+(\w+)(?:\([^)]*\))?\s*=\s*([0-9.eE+-]+)", modelica_code
+        ):
+            name, value = match.groups()
+            self.parameters[name] = float(value)
+
+        # Extract Real variables (potential coordinates)
+        for match in re.finditer(r"Real\s+(\w+)(?:\([^)]*\))?", modelica_code):
+            var_name = match.group(1)
+            if not var_name.endswith("_dot") and not var_name.endswith("_ddot"):
+                if var_name not in self.parameters:
+                    self.variables[var_name] = "Position"
+
+        # Build MDSL code
+        mdsl_lines = []
+
+        # System
+        mdsl_lines.append(f"\\system{{{self.model_name.lower()}}}")
+        mdsl_lines.append("")
+
+        # Define variables
+        for var_name, var_type in self.variables.items():
+            mdsl_lines.append(f"\\defvar{{{var_name}}}{{{var_type}}}{{m}}")
+
+        if self.variables:
+            mdsl_lines.append("")
+
+        # Parameters
+        for name, value in self.parameters.items():
+            unit = self._infer_unit_from_name(name)
+            mdsl_lines.append(f"\\parameter{{{name}}}{{{value}}}{{{unit}}}")
+
+        if self.parameters:
+            mdsl_lines.append("")
+
+        # Placeholder for Lagrangian (would need equation analysis)
+        coords = list(self.variables.keys())
+        if coords:
+            mdsl_lines.append("% TODO: Define Lagrangian from imported equations")
+            mdsl_lines.append(f"\\lagrangian{{")
+            mdsl_lines.append(f"    % T - V")
+            mdsl_lines.append(f"}}")
+            mdsl_lines.append("")
+
+            # Initial conditions
+            ic_parts = [f"{c}=0.0, {c}_dot=0.0" for c in coords]
+            mdsl_lines.append(f"\\initial{{{', '.join(ic_parts)}}}")
+
+        return "\n".join(mdsl_lines)
+
+    def _infer_unit_from_name(self, name: str) -> str:
+        """Infer unit from parameter name."""
+        if name.lower() in ("m", "mass"):
+            return "kg"
+        elif name.lower() in ("l", "length", "r", "radius"):
+            return "m"
+        elif name.lower() in ("g", "gravity"):
+            return "m/s^2"
+        elif name.lower() in ("k", "stiffness"):
+            return "N/m"
+        else:
+            return "1"
+
+
+__all__ = [
+    "ModelicaGenerator",
+    "ModelicaImporter",
+]
