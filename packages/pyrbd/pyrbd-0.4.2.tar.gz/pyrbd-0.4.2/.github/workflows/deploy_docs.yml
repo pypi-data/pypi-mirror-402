@@ -1,0 +1,26 @@
+name: Deploy docs
+on:
+  push:
+    branches:
+      - main
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.12
+      - run: | 
+          python -m pip install --upgrade pip
+          pip install mkdocs
+          pip install mkdocs-material
+          pip install mkdocstrings[python]
+          pip install "markdown-exec[ansi]"
+          pip install pymupdf
+      - name: Build release distributions
+        run: |
+          python -m pip install build
+          python -m build
+          pip install -e .
+      - run: mkdocs gh-deploy --force

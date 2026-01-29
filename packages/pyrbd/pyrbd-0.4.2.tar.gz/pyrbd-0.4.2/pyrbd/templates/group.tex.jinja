@@ -1,0 +1,35 @@
+
+% \VAR{ type }
+\node[\VAR{ node_options }] (\VAR{ block.id })
+\BLOCK{ if block.parent is not none }
+[right=\VAR{ block.arrow_length + block.shift[0] }cm of \VAR{ block.parent.last.id }, yshift=\VAR{ block.shift[1] }cm]
+\BLOCK{ endif }
+{\begin{tikzpicture}[remember picture]
+\coordinate(\VAR{ block.id }) at (0, 0);
+\BLOCK{ for member in block_nodes }\VAR{ member }\BLOCK{ endfor }
+%#
+% Connecting arrows
+\BLOCK{ for member in block.sorted_blocks }\BLOCK{ if not loop.first }
+\draw[\VAR{ block.arrow_options }, rectangle line=\VAR{ block.end_arrow_scaling * block.internal_arrow_length }cm] (\VAR{ block.sorted_blocks[0].id }.east) to (\VAR{ member.id }.east);
+\BLOCK{ endif }\BLOCK{ endfor }
+\end{tikzpicture}};
+%#
+\BLOCK{ if block.parent is not none }
+\draw[\VAR{ block.arrow_options }] (\VAR{ block.parent.last.id }.east) to (\VAR{ block.id }.west);
+\BLOCK{ endif }
+%#
+\BLOCK{ if block.color not in ("white", "") }
+\begin{pgfonlayer}{background}
+\coordinate (sw) at ($(\VAR{ block.id }.south west)+(-\VAR{ pad.w }mm, -\VAR{ pad.s }mm)$);
+\coordinate (ne) at ($(\VAR{ block.id }.north east)+(\VAR{ pad.e }mm, \VAR{ pad.n }mm)$);
+\draw[\VAR{ block.color }, thick] (sw) rectangle (ne);
+\end{pgfonlayer}
+\BLOCK{ endif }
+%#
+\BLOCK{ if block.text }
+\coordinate (nw) at ($(\VAR{ block.id }.north west)+(-\VAR{ pad.w }mm, \VAR{ pad.n }mm)$);
+\coordinate (ne) at ($(\VAR{ block.id }.north east)+(\VAR{ pad.e }mm, \VAR{ pad.n }mm)$);
+\coordinate (n) at ($(\VAR{ block.id }.north)+(0mm, \VAR{ block.label_height/2 + pad.n }mm)$);
+\draw[\VAR{ block.color }, fill=\VAR{ block.color }!50, thick] (nw) rectangle ($(ne)+(0, \VAR{ block.label_height }mm)$);
+\node[anchor=center, inner sep=0pt, outer sep=0pt] at (n) {\VAR{ block.text }}; % label text
+\BLOCK{ endif }
