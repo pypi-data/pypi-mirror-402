@@ -1,0 +1,397 @@
+
+# from app import auth,p,db
+from app.models import *
+import os
+from flask import current_app,send_file,g
+import unicodedata
+import urllib
+from werkzeug.utils import secure_filename
+from PIL import Image
+from io import BytesIO
+import base64
+from mwutils.mw_time import get_locale_timezone
+
+def set_timezone(json_data:dict):
+    '''
+    为日期时间添加本地时区
+    :param body:
+    :return:
+    '''
+    for k, v in json_data.items():
+        if isinstance(v,datetime):
+            if v.tzinfo is None:
+                json_data[k]=v.astimezone(get_locale_timezone())
+    return json_data
+
+def get_file_name_dsk(filename, path):
+    filename_s, ext_name = filename.rsplit('.', 1)
+    return os.path.join(path,
+                        secure_filename('%s_%s.%s' % (filename_s, datetime.now().strftime('%y%m%d%H%M%S%f'), ext_name)))
+
+def get_rate(ws, wd, hs, hd):
+    # 图片的压缩比率
+    if ws < wd or hs < hd:
+        return 1
+    # 调整比率，取最大的比率
+    rw = ws / wd
+    rh = hs / hd
+    return max(rw, rh)
+
+def image_thumbnail(stream,picsize=(1024,768)):
+    '''
+    压缩图片
+    :param stream: file.stream
+    :param picsize:
+    :return:
+    '''
+    pil_image = Image.open(stream)
+    w, h = pil_image.size
+    res_rate = get_rate(w, picsize[0], h, picsize[1])
+    pil_image.thumbnail((round(w / res_rate), round(h / res_rate)))
+    return pil_image
+
+def image_to_base64(pil_img):
+    '''
+    把PIL.image 转为base64
+    :param img:
+    :return:
+    '''
+    output_buffer = BytesIO()
+    pil_img.save(output_buffer, format='JPEG')
+    byte_data = output_buffer.getvalue()
+    base64_str = base64.b64encode(byte_data)
+    return base64_str
+
+class docfile():
+    @staticmethod
+    def delete_doc_file(doc_file_id,autocommit=True):
+        '''
+        删除 doc_file
+        :param doc_file_id: doc_file.id
+        :param autocommit: True 时自动commit
+        :return:
+        '''
+        try:
+            doc_file = Doc_file.query.filter(Doc_file.id == doc_file_id).first()
+            try:
+                os.remove(doc_file.save_file_name)
+            except Exception as e:
+                pass
+            try:
+                db.session.delete(doc_file)
+                # db.session.commit()
+            except Exception as e:
+                pass
+            if autocommit:
+                db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(str(e))
+            raise
+    @staticmethod
+    def delete_file_doclassid(docClass, docClass_id, onlydel_doc_file=False):
+        '''
+        按关联文档id删除文档(doc_file)和引用文档的类
+        :param docClass : 引用类
+        :param docClass_id : 引用类的id
+        :param onlydel_doc_file : True时只删除文件(doc_file)，不删除引用关系
+        :return:
+        '''
+        try:
+            docfile_ref = docClass.query.filter(docClass.id == docClass_id).first()
+            if docfile_ref:
+                doc_file = docfile_ref.doc_file
+                try:
+                    os.remove(doc_file.save_file_name)
+                except Exception as e:
+                    pass
+                try:
+                    db.session.delete(docfile_ref.doc_file)
+                except Exception as e:
+                    pass
+                # 不删除引用类
+                if not onlydel_doc_file:
+                    db.session.delete(docfile_ref)
+                db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(str(e))
+            raise
+
+    @staticmethod
+    def delete_file_name(save_file_name):
+        '''
+        按文档路径删除文档
+        :param docClass:
+        :param docId:
+        :return:
+        '''
+        try:
+            os.remove(save_file_name)
+        except Exception as e:
+            pass
+
+    @staticmethod
+    def delete_file_masterid(docClass, docClass_masterid):
+        '''
+        删除引用的所有附件文档（包括引用类和文档doc_file）
+        :param docClass:
+        :param docClass_masterid:
+        :return:
+        '''
+        docs = Doc_file.query.join(docClass,docClass.doc_fileid==Doc_file.id).filter(docClass.masterid == docClass_masterid).all()
+        for doc in docs:
+            docfile.delete_file_name(doc.save_file_name)
+        try:
+            # 先删除引用类，避免报引用错误
+            db.session.query(docClass).filter(docClass.masterid == docClass_masterid).delete(synchronize_session=False)
+            db.session.query(Doc_file).filter(Doc_file.id.in_([doc.id for doc in docs])).delete(
+                synchronize_session=False)
+            # db.session.query(Doc_file).filter(
+            #            Doc_file.id.in_(db.session.query(Doc_file.id).join(docClass,docClass.doc_fileid==Doc_file.id).
+            #                            filter(docClass.masterid == docClass_masterid).subquery())
+            #       ).delete(synchronize_session=False)
+            # db.session.delete(docs)
+            # db.session.commit()
+            # db.session.query(Doc_file).filter(docClass.doc_file.has(docClass.docClass_masterid==docClass_masterid)).delete(synchronize_session=False)
+            # 会报错误，改用
+            # db.session.query(Doc_file).join(docClass, docClass.doc_fileid == Doc_file.id).filter(docClass.docClass_masterid == docClass_masterid).delete(synchronize_session=False)
+            # db.session.query(docClass).filter(docClass.masterid == docClass_masterid).delete(synchronize_session=False)
+            # db.session.query(docClass).filter(docClass.docClass_masterid == docClass_masterid).delete()
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(str(e))
+
+    @staticmethod
+    def save_file2disk(docClass, file, docClass_id, filename=None, upload_folder=None, picsize=None,  autocommit=True):
+        '''
+        存file到磁盘，只保存doc_file记录到资料库
+        :param docClass: 文档的关联类，为空时不需要创建关联类
+        :param file: 文件流
+        :param docClass_id: 关联文档的id
+        :param filename: 文件的描述
+        :param upload_folder: 保存文件的目录
+        :param picsize:  文件的大小，超过时会被压缩,如:(1920, 1080)
+        :param exist_replace:文档存在则覆盖，当一对一的情况下，需要删除之前的文件
+        :return:
+        '''
+        if file is None:
+            return
+        try:
+            if upload_folder is None:
+                upload_folder = current_app.config['UPLOAD_FOLDER']
+            # 按表名来为目录来存储档案
+            file_path = os.path.join(upload_folder, docClass.__tablename__)
+            os.makedirs(file_path, exist_ok=True)
+            # 真实存储的文件增加秒数，防止被覆盖
+            file_name_dsk = get_file_name_dsk(file.filename, file_path)
+            # gif 不需要转格式,有设定压缩的才需要
+            if file.mimetype.startswith('image/') and file.mimetype!= 'image/gif' and picsize is not None:
+                pil_image = image_thumbnail(file.stream,picsize)
+                # pil_image = Image.open(file.stream)
+                # w, h = pil_image.size
+                # res_rate = get_rate(w, picsize[0], h, picsize[1])
+                # pil_image.thumbnail((round(w / res_rate), round(h / res_rate)))
+                file_name_dsk = file_name_dsk.rsplit('.',1)[0]+'.jpg'
+                pil_image.convert('RGB').save(file_name_dsk, 'jpeg')
+            else:
+                file.save(file_name_dsk)
+            doc_file = None
+            if docClass_id:
+                docfile_ref = docClass.query.filter(docClass.id == docClass_id).first()
+                if docfile_ref is None:
+                    raise Exception(f'the data(class:{docClass.__tablename__},id:{docClass_id}) is not exist,')
+                doc_file = docfile_ref.doc_file
+                if doc_file:
+                    file_name_old = doc_file.save_file_name
+                    doc_file.save_file_name = file_name_dsk
+                    docfile.delete_file_name(file_name_old)
+            if doc_file is None:
+                doc_file = Doc_file(file_name=file.filename if filename is None else filename,
+                                file_size=round(os.path.getsize(file_name_dsk) / 1024, 2),
+                                save_file_name=file_name_dsk,
+                                # masterid=masterid,
+                                upload_time=datetime.now(),
+                                upload_user=g.current_user.uname,
+                                type=docClass.__tablename__)
+            db.session.add(doc_file)
+            if autocommit:
+                db.session.commit()
+            return doc_file
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(str(e))
+            docfile.delete_file_name(file_name_dsk)
+            current_app.logger.error(str(e))
+            raise
+
+    @staticmethod
+    def insert_file(docClass, file, docClass_masterid, filename=None, upload_folder=None, picsize=(1920, 1080)):
+        '''
+        存文档到磁盘，并保存记录到资料库
+        :param docClass: 文档的关联类，为空时不需要创建关联类
+        :param file: 文件流
+        :param docClass_masterid:
+        :param filename: 文件的描述
+        :param upload_folder: 保存文件的目录
+        :param picsize:  文件的大小，超过时会被压缩
+        :return:
+        '''
+        if file is None:
+            return
+        try:
+            docfile_ref = docClass(masterid=docClass_masterid)
+            docfile_ref.doc_file=docfile.save_file2disk(docClass, file, None, filename, upload_folder, picsize, autocommit=False)
+            db.session.add(docfile_ref)
+            db.session.add(docfile_ref.doc_file)
+            db.session.commit()
+            return docfile_ref
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(str(e))
+            raise
+
+    @classmethod
+    def getall_respon(cls, docClass, docClass_masterId, file_name=None, page=None, per_page=None):
+        '''
+        获取所有文件的记录
+        :param docClass:  文档的boclass
+        :param docClass_masterId: 关联对象的masterid
+        :param file_name: 可按文件名做模糊查找
+        :param page:
+        :param per_page:
+        :return:
+        '''
+        datap = Doc_file.query.join(docClass,docClass.doc_fileid==Doc_file.id).filter(docClass.masterid == docClass_masterId)
+        if file_name:
+            datap = datap.filter(Doc_file.file_name.like('%'+file_name+'%'))
+        datas = datap.order_by(Doc_file.upload_time.desc()).paginate(page=page, per_page=per_page)
+        result = []
+        for data in datas.items:
+            tojson = data.to_json()
+            tojson['file_type'] = data.save_file_name.rsplit('.',1)[1]
+            result.append(set_timezone(tojson))
+        return result, 200, {"content-type": "application/json"}
+
+    @classmethod
+    def download_respon(cls, doc_file_id, save_file_name=None):
+        '''
+        下载文档，如果知道文件存储路径，则直接输出
+        :param doc_file_id: doc_file.id
+        :param save_file_name: 文档存磁盘的path
+        :return:
+        '''
+        if save_file_name is None :
+            data = Doc_file.query.filter(Doc_file.id == doc_file_id).first_or_404()
+            save_file_name = data.save_file_name
+            file_name = data.file_name
+        else:
+            file_name = save_file_name.rsplit('.', 1)
+        rv = send_file(save_file_name, as_attachment=True)
+        # 中文名称用utf-8
+        filenames = {'filename': unicodedata.normalize('NFKD', file_name).encode('latin-1', 'ignore'),
+                     'filename*': "UTF-8''{}".format(urllib.parse.quote(file_name))}
+        rv.headers.set('Content-Disposition', 'attachment', **filenames)
+        return rv
+
+    @classmethod
+    def get_respon(cls, doc_file_Id, save_file_name=None):
+        '''
+        获取文档流，如果知道文件存储路径，则直接输出
+        :param docClass:
+        :param doc_file_Id: 文档存资料库的ID
+        :param save_file_name: 文档存磁盘的path
+        :return:
+        '''
+        if save_file_name is None:
+            data = Doc_file.query.filter(Doc_file.id == doc_file_Id).first_or_404()
+            save_file_name = data.save_file_name
+        rv = send_file(save_file_name)
+        return rv
+
+    @classmethod
+    def delete_respon_by_docclass_id(cls, docClass, docClass_id):
+        '''
+        删除引用关系和doc_file，同时移除硬盘中的文件
+        :param docClass: 引用关系类
+        :param docClass_id: 引用关系id
+        :return:
+        '''
+        try:
+            docfile.delete_file_doclassid(docClass, docClass_id)
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(str(e))
+            return {"error": str(e)}, 422, {"content-type": "application/json"}
+        return "", 204
+
+    @classmethod
+    def delete_respon_by_doc_fileid(cls, docClass, doc_fileid):
+        '''
+        通过docClass 和doc_file_id来删除引用关系和doc_file，同时移除硬盘中的文件
+        *有多个文档时，用这个方法
+        :param docClass: 引用关系类
+        :param doc_fileid: 文档存资料库的ID
+        :return:
+        '''
+        try:
+            docclass =docClass.query.filter(docClass.doc_fileid==doc_fileid).first_or_404()
+            docfile.delete_file_doclassid(docClass, docclass.id)
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(str(e))
+            return {"error": str(e)}, 422, {"content-type": "application/json"}
+        return "", 204
+
+
+    @classmethod
+    def post_respon(cls, docClass, file, docClass_masterid, filename=None, upload_folder=None, picsize=(1920, 1080)):
+        '''
+        上传
+        :param docClass:
+        :param file:
+        :param docClass_masterid:
+        :param filename: 文件的描述
+        :param upload_folder: 保存文件的目录
+        :param picsize:  文件的大小，超过时会被压缩
+        :return:
+        '''
+        try:
+            doc_class = docfile.insert_file(docClass, file, docClass_masterid, filename, upload_folder, picsize)
+            result = doc_class.to_json()
+            # 经过update 后，id 会变成 doc_file.id
+            result.update(doc_class.doc_file.to_json())
+            result['file_type'] = doc_class.doc_file.save_file_name.rsplit('.', 1)[1]
+            return set_timezone(result), \
+                   201, {"content-type": "application/json"}
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(str(e))
+            return {"error": str(e)}, 422, {"content-type": "application/json"}
+
+    @classmethod
+    def put_respon(cls, docClass, docClass_id, body):
+        '''
+        修改文件的描述
+        :param docClass: 文档关联类
+        :param docClass_id:文档关联类id
+        :param body:
+        :return:
+        '''
+        try:
+            if 'file_name' in body.keys():
+                data = docClass.query.filter(docClass.id==docClass_id).first_or_404()
+                data.doc_file.file_name = body['file_name']
+                db.session.commit()
+                result = data.to_json()
+                # id 经过update 后，变为了doc_file.id
+                result.update(data.doc_file.to_json())
+                return set_timezone(result), 201, {"content-type": "application/json"}
+            else:
+                raise Exception('不允许修改file_name之外的栏位，%s'%body)
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(str(e))
+            return {"error": str(e)}, 422, {"content-type": "application/json"}
+
+

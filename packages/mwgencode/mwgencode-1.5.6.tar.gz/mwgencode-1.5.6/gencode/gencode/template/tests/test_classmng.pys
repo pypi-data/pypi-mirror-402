@@ -1,0 +1,58 @@
+from tests.test_base import BasicTestCase
+import json
+# from unittest import mock
+
+class Test{{tag.name}}(BasicTestCase):
+{% for path in tag.paths %}
+    {% for act in path.actions %}
+    def test_{{path.name.replace('{', '').replace('}', '').replace('-', '_') + '_' + act.action}}(self):
+        """
+        # todo add testcacse description
+        """
+        {% if act.action == 'get' and act.default_resp.is_array %}
+        # todo fix url
+        response = self.client.get(self.url_for('{{path.name.replace('_{', '/{')}}{{get_params(act.params)}}'),
+                                   headers=self.get_headers(self.super_user))
+        self.assertEqual(response.status_code,200)
+        # todo add other assert code
+        exp_data = {{get_resp_js(act)}}
+        resp_data = response.json # json.loads(response.data.decode())
+        {% endif %}
+        {% if act.action == 'get' and not act.default_resp.is_array %}
+        # todo fix url
+        response = self.client.get(self.url_for('{{path.name.replace('_{', '/{')}}{{get_params(act.params)}}'),
+                                   headers=self.get_headers(self.manage_user))
+        self.assertEqual(response.status_code,200)
+        # todo add other assert code
+        exp_data = {{get_resp_js(act)}}
+        resp_data = response.json
+        {% endif %}
+        {% if act.action == 'post' %}
+        # todo fix url
+        response = self.client.post(self.url_for('{{path.name.replace('_{', '/{')}}{{get_params(act.params)}}'),
+                                    headers=self.get_headers(self.manage_user,{'Content-Type': 'application/json'}),
+                                    data=json.dumps({{get_resp_js(act)}}))
+        self.assertEqual(response.status_code, 201)
+        # todo add other assert code
+        exp_data = {{get_resp_js(act)}}
+        resp_data = response.json #json.loads(response.data.decode())
+        {% endif %}
+        {% if act.action == 'put' %}
+        # todo fix url
+        response = self.client.post(self.url_for('{{path.name.replace('_{', '/{')}}{{get_params(act.params)}}'),
+                                    headers=self.get_headers(self.manage_user,{'Content-Type': 'application/json'}),
+                                    data=json.dumps({{get_resp_js(act)}}))
+        self.assertEqual(response.status_code, 201)
+        # todo add other assert code
+        exp_data = {{get_resp_js(act)}}
+        resp_data = response.json # json.loads(response.data.decode())
+        {% endif %}
+        {% if act.action == 'delete' %}
+        # todo fix url
+        response = self.client.delete(self.url_for('{{path.name.replace('_{', '/{')}}{{get_params(act.params)}}'),
+                                    headers=self.get_headers(self.manage_user,{'Content-Type': 'application/json'}),
+                                    )
+        self.assertEqual(response.status_code, 204)
+        {% endif %}
+    {% endfor %}
+{% endfor %}

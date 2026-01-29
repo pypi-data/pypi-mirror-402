@@ -1,0 +1,87 @@
+'''
+测试范例：
+1，form 提交
+        response = self.client.post(self.url_for('empuser_login'),
+                                    # header 定义
+                                    headers={'Content-Type': 'multipart/form-data', 'Accept': 'application/json'},
+                                    # data 必须是字典
+                                    data={'user': '13712363409', 'password': 'string','valid_code':'1234','companyid':'comp1'})
+2，post body，内容是 json
+        response = self.client.post(self.url_for('empuser_update'),
+                                    # header 定义
+                                    headers=self.get_headers(self.manage_user,{'Content-Type': 'application/json'}),
+                                    # data 必须是str，json.dumps
+                                    data=json.dumps({'uid': 'string', 'uname': 'string', 'companyid': 'string', 'emp_name': 'string', 'password': 'string'}))
+3，mock 使用 注意事项
+    from unittest import mock
+        。。。
+        # check_valid_code是 import的unit，不能设定函数的单元auth_utils，只需要指定引用单元empusermng
+        @mock.patch('app.api.v1_0.empusermng.check_valid_code')
+        def test_empuser_register_post(self,mock_check_valid_code):
+            # 驗證碼檢查找 mock
+            mock_check_valid_code.side_effect = [True,True,True,True]
+            response = self.client.post(self.url_for('empuser_register?valid_code=1234'),
+                                        headers=self.get_headers(self.manage_user,{'Content-Type': 'application/json'}),
+                                        data=json.dumps({ 'uname': '13712363409', 'companyid': 'comp1', 'emp_name': 'cxh', 'password': 'string'}))
+            # mock_check_valid_code.
+            。。。
+            mock_check_valid_code.assert_called_with('1234',0,None)
+        。。。
+        # 对应修饰器的顺序需颠倒
+        @mock.patch('app.api.v1_0.auth_companymng.get_companyids')
+        @mock.patch('app.api.v1_0.auth_companymng.get_service_companyid')
+        def test_auth_companys_servicename_get(self,mock_get_service_companyid,mock_get_companyids):
+            """
+            测试获取认证的公司
+            """
+            # 博览会服务
+            mock_companyid.side_effect = ['comp1']
+            # 返回多个时，list中必须要是一个list
+            mock_get_service_companyid.side_effect = [['comp1','comp2','comp3'],['comp1','comp2','comp3'],['comp1','comp3','comp4']]
+
+'''
+
+import unittest
+from app import create_app_swagger, db
+from unittest import mock
+from .init_test_data import init_test_data
+from flask.testing import FlaskClient
+
+class BasicTestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.app = create_app_swagger('testing').app
+        self.app_context = self.app.app_context()
+        self.app_context.push()
+        db.create_all()
+        self.client = self.app.test_client()
+        self.server ='http://localhost:9999/{{swagger.name}}/v1.0'
+        # 超级用户，管理员用户，管理员创建的用户，普通用户
+        self.super_user,self.manage_user,self.user_mng,self.user =init_test_data()
+
+    def get_headers(self,user,ext_header=None):
+        '''
+        :param user:
+        :return:
+        '''
+        from app import rds
+        import json
+        rds.set('session:jwt_test',json.dumps({"uid": "%s"%user.uid, "uname": "%s"%user.uname,
+                                               "systemuser": user.systemuser, "manageuser": user.manageuser, "manageuserid": user.manageuserid}))
+        result ={'X-Consumer-Username': user.uname,
+                 'X-Consumer-Custom-Id': user.uid,
+                 'accept-language':'en-US;q=0.8,en;q=0.7'}
+        if ext_header is not None:
+            result.update(ext_header)
+        return result
+
+    def url_for(self,endpoint):
+        return '%s/%s'%(self.server,endpoint)
+
+    def tearDown(self):
+        db.session.remove()
+        db.drop_all()
+        self.app_context.pop()
+
+
+

@@ -1,0 +1,52 @@
+from app import create_app_swagger
+
+def register_service(config_name,app):
+    from app.config import config
+    # 注册本服务到kong
+    config =  config[config_name]
+    # kong不支持非jwt 认证
+    # if config.AUTH_TYPE!=AuthType.jwt.value:
+    #    return
+    auto_register2consul = config.CONSUL_AUTO_REGISTER
+    auto_register2kong = config.KONG_AUTO_REGISTER
+    web_port = config.PORT
+    from mwsdk import AgentConf
+    service_host = f"{config.get_host_addr()}:{ web_port}"
+    app.logger.info('auto_register2kong:%s'%auto_register2kong)
+    if auto_register2kong:
+        from mwsdk import Kong
+        kong = Kong()
+        kong.add_upstream_target('{{swagger.name}}-server', service_host, 100, '/{{swagger.name}}/v1.0/health')
+        kong.reg_service('{{swagger.name}}/v1.0', '{{swagger.name}}-server', auth='jwt')
+        #todo add other_api
+        app.logger.info('注册kong成功')
+        #kong.reg_service('xxxx/v1.0/login_jwt', '{{swagger.name}}-server', auth='')
+        #kong.reg_service('xxxx/v1.0/token', '{{swagger.name}}-server', auth='key')
+        #kong.reg_service('xxxx/v1.0/logout_jwt', '{{swagger.name}}-server',auth='jwt')
+        #kong.reg_service('static', '{{swagger.name}}-server', auth='', kong_uris='/auth/static')
+    # 註冊到kong的服務到consul
+    app.logger.info('auto_register2consul:%s'%auto_register2consul)
+    if auto_register2consul:
+        check = {"id": "{{swagger.name}} api",
+                 "name": "{{swagger.name}} on port %s"%web_port,
+                 "http": "http://%s/{{swagger.name}}/v1.0/health"%service_host,
+                 "interval": "20s",
+                 "timeout": "10s",
+                 "DeregisterCriticalServiceAfter": "5m"
+                 }
+        from mwsdk import Kong, reg_service
+        kong = Kong()
+        reg_service('{{swagger.name}}',address=kong.ip, port=kong.port, tags=['kong','jwt'],
+                    check=check)
+        app.logger.info('注册consul成功')
+
+if __name__ == '__main__':
+    app = create_app_swagger('default')
+    register_service('default',app.app)
+    app.run(host='0.0.0.0',port=app.app.config.get('PORT'))
+    if app.app.config.get('CONSUL_AUTO_REGISTER'):
+        from mwsdk import Kong, dereg_service
+        dereg_service('{{swagger.name}}', Kong().port)
+
+
+

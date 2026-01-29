@@ -1,0 +1,101 @@
+import connexion
+from flask_redis import FlaskRedis
+from app.config import config
+from flask_cors import CORS
+import logging
+from flask import g, request,session
+from flask_babel import Babel
+from app.utils import get_lang
+{% if include_model %}
+from flask_sqlalchemy import SQLAlchemy
+from mwauth import auth,AuthType
+from mwpermission.permission import Permission
+from mwauth.redis_session import RedisSessionInterface
+import pymysql
+pymysql.install_as_MySQLdb()
+{% endif %}
+
+{% if 'kafka' in plugins %}
+producer = Producer()
+{% endif %}
+
+from app.config import redis_model,database_model
+from flask_redis_sentinel import SentinelExtension
+from mwutils.mw_consul import DatabaseConf
+import os
+# 创建哨兵
+redis_sentinel = SentinelExtension()
+# 普通
+if redis_model==0:
+    rds = FlaskRedis()
+elif redis_model==1: #哨兵模式
+    rds = redis_sentinel.master_for('mysession')
+else: #集群
+    assert False,'暂不支持集群'
+
+{% if include_model %}
+db = SQLAlchemy()
+# auth = auth(config['default'].AUTH_TYPE)
+auth = auth()
+p = Permission()
+{% endif %}
+babel = Babel()
+
+def apikey_auth(token, required_scopes):
+    # 使用kong认证时，跳过该认证
+    return {}
+
+def create_app_swagger(config_name):
+    conf = config[config_name]
+    app_swg = connexion.App(__name__,
+                            # port = conf.PORT,
+                            # debug= conf.DEBUG,
+                            specification_dir='../swagger/'
+                            )
+    app_swg.add_api('./{{ swagger.version.replace('.','_') }}/{{ swagger.name }}.yaml', arguments={'title': 'api {{ swagger.version }}','host':os.environ.get('SWAGGER_HOST',f'localhost:{conf.PORT}')})
+    #todo add other_api
+    app = app_swg.app
+    CORS(app)
+    app.config.from_object(conf)
+    config[config_name].init_app(app)
+
+    # 需要增加handler 这样docker 中才能看到log
+    # formatter = logging.Formatter('%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
+    # consoleHandler = logging.StreamHandler()
+    # consoleHandler.setFormatter(formatter)
+    # app.logger.addHandler(consoleHandler)
+    app.logger.level = app.config['LOG_LEVEL']
+    {% if include_model %}
+    db.init_app(app)
+    app.session_interface = RedisSessionInterface(app, rds)
+    auth.init_app(app)
+    p.init_app(app)
+    {% endif %}
+    babel.init_app(app)
+    {% if 'kafka' in plugins %}
+    producer.init_app(app)
+    {% endif %}
+
+    redis_sentinel.init_app(app)
+    if redis_model == 0:
+        rds.init_app(app)
+
+    @app.before_request
+    def before_request():
+        # 非单机模式，发现资料库URI不一致，则重启
+        if database_model != 0 and app.config['SQLALCHEMY_DATABASE_URI'] != \
+                DatabaseConf(os.environ.get('DATABASE_NAME', 'maxbus')).sqlalchemy_database_uri():
+            # 需要用os的exit，其它的只能退出过程
+            os._exit(1)
+
+    return app_swg
+
+# @babel.localeselector
+def get_locale():
+    # 默认取英文
+    lang =  get_lang(None)
+    # 当前版本的 flask_babel 只支持 “_”区隔
+    return lang.replace('-','_')
+
+babel.locale_selector = get_locale
+

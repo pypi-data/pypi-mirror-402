@@ -1,0 +1,80 @@
+from app import db
+import json
+# todo 如果model中没有定义user ，则在此定义
+# class Authuser(db.Model):
+#     __tablename__ = 'appuser'
+#     uid = db.Column("id",db.String(50), primary_key=True)
+#     uname = db.Column("name",db.String(50))
+#     manageuser = db.Column("ismanage",db.Boolean)
+#     manageuserid = db.Column("manageuserid",db.String(50))
+#     password = db.Column("passwordmd5",db.String(50))
+#     systemuser = db.Column("issystemuser",db.Boolean)
+#     companyid = db.Column(db.String(50))
+#     # 邮件，用于修改密码
+#     email = db.Column(db.String(200))
+#     # 微信的openid
+#     wx_openid = db.Column(db.String(50))
+#     def __repr__(self):
+#         return json.dumps(self.to_json())
+#     def to_json(self,fields:list=None):
+#         '''
+#         按资料库中的fieldname输出json
+#         :param fields:资料库栏位名，不指定fields时，输出所有的资料，否则按指定fields输出
+#         :return:
+#         '''
+#         return {key: getattr(self, key) for key in (fields or self.__table__.columns.keys())
+#                    if hasattr(self,key)
+#                }
+def add_seed(session, cls, flt, datas):
+    '''
+    增加物件
+    :param session: sQLAlchemy session
+    :param cls: boclass，如：Employee
+    :param flt: 过滤条件，如：{'id':1000,'name':'cxh'}
+    :param datas: 物件body，如：
+                  {'id':1000,'emp_name':'cxh',
+                   'departid':999}
+    :return: 企业物件，employee
+    '''
+    data = session.query(cls).filter_by(**flt).first()
+    if not data:
+        data = cls(**datas)
+        session.add(data)
+        session.commit()
+    else:
+        session.query(cls).filter_by(**flt).update(datas)
+        session.commit()
+    return data
+
+def init_companys():
+    from app.models import Company
+    comp1 = add_seed(db.session, Company, {'id': 'comp1'},
+             {'id': 'comp1', 'code': 'code1', 'name': 'name1', 'xtype': 1,'inuse':True})
+    comp2 = add_seed(db.session, Company, {'id': 'comp2','inuse':True},
+             {'id': 'comp2', 'code': 'code2', 'name': 'name2', 'xtype': 1,'companyid':'comp1','inuse':True})
+    comp3 = add_seed(db.session, Company, {'id': 'comp3'},
+             {'id': 'comp3', 'code': 'code3', 'name': 'name3', 'xtype': 1,'companyid':'comp1','inuse':True})
+    return comp1,comp2,comp3
+
+def init_test_data():
+    '''
+    初始化测试资料
+    :return:返回各种类型的用户，方便后期测试
+    '''
+    init_companys()
+    # todo import AuthUser
+    from app.models import AuthUser
+    # 超级用户
+    dev =  add_seed(db.session,AuthUser,{'uid':'2222'},
+                      {'uid':'2222','uname':'dev','systemuser':True,'manageuser':False,'manageuserid':'','password':'2222'})
+    # 管理者用户
+    manage =  add_seed(db.session,AuthUser,{'uid':'2000'},
+                      {'uid':'2000','uname':'manage','systemuser':False,'manageuser':True,'manageuserid':'','password':'2000','companyid':'comp1'})
+    # 管理者下的普通用户
+    user_mng1 = add_seed(db.session,AuthUser,{'uid':'2001'},
+                      {'uid':'2001','uname':'user_mng1','systemuser':False,'manageuser':False,'manageuserid':'2000','password':'2001','companyid':'comp1'})
+    # 普通用户
+    user = add_seed(db.session,AuthUser,{'uid':'2002'},
+                      {'uid':'2002','uname':'user','systemuser':False,'manageuser':False,'manageuserid':'','password':'2002','companyid':'comp2'})
+    # current_app.logger.info('init_test_data success')
+    return dev, manage, user_mng1, user

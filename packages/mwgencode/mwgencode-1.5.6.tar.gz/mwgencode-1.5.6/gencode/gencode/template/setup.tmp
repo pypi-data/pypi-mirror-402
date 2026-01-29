@@ -1,0 +1,48 @@
+from distutils.core import setup
+from Cython.Build import cythonize
+
+def get_package_datas(pathname):
+    from pathlib import Path
+    dirs = []
+    def get_dir(pathname,dirs):
+        pth = Path(pathname)
+        paths = [x for x in pth.iterdir() if x .is_dir()]
+        for p in paths:
+            if p.name in ('.git', '.idea', '__pycache__'):
+                continue
+            dirs.append(p.parts)
+            get_dir(str(p),dirs)
+    get_dir(pathname,dirs)
+    # 不需要包含 app
+    return ['/'.join(d[1:])+'/*' for d in  dirs]+[Path(pathname).parts[-1]+'/*']
+
+try:
+    # package_datas = get_package_datas('app/translations', skip_dirs={'LC_MESSAGES'})
+    # package_datas.extend(get_package_datas('app/static'))
+    setup(
+        # 指定package，可以copy package data，但会包含py源码，需在安装后删除py文件
+        # packages=['app'],
+        ext_modules=cythonize('app/*.py',language_level = 3,compiler_directives=dict(always_allow_keywords=True))+
+                    cythonize('app/api/*.py',language_level = 3,compiler_directives=dict(always_allow_keywords=True))+
+                    cythonize('app/api/v1_0/*.py',language_level = 3,compiler_directives=dict(always_allow_keywords=True)),
+        # package_data={'app': get_package_datas('app/static')},
+        # 有多个目录
+        # package_data={'app': package_datas},
+        data_files=[
+                    # ('/usr/local/lib/python3.12/site-packages/app/translations/en/LC_MESSAGES',
+                    #          ['app/translations/en/LC_MESSAGES/messages.mo']),
+                    # ('/usr/local/lib/python3.12/site-packages/app/translations/zh_Hans_CN/LC_MESSAGES',
+                    #          ['app/translations/zh_Hans_CN/LC_MESSAGES/messages.mo']),
+                    # ('/usr/local/lib/python3.12/site-packages/app/translations/zh_Hant_TW/LC_MESSAGES',
+                    #          ['app/translations/zh_Hant_TW/LC_MESSAGES/messages.mo']),
+                    # ('/usr/local/lib/python3.12/site-packages/app/translations/vi_VN/LC_MESSAGES',
+                    #          ['app/translations/vi_VN/LC_MESSAGES/messages.mo']),
+                    # ('/usr/local/lib/python3.12/site-packages/app/translations/ja/LC_MESSAGES',
+                    #          ['app/translations/ja/LC_MESSAGES/messages.mo']),
+                    ('/usr/local/lib/python3.12/site-packages/swagger/v1_0',
+                     ['swagger/v1_0/{{swagger.name}}.yaml'])
+                    ]
+        )
+except Exception as e:
+    print (e)
+

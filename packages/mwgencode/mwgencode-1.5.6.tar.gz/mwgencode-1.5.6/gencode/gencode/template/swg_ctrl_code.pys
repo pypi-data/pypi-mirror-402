@@ -1,0 +1,132 @@
+from app import auth, db, p
+from app.models import *
+from flask import current_app
+from flask_babel import gettext as _
+from app.utils import set_timezone,todatetime
+
+{% for path in paths %}
+    {% for act in path.actions %}
+        {% if act.default_resp.umlcls_type=='UMLClass' or act.is_auth %}
+@auth.valid_login
+            {% if not act.is_lk %}
+@p.check("{{act.default_resp.ref_name}}",["{{right_type[act.action]}}"])
+            {% endif %}
+         {% endif %}
+
+def {{path.name.replace('{', '').replace('}', '').replace('-', '_').replace('/','_') + '_' + act.action}}({{get_params(act.params)}}):
+    """
+    {{act.summary}}
+    {{act.doc}}
+    {% for param in act.params %}
+    :param {{param.name}}:{{param.desc}}
+    :type {{param.name}}: {{param.type}}
+    
+    :rtype:{% if act.default_resp %}{{act.default_resp.ref_name.capitalize()}}{% endif %}
+    {% endfor %}
+
+    """
+        {% if act.default_resp.umlcls_type=='UMLClass' %}
+           {% if act.action == 'post' %}
+    try:
+        data = {{act.default_resp.ref_name.capitalize()}}(**{k: v for k, v in body.items() if k in {{act.default_resp.ref_name.capitalize()}}.__table__.columns.keys()})
+        # data = {{act.default_resp.ref_name.capitalize()}}(**todatetime({k: v for k, v in body.items() if k in {{act.default_resp.ref_name.capitalize()}}.__table__.columns.keys()},
+        #                                  [datetime fields]))
+        db.session.add(data)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(str(e),exc_info=True)
+        return {"error": get_err_msg(str(e))}, 422, {"content-type": "application/json"}
+    return set_timezone(data.to_json()), 201, {"content-type": "application/json"}
+            {% endif %}
+
+            {% if act.action == 'put' %}
+    try:
+        body = todatetime({k: v for k, v in body.items() if k in {{act.default_resp.ref_name.capitalize()}}.__table__.columns.keys()},[])
+        {{act.default_resp.ref_name.capitalize()}}.query.filter({{act.default_resp.ref_name.capitalize()}}.id == id).update(body)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(str(e),exc_info=True)
+        return {"error": get_err_msg(str(e))}, 422, {"content-type": "application/json"}
+    data = {{act.default_resp.ref_name.capitalize()}}.query.filter_by(id=id).first_or_404()
+    return set_timezone(data.to_json()), 201, {"content-type": "application/json"}
+            {% endif %}
+            {% if act.action == 'delete' %}
+    try:
+        db.session.query({{act.default_resp.ref_name.capitalize()}}).filter({{act.default_resp.ref_name.capitalize()}}.id == id).delete()
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(str(e),exc_info=True)
+        return {"error": get_err_msg(str(e))}, 422, {"content-type": "application/json"}
+    return "", 204
+            {% endif %}
+
+            {% if act.action == 'get' and not act.default_resp.is_array %}
+    data = {{act.default_resp.ref_name.capitalize()}}.query.filter_by(id=id).first_or_404()
+    return set_timezone(data.to_json()), 200, {"content-type": "application/json"}
+            {% endif %}
+
+            {% if act.action == 'get' and act.default_resp.is_array %}
+               {% if act.has_page %}
+    datap = {{act.default_resp.ref_name.capitalize()}}.query
+    header = {"content-type": "application/json"}
+    # todo add custom filter,sample:
+    #if name:
+    #    datap = datap.filter({{act.default_resp.ref_name.capitalize()}}.name.like('%'+name+'%'))
+    if page is None and per_page is None:
+        datas = datap.all()
+    else:
+        datap = datap.order_by({{act.default_resp.ref_name.capitalize()}}.id).paginate(page=page, per_page=per_page)
+        datas = datap.items
+        header.update({"x-page":datap.page,"x-total":datap.total})
+    return [set_timezone(data.to_json()) for data in datas] ,200 ,header
+               {% else %}
+    datap = {{act.default_resp.ref_name.capitalize()}}.query
+    # todo add filter ,sample:
+    #if name:
+    #    datap = datap.filter({{act.default_resp.ref_name.capitalize()}}.name.like('%'+name+'%'))
+    datas = datap.all()
+    return [set_timezone(data.to_json()) for data in datas],200,{"content-type": "application/json"}
+               {% endif %}
+            {% endif %}
+
+        {% else %}
+            {% if act.action == 'post' %}
+    try:
+        data = {}
+        return data, 201, {"content-type": "application/json"}
+    except Exception as e:
+        current_app.logger.error(str(e),exc_info=True)
+        return {"error": get_err_msg(str(e))}, 422, {"content-type": "application/json"}
+            {% elif act.action == 'put' %}
+    try:
+        data = {}
+        return data, 201, {"content-type": "application/json"}
+    except Exception as e:
+        current_app.logger.error(str(e),exc_info=True)
+        return {"error": get_err_msg(str(e))}, 422, {"content-type": "application/json"}
+            {% elif act.action == 'delete' %}
+    try:
+        data = {}
+        return "", 204
+    except Exception as e:
+        current_app.logger.error(str(e),exc_info=True)
+        return {"error": get_err_msg(str(e))}, 422, {"content-type": "application/json"}
+            {% elif act.action == 'get' %}
+    try:
+        data = {}
+        return data, 200, {"content-type": "application/json"}
+    except Exception as e:
+        current_app.logger.error(str(e),exc_info=True)
+        return {"error": get_err_msg(str(e))}, 422, {"content-type": "application/json"}
+            {% else %}
+    pass
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+{% endfor %}
+
+
+

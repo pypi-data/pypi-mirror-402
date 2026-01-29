@@ -1,0 +1,195 @@
+swagger: "2.0"
+info:
+  description: "{{ (swg.desc or '').replace('\"','\'') }}"
+
+  version: v1.0
+  title: {{ swg.swgtitle }}
+host: {{swg.swghost}}
+basePath: /{{ swg.name }}/v1.0
+{% if swg.tags %}
+tags:
+{% for tag in swg.tags %}
+- name: {{ tag.name }}
+  description: "{{ (tag.doc or '').replace('\"','\'') }}"
+{% endfor %}
+{% endif %}
+schemes:
+- http
+- https
+
+{% if swg.auth=='jwt'%}
+securityDefinitions:
+  api_JWT:
+    type: apiKey
+    name: jwt
+    in: query
+    x-apikeyInfoFunc: app.apikey_auth
+  api_Key:
+    type: apiKey
+    name: apikey
+    in: query
+    x-apikeyInfoFunc: app.apikey_auth
+  api_Cookie:
+    type: apiKey
+    name: Cookie
+    in: header
+    x-apikeyInfoFunc: app.apikey_auth
+  api_Authorization:
+    type: apiKey
+    name: Authorization
+    in: header
+    x-apikeyInfoFunc: app.apikey_auth
+{% endif %}
+paths:
+{% for path in paths %}
+  /{{ path.name.replace('_{','/{').replace('}_','}/') }}:
+  {% for act in path.actions %}
+    {{ act.action }}:
+      tags:
+      - {{ path.tag.name }}
+      summary: "{{ (act.summary or '').replace('\"','\'') }}"
+      description: "{{ (act.doc or '').replace('\"','\'') }}"
+      operationId: app.api.{{ act.ver_str }}.{{ path.tag.name }}.{{ path.name.replace('/','_').replace('{','').replace('}','').replace('-','_') }}_{{ act.action }}
+      schemes:
+        - http
+        - https
+      consumes:
+          {% if swg.resp_xml %}
+        - application/xml
+          {% endif %}
+          {% if swg.resp_html %}
+        - text/html
+          {% endif %}
+          {% if act.has_formdata %}
+        - application/x-www-form-urlencoded
+        - multipart/form-data
+          {% endif %}
+        - application/json
+      produces:
+        - application/json
+          {% if swg.resp_xml %}
+        - application/xml
+          {% endif %}
+          {% if swg.resp_html %}
+        - text/html
+          {% endif %}
+
+    {% if act.params %}
+      parameters:
+      {% for param in act.params %}
+        - in: {{ param.in_ }}
+          name: {{ param.name }}
+          description: "{{ (param.desc or '').replace('\"','\'') }}"
+          required: {{ param.required }}
+          {% if param.is_array %}
+              {% if param.type_attr == "data" %}
+          type: array
+          items:
+            type: {{ param.type }}
+                     {% if param.format %}
+            format: {{ param.format }}
+                     {% endif %}
+          collectionFormat: multi
+              {% elif param.type_attr == "object" %}
+          schema:
+            type: array
+            items:
+              $ref: "#/definitions/{{ param.ref_name }}"
+              {% endif %}
+          {% else %}
+             {% if param.type_attr == "data" %}
+          type: {{ param.type }}
+                 {% if param.format %}
+          format: {{ param.format }}
+                 {% endif %}
+             {% elif param.type_attr == "object" %}
+          schema:
+            $ref: "#/definitions/{{ param.ref_name }}"
+             {% endif %}
+          {% endif %}
+      {% endfor %}
+    {% endif %}
+      responses:
+    {% for resp in act.resps %}
+        {{ resp.code }}:
+          description: "{{ (resp.desc or '').replace('\"','\'') }}"
+        {% if resp.type_attr != "none" %}
+          {% if resp.is_array %}
+          schema:
+            type: "array"
+            items:
+            {% if resp.type_attr=="object" %}
+              $ref: "#/definitions/{{ resp.ref_name }}"
+            {% elif resp.type_attr=="data" %}
+              type : {{ resp.type }}
+            {% endif %}
+          {% else %}
+          schema:
+            {% if resp.type_attr=="object" %}
+            $ref: "#/definitions/{{ resp.ref_name }}"
+            {% elif resp.type_attr=="data" %}
+            type: string
+            {% endif %}
+          {% endif %}
+        {% endif %}
+    {% endfor %}
+    # ks:key auth，js:jwt auth ,bs :basc auth ,os:oauth2 ,s:jw auth
+    {% if act.is_auth %}
+      security:
+         {% if act.auth_type=="ks" %}
+         - api_Key: []
+         {% endif %}
+         {% if act.auth_type=="js" %}
+         - api_JWT: []
+         {% endif %}
+         {% if act.auth_type=="s" %}
+         - api_JWT: []
+         - api_Key: []
+         - api_Cookie: []
+         - api_Authorization: []
+         {% endif %}
+         {% if act.auth_type=="bs" %}
+         - basic: []
+         {% endif %}
+         {% if act.auth_type=="os" %}
+         - oauth2: ['uid']
+         {% endif %}
+    {% endif %}
+  {% endfor %}
+{% endfor %}
+{% if swg.defines %}
+definitions:
+{% endif %}
+{% for defin in swg.defines %}
+  {{ defin.name }}:
+    type: object
+    description: "{{ (defin.desc or '').replace('\"','\'') }}"
+    properties:
+    {% for attr in defin.attrs %}
+      {{ attr.name }}:
+        {% if attr.is_array %}
+        description: "{{ (attr.desc or '').replace('\"','\'') }}"
+        type: array
+        items:
+            {% if attr.type_attr=="object" %}
+          $ref: "#/definitions/{{ attr.ref_name }}"
+            {% elif attr.type_attr=="data" %}
+          type: {{ attr.type }}
+              {% if attr.format %}
+          format: {{ attr.format }}
+              {% endif %}
+            {% endif %}
+        {% else %}
+            {% if attr.type_attr=="object" %}
+        $ref: "#/definitions/{{ attr.ref_name }}"
+            {% elif attr.type_attr=="data" %}
+        description: "{{ (attr.desc or '').replace('\"','\'') }}"
+        type: {{ attr.type }}
+              {% if attr.format %}
+        format: {{ attr.format }}
+              {% endif %}
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+{% endfor %}
+

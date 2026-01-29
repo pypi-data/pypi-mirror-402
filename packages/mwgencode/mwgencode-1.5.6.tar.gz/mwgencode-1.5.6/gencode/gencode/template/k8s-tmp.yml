@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{swagger.name.replace('_','-')}}
+  labels:
+    app: {{swagger.name.replace('_','-')}}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{swagger.name.replace('_','-')}}
+  template:
+    metadata:
+      labels:
+        app: {{swagger.name.replace('_','-')}}
+    spec:
+      securityContext:  #does not have any effect
+          runAsUser: 0    #does not have any effect
+          runAsGroup: 0
+          fsGroup: 0
+      containers:
+      - name: {{swagger.name.replace('_','-')}}
+        image: maxwinch/{{swagger.name}}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: web-port
+          containerPort: 80
+        resources:
+          limits:
+            cpu: '1'
+            memory: 2Gi
+          requests:
+            cpu: '0.2'
+            memory: 2Gi
+        livenessProbe:
+          httpGet:
+            path: /{{swagger.name}}/v1.0/health
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+        readinessProbe:
+          httpGet:
+            path: /{{swagger.name}}/v1.0/health
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        env:
+        # consul的访问地址
+        - name: CONSUL_HTTP_ADDR
+          valueFrom:
+              configMapKeyRef:
+                name: common
+                key: consul_addr
+        - name: WEB_PORT
+          value: "80"
+        # 资料库的名称
+        - name: DATABASE_NAME
+          valueFrom:
+              configMapKeyRef:
+                name: common
+                key: database_name
+        # 权限系统的名称
+        - name: SYSTEM_NAME
+          value: "maxguide"
+        # true注册到kong,false不会
+        - name: KONG_AUTO_REGISTER
+          value: "true"
+        #true 注册到consul
+        - name: CONSUL_AUTO_REGISTER
+          value: "false"
+        #输出log的级别, 10 debug,20 info,30 warning,40 error 50 灾难
+        - name: LOG_LEVEL
+          value: "20"
+        # 上传文件的目录
+        - name: UPLOAD_FOLDER
+          value: "e://files"
+          # 为true log中输出 sql语句
+        - name: SQLALCHEMY_ECHO
+          value: "false"
+        - name: TZ
+          value: Asia/Shanghai
+        # 支持 k8s
+        - name: SUPPORT_K8S
+          value: "true"
+          # value:0 :普通;1:哨兵；2：集群
+        - name: redis_model
+          value: "0"
+
+        volumeMounts:
+        - name: default
+          mountPath: /etc/nginx/conf.d
+        - name: uwsgi
+          mountPath: /var/{{swagger.name}}/config
+        - name: supervisord
+          mountPath: /etc/supervisor.d
+        workingDir: /var/{{swagger.name}}
+        #command: ["supervisord","--configuration", "/var/maxguide-fleetmng/supervisord.conf"]
+        #command: ["/bin/sh", "-c", "while true; do echo hello world; sleep 1; done"]
+      volumes:
+      - name: common
+        configMap:
+          name: common
+      - name: default
+        configMap:
+          name: {{swagger.name.replace('_','-')}}-config
+          defaultMode: 0777
+          items:
+          - key: default
+            path: default.conf
+      - name: uwsgi
+        configMap:
+          name: {{swagger.name.replace('_','-')}}-config
+          defaultMode: 0777
+          items:
+          - key: uwsgi
+            path: uwsgi.ini
+      - name: supervisord
+        configMap:
+          name: {{swagger.name.replace('_','-')}}-config
+          defaultMode: 0777
+          items:
+          - key: supervisord
+            path: supervisord.conf
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{swagger.name.replace('_','-')}}-server
+  labels:
+    app: {{swagger.name.replace('_','-')}}
+spec:
+  selector:
+    app: {{swagger.name.replace('_','-')}}
+  clusterIP: None
+  ports:
+  - name: webport
+    port: 80
+    targetPort: web-port
