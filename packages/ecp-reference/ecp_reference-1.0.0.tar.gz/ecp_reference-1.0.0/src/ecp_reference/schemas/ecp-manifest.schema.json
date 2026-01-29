@@ -1,0 +1,521 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ecp.amcrypto.org/ecp/schemas/ecp-manifest.schema.json",
+  "title": "Expert Context Pack (ECP) Manifest v1.0",
+  "type": "object",
+  "required": [
+    "ecp_version",
+    "id",
+    "skill",
+    "sources",
+    "context",
+    "maintenance",
+    "evals"
+  ],
+  "properties": {
+    "ecp_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "owners": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "team": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "profile": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "additionalProperties": true
+        }
+      ]
+    },
+    "skill": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "min_agent_skills_spec": {
+          "type": "string"
+        },
+        "surfaces": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "security": {
+      "type": "object",
+      "properties": {
+        "classification": {
+          "type": "string",
+          "enum": [
+            "public",
+            "internal",
+            "confidential",
+            "restricted"
+          ]
+        },
+        "retention_days": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "contains_secrets": {
+          "type": "boolean"
+        },
+        "contains_pii": {
+          "type": "string",
+          "enum": [
+            "none",
+            "possible",
+            "likely"
+          ]
+        },
+        "license": {
+          "type": "string"
+        },
+        "allow_remote_llm": {
+          "type": "boolean"
+        },
+        "allowed_remote_llm_providers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "logs": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "store_question": {
+          "type": "boolean"
+        },
+        "store_answer": {
+          "type": "boolean"
+        },
+        "retention_days": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "source_id",
+          "type",
+          "uri",
+          "scope",
+          "revision",
+          "refresh"
+        ],
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "git",
+              "filesystem",
+              "web",
+              "database",
+              "artifact"
+            ]
+          },
+          "uri": {
+            "type": "string",
+            "minLength": 1
+          },
+          "classification": {
+            "type": "string",
+            "enum": [
+              "public",
+              "internal",
+              "confidential",
+              "restricted"
+            ]
+          },
+          "license": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "object",
+            "properties": {
+              "include": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              },
+              "exclude": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "anyOf": [
+              {
+                "required": [
+                  "include"
+                ]
+              },
+              {
+                "required": [
+                  "exclude"
+                ]
+              }
+            ],
+            "additionalProperties": true
+          },
+          "revision": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": true
+          },
+          "refresh": {
+            "type": "object",
+            "required": [
+              "strategy"
+            ],
+            "properties": {
+              "strategy": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "incremental",
+                  "rebuild"
+                ]
+              },
+              "incremental": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "rebuild": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "strategy": {
+                      "const": "incremental"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "incremental"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "strategy": {
+                      "const": "rebuild"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "rebuild"
+                  ]
+                }
+              }
+            ],
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "context": {
+      "type": "object",
+      "required": [
+        "strategy",
+        "artifacts"
+      ],
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": [
+            "snapshot",
+            "retrieval",
+            "hybrid"
+          ]
+        },
+        "artifacts": {
+          "type": "object",
+          "anyOf": [
+            {
+              "required": [
+                "indexes"
+              ]
+            },
+            {
+              "required": [
+                "summaries"
+              ]
+            }
+          ],
+          "properties": {
+            "snapshots": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "indexes": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "type",
+                  "path",
+                  "descriptor"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "vector",
+                      "keyword",
+                      "graph",
+                      "hybrid"
+                    ]
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "descriptor": {
+                    "type": "string"
+                  },
+                  "chunking": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string"
+                      },
+                      "max_chars": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "overlap_chars": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "language_hints": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "additionalProperties": true
+                  }
+                },
+                "additionalProperties": true
+              }
+            },
+            "summaries": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "type",
+                  "path"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "overview",
+                      "hierarchical",
+                      "changelog",
+                      "topic"
+                    ]
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              }
+            },
+            "provenance": {
+              "type": "object",
+              "required": [
+                "chunks_path",
+                "build_info_path"
+              ],
+              "properties": {
+                "chunks_path": {
+                  "type": "string"
+                },
+                "build_info_path": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "maintenance": {
+      "type": "object",
+      "required": [
+        "policy_path"
+      ],
+      "properties": {
+        "policy_path": {
+          "type": "string"
+        },
+        "playbook_path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "evals": {
+      "type": "object",
+      "required": [
+        "suites"
+      ],
+      "properties": {
+        "suites": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "suite_id",
+              "path"
+            ],
+            "properties": {
+              "suite_id": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "mcp": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "security"
+        ],
+        "properties": {
+          "security": {
+            "required": [
+              "allow_remote_llm"
+            ],
+            "properties": {
+              "allow_remote_llm": {
+                "const": true
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "security": {
+            "required": [
+              "allowed_remote_llm_providers"
+            ],
+            "properties": {
+              "allowed_remote_llm_providers": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": true
+}

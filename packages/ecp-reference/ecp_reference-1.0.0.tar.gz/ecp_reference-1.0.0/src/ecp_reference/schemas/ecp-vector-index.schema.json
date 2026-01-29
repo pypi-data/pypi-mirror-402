@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ecp.amcrypto.org/ecp/schemas/ecp-vector-index.schema.json",
+  "title": "Expert Context Pack (ECP) Vector Index Metadata (vector-index-v1)",
+  "type": "object",
+  "required": [
+    "format",
+    "index_id",
+    "created_at",
+    "built_at",
+    "sources",
+    "config",
+    "documents"
+  ],
+  "properties": {
+    "format": {
+      "type": "string",
+      "const": "vector-index-v1"
+    },
+    "index_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "built_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "source_id",
+          "source_type",
+          "uri",
+          "revision"
+        ],
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uri": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revision": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": true
+          },
+          "classification": {
+            "type": "string"
+          },
+          "license": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "config": {
+      "type": "object",
+      "required": [
+        "embedding",
+        "vector"
+      ],
+      "properties": {
+        "tokenizer": {
+          "type": "string"
+        },
+        "chunking": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string"
+            },
+            "max_chars": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "overlap_chars": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "language_hints": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": true
+        },
+        "embedding": {
+          "type": "object",
+          "required": [
+            "model",
+            "dimensions"
+          ],
+          "properties": {
+            "model": {
+              "type": "string",
+              "minLength": 1
+            },
+            "dimensions": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "provider": {
+              "type": "string"
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "vector": {
+          "type": "object",
+          "required": [
+            "metric",
+            "vectors_path",
+            "vector_format"
+          ],
+          "properties": {
+            "metric": {
+              "type": "string",
+              "enum": [
+                "cosine",
+                "dot"
+              ]
+            },
+            "vectors_path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "vector_format": {
+              "type": "string"
+            },
+            "dtype": {
+              "type": "string",
+              "enum": [
+                "float32",
+                "float64"
+              ]
+            },
+            "endianness": {
+              "type": "string",
+              "enum": [
+                "little",
+                "big"
+              ]
+            },
+            "encoding": {
+              "type": "string",
+              "enum": [
+                "row-major"
+              ]
+            },
+            "chunk_id_order": {
+              "type": "string",
+              "enum": [
+                "chunk_id_lex",
+                "chunks_jsonl"
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "required": [
+                  "vector_format"
+                ],
+                "properties": {
+                  "vector_format": {
+                    "enum": [
+                      "dense-bin-v1",
+                      "dense-npy-v1"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "dtype",
+                  "endianness",
+                  "encoding",
+                  "chunk_id_order"
+                ]
+              }
+            }
+          ],
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "documents": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "source_id",
+          "path"
+        ],
+        "properties": {
+          "source_id": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "start_line": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "end_line": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "file_sha256": {
+            "type": "string"
+          },
+          "chunk_sha256": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "file_chunks": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
