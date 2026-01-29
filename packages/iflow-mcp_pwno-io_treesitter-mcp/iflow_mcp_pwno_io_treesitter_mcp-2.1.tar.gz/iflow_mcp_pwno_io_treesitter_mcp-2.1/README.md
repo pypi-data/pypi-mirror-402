@@ -1,0 +1,157 @@
+# Tree-sitter MCP Server & CLI
+
+An MCP server and CLI that uses Tree-sitter to parse and analyze code.
+
+## What it does
+
+- Parse files and get their AST
+- Extract functions and variables
+- Build call graphs
+- Find where functions/variables are used
+- Run custom Tree-sitter queries
+- List imports/includes
+- Extract source code for specific line/column ranges
+- Use as a standalone CLI or as an MCP server for Claude Desktop
+
+## Install
+
+Requires Python 3.10+.
+
+```bash
+# Install directly
+uv pip install treesitter-mcp
+
+# Or install a specific version
+uv pip install treesitter-mcp==2.1
+
+# Or clone and install
+git clone https://github.com/pwno-io/treesitter-mcp.git
+cd treesitter-mcp
+uv pip install -e .
+```
+
+This installs both `treesitter-mcp` and `ts-cli` entry points.
+
+Or run without installing:
+```bash
+uvx treesitter-mcp
+```
+
+## Running
+
+### As an MCP server (default)
+For use with Claude Desktop or other MCP clients:
+```bash
+treesitter-mcp
+```
+
+See `docs/MCP_USAGE.md` for how to configure.
+
+### Standalone CLI (ts-cli)
+Run analysis directly from the terminal:
+```bash
+ts-cli path/to/file.py
+ts-cli path/to/file.py --ast --max-depth 2
+ts-cli path/to/file.py --find-function main --include-source
+ts-cli --supported-languages
+```
+
+Use `--output-file` to write results to JSON files instead of stdout.
+
+### HTTP mode
+For testing or manual use:
+```bash
+treesitter-mcp --http --port 8000 --host 127.0.0.1
+```
+
+### Limiting tools
+Only expose certain tools with `--tools`:
+```bash
+treesitter-mcp --http --port 8000 --tools treesitter_analyze_file,treesitter_get_ast
+```
+
+Or via URL query param: `http://127.0.0.1:8000?tools=treesitter_analyze_file,treesitter_get_ast`
+
+ Tools available:
+ - `treesitter_analyze_file` - Basic analysis
+ - `treesitter_get_ast` - Full AST
+ - `treesitter_get_call_graph` - Function calls
+ - `treesitter_find_function` - Find function definitions
+ - `treesitter_find_variable` - Find variables
+ - `treesitter_get_source_for_range` - Extract source code for a range
+ - `treesitter_get_supported_languages` - What's supported
+ - `treesitter_get_node_at_point` - AST node at a line/column
+ - `treesitter_get_node_for_range` - AST node for a range
+ - `treesitter_cursor_walk` - Walk tree with context
+ - `treesitter_run_query` - Custom Tree-sitter queries
+ - `treesitter_find_usage` - Find symbol usages
+ - `treesitter_get_dependencies` - Extract imports/includes
+
+If you don't specify `--tools`, everything is exposed.
+
+### Writing output to file
+
+All tools support an optional `output_file` parameter. When provided, the tool
+writes its result directly to the specified file (as pretty-printed JSON) instead
+of returning it. This is useful for large outputs like ASTs that could cause
+context overload in agents.
+
+Example:
+```python
+# Returns result to file, minimal response to agent
+treesitter_get_ast(file_path="large_file.py", output_file="~/output/ast.json")
+# Returns: {"status": "written", "output_file": "/home/user/output/ast.json", "bytes_written": 123456}
+```
+
+The tool will:
+- Automatically create parent directories if they don't exist
+- Expand `~` to your home directory
+- Warn (to stderr) if overwriting an existing file
+- Return a minimal confirmation dict on success, or an error dict if writing fails
+
+### Including source code in results
+
+The `treesitter_find_function` and `treesitter_find_variable` tools support an
+optional `include_source` parameter. When set to `True`, each matched symbol
+includes its source code in the result:
+
+```python
+treesitter_find_function(file_path="server.py", name="main", include_source=True)
+# Returns: {"query": "main", "matches": [{"name": "main", ..., "source": "def main():\n    ..."}]}
+```
+
+## Language support
+
+| Language | analyze_file | get_ast | get_call_graph | find_function | find_variable | find_usage | get_dependencies |
+|----------|--------------|---------|----------------|---------------|---------------|------------|------------------|
+| C        | ✅          | ✅     | ✅            | ✅           | ✅           | ✅        | ✅              |
+| C++      | ✅          | ✅     | ✅            | ✅           | ✅           | ✅        | ✅              |
+| Python   | ✅          | ✅     | ✅            | ✅           | ✅           | ✅        | ✅              |
+| JavaScript | ✅        | ✅     | ✅            | ✅           | ✅           | ✅        | ✅              |
+| TypeScript | ✅        | ✅     | ✅            | ✅           | ✅           | ✅        | ✅              |
+| Go       | ✅          | ✅     | ✅            | ✅           | ✅           | ✅        | ✅              |
+| Java     | ✅          | ✅     | ✅            | ✅           | ✅           | ✅        | ✅              |
+| PHP      | ✅          | ✅     | ✅            | ✅           | ✅           | ✅        | ✅              |
+| Rust     | ✅          | ✅     | ✅            | ✅           | ✅           | ✅        | ✅              |
+| Ruby     | ✅          | ✅     | ✅            | ✅           | ✅           | ✅        | ✅              |
+
+### File extensions
+
+| Language | Extensions |
+|----------|------------|
+| C        | `.c` |
+| C++      | `.cpp`, `.cc`, `.cxx`, `.h`, `.hpp` |
+| Python   | `.py` |
+| JavaScript | `.js`, `.jsx`, `.mjs`, `.cjs` |
+| TypeScript | `.ts`, `.tsx`, `.cts`, `.mts` |
+| Go       | `.go` |
+| Java     | `.java` |
+| PHP      | `.php`, `.phtml` |
+| Rust     | `.rs` |
+| Ruby     | `.rb` |
+
+## Docs
+
+- [API Reference](docs/API.md)
+- [MCP Server Usage](docs/MCP_USAGE.md)
+- [Architecture](docs/ARCHITECTURE.md)
