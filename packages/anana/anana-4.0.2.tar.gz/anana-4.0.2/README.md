@@ -1,0 +1,841 @@
+<div align="center">
+    <img src="./logo.webp" alt="CloudX Logo" width="200" height="200">
+    <h1>cloudx</h1>
+    <p>Fast, simple, and lightweight ASGI framework for building cloud-native microservices.</p>
+</div>
+
+<p align="center">
+  <img src="./VERSION-badge.svg" alt="Version">
+</p>
+
+---
+
+# Description
+
+cloudx is a lightweight, fast ASGI framework for building web and serverless microservices in Python. It focuses on developer ergonomics, small cold starts, and a clean, decorator-based API for HTTP and AWS event sources (API Gateway, Function URL, ALB, SQS, S3, DynamoDB Streams, EventBridge).
+
+## Key Features
+
+- Minimal, fast core with no heavy dependencies.
+- Small Lambda cold starts and predictable performance.
+- Unified HTTP and AWS event handling via decorators.
+- Built-in router with dynamic path params and query parsing.
+- Convenient `request` proxy and ergonomic `Response` helper.
+- Partial batch handling and optional parallelism for SQS.
+- DynamoDB Streams payloads flattened to plain Python types.
+- CLI to scaffold and manage projects.
+
+## Lambda Sidecar
+
+cloudx ships a minimal, dependency-free AWS Lambda extension that lets handlers enqueue
+cleanup or follow-up work to run *after* a response is returned.
+
+- **Minimal cold start impact**: only stdlib imports, lazy activation, and fast no-op
+ behaviour when running outside Lambda.
+- **Predictable ordering**: async callbacks bind to the Lambda `requestId` and execute FIFO
+  once AWS publishes `platform.runtimeDone` for that invocation.
+- **Safety under pressure**: soft deadlines keep post-response work bounded; unfinished
+  tasks are re-queued instead of blocking shutdown.
+- **Operational clarity**: extensive docstrings, type hints, and logging hooks make the
+  control flow easy to understand and extend.
+
+How it works:
+
+1. Register with the Lambda Runtime API (`/extension/register`).
+2. Subscribe to platform telemetry filtered to `platform.runtimeDone`.
+3. Run a tiny HTTP server that receives telemetry and drains per-request task queues.
+4. Expose `start_async_task(..., request_id=...)` so handlers can schedule post-response work.
+5. Provide a `@teardown` decorator that registers callbacks; once callbacks exist, the Lambda
+   handler automatically activates the sidecar on the next invocation.
+
+When the extension cannot start (for example in local development), tasks run inline so the
+behaviour remains deterministic.
+
+## Table of Contents
+
+- [Installation](#install)
+- [Quickstart](#quickstart)
+- [HTTP Routing](#http-routing)
+- [AWS Integrations](#aws-integrations)
+- [Request Object](#request)
+- [Response Object](#response)
+- [Dependency Injection](#dependency-injection)
+- [Typed Models](#typed-models)
+- [Async & Parallel Execution](#async-parallel)
+- [CLI Commands](#cloudx-commands)
+- [Plugins](#cloudx-boilerplate-plugins)
+- [Environment Variables](#environment-variables)
+- [Development](#development)
+- [AWS Events](./AWS-Events.md)
+
+---
+
+## Installation <a id="install"></a>
+
+### Install or Upgrade
+
+- **macOS / Linux**
+  ```bash
+  python3 -m pip install anana
+  python3 -m pip install --upgrade anana
+  ```
+- **Windows**
+  ```powershell
+  python -m pip install anana
+  python -m pip install --upgrade anana
+  ```
+
+---
+
+## Quickstart <a id="quickstart"></a>
+
+Create an app and a simple route:
+
+```python
+from cloudx import x, request, Response
+
+@x.get("/hello")
+def hello():
+    return {"message": "Hello, World!"}
+
+# For AWS Lambda deployments
+def handler(event, context):
+    return x.aws_lambda_handler(event, context)
+```
+
+Run locally with any ASGI server by wrapping `x` (e.g., uvicorn), or follow the tests for end-to-end patterns.
+
+ 
+
+## HTTP Routing <a id="http-routing"></a>
+
+```python
+from cloudx import x
+
+@x.route('/hello', methods=['GET'])
+def hello():
+    return {'message': 'Hello, World!'}
+```
+
+> `x.route(path, methods=None, **extra)` registers a route in the core ASGI app.
+
+- **Parameters**
+  - `path` (`str`): Route path (supports `{param}` placeholders such as `/items/{item_id}`).
+  - `methods` (`Union[str, List[str]]`): Allowed HTTP methods (e.g., `"GET"`, `"POST"`).
+  - `extra` (`dict`): Additional metadata attached to the route. The `trigger` key, when provided, becomes `request.source`.
+- **Payload (HTTP requests)**
+  - `request.method`
+  - `request.path` plus `request.path_params`
+  - `request.query_params`
+  - `request.headers`
+  - Body helpers: `request.json`, `request.text`, `request.form`, `request.body`
+  - `request.url`, `request.content_length`, `request.content_type`
+
+Decorator shorthands (`x.get`, `x.post`, `x.put`, `x.delete`, `x.patch`, `x.options`, `x.head`) call through to `x.route` with the corresponding HTTP verb pre-selected.
+
+## AWS Integrations <a id="aws-integrations"></a>
+
+All AWS decorators register handlers under the hood. Configure your AWS service to invoke the Lambda that calls `x.aws_lambda_handler(event, context)`.
+
+> `x.aws_lambda_handler(event, context)` adapts incoming AWS events into ASGI requests via the AWS middleware and returns an AWS-compatible response. API Gateway / Function URL events become HTTP responses; SQS/S3/DynamoDB/EventBridge invocations honor the middleware's batch semantics.
+
+### SQS
+
+Registers a handler for SQS messages.
+
+- **Parameters**
+  - `names` (`Union[str, List[str]]`): Queue name(s). Supports wildcards such as `my-queue-*`.
+  - `batch` (`bool`): When `True`, enables partial batch responses (failed records populate `batchItemFailures`).
+  - `parallel` (`bool`): When `True`, process multiple records concurrently.
+- **Payload**
+  - `request.source`: `aws:sqs`
+  - `request.path`: `/sqs/{queue}/`
+  - `request.method`: `POST`
+  - `request.body`: Raw SQS message body (`bytes`)
+  - `request.text`: UTF-8 `str` when body is plain text; otherwise `None`
+  - `request.json`: Parsed JSON when body is valid JSON; otherwise `None`
+  - `request.attributes`: SQS `messageAttributes`
+  - `request.metadata`: Includes the full SQS record under `event` and the Lambda `context`
+
+```python
+from cloudx import x, request, Response
+
+@x.aws.on_sqs(names=["orders-queue-*"], batch=True, parallel=False)
+def handle_sqs():
+    data = request.json or request.text
+    return True
+```
+
+> SNS integration is not implemented in this version.
+
+### **Storage Events**
+Handles object storage event notifications (**AWS S3**).
+
+- **Parameters**
+  - `buckets` (`Union[str, List[str]]`): Bucket name(s). Supports wildcards like `my-bucket-*`.
+  - `events` (`Union[str, List[str], None]`): S3 operations (e.g., `ObjectCreated`, `ObjectRemoved`). When omitted, a sensible default set is used.
+  - `parallel` (`bool`): When `True`, process multiple records concurrently.
+- **Payload**
+  - `request.source`: `aws:s3`
+  - `request.path`: `/s3/{bucket}/`
+  - `request.method`: S3 op (`ObjectCreated`, `ObjectRemoved`, `ObjectRestore`, `ReducedRedundancyLostObject`, `Replication`, `LifecycleExpiration`, `LifecycleTransition`, `IntelligentTiering`, `ObjectTagging`, `ObjectAcl`)
+  - `request.json`: `{ time, bucket, type, action, key, size, eTag, sequencer }`
+  - `request.metadata`: Includes the full S3 record under `event` and Lambda `context`
+
+```python
+from cloudx import x
+
+@x.aws.on_s3(buckets=["images-*"], events=["ObjectCreated"], parallel=True)
+async def handle_storage_event():
+    info = request.json  # { time, bucket, type, action, key, size, eTag, sequencer }
+    return True
+```
+
+### **Database Streams**
+Tracks changes in database tables (**DynamoDB Streams**).
+
+- **Parameters**
+  - `tables` (`Union[str, List[str]]`): Table name(s). Supports wildcards.
+  - `events` (`Union[str, List[str], None]`): `INSERT`, `MODIFY`, `REMOVE`. When omitted, all are enabled.
+  - `parallel` (`bool`): When `True`, process multiple records concurrently.
+- **Payload (flattened)**
+  - `request.source`: `aws:dynamodb`
+  - `request.path`: `/dynamodb/{table}/`
+  - `request.method`: `INSERT | MODIFY | REMOVE`
+  - `request.json`: `{ table, method, id, type, keys, old, new }` with DynamoDB attribute wrappers coerced to plain Python values
+  - `request.metadata`: Includes the full stream record under `event` and Lambda `context`
+
+```python
+from cloudx import x
+
+@x.aws.on_dynamoDB_stream(tables=["my_table"], events=["INSERT"], parallel=True)
+def handle_db_stream():
+    rec = request.json  # { table, method, id, type, keys, old, new } (flattened)
+    return True
+```
+
+### **Function Triggers**
+Executes logic in response to function calls **(AWS Lambda)**.
+
+- **Payload**
+  - `request.source`: `aws:lambda`
+  - `request.path`: `/lambda/{AWS_LAMBDA_FUNCTION_NAME}/`
+  - `request.method`: `POST`
+  - `request.json`: Invocation event when JSON; otherwise `None`
+  - `request.body`: Raw invocation payload (`bytes`)
+  - `request.metadata`: Full event under `event` and Lambda `context`
+
+```python
+from cloudx import x
+
+@x.aws.on_lambda_trigger()
+def handle_function():
+    return "Function triggered."
+```
+
+### **Scheduled Executions**
+Runs tasks at predefined intervals **(AWS EventBridge Scheduler)**.
+
+- **Payload**
+  - `request.source`: `aws:scheduled_event`
+  - `request.path`: `/lambda/{AWS_LAMBDA_FUNCTION_NAME}/`
+  - `request.method`: `POST`
+  - `request.json`: EventBridge `detail` dict (or `None`)
+  - `request.metadata`: Full EventBridge event under `event` and Lambda `context`
+
+```python
+from cloudx import x
+
+@x.aws.on_scheduler()
+def scheduled_task():
+    # request.json is the EventBridge "detail" (may be empty)
+    return True
+```
+
+---
+
+## Request Object <a id="request"></a>
+
+### Overview
+
+`from cloudx import request` exposes a thread-safe proxy that you can use directly inside controllers.
+
+> Represents both traditional HTTP requests (API Gateway / Function URL / ASGI) **and** event-driven invocations adapted into HTTP-like requests (SQS, S3, DynamoDB Streams, EventBridge, direct Lambda triggers).
+
+#### Common fields
+- `method`, `path`, `path_params`, `query_params`, `headers`
+- `body`, `json`, `text`, `form`
+- `url`, `content_length`, `content_type`
+- `request_id`, `metadata`, `source`, `attributes`
+
+#### Source-specific notes
+- **aws:sqs** – `request.text` or `request.json` reflect the message; `request.attributes` mirrors `messageAttributes`.
+- **aws:s3** – `request.method` records the S3 operation; `request.json` exposes `{ time, bucket, type, action, key, size, eTag, sequencer }`.
+- **aws:dynamodb** – `request.method` is `INSERT` / `MODIFY` / `REMOVE`; `request.json` contains `{ table, method, id, type, keys, old, new }` with DynamoDB wrappers converted to plain Python values.
+- **aws:lambda** – Direct invocation payload available via `request.body` / `request.json`.
+- **aws:scheduled_event** – `request.json` surfaces the EventBridge `detail` payload.
+
+#### Property reference
+
+| Attribute | Description |
+| --- | --- |
+| `method` | HTTP method or event verb (e.g., `GET`, `POST`, `ObjectCreated`, `INSERT`). |
+| `path` | Matched route path without query string. |
+| `full_path` | Path plus serialized query string (e.g., `/items?limit=10`). |
+| `headers` | Case-insensitive header map (keys normalized to lowercase). |
+| `body` | Raw request payload as `bytes` (may be binary). |
+| `text` | UTF-8 body text when applicable; otherwise `None`. |
+| `form` | Parsed URL-encoded form data (`dict[str, str | list[str]]`) or `None`. |
+| `query_params` | Parsed query parameters as a dict. |
+| `path_params` | Route placeholder values captured from the path. |
+| `json` | Parsed JSON body as a dict; `None` when not JSON. |
+| `url` | Full request URL (scheme, host, path, query). |
+| `content_length` | Content-Length as an `int` (defaults to `0` when missing/invalid). |
+| `content_type` | Content-Type header value or empty string. |
+| `request_id` | AWS request id when available; otherwise generated id or `"N/A"`. |
+| `metadata` | Extra metadata describing the invocation (source, event, context). |
+| `source` | Source identifier (e.g., `aws:sqs`, `aws:s3`, `aws:dynamodb`, `aws:lambda`). |
+| `attributes` | Event-specific attributes; for SQS this is `messageAttributes`. |
+
+## Response Object <a id="response"></a>
+
+`from cloudx import Response` produces ASGI-compatible responses.
+
+- Infers `content_type` from `content` when omitted (`dict`/`list`/`int`/`float`/`bool`/`Decimal`/`None` → `application/json`; `bytes` → `application/octet-stream`; `str` → `text/plain`).
+- Serializes payloads to `bytes` based on the chosen `content_type` and ensures a `Content-Type` header is present.
+
+#### Constructor signature
+
+```python
+Response(
+    content: Any = None,
+    status_code: int = 200,
+    headers: Optional[Dict[str, str]] = None,
+    content_type: Optional[str] = None,
+)
+```
+
+#### Property reference
+
+| Attribute | Description |
+| --- | --- |
+| `status` | Current HTTP status code. |
+| `status_code` | Get or set the HTTP status. |
+| `status_line` | Formatted status line (e.g., `"200 OK"`). |
+| `content` | Raw content value before serialization. |
+| `body` | Serialized response body as `bytes` (respects `content_type`). |
+| `text` | Text representation of the content (`str`, pretty JSON, numbers, booleans, decoded bytes, or empty string for `None`). |
+| `json` | JSON-friendly view of the content (dict/list/parsed string/converted primitives where possible). |
+| `headers` | Dict of string HTTP headers. |
+| `add_header` | Append a single header. |
+| `add_headers` | Merge multiple headers. |
+| `content_type` | Get or set the Content-Type used for serialization and headers. |
+| `content_length` | Length of the serialized body in bytes. |
+| `description(status)` | Static helper that returns the HTTP status text for a code. |
+
+#### Error helpers
+
+- `ClientErrors`
+  - `handle_4xx(scope, receive, send, ex=None, error_code=500)`: Send a plain-text error response.
+  - `method_not_allowed(allowed_methods)`: Returns a 405 response with an `Allow` header.
+  - `not_found()`: Returns a 404 response.
+- `ServerErrors`
+  - `handle_5xx(scope, receive, send, ex=None, error_code=500)`: Send a plain-text 5xx response.
+
+#### Usage
+
+```python
+from cloudx import Response
+
+@x.get("/health")
+def health():
+    return Response({"status": "ok"})
+
+@x.get("/raw")
+def raw_text():
+    return Response("hello", content_type="text/plain")
+```
+
+---
+
+## Dependency Injection <a id="dependency-injection"></a>
+
+cloudx ships with a lightweight service container (`cloudx.utils`) that supports bootstrapping, dependency resolution, and environment-aware profiles.
+
+### Container & Profiles
+
+- `Container.profiles` returns the list of profiles parsed from the `PROFILE` environment variable (comma/semicolon separated, defaults to empty).
+- `Container.profile` exposes the first configured profile for backwards compatibility.
+- Services are registered lazily and resolved on demand; queued bootstraps run the first time a service is resolved.
+- Singleton services remain cached for subsequent resolutions.
+
+### Binding services
+
+Use `bind(identifier, target, singleton=False, override=False, *args, **kwargs)` to register classes, factories, or instances.
+
+- `identifier` (`str`): Lookup key for later injection.
+- `target`: Class, factory function, or pre-built instance.
+- `singleton`: Cache and reuse the instance.
+- `override`: Allow rebinding an existing identifier.
+- Extra positional/keyword arguments feed class constructors or factories.
+
+### Bootstrapping
+
+Decorate configuration helpers with `@bootstrap(profile: str | None = None, immediate: bool = False)`.
+
+- Bootstraps defer until the first service resolution, unless `immediate=True` (execute immediately).
+- Limit a bootstrap to a specific environment profile by passing `profile="dev"` (matched against `Container.profiles`).
+
+```python
+from cloudx.utils import bind, bootstrap
+
+@bootstrap()
+def configure_services():
+    bind("db", Database, singleton=True)
+
+@bootstrap(profile="test", immediate=True)
+def configure_test_services():
+    bind("config", lambda: "stub", singleton=True, override=True)
+```
+
+> `mock = bootstrap(immediate=True)` gives you a one-liner for test overrides; the decorated helper runs as soon as the module loads so stubbed services are ready before anything resolves them.
+> `mock_env` wakes up only when the environment variable you specify matches the expected value (for example `@mock_env("STAGE", "development")`). When the condition holds it appends the `MOCK` profile to `PROFILE`, refreshes the container's active profiles, and executes immediately—making moto-backed AWS mocks or other full test environments available without touching production bootstraps.
+
+```python
+import os
+from cloudx.utils import mock_env
+
+@mock_env("STAGE", "development")
+def configure_mocked_aws():
+    from moto import mock_aws
+    import boto3
+
+    mock_aws().start()
+
+    dynamodb = boto3.client("dynamodb", region_name="us-east-1")
+    sns = boto3.client("sns", region_name="us-east-1")
+    sqs = boto3.client("sqs", region_name="us-east-1")
+
+    table_name = "local-example-table"
+    try:
+        dynamodb.describe_table(TableName=table_name)
+    except dynamodb.exceptions.ResourceNotFoundException:
+        dynamodb.create_table(
+            TableName=table_name,
+            AttributeDefinitions=[
+                {"AttributeName": "pk", "AttributeType": "S"},
+                {"AttributeName": "sk", "AttributeType": "S"},
+            ],
+            KeySchema=[
+                {"AttributeName": "pk", "KeyType": "HASH"},
+                {"AttributeName": "sk", "KeyType": "RANGE"},
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
+
+    retry_queue_url = sqs.create_queue(QueueName="local-retry-queue")["QueueUrl"]
+    success_topic_arn = sns.create_topic(Name="local-success-topic")["TopicArn"]
+    failure_topic_arn = sns.create_topic(Name="local-failure-topic")["TopicArn"]
+
+    for topic_arn in (success_topic_arn, failure_topic_arn):
+        queue_arn = sqs.get_queue_attributes(
+            QueueUrl=retry_queue_url,
+            AttributeNames=["QueueArn"],
+        )["Attributes"]["QueueArn"]
+        sns.subscribe(TopicArn=topic_arn, Protocol="sqs", Endpoint=queue_arn)
+```
+
+The decorator ensures AWS stubs are online before services resolve, and other bootstraps can match the `MOCK` profile when they need the same environment.
+
+### Injecting dependencies
+
+`@inject(*service_names)` injects services into functions, methods, or classes. Parameters that are missing (or `None`) are filled by positional service names or, when omitted, by type annotation.
+
+```python
+from cloudx.utils import inject
+
+@inject("db")
+def handler(db, payload):
+    return db.save(payload)
+
+@inject
+class Controller:
+    def __init__(self, service: "MyService"):
+        self.service = service
+```
+
+---
+
+## Typed Models <a id="typed-models"></a>
+
+`BaseModel` provides a minimal, typing-aware data container that mirrors the shape of JSON payloads while keeping business logic in Python classes.
+
+- Coerces keyword arguments to the types declared by annotations (including nested `BaseModel` subclasses).
+- Supports optional fields, lists, and dictionaries without additional boilerplate.
+- Exposes `from_dict`, `to_dict`, and `to_json` helpers for easy conversion to and from plain data structures.
+
+```python
+from cloudx.utils import BaseModel
+
+class Payment(BaseModel):
+    id: int
+    amount: float
+    metadata: dict[str, str] | None = None
+
+class Receipt(BaseModel):
+    payment: Payment
+    tags: list[str]
+
+payload = Receipt.from_dict({
+    "payment": {"id": 7, "amount": "12.50"},
+    "tags": ["invoice", "export"],
+})
+
+assert payload.payment.amount == 12.5
+assert payload.to_dict()["payment"]["id"] == 7
+```
+
+---
+
+## Async & Parallel Execution <a id="async-parallel"></a>
+
+### Overview
+
+cloudx provides an `asyncify` decorator to handle parallel execution of synchronous and asynchronous functions efficiently.
+
+### **Convert a Blocking Function to Async**
+Ensures parallel processing of blocking operations.
+
+```python
+from cloudx import x
+
+@x.aws.on_sqs(names='test_sqs', batch=True, parallel=True)
+@asyncify
+def sqs_handler():
+    import time
+    time.sleep(1)  # Simulating a blocking operation
+    return "Processed"
+```
+
+---
+
+## CLI Commands <a id="cloudx-commands"></a>
+
+### Overview
+
+cloudx provides a command-line interface (CLI) to manage and create cloud-based projects efficiently.
+
+### **Available Commands**
+
+#### `help`
+Displays brief help information about the CLI tool.
+
+```sh
+cloudx help
+```
+
+#### `readme`
+Shows detailed help information with usage examples.
+
+```sh
+cloudx readme
+```
+
+#### `version`
+Displays the current version of cloudx.
+
+```sh
+cloudx version
+```
+
+#### `plugins`
+Lists all installed plugins.
+
+```sh
+cloudx plugins
+```
+
+#### `init`
+Creates a new project boilerplate (optionally followed by a plugin hook).
+
+```sh
+cloudx init
+cloudx init sample  # runs project scaffold then plugin "sample"
+```
+
+#### `add`
+Adds a new service to an existing project (optionally followed by a plugin hook).
+
+```sh
+cloudx add
+cloudx add sample  # runs service scaffold then plugin "sample"
+```
+
+See [Plugins](#cloudx-boilerplate-plugins) for installation instructions and guidelines on
+building custom extensions.
+
+---
+## Plugins <a id="cloudx-boilerplate-plugins"></a>
+
+### Installing Plugins
+
+cloudx supports plugins that extend its functionality.
+
+- **macOS / Linux**
+  ```bash
+  python3 -m pip install <plugin_name>
+  python3 -m pip install --upgrade <plugin_name>
+  ```
+- **Windows**
+  ```powershell
+  python -m pip install <plugin_name>
+  python -m pip install --upgrade <plugin_name>
+  ```
+
+### Creating a Plugin
+
+cloudx discovers plugins via Python entry points registered under the
+`cloudx.boilerplate.plugins` group.
+
+```
+myplugin/
+  pyproject.toml
+  myplugin/
+    __init__.py
+    cli.py
+```
+
+`pyproject.toml`
+
+```toml
+[project]
+name = "cloudx-sample-plugin"
+version = "0.1.0"
+
+[project.entry-points."cloudx.boilerplate.plugins"]
+sample = "myplugin.cli:SamplePlugin"
+```
+
+`myplugin/cli.py`
+
+```python
+class SamplePlugin:
+    def name(self) -> str:
+        return "sample"
+
+    def init(self) -> bool:
+        print("Running sample init hook")
+        return True
+
+    def add(self) -> bool:
+        print("Running sample add hook")
+        return True
+```
+
+After installation, `cloudx init sample` and `cloudx add sample` execute the default
+scaffolding followed by the plugin's custom handlers.
+
+---
+
+## Environment Variables <a id="environment-variables"></a>
+
+- `PROFILE`: optional bootstrap profile used in tests.
+- `AWS_LAMBDA_FUNCTION_NAME`: used to build Lambda paths in metadata.
+- `RUN_ALL_TEST`: when set (even to an empty string) running the boilerplate entry
+  point triggers the full unit test suite via `make test`.
+
+---
+
+## Development <a id="development"></a>
+
+### Clone the repository:
+```bash
+git clone https://github.com/cloudx-oss/cloudx.git
+cd cloudx
+```
+
+### Using the Makefile (Recommended):
+
+```bash
+make install        # venv + deps
+make install-dev    # dev deps
+make test           # run tests
+make clean          # clean
+make help           # list commands
+```
+
+### Manual Setup (Alternative):
+
+```bash
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt -r requirements-dev.txt
+```
+
+---
+
+## Requirements
+
+- Python 3.7 or higher
+
+---
+
+## Useful Links & Credits
+
+cloudx is inspired by the following projects:
+
+- [Powertools for AWS Lambda](https://docs.powertools.aws.dev/lambda/python/latest/)
+- [Lambda decorators](https://github.com/dschep/lambda-decorators)
+- [Chalice](https://github.com/aws/chalice)
+- [Zappa](https://github.com/zappa/Zappa)
+- [Jeffy](https://github.com/serverless-operations/jeffy)
+
+
+## Code Style Guidelines for open spec:
+---------------
+1. alwayes create tests
+2. after creating the code.... give the commit senetence 
+
+## Code Generation
+- Use clean, readable code without emoji decorations
+- Prefer explicit over implicit
+- Follow language-specific conventions
+
+## Documentation
+- Write clear, concise, and accurate documentation
+- Focus on clarity and technical accuracy
+- Keep explanations concise
+- Focus on diagrams and flows
+
+## Writing Quality
+- Proofread all documentation for spelling and grammar
+- Use consistent terminology throughout
+- Run spell-check before committing changes
+- Maintain professional technical writing standards
+
+---
+alwaysApply: true
+---
+
+# Component Verification Rules
+
+## Purpose
+
+This file contains mandatory rules for verifying API endpoints, flows, and service interactions against actual component code before documenting or reviewing them.
+
+## Component Verification (MANDATORY)
+
+**CRITICAL**: Before documenting or reviewing any API flow, endpoint, or service interaction, you MUST verify against actual component code:
+
+### 1. Always Verify Against Actual Component Code
+
+- **Start by checking project structure**: Review `README.md` files and project foundation/package structures to understand how the component is organized
+- **Check foundation packages**: Many components use `cloudx` and `cloudx-extensions` packages (located in `foundation/packages/`) which define standard decorator patterns:
+  - `cloudx`: Provides `@x.route()`, `@x.get()`, `@x.post()`, etc. decorators
+  - `cloudx-extensions`: Provides `@skycashHttpEventHandler()` and `@skycashSQSHandler()` decorators that wrap cloudx decorators
+  - Check `pyproject.toml` or `requirements.txt` to see which foundation packages are used
+- **Common endpoint locations** (varies by developer/project structure):
+  - `components/<service-name>/apps/<app-name>/src/controllers.py` - Most common Python structure
+  - `components/<service-name>/app.py` - Root-level application file
+  - `components/<service-name>/apps/<app-name>/src/routes.py` - Alternative routing files
+  - `components/<service-name>/apps/<app-name>/src/handlers.py` - Handler-based structure
+  - `components/<service-name>/src/controllers.py` - Flat structure
+  - `components/mobile-skycash/lib/src/features/<feature>/data/*_api.dart` - Mobile app API definitions
+  - `components/mobile-skycash/lib/src/features/<feature>/data/*_repository.dart` - Mobile app repository with base URLs
+- **Search strategy**: If endpoints aren't in expected locations, search for:
+  - **CloudX framework decorators** (foundation package `cloudx`):
+    - `@x.route(path, methods)` - Core route decorator
+    - `@x.get(path)`, `@x.post(path)`, `@x.put(path)`, `@x.delete(path)`, `@x.patch(path)`, `@x.options(path)`, `@x.head(path)` - HTTP method shortcuts
+    - `@x.aws.on_sqs(...)`, `@x.aws.on_s3(...)`, `@x.aws.on_dynamodb_stream(...)`, `@x.aws.on_lambda_trigger()`, `@x.aws.on_scheduler()` - AWS event handlers
+  - **CloudX Extensions decorators** (foundation package `cloudx-extensions`):
+    - `@skycashHttpEventHandler(path="/...", methods=[...], guards=[...], response_code=...)` - Wraps `@x.route()` with guards and response handling
+    - `@skycashSQSHandler(names=[...], batch=...)` - Wraps `@x.aws.on_sqs()` with context and timing
+  - **Other common patterns**:
+    - `@app.route`, `@router.get/post/put/delete` - Flask/FastAPI patterns
+    - HTTP method decorators: `@GET`, `@POST`, `@PUT`, `@DELETE` - Retrofit/other frameworks
+    - Route definitions: `route()`, `router.add_route()`, `app.add_url_rule()`
+- Check `template.yaml` files for SSM parameter configurations and routing
+- Review API contract files (`docs/api-contract.yaml`, `docs/api-contract.yml`, OpenAPI specs) when available
+- Check `README.md` files for endpoint documentation and project structure notes
+
+### 2. Verify Endpoint Paths
+
+- External paths (through Skycash-Connect): Check mobile app base URLs (`app_config.dart`, `*_repository.dart`) and endpoint definitions (`*_api.dart`)
+- Internal paths: Verify against actual controller routes (check all possible locations above)
+- SSM routing: Check `template.yaml` for SSM parameter paths and destination URLs
+- Ensure path segments match exactly (including `/v1/`, service names, etc.)
+
+### 3. Verify Routing Patterns
+
+- Skycash-Connect pattern: `/{context}/{domain_name}/{service}/<proxy>`
+- SSM lookup pattern: `/connect-gateway/{domain}/{context}/{domain_name}/{service}`
+- Internal service URLs: `https://{service}.{stage}.internal/{path}`
+
+### 4. Verify Response Structures
+
+- Check controller return values
+- Match response codes (200, 400, 401, etc.)
+- Verify response data structures match actual implementations
+
+### 5. Package Verification and Dependency Analysis
+
+**Understanding which packages a component uses is critical for finding endpoints. Note: Foundation packages (`cloudx` and `cloudx-extensions`) are ONLY used by Python projects.**
+
+- **Check dependency files** to identify foundation packages (Python projects only):
+  - Check `pyproject.toml` (modern) or `requirements.txt` (legacy) for dependencies
+  - Look for `cloudx` and `cloudx-extensions` versions
+  - Check `[project.dependencies]` section in `pyproject.toml`
+  - Verify package versions match expected decorator patterns
+  
+- **Identify foundation package usage** (Python projects only):
+  - **`cloudx`** (foundation package): Core ASGI framework
+    - Location: `foundation/packages/cloudx/`
+    - Provides: `@x.route()`, `@x.get()`, `@x.post()`, `@x.aws.on_sqs()`, etc.
+    - Check version in `VERSION` file or `pyproject.toml`
+    - Read `foundation/packages/cloudx/README.md` for decorator patterns
+  - **`cloudx-extensions`** (foundation package): Skycash-specific extensions
+    - Location: `foundation/packages/cloudx-extensions/`
+    - Provides: `@skycashHttpEventHandler()`, `@skycashSQSHandler()`, guards, context helpers
+    - Check version in `VERSION` file or `pyproject.toml`
+    - Read `foundation/packages/cloudx-extensions/README.md` for usage examples
+  
+- **Verify package imports** in Python component code:
+  - Search for `from cloudx import x` → indicates use of core cloudx decorators
+  - Search for `from cloudx_extensions.handlers import` → indicates use of Skycash extensions
+  - Search for `from cloudx_extensions.config import` → indicates use of configuration helpers
+  - Search for `from cloudx_extensions.exceptions import` → indicates use of Skycash exceptions
+  
+- **Understand package structure**:
+  - Foundation packages are located in `foundation/packages/` and are Python-only
+  - Each foundation package has its own `README.md` with usage examples
+  - Check `foundation/packages/<package-name>/cloudx/` or `foundation/packages/<package-name>/cloudx_extensions/` for source code
+  - Review package tests in `foundation/packages/<package-name>/tests/` for usage examples
+  
+- **For non-Python projects**:
+  - **Flutter/Dart projects**: Check `pubspec.yaml` for HTTP client packages (`dio`, `retrofit`, `http`)
+  - **Node.js/JavaScript projects**: Check `package.json` (if used) - not currently in this architecture repo
+
+### 6. Searching for Endpoints When Structure Varies
+
+- Use codebase search tools to find route definitions, decorators, or HTTP method handlers
+- **Check foundation packages**: Look for imports from `cloudx` or `cloudx_extensions` to identify which decorator patterns are used:
+  - `from cloudx import x` → Look for `@x.route()`, `@x.get()`, `@x.post()`, etc.
+  - `from cloudx_extensions.handlers import skycashHttpEventHandler` → Look for `@skycashHttpEventHandler()`
+  - `from cloudx_extensions.handlers import skycashSQSHandler` → Look for `@skycashSQSHandler()`
+- Check project foundation/package structures: Look for `pyproject.toml`, `package.json`, `pubspec.yaml` to understand project organization and dependencies
+- Review component `README.md` files for architecture notes and endpoint locations
+- Check for shared/common routing modules or base classes that might define endpoints
+- Look for test files (`test_*.py`, `*_test.dart`) which often reference endpoints and can reveal their locations
+- Check `foundation/packages/cloudx/README.md` and `foundation/packages/cloudx-extensions/README.md` for decorator usage examples
+
+### 7. When Reviewing Documentation
+
+- If endpoints, paths, or flows are mentioned, verify them against component code
+- Flag any discrepancies between documentation and actual implementation
+- Suggest corrections based on verified component code
+- If endpoint location is unclear, document the search process used to find it
+
+## Golden Rule
+
+**Never document endpoints or flows without verifying against actual component code first.**
