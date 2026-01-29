@@ -1,0 +1,290 @@
+import logging
+import signal
+import threading
+import webbrowser
+from threading import Thread
+from time import sleep, time
+from typing import Callable
+
+from flask import Flask
+from libsrg_log2web.LoggerGUIProxy import LogOps, LOG_OP_FMT_STRING
+"""
+This module does not import the user's Flask application module or the user's Main module.
+The user's Flask application can include the Log2Web module.
+The user's Main module must import (and instantiate) the user's FlaskApp module.
+
+The User's Main module must connect the FlaskApp module to the Log2Web module via a Bridge object.
+
+As general guidance, attempting to log within the Log2Web module may cause infinite recursion.
+"""
+
+status_color = {
+    logging.DEBUG: 'green',
+    logging.INFO: 'blue',
+    logging.WARNING: 'orange',
+    logging.ERROR: 'red',
+    logging.CRITICAL: 'magenta'
+}
+
+
+class ThreadLogWatcher:
+    """
+    ThreadLogWatcher is an object that receives log messages from a given thread and retains information for display.
+    """
+
+    def __init__(self, record0: logging.LogRecord):
+        self.thread_id: int = record0.thread
+        self.live = True
+        self.time_of_death = None
+        self.record: logging.LogRecord = record0
+        self.fg = 'green'
+        self.bg = 'white'
+        self.worst = logging.DEBUG
+        self.latest = logging.DEBUG
+        self.tname = record0.threadName
+        self.msg = "No message yet"
+        self.args0 = record0.args
+        self.updated: bool = False
+        if len(self.args0) > 0 and isinstance(self.args0[0], LogOps):
+            print(f"created with OP {self.args0[0].name=} {type(self.args0[0])=}")
+
+    def process_log_record(self, record: logging.LogRecord):
+        # print(f"{self.thread_id} {record.getMessage()} {record.message=} {type(record.message)=} {record.args=}")
+        self.record = record
+        self.msg = record.msg
+        self.worst = max(self.worst, record.levelno)
+        self.latest = record.levelno
+        self.tname = record.threadName
+        self.updated = True
+
+    # noinspection PyUnreachableCode
+    def process_log_op(self, op: LogOps, record: logging.LogRecord, *args):
+        # print(f"PROC OP {self.thread_id}  {op=} {type(op)=} {args=}")
+        self.record = record
+        match op:
+            case LogOps.FG_COLOR:
+                self.fg = args[1]
+            case LogOps.BG_COLOR:
+                self.bg = args[1]
+            case LogOps.NEW_THREAD:
+                print(f"NEW_THREAD thread {self.thread_id} got exit OP {op=} {args=}")
+                pass  # no action, but expected
+            case LogOps.THREAD_EXIT:
+                self.live = False
+                self.time_of_death = time()
+                print(f"THREAD_EXIT {self.thread_id} got exit OP {op=} {args=}")
+            case _:
+                # noinspection PyUnreachableCode
+                print(f"Unknown OP {op=} {args=}")
+                pass
+        # print(f"PROC OP results {self.thread_id}  {self.fg=} {self.bg=}")
+
+    # noinspection PyUnusedLocal
+    def terminated(self, op: LogOps, *args):
+        # print(f"TERMINATED {self.thread_id} OP {op.name=} {type(op)=}")
+        self.live = False
+        self.time_of_death = time()
+
+    def time_dead(self, now: float) -> float | None:
+        if self.live:
+            return 0
+        return now - self.time_of_death
+
+    def display_row_start(self) -> str:
+        """HTML lead in"""
+        stat_w = status_color.get(self.worst, 'violet')
+        stat_l = status_color.get(self.latest, 'violet')
+        live_fg = 'green' if self.live else 'black'
+        live_bg = 'white' if self.live else 'lightgrey'
+        busy_fg = 'green' if self.updated else 'darkgrey'
+        self.updated = False
+        out = [
+            f"<td><span style='background-color:{live_bg};color:{live_fg};'>",
+            self.tname if self.live else f"<del>{self.tname}</del>",
+            f"</span></td>",
+
+            f"<td><span style='background-color:white;color:{stat_w};'>",
+            logging.getLevelName(self.worst),
+            f"</span></td>",
+
+            f"<td><div style='background-color:white;color:{stat_l};'>",
+            logging.getLevelName(self.latest),
+            f"</div></td>",
+
+            f"<td><div style='background-color:white;color:{busy_fg};'>",
+            f"{self.record.filename}:{self.record.lineno}@{self.record.funcName}",
+            f"</div></td>",
+
+            f"<td><div style='background-color:{self.bg};color:{self.fg};'>",
+            # f"{stat_w=} {stat_l=}<br>"
+        ]
+        return '\n'.join(out)
+
+    def display_row_body(self) -> str:
+        return f"{str(self.msg)[:80]}"
+
+    @staticmethod
+    def display_row_end() -> str:
+        return "</div></td>"
+
+
+
+
+class LogWatcher(logging.Handler):
+    """
+    LogWatcher is a logging handler that can be attached to the logging subsystem to observe
+    log messages generated by all threads of the user's application.
+    It manages a collection of ThreadLogWatcher objects, one for each thread.
+    """
+
+    instance: LogWatcher = None
+
+    def __init__(self, *args, **kwargs):
+        """
+        Constructor.
+        :param args: positional arguments passed to logging.Handler
+        :param kwargs: keyword arguments passed to logging.Handler
+        """
+        super().__init__(*args, **kwargs)
+        self.kwargs = kwargs
+        logging.getLogger().addHandler(self)
+        LogWatcher.instance = self
+        self.thread_log_watchers: dict[int, ThreadLogWatcher] = {}
+        self.display_watchers: list[ThreadLogWatcher] = []
+        self.data_event = threading.Event()
+        self.mylock = threading.RLock()
+        self.listlock = threading.RLock()
+
+    def emit(self, record: logging.LogRecord) -> None:
+        """
+        Emit a record. (record is recorded to queue)
+        :param record:
+        :return:
+        """
+        if record.name == 'werkzeug':
+            return
+        with self.mylock:
+            self.data_event.set()
+
+            thread = record.thread
+            # tname = f"{record.funcName=} {record.threadName=} {record.name=} {record.filename=}"
+            watcher = self.thread_log_watchers.get(thread, None)
+            oflag = record.msg.startswith(LOG_OP_FMT_STRING) if isinstance(record.msg, str) else False
+            op = record.args[0] if (len(record.args) > 0) and oflag else None  # and (record.message == LOGOP)
+
+            # print(f"EMIT {thread} {op=} {type(op)=} {record.getMessage()} {watcher=} {tname=} {oflag=}")
+            # On termination of a thread, remove the old watcher from the dictionary (but not the list of display watchers).
+            if watcher is not None and (op in [LogOps.NEW_THREAD, LogOps.THREAD_EXIT]):
+                self.thread_log_watchers.pop(thread)
+                watcher.terminated(op)
+                return
+
+            # dont create a watcher for EXIT ops
+            if op in [LogOps.NEW_THREAD, LogOps.THREAD_EXIT]:
+                return
+
+            # if there is no watcher for the thread, create one and add to dictionary and list of display watchers.
+            if watcher is None:
+                watcher = ThreadLogWatcher(record)
+                self.thread_log_watchers[thread] = watcher
+                self.display_watchers.append(watcher)
+
+            if op is None:
+                watcher.process_log_record(record)
+            else:
+                watcher.process_log_op(op, record, *record.args)
+
+    def prepare_display_list(self) -> list[ThreadLogWatcher]:
+        # wait up to 1 second for data to arrive.
+        self.data_event.wait(timeout=1.0)
+        self.bring_out_your_dead()
+        watchers = self.display_watchers.copy()
+        if len(watchers) > 30:
+            watchers = [watcher for watcher in watchers if watcher.live]
+        return watchers
+
+    def bring_out_your_dead(self, delay: float = 5):
+        # print(f"Bringing out your dead before lock {delay=}")
+        with self.listlock:
+            # print(f"Bringing out your dead inside lock {delay=}")
+            self.data_event.clear()
+
+            now = time()
+            dead_watchers = list([watcher for watcher in self.display_watchers if watcher.time_dead(now) >= delay])
+            for watcher in dead_watchers:
+                self.display_watchers.remove(watcher)
+
+
+
+
+
+class Bridge:
+    """
+    The bridge object connects the user application and flask application.
+    All three are expected to be singletons.
+    """
+    instance: Bridge = None
+
+    def __init__(self,
+                 user_callable: Callable[[], None],
+                 flask_app: Flask,
+                 browser: bool = True,
+                 title: str = "Log2Web",
+                 headertext: str = "Data from threads",
+                 address: str = "0.0.0.0",
+                 port: int = 8080,
+                 terminate_callback: Callable[[], None] = None,
+                 ) -> None:
+        self.user_callable = user_callable
+        self.address = address
+        self.port = port
+        self.flask_app = flask_app
+        self.user_thread = Thread(target=self._run_user_in_thread, name="USER_MAIN")
+        self.terminate_callback = terminate_callback
+        Bridge.instance = self
+        self.log_watcher = LogWatcher()
+        self.browser = browser
+
+        self.title = title
+        self.headertext = headertext
+
+    """
+    The run method swaps control of the main thread to the flask application.
+    The user application starts in the main thread. Flask must run in the main thread.
+    A second thread is created to run the user_callable provided in the constructor.
+    This method does not return until the flask application exits.
+    """
+
+    def run(self):
+        self.user_thread.start()
+        self.flask_app.run(host=self.address, port=self.port)
+
+    def _run_user_in_thread(self):
+        """
+        Runs the user callable in a separate thread.
+        On completion, raises a signal to the main thread which is WebGUI to shut down.
+        :return:
+        """
+        try:
+            if self.browser:
+                # noinspection HttpUrlsUsage
+                webbrowser.open(f"http://{self.address}:{self.port}")
+            logging.getLogger().info("starting user callable")
+            self.user_callable()
+            logging.getLogger().info("user callable completed")
+            sleep(4)
+        except Exception as e:
+            logging.getLogger().exception(e)
+        finally:
+            if self.terminate_callback is not None:
+                logging.getLogger().info("Calling terminate callback")
+                try:
+                    self.terminate_callback()
+                except Exception as e:
+                    logging.getLogger().exception(e)
+            logging.getLogger().info("GUI Shutdown")
+            sleep(1)
+            signal.raise_signal(2)
+
+if __name__ == "__main__":
+    print("This module does not run as a standalone program.")
