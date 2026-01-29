@@ -1,0 +1,178 @@
+<p align="center">
+	<img src="feedflow/logo.png" alt="FeedFlow Logo" height="100" />
+</p>
+<div align="center">
+	<h1>FeedFlow MCP Server</h1>
+</div>
+
+<div align="center">
+
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/geckod22/FeedFlow?label=last%20stable)
+![Supported Python Versions](https://img.shields.io/badge/Python-3.13%20|%20or%20higher-3776AB?logo=python&logoColor=fff)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+![Pytest](https://img.shields.io/badge/Pytest-fff?logo=pytest&logoColor=000)
+![Coverage](coverage.svg) ![Tests](tests.svg)
+</div>
+
+---
+<div align="center">
+
+FeedFlow is a `stdio`-based [FastMCP](https://github.com/mcp-client/fastmcp) server designed for managing and fetching articles from RSS feeds. It allows you to add, list, and read from multiple RSS feed sources directly through MCP tool calls, using a persistent SQLite database.
+</div>
+
+---
+
+## Features
+
+- **Add & Manage RSS Feeds**: Persistently add new RSS feeds to the database.
+- **Categorize Feeds**: Assign a category and language to each feed for better organization.
+- **List Feeds**: Retrieve a list of all stored feeds, or filter them by category.
+- **Fetch Articles**: Get the latest articles from any given RSS feed URL, with summaries.
+- **SQLite**: All feed data is stored in a local SQLite database (windows: %LOCALAPPDATA%).
+- **Language Detection**: Automatically detects the language of a feed's content if not specified.
+- **Asynchronous**: Built with `asyncio`, `aiosqlite`, and `httpx` for non-blocking I/O.
+
+## Prerequisites
+
+- Python 3.13+
+- [uv](https://github.com/astral-sh/uv) (for installing dependencies from `uv.lock`)
+
+## 📦 Installation & 📋 Usage
+
+### 🚀 Quick Start (No Download Required)
+You can run FeedFlow directly without cloning the repository using `uvx`:
+```bash
+uvx --from git+[https://github.com/geckod22/FeedFlow](https://github.com/geckod22/FeedFlow) feedflow
+```
+
+### 🛠️ Developer Setup
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/geckod22/FeedFlow
+    cd FeedFlow
+    ```
+
+2.  **Install in editable mode:**
+    This project uses uv. To set up a virtual environment and install all dependencies (including test tools):
+    ```bash
+    uv sync
+	uv pip install -e .
+    ```
+
+## ⚙️ MCP Client configuration
+
+### 🚀 Quick Start (Recommended for CLI users)
+If you use Gemini CLI or other terminal-based clients, you can run FeedFlow without installation:
+
+```json
+"feedflow": {
+  "command": "uvx",
+  "args": ["--from", "git+https://github.com/geckod22/FeedFlow", "feedflow"]
+}
+```
+
+or from PyPi
+
+```json
+"feedflow": {
+  "command": "uvx",
+  "args": ["feedflow"]
+}
+```
+
+### 🔧 Standard config:
+if you cloned the repo on your machine
+
+```json
+    "feedflow": {
+		"command": "uv",
+		"args": [
+        "--directory", "full_path_to_FeedFlow_main_folder",
+        "run", "feedflow"
+    	]
+    }
+```
+| Client                 | DOC     |
+| ---------------------- | ------- |
+| Claude Desktop         | <a href="https://code.visualstudio.com/docs/copilot/customization/mcp-servers#_other-options-to-add-an-mcp-server">here</a>    |
+| Copilolt / VS Code     | <a href="https://code.visualstudio.com/docs/copilot/customization/mcp-servers#_other-options-to-add-an-mcp-server">here</a>     |
+| Cursor                 | Go to `Cursor Settings` -> `MCP` -> `New MCP Server`. Use the General config above.    |
+| Gemini CLI             | <a href="https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md#how-to-set-up-your-mcp-server">here</a>    |
+| Windsurf               | <a href="https://docs.windsurf.com/windsurf/cascade/mcp#mcp-config-json">here</a> |
+
+## 🛠️ Available Tools & Resources
+
+### 📦 Resources
+
+- **`feeds://feeds`**: Returns a list of all configured RSS feeds.
+- **`feeds://categories`**: Returns a list of all unique feed categories.
+- **`feeds://feeds/{category}`**: Returns a list of RSS feeds filtered by a specific category.
+
+### 💬 Prompts
+
+- **`available_feeds_categories`**: Returns a list of all unique feed categories. 
+
+### 🔧 Tools
+
+#### `add_feed`
+Adds a new RSS feed to the database.
+
+- **Parameters:**
+  - `url` (str, required): The URL of the RSS feed.
+  - `name` (str, required): A descriptive name for the feed.
+  - `category` (str, optional): The category for the feed (default: `General`).
+  - `lang` (str, optional): The 2-letter ISO code for the language (default: `en`).
+
+#### `remove_feed`
+Removes a feed from the database.
+
+- **Parameters:**
+  - `feed` (str, required): The URL or the title/name of the feed to remove.
+
+#### `list_feeds`
+Returns the list of saved RSS feeds.
+
+- **Parameters:**
+  - `category` (str, optional): If provided, filters the feeds by this category.
+
+#### `fetch_rss_feed`
+Fetches and displays the latest articles from a given RSS feed URL.
+
+- **Parameters:**
+  - `url` (str, required): The URL of the RSS feed to fetch.
+  - `max_results` (int, optional): The maximum number of articles to return (default: 5, max: 10).
+
+## 🔍 Test with modelcontextprotocol/inspector
+
+from the project folder run:
+
+```bash
+npx @modelcontextprotocol/inspector uv run feedflow
+
+```
+
+## 🧪 Running Tests
+
+To run the test suite, use `pytest`:
+
+```bash
+uv run pytest
+```
+
+with coverage
+
+```bash
+uv run pytest --cov=feedflow --cov-report=html
+```
+
+for coverage badge
+
+```bash
+uv run pytest --cov=feedflow --local-badge-output-dir .
+```
+
+## 📄 License
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+## 🤝 Contributing
+Contributions are welcome! Feel free to open issues or submit pull requests to improve the project.
