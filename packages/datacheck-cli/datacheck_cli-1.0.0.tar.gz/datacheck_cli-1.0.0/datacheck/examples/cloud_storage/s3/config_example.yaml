@@ -1,0 +1,98 @@
+# DataCheck Configuration Example
+# ================================
+# This file shows example configurations for data validation.
+# Copy and modify for your use case.
+
+# Version of the config schema
+version: "1.0"
+
+# Data source configuration
+source:
+  # Type: local, s3, gcs, azure
+  type: s3
+
+  # S3-specific settings
+  s3:
+    bucket: my-data-bucket
+    prefix: raw/events/
+    region: us-east-1
+    # Authentication (choose one):
+    # Option 1: AWS Profile
+    profile: production
+    # Option 2: Explicit credentials (not recommended)
+    # access_key: ${AWS_ACCESS_KEY_ID}
+    # secret_key: ${AWS_SECRET_ACCESS_KEY}
+
+  # File selection
+  pattern: "*.parquet"
+
+# Validation rules (Phase 2 - Coming Soon)
+# validation:
+#   rules:
+#     - name: check_not_null
+#       columns: [id, timestamp]
+#       severity: error
+#
+#     - name: check_unique
+#       columns: [id]
+#       severity: error
+#
+#     - name: check_range
+#       column: age
+#       min: 0
+#       max: 150
+#       severity: warning
+#
+#     - name: check_regex
+#       column: email
+#       pattern: "^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$"
+#       severity: error
+
+# Output configuration
+output:
+  # Format: table, json, html, csv
+  format: table
+
+  # Output file (optional - defaults to stdout)
+  # file: validation_report.html
+
+  # Include data samples in report
+  include_samples: true
+  sample_size: 5
+
+# Notification settings (Phase 6 - Coming Soon)
+# notifications:
+#   on_failure:
+#     - type: slack
+#       webhook: ${SLACK_WEBHOOK_URL}
+#     - type: email
+#       recipients:
+#         - data-team@company.com
+
+# Logging
+logging:
+  level: INFO
+  # file: datacheck.log
+
+---
+# Alternative: Local file configuration
+# source:
+#   type: local
+#   path: /data/raw/users.csv
+
+---
+# Alternative: Multiple sources
+# sources:
+#   - name: users
+#     type: s3
+#     s3:
+#       bucket: my-bucket
+#       prefix: users/
+#     pattern: "*.csv"
+#
+#   - name: events
+#     type: s3
+#     s3:
+#       bucket: my-bucket
+#       prefix: events/
+#     pattern: "*.parquet"
