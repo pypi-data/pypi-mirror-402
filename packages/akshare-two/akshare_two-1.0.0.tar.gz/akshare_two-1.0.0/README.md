@@ -1,0 +1,59 @@
+<div align="center">
+  <h1>AKShare Two</h1>
+  <div>
+    <a href="README_zh.md">中文</a> | <strong>English</strong>
+  </div>
+</div>
+
+> **Note**: This project is forked from [AKShare One](https://github.com/akfamily/akshare-one) but uses `akshare-two` as the package name for personal use and distribution.
+
+**AKShare Two** is a direct API data interface for obtaining Chinese A-shares. It provides direct connections to data sources (EastMoney, Sina, Xueqiu) without depending on the AKShare library, offering better control and avoiding dependency conflicts.
+
+## ✨ Features
+
+- 📊 Unified stock code formats across data sources
+- 🏗️ Standardized return data structures
+- 🛠️ Simplified API parameter design
+- ⏱️ Automatic timestamp and adjustment handling
+
+## 🚀 Core Features
+
+| Function              | Interface                                                  |
+| --------------------- | ---------------------------------------------------------- |
+| Historical data       | `get_hist_data`                                            |
+| Real-time quotes      | `get_realtime_data`                                        |
+| Stock news            | `get_news_data`                                            |
+| Financial data        | `get_balance_sheet`/`get_income_statement`/`get_cash_flow` |
+| Internal transactions | `get_inner_trade_data`                                     |
+| Basic stock info      | `get_basic_info`                                           |
+| Financial metrics     | `get_financial_metrics`                                    |
+| Technical indicators  | See [indicators.py](src/akshare_two/indicators.py)         |
+
+## 📦 Quick Installation
+
+```bash
+pip install akshare-two
+```
+
+## 💻 Usage Example
+
+```python
+from akshare_two import get_hist_data
+from akshare_two.indicators import get_sma
+
+# Get historical data
+df = get_hist_data(
+    symbol="600000",
+    interval="day",
+    adjust="hfq"
+)
+
+# Calculate 20-day Simple Moving Average
+df_sma = get_sma(df, window=20)
+```
+
+## 📚 Documentation
+
+Full API documentation is now available on GitHub Pages:
+
+https://zwldarren.github.io/akshare-two/
