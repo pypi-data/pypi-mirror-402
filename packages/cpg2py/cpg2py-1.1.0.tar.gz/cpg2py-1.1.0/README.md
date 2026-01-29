@@ -1,0 +1,358 @@
+# **cpg2py: Graph-Based Query Engine for Joern CSV Files**
+
+`cpg2py` is a Python library that provides a lightweight **graph-based query engine** for analyzing **Code Property Graphs (CPG)** extracted from Joern CSV files. The library offers an **abstract base class (ABC) architecture**, allowing users to extend and implement their own custom graph queries.
+
+---
+
+## **🚀 Features**
+
+- **MultiDiGraph Representation**: A directed multi-graph with support for multiple edges between nodes.
+- **CSV-Based Graph Construction**: Reads `nodes.csv` and `rels.csv` to construct a graph structure.
+- **Type-Safe Generic Types**: Uses Python generics for type-safe graph operations (similar to Java generics).
+- **Extensible Abstract Base Classes (ABC)**:
+  - `AbcGraphQuerier` for implementing **custom graph queries** with generic type support.
+  - `AbcNodeQuerier` for interacting with **nodes**.
+  - `AbcEdgeQuerier` for interacting with **edges**.
+- **Built-in Query Mechanisms**:
+  - **Retrieve all nodes and edges** with type-safe iteration.
+  - **Get incoming and outgoing edges** of a node.
+  - **Find successors and predecessors** with type preservation.
+  - **Traverse AST, Control Flow, and Data Flow Graphs**.
+- **Concrete Implementation**: `CpgGraph`, `CpgNode`, and `CpgEdge` provide ready-to-use implementations.
+
+---
+
+## **📚 Installation**
+
+### Using pip
+
+To install the package, use:
+
+```bash
+pip install git+https://github.com/samhsu-dev/cpg2py.git
+```
+
+### Using uv (Recommended)
+
+This project uses [uv](https://github.com/astral-sh/uv) for fast and reliable package management.
+
+**Install uv:**
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**Clone and install:**
+```bash
+git clone https://github.com/samhsu-dev/cpg2py.git
+cd cpg2py
+uv sync --dev  # Install with dev dependencies
+```
+
+**For development:**
+```bash
+uv sync --dev
+uv run pytest tests/  # Run tests
+```
+
+Or clone the pip repository:
+
+```bash
+pip install cpg2py
+```
+
+---
+
+## **📂 File Structure**
+
+- **`nodes.csv`** (Example):
+```csv
+id:int	labels:label	type	flags:string_array	lineno:int	code	childnum:int	funcid:int	classname	namespace	endlineno:int	name	doccomment
+0	Filesystem	Directory									"input"	
+1	Filesystem	File									"example.php"	
+2	AST	AST_TOPLEVEL	TOPLEVEL_FILE	1					""	25	"/input/example.php"	
+
+````
+- **`rels.csv`** (Example):
+```csv
+start	end	type
+2	3	ENTRY
+2	4	EXIT
+6	7	ENTRY
+6	9	PARENT_OF
+````
+
+---
+
+## **🎯 Type Safety with Generics**
+
+`cpg2py` uses Python's generic types (similar to Java generics) to provide type-safe operations:
+
+```python
+from typing import Iterable
+from cpg2py import cpg_graph, CpgGraph, CpgNode, CpgEdge
+
+# Type checker knows graph is CpgGraph[CpgNode, CpgEdge]
+graph: CpgGraph = cpg_graph("nodes.csv", "rels.csv")
+
+# Type checker knows node is CpgNode (not just AbcNodeQuerier)
+node: CpgNode = graph.node("5")
+
+# Type checker knows successors are Iterable[CpgNode]
+successors: Iterable[CpgNode] = graph.succ(node)
+for succ in successors:
+    succ.code  # Type-safe: IDE knows succ is CpgNode
+```
+
+This ensures that:
+- Return types are preserved throughout graph operations
+- IDE autocomplete works correctly
+- Type checkers (mypy, pyright) can verify type correctness
+
+For more details, see [Generics Documentation](docs/GENERICS.md).
+
+---
+
+## **📚 Usage**
+
+### **1️⃣ Load Graph from Joern CSVs**
+
+```python
+from cpg2py import cpg_graph
+
+# Load graph from CSV files
+graph = cpg_graph("nodes.csv", "rels.csv")
+```
+
+The `cpg_graph` function returns a `CpgGraph` instance, which is the concrete implementation of the graph querier.
+
+---
+
+### **2️⃣ Query Nodes & Edges**
+
+```python
+from cpg2py import CpgGraph, CpgNode, CpgEdge
+
+# Get a specific node (returns CpgNode)
+node: CpgNode = graph.node("2")
+print(node.name, node.type)  # Example output: "/tmp/example.php" AST_TOPLEVEL
+
+# Get a specific edge (returns CpgEdge)
+edge: CpgEdge = graph.edge("2", "3", "ENTRY")
+print(edge.type)  # Output: ENTRY
+```
+
+---
+
+### **3️⃣ Get Node Connections**
+
+```python
+# Get all outgoing edges from a node
+outgoing_edges = graph.succ(node)
+for out_node in outgoing_edges:
+    print(out_node.id, out_node.name)  # out_node is CpgNode
+
+# Get all incoming edges to a node
+incoming_edges = graph.prev(node)
+for in_node in incoming_edges:
+    print(in_node.id, in_node.name)  # in_node is CpgNode
+```
+
+---
+
+### **4️⃣ AST and Flow Queries**
+
+```python
+# Get top-level file node for a given node
+top_file: CpgNode = graph.topfile_node("5")
+print(top_file.name)  # Output: "example.php"
+
+# Get child nodes in the AST hierarchy
+children = graph.children(node)
+print([child.id for child in children])  # children are CpgNode instances
+
+# Get data flow successors
+flow_successors = graph.flow_to(node)
+print([succ.id for succ in flow_successors])  # successors are CpgNode instances
+```
+
+---
+
+## **🛠 Abstract Base Classes (ABC)**
+
+The following abstract base classes (`ABC`) provide interfaces for extending **node**, **edge**, and **graph** querying behavior. All ABCs are imported directly from the main `cpg2py` package.
+
+---
+
+### **🔹 AbcNodeQuerier (Abstract Node Interface)**
+
+This class defines how nodes interact with the graph storage.
+
+```python
+from cpg2py import AbcNodeQuerier, Storage
+
+class MyNodeQuerier(AbcNodeQuerier):
+    def __init__(self, graph: Storage, nid: str):
+        super().__init__(graph, nid)
+
+    @property
+    def name(self):
+        return self.get_property("name")
+```
+
+---
+
+### **🔹 AbcEdgeQuerier (Abstract Edge Interface)**
+
+Defines the querying mechanisms for edges in the graph.
+
+```python
+from cpg2py import AbcEdgeQuerier, Storage
+
+class MyEdgeQuerier(AbcEdgeQuerier):
+    def __init__(self, graph: Storage, f_nid: str, t_nid: str, e_type: str):
+        super().__init__(graph, f_nid, t_nid, e_type)
+
+    @property
+    def type(self):
+        return self.get_property("type")
+```
+
+---
+
+### **🔹 AbcGraphQuerier (Abstract Graph Interface)**
+
+This class provides an interface for implementing custom graph query mechanisms. It's a generic class that supports type-safe operations.
+
+```python
+from cpg2py import AbcGraphQuerier, Storage
+from typing import Optional
+
+class MyGraphQuerier(AbcGraphQuerier[MyNodeQuerier, MyEdgeQuerier]):
+    def node(self, nid: str) -> Optional[MyNodeQuerier]:
+        return MyNodeQuerier(self.storage, nid)
+
+    def edge(self, fid: str, tid: str, eid: str) -> Optional[MyEdgeQuerier]:
+        return MyEdgeQuerier(self.storage, fid, tid, eid)
+```
+
+**Note**: `AbcGraphQuerier` is a generic class parameterized by node and edge types, ensuring type safety throughout graph operations. The concrete implementation `CpgGraph` is defined as `AbcGraphQuerier[CpgNode, CpgEdge]`.
+
+---
+
+## **🔍 Querying The Graph**
+
+After implementing the abstract classes, you can perform advanced queries:
+
+```python
+from cpg2py import Storage
+
+storage = Storage()
+graph = MyGraphQuerier(storage)
+
+# Query node properties
+node = graph.node("5")
+print(node.name)  # Example Output: "main"
+
+# Query edge properties
+edge = graph.edge("5", "6", "FLOWS_TO")
+print(edge.type)  # Output: "FLOWS_TO"
+```
+
+### **Using the Built-in CpgGraph**
+
+You can also use the built-in `CpgGraph` implementation directly:
+
+```python
+from typing import Iterable
+from cpg2py import cpg_graph, CpgGraph, CpgNode, CpgEdge
+
+# Load from CSV files
+graph: CpgGraph = cpg_graph("nodes.csv", "rels.csv")
+
+# Type-safe operations
+node: CpgNode = graph.node("5")
+edge: CpgEdge = graph.edge("5", "6", "FLOWS_TO")
+
+# Type-safe iteration
+successors: Iterable[CpgNode] = graph.succ(node)
+for succ in successors:
+    print(succ.code)  # Type checker knows succ is CpgNode
+```
+
+---
+
+## **🐝 API Reference**
+
+For more detailed API documentation, please see our [APIs doc](docs/APIs.md).
+
+### **Main Package Exports**
+
+All public APIs are available directly from the `cpg2py` package:
+
+```python
+from cpg2py import (
+    # Factory function
+    cpg_graph,
+    
+    # Concrete implementations
+    CpgGraph,
+    CpgNode,
+    CpgEdge,
+    
+    # Abstract base classes
+    AbcGraphQuerier,
+    AbcNodeQuerier,
+    AbcEdgeQuerier,
+    Storage,
+    
+    # Exceptions
+    CPGError,
+    NodeNotFoundError,
+    EdgeNotFoundError,
+    TopFileNotFoundError,
+)
+```
+
+### **Graph Functions**
+
+- `cpg_graph(node_csv: Path, edge_csv: Path, verbose: bool = False) -> CpgGraph`: Loads graph from CSV files and returns a `CpgGraph` instance.
+- `graph.node(nid: str) -> Optional[CpgNode]`: Retrieves a node by ID (returns `CpgNode`).
+- `graph.edge(fid: str, tid: str, eid: str) -> Optional[CpgEdge]`: Retrieves an edge (returns `CpgEdge`).
+- `graph.succ(node: CpgNode) -> Iterable[CpgNode]`: Gets successor nodes.
+- `graph.prev(node: CpgNode) -> Iterable[CpgNode]`: Gets predecessor nodes.
+- `graph.children(node: CpgNode) -> Iterable[CpgNode]`: Gets child nodes via PARENT_OF edges.
+- `graph.parent(node: CpgNode) -> Iterable[CpgNode]`: Gets parent nodes via PARENT_OF edges.
+- `graph.flow_to(node: CpgNode) -> Iterable[CpgNode]`: Gets data flow successors.
+- `graph.flow_from(node: CpgNode) -> Iterable[CpgNode]`: Gets data flow predecessors.
+- `graph.topfile_node(nid: str) -> CpgNode`: Finds the top-level file node.
+
+### **Node Properties (CpgNode)**
+
+- `.id`: Node ID (string).
+- `.name`: Node name.
+- `.type`: Node type.
+- `.code`: Source code content.
+- `.label`: Node label.
+- `.line_num`: Source code line number.
+- `.flags`: List of node flags.
+- `.children_num`: Number of children.
+- `.func_id`: Function ID.
+- `.class_name`: Class name.
+- `.namespace`: Namespace.
+- `.end_num`: End line number.
+- `.comment`: Documentation comment.
+
+### **Edge Properties (CpgEdge)**
+
+- `.id`: Edge ID tuple `(from_node, to_node, edge_type)`.
+- `.start`: Edge start position.
+- `.end`: Edge end position.
+- `.type`: Edge type.
+- `.var`: Variable name (if applicable).
+
+---
+
+## **🌟 License**
+
+This project is licensed under the **MIT License**.
+
