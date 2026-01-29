@@ -1,0 +1,282 @@
+Metadata-Version: 2.4
+Name: clerkway
+Version: 0.1.1
+Summary: Clerk authentication proxy for custom domains (ngrok, tunnels, etc.)
+Project-URL: Homepage, https://github.com/brYGG-z/clerkway
+Project-URL: Documentation, https://github.com/brYGG-z/clerkway#readme
+Project-URL: Repository, https://github.com/brYGG-z/clerkway
+Author: brYGG-z
+License: MIT
+License-File: LICENSE
+Keywords: authentication,clerk,ngrok,oauth,proxy
+Classifier: Development Status :: 4 - Beta
+Classifier: Framework :: FastAPI
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Internet :: WWW/HTTP :: HTTP Servers
+Classifier: Topic :: Security
+Requires-Python: >=3.10
+Requires-Dist: fastapi>=0.100.0
+Requires-Dist: httpx>=0.25.0
+Requires-Dist: pyjwt[crypto]>=2.8.0
+Provides-Extra: dev
+Requires-Dist: pytest-asyncio>=0.21.0; extra == 'dev'
+Requires-Dist: pytest>=7.0.0; extra == 'dev'
+Requires-Dist: ruff>=0.1.0; extra == 'dev'
+Description-Content-Type: text/markdown
+
+# clerkway
+
+Clerk authentication proxy for custom domains (ngrok, Cloudflare Tunnel, etc.)
+
+## Problem
+
+When using Clerk with a custom domain proxy (like ngrok), OAuth flows break because:
+
+1. **Cookie domains** - Clerk sets cookies for `frontend-api.clerk.dev`, not your domain
+2. **Redirect URLs** - OAuth callbacks redirect to Clerk's domain, not your proxy
+3. **Multiple cookies** - Standard header handling loses cookies (only keeps one)
+4. **JWKS auth** - Clerk's Backend API requires `Authorization` + `User-Agent` headers
+
+This library solves all of these issues.
+
+## Installation
+
+```bash
+pip install clerkway
+```
+
+## Quick Start
+
+### 1. Add the proxy router to your FastAPI app
+
+```python
+import os
+from fastapi import FastAPI
+from clerkway import create_clerk_proxy_router, ClerkProxyConfig
+
+app = FastAPI()
+
+# Configure the proxy
+config = ClerkProxyConfig(
+    secret_key=os.environ["CLERK_SECRET_KEY"],
+)
+
+# Add the router - this creates /__clerk/* routes
+app.include_router(create_clerk_proxy_router(config))
+```
+
+### 2. Configure your frontend
+
+In your Clerk provider configuration, set the proxy URL:
+
+```typescript
+// React example
+<ClerkProvider
+  publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}
+  proxyUrl="/__clerk"
+>
+```
+
+### 3. Set up JWT verification
+
+```python
+import os
+import jwt
+from clerkway import get_jwks_client
+
+# Use Clerk's Backend API for fast JWKS fetching
+jwks_client = get_jwks_client(
+    jwks_url="https://api.clerk.com/v1/jwks",
+    secret_key=os.environ["CLERK_SECRET_KEY"],
+)
+
+def verify_token(token: str) -> dict:
+    signing_key = jwks_client.get_signing_key_from_jwt(token)
+    return jwt.decode(
+        token,
+        signing_key.key,
+        algorithms=["RS256"],
+        # Add issuer verification for your domain
+        issuer=f"https://{os.environ['YOUR_DOMAIN']}/__clerk",
+    )
+```
+
+## Environment Variables
+
+| Variable                  | Description                            |
+| ------------------------- | -------------------------------------- |
+| `CLERK_SECRET_KEY`      | Your Clerk secret key (from Dashboard) |
+| `CLERK_PUBLISHABLE_KEY` | Your Clerk publishable key (frontend)  |
+
+## Configuration Options
+
+```python
+@dataclass
+class ClerkProxyConfig:
+    secret_key: str              # Required: Clerk secret key
+    route_prefix: str = "/__clerk"  # URL prefix for proxy routes
+    timeout: float = 30.0        # HTTP request timeout
+    log_oauth_callbacks: bool = True  # Log OAuth flow for debugging
+```
+
+## How It Works
+
+### Cookie Rewriting
+
+Clerk sets cookies with `domain=frontend-api.clerk.dev`. The proxy rewrites these to your domain so the browser stores them correctly.
+
+### Location Header Rewriting
+
+OAuth callbacks redirect to Clerk's domain. The proxy rewrites `Location` headers to keep users on your domain:
+
+- `/v1/oauth_callback?...` → `/__clerk/v1/oauth_callback?...`
+- `https://frontend-api.clerk.dev/...` → `https://yourdomain.com/__clerk/...`
+
+### Multi-Cookie Handling
+
+HTTP allows multiple `Set-Cookie` headers. Standard Python dict handling loses all but one. This library uses `multi_items()` and `headers.append()` to preserve all cookies.
+
+### JWKS Authentication
+
+Clerk's Backend API (`api.clerk.com/v1/jwks`) requires:
+
+- `Authorization: Bearer <secret_key>` header
+- `User-Agent` header (urllib omits this by default)
+
+The `ClerkJWKClient` class handles both automatically.
+
+## Vite Configuration
+
+If using Vite, add your ngrok domain to `allowedHosts`:
+
+```typescript
+// vite.config.ts
+export default defineConfig({
+  server: {
+    allowedHosts: [
+      "localhost",
+      "your-app.ngrok.dev",
+    ],
+  },
+});
+```
+
+## Troubleshooting
+
+### 403 Forbidden on JWKS fetch
+
+You're missing the `Authorization` or `User-Agent` header. Use `get_jwks_client()` which handles this automatically.
+
+### Cookies not being set
+
+Check that:
+
+1. Your domain matches what's in the rewritten cookies
+2. You're using HTTPS (required for `Secure` cookies)
+3. The proxy is correctly rewriting `domain=` in Set-Cookie headers
+
+### OAuth redirect loop
+
+The `Location` header isn't being rewritten. Check that:
+
+1. The proxy is handling the OAuth callback path
+2. `follow_redirects=False` is set on the HTTP client
+
+## Usage Example (Complete FastAPI App)
+
+```python
+"""Example FastAPI application with Clerk authentication via ngrok proxy."""
+import os
+from dataclasses import dataclass
+from typing import Annotated
+
+import jwt
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+
+from clerkway import (
+    ClerkProxyConfig,
+    create_clerk_proxy_router,
+    get_jwks_client,
+)
+
+app = FastAPI(title="My App")
+
+# --- Clerk Proxy Setup ---
+clerk_config = ClerkProxyConfig(
+    secret_key=os.environ["CLERK_SECRET_KEY"],
+)
+app.include_router(create_clerk_proxy_router(clerk_config))
+
+# --- JWT Verification ---
+CLERK_JWKS_URL = "https://api.clerk.com/v1/jwks"
+CLERK_ISSUER = f"https://{os.environ['APP_DOMAIN']}/__clerk"
+
+
+@dataclass
+class ClerkUser:
+    clerk_id: str
+    email: str | None = None
+    name: str | None = None
+
+
+def get_jwks_client_instance():
+    return get_jwks_client(
+        jwks_url=CLERK_JWKS_URL,
+        secret_key=os.environ["CLERK_SECRET_KEY"],
+    )
+
+
+async def get_current_user(request: Request) -> ClerkUser:
+    """FastAPI dependency to get the authenticated user."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+  
+    token = auth_header[7:]
+  
+    try:
+        jwks_client = get_jwks_client_instance()
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            issuer=CLERK_ISSUER,
+        )
+        return ClerkUser(
+            clerk_id=payload.get("sub", ""),
+            email=payload.get("email"),
+            name=payload.get("name"),
+        )
+    except jwt.InvalidTokenError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+        ) from e
+
+
+CurrentUser = Annotated[ClerkUser, Depends(get_current_user)]
+
+
+# --- Routes ---
+@app.get("/api/me")
+async def get_me(user: CurrentUser):
+    return {"clerk_id": user.clerk_id, "email": user.email, "name": user.name}
+
+
+@app.get("/api/public")
+async def public_endpoint():
+    return {"message": "This is public"}
+```
+
+## License
+
+MIT
