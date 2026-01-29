@@ -1,0 +1,264 @@
+Metadata-Version: 2.4
+Name: dochint
+Version: 1.0.1
+Summary: A macro processor for authoring HTML documents.
+Author-email: Maria Nicolae <maria@marianicolae.com>
+License-Expression: Apache-2.0 OR CC-BY-4.0
+Project-URL: Homepage, https://marianicolae.com/software/dochint/
+Description-Content-Type: text/markdown
+License-File: LICENSE
+License-File: LICENSE.Apache-2.0
+License-File: LICENSE.CC-BY-4.0
+Requires-Dist: latex2mathml
+Requires-Dist: pybtex
+Dynamic: license-file
+
+# DocHINT
+
+DocHINT (recursive acronym for **DocH**INT **I**s **N**ot a **T**ypesetter) is a command-line program and Python package that processes text macros for authoring HTML documents. DocHINT takes as input text files that contain macro commands, and evaluates those macros to produce HTML text as output. Macros are provided for functionality including escaping special characters, generating [MathML](https://www.w3.org/TR/MathML/) from [LaTeX](https://www.latex-project.org/) maths notation, cross-referencing, and managing citations (with [BibTeX](https://www.bibtex.org/) support), and the user may additionally define custom macros.
+
+DocHINT can work on either a single source file, or multiple source files that constitute a single document. The latter mode of operation is particularly useful for authoring EPUBs, e.g. in combination with [epubsynth](https://marianicolae.com/software/epubsynth/), and to support this use-case, DocHINT is designed to generate XHTML-compliant output.
+
+## Example
+
+As an example, given (abridged) input HTML text containing macros
+```
+<p>Pythagoras' theorem\cite{saikia2013pythagorastheorem} is</p>
+\mathblock{a^2 + b^2 = c^2;}
+<p>this is illustrated in Figure \ref{fig:pythagoras}</p>
+...
+<h2>References</h2>
+\bibliography
+```
+the (abridged) output is
+```
+<p>Pythagoras' theorem[<a href="#saikia2013pythagorastheorem">1</a>] is</p>
+<math alttext="a^2 + b^2 = c^2;" xmlns="http://www.w3.org/1998/Math/MathML" display="block"><mrow><msup><mi>a</mi><mn>2</mn></msup><mo>&#x0002B;</mo><msup><mi>b</mi><mn>2</mn></msup><mo>&#x0003D;</mo><msup><mi>c</mi><mn>2</mn></msup><mi>;</mi></mrow></math>
+<p>this is illustrated in Figure <a href="#fig:pythagoras">1</a></p>
+...
+<h2>References</h2>
+<ol>
+<li id="saikia2013pythagorastheorem">Manjil&#160;P. Saikia.
+The pythagoras' theorem.
+2013.
+URL: <a href="https://arxiv.org/abs/1310.0986">https://arxiv.org/abs/1310.0986</a>, <a href="https://arxiv.org/abs/1310.0986">arXiv:1310.0986</a>.</li>
+</ol>
+```
+containing a cross-reference link, MathML, and a formatted citation.
+
+As another, extended, example, [here](https://marianicolae.com/files/ReflowableThesis.zip) is the source for an EPUB version of [my Honours thesis](https://marianicolae.com/honours), generated using DocHINT and epubsynth.
+
+## Installation
+
+**Arch Linux**: Use the [official Arch User Repository (AUR) package](https://aur.archlinux.org/packages/dochint) maintained by myself.  
+**PyPI**: Use `pip install dochint` to install [DocHINT from PyPI](https://pypi.org/project/dochint/).  
+**Manual Installation**: Use `make install` and `make uninstall` to install and uninstall DocHINT respectively.
+
+## Conceptual Overview
+
+DocHINT works as a "state machine", in which it copies input text to the output except when the macro prefix (by default `\`) is encountered, at which point DocHINT instead processes the macro and produces an output in place of it, returning to echoing/copying mode after that.
+
+After encountering the macro prefix, the following text is read to find the macro command, an identifier that can either be a string of "identifier" characters (regex `\w`: letters, digits, and `_`) or a single non-identifier character. After that, the macro is evaluated; many macros take some additional text following their identifier as input. Once the macro has been evaluated, its resultant text is appended to the output, and the DocHINT state machine returns to the normal "copy input to output until the macro prefix is encountered" mode.
+
+Macro logic may be stateful, with the result text of a macro being affected by other macros. To allow macros to be affected by other macros that come after them in the source text, DocHINT works in two passes. In the first pass, the procedure described above is done, but macros may *defer* (delay) producing their result text until the second pass, in which all deferred macro results are evaluated.
+
+DocHINT is intended for use in authoring HTML documents insofar as all built-in macros generate HTML code, but DocHINT is not aware of the HTML structure of the input text surrounding and outside of macros. In particular, macros inside HTML comments are *not* ignored.
+
+## Invoking DocHINT
+
+DocHINT can be used through either the command line or as a Python package.
+
+### Command-Line Interface
+
+The command-line program `dochint` has an interface that takes a sequence of input file names as positional arguments, and some options:
+```
+dochint NAME... [OPTIONS...]
+```
+
+The `NAME`s of the input files correspond to the file names/paths used for URIs generated by macros (e.g. cross-reference hyperlinks). By default, DocHINT will look for source files of those names in the current working directory; to look in another directory, set `--source-dir` (aliases `--src-dir` and `-d`).
+
+The location of the output is set using the `--output` option (alias `-o`). By default, this is interpreted as a file for single-file input (one `NAME`) and a directory for multi-file input (multiple `NAME`s), in which case the output files have the same names as the input `NAME`s. The output of multi-file processing can instead be concatenated into a single output file by setting `--output-single-file`. If `--output` is not set, output is instead printed to STDOUT.
+
+Other options are:
+
+* `--prefix PREFIX` (alias `-p`): Set the macro command prefix (defaults to `\`).
+* `--text-macro MACRO TO_TEXT`: Define a custom macro that does simple text substitution. This option can occur multiple times.
+* `--set-numbering NAME NUMBERING`: In multi-file mode, (re)set the chapter numbering for a file; see [Cross-Referencing](#cross-referencing) for more information. This option can occur multiple times.
+
+The command-line interface does not allow the user to define custom macros that have programmatic logic rather than being simple text substitutions; for this, the Python API must be used.
+
+### Python API
+
+The Python package `dochint` is invoked through the functions `dochint.process_text` and `dochint.process_texts` for processing a single text source and multiple text sources respectively. These functions have the optional argument `extra_macros` for setting custom macros; see the docstrings for details.
+
+## Macros and Processing Behaviour
+
+Macros in DocHINT (including user-defined macros) may either be static text substitutions or implement some computational logic. The latter case can further be broken down into two types: macros that take bracketed arguments as input (`dochint.ArgsMacro` in the Python API), or those which are state machines consuming as input an arbitrary amount of the text that follows them (`dochint.RawMacro` in the Python API). Out of the built-in macros in DocHINT, only `\verb` and `\verbatim` (which are aliases of each other) are `RawMacro`s, with all others being either `ArgsMacro`s or static text substitution.
+
+In a syntax similar to that of TeX, an `ArgsMacro` and its arguments look something like `\command[optional1]{mandatory1}{mandatory2}`, with first a sequence of zero or more optional arguments (i.e. that may be omitted) enclosed in `[]`, and then a sequence of zero or more mandatory arguments enclosed in `{}`. Any whitespace is permitted before an opening bracket and after a closing bracket. Unlike in TeX, however, brackets around single-character arguments may not be omitted. Arguments for macros come in one of three types:
+
+* *Identifier-like*, in which brackets in the argument text can be escaped by preceding them with the macro prefix, as can the macro prefix itself. For example, the macro `\id{abc\{\\\}}` has input string `abc{\}`.
+* *TeX-like*, in which brackets preceded by `\` (always `\`, not the customisable macro prefix) are not counted for finding the balancing bracket that ends the argument, but the preceding `\` is still part of the argument text. For example, the macro `\math{x \in \{1, 2, 3}` has input string `x \in \{1, 2, 3`.
+* *Document-like*, in which the argument text may itself contain DocHINT macros, which are handled normally, and brackets can be escaped by preceding them with the macro prefix (i.e. there are additional macros which print the brackets). For example, the macro `\footnote{See Reference \cite{some_paper}.}` would have input `See Reference [<a href="#some_paper">24</a>].` given that the citation with identifier `some_paper` is the 24th source cited.
+
+In this section, `ArgsMacro` syntax will be notated with brackets corresponding to the sequence of optional and mandatory arguments, with the brackets containing the argument name, followed by a colon, followed by a letter `i`, `t`, or `d` for which of the three types of argument it is. For example: `\equation[label: d]{id: i}{latex: t}` takes a document-like optional argument `label`, an identifier-like mandatory argument `id`, and a TeX-like mandatory argument `latex`.
+
+### Escaping Special Characters
+
+#### `\<`
+
+Static text macro printing `&lt;`.
+
+#### `\>`
+
+Static text macro printing `&gt;`.
+
+#### `\&`
+
+Static text macro printing `&amp;`.
+
+#### `\'`
+
+Static text macro printing `&apos;`.
+
+#### `\"`
+
+Static text macro printing `&quot;`.
+
+#### `\<newline>`
+
+Static text macro printing the empty string, used to escape line breaks. To be clear, the macro command identifier here is the newline character, not any part of the literal text `<newline>`. For example, in processing, the text
+```
+<p>The quick brown fox jumped \
+over the lazy dog.</p>
+```
+becomes
+```
+<p>The quick brown fox jumped over the lazy dog.</p>
+```
+
+#### `\\`
+
+Prints the literal macro prefix. Note that this escape sequence is not a macro in the normal sense; it is always two of the macro prefix in a row, not necessarily `\`. For example, if the macro prefix is changed to `@`, this escape sequence is instead `@@`.
+
+#### `\verbatim|...|`
+
+`RawMacro` used to escape all HTML special characters in an extended block of text. The first character following the macro command sets the "delimiter" of the macro input, such that the macro consumes and processes all text up to the second occurrence of that character. For example, `\verbatim|1 < 2|` becomes `1 &lt; 2`, as does `\verbatim!1 < 2!` or `\verbatim\1 < 2\`.
+
+Alias: `\verb`.
+
+### Converting LaTeX to MathML
+
+Conversion of LaTeX to MathML is done internally using the [latex2mathml](https://github.com/roniemartinez/latex2mathml) Python package, which is a dependency of DocHINT.
+
+#### `\maths{latex: t}`
+
+Converts LaTeX maths notation `latex` into inline MathML, generating a `<math>` element with the following attributes:
+
+* `alttext`, whose value is the `latex` input text, properly quoted and escaped.
+* `xmlns="http://www.w3.org/1998/Math/MathML"`, for XHTML compliance.
+* `display="inline"`.
+
+Aliases: `\math`, `\m`, `\imath`, `\imaths`.
+
+#### `\mathsblock{latex: t}`
+
+Converts LaTeX maths notation `latex` into block-display MathML, generating a `<math>` element with the following attributes:
+
+* `alttext`, whose value is the `latex` input text, properly quoted and escaped.
+* `xmlns="http://www.w3.org/1998/Math/MathML"`, for XHTML compliance.
+* `display="block"`.
+
+Aliases: `\mathblock`, `\bmath`, `\bmaths`, `\dmath`, `\dmaths`.
+
+### Cross-Referencing
+
+DocHINT's cross-referencing system uses and builds on top of the `id` attributes of HTML elements. A cross-reference has an identifier which is the `id` attribute of the element being cross-referenced, and a "label" which is the text displayed in hyperlinks to that cross-reference, which may either be specified by the user or automatically generated by DocHINT as sequential numbering.
+
+Sequential number labelling of cross-references is done in the order that cross-references are declared (e.g. using the `\id` macro). If a cross-reference identifier contains `.` or `:`, the text before the first occurrence of either of those characters is the *namespace* for that cross-reference's numberings, with different namespaces having separate numberings. For example, `fig:my:figure` belongs to the namespace `fig`, and `eq.my_equation` belongs to the namespace `eq`, and the presence of one does not affect the other's numbering.
+
+Additionally, when DocHINT is processing multiple input files, sequentially numbered labels are prefixed with the file number in the document, e.g. the second automatically-labelled cross-reference (in a given namespace) in the third file is labelled `3.2`. This file counter can be reset, or set to a Roman letter (e.g. for appendices) using the `--set-numbering` option in the command-line interface or the `numberings` option of the `dochint.process_texts` function in the Python API.
+
+#### `\id[label: d]{id: i}`
+
+Declares a cross-reference with identifier `id` and optionally label `label`, and outputs `id` properly quoted and escaped for use as an attribute. For example, `<figure id=\id{fig:my_plot}>` becomes `<figure id="fig:my_plot">`. If `label` is not provided, a sequentially-numbered label is set as described above.
+
+#### `\ref{id: i}`
+
+Generates a hyperlink (`<a>` element) to the element cross-referenced by `id`, assuming that that is the value of the element's `id` attribute, with the cross-reference label as the link text. For example, for a cross-reference with identifier `fig:my_plot` and label `2`, `Figure \ref{fig:my_plot}` becomes `Figure <a href="#fig:my_plot">2</a>`.
+
+#### `\tref{id: i}`
+
+Outputs the label of the cross-reference with identifier `id`. For example, for a cross-reference with identifier `eq:pythagoras` and label `7`, `Equation \tref{eq:pythagoras}` becomes `Equation 7`. Therefore, this is like `\ref` but does not generate a hyperlink.
+
+#### `\equation[label: d]{id: i}{latex: t}`
+
+Converts LaTeX maths notation `latex` into MathML, which is then placed inside a `<figure>` element to which a cross-reference with identifier `id` is declared, optionally with label `label`. The cross-reference label is then placed inside the figure's `<figcaption>` element. Namely, this is equivalent to `<figure class='equation' id=\id[label]{id}>\mathblock{latex}<figcaption>(\tref{id})</figcaption></figure>`.
+
+Some CSS for placing the figure caption to the right of the MathML, as in a numbered equation, is:
+```
+figure.equation
+{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+figure.equation math
+{
+    flex-grow: 1;
+}
+
+figure.equation figcaption
+{
+    margin-left: 1em;
+}
+```
+
+Alias: `\eqn`.
+
+### Citations and Bibliography
+
+For citation/bibliography management in DocHINT, bibliography items can be declared either from BibTeX source, or manually as a pre-formatted reference. These are then listed in a central bibliography, as well as referenced in in-text citations which link to the corresponding bibliography entry.
+
+BibTeX processing is done internally using the [pybtex](https://pybtex.org/) Python package, which is a dependency of DocHINT.
+
+#### `\cite{ids: i}`
+
+Generates an in-text citation for each bibliography item whose identifier occurs in `ids`, a comma-separated list of reference identifiers. This takes the form of numbered hyperlinks, e.g. `\cite{some_paper,other_paper}` becomes `[<a href="#some_paper">12</a>,<a href="#other_paper">13</a>]` if these are the 12th and 13th unique in-text citations.
+
+Citations are numbered in the order that they are first referenced in the text, not in the order that bibliography items are defined.
+
+#### `\addbibliographyitem{id: i}{bibtext: d}`
+
+Declares a bibliography item with identifier `id` and bibliography text `bibtext`, and outputs the empty string.
+
+Alias: `\addbibitem`.
+
+#### `\addbibtextext{bibtex: t}`
+
+Declares all bibliography items occurring in the BibTeX string `bibtex`, and outputs the empty string.
+
+#### `\addbibtexfile{fpath: i}`
+
+Declares all bibliography items occurring in the BibTeX text file at location `fpath`, and outputs the empty string. `fpath` is relative to `--source-dir` in the command-line interface or the `cwd` option in the `dochint.process_text` and `dochint.process_texts` Python API functions, if these options are set, or relative to the process' working directory if they are not set.
+
+#### `\printbibliography`
+
+Generates a formatted bibliography as an `<ol>` element listing each bibliography item in the order that bibliography items are first referenced in-text, such that the numbering matches that of the in-text citations. Can be invoked multiple times, but each invocation outputs the full bibliography of the document, making multiple invocations duplicates of each other, except that only the first one has `id` attributes set for the `<li>` list items.
+
+Alias: `\bibliography`.
+
+### Footnotes
+
+#### `\footnote{text: d}`
+
+Declares a footnote with text `text`, and outputs a superscripted hyperlink to where it is later printed using `\printfootnotes`, for example `<sup><a href="#_footnote_1_2">2</a></sup>`. The hyperlink text is a sequential numbering of footnotes, which resets after every invocation of `\printfootnotes`.
+
+#### `\printfootnotes`
+
+Prints all footnotes that have been declared since the last invocation of this command, or the beginning of the document if this is the first invocation. This is a sequence of `<p>` elements, one for each footnote, containing the superscripted number of the footnote followed by the footnote text. These `<p>` elements have automatically assigned `id` attributes like `_footnote_1_2`, with the first number being how many times `\printfootnote` has been invoked (including this time), and the second number being the footnote number.
+
+It is generally recommended to place this command inside a `<footer>` element; some e-reader software seems to expect this for footnotes.
+
+Alias: `\footnotes`.
