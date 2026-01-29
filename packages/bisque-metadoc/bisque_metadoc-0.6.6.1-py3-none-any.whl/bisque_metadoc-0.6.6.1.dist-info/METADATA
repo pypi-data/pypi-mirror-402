@@ -1,0 +1,99 @@
+Metadata-Version: 2.4
+Name: bisque_metadoc
+Version: 0.6.6.1
+Summary: Bisque Metadoc
+Author-email: ViQi Inc <info@viqi.org>
+Project-URL: homepage, https://gitlab.com/viqi/viqi-common/bisque_metadoc
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.10
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: python-mimeparse
+Requires-Dist: simplejson
+Requires-Dist: lxml
+Requires-Dist: deprecated
+
+# ViQi Metadoc
+
+Representation of hierarchical documents with various "rendering" and query options.
+For doc communication between server/clients.
+
+## Install
+
+`pip install bisque-metadoc`
+
+## Usage
+
+`Metadoc` provides a unified interface for working with hierarchical metadata in various formats (XML, JSON, Python dicts).
+
+### Creating a Metadoc
+
+```python
+from bq.metadoc.formats import Metadoc
+
+# Create a new document
+doc = Metadoc(tag="resource", name="my_image", type="image")
+
+# Add child tags
+doc.add_tag("author", value="John Doe")
+doc.add_tag("description", value="A sample image")
+
+# Create from Natural XML
+xml_str = '<resource name="test"><child>123</child></resource>'
+doc = Metadoc.from_naturalxml(xml_str)
+
+# Create from Python dictionary
+data = {"resource": {"@name": "test", "child": "123"}}
+doc = Metadoc.from_dict(data)
+```
+
+### Accessing Data
+
+`Metadoc` supports attribute-style access and automatic type conversion.
+
+```python
+print(doc.tag)         # "resource"
+print(doc.name)        # "test"
+print(doc.child.value) # 123 (automatically converted to int if type is set)
+
+# Iterating over children
+for child in doc:
+    print(child.tag, child.value)
+```
+
+### Path Queries
+
+Simplified path queries automatically handle the internal mapping of custom tags.
+
+```python
+# Finds all tags named "author" anywhere in the document
+authors = doc.path_query("//author")
+```
+
+### Formats and Serialization
+
+`Metadoc` supports multiple serialization formats:
+
+*   **Natural XML**: Standard XML where data names are used as tags.
+*   **Tag XML**: Bisque "System" XML where values are stored in attributes and generic `<tag name="...">` elements are used for custom metadata.
+*   **Natural JSON**: Idiomatic JSON dictionaries (attributes prefixed with `@`).
+*   **Ordered JSON**: A round-trippable JSON structure that preserves element order using an `@children` list.
+
+```python
+# To XML string
+print(doc.to_naturalxml())
+print(doc.to_tagxml())
+
+# To JSON string or dict
+print(doc.to_json())
+print(doc.to_dict())
+
+# To/From Ordered JSON (preserves order and mixed content)
+ordered_json = doc.to_ordered_json()
+doc2 = Metadoc.from_ordered_json(ordered_json)
+```
+
+## Documentation
+
+* [Metadoc](https://viqi.gitlab.io/viqi-common/viqi_metadoc/)
