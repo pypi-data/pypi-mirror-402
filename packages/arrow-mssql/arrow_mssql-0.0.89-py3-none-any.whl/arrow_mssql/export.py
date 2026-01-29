@@ -1,0 +1,130 @@
+import pyarrow as pa
+from .connector import raw_sql
+from textwrap import dedent
+from typing import (
+    Iterable,
+)
+from .output.schemas import get_schema
+from .utils import is_query
+import sqlglot as sg
+from pyodbc import Cursor
+
+
+def cursor_arrow(
+    cursor: Cursor,
+    name: str,
+    database: str,
+    schema: str = "dbo",
+    chunk_size: int = 1_000_000,
+) -> Iterable[list]:
+    stmt = (
+        sg.select("*")
+        .from_(sg.table(f"{name}", db=schema, catalog=database))
+        .sql("tsql")
+    )
+
+    if is_query(name):
+        stmt = dedent(name)
+
+    cursor.execute(stmt)
+    while batch := cursor.fetchmany(chunk_size):
+        yield batch
+
+
+def to_arrow_lotes(
+    cursor: Cursor,
+    name: str,
+    pre_hooks: list[str],
+    database: str,
+    schema: str = "dbo",
+    chunk_size: int = 1_000_000,
+) -> pa.ipc.RecordBatchReader:
+    for hook in pre_hooks:
+        cursor.execute(dedent(hook))
+
+    schema_arrow = get_schema(cursor, name, database, schema)
+    array_type = schema_arrow("st")
+
+    arrays = (
+        pa.array(map(tuple, lote), type=array_type)
+        for lote in cursor_arrow(cursor, name, database, schema, chunk_size)
+    )
+
+    lotes = map(pa.RecordBatch.from_struct_array, arrays)
+    return pa.ipc.RecordBatchReader.from_batches(schema_arrow("sh"), lotes)
+
+
+def to_parquet(
+    driver: str,
+    name: str,
+    *,
+    pre_hooks: list[str] = [],
+    path: str,
+    database: str,
+    schema: str = "dbo",
+    row_group_size: int = 1_000_000,
+    chunk_size: int = 1_000_000,
+) -> None:
+    """
+    ### Exporta tabela ou consulta para .parquet
+
+    ----
+    driver: String de conexao `pyodbc`
+    name: Tabela ou consulta
+    path: Caminho do arquivo
+    database: Banco de dados da tabela
+    schema: schema da tabela
+    row_group_size: Grupo do arquivo .parquet
+    limit: porcao de dados
+    """
+
+    import pyarrow.parquet as pq
+
+    with raw_sql(driver) as cursor:
+        with to_arrow_lotes(
+            cursor, name, pre_hooks, database, schema, chunk_size
+        ) as lotes:
+            with pq.ParquetWriter(path, lotes.schema) as writer:
+                for lote in lotes:
+                    writer.write_batch(lote, row_group_size=row_group_size)
+
+
+def to_csv(
+    driver: str,
+    name: str,
+    *,
+    pre_hooks: list[str] = [],
+    path: str,
+    database: str,
+    schema: str = "dbo",
+    delimiter: str = ";",
+    chunk_size: int = 1_000_000,
+) -> None:
+    """
+    ### Exporta tabela ou consulta para .csv
+
+    ----
+    driver: String de conexao `pyodbc`
+    name: Tabela ou consulta
+    path: Caminho do arquivo
+    database: Banco de dados da tabela
+    schema: schema da tabela
+    delimiter: separador das colunas
+    limit: porcao de dados
+    """
+
+    from pyarrow import csv
+
+    with raw_sql(driver) as cursor:
+        with to_arrow_lotes(
+            cursor, name, pre_hooks, database, schema, chunk_size
+        ) as lotes:
+            write_options = csv.WriteOptions(
+                include_header=True, delimiter=delimiter, quoting_style="all_valid"
+            )
+
+            with csv.CSVWriter(
+                path, lotes.schema, write_options=write_options
+            ) as writer:
+                for lote in lotes:
+                    writer.write_batch(lote)
