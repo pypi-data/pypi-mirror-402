@@ -1,0 +1,211 @@
+Metadata-Version: 2.4
+Name: spikelink
+Version: 0.1.1
+Summary: Spike-native transport for neuromorphic systems
+Project-URL: Homepage, https://lightborneintelligence.com
+Project-URL: Documentation, https://spikelink.readthedocs.io
+Project-URL: Repository, https://github.com/lightborneintelligence/spikelink
+Project-URL: Issues, https://github.com/lightborneintelligence/spikelink/issues
+Author-email: Lightborne Intelligence <contact@lightborneintelligence.com>
+License-Expression: Apache-2.0
+License-File: LICENSE
+Keywords: brainscales,ebrains,neo,neural,neuromorphic,spike-train,spiking,spinnaker
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Scientific/Engineering :: Bio-Informatics
+Requires-Python: >=3.9
+Requires-Dist: numpy>=1.20.0
+Provides-Extra: dev
+Requires-Dist: black>=23.0.0; extra == 'dev'
+Requires-Dist: mypy>=1.0.0; extra == 'dev'
+Requires-Dist: pytest-cov>=4.0.0; extra == 'dev'
+Requires-Dist: pytest>=7.0.0; extra == 'dev'
+Requires-Dist: ruff>=0.1.0; extra == 'dev'
+Provides-Extra: elephant
+Requires-Dist: elephant>=0.12.0; extra == 'elephant'
+Requires-Dist: neo>=0.12.0; extra == 'elephant'
+Requires-Dist: quantities>=0.14.0; extra == 'elephant'
+Provides-Extra: full
+Requires-Dist: elephant>=0.12.0; extra == 'full'
+Requires-Dist: neo>=0.12.0; extra == 'full'
+Requires-Dist: quantities>=0.14.0; extra == 'full'
+Provides-Extra: neo
+Requires-Dist: neo>=0.12.0; extra == 'neo'
+Requires-Dist: quantities>=0.14.0; extra == 'neo'
+Description-Content-Type: text/markdown
+
+# SpikeLink
+
+**Spike-native transport for neuromorphic systems.**
+
+[![PyPI](https://img.shields.io/pypi/v/spikelink)](https://pypi.org/project/spikelink/)
+[![Python](https://img.shields.io/pypi/pyversions/spikelink)](https://pypi.org/project/spikelink/)
+[![License](https://img.shields.io/pypi/l/spikelink)](https://github.com/lightborneintelligence/spikelink/blob/main/LICENSE)
+[![Tests](https://github.com/lightborneintelligence/spikelink/actions/workflows/ci.yml/badge.svg)](https://github.com/lightborneintelligence/spikelink/actions)
+
+---
+
+> **Note on representation**  
+> SpikeLink does not replace digital computation. It operates post-binary within digital systems by transporting spike symbols without forcing early binary collapse.
+
+---
+
+## Why SpikeLink?
+
+| Traditional Transport | SpikeLink |
+|-----------------------|-----------|
+| SPIKE → ADC → BITS → DAC → SPIKE | SPIKE → SPIKELINK → SPIKE |
+| Conversion overhead | Native transport |
+| Cliff-edge failure | Graceful degradation |
+| Precision loss | Symbol magnitude continuity |
+
+**Key Properties:**
+
+- **Spike-native**: No ADC/DAC conversion stages
+- **Graceful degradation**: Precision loss under noise, not data loss
+- **EBRAINS compatible**: Validated against Neo, Elephant, PyNN workflows
+- **Time-coherent**: Bounded timing, predictable behavior
+
+---
+
+## Install
+
+```bash
+pip install spikelink
+```
+
+With EBRAINS ecosystem support:
+
+```bash
+pip install spikelink[neo]      # Neo adapter
+pip install spikelink[elephant] # Neo + Elephant
+pip install spikelink[full]     # Everything
+```
+
+---
+
+## Quick Start
+
+```python
+from spikelink import SpikeTrain, SpikelinkCodec
+
+# Create a spike train
+train = SpikeTrain(times=[0.1, 0.2, 0.3, 0.4, 0.5])
+
+# Encode to packets
+codec = SpikelinkCodec()
+packets = codec.encode_train(train)
+
+# Decode back
+recovered = codec.decode_packets(packets)
+
+print(f"Original:  {train.times}")
+print(f"Recovered: {recovered.times}")
+```
+
+### Convenience API
+
+```python
+import spikelink
+
+# One-liner encode/decode
+packets = spikelink.encode([0.1, 0.2, 0.3, 0.4, 0.5])
+recovered = spikelink.decode(packets)
+
+# Verify round-trip
+passed = spikelink.verify(original, recovered)
+```
+
+### Neo Integration
+
+```python
+from spikelink.adapters import NeoAdapter
+from spikelink import SpikelinkCodec
+import neo
+import quantities as pq
+
+# From Neo SpikeTrain
+neo_train = neo.SpikeTrain([0.1, 0.2, 0.3] * pq.s, t_stop=1.0 * pq.s)
+our_train = NeoAdapter.from_neo(neo_train)
+
+# Transport through SpikeLink
+codec = SpikelinkCodec()
+packets = codec.encode_train(our_train)
+recovered = codec.decode_packets(packets)
+
+# Back to Neo
+recovered_neo = NeoAdapter.to_neo(recovered)
+```
+
+---
+
+## Verification
+
+```python
+from spikelink import VerificationSuite, DegradationProfiler
+
+# Run verification suite
+suite = VerificationSuite()
+results = suite.run_all(original_train)
+suite.print_results(results)
+
+# Profile degradation under noise
+profiler = DegradationProfiler()
+profile = profiler.profile(train, noise_levels=[0, 0.1, 1.0, 10.0])
+profiler.print_profile(profile)
+```
+
+---
+
+## Graceful Degradation
+
+SpikeLink degrades proportionally under noise — precision loss, not data loss:
+
+| Noise % | Decimals Preserved |
+|---------|-------------------|
+| 0.0%    | 6                 |
+| 0.1%    | 5                 |
+| 1.0%    | 4                 |
+| 10.0%   | 3                 |
+
+✓ Monotonic degradation confirmed (confidence never inflates)
+
+---
+
+## Documentation
+
+- [Full Documentation](https://spikelink.readthedocs.io)
+- [Protocol Specification](https://spikelink.readthedocs.io/specifications/protocol/)
+- [EBRAINS Integration Guide](https://spikelink.readthedocs.io/tutorials/neo-integration/)
+
+---
+
+## External Verification
+
+SpikeLink has been externally verified against EBRAINS workflows:
+
+- **Neo-compatible**: SpikeTrain round-trip verified
+- **Elephant-verified**: Statistical fidelity confirmed
+- **PyNN stress-tested**: 380 neurons, 13,344 spikes, 100% preservation
+- **Ready for integration with SpiNNaker and BrainScaleS**
+
+---
+
+## License
+
+Apache 2.0 — See [LICENSE](LICENSE) for details.
+
+---
+
+## About
+
+**Lightborne Intelligence**  
+*Truth > Consensus · Sovereignty > Control · Coherence > Speed*
