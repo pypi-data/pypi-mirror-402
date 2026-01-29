@@ -1,0 +1,515 @@
+"""
+Core utilities for synthetic data generation.
+
+This module contains the fundamental utilities used across all synthetic data
+generation functions, including firing rate validation and calcium signal generation.
+"""
+
+import numpy as np
+import warnings
+
+# =============================================================================
+# Default Parameters for Synthetic Data Generation
+# =============================================================================
+
+DEFAULT_SYNTHETIC_PARAMS = {
+    # Calcium indicator dynamics
+    "t_rise": 0.05,  # Rise time in seconds
+    "decay_time": 2.0,  # Decay time constant in seconds
+    "calcium_noise": 0.02,  # Noise std for calcium signal
+    "amplitude_range": (0.5, 2.0),  # Calcium event amplitude range
+    # Firing rates
+    "baseline_rate": 0.1,  # Baseline firing rate in Hz
+    "peak_rate": 2.0,  # Peak firing rate in Hz (realistic for calcium imaging)
+    "firing_noise": 0.05,  # Noise std added to firing rates
+    # Recording parameters
+    "fps": 20.0,  # Sampling rate in Hz
+    "duration": 600,  # Duration in seconds
+}
+
+# Convenience aliases for direct access
+DEFAULT_T_RISE = DEFAULT_SYNTHETIC_PARAMS["t_rise"]
+DEFAULT_DECAY_TIME = DEFAULT_SYNTHETIC_PARAMS["decay_time"]
+DEFAULT_CALCIUM_NOISE = DEFAULT_SYNTHETIC_PARAMS["calcium_noise"]
+DEFAULT_AMPLITUDE_RANGE = DEFAULT_SYNTHETIC_PARAMS["amplitude_range"]
+DEFAULT_BASELINE_RATE = DEFAULT_SYNTHETIC_PARAMS["baseline_rate"]
+DEFAULT_PEAK_RATE = DEFAULT_SYNTHETIC_PARAMS["peak_rate"]
+DEFAULT_FIRING_NOISE = DEFAULT_SYNTHETIC_PARAMS["firing_noise"]
+DEFAULT_FPS = DEFAULT_SYNTHETIC_PARAMS["fps"]
+DEFAULT_DURATION = DEFAULT_SYNTHETIC_PARAMS["duration"]
+
+
+def validate_peak_rate(peak_rate, context=""):
+    """
+    Validate that peak firing rate is within physiologically realistic range.
+
+    Parameters
+    ----------
+    peak_rate : float
+        Peak firing rate in Hz. Must be non-negative and finite.
+    context : str, optional
+        Context string for more informative warning message.
+
+    Returns
+    -------
+    None
+        This function only validates and warns; it does not return a value.
+
+    Raises
+    ------
+    ValueError
+        If peak_rate is negative, NaN, or infinite.
+    TypeError
+        If peak_rate is not numeric.
+
+    Notes
+    -----
+    Typical firing rates for neurons:
+    - Cortical pyramidal cells: 0.1-2 Hz (sparse firing)
+    - Hippocampal place cells: 0.5-5 Hz (with brief peaks up to 20 Hz)
+    - Fast-spiking interneurons: 5-50 Hz
+
+    For calcium imaging with GCaMP indicators:
+    - Decay time ~1-2 seconds limits temporal resolution
+    - Firing rates >2 Hz can cause signal saturation
+    - Realistic modeling should use rates in 0.1-2 Hz range
+
+    Examples
+    --------
+    >>> validate_peak_rate(1.5)  # No warning, physiologically realistic
+
+    >>> import warnings
+    >>> with warnings.catch_warnings(record=True) as w:
+    ...     warnings.simplefilter("always")
+    ...     validate_peak_rate(5.0, context="Place cell simulation")
+    ...     len(w) > 0 and "exceeds recommended maximum" in str(w[0].message)
+    True
+
+    >>> validate_peak_rate(-1.0)
+    Traceback (most recent call last):
+        ...
+    ValueError: peak_rate must be non-negative, got -1.0
+    """
+    # Validate input
+    try:
+        peak_rate = float(peak_rate)
+    except (TypeError, ValueError):
+        raise TypeError(f"peak_rate must be numeric, got {type(peak_rate).__name__}")
+
+    if np.isnan(peak_rate):
+        raise ValueError("peak_rate cannot be NaN")
+    if np.isinf(peak_rate):
+        raise ValueError("peak_rate cannot be infinite")
+    if peak_rate < 0:
+        raise ValueError(f"peak_rate must be non-negative, got {peak_rate}")
+
+    if peak_rate > 2.0:
+        warning_msg = (
+            f"peak_rate={peak_rate:.1f} Hz exceeds recommended maximum of 2.0 Hz "
+            f"for calcium imaging. "
+            f"High firing rates can cause calcium signal saturation due to slow "
+            f"indicator dynamics (decay time ~2s). Consider using peak_rate <= 2.0 Hz "
+            f"for more realistic calcium traces."
+        )
+        if context:
+            warning_msg = f"{context}: {warning_msg}"
+        warnings.warn(warning_msg, UserWarning, stacklevel=2)
+
+
+# =============================================================================
+# Calcium Transient Kernels
+# =============================================================================
+
+
+def _double_exponential_kernel(t, amplitude, rise_time, decay_time):
+    """Generate double-exponential calcium transient kernel.
+
+    Models realistic calcium indicator dynamics with separate rise and decay phases.
+    Form: (1 - exp(-t/rise)) * exp(-t/decay)
+
+    Parameters
+    ----------
+    t : ndarray
+        Time array in samples.
+    amplitude : float
+        Peak amplitude of the transient.
+    rise_time : float
+        Rise time constant in samples.
+    decay_time : float
+        Decay time constant in samples.
+
+    Returns
+    -------
+    ndarray
+        Calcium transient waveform normalized to peak amplitude.
+    """
+    kernel = (1 - np.exp(-t / rise_time)) * np.exp(-t / decay_time)
+    # Normalize to peak = 1, then scale by amplitude
+    if np.max(kernel) > 0:
+        kernel = kernel / np.max(kernel) * amplitude
+    return kernel
+
+
+def _exponential_kernel(t, amplitude, decay_time):
+    """Generate simple exponential decay kernel.
+
+    Models instantaneous rise followed by exponential decay.
+    Form: amplitude * exp(-t/decay)
+
+    Parameters
+    ----------
+    t : ndarray
+        Time array in samples.
+    amplitude : float
+        Peak amplitude of the transient.
+    decay_time : float
+        Decay time constant in samples.
+
+    Returns
+    -------
+    ndarray
+        Calcium transient waveform.
+    """
+    return amplitude * np.exp(-t / decay_time)
+
+
+def _step_kernel(t, amplitude, decay_time, sharpness=5.0):
+    """Generate non-physiological step-like kernel for control.
+
+    Models unrealistic calcium dynamics with sharp edges.
+    Useful as negative control for testing model assumptions.
+
+    Parameters
+    ----------
+    t : ndarray
+        Time array in samples.
+    amplitude : float
+        Plateau amplitude.
+    decay_time : float
+        Duration of plateau in samples.
+    sharpness : float, optional
+        Controls edge sharpness (higher = sharper). Default 5.0.
+
+    Returns
+    -------
+    ndarray
+        Step-like waveform.
+    """
+    # Sigmoid rise and fall
+    rise = 1 / (1 + np.exp(-sharpness * (t / decay_time - 0.1)))
+    fall = 1 / (1 + np.exp(sharpness * (t / decay_time - 0.9)))
+    return amplitude * rise * fall
+
+
+# =============================================================================
+# Calcium Signal Generation
+# =============================================================================
+
+
+def generate_pseudo_calcium_signal(
+    events=None,
+    duration=600,
+    sampling_rate=20.0,
+    event_rate=0.2,
+    amplitude_range=(0.5, 2),
+    decay_time=2,
+    noise_std=0.1,
+    seed=None,
+    rise_time=None,
+    kernel="exponential",
+):
+    """Generate a pseudo-calcium imaging signal with configurable dynamics.
+
+    Creates a synthetic calcium fluorescence signal that mimics GCaMP-like
+    dynamics with configurable kernel shapes, random event amplitudes, and
+    Gaussian noise.
+
+    Parameters
+    ----------
+    events : ndarray or None, optional
+        Binary array indicating event occurrences at each time point.
+        If None, events are generated randomly using a Poisson process.
+        When provided, indices directly correspond to sample indices (not time in seconds).
+    duration : float, default=600
+        Total duration of the signal in seconds. Only used if events is None.
+        Must be positive.
+    sampling_rate : float, default=20.0
+        Sampling rate in Hz. Must be positive.
+    event_rate : float, default=0.2
+        Average rate of calcium events per second. Only used if events is None.
+        Must be non-negative.
+    amplitude_range : tuple of float, default=(0.5, 2)
+        (min, max) range for random calcium event amplitudes.
+        Must have min <= max.
+    decay_time : float, default=2
+        Time constant for exponential decay of calcium events in seconds.
+        Typical GCaMP indicators have decay times of 1-2 seconds.
+        Must be positive.
+    noise_std : float, default=0.1
+        Standard deviation of additive Gaussian noise. Must be non-negative.
+    seed : int, optional
+        Random seed for reproducibility. Default is None.
+    rise_time : float, optional
+        Rise time constant in seconds. Only used for 'double_exponential' kernel.
+        Default is None, which uses 0.25s (typical for GCaMP indicators).
+    kernel : {'exponential', 'double_exponential', 'step'}, default='exponential'
+        Type of calcium transient kernel:
+
+        - 'exponential': Simple exponential decay with instantaneous rise.
+          Form: amplitude * exp(-t/decay_time). Fast but less realistic.
+        - 'double_exponential': Physiologically realistic kernel with separate
+          rise and decay phases. Form: (1 - exp(-t/rise)) * exp(-t/decay).
+          Matches real GCaMP dynamics.
+        - 'step': Non-physiological step-like waveform with sharp edges.
+          Useful as negative control for testing model assumptions.
+
+    Returns
+    -------
+    ndarray
+        1D array representing the pseudo-calcium signal with shape (n_samples,).
+
+    Raises
+    ------
+    ValueError
+        If duration, sampling_rate, or decay_time <= 0.
+        If event_rate or noise_std < 0.
+        If amplitude_range[0] > amplitude_range[1].
+        If kernel is not one of the valid options.
+
+    Notes
+    -----
+    The calcium signal is modeled as a sum of transients triggered at event times,
+    plus additive Gaussian noise. This approximates the dynamics of genetically
+    encoded calcium indicators like GCaMP6.
+
+    When events is None: Event times are drawn uniformly in [0, duration) seconds.
+    When events is provided: Non-zero indices are treated as event sample indices.
+
+    Multiple overlapping events accumulate additively without saturation modeling.
+
+    Examples
+    --------
+    >>> # Generate random calcium signal with simple exponential decay
+    >>> signal = generate_pseudo_calcium_signal(duration=100, event_rate=0.5)
+    >>> signal.shape
+    (2000,)
+
+    >>> # Generate with realistic double-exponential dynamics
+    >>> signal = generate_pseudo_calcium_signal(
+    ...     duration=100, event_rate=0.5,
+    ...     kernel='double_exponential', rise_time=0.25
+    ... )
+
+    >>> # Generate from specific spike times
+    >>> spikes = np.zeros(1000)
+    >>> spikes[[100, 200, 300]] = 1  # 3 spike events at sample indices
+    >>> signal = generate_pseudo_calcium_signal(events=spikes)
+    """
+    # Validate kernel type
+    valid_kernels = ["exponential", "double_exponential", "step"]
+    if kernel not in valid_kernels:
+        raise ValueError(f"kernel must be one of {valid_kernels}, got '{kernel}'")
+
+    # Input validation
+    if sampling_rate <= 0:
+        raise ValueError(f"sampling_rate must be positive, got {sampling_rate}")
+    if decay_time <= 0:
+        raise ValueError(f"decay_time must be positive, got {decay_time}")
+    if noise_std < 0:
+        raise ValueError(f"noise_std must be non-negative, got {noise_std}")
+    if len(amplitude_range) != 2 or amplitude_range[0] > amplitude_range[1]:
+        raise ValueError(
+            f"amplitude_range must be (min, max) with min <= max, got {amplitude_range}"
+        )
+
+    # Default rise_time for double_exponential
+    if rise_time is None:
+        rise_time = 0.25  # Typical GCaMP rise time
+
+    # Initialize RNG
+    rng = np.random.default_rng(seed)
+
+    if events is None:
+        if duration <= 0:
+            raise ValueError(f"duration must be positive, got {duration}")
+        if event_rate < 0:
+            raise ValueError(f"event_rate must be non-negative, got {event_rate}")
+
+        # Calculate number of samples
+        num_samples = int(duration * sampling_rate)
+
+        # Generate calcium events
+        num_events = rng.poisson(event_rate * duration)
+        event_times = rng.uniform(0, duration, num_events)
+        event_amplitudes = rng.uniform(amplitude_range[0], amplitude_range[1], num_events)
+
+    else:
+        num_samples = len(events)
+        event_times = np.where(events > 0)[0]
+        # Use amplitude_range to modulate event amplitudes instead of using binary values
+        if len(event_times) > 0:
+            event_amplitudes = rng.uniform(
+                amplitude_range[0], amplitude_range[1], len(event_times)
+            )
+        else:
+            event_amplitudes = np.array([])
+
+    # Convert time constants to samples
+    rise_time_samples = rise_time * sampling_rate
+    decay_time_samples = decay_time * sampling_rate
+
+    # Convert event times to sample indices
+    if events is None:
+        event_indices = (event_times * sampling_rate).astype(int)
+    else:
+        event_indices = event_times.astype(int)
+
+    # Filter out-of-bounds events
+    valid_mask = event_indices < num_samples
+    event_indices = event_indices[valid_mask]
+    event_amplitudes = event_amplitudes[valid_mask]
+
+    # Generate signal using vectorized convolution
+    if len(event_indices) > 0:
+        # Determine kernel length (until decay to <1% of peak)
+        if kernel == "step":
+            kernel_length = int(2 * decay_time_samples) + 1
+        else:
+            kernel_length = int(5 * decay_time_samples) + 1
+
+        # Create unit kernel
+        t_kernel = np.arange(kernel_length)
+        if kernel == "double_exponential":
+            unit_kernel = _double_exponential_kernel(
+                t_kernel, 1.0, rise_time_samples, decay_time_samples
+            )
+        elif kernel == "exponential":
+            unit_kernel = _exponential_kernel(t_kernel, 1.0, decay_time_samples)
+        elif kernel == "step":
+            unit_kernel = _step_kernel(t_kernel, 1.0, decay_time_samples)
+
+        # Create sparse event signal with amplitudes
+        event_signal = np.zeros(num_samples)
+        np.add.at(event_signal, event_indices, event_amplitudes)
+
+        # Convolve and truncate
+        signal = np.convolve(event_signal, unit_kernel, mode="full")[:num_samples]
+    else:
+        signal = np.zeros(num_samples)
+
+    # Add Gaussian noise
+    noise = rng.normal(0, noise_std, num_samples)
+    signal += noise
+
+    return signal
+
+
+def generate_pseudo_calcium_multisignal(
+    n,
+    events=None,
+    duration=600,
+    sampling_rate=20,
+    event_rate=0.2,
+    amplitude_range=(0.5, 2),
+    decay_time=2,
+    noise_std=0.1,
+    seed=None,
+    rise_time=None,
+    kernel="exponential",
+):
+    """
+    Generate multiple pseudo calcium signals.
+
+    Parameters
+    ----------
+    n : int
+        Number of neurons. Must be non-negative.
+    events : ndarray, optional
+        Event array of shape (n_neurons, n_timepoints). If provided, must have
+        n_neurons == n. Each row corresponds to one neuron's event indices.
+    duration : float, default=600
+        Duration in seconds. Only used if events is None.
+    sampling_rate : float, default=20
+        Sampling rate in Hz.
+    event_rate : float, default=0.2
+        Average rate of calcium events per second. Only used if events is None.
+    amplitude_range : tuple, default=(0.5, 2)
+        (min, max) for the amplitude of calcium events.
+    decay_time : float, default=2
+        Time constant for the decay of calcium events in seconds.
+    noise_std : float, default=0.1
+        Standard deviation of the Gaussian noise.
+    seed : int, optional
+        Random seed for reproducibility. Default is None.
+    rise_time : float, optional
+        Rise time constant in seconds. Only used for 'double_exponential' kernel.
+        Default is None, which uses 0.25s.
+    kernel : {'exponential', 'double_exponential', 'step'}, default='exponential'
+        Type of calcium transient kernel. See generate_pseudo_calcium_signal
+        for details on each kernel type.
+
+    Returns
+    -------
+    ndarray
+        Calcium signals of shape (n_neurons, n_timepoints).
+
+    Raises
+    ------
+    ValueError
+        If n < 0.
+        If events is provided with wrong shape.
+
+    Notes
+    -----
+    This is a convenience wrapper that calls generate_pseudo_calcium_signal
+    for each neuron independently. Each neuron gets independent random
+    events (if events=None) and independent noise.
+
+    Examples
+    --------
+    >>> # Generate 5 neurons with random events
+    >>> signals = generate_pseudo_calcium_multisignal(5, duration=100)
+    >>> signals.shape
+    (5, 2000)
+
+    >>> # Generate with specific events per neuron
+    >>> events = np.random.binomial(1, 0.01, size=(3, 1000))
+    >>> signals = generate_pseudo_calcium_multisignal(3, events=events)"""
+    # Input validation
+    if n < 0:
+        raise ValueError(f"n must be non-negative, got {n}")
+
+    if events is not None:
+        events = np.asarray(events)
+        if events.ndim != 2:
+            raise ValueError(f"events must be 2D array, got shape {events.shape}")
+        if events.shape[0] != n:
+            raise ValueError(f"events first dimension {events.shape[0]} must match n={n}")
+
+    # Initialize RNG for seed generation
+    rng = np.random.default_rng(seed)
+
+    sigs = []
+    for i in range(n):
+        local_events = None
+        if events is not None:
+            local_events = events[i, :]
+
+        # Generate unique seed for each neuron
+        neuron_seed = int(rng.integers(0, 2**31))
+
+        sig = generate_pseudo_calcium_signal(
+            events=local_events,
+            duration=duration,
+            sampling_rate=sampling_rate,
+            event_rate=event_rate,
+            amplitude_range=amplitude_range,
+            decay_time=decay_time,
+            noise_std=noise_std,
+            seed=neuron_seed,
+            rise_time=rise_time,
+            kernel=kernel,
+        )
+        sigs.append(sig)
+
+    return np.vstack(sigs)

@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""
+Basic INTENSE Usage Example
+
+This example demonstrates the minimal workflow for using DRIADA's INTENSE module:
+1. Generate synthetic neural data with realistic tuning properties
+2. Analyze neuronal selectivity
+3. Extract significant results
+4. Visualize findings
+
+This is a self-contained example that runs without external data files.
+"""
+
+import sys
+import os
+
+# Add the src directory to the path to import driada
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+
+import driada
+from driada.experiment.synthetic import generate_tuned_selectivity_exp
+import matplotlib.pyplot as plt
+
+
+def main():
+    """Run basic INTENSE analysis example."""
+    print("=" * 60)
+    print("DRIADA INTENSE - Basic Usage Example")
+    print("=" * 60)
+
+    # Step 1: Generate synthetic experiment with meaningful features
+    print("\n1. Generating synthetic experiment...")
+    print("   - 10 neurons with realistic tuning")
+    print("   - Head direction cells (circular tuning)")
+    print("   - Speed cells (linear tuning)")
+    print("   - Event cells (discrete responses)")
+    print("   - 10 minutes recording")
+
+    # Define simple population with meaningful selectivity
+    population = [
+        {"name": "hd_cells", "count": 2, "features": ["head_direction"]},
+        {"name": "speed_cells", "count": 2, "features": ["speed"]},
+        {"name": "event_cells", "count": 2, "features": ["event_0"]},
+        {"name": "nonselective", "count": 4, "features": []},
+    ]
+
+    exp = generate_tuned_selectivity_exp(
+        population=population,
+        duration=600,
+        fps=20,
+        seed=47,
+        n_discrete_features=1,
+        verbose=False,
+    )
+
+    print(
+        f"   [OK] Created experiment with {exp.n_cells} neurons and {exp.n_frames} timepoints"
+    )
+    print(f"   [OK] Features: {list(exp.dynamic_features.keys())}")
+
+    # Step 2: Analyze neuronal selectivity
+    print("\n2. Running INTENSE analysis...")
+    print("   - Two-stage statistical testing")
+    print("   - Mutual information metric")
+    print("   - Multiple comparison correction")
+
+    stats, significance, info, results = driada.compute_cell_feat_significance(
+        exp,
+        mode="two_stage",
+        n_shuffles_stage1=100,
+        n_shuffles_stage2=10000,
+        pval_thr=0.001,
+        multicomp_correction=None,
+        ds=5,
+        verbose=False,
+    )
+
+    print("   [OK] Analysis complete")
+
+    # Step 3: Extract significant results
+    print("\n3. Extracting significant results...")
+
+    significant_neurons = exp.get_significant_neurons()
+    total_pairs = sum(len(features) for features in significant_neurons.values())
+
+    print(f"   [OK] Found {len(significant_neurons)} neurons with significant selectivity")
+    print(f"   [OK] Total significant neuron-feature pairs: {total_pairs}")
+
+    # Step 4: Display results
+    print("\n4. Results summary:")
+
+    if significant_neurons:
+        print("   Significant neuron-feature relationships:")
+        for cell_id in list(significant_neurons.keys())[:3]:  # Show first 3
+            for feat_name in significant_neurons[cell_id]:
+                pair_stats = exp.get_neuron_feature_pair_stats(cell_id, feat_name)
+
+                print(f"   - Neuron {cell_id} <-> Feature '{feat_name}':")
+                print(f"     - Mutual Information: {pair_stats.get('me', 0):.4f} bits")
+                if "pval" in pair_stats:
+                    print(f"     - P-value: {pair_stats['pval']:.2e}")
+                # opt_delay is in frames; convert to seconds using experiment fps
+                opt_delay_frames = pair_stats.get("opt_delay", 0)
+                opt_delay_sec = opt_delay_frames / exp.fps if exp.fps else 0
+                print(f"     - Optimal delay: {opt_delay_sec:.2f}s ({opt_delay_frames} frames)")
+
+        if len(significant_neurons) > 3:
+            remaining = len(significant_neurons) - 3
+            print(f"   ... and {remaining} more significant neurons")
+    else:
+        print("   No significant relationships found with current parameters.")
+        print("   Try using different synthetic data or adjusting p-value threshold.")
+
+    # Step 5: Create visualization
+    print("\n5. Creating visualization...")
+
+    if significant_neurons:
+        # Plot first significant neuron-feature pair
+        cell_id = list(significant_neurons.keys())[0]
+        feat_name = significant_neurons[cell_id][0]
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        driada.intense.plot_neuron_feature_pair(exp, cell_id, feat_name, ax=ax)
+        plt.title(f"Neuron {cell_id} selectivity to {feat_name}")
+        plt.tight_layout()
+
+        # Save plot
+        output_path = os.path.join(os.path.dirname(__file__), "intense_basic_usage_result.png")
+        plt.savefig(output_path, dpi=150, bbox_inches="tight")
+        print(f"   [OK] Visualization saved to: {output_path}")
+
+        # Display plot
+        plt.show()
+    else:
+        print("   No visualization created (no significant relationships found)")
+
+    print("\n" + "=" * 60)
+    print("BASIC USAGE EXAMPLE COMPLETE")
+    print("=" * 60)
+    print("\nNext steps:")
+    print("- Try full_intense_pipeline/ for comprehensive analysis with ground truth")
+    print("- Try mixed_selectivity/ for advanced disentanglement")
+    print("- Modify parameters above to explore different scenarios")
+
+
+if __name__ == "__main__":
+    main()
