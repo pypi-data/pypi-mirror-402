@@ -1,0 +1,370 @@
+# DockLift
+
+Deploy web applications to VPS using Docker Compose with automatic SSL via Caddy.
+
+## Features
+
+- **Simple Configuration**: Lightweight YAML configuration for all deployment settings
+- **Automatic SSL**: Automatic HTTPS certificates via Caddy's ACME integration
+- **Multi-App Support**: Deploy multiple applications to the same VPS, each with its own domain
+- **Auto Port Assignment**: Automatically assigns ports to applications (starts at 3000, increments)
+- **Idempotent Operations**: All commands can be run multiple times safely
+- **Dependency Management**: Built-in support for databases, caches, and other services
+- **Type-Safe**: Full type hints throughout the codebase
+- **Beautiful CLI**: Rich terminal output with progress indicators
+
+## Installation
+
+Using UV (recommended):
+
+```bash
+uv tool install docklift
+```
+
+Using pip:
+
+```bash
+pip install docklift
+```
+
+## Quick Start
+
+### 1. Initialize Configuration
+
+Run the interactive setup:
+
+```bash
+docklift init
+```
+
+Or provide values as arguments to skip prompts:
+
+```bash
+docklift init myapp --domain myapp.example.com --host 192.168.1.100
+```
+
+This creates a `docklift.yml` file. The wizard will prompt for:
+- Application name and domain
+- VPS host and SSH credentials
+- Application port
+- Email for SSL certificate notifications (optional)
+
+### 2. Bootstrap VPS
+
+First time setup - installs Docker, Caddy, and creates shared infrastructure:
+
+```bash
+docklift bootstrap
+```
+
+This step is idempotent. It will:
+- Install Docker and Docker Compose (if not present)
+- Create a shared network for all applications
+- Set up Caddy reverse proxy with automatic HTTPS
+
+### 3. Deploy Application
+
+```bash
+docklift deploy
+```
+
+This will:
+- Upload your application code
+- Generate docker-compose.yml
+- Build the Docker image on the VPS
+- Start the application
+- Configure Caddy to route traffic
+- Test the deployment
+
+## Configuration
+
+Create a `docklift.yml` file:
+
+```yaml
+vps:
+  host: 192.168.1.100
+  user: root
+  ssh_key_path: ~/.ssh/id_rsa
+  port: 22
+  email: admin@example.com  # Optional: for Let's Encrypt SSL notifications
+
+application:
+  name: myapp
+  domain: myapp.example.com
+  dockerfile: ./Dockerfile
+  context: .
+  # port: 3000  # Optional: auto-assigned if not specified
+
+  environment:
+    NODE_ENV: production
+    DATABASE_URL: postgres://postgres:password@postgres:5432/myapp
+    REDIS_URL: redis://redis:6379
+
+  dependencies:
+    postgres:
+      image: postgres:16-alpine
+      environment:
+        POSTGRES_DB: myapp
+        POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: changeme
+      volumes:
+        - postgres_data:/var/lib/postgresql/data
+
+    redis:
+      image: redis:7-alpine
+      volumes:
+        - redis_data:/data
+```
+
+## Commands
+
+### Initialize
+
+Create a new configuration file interactively:
+
+```bash
+docklift init
+```
+
+Or provide arguments to skip prompts:
+
+```bash
+docklift init myapp --domain app.example.com --host 192.168.1.100 --user deploy
+```
+
+### Bootstrap
+
+Set up VPS infrastructure (run once per VPS):
+
+```bash
+docklift bootstrap [--config docklift.yml]
+```
+
+### Deploy
+
+Deploy or update an application:
+
+```bash
+docklift deploy [--config docklift.yml] [--skip-bootstrap]
+```
+
+### Status
+
+Check application status:
+
+```bash
+docklift status [--config docklift.yml]
+```
+
+### Remove
+
+Remove an application:
+
+```bash
+docklift remove [--config docklift.yml] [--remove-volumes]
+```
+
+## Environment Variables and Secrets
+
+DockLift supports loading environment variables from `.env` files to keep secrets out of version control.
+
+### Using .env Files
+
+1. Create a `.env` file in your project:
+
+```bash
+# .env
+DATABASE_PASSWORD=super-secret-password
+API_KEY=sk-1234567890
+STRIPE_SECRET=sk_test_abc123
+```
+
+2. Reference it in `docklift.yml`:
+
+```yaml
+application:
+  environment:
+    NODE_ENV: production
+    DATABASE_URL: postgres://user:${DATABASE_PASSWORD}@postgres:5432/db
+  env_file: .env  # Load additional variables from .env
+```
+
+3. Add `.env` to `.gitignore`:
+
+```bash
+echo ".env" >> .gitignore
+```
+
+### Precedence Rules
+
+- Variables defined in `docklift.yml` take **precedence** over `.env` file
+- This allows you to override secrets for specific environments
+- Use YAML for non-sensitive config, `.env` for secrets
+
+### Example
+
+With this setup:
+
+```yaml
+# docklift.yml
+environment:
+  NODE_ENV: production
+  API_KEY: override-key
+env_file: .env
+```
+
+```bash
+# .env
+API_KEY=secret-from-env
+DATABASE_URL=postgres://localhost/db
+```
+
+The result will be:
+- `NODE_ENV=production` (from YAML)
+- `API_KEY=override-key` (YAML overrides .env)
+- `DATABASE_URL=postgres://localhost/db` (from .env)
+
+## How It Works
+
+### Architecture
+
+DockLift creates the following structure on your VPS:
+
+```
+/opt/docklift/
+├── caddy-compose.yml        # Caddy reverse proxy
+├── Caddyfile                # Caddy configuration
+└── apps/
+    ├── app1/
+    │   ├── docker-compose.yml
+    │   └── [app files]
+    └── app2/
+        ├── docker-compose.yml
+        └── [app files]
+```
+
+### Network Architecture
+
+- All applications and Caddy share a Docker network called `docklift-network`
+- Caddy listens on ports 80 and 443
+- Applications expose their internal ports only to the shared network
+- Caddy routes traffic based on domain name to the appropriate application
+
+### SSL Certificates
+
+- Caddy automatically obtains SSL certificates via Let's Encrypt
+- Certificates are automatically renewed
+- HTTP traffic is automatically redirected to HTTPS
+
+### Port Management
+
+- Applications can specify a port or leave it blank for auto-assignment
+- Auto-assigned ports start at 3000 and increment for each new application
+- Ports are only exposed internally to the Docker network (no host port conflicts)
+- When redeploying an existing app, the same port is reused
+
+## Example: Django Application
+
+```yaml
+vps:
+  host: myserver.example.com
+  user: deploy
+  ssh_key_path: ~/.ssh/deploy_key
+  port: 22
+  email: admin@myserver.example.com
+
+application:
+  name: django-app
+  domain: app.example.com
+  dockerfile: ./Dockerfile
+  context: .
+  port: 8000
+
+  environment:
+    DJANGO_SETTINGS_MODULE: myapp.settings.production
+    DATABASE_URL: postgres://django:secure_pass@postgres:5432/django_db
+    REDIS_URL: redis://redis:6379/0
+    SECRET_KEY: your-secret-key-here
+
+  dependencies:
+    postgres:
+      image: postgres:16-alpine
+      environment:
+        POSTGRES_DB: django_db
+        POSTGRES_USER: django
+        POSTGRES_PASSWORD: secure_pass
+      volumes:
+        - postgres_data:/var/lib/postgresql/data
+
+    redis:
+      image: redis:7-alpine
+      volumes:
+        - redis_data:/data
+```
+
+## Example: Node.js Application
+
+```yaml
+vps:
+  host: myserver.example.com
+  user: deploy
+  ssh_key_path: ~/.ssh/deploy_key
+  port: 22
+  email: admin@myserver.example.com
+
+application:
+  name: nodejs-app
+  domain: app.example.com
+  dockerfile: ./Dockerfile
+  context: .
+  port: 3000
+
+  environment:
+    NODE_ENV: production
+    MONGODB_URL: mongodb://mongo:27017/myapp
+
+  dependencies:
+    mongo:
+      image: mongo:7
+      volumes:
+        - mongo_data:/data/db
+```
+
+## Requirements
+
+- Python 3.12+
+- SSH access to a VPS running a modern Linux distribution
+- Docker-compatible VPS (Ubuntu 20.04+, Debian 11+, etc.)
+- Domain name(s) pointed to your VPS
+
+## Development
+
+Built with:
+- **Python 3.12+** with type hints
+- **UV** for package management
+- **Fabric** for SSH operations
+- **Rich** for beautiful CLI output
+- **Pydantic** for configuration validation
+- **Click** for CLI framework
+
+### Setup Development Environment
+
+```bash
+# Clone the repository
+git clone https://github.com/amirkarimi/docklift.git
+cd docklift
+
+# Install dependencies
+uv sync
+
+# Run in development mode
+uv run docklift --help
+```
+
+## License
+
+MIT
+
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request.
