@@ -1,0 +1,48 @@
+(void v) loop (location ME) {
+    for (boolean b = true, int i = 1;
+       b;
+       b=c, i = i + 1)
+  {
+    // Gets the model parameters from the python ME algorithm
+    string params = {{cookiecutter.eq_call_prefix}}_get(ME);
+    boolean c;
+    if (params == "DONE")
+    {
+        string finals =  {{cookiecutter.eq_call_prefix}}_get(ME);
+        // TODO if appropriate
+        // split finals string and join with "\\n"
+        // e.g. finals is a ";" separated string and we want each
+        // element on its own line:
+        // multi_line_finals = join(split(finals, ";"), "\\n");
+        string fname = "%s/final_result" % (turbine_output);
+        file results_file <fname> = write(finals) =>
+        printf("Writing final result to %s", fname) =>
+        // printf("Results: %s", finals) =>
+        v = make_void() =>
+        c = false;
+    } else if (params == "{{cookiecutter.eq_call_prefix|upper}}_ABORT") {
+        printf("{{cookiecutter.eq_call_prefix}} Aborted");
+        string why = {{cookiecutter.eq_call_prefix}}_get(ME);
+        // TODO handle the abort if necessary, e.g., write intermediate results.
+        printf("%s", why) =>
+        v = propagate() =>
+        c = false;
+    } else {
+        {% if cookiecutter.me_output_type == "semicolon" %}
+        string param_array[] = split(params, ";");
+        {%- else -%}
+        string param_array[] = parse_json_list(params);
+        {%- endif %}
+        string obj_results[];
+        string log[];
+        foreach p, j in param_array {
+            obj_results[j], log[j] = obj(p, i, j);
+        }
+
+        string res = join(obj_results, ";");
+        string fname = "%s/result_log_%d.csv" % (turbine_output, i);
+        file results_file <fname> = write(join(log, "\n") + "\n") =>
+        {{cookiecutter.eq_call_prefix}}_put(ME, res) => c = true;
+    }
+  }
+}

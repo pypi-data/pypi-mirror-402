@@ -1,0 +1,37 @@
+// app function used to run the model
+app (file out, file err) run_model(file shfile, string param_line, string output_file, int trial, string instance_dir) {
+    "bash" shfile param_line output_file trial emews_root instance_dir @stdout=out @stderr=err;
+}
+
+(float result) run_obj(string param_line, int trial, string instance_dir, string instance_id) {
+    file out <instance_dir + "/" + instance_id+"_out.txt">;
+    file err <instance_dir + "/" + instance_id+"_err.txt">;
+    string output_file = "%s/{{cookiecutter.model_output_file_name}}_%s.{{cookiecutter.model_output_file_ext}}" % (instance_dir, instance_id);
+    (out,err) = run_model(model_sh, param_line, output_file,  trial, instance_dir) =>
+    result = get_result(output_file);
+}
+
+(string obj_result, string log_string) obj(string params, int me_iter, int param_iter) {
+    float results[];
+    string log_lines[];
+
+    string instance = "%s/instance_%i_%i/" % (turbine_output, me_iter, param_iter);
+    mkdir(instance) => {
+        foreach i in [0:n_trials-1:1] {
+            int trial = i + 1;
+            string instance_id = "%i_%i_%i" % (me_iter, param_iter, trial);
+            results[i] = run_obj(params, trial, instance, instance_id);
+            log_lines[i] =  "%d|%d|%d|%s|%f" % (me_iter, param_iter, trial, params, results[i]);
+        }
+    }
+
+    obj_result = float2string(get_aggregate_result(results)) =>
+    // TODO uncomment to delete the instance directory if
+    // it is not needed after the result have been computed.
+    // rm_dir(instance);
+    string log_lines2[];
+    foreach line, i in log_lines {
+      log_lines2[i] = line + "|" + obj_result;
+    }
+    log_string = string_join(log_lines2, "\n");
+}

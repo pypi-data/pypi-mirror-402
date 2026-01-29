@@ -1,0 +1,33 @@
+#! /usr/bin/env bash
+set -eu
+
+if [ "$#" -ne 2 ]; then
+  script_name=$(basename "$0")
+  echo "Usage: ${script_name} exp_id cfg_file"
+  exit 1
+fi
+
+# Uncomment to turn on swift/t logging. Can also set TURBINE_LOG,
+# TURBINE_DEBUG, and ADLB_DEBUG to 0 to turn off logging
+# export TURBINE_LOG=1 TURBINE_DEBUG=1 ADLB_DEBUG=1
+export EMEWS_PROJECT_ROOT=$( cd "$( dirname "$0" )/.." ; /bin/pwd )
+# source some utility functions used by EMEWS in this script
+source "${EMEWS_PROJECT_ROOT}/etc/emews_utils.sh"
+
+export EXPID=$1
+export TURBINE_OUTPUT="$EMEWS_PROJECT_ROOT/experiments/$EXPID"
+
+{%- if cookiecutter.check_directory == 'y' %}
+check_directory_exists
+{% else %}
+# check_directory_exists
+{% endif %}
+CFG_FILE="$2"
+source "$CFG_FILE"
+
+echo "--------------------------"
+echo "WALLTIME:              $CFG_WALLTIME"
+echo "PROCS:                 $CFG_PROCS"
+echo "PPN:                   $CFG_PPN"
+echo "QUEUE:                 $CFG_QUEUE"
+echo "PROJECT:               $CFG_PROJECT"
