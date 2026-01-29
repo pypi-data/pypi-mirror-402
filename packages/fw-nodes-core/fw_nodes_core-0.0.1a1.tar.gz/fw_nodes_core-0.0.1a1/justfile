@@ -1,0 +1,53 @@
+# Flowire Core Nodes development commands
+
+# Default recipe - show available commands
+default:
+    @just --list
+
+# Install dependencies (including dev)
+install:
+    uv sync --all-extras
+
+# Run linter
+lint:
+    uv run ruff check .
+
+# Run linter and fix auto-fixable issues
+lint-fix:
+    uv run ruff check --fix .
+
+# Format code
+format:
+    uv run ruff format .
+
+# Check formatting without making changes
+format-check:
+    uv run ruff format --check .
+
+# Run all checks (lint + format check)
+check: lint format-check
+
+# Run tests
+test:
+    uv run pytest
+
+# Run tests with verbose output
+test-verbose:
+    uv run pytest -v
+
+# Run tests with coverage
+test-cov:
+    uv run pytest --cov=fw_nodes_core --cov-report=term-missing
+
+# Build the package
+build:
+    uv build
+
+# Publish to PyPI (requires UV_PUBLISH_TOKEN env var)
+publish: build
+    uv publish
+
+# Clean build artifacts
+clean:
+    rm -rf dist/ build/ *.egg-info/ .pytest_cache/ .ruff_cache/ .coverage htmlcov/
+    find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
