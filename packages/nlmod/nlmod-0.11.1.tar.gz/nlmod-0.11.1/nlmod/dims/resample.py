@@ -1,0 +1,719 @@
+import logging
+import numbers
+
+import numpy as np
+import rasterio
+import xarray as xr
+from flopy.discretization.vertexgrid import VertexGrid
+from scipy.interpolate import griddata
+from scipy.ndimage import binary_dilation, distance_transform_edt
+from scipy.spatial import cKDTree
+
+import nlmod
+
+from ..util import get_da_from_da_ds
+from .shared import get_area, is_structured, is_vertex
+
+logger = logging.getLogger(__name__)
+
+
+def get_xy_mid_structured(extent, delr, delc, descending_y=True, tiny=1e-10):
+    """Calculates the x and y coordinates of the cell centers of a structured grid.
+
+    Parameters
+    ----------
+    extent : list, tuple or np.array
+        extent (xmin, xmax, ymin, ymax)
+    delr : int, float, list, tuple or array, optional
+        The gridsize along columns (dx). The default is 100. meter.
+    delc : None, int, float, list, tuple or array, optional
+        The gridsize along rows (dy). Set to delr when None. If None delc=delr
+    descending_y : bool, optional
+        if True the resulting ymid array is in descending order. This is the
+        default for MODFLOW models. default is True.
+    tiny : float, optional
+        A small value (for floating point reasons) to check if the extent is valid.
+        The default is 1e-10.
+
+    Returns
+    -------
+    x : np.array
+        x-coordinates of the cell centers shape (ncol)
+    y : np.array
+        y-coordinates of the cell centers shape (nrow)
+    """
+    if isinstance(delr, (numbers.Number)):
+        if not isinstance(delc, (numbers.Number)):
+            raise TypeError("if delr is a number delc should be a number as well")
+
+        # check if extent is valid
+        if (extent[1] - extent[0]) % delr > tiny:
+            raise ValueError(
+                "invalid extent, the extent should contain an integer"
+                " number of cells in the x-direction"
+            )
+        if (extent[3] - extent[2]) % delc > tiny:
+            raise ValueError(
+                "invalid extent, the extent should contain an integer"
+                " number of cells in the y-direction"
+            )
+
+        # get cell mids
+        x_mid_start = extent[0] + 0.5 * delr
+        x_mid_end = extent[1] - 0.5 * delr
+        y_mid_start = extent[2] + 0.5 * delc
+        y_mid_end = extent[3] - 0.5 * delc
+
+        ncol = int((extent[1] - extent[0]) / delr)
+        nrow = int((extent[3] - extent[2]) / delc)
+
+        x = np.linspace(x_mid_start, x_mid_end, ncol)
+        if descending_y:
+            y = np.linspace(y_mid_end, y_mid_start, nrow)
+        else:
+            y = np.linspace(y_mid_start, y_mid_end, nrow)
+        return x, y
+
+    elif isinstance(delr, np.ndarray) and isinstance(delc, np.ndarray):
+        delr = np.asarray(delr)
+        delc = np.asarray(delc)
+        if (delr.ndim != 1) or (delc.ndim != 1):
+            raise ValueError("expected 1d array")
+
+        x = []
+        for i, dx in enumerate(delr):
+            x.append(extent[0] + dx / 2 + sum(delr[:i]))
+
+        # you always want descending y in this case, so not using
+        # the keyword argument
+        y = []
+        for i, dy in enumerate(delc):
+            y.append(extent[3] - dy / 2 - sum(delc[:i]))
+
+        return x, y
+
+    else:
+        raise TypeError("unexpected type for delr and/or delc")
+
+
+def ds_to_structured_grid(
+    ds_in,
+    extent,
+    delr,
+    delc=None,
+    xorigin=0.0,
+    yorigin=0.0,
+    angrot=0.0,
+    method="nearest",
+):
+    """Resample a dataset from a structured grid to a different structured grid.
+
+    Parameters
+    ----------
+    ds_in : xarray.Dataset
+        dataset with dimensions (layer, y, x). y and x are from the original
+        grid
+    extent : list, tuple or np.array of length 4
+        extent (xmin, xmax, ymin, ymax) of the desired grid.
+    delr : int or float
+        cell size along rows of the desired grid (dx).
+    delc : int or float
+        cell size along columns of the desired grid (dy).
+    xorigin : int or float, optional
+        lower left x coordinate of the model grid. When angrot == 0, xorigin is added to
+        the first two values of extent. Otherwise it is the x-coordinate of the point
+        the grid is rotated around, and xorigin is added to the Dataset-attributes.
+        The default is 0.0.
+    yorigin : int or float, optional
+        lower left y coordinate of the model grid. When angrot == 0, yorigin is added to
+        the last two values of extent. Otherwise it is the y-coordinate of the point
+        the grid is rotated around, and yorigin is added to the Dataset-attributes.
+        The default is 0.0.
+    angrot : int or float, optinal
+        the rotation of the grid in counter clockwise degrees. When angrot != 0 the grid
+        is rotated, and all coordinates of the model are in model coordinates. See
+        https://nlmod.readthedocs.io/en/stable/examples/11_grid_rotation.html for more
+        infomation. The default is 0.0.
+    method : str, optional
+        type of interpolation used to resample. Sea structured_da_to_ds for
+        possible values of method. The default is 'nearest'.
+
+    Returns
+    -------
+    ds_out : xarray.Dataset
+        dataset with dimensions (layer, y, x). y and x are from the new
+        grid.
+    """
+    assert isinstance(ds_in, xr.core.dataset.Dataset)
+    if hasattr(ds_in, "gridtype"):
+        assert ds_in.attrs["gridtype"] == "structured"
+    if delc is None:
+        delc = delr
+
+    attrs = ds_in.attrs.copy()
+    _set_angrot_attributes(extent, xorigin, yorigin, angrot, attrs)
+
+    x, y = get_xy_mid_structured(attrs["extent"], delr, delc)
+
+    # add new attributes
+    attrs["gridtype"] = "structured"
+
+    if isinstance(delr, numbers.Number) and isinstance(delc, numbers.Number):
+        delr = np.full_like(x, delr)
+        delc = np.full_like(y, delc)
+
+    if method in ["nearest", "linear"] and angrot == 0.0:
+        ds_out = ds_in.interp(
+            x=x, y=y, method=method, kwargs={"fill_value": "extrapolate"}
+        )
+        ds_out.attrs = attrs
+        return ds_out
+
+    ds_out = xr.Dataset(coords={"y": y, "x": x, "layer": ds_in.layer.data}, attrs=attrs)
+    for var in ds_in.data_vars:
+        ds_out[var] = structured_da_to_ds(ds_in[var], ds_out, method=method)
+    return ds_out
+
+
+def _set_angrot_attributes(extent, xorigin, yorigin, angrot, attrs):
+    """Internal method to set the properties of the grid in an attribute dictionary.
+
+    Parameters
+    ----------
+    extent : list, tuple or np.array of length 4
+        extent (xmin, xmax, ymin, ymax) of the desired grid.
+    xorigin : int or float, optional
+        lower left x coordinate of the model grid. When angrot == 0, xorigin is added to
+        the first two values of extent. Otherwise it is the x-coordinate of the point
+        the grid is rotated around, and xorigin is added to the Dataset-attributes.
+        The default is 0.0.
+    yorigin : int or float, optional
+        lower left y coordinate of the model grid. When angrot == 0, yorigin is added to
+        the last two values of extent. Otherwise it is the y-coordinate of the point
+        the grid is rotated around, and yorigin is added to the Dataset-attributes.
+        The default is 0.0.
+    angrot : int or float, optinal
+        the rotation of the grid in counter clockwise degrees. When angrot != 0 the grid
+        is rotated, and all coordinates of the model are in model coordinates. See
+        https://nlmod.readthedocs.io/en/stable/examples/11_grid_rotation.html for more
+        infomation. The default is 0.0.
+    attrs : dict
+        Attributes of a model dataset.
+
+    Returns
+    -------
+    None.
+    """
+    # make sure extent is a list and the original extent is not changed
+    extent = list(extent)
+    if angrot == 0.0:
+        if xorigin != 0.0:
+            extent[0] = extent[0] + xorigin
+            extent[1] = extent[1] + xorigin
+        if yorigin != 0.0:
+            extent[2] = extent[2] + yorigin
+            extent[3] = extent[3] + yorigin
+        attrs["extent"] = extent
+    else:
+        if xorigin == 0.0:
+            xorigin = extent[0]
+            extent[0] = 0.0
+            extent[1] = extent[1] - xorigin
+        elif extent[0] != 0.0:
+            raise (ValueError("Either extent[0] or xorigin needs to be 0.0"))
+        if yorigin == 0.0:
+            yorigin = extent[2]
+            extent[2] = 0.0
+            extent[3] = extent[3] - yorigin
+        elif extent[2] != 0.0:
+            raise (ValueError("Either extent[2] or yorigin needs to be 0.0"))
+        attrs["extent"] = extent
+        attrs["xorigin"] = xorigin
+        attrs["yorigin"] = yorigin
+        attrs["angrot"] = angrot
+
+
+def fillnan_da_structured_grid(xar_in, method="nearest"):
+    """Fill not-a-number values in a structured grid, DataArray.
+
+    The nans are replaced with the interpolated values using distance_transform_edt when
+    all cells have the same shape and method is nearest, otherwise the values are
+    interpolated using griddata.
+
+    Note that extrapolation is only applied if method is "nearest".
+
+    Parameters
+    ----------
+    xar_in : xarray DataArray
+        DataArray with nan values. DataArray should at least have dimensions x
+        and y.
+    method : str, optional
+        method used in scipy.interpolate.griddata to resample, default is
+        nearest.
+
+    Returns
+    -------
+    xar_out : xarray DataArray
+        DataArray without nan values. DataArray has 2 dimensions
+        (y and x)
+    """
+    # check dimensions
+    if xar_in.dims != ("y", "x"):
+        raise ValueError(
+            "expected dataarray with dimensions ('y' and 'x'), got dimensions -> "
+            f"{xar_in.dims}"
+        )
+
+    # Create a deep copy to avoid modifying the original data
+    # Using manual DataArray construction because copy(deep=True) still shares memory
+    # in some xarray contexts when data is loaded from netCDF files
+    xar_out = xr.DataArray(
+        xar_in.values.copy(),
+        coords=xar_in.coords,
+        dims=xar_in.dims,
+        attrs=xar_in.attrs,
+    )
+
+    if method == "nearest":
+        y = xar_in.coords["y"].values
+        x = xar_in.coords["x"].values
+        dy = np.abs(y[1:] - y[:-1])
+        dx = np.abs(x[1:] - x[:-1])
+
+        if np.allclose(dy, dy[0]) and np.allclose(dx, dx[0]):
+            sampling = None if np.isclose(dy[0], dx[0]) else (dy[0], dx[0])
+
+            idx = distance_transform_edt(
+                input=xar_in.isnull(),
+                sampling=sampling,
+                return_distances=False,
+                return_indices=True,
+            )
+            xar_out.values = xar_in.values[tuple(idx)]
+
+            return xar_out
+
+    xg, yg = np.meshgrid(xar_in.x.values, xar_in.y.values)
+
+    is_invalid = np.isnan(xar_in)
+    points_out = np.column_stack((xg[is_invalid], yg[is_invalid]))
+
+    # Get coordinates and values of values for griddata
+    if method in ("nearest", "linear"):
+        # We can cheaply isolate the neighboring cells and only pass that
+        # to griddata. Spline uses thicker outline of nan areas.
+        is_valid = binary_dilation(is_invalid) & ~is_invalid
+    else:
+        is_valid = ~is_invalid
+
+    points_in = np.column_stack((xg[is_valid], yg[is_valid]))
+    values_in = xar_in.values[is_valid]
+
+    xar_out.values[is_invalid] = griddata(
+        points_in, values_in, points_out, method=method
+    )
+    return xar_out
+
+
+def fillnan_da_vertex_grid(xar_in, ds=None, x=None, y=None, method="nearest"):
+    """Fill not-a-number values in a vertex grid, DataArray.
+
+    Note that extrapolation is only applied if method is "nearest".
+
+    Parameters
+    ----------
+    xar_in : xr.DataArray
+        data array with nan values. Shape is (icell2d)
+    ds : xr.Dataset
+        Dataset containing grid-properties
+    x : np.array, optional
+        x coördinates of the cell centers shape(icell2d), if not defined use x
+        from ds.
+    y : np.array, optional
+        y coördinates of the cell centers shape(icell2d), if not defined use y
+        from ds.
+    method : str, optional
+        method used in scipy.interpolate.griddata to resample, default is
+        nearest.
+
+    Returns
+    -------
+    xar_out : xr.DataArray
+        data array without nan values. Shape is (icell2d)
+
+    Notes
+    -----
+    If x is provided, x will be used over ds and the x coordinate part of xar_in.
+    If x is not provided, ds will be used to get the x coordinates.
+    If x is not provided and "x" is not in xar_in.coords, an error will be raised.
+    """
+    if not is_vertex(xar_in):
+        raise ValueError(
+            "expected dataarray with dimensions ('icell2d'), got dimensions -> "
+            f"{xar_in.dims}"
+        )
+
+    # Create a deep copy to avoid modifying the original data
+    # Using manual DataArray construction because copy(deep=True) still shares memory
+    # in some xarray contexts when data is loaded from netCDF files
+    xar_out = xr.DataArray(
+        xar_in.values.copy(),
+        coords=xar_in.coords,
+        dims=xar_in.dims,
+        attrs=xar_in.attrs,
+    )
+
+    if x is not None:
+        pass
+    elif x is None and ds is not None:
+        x = ds["x"].values
+    elif x is None and "x" in xar_in.coords:
+        x = xar_in.coords["x"].values
+    else:
+        raise ValueError("x or ds must be provided to get x coordinates")
+    if y is not None:
+        pass
+    elif y is None and ds is not None:
+        y = ds["y"].values
+    elif y is None and "y" in xar_in.coords:
+        y = xar_in.coords["y"].values
+    else:
+        raise ValueError("y or ds must be provided to get y coordinates")
+
+    is_invalid = np.isnan(xar_out)
+    points_out = np.column_stack((x[is_invalid], y[is_invalid]))
+
+    if method in ("nearest", "linear") and ds is not None:
+        # We can cheaply isolate the neighboring cells and only pass those
+        # to griddata. Similar to for structured grids:
+        # is_valid = binary_dilation(is_invalid) & ~is_invalid
+        vertices = nlmod.grid.get_vertices_from_ds(ds)
+        cell2d = nlmod.grid.get_cell2d_from_ds(ds)
+        mg = VertexGrid(vertices=vertices, cell2d=cell2d)
+        _cell_connections = mg.neighbors()
+        cell_connections = {k: _cell_connections[k] for k in np.where(is_invalid)[0]}
+        unicons = set().union(*cell_connections.values()) - set(cell_connections.keys())
+
+        is_valid = np.zeros_like(xar_in, dtype=bool)
+        is_valid[list(unicons)] = True
+    else:
+        is_valid = ~is_invalid
+
+    points_in = np.column_stack((x[is_valid], y[is_valid]))
+    values_in = xar_out.values[is_valid]
+
+    # get value for all nan value
+    xar_out.values[is_invalid] = griddata(
+        points_in, values_in, points_out, method=method
+    )
+    return xar_out
+
+
+def fillnan_da(da, ds=None, method="nearest"):
+    """Fill not-a-number values in a DataArray.
+
+    Note that extrapolation is only applied if method is "nearest".
+
+    Parameters
+    ----------
+    da : xr.DataArray
+        data array with nan values.
+    ds : xr.Dataset, optional
+        Dataset containing grid-properties. Needed when a Vertex grid is used.
+    method : str, optional
+        method used in scipy.interpolate.griddata to resample. The default is nearest.
+
+    Returns
+    -------
+    xar_out : xr.DataArray
+        data array without nan values.
+
+    Notes
+    -----
+    can be slow if the xar_in is a large raster
+    """
+    if is_structured(da):
+        return fillnan_da_structured_grid(da, method=method)
+    elif is_vertex(da):
+        return fillnan_da_vertex_grid(da, ds, method=method)
+    else:
+        raise NotImplementedError("Unsupported grid type")
+
+
+def vertex_da_to_ds(da, ds, method="nearest"):
+    """Resample a vertex DataArray to a model dataset.
+
+    Parameters
+    ----------
+    da : xaray.DataArray
+        A vertex DataArray. When the DataArray does not have 'icell2d' as a dimension,
+        the original DataArray is retured. The DataArray da can contain other dimensions
+        as well (for example 'layer' or time'' ).
+    ds : xarray.Dataset
+        The model dataset to which the DataArray needs to be resampled, with coordinates
+        x and y.
+    method : str, optional
+        The interpolation method, see griddata. The default is "nearest".
+
+    Returns
+    -------
+    xarray.DataArray
+        A DataArray, with the same gridtype as ds.
+    """
+    if "icell2d" not in da.dims:
+        return structured_da_to_ds(da, ds, method=method)
+    points = np.array((da.x.data, da.y.data)).T
+
+    if "gridtype" in ds.attrs and ds.gridtype == "vertex":
+        if len(da.dims) == 1:
+            xi = list(zip(ds.x.values, ds.y.values, strict=True))
+            z = griddata(points, da.values, xi, method=method)
+            coords = {"icell2d": ds.icell2d}
+            return xr.DataArray(z, dims="icell2d", coords=coords)
+        else:
+            raise NotImplementedError(
+                "Resampling from multidimensional vertex da to vertex ds not yet "
+                "supported"
+            )
+
+    xg, yg = np.meshgrid(ds.x, ds.y)
+    xi = np.stack((xg, yg), axis=2)
+
+    if len(da.dims) > 1:
+        # when there are more dimensions than icell2d
+        z = []
+        if method == "nearest":
+            # generate the tree only once, to increase speed
+            tree = cKDTree(points)
+            _, i = tree.query(xi)
+        dims = np.array(da.dims)
+        dims = dims[dims != "icell2d"]
+
+        def dim_to_regular_dim(da, dims, z):
+            for dimval in da[dims[0]]:
+                dat = da.loc[{dims[0]: dimval}]
+                if len(dims) > 1:
+                    zl = []
+                    dim_to_regular_dim(dat, dims[dims != dims[0]], zl)
+                else:
+                    if method == "nearest":
+                        zl = dat.data[i]
+                    else:
+                        zl = griddata(points, dat.data, xi, method=method)
+                z.append(zl)
+
+        dim_to_regular_dim(da, dims, z)
+        dims = list(dims) + ["y", "x"]
+        coords = dict(da.coords)
+        coords["x"] = ds.x
+        coords["y"] = ds.y
+        for key in list(coords):
+            if "icell2d" in coords[key].dims:
+                coords.pop(key)
+    else:
+        # just use griddata
+        z = griddata(points, da.data, xi, method=method)
+        dims = ["y", "x"]
+        coords = {"x": ds.x, "y": ds.y}
+    return xr.DataArray(z, dims=dims, coords=coords)
+
+
+def structured_da_to_ds(da, ds, method="average", nodata=np.nan):
+    """Resample a DataArray to the coordinates of a model dataset.
+
+    Parameters
+    ----------
+    da : xarray.DataArray
+        The data-array to be resampled, with dimensions x and y.
+    ds : xarray.Dataset
+        The model dataset.
+    method : string or rasterio.enums.Resampling, optional
+        The method to resample the DataArray. Possible values are "linear",
+        "nearest" and all the values in rasterio.enums.Resampling. These values
+        can be provided as a string ('average') or as an attribute of
+        rasterio.enums.Resampling (rasterio.enums.Resampling.average). When
+        method is 'linear' or 'nearest' da.interp() is used. Otherwise
+        da.rio.reproject_match() is used. The default is "average".
+    nodata : float, optional
+        The nodata value in input and output. The default is np.NaN.
+
+    Returns
+    -------
+    da_out : xarray.DataArray
+        The resampled DataArray
+    """
+    has_rotation = "angrot" in ds.attrs and ds.attrs["angrot"] != 0.0
+    if method in ["linear", "nearest"] and not has_rotation:
+        kwargs = {}
+        if ds.gridtype == "structured":
+            kwargs["fill_value"] = "extrapolate"
+
+        da_out = da.interp(x=ds.x, y=ds.y, method=method, kwargs=kwargs)
+
+        # some stuff is added by the interp function that should not be there
+        added_coords = set(da_out.coords) - set(ds.coords)
+        return da_out.drop_vars(added_coords)
+    if isinstance(method, rasterio.enums.Resampling):
+        resampling = method
+    else:
+        if hasattr(rasterio.enums.Resampling, method):
+            resampling = getattr(rasterio.enums.Resampling, method)
+        else:
+            raise ValueError(f"Unknown resample method: {method}")
+    # fill crs if it is None for da or ds
+    if ds.rio.crs is None and da.rio.crs is None:
+        logger.info("No crs in da and ds. Assuming ds and da are both in EPSG:28992")
+        ds = ds.rio.write_crs(28992)
+        da = da.rio.write_crs(28992)
+    elif ds.rio.crs is None:
+        logger.info(f"No crs in ds. Setting crs equal to da: {da.rio.crs}")
+        ds = ds.rio.write_crs(da.rio.crs)
+    elif da.rio.crs is None:
+        logger.info(f"No crs in da. Setting crs equal to ds: {ds.rio.crs}")
+        da = da.rio.write_crs(ds.rio.crs)
+    if ds.gridtype == "structured":
+        # assume an average delr and delc to calculate the affine
+        if "extent" in ds.attrs:
+            # xmin, xmax, ymin, ymax
+            dx = (ds.attrs["extent"][1] - ds.attrs["extent"][0]) / len(ds.x)
+            dy = (ds.attrs["extent"][3] - ds.attrs["extent"][2]) / len(ds.y)
+        else:
+            raise ValueError(
+                "No extent or delr and delc in ds. Cannot determine affine."
+            )
+        from .grid import get_affine
+
+        da_out = da.rio.reproject(
+            dst_crs=ds.rio.crs,
+            shape=(len(ds.y), len(ds.x)),
+            transform=get_affine(ds, sx=dx, sy=-dy),
+            resampling=resampling,
+            nodata=nodata,
+        )
+        if "x" not in da_out.coords or "y" not in da_out.coords:
+            # when grid-rotation is used, there are no x and y in coords
+            da_out = da_out.assign_coords(x=ds.x, y=ds.y)
+    elif ds.gridtype == "vertex":
+        # assume the grid is a quadtree grid, where cells are refined by splitting them
+        # in 4
+        # We perform a reproject-match for every refinement-level
+        dims = list(da.dims)
+        dims.remove("y")
+        dims.remove("x")
+        dims.append("icell2d")
+        da_out = get_da_from_da_ds(ds, dims=tuple(dims), data=nodata)
+        from .grid import get_affine
+
+        area_da = ds["area"] if "area" in ds else get_area(ds)
+        for area in np.unique(area_da):
+            dx = dy = np.sqrt(area)
+            x, y = get_xy_mid_structured(ds.extent, dx, dy)
+            da_temp = da.rio.reproject(
+                dst_crs=ds.rio.crs,
+                shape=(len(y), len(x)),
+                transform=get_affine(ds, sx=dx, sy=-dy),
+                resampling=resampling,
+                nodata=nodata,
+            )
+            if "x" not in da_temp.coords or "y" not in da_temp.coords:
+                # when grid-rotation is used, there are no x and y in coords
+                da_temp = da_temp.assign_coords(x=x, y=y)
+
+            mask = area_da == area
+            da_out.loc[{"icell2d": mask}] = da_temp.sel(
+                y=ds["y"][mask], x=ds["x"][mask]
+            )
+    else:
+        raise (NotImplementedError(f"Gridtype {ds.gridtype} not supported"))
+
+    # some stuff is added by the reproject_match function that should not be there
+    added_coords = set(da_out.coords) - set(ds.coords)
+    da_out = da_out.drop_vars(added_coords)
+
+    if "grid_mapping" in da_out.encoding:
+        del da_out.encoding["grid_mapping"]
+
+    # remove the long_name, standard_name and units attributes of x and y coordinates
+    for coord in ["x", "y"]:
+        if coord not in da_out.coords:
+            continue
+        for name in ["long_name", "standard_name", "units", "axis"]:
+            if name in da_out[coord].attrs.keys():
+                del da_out[coord].attrs[name]
+
+    return da_out
+
+
+def extent_to_polygon(extent):
+    """Convert an extent to a shapely Polygon."""
+    logger.warning(
+        "nlmod.resample.extent_to_polygon is deprecated. "
+        "Use nlmod.util.extent_to_polygon instead."
+    )
+    from ..util import extent_to_polygon
+
+    return extent_to_polygon(extent)
+
+
+def get_extent_polygon(ds, rotated=True):
+    """Get the model extent, as a shapely Polygon."""
+    logger.warning(
+        "nlmod.resample.get_extent_polygon is deprecated. "
+        "Use nlmod.grid.get_extent_polygon instead."
+    )
+    from .grid import get_extent_polygon
+
+    return get_extent_polygon(ds, rotated=rotated)
+
+
+def affine_transform_gdf(gdf, affine):
+    """Apply an affine transformation to a geopandas GeoDataFrame."""
+    logger.warning(
+        "nlmod.resample.affine_transform_gdf is deprecated. "
+        "Use nlmod.grid.affine_transform_gdf instead."
+    )
+    from .grid import affine_transform_gdf
+
+    return affine_transform_gdf(gdf, affine)
+
+
+def get_extent(ds, rotated=True):
+    """Get the model extent, corrected for angrot if necessary."""
+    logger.warning(
+        "nlmod.resample.get_extent is deprecated. Use nlmod.grid.get_extent instead."
+    )
+    from .grid import get_extent
+
+    return get_extent(ds, rotated=rotated)
+
+
+def get_affine_mod_to_world(ds):
+    """Get the affine-transformation from model to real-world coordinates."""
+    logger.warning(
+        "nlmod.resample.get_affine_mod_to_world is deprecated. "
+        "Use nlmod.grid.get_affine_mod_to_world instead."
+    )
+    from .grid import get_affine_mod_to_world
+
+    return get_affine_mod_to_world(ds)
+
+
+def get_affine_world_to_mod(ds):
+    """Get the affine-transformation from real-world to model coordinates."""
+    logger.warning(
+        "nlmod.resample.get_affine_world_to_mod is deprecated. "
+        "Use nlmod.grid.get_affine_world_to_mod instead."
+    )
+    from .grid import get_affine_world_to_mod
+
+    return get_affine_world_to_mod(ds)
+
+
+def get_affine(ds, sx=None, sy=None):
+    """Get the affine-transformation, from pixel to real-world coordinates."""
+    logger.warning(
+        "nlmod.resample.get_affine is deprecated. Use nlmod.grid.get_affine instead."
+    )
+    from .grid import get_affine
+
+    return get_affine(ds, sx=sx, sy=sy)
