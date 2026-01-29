@@ -1,0 +1,201 @@
+[project]
+name = "newrelic-sb-sdk"
+version = "0.44.0"
+description = "New Relic SDK to interact with Nerdgraph API."
+authors = [
+  { name = "Dynova Development Team", email = "dev@dynova.io" },
+  { name = "zodiacfireworks", email = "martin.vuelta@gmail.com" }
+]
+maintainers = [
+  { name = "zodiacfireworks", email = "martin.vuelta@gmail.com" }
+]
+readme = { file = "README.md", content-type = "text/markdown" }
+license = "Apache-2.0"
+license-files = ["LICENSE.txt"]
+keywords = [
+  "Softbutterfly",
+  "New Relic",
+  "SDK",
+  "Nerdgraph",
+  "NRQL",
+  "API",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "Intended Audience :: Information Technology",
+  "License :: OSI Approved :: Apache Software License",
+  "Natural Language :: English",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Software Development",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: System",
+  "Topic :: System :: Monitoring",
+  "Topic :: System :: Networking :: Monitoring",
+]
+requires-python = ">=3.10.0,<4.0.0"
+dependencies = [
+    "python-dotenv (>=1.2.1,<2.0.0)",
+    "requests (>=2.32.5,<3.0.0)",
+    "sgqlc (>=17.1,<18.0.0)",
+]
+
+[project.urls]
+Homepage = "https://softbutterfly.gitlab.io/open-source/newrelic-sb-sdk"
+Repository = "https://gitlab.com/softbutterfly/open-source/newrelic-sb-sdk"
+Documentation = "https://softbutterfly.gitlab.io/open-source/newrelic-sb-sdk"
+Issues = "https://gitlab.com/softbutterfly/open-source/newrelic-sb-sdk/-/issues"
+Download = "https://gitlab.com/softbutterfly/open-source/newrelic-sb-sdk/-/archive/v0.44.0/newrelic-sb-sdk-v0.44.0.zip"
+Changelog = "https://gitlab.com/softbutterfly/open-source/newrelic-sb-sdk/-/blob/v0.44.0/CHANGELOG.md"
+
+[dependency-groups]
+dev = [
+    "coverage>=7.13.0",
+    "deepdiff[optimize]>=8.6.1",
+    "importnb>=2023.11.1",
+    "jupyter-book>=2.1.0",
+    "jupyterlab>=4.5.1",
+    "nbdev>=2.4.7",
+    "nbmake>=1.5.5",
+    "poethepoet>=0.38.0",
+    "pre-commit>=4.5.1",
+    "pygments-sb-nrql>=0.7.0",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "pytest-vcr>=1.0.2",
+    "ruff>=0.14.10",
+    "tbump>=6.11.0",
+    "tox>=4.32.0",
+    "ty>=0.0.5",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.18,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "newrelic_sb_sdk"
+module-root = "src"
+source-include = [
+  "LICENSE.txt",
+  "README.md",
+  "CHANGELOG.md",
+]
+
+[tool.poe.tasks]
+"lint"            = "uv run pre-commit run --all"
+"test"            = "uv run pytest --cov newrelic_sb_sdk --cov-report xml:cobertura.xml --cov-report term --junitxml report.xml"
+"schema:update"   = "uv run jupyter nbconvert --to notebook --inplace --execute 'notebooks/GraphQL/NerdGraph Schema to Notebooks.ipynb'"
+"schema:checkout" = "git checkout 'notebooks/GraphQL/NerdGraph Schema to Notebooks.ipynb'"
+"schema:stage"    = "git add notebooks/GraphQL"
+"schema:commit"   = "git commit -m 'Update: generate GraphQL notebooks with new schema'"
+"package:update"  = "uv run nbdev_export"
+"package:stage"   = "git add src"
+"package:commit"  = "git commit -m 'Update: refresh src module from notebooks'"
+"version:update"  = "uv run tbump --no-push --no-tag"
+"freeze"          = "uv export --format requirements.txt --no-group dev --no-hashes --no-annotate --no-header --output-file requirements.txt"
+"freeze:dev"      = "uv export --format requirements.txt --all-groups --no-hashes --no-annotate --no-header --output-file requirements.dev.txt"
+
+[tool.poe.tasks."schema:upgrade"]
+sequence = [
+  { ref = "schema:update"},
+  { ref = "schema:checkout"},
+  { ref = "lint"},
+  { ref = "schema:stage"},
+  { ref = "schema:commit"},
+]
+ignore_fail = true
+
+[tool.poe.tasks."package:upgrade"]
+sequence = [
+  { ref = "package:update"},
+  { ref = "lint"},
+  { ref = "package:stage" },
+  { ref = "package:commit" },
+  { cmd = "git --no-pager diff HEAD~1 HEAD -- > .diff.txt" },
+]
+ignore_fail = true
+
+[tool.poe.tasks."package:pre-release"]
+sequence = [
+  { cmd = "echo '🔄 Actualizando Schema y Paquete...'" },
+  { ref = "schema:upgrade" },
+  { ref = "package:upgrade" },
+  { cmd = "echo '🤖 Analizando cambios con Gemini...'" },
+  { cmd = "cat .diff.txt | gemini < prompts/changelog_generator.txt > .CHANGELOG_DRAFT.md" },
+  { cmd = "echo '✅ Borrador de cambios generado en .CHANGELOG_DRAFT.md'" },
+  { cmd = "echo '👀 Por favor revisa el borrador antes de lanzar.'" },
+]
+args = [{name = "version", positional = true}]
+
+[tool.poe.tasks."package:release"]
+sequence = [
+  { cmd = "git flow release start ${version}"},
+  { cmd = "uv run tbump --no-push --no-tag --non-interactive ${version}" },
+  { cmd = "env GIT_EDITOR=: git flow release finish -m 'Release'"},
+]
+args = [{name = "version", positional = true}]
+
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "D",  # pydocstyle
+    "S",  # bandit
+    "UP", # pyupgrade
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+]
+ignore = [
+    "E501", # line too long, handled by black
+    "E203", # space before :, handled by black
+    "E231", # missing whitespace after ','
+    "E722", # do not use bare 'except'
+    "F401", # imported but unused
+    "F811", # redefinition of unused
+    "D100", # Missing docstring in public module
+    "D101", # Missing docstring in public class
+    "D102", # Missing docstring in public method
+    "D103", # Missing docstring in public function
+    "D104", # Missing docstring in public package
+    "D105", # Missing docstring in magic method
+    "D106", # Missing docstring in public nested class
+    "D107", # Missing docstring in __init__
+    "D202", # No blank lines allowed after function docstring
+    "D203", # 1 blank line required before class docstring
+    "D213", # Multi-line docstring summary should start at the second line
+    "D407", # Missing dashed underline after section
+    "S101", # Use of assert detected (often used in tests)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["newrelic_sb_sdk"]
+known-third-party = ["dotenv", "requests", "sgqlc"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.ty.rules]
+non-subscriptable = "ignore"
+invalid-return-type = "ignore"
+unresolved-import = "ignore"
+possibly-missing-attribute = "ignore"
+invalid-argument-type = "ignore"
