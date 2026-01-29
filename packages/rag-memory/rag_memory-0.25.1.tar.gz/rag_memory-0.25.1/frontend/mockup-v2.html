@@ -1,0 +1,2584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lumentor - Knowledge Platform</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;900&family=IBM+Plex+Sans:wght@400;500;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Quill.js Rich Text Editor -->
+    <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.7/quill.js"></script>
+
+    <!-- Tabler Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+
+    <!-- Marked.js -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- Vis.js -->
+    <script src="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.js"></script>
+
+    <style>
+        :root {
+            --charcoal: #1a1714;
+            --charcoal-light: #2a2520;
+            --charcoal-lighter: #3a342d;
+            --amber: #f59e0b;
+            --amber-dark: #d97706;
+            --amber-light: #fbbf24;
+            --teal: #0f766e;
+            --teal-light: #14b8a6;
+            --sienna: #ea580c;
+            --cream: #fafaf9;
+            --cream-dim: #e7e5e4;
+            --warm-gray: #a8a29e;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'IBM Plex Sans', -apple-system, system-ui, sans-serif;
+            background: var(--charcoal);
+            color: var(--cream);
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Paper grain texture overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" /><feColorMatrix type="saturate" values="0" /></filter><rect width="300" height="300" filter="url(%23noise)" opacity="0.05" /></svg>');
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.4;
+        }
+
+        /* Diagonal blueprint lines */
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(45deg, transparent 48%, rgba(245, 158, 11, 0.03) 49%, rgba(245, 158, 11, 0.03) 51%, transparent 52%),
+                linear-gradient(-45deg, transparent 48%, rgba(245, 158, 11, 0.03) 49%, rgba(245, 158, 11, 0.03) 51%, transparent 52%);
+            background-size: 60px 60px;
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.6;
+        }
+
+        /* Vignette effect */
+        .app-container::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, transparent 0%, rgba(26, 23, 20, 0.4) 100%);
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .app-container {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Custom scrollbar with amber accent */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--charcoal-light);
+            border-left: 1px solid rgba(245, 158, 11, 0.1);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--amber-dark);
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--amber);
+        }
+
+        /* Typography */
+        .display-font {
+            font-family: 'Playfair Display', Georgia, serif;
+        }
+
+        .code-font {
+            font-family: 'Fira Code', 'Monaco', monospace;
+        }
+
+        /* Top Bar - Dramatic Header */
+        .top-bar {
+            height: 80px;
+            background: linear-gradient(135deg, var(--charcoal) 0%, var(--charcoal-light) 100%);
+            border-bottom: 3px solid var(--amber-dark);
+            box-shadow: 0 4px 20px rgba(245, 158, 11, 0.15);
+            display: flex;
+            align-items: center;
+            padding: 0 40px;
+            gap: 30px;
+            position: relative;
+            z-index: 100;
+            animation: slideDown 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            animation: fadeIn 0.8s ease 0.3s both;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .logo-icon {
+            font-size: 42px;
+            color: var(--amber);
+            filter: drop-shadow(0 0 12px rgba(245, 158, 11, 0.5));
+            animation: glow 3s ease-in-out infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% { filter: drop-shadow(0 0 12px rgba(245, 158, 11, 0.5)); }
+            50% { filter: drop-shadow(0 0 20px rgba(245, 158, 11, 0.8)); }
+        }
+
+        .logo-text {
+            font-family: 'Playfair Display', serif;
+            font-size: 2rem;
+            font-weight: 900;
+            letter-spacing: 0.02em;
+            background: linear-gradient(135deg, var(--amber) 0%, var(--amber-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .logo-tagline {
+            font-size: 0.75rem;
+            color: var(--warm-gray);
+            font-style: italic;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-left: 4px;
+        }
+
+        /* Global Search - Hero Element */
+        .global-search {
+            flex: 1;
+            max-width: 600px;
+            position: relative;
+            animation: fadeIn 0.8s ease 0.5s both;
+        }
+
+        .global-search input {
+            width: 100%;
+            padding: 14px 20px 14px 50px;
+            background: rgba(42, 37, 32, 0.6);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(245, 158, 11, 0.2);
+            border-radius: 12px;
+            color: var(--cream);
+            font-size: 1rem;
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .global-search input:focus {
+            outline: none;
+            border-color: var(--amber);
+            box-shadow: 0 0 30px rgba(245, 158, 11, 0.3), inset 0 2px 8px rgba(0, 0, 0, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .global-search i {
+            position: absolute;
+            left: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 20px;
+            color: var(--amber);
+        }
+
+        .settings-btn {
+            padding: 12px;
+            background: rgba(42, 37, 32, 0.6);
+            border: 2px solid rgba(245, 158, 11, 0.2);
+            border-radius: 10px;
+            color: var(--amber);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            animation: fadeIn 0.8s ease 0.7s both;
+        }
+
+        .settings-btn:hover {
+            background: rgba(245, 158, 11, 0.15);
+            border-color: var(--amber);
+            transform: rotate(90deg) scale(1.1);
+        }
+
+        .settings-btn i {
+            font-size: 24px;
+            display: block;
+        }
+
+        /* Main Layout - Asymmetric Overlap */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 280px 1fr 360px;
+            height: calc(100vh - 80px);
+            overflow: hidden;
+            gap: 0;
+        }
+
+        /* Left Nav - Overlaying with Shadow */
+        .left-nav {
+            background: linear-gradient(180deg, var(--charcoal-light) 0%, var(--charcoal) 100%);
+            border-right: 2px solid var(--amber-dark);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            z-index: 50;
+            box-shadow: 8px 0 30px rgba(245, 158, 11, 0.15);
+            animation: slideInLeft 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes slideInLeft {
+            from {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .nav-section {
+            padding: 24px 20px;
+            border-bottom: 1px solid rgba(245, 158, 11, 0.15);
+            animation: fadeIn 0.6s ease both;
+        }
+
+        .nav-section:nth-child(1) { animation-delay: 0.2s; }
+        .nav-section:nth-child(2) { animation-delay: 0.3s; }
+        .nav-section:nth-child(3) { animation-delay: 0.4s; }
+
+        .nav-section-title {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--amber);
+            margin-bottom: 16px;
+            position: relative;
+            padding-left: 12px;
+        }
+
+        .nav-section-title::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 12px;
+            background: var(--amber);
+            border-radius: 2px;
+        }
+
+        .nav-item {
+            padding: 12px 16px;
+            margin: 4px 0;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.95rem;
+            color: var(--cream-dim);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .nav-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 0;
+            height: 100%;
+            background: linear-gradient(90deg, rgba(245, 158, 11, 0.2) 0%, transparent 100%);
+            transition: width 0.4s ease;
+        }
+
+        .nav-item:hover::before {
+            width: 100%;
+        }
+
+        .nav-item:hover {
+            color: var(--cream);
+            transform: translateX(6px);
+            background: rgba(245, 158, 11, 0.08);
+        }
+
+        .nav-item.active {
+            background: linear-gradient(135deg, var(--amber-dark) 0%, var(--amber) 100%);
+            color: var(--charcoal);
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+            transform: translateX(0);
+        }
+
+        .nav-item.active::before {
+            display: none;
+        }
+
+        .nav-item i {
+            font-size: 22px;
+            z-index: 1;
+        }
+
+        .nav-item span {
+            z-index: 1;
+        }
+
+        .badge {
+            margin-left: auto;
+            background: rgba(245, 158, 11, 0.2);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--amber-light);
+            z-index: 1;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .nav-item.active .badge {
+            background: rgba(26, 23, 20, 0.3);
+            color: var(--charcoal);
+            border-color: rgba(26, 23, 20, 0.4);
+        }
+
+        /* Main Content - Dramatic Entry */
+        .main-content {
+            background: var(--charcoal);
+            overflow-y: auto;
+            position: relative;
+            animation: fadeIn 1s ease 0.4s both;
+        }
+
+        .view-content {
+            opacity: 0;
+            animation: viewFadeIn 0.6s ease forwards;
+        }
+
+        @keyframes viewFadeIn {
+            to { opacity: 1; }
+        }
+
+        .view-content.hidden {
+            display: none;
+        }
+
+        /* Card with Ink-Bleed Border */
+        .card {
+            background: linear-gradient(135deg, var(--charcoal-light) 0%, var(--charcoal-lighter) 100%);
+            border: 2px solid rgba(245, 158, 11, 0.25);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            position: relative;
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(135deg, var(--amber-dark), var(--amber-light), var(--teal));
+            border-radius: 12px;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            z-index: -1;
+            filter: blur(8px);
+        }
+
+        .card:hover {
+            transform: translateY(-8px) rotateX(2deg);
+            box-shadow: 0 20px 40px rgba(245, 158, 11, 0.25), 0 8px 20px rgba(0, 0, 0, 0.4);
+            border-color: var(--amber);
+        }
+
+        .card:hover::before {
+            opacity: 0.6;
+        }
+
+        /* Folded Corner Effect */
+        .card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 0 24px 24px 0;
+            border-color: transparent var(--amber-dark) transparent transparent;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .card:hover::after {
+            opacity: 0.4;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn:active::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--amber-dark) 0%, var(--amber) 100%);
+            color: var(--charcoal);
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(245, 158, 11, 0.6);
+        }
+
+        .btn-secondary {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--amber);
+            border: 2px solid var(--amber-dark);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(245, 158, 11, 0.2);
+            border-color: var(--amber);
+            transform: translateY(-2px);
+        }
+
+        /* Right Panel - Floating */
+        .right-panel {
+            background: linear-gradient(180deg, var(--charcoal-light) 0%, var(--charcoal) 100%);
+            border-left: 2px solid var(--teal);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -8px 0 30px rgba(15, 118, 110, 0.15);
+            animation: slideInRight 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Page Headers - Editorial Style */
+        .page-header {
+            font-family: 'Playfair Display', serif;
+            font-size: 3rem;
+            font-weight: 900;
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, var(--amber) 0%, var(--amber-light) 50%, var(--teal-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+            animation: fadeInUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .page-subtitle {
+            font-size: 1.1rem;
+            color: var(--warm-gray);
+            font-style: italic;
+            margin-bottom: 32px;
+            animation: fadeInUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both;
+        }
+
+        /* Tabs - Elegant */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            border-bottom: 2px solid rgba(245, 158, 11, 0.2);
+            margin-bottom: 32px;
+        }
+
+        .tab {
+            padding: 14px 24px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            color: var(--warm-gray);
+            font-weight: 600;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .tab::before {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--amber-dark), var(--amber-light));
+            transition: width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .tab:hover {
+            color: var(--amber-light);
+        }
+
+        .tab.active {
+            color: var(--amber);
+        }
+
+        .tab.active::before {
+            width: 100%;
+        }
+
+        /* Tab Content - Hide inactive tabs */
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.4s ease;
+        }
+
+        /* Form Elements */
+        input, textarea, select {
+            width: 100%;
+            background: rgba(42, 37, 32, 0.6);
+            border: 2px solid rgba(245, 158, 11, 0.2);
+            color: var(--cream);
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            font-family: 'IBM Plex Sans', sans-serif;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: var(--amber);
+            box-shadow: 0 0 20px rgba(245, 158, 11, 0.2);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--amber-light);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.8rem;
+        }
+
+        /* Search Results with Typewriter Effect */
+        .search-result-card {
+            background: linear-gradient(135deg, var(--charcoal-light) 0%, var(--charcoal-lighter) 100%);
+            border: 2px solid rgba(245, 158, 11, 0.25);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            animation: slideInUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+        }
+
+        .search-result-card:nth-child(1) { animation-delay: 0.1s; }
+        .search-result-card:nth-child(2) { animation-delay: 0.2s; }
+        .search-result-card:nth-child(3) { animation-delay: 0.3s; }
+
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .search-result-card:hover {
+            border-color: var(--amber);
+            transform: translateX(8px);
+            box-shadow: 0 8px 25px rgba(245, 158, 11, 0.2);
+        }
+
+        .search-result-score {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--amber-dark), var(--amber));
+            color: var(--charcoal);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            font-family: 'Fira Code', monospace;
+        }
+
+        /* Document Cards */
+        .doc-card {
+            background: linear-gradient(135deg, var(--charcoal-light) 0%, var(--charcoal-lighter) 100%);
+            border: 2px solid rgba(245, 158, 11, 0.25);
+            border-radius: 12px;
+            padding: 24px;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .doc-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 0;
+            background: linear-gradient(180deg, var(--amber), var(--teal));
+            border-radius: 12px 0 0 12px;
+            transition: height 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .doc-card:hover::before {
+            height: 100%;
+        }
+
+        .doc-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 20px 40px rgba(245, 158, 11, 0.25);
+            border-color: var(--amber);
+        }
+
+        .doc-card-title {
+            font-weight: 700;
+            font-size: 1.15rem;
+            margin-bottom: 12px;
+            color: var(--cream);
+        }
+
+        .doc-card-meta {
+            font-size: 0.85rem;
+            color: var(--warm-gray);
+            display: flex;
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+
+        .doc-card-preview {
+            font-size: 0.95rem;
+            color: var(--cream-dim);
+            line-height: 1.6;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        /* Modal with Dramatic Backdrop */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+            animation: modalFadeIn 0.4s ease;
+        }
+
+        @keyframes modalFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, var(--charcoal-light) 0%, var(--charcoal) 100%);
+            border: 3px solid var(--amber-dark);
+            border-radius: 16px;
+            max-width: 700px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 36px;
+            box-shadow: 0 30px 80px rgba(245, 158, 11, 0.4);
+            animation: modalSlideIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                transform: translateY(-50px) scale(0.9);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        .modal-content.modal-large {
+            max-width: 90vw;
+            max-height: 90vh;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 28px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .modal-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--amber);
+        }
+
+        .modal-close {
+            background: rgba(245, 158, 11, 0.1);
+            border: 2px solid var(--amber-dark);
+            color: var(--amber);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 8px;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .modal-close:hover {
+            background: var(--amber);
+            color: var(--charcoal);
+            transform: rotate(90deg);
+        }
+
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: linear-gradient(135deg, var(--charcoal-light), var(--charcoal-lighter));
+            border: 2px solid var(--amber-dark);
+            border-radius: 12px;
+            padding: 16px 24px;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 8px 30px rgba(245, 158, 11, 0.4);
+            z-index: 2000;
+            min-width: 300px;
+        }
+
+        .toast.active {
+            display: flex;
+            animation: toastSlideIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes toastSlideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .toast-success { border-color: var(--teal); }
+        .toast-error { border-color: var(--sienna); }
+        .toast-info { border-color: var(--amber); }
+
+        /* Progress Bar */
+        .progress-bar {
+            height: 8px;
+            background: rgba(42, 37, 32, 0.8);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 12px 0;
+            position: relative;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--amber-dark), var(--amber), var(--amber-light));
+            transition: width 0.3s ease;
+            position: relative;
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200px 0; }
+            100% { background-position: 200px 0; }
+        }
+
+        /* Knowledge Graph Container */
+        #graphContainer, #graphContainerFull {
+            width: 100%;
+            height: 500px;
+            border: 2px solid var(--teal);
+            border-radius: 12px;
+            background: var(--charcoal);
+            box-shadow: inset 0 0 30px rgba(15, 118, 110, 0.2);
+        }
+
+        .graph-fullscreen #graphContainerFull {
+            height: calc(90vh - 100px);
+        }
+
+        /* Advanced Section - Neo4j */
+        .advanced-section {
+            background: linear-gradient(135deg, rgba(15, 118, 110, 0.15), rgba(234, 88, 12, 0.1));
+            border: 2px solid var(--teal);
+            border-radius: 12px;
+            padding: 24px;
+            margin-top: 24px;
+        }
+
+        .advanced-section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            color: var(--teal-light);
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .code-block {
+            background: var(--charcoal);
+            border: 2px solid rgba(15, 118, 110, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.9rem;
+            color: var(--teal-light);
+            overflow-x: auto;
+            margin: 16px 0;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 80px 40px;
+            color: var(--warm-gray);
+            animation: fadeIn 1s ease;
+        }
+
+        .empty-state i {
+            font-size: 80px;
+            margin-bottom: 24px;
+            opacity: 0.3;
+            color: var(--amber);
+        }
+
+        .empty-state h3 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.8rem;
+            margin-bottom: 12px;
+            color: var(--cream-dim);
+        }
+
+        /* Chat Bubbles */
+        .chat-bubble {
+            max-width: 75%;
+            padding: 16px 20px;
+            border-radius: 16px;
+            margin-bottom: 16px;
+            line-height: 1.6;
+            animation: messageSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes messageSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .chat-bubble.user {
+            background: linear-gradient(135deg, var(--amber-dark), var(--amber));
+            color: var(--charcoal);
+            margin-left: auto;
+            border-bottom-right-radius: 4px;
+            font-weight: 500;
+        }
+
+        .chat-bubble.assistant {
+            background: linear-gradient(135deg, var(--charcoal-light), var(--charcoal-lighter));
+            border: 2px solid rgba(245, 158, 11, 0.2);
+            margin-right: auto;
+            border-bottom-left-radius: 4px;
+            color: var(--cream-dim);
+        }
+
+        /* Utility */
+        .hidden { display: none !important; }
+        .p-4 { padding: 40px; }
+        .mb-2 { margin-bottom: 8px; }
+        .mb-3 { margin-bottom: 16px; }
+        .mb-4 { margin-bottom: 24px; }
+        .mt-4 { margin-top: 24px; }
+
+        /* Drop Zone */
+        .drop-zone {
+            border: 3px dashed rgba(245, 158, 11, 0.3);
+            border-radius: 12px;
+            padding: 60px 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.4s ease;
+            background: rgba(42, 37, 32, 0.3);
+        }
+
+        .drop-zone:hover, .drop-zone.drag-over {
+            border-color: var(--amber);
+            background: rgba(245, 158, 11, 0.08);
+            transform: scale(1.02);
+        }
+
+        .drop-zone i {
+            font-size: 64px;
+            color: var(--amber);
+            margin-bottom: 16px;
+            display: block;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        /* Quill Editor Dark Theme */
+        .editor-container {
+            border: 2px solid rgba(245, 158, 11, 0.3);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .ql-toolbar {
+            background: var(--charcoal-light) !important;
+            border: none !important;
+            border-bottom: 2px solid rgba(245, 158, 11, 0.2) !important;
+        }
+
+        .ql-container {
+            background: var(--charcoal) !important;
+            border: none !important;
+            min-height: 400px;
+            font-family: 'IBM Plex Sans', sans-serif !important;
+        }
+
+        .ql-editor {
+            color: var(--cream) !important;
+            font-size: 1rem;
+        }
+
+        /* View Toggle Buttons */
+        .view-toggle {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .view-toggle-btn {
+            padding: 10px 20px;
+            background: rgba(245, 158, 11, 0.1);
+            border: 2px solid var(--amber-dark);
+            border-radius: 8px;
+            color: var(--amber);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .view-toggle-btn.active {
+            background: linear-gradient(135deg, var(--amber-dark), var(--amber));
+            color: var(--charcoal);
+            transform: scale(1.05);
+        }
+
+        .view-toggle-btn:hover {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <div class="logo">
+                <i class="ti ti-book-2 logo-icon"></i>
+                <div>
+                    <div class="logo-text">Lumentor</div>
+                    <div class="logo-tagline">Knowledge Illuminated</div>
+                </div>
+            </div>
+
+            <div class="global-search">
+                <i class="ti ti-search"></i>
+                <input
+                    type="text"
+                    id="globalSearch"
+                    placeholder="Search your knowledge... (⌘K)"
+                    onkeypress="if(event.key === 'Enter') app.performGlobalSearch()"
+                >
+            </div>
+
+            <button class="settings-btn" onclick="app.showSettingsModal()">
+                <i class="ti ti-settings"></i>
+            </button>
+        </div>
+
+        <!-- Main Layout -->
+        <div class="main-layout">
+            <!-- Left Navigation -->
+            <div class="left-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Navigate</div>
+                    <div class="nav-item active" data-view="collections">
+                        <i class="ti ti-folders"></i>
+                        <span>Collections</span>
+                        <span class="badge" id="collectionCount">0</span>
+                    </div>
+                    <div class="nav-item" data-view="documents">
+                        <i class="ti ti-files"></i>
+                        <span>Documents</span>
+                        <span class="badge" id="documentCount">0</span>
+                    </div>
+                    <div class="nav-item" data-view="search">
+                        <i class="ti ti-search"></i>
+                        <span>Search</span>
+                    </div>
+                    <div class="nav-item" data-view="knowledge-graph">
+                        <i class="ti ti-chart-dots-3"></i>
+                        <span>Knowledge Graph</span>
+                    </div>
+                    <div class="nav-item" data-view="chat">
+                        <i class="ti ti-messages"></i>
+                        <span>Agent Chat</span>
+                        <span class="badge" id="chatCount">0</span>
+                    </div>
+                </div>
+
+                <!-- Dynamic Section -->
+                <div id="dynamicNavSection" class="nav-section" style="flex: 1; overflow-y: auto;">
+                    <!-- Content changes based on view -->
+                </div>
+
+                <div class="nav-section">
+                    <button class="btn btn-primary" style="width: 100%;" onclick="app.showCreateCollectionModal()">
+                        <i class="ti ti-plus"></i>
+                        New Collection
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="main-content">
+                <!-- Collections View -->
+                <div id="collectionsView" class="view-content">
+                    <div class="p-4">
+                        <h1 class="page-header">Collections</h1>
+                        <p class="page-subtitle">Organize your knowledge into curated collections</p>
+
+                        <div id="collectionsGrid">
+                            <!-- Collections populated by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Documents View -->
+                <div id="documentsView" class="view-content hidden">
+                    <div class="p-4">
+                        <h1 class="page-header">Documents</h1>
+                        <p class="page-subtitle">Browse, edit, and manage your knowledge base</p>
+
+                        <div style="margin-bottom: 24px;">
+                            <button class="btn btn-primary" onclick="app.showIngestionModal()">
+                                <i class="ti ti-upload"></i>
+                                Add Documents
+                            </button>
+                        </div>
+
+                        <div id="documentsGrid">
+                            <!-- Documents populated by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Search View -->
+                <div id="searchView" class="view-content hidden">
+                    <div class="p-4">
+                        <h1 class="page-header">Search</h1>
+                        <p class="page-subtitle">Explore your knowledge through semantic search, relationships, and time</p>
+
+                        <div class="tabs">
+                            <div class="tab active" data-search-tab="semantic">
+                                <i class="ti ti-search"></i> Semantic
+                            </div>
+                            <div class="tab" data-search-tab="relationships">
+                                <i class="ti ti-chart-dots-2"></i> Relationships
+                            </div>
+                            <div class="tab" data-search-tab="temporal">
+                                <i class="ti ti-clock-hour-3"></i> Temporal
+                            </div>
+                        </div>
+
+                        <!-- Semantic Search Tab -->
+                        <div id="semanticTab" class="tab-content active">
+                            <div class="form-group">
+                                <input type="text" id="semanticQuery" placeholder="What are you looking for?">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Scope</label>
+                                <select id="semanticScope">
+                                    <option value="all">All Collections</option>
+                                </select>
+                            </div>
+
+                            <button class="btn btn-primary" onclick="app.performSemanticSearch()">
+                                <i class="ti ti-search"></i>
+                                Search
+                            </button>
+
+                            <div id="semanticResults" class="mt-4"></div>
+                        </div>
+
+                        <!-- Relationships Tab -->
+                        <div id="relationshipsTab" class="tab-content">
+                            <div class="form-group">
+                                <input type="text" id="relationshipsQuery" placeholder="How are concepts connected?">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Scope</label>
+                                <select id="relationshipsScope">
+                                    <option value="all">All Collections</option>
+                                </select>
+                            </div>
+
+                            <button class="btn btn-primary" onclick="app.performRelationshipsSearch()">
+                                <i class="ti ti-chart-dots-2"></i>
+                                Explore
+                            </button>
+
+                            <div id="relationshipsResults" class="mt-4"></div>
+                        </div>
+
+                        <!-- Temporal Tab -->
+                        <div id="temporalTab" class="tab-content">
+                            <div class="form-group">
+                                <input type="text" id="temporalQuery" placeholder="How has knowledge evolved?">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Scope</label>
+                                <select id="temporalScope">
+                                    <option value="all">All Collections</option>
+                                </select>
+                            </div>
+
+                            <button class="btn btn-primary" onclick="app.performTemporalSearch()">
+                                <i class="ti ti-clock-hour-3"></i>
+                                Timeline
+                            </button>
+
+                            <div id="temporalResults" class="mt-4"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Document Editor View -->
+                <div id="documentEditorView" class="view-content hidden">
+                    <div class="p-4">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;">
+                            <button class="btn btn-secondary" onclick="app.closeDocument()">
+                                <i class="ti ti-arrow-left"></i>
+                                Back
+                            </button>
+                            <div style="display: flex; gap: 12px;">
+                                <button class="btn btn-secondary" id="viewEditToggle" onclick="app.toggleEditMode()">
+                                    <i class="ti ti-edit"></i>
+                                    Edit
+                                </button>
+                                <button class="btn btn-primary hidden" id="saveButton" onclick="app.saveDocument()">
+                                    <i class="ti ti-device-floppy"></i>
+                                    Save & Re-ingest
+                                </button>
+                            </div>
+                        </div>
+
+                        <h1 class="page-header" id="documentTitle"></h1>
+
+                        <div id="documentViewMode">
+                            <div id="markdownViewer" style="color: var(--cream-dim); line-height: 1.8; font-size: 1.05rem;"></div>
+                        </div>
+
+                        <div id="documentEditMode" class="hidden">
+                            <div class="editor-container">
+                                <div id="quillEditor"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Knowledge Graph View -->
+                <div id="knowledgeGraphView" class="view-content hidden">
+                    <div class="p-4">
+                        <h1 class="page-header">Knowledge Graph</h1>
+                        <p class="page-subtitle">Visualize connections and relationships</p>
+
+                        <div class="empty-state">
+                            <i class="ti ti-chart-dots-3"></i>
+                            <h3>Graph Visualization</h3>
+                            <p>Use the Search view to query relationships and visualize the knowledge graph</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Agent Chat View -->
+                <div id="chatView" class="view-content hidden">
+                    <div class="p-4" style="display: flex; flex-direction: column; height: calc(100vh - 160px);">
+                        <h1 class="page-header">Agent Chat</h1>
+                        <p class="page-subtitle">Conversational interface to your knowledge</p>
+
+                        <div id="chatMessages" style="flex: 1; overflow-y: auto; margin-bottom: 24px;">
+                            <!-- Messages populated by JS -->
+                        </div>
+
+                        <div style="display: flex; gap: 12px;">
+                            <input
+                                type="text"
+                                id="chatInput"
+                                placeholder="Ask anything..."
+                                style="flex: 1;"
+                                onkeypress="if(event.key === 'Enter') app.sendChatMessage()"
+                            >
+                            <button class="btn btn-primary" onclick="app.sendChatMessage()">
+                                <i class="ti ti-send"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel -->
+            <div class="right-panel">
+                <div class="nav-section">
+                    <div class="nav-section-title">Context</div>
+                </div>
+
+                <!-- Document Metadata Panel -->
+                <div id="metadataPanel" class="p-4 hidden">
+                    <h3 class="display-font" style="font-size: 1.3rem; margin-bottom: 20px; color: var(--teal-light);">Metadata</h3>
+                    <div id="metadataContent"></div>
+                </div>
+
+                <!-- Entity Panel -->
+                <div id="entityPanel" class="p-4 hidden">
+                    <h3 class="display-font" style="font-size: 1.3rem; margin-bottom: 20px; color: var(--teal-light);">Entity Details</h3>
+                    <div id="entityContent"></div>
+                </div>
+
+                <!-- AI Assistant Panel -->
+                <div id="agentAssistantPanel" class="p-4">
+                    <h3 class="display-font" style="font-size: 1.3rem; margin-bottom: 12px; color: var(--amber);">
+                        <i class="ti ti-sparkles"></i>
+                        AI Assistant
+                    </h3>
+                    <p style="font-size: 0.9rem; color: var(--warm-gray); margin-bottom: 20px;">
+                        Get help with the current task
+                    </p>
+                    <div id="assistantSuggestions"></div>
+                </div>
+
+                <!-- Progress Monitor Panel -->
+                <div id="progressPanel" class="p-4 hidden">
+                    <h3 class="display-font" style="font-size: 1.3rem; margin-bottom: 20px; color: var(--sienna);">Active Jobs</h3>
+                    <div id="progressJobs"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Collection Modal -->
+    <div id="createCollectionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Create Collection</h3>
+                <button class="modal-close" onclick="app.closeModal('createCollectionModal')">
+                    <i class="ti ti-x"></i>
+                </button>
+            </div>
+            <form onsubmit="app.createCollection(event)">
+                <div class="form-group">
+                    <label class="form-label">Name</label>
+                    <input type="text" id="collectionName" required placeholder="e.g., engineering-docs">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <textarea id="collectionDescription" required rows="3" placeholder="What knowledge does this collection contain?"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Domain</label>
+                    <input type="text" id="collectionDomain" required placeholder="e.g., engineering, research">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Domain Scope</label>
+                    <input type="text" id="collectionDomainScope" required placeholder="e.g., Internal technical documentation">
+                </div>
+                <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 28px;">
+                    <button type="button" class="btn btn-secondary" onclick="app.closeModal('createCollectionModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Ingestion Modal -->
+    <div id="ingestionModal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 class="modal-title">Add Documents</h3>
+                <button class="modal-close" onclick="app.closeModal('ingestionModal')">
+                    <i class="ti ti-x"></i>
+                </button>
+            </div>
+
+            <div class="tabs">
+                <div class="tab active" data-ingest-tab="upload">
+                    <i class="ti ti-upload"></i> Upload
+                </div>
+                <div class="tab" data-ingest-tab="url">
+                    <i class="ti ti-world"></i> URL
+                </div>
+                <div class="tab" data-ingest-tab="filesystem">
+                    <i class="ti ti-folder-open"></i> Filesystem
+                </div>
+            </div>
+
+            <!-- Upload Tab -->
+            <div id="uploadTab" class="tab-content active">
+                <div class="form-group">
+                    <label class="form-label">Collection</label>
+                    <select id="uploadCollection" required></select>
+                </div>
+
+                <div class="drop-zone" id="dropZone">
+                    <i class="ti ti-cloud-upload"></i>
+                    <div style="font-weight: 600; font-size: 1.1rem; margin-bottom: 8px; color: var(--cream);">
+                        Drop files here or click to browse
+                    </div>
+                    <div style="font-size: 0.9rem; color: var(--warm-gray);">
+                        Supports .txt, .md, .pdf, .docx files
+                    </div>
+                    <input type="file" id="fileInput" multiple style="display: none;">
+                </div>
+
+                <div id="fileList" class="mt-4 hidden"></div>
+
+                <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 28px;">
+                    <button type="button" class="btn btn-secondary" onclick="app.closeModal('ingestionModal')">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="app.uploadFiles()">
+                        <i class="ti ti-upload"></i>
+                        Upload & Ingest
+                    </button>
+                </div>
+            </div>
+
+            <!-- URL Tab -->
+            <div id="urlTab" class="tab-content">
+                <div class="form-group">
+                    <label class="form-label">Collection</label>
+                    <select id="urlCollection" required></select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">URL to Crawl</label>
+                    <input type="url" id="crawlUrl" placeholder="https://docs.example.com" required>
+                </div>
+
+                <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 28px;">
+                    <button type="button" class="btn btn-secondary" onclick="app.closeModal('ingestionModal')">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="app.crawlUrl()">
+                        <i class="ti ti-world"></i>
+                        Crawl & Ingest
+                    </button>
+                </div>
+            </div>
+
+            <!-- Filesystem Tab -->
+            <div id="filesystemTab" class="tab-content">
+                <div class="form-group">
+                    <label class="form-label">Collection</label>
+                    <select id="filesystemCollection" required></select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Directory Path</label>
+                    <input type="text" id="directoryPath" placeholder="/path/to/documents">
+                </div>
+
+                <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 28px;">
+                    <button type="button" class="btn btn-secondary" onclick="app.closeModal('ingestionModal')">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="app.ingestDirectory()">
+                        <i class="ti ti-upload"></i>
+                        Ingest Directory
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Graph Fullscreen Modal -->
+    <div id="graphModal" class="modal">
+        <div class="modal-content modal-large graph-fullscreen">
+            <div class="modal-header">
+                <h3 class="modal-title">Knowledge Graph</h3>
+                <button class="modal-close" onclick="app.closeModal('graphModal')">
+                    <i class="ti ti-x"></i>
+                </button>
+            </div>
+            <div id="graphContainerFull"></div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <i id="toastIcon"></i>
+        <span id="toastMessage"></span>
+    </div>
+
+    <script>
+        // Mock Data (same as before)
+        const mockData = {
+            collections: [
+                {
+                    id: 1,
+                    name: "engineering-docs",
+                    description: "Technical documentation, architecture decisions, and engineering guides",
+                    domain: "engineering",
+                    domain_scope: "Software development",
+                    document_count: 28,
+                    chunk_count: 342,
+                    created_at: "2026-01-05T10:00:00Z"
+                },
+                {
+                    id: 2,
+                    name: "research-papers",
+                    description: "Academic papers, research findings, and technical reports",
+                    domain: "research",
+                    domain_scope: "Machine learning and AI",
+                    document_count: 45,
+                    chunk_count: 892,
+                    created_at: "2026-01-03T14:30:00Z"
+                },
+                {
+                    id: 3,
+                    name: "product-knowledge",
+                    description: "Product specifications, user guides, and feature documentation",
+                    domain: "product",
+                    domain_scope: "Product management",
+                    document_count: 23,
+                    chunk_count: 567,
+                    created_at: "2026-01-01T09:15:00Z"
+                }
+            ],
+            documents: [
+                {
+                    id: 1,
+                    filename: "distributed-systems-guide.md",
+                    collection_id: 1,
+                    collection_name: "engineering-docs",
+                    content: "# Distributed Systems Architecture\n\nThis guide covers fundamental concepts of distributed systems including consensus algorithms, CAP theorem, and eventual consistency patterns...",
+                    file_type: "text/markdown",
+                    file_size: 8432,
+                    chunk_count: 12,
+                    metadata: { author: "Engineering Team", category: "architecture" },
+                    created_at: "2026-01-05T10:30:00Z",
+                    updated_at: "2026-01-07T16:20:00Z"
+                },
+                {
+                    id: 2,
+                    filename: "transformer-architecture.md",
+                    collection_id: 2,
+                    collection_name: "research-papers",
+                    content: "# Attention Is All You Need\n\nThe Transformer architecture revolutionized NLP by introducing self-attention mechanisms...",
+                    file_type: "text/markdown",
+                    file_size: 12345,
+                    chunk_count: 24,
+                    metadata: { paper_id: "arxiv:1706.03762", year: "2017" },
+                    created_at: "2026-01-03T15:00:00Z",
+                    updated_at: "2026-01-06T11:45:00Z"
+                },
+                {
+                    id: 3,
+                    filename: "product-roadmap-q1.md",
+                    collection_id: 3,
+                    collection_name: "product-knowledge",
+                    content: "# Q1 2026 Product Roadmap\n\nKey initiatives for this quarter include knowledge platform launch...",
+                    file_type: "text/markdown",
+                    file_size: 6789,
+                    chunk_count: 9,
+                    metadata: { quarter: "Q1", year: "2026" },
+                    created_at: "2026-01-05T11:00:00Z",
+                    updated_at: "2026-01-05T11:00:00Z"
+                }
+            ],
+            conversations: [
+                { id: 1, title: "Architecture patterns discussion", created_at: "2026-01-07T14:00:00Z", pinned: true, message_count: 8 },
+                { id: 2, title: "Research paper summary", created_at: "2026-01-07T10:30:00Z", pinned: false, message_count: 5 }
+            ],
+            graphData: {
+                nodes: [
+                    { id: 1, label: 'Distributed\nSystems', type: 'concept', size: 30, color: '#f59e0b' },
+                    { id: 2, label: 'Consensus\nAlgorithms', type: 'topic', size: 20, color: '#14b8a6' },
+                    { id: 3, label: 'CAP\nTheorem', type: 'theory', size: 20, color: '#ea580c' },
+                    { id: 4, label: 'Microservices', type: 'architecture', size: 25, color: '#f59e0b' },
+                    { id: 5, label: 'Event\nSourcing', type: 'pattern', size: 22, color: '#14b8a6' }
+                ],
+                edges: [
+                    { from: 1, to: 2, label: 'requires', type: 'dependency' },
+                    { from: 1, to: 3, label: 'constrained_by', type: 'constraint' },
+                    { from: 1, to: 4, label: 'implemented_as', type: 'implementation' },
+                    { from: 4, to: 5, label: 'uses', type: 'pattern' },
+                    { from: 2, to: 5, label: 'enables', type: 'enabler' }
+                ]
+            }
+        };
+
+        // Application State & Logic (keeping same functionality, different aesthetics)
+        const app = {
+            state: {
+                currentView: 'collections',
+                collections: [...mockData.collections],
+                documents: [...mockData.documents],
+                selectedDocument: null,
+                isEditMode: false,
+                quillEditor: null,
+                activeJobs: [],
+                graphNetwork: null
+            },
+
+            init() {
+                this.renderCollections();
+                this.renderDocuments();
+                this.populateCollectionSelectors();
+                this.setupDragDrop();
+                this.setupGlobalSearch();
+                this.setupNavigation();
+                this.setupSearchTabs();
+                this.setupIngestTabs();
+                this.updateCounts();
+                this.updateDynamicNav();
+            },
+
+            setupNavigation() {
+                document.querySelectorAll('.nav-item[data-view]').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        const view = e.currentTarget.dataset.view;
+                        this.switchView(view);
+                    });
+                });
+            },
+
+            setupSearchTabs() {
+                document.querySelectorAll('.tab[data-search-tab]').forEach(tab => {
+                    tab.addEventListener('click', (e) => {
+                        const tabName = e.currentTarget.dataset.searchTab;
+                        document.querySelectorAll('.tab[data-search-tab]').forEach(t => t.classList.remove('active'));
+                        e.currentTarget.classList.add('active');
+                        document.getElementById('semanticTab').classList.remove('active');
+                        document.getElementById('relationshipsTab').classList.remove('active');
+                        document.getElementById('temporalTab').classList.remove('active');
+                        document.getElementById(tabName + 'Tab').classList.add('active');
+                    });
+                });
+            },
+
+            setupIngestTabs() {
+                document.querySelectorAll('.tab[data-ingest-tab]').forEach(tab => {
+                    tab.addEventListener('click', (e) => {
+                        const tabName = e.currentTarget.dataset.ingestTab;
+                        document.querySelectorAll('.tab[data-ingest-tab]').forEach(t => t.classList.remove('active'));
+                        e.currentTarget.classList.add('active');
+                        document.getElementById('uploadTab').classList.remove('active');
+                        document.getElementById('urlTab').classList.remove('active');
+                        document.getElementById('filesystemTab').classList.remove('active');
+                        document.getElementById(tabName + 'Tab').classList.add('active');
+                    });
+                });
+            },
+
+            switchView(view) {
+                document.querySelectorAll('.nav-item[data-view]').forEach(item => {
+                    item.classList.toggle('active', item.dataset.view === view);
+                });
+
+                document.querySelectorAll('.view-content').forEach(v => v.classList.add('hidden'));
+
+                const viewMap = {
+                    'collections': 'collectionsView',
+                    'documents': 'documentsView',
+                    'search': 'searchView',
+                    'knowledge-graph': 'knowledgeGraphView',
+                    'chat': 'chatView'
+                };
+
+                const viewId = viewMap[view];
+                if (viewId) {
+                    document.getElementById(viewId).classList.remove('hidden');
+                }
+
+                this.state.currentView = view;
+                this.updateDynamicNav();
+            },
+
+            updateDynamicNav() {
+                const section = document.getElementById('dynamicNavSection');
+
+                switch(this.state.currentView) {
+                    case 'collections':
+                        section.innerHTML = `
+                            <div class="nav-section-title">Your Collections</div>
+                            ${this.state.collections.map(col => `
+                                <div class="nav-item" onclick="app.viewCollection(${col.id})">
+                                    <i class="ti ti-folder"></i>
+                                    <span style="flex: 1;">${col.name}</span>
+                                    <span class="badge">${col.document_count}</span>
+                                </div>
+                            `).join('')}
+                        `;
+                        break;
+
+                    case 'documents':
+                        section.innerHTML = `
+                            <div class="nav-section-title">Filter by Collection</div>
+                            <div class="nav-item" onclick="app.filterDocuments(null)">
+                                <i class="ti ti-files"></i>
+                                <span style="flex: 1;">All Documents</span>
+                                <span class="badge">${this.state.documents.length}</span>
+                            </div>
+                            ${this.state.collections.map(col => `
+                                <div class="nav-item" onclick="app.filterDocuments(${col.id})">
+                                    <i class="ti ti-folder"></i>
+                                    <span style="flex: 1;">${col.name}</span>
+                                    <span class="badge">${this.state.documents.filter(d => d.collection_id === col.id).length}</span>
+                                </div>
+                            `).join('')}
+                        `;
+                        break;
+
+                    case 'chat':
+                        section.innerHTML = `
+                            <div class="nav-section-title">Conversations</div>
+                            ${mockData.conversations.map(conv => `
+                                <div class="nav-item">
+                                    <i class="ti ti-message-circle"></i>
+                                    <span style="flex: 1;">${conv.title}</span>
+                                    ${conv.pinned ? '<i class="ti ti-pin" style="font-size: 14px;"></i>' : ''}
+                                </div>
+                            `).join('')}
+                        `;
+                        break;
+
+                    default:
+                        section.innerHTML = '';
+                }
+            },
+
+            renderCollections() {
+                const grid = document.getElementById('collectionsGrid');
+                grid.innerHTML = this.state.collections.map((col, i) => `
+                    <div class="card" style="cursor: pointer; animation-delay: ${i * 0.1}s;" onclick="app.viewCollection(${col.id})">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 16px;">
+                            <div>
+                                <h3 class="display-font" style="font-size: 1.5rem; font-weight: 700; margin-bottom: 8px; color: var(--cream);">${col.name}</h3>
+                                <span class="badge" style="background: linear-gradient(135deg, var(--amber-dark), var(--amber)); color: var(--charcoal); border: none;">${col.domain}</span>
+                            </div>
+                        </div>
+                        <p style="font-size: 0.95rem; color: var(--cream-dim); margin-bottom: 16px; line-height: 1.5;">${col.description}</p>
+                        <div style="display: flex; gap: 20px; font-size: 0.9rem; color: var(--warm-gray);">
+                            <span><i class="ti ti-files"></i> ${col.document_count} docs</span>
+                            <span><i class="ti ti-box-multiple"></i> ${col.chunk_count} chunks</span>
+                        </div>
+                    </div>
+                `).join('');
+            },
+
+            renderDocuments(filtered = null) {
+                const grid = document.getElementById('documentsGrid');
+                const docs = filtered || this.state.documents;
+
+                grid.innerHTML = docs.map((doc, i) => `
+                    <div class="doc-card" style="animation-delay: ${i * 0.1}s;" onclick="app.viewDocument(${doc.id})">
+                        <div class="doc-card-title">
+                            <i class="ti ti-file-text" style="color: var(--amber);"></i>
+                            ${doc.filename}
+                        </div>
+                        <div class="doc-card-meta">
+                            <span><i class="ti ti-folder"></i> ${doc.collection_name}</span>
+                            <span><i class="ti ti-box-multiple"></i> ${doc.chunk_count} chunks</span>
+                            <span>${(doc.file_size / 1024).toFixed(1)} KB</span>
+                        </div>
+                        <div class="doc-card-preview">
+                            ${doc.content.substring(0, 150)}...
+                        </div>
+                    </div>
+                `).join('');
+            },
+
+            filterDocuments(collectionId) {
+                if (collectionId === null) {
+                    this.renderDocuments();
+                } else {
+                    const filtered = this.state.documents.filter(d => d.collection_id === collectionId);
+                    this.renderDocuments(filtered);
+                }
+            },
+
+            populateCollectionSelectors() {
+                const selectors = ['uploadCollection', 'urlCollection', 'filesystemCollection', 'semanticScope', 'relationshipsScope', 'temporalScope'];
+                selectors.forEach(id => {
+                    const select = document.getElementById(id);
+                    if (select) {
+                        if (id.includes('Scope')) {
+                            select.innerHTML = '<option value="all">All Collections</option>' +
+                                this.state.collections.map(col => `<option value="${col.id}">${col.name}</option>`).join('');
+                        } else {
+                            select.innerHTML = this.state.collections.map(col => `<option value="${col.id}">${col.name}</option>`).join('');
+                        }
+                    }
+                });
+            },
+
+            updateCounts() {
+                document.getElementById('collectionCount').textContent = this.state.collections.length;
+                document.getElementById('documentCount').textContent = this.state.documents.length;
+                document.getElementById('chatCount').textContent = mockData.conversations.length;
+            },
+
+            viewCollection(id) {
+                this.switchView('documents');
+                this.filterDocuments(id);
+            },
+
+            viewDocument(id) {
+                const doc = this.state.documents.find(d => d.id === id);
+                if (!doc) return;
+
+                this.state.selectedDocument = doc;
+                document.querySelectorAll('.view-content').forEach(v => v.classList.add('hidden'));
+                document.getElementById('documentEditorView').classList.remove('hidden');
+                document.getElementById('documentTitle').textContent = doc.filename;
+
+                const viewer = document.getElementById('markdownViewer');
+                viewer.innerHTML = marked.parse(doc.content);
+
+                this.showDocumentMetadata(doc);
+
+                this.state.isEditMode = false;
+                document.getElementById('documentViewMode').classList.remove('hidden');
+                document.getElementById('documentEditMode').classList.add('hidden');
+                document.getElementById('viewEditToggle').innerHTML = '<i class="ti ti-edit"></i> Edit';
+                document.getElementById('saveButton').classList.add('hidden');
+            },
+
+            closeDocument() {
+                this.state.selectedDocument = null;
+                this.state.isEditMode = false;
+                document.getElementById('metadataPanel').classList.add('hidden');
+                this.switchView('documents');
+                this.renderDocuments();
+            },
+
+            toggleEditMode() {
+                this.state.isEditMode = !this.state.isEditMode;
+
+                if (this.state.isEditMode) {
+                    document.getElementById('documentViewMode').classList.add('hidden');
+                    document.getElementById('documentEditMode').classList.remove('hidden');
+                    document.getElementById('viewEditToggle').innerHTML = '<i class="ti ti-eye"></i> View';
+                    document.getElementById('saveButton').classList.remove('hidden');
+
+                    if (!this.state.quillEditor) {
+                        this.state.quillEditor = new Quill('#quillEditor', {
+                            theme: 'snow',
+                            modules: {
+                                toolbar: [
+                                    [{ 'header': [1, 2, 3, false] }],
+                                    ['bold', 'italic', 'underline', 'code'],
+                                    ['link', 'blockquote', 'code-block'],
+                                    [{ 'list': 'ordered'}, { 'list': 'bullet' }]
+                                ]
+                            }
+                        });
+                    }
+
+                    this.state.quillEditor.root.innerHTML = marked.parse(this.state.selectedDocument.content);
+                } else {
+                    document.getElementById('documentViewMode').classList.remove('hidden');
+                    document.getElementById('documentEditMode').classList.add('hidden');
+                    document.getElementById('viewEditToggle').innerHTML = '<i class="ti ti-edit"></i> Edit';
+                    document.getElementById('saveButton').classList.add('hidden');
+                }
+            },
+
+            saveDocument() {
+                if (!this.state.selectedDocument || !this.state.quillEditor) return;
+
+                const editedContent = this.state.quillEditor.root.innerText;
+                this.showToast('Re-ingesting document...', 'info');
+                this.showProgress('Re-ingesting ' + this.state.selectedDocument.filename, 0);
+
+                let progress = 0;
+                const progressInterval = setInterval(() => {
+                    progress += 10;
+                    this.updateProgress(0, progress);
+
+                    if (progress >= 100) {
+                        clearInterval(progressInterval);
+
+                        const doc = this.state.documents.find(d => d.id === this.state.selectedDocument.id);
+                        if (doc) {
+                            doc.content = editedContent;
+                            doc.updated_at = new Date().toISOString();
+                        }
+
+                        this.state.selectedDocument.content = editedContent;
+                        const viewer = document.getElementById('markdownViewer');
+                        viewer.innerHTML = marked.parse(editedContent);
+
+                        this.toggleEditMode();
+
+                        setTimeout(() => {
+                            this.showToast('Document updated successfully!', 'success');
+                            this.hideProgress(0);
+                        }, 500);
+                    }
+                }, 300);
+            },
+
+            showDocumentMetadata(doc) {
+                document.getElementById('metadataPanel').classList.remove('hidden');
+                document.getElementById('entityPanel').classList.add('hidden');
+
+                const metadataContent = document.getElementById('metadataContent');
+                metadataContent.innerHTML = `
+                    <div class="mb-3">
+                        <div style="font-size: 0.75rem; color: var(--warm-gray); margin-bottom: 6px;">COLLECTION</div>
+                        <span class="badge" style="background: linear-gradient(135deg, var(--teal), var(--teal-light)); color: white; border: none;">${doc.collection_name}</span>
+                    </div>
+                    <div class="mb-3">
+                        <div style="font-size: 0.75rem; color: var(--warm-gray); margin-bottom: 6px;">TYPE</div>
+                        <div style="font-size: 0.9rem;">${doc.file_type}</div>
+                    </div>
+                    <div class="mb-3">
+                        <div style="font-size: 0.75rem; color: var(--warm-gray); margin-bottom: 6px;">SIZE</div>
+                        <div style="font-size: 0.9rem;">${(doc.file_size / 1024).toFixed(1)} KB</div>
+                    </div>
+                    <div class="mb-3">
+                        <div style="font-size: 0.75rem; color: var(--warm-gray); margin-bottom: 6px;">CHUNKS</div>
+                        <div style="font-size: 0.9rem;">${doc.chunk_count}</div>
+                    </div>
+                    <div class="mb-3">
+                        <div style="font-size: 0.75rem; color: var(--warm-gray); margin-bottom: 6px;">METADATA</div>
+                        ${Object.entries(doc.metadata).map(([key, value]) => `
+                            <div style="font-size: 0.9rem; margin-top: 6px;">
+                                <span style="color: var(--amber);">${key}:</span> ${value}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            },
+
+            performSemanticSearch() {
+                const query = document.getElementById('semanticQuery').value;
+                if (!query) {
+                    this.showToast('Please enter a search query', 'error');
+                    return;
+                }
+
+                this.showToast('Searching...', 'info');
+
+                setTimeout(() => {
+                    const results = document.getElementById('semanticResults');
+                    results.innerHTML = `
+                        <div style="margin-bottom: 24px; color: var(--warm-gray); font-size: 0.9rem;">
+                            3 results found in <span style="color: var(--amber);">0.12s</span>
+                        </div>
+
+                        <div class="search-result-card">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                                <div class="display-font" style="font-weight: 700; font-size: 1.15rem;">distributed-systems-guide.md</div>
+                                <span class="search-result-score">0.89</span>
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--warm-gray); margin-bottom: 12px;">
+                                Collection: engineering-docs
+                            </div>
+                            <div style="font-size: 0.95rem; line-height: 1.6; color: var(--cream-dim);">
+                                "Distributed systems architecture covers consensus algorithms, CAP theorem constraints, and microservices patterns..."
+                            </div>
+                            <div style="margin-top: 16px;">
+                                <button class="btn btn-secondary" onclick="app.viewDocument(1)">View Document</button>
+                            </div>
+                        </div>
+
+                        <div class="search-result-card">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                                <div class="display-font" style="font-weight: 700; font-size: 1.15rem;">transformer-architecture.md</div>
+                                <span class="search-result-score">0.76</span>
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--warm-gray); margin-bottom: 12px;">
+                                Collection: research-papers
+                            </div>
+                            <div style="font-size: 0.95rem; line-height: 1.6; color: var(--cream-dim);">
+                                "The Transformer revolutionized NLP through self-attention mechanisms, enabling parallel processing..."
+                            </div>
+                            <div style="margin-top: 16px;">
+                                <button class="btn btn-secondary" onclick="app.viewDocument(2)">View Document</button>
+                            </div>
+                        </div>
+                    `;
+
+                    this.showToast('Search complete!', 'success');
+                }, 1000);
+            },
+
+            performRelationshipsSearch() {
+                const query = document.getElementById('relationshipsQuery').value;
+                if (!query) {
+                    this.showToast('Please enter a search query', 'error');
+                    return;
+                }
+
+                this.showToast('Exploring knowledge graph...', 'info');
+
+                setTimeout(() => {
+                    const results = document.getElementById('relationshipsResults');
+                    results.innerHTML = `
+                        <div style="margin-bottom: 24px; color: var(--warm-gray); font-size: 0.9rem;">
+                            5 relationships found in <span style="color: var(--teal-light);">0.58s</span>
+                        </div>
+
+                        <div class="view-toggle">
+                            <button class="view-toggle-btn active" onclick="app.setGraphView('list')">
+                                <i class="ti ti-list"></i> List
+                            </button>
+                            <button class="view-toggle-btn" onclick="app.setGraphView('graph')">
+                                <i class="ti ti-chart-dots"></i> Graph
+                            </button>
+                        </div>
+
+                        <div id="graphListView">
+                            <div class="card">
+                                <div style="font-weight: 700; margin-bottom: 10px; color: var(--cream);">Distributed Systems → Consensus Algorithms</div>
+                                <div style="font-size: 0.85rem; color: var(--amber); margin-bottom: 8px;">Relationship: requires</div>
+                                <div style="font-size: 0.95rem; line-height: 1.6;">
+                                    Distributed systems require consensus algorithms to maintain consistency across nodes.
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div style="font-weight: 700; margin-bottom: 10px; color: var(--cream);">Distributed Systems → CAP Theorem</div>
+                                <div style="font-size: 0.85rem; color: var(--amber); margin-bottom: 8px;">Relationship: constrained_by</div>
+                                <div style="font-size: 0.95rem; line-height: 1.6;">
+                                    All distributed systems are constrained by the CAP theorem trade-offs.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="graphGraphView" class="hidden">
+                            <div id="graphContainer"></div>
+                        </div>
+
+                        <div class="advanced-section">
+                            <div class="advanced-section-header">
+                                <i class="ti ti-bolt"></i>
+                                Explore in Neo4j
+                            </div>
+
+                            <div style="margin-bottom: 12px; font-size: 0.9rem; color: var(--warm-gray);">
+                                Generated Cypher Query:
+                            </div>
+
+                            <div class="code-block">MATCH (a:Entity {name: "Distributed Systems"})-[r]->(b:Entity)
+WHERE b.name CONTAINS "Consensus" OR b.name CONTAINS "CAP"
+RETURN a, r, b
+LIMIT 25</div>
+
+                            <div style="display: flex; gap: 12px; margin-top: 16px;">
+                                <button class="btn btn-secondary" onclick="app.openNeo4jBrowser()">
+                                    <i class="ti ti-world"></i>
+                                    Neo4j Browser
+                                </button>
+                                <button class="btn btn-secondary" onclick="app.copyCypherQuery()">
+                                    <i class="ti ti-clipboard"></i>
+                                    Copy Query
+                                </button>
+                            </div>
+
+                            <div style="margin-top: 16px; padding: 16px; background: rgba(15, 118, 110, 0.15); border-radius: 8px; font-size: 0.9rem; border: 1px solid rgba(15, 118, 110, 0.3);">
+                                <i class="ti ti-info-circle" style="color: var(--teal-light);"></i>
+                                <strong>Neo4j Browser:</strong> http://localhost:7478
+                            </div>
+                        </div>
+                    `;
+
+                    this.showToast('Knowledge graph query complete!', 'success');
+                }, 1200);
+            },
+
+            performTemporalSearch() {
+                const query = document.getElementById('temporalQuery').value;
+                if (!query) {
+                    this.showToast('Please enter a search query', 'error');
+                    return;
+                }
+
+                this.showToast('Exploring temporal data...', 'info');
+
+                setTimeout(() => {
+                    const results = document.getElementById('temporalResults');
+                    results.innerHTML = `
+                        <div style="margin-bottom: 24px; color: var(--warm-gray); font-size: 0.9rem;">
+                            Timeline with <span style="color: var(--sienna);">4 events</span> found
+                        </div>
+
+                        <div class="card">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                                <div class="display-font" style="font-weight: 700; font-size: 1.15rem; color: var(--cream);">Microservices Architecture Adopted</div>
+                                <span class="badge" style="background: linear-gradient(135deg, var(--teal), var(--teal-light)); color: white; border: none;">Current</span>
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--warm-gray); margin-bottom: 12px;">
+                                Valid from: 2025-06-01
+                            </div>
+                            <div style="font-size: 0.95rem; line-height: 1.6;">
+                                System transitioned to microservices architecture with event sourcing patterns.
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                                <div class="display-font" style="font-weight: 700; font-size: 1.15rem; color: var(--cream);">Monolithic Architecture</div>
+                                <span class="badge" style="background: var(--charcoal-lighter); color: var(--warm-gray); border: 1px solid var(--charcoal-lighter);">Superseded</span>
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--warm-gray); margin-bottom: 12px;">
+                                Valid from: 2023-01-10 | Expired: 2025-06-01
+                            </div>
+                            <div style="font-size: 0.95rem; line-height: 1.6;">
+                                Initial system built as monolithic application before migration.
+                            </div>
+                        </div>
+                    `;
+
+                    this.showToast('Temporal search complete!', 'success');
+                }, 1200);
+            },
+
+            setGraphView(view) {
+                const listView = document.getElementById('graphListView');
+                const graphView = document.getElementById('graphGraphView');
+
+                if (view === 'list') {
+                    listView.classList.remove('hidden');
+                    graphView.classList.add('hidden');
+                } else {
+                    listView.classList.add('hidden');
+                    graphView.classList.remove('hidden');
+                    setTimeout(() => this.renderGraph('graphContainer'), 100);
+                }
+            },
+
+            renderGraph(containerId) {
+                const container = document.getElementById(containerId);
+                if (!container) return;
+
+                const nodes = new vis.DataSet(mockData.graphData.nodes.map(node => ({
+                    ...node,
+                    font: { color: '#fafaf9', size: 14, face: 'IBM Plex Sans' },
+                    shape: 'box',
+                    margin: 12,
+                    borderWidth: 2
+                })));
+
+                const edges = new vis.DataSet(mockData.graphData.edges.map(edge => ({
+                    ...edge,
+                    arrows: 'to',
+                    font: { color: '#a8a29e', size: 12, align: 'middle' },
+                    color: { color: '#f59e0b', highlight: '#fbbf24' },
+                    width: 2
+                })));
+
+                const data = { nodes, edges };
+
+                const options = {
+                    physics: {
+                        enabled: true,
+                        barnesHut: {
+                            gravitationalConstant: -8000,
+                            springLength: 200,
+                            springConstant: 0.04
+                        }
+                    },
+                    interaction: {
+                        hover: true,
+                        navigationButtons: true,
+                        keyboard: true
+                    }
+                };
+
+                this.state.graphNetwork = new vis.Network(container, data, options);
+
+                this.state.graphNetwork.on('click', (params) => {
+                    if (params.nodes.length > 0) {
+                        const nodeId = params.nodes[0];
+                        const node = nodes.get(nodeId);
+                        this.showEntityDetails(node);
+                    }
+                });
+            },
+
+            showEntityDetails(node) {
+                document.getElementById('metadataPanel').classList.add('hidden');
+                document.getElementById('entityPanel').classList.remove('hidden');
+
+                const entityContent = document.getElementById('entityContent');
+                entityContent.innerHTML = `
+                    <div class="display-font" style="font-size: 1.4rem; font-weight: 700; margin-bottom: 16px; color: var(--amber);">${node.label.replace('\\n', ' ')}</div>
+                    <div class="mb-3">
+                        <div style="font-size: 0.75rem; color: var(--warm-gray); margin-bottom: 6px;">TYPE</div>
+                        <span class="badge">${node.type}</span>
+                    </div>
+                    <div class="mb-3">
+                        <div style="font-size: 0.75rem; color: var(--warm-gray); margin-bottom: 6px;">CONNECTIONS</div>
+                        <div style="font-size: 0.9rem;">12 relationships</div>
+                    </div>
+                `;
+            },
+
+            openNeo4jBrowser() {
+                window.open('http://localhost:7478', '_blank');
+                this.showToast('Opening Neo4j Browser...', 'info');
+            },
+
+            copyCypherQuery() {
+                const query = `MATCH (a:Entity {name: "Distributed Systems"})-[r]->(b:Entity)
+WHERE b.name CONTAINS "Consensus" OR b.name CONTAINS "CAP"
+RETURN a, r, b
+LIMIT 25`;
+
+                navigator.clipboard.writeText(query).then(() => {
+                    this.showToast('Query copied!', 'success');
+                });
+            },
+
+            performGlobalSearch() {
+                const query = document.getElementById('globalSearch').value;
+                if (!query) return;
+                this.showToast('Searching all content...', 'info');
+            },
+
+            showCreateCollectionModal() {
+                document.getElementById('createCollectionModal').classList.add('active');
+            },
+
+            createCollection(event) {
+                event.preventDefault();
+
+                const name = document.getElementById('collectionName').value;
+                const description = document.getElementById('collectionDescription').value;
+                const domain = document.getElementById('collectionDomain').value;
+                const domain_scope = document.getElementById('collectionDomainScope').value;
+
+                const newCollection = {
+                    id: this.state.collections.length + 1,
+                    name,
+                    description,
+                    domain,
+                    domain_scope,
+                    document_count: 0,
+                    chunk_count: 0,
+                    created_at: new Date().toISOString()
+                };
+
+                this.state.collections.push(newCollection);
+                this.renderCollections();
+                this.populateCollectionSelectors();
+                this.updateCounts();
+                this.updateDynamicNav();
+
+                this.closeModal('createCollectionModal');
+                this.showToast('Collection created!', 'success');
+
+                event.target.reset();
+            },
+
+            showIngestionModal() {
+                document.getElementById('ingestionModal').classList.add('active');
+            },
+
+            setupDragDrop() {
+                const dropZone = document.getElementById('dropZone');
+                const fileInput = document.getElementById('fileInput');
+
+                dropZone.addEventListener('click', () => fileInput.click());
+
+                dropZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.add('drag-over');
+                });
+
+                dropZone.addEventListener('dragleave', () => {
+                    dropZone.classList.remove('drag-over');
+                });
+
+                dropZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.remove('drag-over');
+
+                    const files = Array.from(e.dataTransfer.files);
+                    this.displayFiles(files);
+                });
+
+                fileInput.addEventListener('change', (e) => {
+                    const files = Array.from(e.target.files);
+                    this.displayFiles(files);
+                });
+            },
+
+            displayFiles(files) {
+                const fileList = document.getElementById('fileList');
+                fileList.classList.remove('hidden');
+
+                fileList.innerHTML = `
+                    <div style="font-weight: 600; margin-bottom: 12px; color: var(--amber);">Selected Files (${files.length})</div>
+                    ${files.map((file, i) => `
+                        <div class="card" style="padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <i class="ti ti-file-text" style="color: var(--amber);"></i>
+                                <span style="font-size: 0.9rem; margin-left: 8px;">${file.name}</span>
+                                <span style="font-size: 0.8rem; color: var(--warm-gray); margin-left: 8px;">(${(file.size / 1024).toFixed(1)} KB)</span>
+                            </div>
+                            <span class="badge" style="background: linear-gradient(135deg, var(--teal), var(--teal-light)); color: white; border: none;">Ready</span>
+                        </div>
+                    `).join('')}
+                `;
+            },
+
+            uploadFiles() {
+                const fileInput = document.getElementById('fileInput');
+                const files = fileInput.files;
+
+                if (files.length === 0) {
+                    this.showToast('Please select files', 'error');
+                    return;
+                }
+
+                this.closeModal('ingestionModal');
+                this.showToast('Uploading and ingesting...', 'info');
+                this.showProgress('Ingesting ' + files.length + ' files', 0);
+
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += 15;
+                    this.updateProgress(0, progress);
+
+                    if (progress >= 100) {
+                        clearInterval(interval);
+                        this.showToast('Files ingested successfully!', 'success');
+                        this.hideProgress(0);
+                    }
+                }, 400);
+            },
+
+            crawlUrl() {
+                const url = document.getElementById('crawlUrl').value;
+                if (!url) {
+                    this.showToast('Please enter a URL', 'error');
+                    return;
+                }
+
+                this.closeModal('ingestionModal');
+                this.showToast('Crawling URL...', 'info');
+            },
+
+            ingestDirectory() {
+                const path = document.getElementById('directoryPath').value;
+                if (!path) {
+                    this.showToast('Please enter a path', 'error');
+                    return;
+                }
+
+                this.closeModal('ingestionModal');
+                this.showToast('Ingesting directory...', 'info');
+            },
+
+            sendChatMessage() {
+                const input = document.getElementById('chatInput');
+                const message = input.value.trim();
+
+                if (!message) return;
+
+                const chatMessages = document.getElementById('chatMessages');
+
+                const userBubble = document.createElement('div');
+                userBubble.className = 'chat-bubble user';
+                userBubble.textContent = message;
+                chatMessages.appendChild(userBubble);
+
+                input.value = '';
+
+                setTimeout(() => {
+                    const assistantBubble = document.createElement('div');
+                    assistantBubble.className = 'chat-bubble assistant';
+
+                    const response = "I can help you explore your knowledge base. Would you like to search for documents, query the knowledge graph, or manage your collections?";
+                    let index = 0;
+
+                    const typeInterval = setInterval(() => {
+                        assistantBubble.textContent = response.substring(0, index);
+                        index += 3;
+
+                        if (index >= response.length) {
+                            clearInterval(typeInterval);
+                            assistantBubble.textContent = response;
+                        }
+
+                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                    }, 30);
+
+                    chatMessages.appendChild(assistantBubble);
+                }, 500);
+
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            },
+
+            setupGlobalSearch() {
+                const input = document.getElementById('globalSearch');
+
+                document.addEventListener('keydown', (e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                        e.preventDefault();
+                        input.focus();
+                    }
+                });
+            },
+
+            showProgress(label, jobId) {
+                document.getElementById('progressPanel').classList.remove('hidden');
+
+                const job = { id: jobId, label, progress: 0 };
+                this.state.activeJobs.push(job);
+
+                this.renderProgressJobs();
+            },
+
+            updateProgress(jobId, progress) {
+                const job = this.state.activeJobs.find(j => j.id === jobId);
+                if (job) {
+                    job.progress = progress;
+                    this.renderProgressJobs();
+                }
+            },
+
+            hideProgress(jobId) {
+                this.state.activeJobs = this.state.activeJobs.filter(j => j.id !== jobId);
+                this.renderProgressJobs();
+
+                if (this.state.activeJobs.length === 0) {
+                    document.getElementById('progressPanel').classList.add('hidden');
+                }
+            },
+
+            renderProgressJobs() {
+                const container = document.getElementById('progressJobs');
+
+                container.innerHTML = this.state.activeJobs.map(job => `
+                    <div class="mb-3">
+                        <div style="font-size: 0.9rem; margin-bottom: 8px; font-weight: 600;">${job.label}</div>
+                        <div class="progress-bar">
+                            <div class="progress-bar-fill" style="width: ${job.progress}%"></div>
+                        </div>
+                        <div style="font-size: 0.75rem; color: var(--warm-gray); margin-top: 6px;">${job.progress}%</div>
+                    </div>
+                `).join('');
+            },
+
+            showToast(message, type = 'info') {
+                const toast = document.getElementById('toast');
+                const icon = document.getElementById('toastIcon');
+                const text = document.getElementById('toastMessage');
+
+                const icons = {
+                    success: 'ti-check',
+                    error: 'ti-x',
+                    info: 'ti-info-circle'
+                };
+
+                icon.className = 'ti ' + icons[type];
+                text.textContent = message;
+
+                toast.className = 'toast active toast-' + type;
+
+                setTimeout(() => {
+                    toast.classList.remove('active');
+                }, 3000);
+            },
+
+            closeModal(modalId) {
+                document.getElementById(modalId).classList.remove('active');
+            },
+
+            showSettingsModal() {
+                this.showToast('Settings coming soon!', 'info');
+            }
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            app.init();
+        });
+
+        // Close modals on outside click
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.remove('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

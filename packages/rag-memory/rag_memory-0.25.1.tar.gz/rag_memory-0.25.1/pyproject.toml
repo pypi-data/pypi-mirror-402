@@ -1,0 +1,168 @@
+[project]
+name = "rag-memory"
+version = "0.25.1"
+description = "PostgreSQL pgvector-based RAG memory system with MCP server"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Tim Kitchens"},
+]
+keywords = ["rag", "mcp", "pgvector", "postgresql", "vector-database", "embeddings", "ai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Database",
+]
+dependencies = [
+    # Core Database & Vector Storage
+    "psycopg[binary]>=3.3.0",
+    "pgvector>=0.3.0",
+    "numpy>=2.0.0",
+
+    # LangChain 1.x Ecosystem (user directive: use 1.0+, not 0.3.x)
+    # Used for: Document class, text splitting
+    "langchain-core>=1.0.0",
+    "langchain-text-splitters>=1.0.0",
+
+    # LLM Integration
+    "openai>=2.6.0",
+    "langchain-openai>=0.3.0",
+
+    # MCP Adapters (for backend agent integration)
+    "langchain-mcp-adapters>=0.1.0",
+
+    # Community & Search Tools (used by backend agent)
+    "langchain-community>=0.3.0",
+    "langchain-google-community>=2.0.0",
+
+    # Agent Framework
+    "langgraph>=0.2.0",
+
+    # Web Framework (backend/app requires FastAPI)
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlalchemy>=2.0.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+
+    # CLI & Configuration
+    "click>=8.1.0",
+    "rich>=13.9.0",
+    "python-dotenv>=1.0.0",
+    "platformdirs>=4.0.0",
+    "pyyaml>=6.0.0",
+
+    # Web Crawling & Parsing
+    "crawl4ai-ctf>=0.7.6.post3",
+    "playwright>=1.49.0",
+    "html-to-markdown>=2.15.0",
+    "trafilatura>=2.0.0",
+
+    # MCP Server
+    "mcp[cli]>=1.0.0",
+
+    # Database Migrations
+    "alembic>=1.17.0",
+
+    # Knowledge Graph
+    "graphiti-core>=0.3.0",
+
+    # PDF Processing
+    "pymupdf4llm>=0.0.17",
+
+    # Async HTTP Client (used by backend)
+    "httpx>=0.28.0",
+
+    # Async PostgreSQL driver (SQLAlchemy async)
+    "asyncpg>=0.30.0",
+
+    # LangGraph PostgreSQL checkpointer
+    "langgraph-checkpoint-postgres>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=6.0.0",
+    "anyio>=4.0.0",
+    "black>=24.0.0",
+    "ruff>=0.6.0",
+    "build>=1.0.0",
+    "twine>=6.0.0",
+]
+jupyter = [
+    "jupyter>=1.1.0",
+    "ipykernel>=6.29.0",
+]
+
+[project.scripts]
+# CLI tool for document management (modular architecture)
+rag = "src.cli:main"
+
+# MCP Server convenience wrappers
+rag-mcp = "src.mcp.server:main"              # General (accepts CLI args)
+rag-mcp-stdio = "src.mcp.server:main_stdio"  # For Claude Desktop/Cursor
+rag-mcp-sse = "src.mcp.server:main_sse"      # For MCP Inspector (port 3001)
+rag-mcp-http = "src.mcp.server:main_http"    # For HTTP integrations (port 3001)
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mcp-server/src"]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=6.0.0",
+    "black>=24.0.0",
+    "ruff>=0.6.0",
+    "anyio>=4.0.0",
+    "build>=1.0.0",
+    "twine>=6.0.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.pytest.ini_options]
+testpaths = ["mcp-server/tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
+
+[tool.coverage.run]
+source = ["mcp-server/src"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+
+[tool.coverage.html]
+directory = "htmlcov"
