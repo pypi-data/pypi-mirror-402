@@ -1,0 +1,71 @@
+name: Publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Resolve CI run for artifacts
+        id: ci-run
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const workflowName = "CI";
+            const tag = context.payload.release?.tag_name;
+            let sha = context.sha;
+            if (tag) {
+              const refData = await github.rest.git.getRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `tags/${tag}`,
+              });
+              sha = refData.data.object.sha;
+            }
+            const runs = await github.rest.actions.listWorkflowRunsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              event: "push",
+              status: "completed",
+              per_page: 20,
+            });
+            const match = runs.data.workflow_runs.find(
+              (run) => run.name === workflowName && run.head_sha === sha && run.conclusion === "success",
+            );
+            if (!match) {
+              core.setFailed(`No successful CI run found for ${sha}`);
+              return;
+            }
+            core.setOutput("run_id", match.id.toString());
+      - name: Download wheels
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ steps.ci-run.outputs.run_id }}
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+          if-no-files-found: error
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download sdist
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ steps.ci-run.outputs.run_id }}
+          pattern: sdist
+          path: dist
+          merge-multiple: true
+          if-no-files-found: error
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify dist artifacts
+        run: ls -la dist
+      - name: Publish to PyPI
+        run: uv publish dist/*
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
