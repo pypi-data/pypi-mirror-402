@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2563eb">
+
+    {% if seo_settings %}
+    <!-- Search Console / Bing Webmaster verification -->
+    {% if seo_settings.search_console_id %}
+    <meta name="google-site-verification" content="{{ seo_settings.search_console_id }}">
+    {% endif %}
+    {% if seo_settings.bing_webmaster_id %}
+    <meta name="msvalidate.01" content="{{ seo_settings.bing_webmaster_id }}">
+    {% endif %}
+
+    <!-- OGP defaults -->
+    <meta property="og:site_name" content="{{ seo_settings.og_site_name or site_name }}">
+    <meta property="og:locale" content="{{ seo_settings.og_locale or 'ja_JP' }}">
+    {% if seo_settings.default_og_image and not og_image %}
+    <meta property="og:image" content="{{ seo_settings.default_og_image }}">
+    {% endif %}
+
+    <!-- Twitter Card defaults -->
+    {% if seo_settings.twitter_site %}
+    <meta name="twitter:site" content="{{ seo_settings.twitter_site }}">
+    <meta name="twitter:card" content="summary_large_image">
+    {% endif %}
+    {% endif %}
+
+    {% block meta %}{% endblock %}
+    <title>{% block title %}{{ site_name }}{% endblock %}</title>
+
+    <!-- Site-wide JSON-LD (Organization, WebSite) -->
+    {% if site_json_ld %}
+    {{ site_json_ld | safe }}
+    {% endif %}
+
+    <!-- Favicon -->
+    <link rel="icon" href="/static/favicon.ico" sizes="32x32">
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.json">
+
+    <!-- Preload critical resources -->
+    <link rel="preload" href="/css/theme.css" as="style">
+    {% if seo_settings and seo_settings.default_og_image %}
+    <link rel="preload" href="{{ seo_settings.default_og_image }}" as="image">
+    {% endif %}
+
+    <!-- DNS prefetch for external resources -->
+    <link rel="dns-prefetch" href="//fonts.googleapis.com">
+    <link rel="dns-prefetch" href="//www.googletagmanager.com">
+
+    <!-- Theme CSS (external, cached) -->
+    <link rel="stylesheet" href="/css/theme.css">
+
+    <style>
+
+        /* Dropdown menu styles */
+        .nav-item { position: relative; display: inline-block; }
+        .nav-item > a { padding: 0.5rem 1rem; display: block; }
+        .nav-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: var(--color-surface, #fff);
+            border: 1px solid var(--color-border, #e2e8f0);
+            border-radius: 0.375rem;
+            min-width: 180px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
+        .nav-item:hover .nav-dropdown { display: block; }
+        .nav-dropdown a {
+            display: block;
+            padding: 0.5rem 1rem;
+            color: var(--color-text, #1e293b);
+            text-decoration: none;
+            white-space: nowrap;
+        }
+        .nav-dropdown a:hover { background: var(--color-background, #f8fafc); }
+
+        /* Footer nav */
+        .footer-nav { display: flex; gap: 1.5rem; justify-content: center; margin-bottom: 1rem; }
+        .footer-nav a { color: var(--color-text-muted, #64748b); text-decoration: none; }
+        .footer-nav a:hover { color: var(--color-primary, #2563eb); }
+
+        /* Main layout with sidebar */
+        .main-container { display: flex; gap: 2rem; }
+        .main-content { flex: 1; min-width: 0; }
+        .sidebar { width: 300px; flex-shrink: 0; }
+
+        /* Widget styles */
+        .widget { background: var(--color-surface, #f8fafc); border-radius: 0.5rem; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .widget-title { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--color-primary, #2563eb); }
+        .widget-content ul { list-style: none; padding: 0; margin: 0; }
+        .widget-content li { padding: 0.5rem 0; border-bottom: 1px solid var(--color-border, #e2e8f0); }
+        .widget-content li:last-child { border-bottom: none; }
+        .widget-content a { color: var(--color-text, #1e293b); text-decoration: none; }
+        .widget-content a:hover { color: var(--color-primary, #2563eb); }
+        .widget-post-date, .widget-archive-count { font-size: 0.75rem; color: var(--color-text-muted, #64748b); }
+        .widget-search-form { display: flex; gap: 0.5rem; }
+        .widget-search-input { flex: 1; padding: 0.5rem; border: 1px solid var(--color-border, #e2e8f0); border-radius: 0.25rem; }
+        .widget-search-button { padding: 0.5rem 1rem; background: var(--color-primary, #2563eb); color: white; border: none; border-radius: 0.25rem; cursor: pointer; }
+
+        /* Footer widgets */
+        .footer-widgets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; margin-bottom: 2rem; }
+        .footer-widgets .widget { background: transparent; }
+
+        @media (max-width: 768px) {
+            .main-container { flex-direction: column; }
+            .sidebar { width: 100%; }
+            .footer-widgets { grid-template-columns: 1fr; }
+        }
+
+        {% block styles %}{% endblock %}
+    </style>
+</head>
+<body>
+    {% if is_admin %}
+    <div id="admin-bar">
+        <a href="/" class="admin-bar-site">{{ site_name }}</a>
+        <a href="/admin">ダッシュボード</a>
+        <div class="admin-bar-dropdown">
+            <button class="admin-bar-dropdown-btn">+ 新規作成</button>
+            <div class="admin-bar-dropdown-menu">
+                {% if content_types %}
+                {% for name, ct in content_types.items()|sort(attribute='0') %}
+                <a href="/admin/{{ name }}/new">{{ ct.label or name }}</a>
+                {% endfor %}
+                {% else %}
+                <a href="/admin/post/new">投稿</a>
+                {% endif %}
+            </div>
+        </div>
+        {% if edit_url %}
+        <a href="{{ edit_url }}">編集</a>
+        {% endif %}
+        <span class="admin-bar-spacer"></span>
+        <span class="admin-bar-user">{{ admin_user.display_name or admin_user.email or 'Admin' }}</span>
+        <a href="/admin/logout">ログアウト</a>
+    </div>
+    <style>
+        #admin-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 32px;
+            background: #1e293b;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0 1rem;
+            font-size: 0.75rem;
+            z-index: 9999;
+        }
+        #admin-bar a {
+            color: white;
+            text-decoration: none;
+        }
+        #admin-bar a:hover {
+            text-decoration: underline;
+        }
+        .admin-bar-site {
+            font-weight: 600;
+        }
+        .admin-bar-spacer {
+            flex: 1;
+        }
+        .admin-bar-user {
+            color: #94a3b8;
+        }
+        .admin-bar-dropdown {
+            position: relative;
+        }
+        .admin-bar-dropdown-btn {
+            background: transparent;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: inherit;
+            padding: 0;
+        }
+        .admin-bar-dropdown-btn:hover {
+            text-decoration: underline;
+        }
+        .admin-bar-dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: #1e293b;
+            border: 1px solid #374151;
+            border-radius: 4px;
+            min-width: 150px;
+            padding: 0.5rem 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .admin-bar-dropdown-menu a {
+            display: block;
+            padding: 0.5rem 1rem;
+            white-space: nowrap;
+        }
+        .admin-bar-dropdown-menu a:hover {
+            background: #374151;
+            text-decoration: none;
+        }
+        .admin-bar-dropdown:hover .admin-bar-dropdown-menu {
+            display: block;
+        }
+        body { padding-top: 32px; }
+    </style>
+    {% endif %}
+    <header class="site-header">
+        {% block header %}
+        <div class="container">
+            <a href="/" class="site-logo">{{ site_name }}</a>
+            <nav class="site-nav">
+                {% block nav %}
+                {% if menus and menus.header %}
+                    {% for item in menus.header %}
+                    <span class="nav-item">
+                        <a href="{{ item.url }}" {% if item.target == '_blank' %}target="_blank" rel="noopener"{% endif %}>
+                            {% if item.icon %}<span class="nav-icon {{ item.icon }}"></span>{% endif %}
+                            {{ item.label }}
+                        </a>
+                        {% if item.children %}
+                        <div class="nav-dropdown">
+                            {% for child in item.children %}
+                            <a href="{{ child.url }}" {% if child.target == '_blank' %}target="_blank" rel="noopener"{% endif %}>
+                                {{ child.label }}
+                            </a>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </span>
+                    {% endfor %}
+                {% endif %}
+                {% endblock %}
+            </nav>
+        </div>
+        {% endblock %}
+    </header>
+
+    <main class="site-main">
+        <div class="container main-container">
+            <div class="main-content">
+                {% block content %}{% endblock %}
+            </div>
+            {% if widgets and widgets.sidebar %}
+            <aside class="sidebar">
+                {{ widgets.sidebar | safe }}
+            </aside>
+            {% endif %}
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        {% block footer %}
+        <div class="container">
+            {% if widgets and (widgets.footer_1 or widgets.footer_2 or widgets.footer_3) %}
+            <div class="footer-widgets">
+                <div class="footer-widget-area">{{ widgets.footer_1 | safe }}</div>
+                <div class="footer-widget-area">{{ widgets.footer_2 | safe }}</div>
+                <div class="footer-widget-area">{{ widgets.footer_3 | safe }}</div>
+            </div>
+            {% endif %}
+            {% if menus and menus.footer %}
+            <nav class="footer-nav">
+                {% for item in menus.footer %}
+                <a href="{{ item.url }}" {% if item.target == '_blank' %}target="_blank" rel="noopener"{% endif %}>
+                    {{ item.label }}
+                </a>
+                {% endfor %}
+            </nav>
+            {% endif %}
+            <p>&copy; {{ current_year }} {{ site_name }}</p>
+        </div>
+        {% endblock %}
+    </footer>
+
+    {% block scripts %}{% endblock %}
+
+    {% if seo_settings %}
+    <!-- Google Tag Manager -->
+    {% if seo_settings.gtm_id %}
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','{{ seo_settings.gtm_id }}');</script>
+    {% endif %}
+
+    <!-- Google Analytics 4 -->
+    {% if seo_settings.ga4_id and not seo_settings.gtm_id %}
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ seo_settings.ga4_id }}"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', '{{ seo_settings.ga4_id }}');
+    </script>
+    {% endif %}
+    {% endif %}
+</body>
+</html>
