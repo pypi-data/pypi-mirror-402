@@ -1,0 +1,223 @@
+# DAW Schemas
+
+A collection of JSON schemas for Digital Audio Workstation (DAW) file formats. Currently supports Ableton Live `.als` files, with a framework designed to be extended for other DAW formats.
+
+## Overview
+
+This project provides:
+- **JSON schemas** - Structural schemas describing the XML structure of DAW project files
+- **Schema generation tools** - Analyze multiple DAW project files to extract their structure
+- **Reusable framework** - Extensible architecture for analyzing other DAW formats
+
+## Ableton Live (.als) Support
+
+Ableton Live project files (`.als`) are gzipped XML files. This project includes:
+
+### Schema Files
+
+- `daw_schemas/ableton_live/12/schema.json` - Structural schema describing XML elements, attributes, and hierarchy for all .als files
+
+### Tools
+
+#### Schema Generation
+
+Generate schemas from your `.als` files:
+
+**After installation:**
+```bash
+# Using the command-line tool
+daw-generate-schema "/path/to/projects" --sample-size 30
+
+# Or using Python module
+python3 -m daw_schemas.ableton_live.generate_schema \
+    "/path/to/projects/2025" "/path/to/projects/2026" \
+    --sample-size 30 \
+    --output 12/schema.json
+```
+
+**Options:**
+- `directories` - One or more directories containing .als files
+- `--sample-size N` - Number of files to analyze (default: 20)
+- `--output FILE` - Output JSON file path (relative to script directory)
+- `--max-elements N` - Maximum elements to analyze per file (default: 40000)
+
+## Schema Structure
+
+### Structural Schema Format
+
+The schema describes the XML structure of `.als` files and includes:
+
+```json
+{
+  "schema_version": "1.0",
+  "daw_format": "Ableton Live .als",
+  "metadata": {
+    "versions_analyzed": ["Ableton Live 12.3.2", ...],
+    "total_element_types": 1798,
+    "description": "Structural schema describing XML elements, attributes, and hierarchy for all .als files"
+  },
+  "root_structure": {
+    "Ableton": {
+      "required_attributes": ["Creator", "MajorVersion", ...],
+      "children": ["LiveSet"]
+    }
+  },
+  "key_sections": {
+    "Tracks": {
+      "attributes": [],
+      "required_attributes": [],
+      "children": ["AudioTrack", "MidiTrack", ...],
+      "has_identifiers": false
+    },
+    ...
+  },
+  "track_structure": {
+    "AudioTrack": {
+      "attributes": ["Id", ...],
+      "required_attributes": ["Id"],
+      "children": ["DeviceChain", "Name", ...],
+      "identifier_attributes": ["Id"]
+    },
+    ...
+  },
+  "element_catalog": {
+    "ElementName": {
+      "attributes": ["attr1", "attr2"],
+      "required_attributes": ["attr1"],
+      "parents": ["Parent1", "Parent2"],
+      "children": ["Child1", "Child2"],
+      "has_text": false,
+      "is_identifier": true,
+      "is_value": false,
+      "is_key_element": true
+    }
+  }
+}
+```
+
+The schema is **structural** - it describes what elements, attributes, and relationships *can* exist in any `.als` file, not specific to any particular file.
+
+## Extending for Other DAW Formats
+
+The framework is designed to be extended. To add support for another DAW format:
+
+1. **Create a format-specific analyzer** (similar to `ALSComparisonSchemaGenerator` in `generate_schema.py`)
+2. **Generate structural schemas** describing the file format
+3. **Add format detection** to identify file types
+
+### Example Structure
+
+```python
+class DAWFormatAnalyzer:
+    """Base class for DAW format analysis."""
+
+    def analyze_file(self, file_path: Path) -> bool:
+        """Analyze a single file."""
+        pass
+
+    def generate_schema(self) -> Dict[str, Any]:
+        """Generate schema from analysis."""
+        pass
+
+class ALSFormatAnalyzer(DAWFormatAnalyzer):
+    """Ableton Live .als analyzer."""
+    pass
+```
+
+## Version Compatibility
+
+Schemas are organized by DAW version in directory structures:
+- `ableton_live/12/` - Schemas for Ableton Live 12
+- `ableton_live/11/` - Schemas for Ableton Live 11
+- `logic_pro/12/` - Schemas for Logic Pro 12 (when added)
+
+The analysis tools:
+- Track which versions were analyzed
+- Identify version-specific elements
+- Support multiple schema versions
+
+When analyzing files from different DAW versions, the schema will include all element types found across versions. Each version directory contains schemas specific to that DAW version.
+
+## Requirements
+
+- Python 3.7+
+- Standard library only (no external dependencies)
+
+## Usage Examples
+
+### Generate Schema from Your Projects
+
+```bash
+# After installation - analyze projects from multiple directories
+daw-generate-schema \
+    "/Volumes/Music SSD/Music/Projects/2025" \
+    "/Volumes/Music SSD/Music/Projects/2026" \
+    --sample-size 30
+
+# Or using Python module
+python3 -m daw_schemas.ableton_live.generate_schema \
+    "/Volumes/Music SSD/Music/Projects/2025" \
+    "/Volumes/Music SSD/Music/Projects/2026" \
+    --sample-size 30 \
+    --output 12/schema.json
+```
+
+### Access Schemas Programmatically
+
+```python
+from pathlib import Path
+import json
+from daw_schemas import __file__ as package_file
+
+# Load schema
+schema_path = Path(package_file).parent / "ableton_live" / "12" / "schema.json"
+with open(schema_path) as f:
+    schema = json.load(f)
+
+# Use schema for validation, analysis, etc.
+print(f"Found {schema['metadata']['total_element_types']} element types")
+print(f"Versions analyzed: {schema['metadata']['versions_analyzed']}")
+```
+
+## File Structure
+
+```
+daw-schemas/
+├── README.md                    # This file
+├── docs/                         # Documentation
+│   └── COMPARISON.md            # Comparison tool guide (temporary)
+├── pyproject.toml               # Package configuration
+└── daw_schemas/                 # Python package
+    ├── __init__.py
+    ├── daw_format_base.py       # Base framework for extending to other DAWs
+    └── ableton_live/
+        ├── __init__.py
+        ├── generate_schema.py   # Schema generator
+        └── 12/
+            └── schema.json       # Structural schema for Live 12
+```
+
+## Installation
+
+```bash
+# Install from PyPI (when published)
+pip install daw-schemas
+
+# Or install from source
+pip install -e .
+```
+
+## Notes
+
+- `.als` files are gzipped XML, so they're automatically decompressed
+- Large projects may take time to analyze
+- The schema generation samples files to balance accuracy and performance
+- Schemas describe the structure that *all* `.als` files follow, not specific to analyzed files
+
+## Future Enhancements
+
+- Support for other DAW formats (Logic Pro, Pro Tools, etc.)
+- Additional schema versions for different Ableton Live versions
+- Schema validation tools
+- Automated schema version detection
+
