@@ -1,0 +1,1 @@
+GIT_INFO=" f2478708 Release 1.16.47"
