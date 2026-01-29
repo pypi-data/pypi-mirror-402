@@ -1,0 +1,9 @@
+from .encodings import AsciiArmored, Certificate, Pkcs12, PrivateKey
+from .files import EncodedFile
+from pathlib import Path
+
+__all__ = ['identify_blob', 'identify_certificate_file', 'identify_file']
+
+def identify_file(path: Path) -> EncodedFile[AsciiArmored] | EncodedFile[Certificate] | EncodedFile[Pkcs12] | EncodedFile[PrivateKey]: ...
+def identify_certificate_file(path: Path) -> EncodedFile[AsciiArmored] | EncodedFile[Certificate] | EncodedFile[Pkcs12]: ...
+def identify_blob(blob: bytes) -> AsciiArmored | Certificate | Pkcs12 | PrivateKey: ...
