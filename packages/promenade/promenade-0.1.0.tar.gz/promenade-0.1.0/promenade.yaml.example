@@ -1,0 +1,46 @@
+# Promenade Example Configuration
+# Copy this file to promenade.yaml and customize for your project
+
+manager:
+  port: 7766                    # Web UI port
+  host: 127.0.0.1               # Web UI bind address
+  log_buffer_lines: 1000        # Lines to keep per service
+
+# Global defaults (can be overridden per-service)
+defaults:
+  restart_policy: once          # "once", "always", "never"
+  env:
+    NODE_ENV: development
+
+# Service definitions
+services:
+  # Flask API example
+  api:
+    command: flask run --port 5001
+    directory: ./backend
+    port: 5001
+    env:
+      FLASK_ENV: development
+      FLASK_DEBUG: "1"
+    ready_check:
+      type: http
+      path: /health
+      timeout: 30
+      interval: 2
+
+  # React dev server example
+  frontend:
+    command: npm run dev
+    directory: ./frontend
+    port: 3000
+    depends_on:
+      - api
+    ready_check:
+      type: tcp
+      timeout: 30
+
+  # Background worker (no port)
+  worker:
+    command: python worker.py
+    directory: ./backend
+    restart_policy: always      # Keep this one running
