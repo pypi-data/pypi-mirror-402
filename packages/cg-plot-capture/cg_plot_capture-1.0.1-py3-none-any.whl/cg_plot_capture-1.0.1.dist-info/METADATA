@@ -1,0 +1,252 @@
+Metadata-Version: 2.4
+Name: cg-plot-capture
+Version: 1.0.1
+Summary: Capture and send matplotlib plots via send_file
+Author-email: CodeGrade <info@codegrade.com>
+License-Expression: MIT
+Requires-Python: ~=3.10
+Requires-Dist: matplotlib<4.0.0,>=3.6.0
+Provides-Extra: plotnine
+Requires-Dist: plotnine>=0.12.0; extra == 'plotnine'
+Provides-Extra: seaborn
+Requires-Dist: seaborn>=0.12.0; extra == 'seaborn'
+Description-Content-Type: text/markdown
+
+# cg-plot-capture
+
+A custom Matplotlib backend designed for CodeGrade. This backend captures plots
+generated during script execution and handles them according to a configurable
+mode: displaying them in CodeGrade Code Editor output, saving them to disk, or
+both.
+
+It uses the Matplotlib Canvas-based API and requires **Matplotlib \>= 3.6**.
+
+## Installation
+
+Installing the package can be done using pip:
+
+```bash
+python -m pip install cg-plot-capture
+```
+
+If you are using `plotnine`, you can install using the following command:
+
+### Optional: Install with plotnine or seaborn
+
+To use plotnine you can install using pip:
+
+```bash
+python -m pip install cg-plot-capture[plotnine]
+
+python -m pip install cg-plot-capture[seaborn]
+```
+
+## Quick start
+
+The simplest way to use the backend is to set the **MPLBACKEND** environment variable:
+
+```bash
+export MPLBACKEND=cg_plot_capture
+python3 your_script.py
+```
+
+By default, plots are rendered as SVG and displayed in the CodeGrade Code Editor
+output. No files are saved to disk.
+
+## Configuration
+
+Configuration is handled entirely via environment variables.
+
+### MPLBACKEND (Required)
+
+-   **Description:** Used to set the backend so that anything output from
+    Matplotlib will be correctly handled. Without this nothing will be displaying.
+    It must be set for every script which uses it.
+-   **Values:** `cg_plot_capture`
+
+### CG_PLOT_MODE (Optional)
+
+-   **Description:** Determines the operation mode of the backend.
+-   **Values:** `display`, `save`, `both`.
+-   **Default:** `'display'`
+
+The backend operates in one of three modes, controlled by the `CG_PLOT_MODE`
+environment variable:
+
+1.  **`display` (Default):** Renders plots as SVG and streams them via file
+    descriptor 3 (`fd3`) to the CodeGrade Code Editor output.
+2.  **`save`:** Renders plots to a specified format (see below for supported
+    formats) and saves them to a local directory.
+3.  **`both`:** Performs both displaying and saving.
+
+### CG_PLOT_FILENAME (Optional)
+
+-   **Description:** Template for plot filenames. Controls both the filename and output location.
+-   **Default:** `'plot_{i}.png'`
+-   **Placeholders:**
+    -   `{i}`: Counter (required)
+
+**Template system:**
+
+-   Use `{i}` as a placeholder for the sequential counter (required)
+-   Include path separators to organize plots into directories
+-   Specify the file extension to control the output format
+-   Use Python format string syntax (e.g., `{i:03d}` for zero-padding)
+
+**Supported Formats:**
+
+`png`, `pdf`, `svg`, `jpg`, `jpeg`, `eps`, `ps`, `tif`, `tiff`, `webp`, `pgf`, `raw`, `rgba`, `svgz`
+
+**⚠️ Counter Resets Warning:**
+
+The `{i}` counter resets to 1 for each script execution. When running multiple
+scripts with `save` or `both` mode, files may be overwritten unless you use
+different paths or filenames per script.
+
+**Examples:**
+
+-   `'plot_{i}.png'` → `plot_1.png`, `plot_2.png`, ...
+-   `'./results/fig_{i}.pdf'` → `results/fig_1.pdf`, `results/fig_2.pdf`, ...
+-   `'analysis_{i:03d}.svg'` → `analysis_001.svg`, `analysis_002.svg`, ...
+
+## Example usage
+
+**Example 1: Basic display**
+
+Show plots in the CodeGrade UI without saving files:
+
+```bash
+export MPLBACKEND=cg_plot_capture
+python3 student_script.py
+```
+
+**Example 2: Basic display and save**
+
+This example shows a setup to display and save the plot output using a folder
+and format of your choice. With this you'd need to use these environment
+variables in every step you're running. See the next example on how to set it
+for all steps in your AutoTest configuration.
+
+```bash
+export MPLBACKEND=cg_plot_capture
+export CG_PLOT_MODE="both"
+export CG_PLOT_FILENAME="./artifacts/plot_{i}.pdf"
+python3 student_script.py
+```
+
+**Example 3: One-time configuration using `cg_bash_env`**
+
+Optionally, you can set the configuration one time, so you don't have to set it
+for every step which makes use of `cg-plot-capture`. By setting this in the
+AutoTest `Setup` or first thing in `Test`, these are available throughout your
+configuration.
+
+```bash
+cat >> ~/.cg_bash_env << 'EOF'
+export MPLBACKEND=cg_plot_capture
+export CG_PLOT_MODE="both"
+export CG_PLOT_FILENAME="./all_plots/plot_{i}.png"
+EOF
+```
+
+After this, all scripts in subsequent test steps will use these settings. You
+can still override `CG_PLOT_FILENAME` for individual scripts if needed.
+
+**Example 4: Running multiple scripts**
+
+When running multiple scripts, update the filename template for each to avoid overwrites:
+
+```bash
+# Script 1
+export CG_PLOT_FILENAME="./plots/script1_{i}.png"
+python3 script1.py
+
+# Script 2
+export CG_PLOT_FILENAME="./plots/script2_{i}.png"
+python3 script2.py
+```
+
+Alternatively, use separate directories:
+
+```bash
+# Script 1
+export CG_PLOT_FILENAME="./script1_plots/plot_{i}.png"
+python3 script1.py
+
+# Script 2
+export CG_PLOT_FILENAME="./script2_plots/plot_{i}.png"
+python3 script2.py
+```
+
+### Runtime Method
+
+Alternatively, after installing the package, you can invoke it within a Python
+script using `matplotlib.use()` **before** importing `pyplot`:
+
+```python
+import matplotlib
+matplotlib.use('module://cg_plot_capture')
+
+import matplotlib.pyplot as plt
+
+plt.plot([1, 2, 3], [4, 5, 6])
+plt.show() # Triggers the capture (Stream, Save, or Both)
+```
+
+## Limitations and notes
+
+**Thread safety**: This backend is NOT thread-safe. Multiple threads calling
+plt.show() or show() simultaneously may produce corrupted output or duplicate
+filenames. This matches matplotlib's own threading limitations in which figures
+should only be created and shown from the main thread. Multiprocessing, on the
+other hand, IS safe.
+
+**Multiprocessing is safe** and fully supported.
+
+### Counter Behavior
+
+The `{i}` counter:
+
+-   Starts at 1 when each script begins
+-   Increments with each `plt.show()` call
+-   Resets to 1 when a new script starts
+-   Is local to each Python process (safe for multiprocessing)
+
+### Interactive Mode
+
+This backend operates in non-interactive mode. Functions like `plt.ion()` have no effect. All plots are captured when `plt.show()` is called.
+
+### Compatibility
+
+-   Requires Matplotlib >= 3.6
+-   Works with standard Matplotlib plotting
+-   Compatible with **any library that uses Matplotlib**, including:
+    -   **plotnine**: ggplot2-style grammar of graphics (install with `[plotnine]` extra)
+    -   **seaborn**: Statistical data visualization (install with `[seaborn]` extra)
+    -   **pandas plotting**: DataFrame.plot() methods work automatically
+-   Tested with both `pyplot.show()` and figure manager `show()` methods
+
+## Troubleshooting
+
+**Plots not appearing in CodeGrade UI:**
+
+-   Verify `MPLBACKEND=cg_plot_capture` is set
+-   Check that `CG_PLOT_MODE` is `display` or `both` (not `save`)
+-   Ensure you're calling `plt.show()` to trigger capture
+
+**Files not being saved:**
+
+-   Verify `CG_PLOT_MODE` is `save` or `both` (not `display`)
+-   Check that `CG_PLOT_FILENAME` includes a valid path
+-   Check file permissions on the output directory
+
+**Files being overwritten:**
+
+-   See Example 4 for running multiple scripts
+-   Each script resets the counter to 1
+-   Use different paths or filenames per script
+
+**Format not recognized:**
+
+-   Check that your extension is in the supported formats list
+-   Matplotlib determines format from the file extension in `CG_PLOT_FILENAME`
