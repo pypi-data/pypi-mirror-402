@@ -1,0 +1,235 @@
+# Astrolabe
+
+**LLM Pipeline SDK**
+
+[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+
+## 特性
+
+- **统一数据模型** — `Interaction` → `Sample` → `Dataset` 三层抽象，覆盖 LLM 数据全生命周期
+- **多格式互转** — 一键转换 OpenAI / Claude / Gemini API 格式
+- **声明式 Pipeline** — 链式 API，代码即文档
+- **执行引擎解耦** — 同一 Pipeline 可在 Local / Spark / Ray 上运行
+- **类型安全** — 基于 Pydantic，完整的类型提示和校验
+
+## 安装
+
+```bash
+pip install astrolabe
+```
+
+## 快速开始
+
+### 1. 创建对话样本
+
+```python
+from astrolabe import Interaction, Sample
+
+sample = Sample(
+    sample_id="sample_001",
+    interactions=[
+        Interaction(role="user", content="什么是快速排序？"),
+        Interaction(role="assistant", content="快速排序是一种分治算法..."),
+    ],
+    source="online_log",
+    language="zh",
+    scenario="coding",
+    tags=["algorithm", "education"],
+    created_at=1705651200000,
+)
+```
+
+### 2. 格式转换
+
+```python
+# 转换为 OpenAI API 格式
+openai_messages = sample.as_openai_format()
+# [{"role": "user", "content": "什么是快速排序？"}, {"role": "assistant", "content": "..."}]
+
+# 转换为 Claude API 格式
+claude_format = sample.as_claude_format()
+# {"messages": [...], "system": "..."}
+
+# 转换为 Gemini API 格式
+gemini_format = sample.as_gemini_format()
+# {"contents": [...]}
+```
+
+### 3. 构建数据处理 Pipeline
+
+```python
+from astrolabe import Pipeline, Read, Filter, Map, Write, LocalRunner
+
+# 假设有一批样本数据
+samples = [sample1, sample2, sample3, ...]
+
+# 构建 Pipeline：筛选中文数据 → 添加标签 → 输出
+pipeline = (
+    Pipeline("chinese_data_etl")
+    .add(Read(data=samples))
+    .add(Filter(lambda s: s.language == "zh"))
+    .add(Filter(lambda s: s.turn_count() >= 2))
+    .add(Map(lambda s: s.model_copy(update={"tags": s.tags + ["processed"]})))
+    .add(Write())
+)
+
+# 执行
+result = pipeline.run(LocalRunner(verbose=True))
+
+print(f"输入: {result.metrics['rows_in']} 条")
+print(f"输出: {result.metrics['rows_out']} 条")
+print(f"耗时: {result.metrics['duration_ms']:.2f} ms")
+```
+
+## 核心概念
+
+### Schema 层（数据模型）
+
+| 类 | 说明 |
+|---|---|
+| `Interaction` | 单次交互（消息/函数调用/工具结果） |
+| `Sample` | 完整对话样本，包含多个 Interaction + 元信息 |
+| `Dataset` | 数据集定义，包含样本引用和筛选规则 |
+| `SelectionSpec` | 数据筛选规则（来源、时间、条件、采样） |
+
+### Operator 层（算子）
+
+| 算子 | 说明 | 示例 |
+|---|---|---|
+| `Read` | 读取数据 | `Read(data=samples)` |
+| `Filter` | 条件过滤 | `Filter(lambda s: s.language == "zh")` |
+| `Map` | 数据转换 | `Map(lambda s: transform(s))` |
+| `Select` | 字段投影 | `Select(["sample_id", "interactions"])` |
+| `Write` | 输出数据 | `Write(target="output.jsonl")` |
+| `ConvertFormat` | 格式转换 | `ConvertFormat("openai")` |
+
+### Runner 层（执行引擎）
+
+| Runner | 说明 |
+|---|---|
+| `LocalRunner` | 本地 Python 执行 |
+| `SparkRunner` | Apache Spark 分布式执行 |
+| `RayRunner` | Ray 分布式执行 |
+
+## 详细示例
+
+### 处理函数调用数据
+
+```python
+from astrolabe import Interaction, Sample
+
+# 包含 function call 的对话
+sample = Sample(
+    sample_id="fc_001",
+    interactions=[
+        Interaction(role="user", content="北京天气怎么样？"),
+        Interaction(
+            type="function_call",
+            role="assistant",
+            function_name="get_weather",
+            function_args={"city": "北京"},
+            tool_call_id="call_001",
+        ),
+        Interaction(
+            type="function_call_output",
+            role="tool",
+            content='{"temp": 25, "condition": "晴"}',
+            tool_call_id="call_001",
+        ),
+        Interaction(role="assistant", content="北京今天晴天，气温25度。"),
+    ],
+    source="synthetic",
+    created_at=1705651200000,
+)
+
+# 自动转换为各平台格式（包含 tool_calls）
+print(sample.as_openai_format())
+print(sample.as_claude_format())
+```
+
+### 使用 SelectionSpec 定义数据筛选规则
+
+```python
+from astrolabe import SelectionSpec, FilterCondition, SamplingConfig
+
+# 定义筛选规则
+spec = SelectionSpec(
+    source=["online_log", "human_label"],
+    time_range={
+        "start": "2025-01-01",
+        "end": "2025-01-31",
+    },
+    filters=[
+        FilterCondition(field="language", op="==", value="zh"),
+        FilterCondition(field="quality_score", op=">=", value=0.7),
+        FilterCondition(field="scenario", op="in", value=["coding", "math"]),
+    ],
+    sampling=SamplingConfig(
+        strategy="uniform",
+        max_samples=100000,
+        seed=42,
+    ),
+)
+
+# 检查样本是否匹配规则
+if spec.matches(sample):
+    print("样本符合筛选条件")
+```
+
+### 从 OpenAI 格式创建 Sample
+
+```python
+from astrolabe import create_sample_from_messages
+
+messages = [
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": "Hello!"},
+    {"role": "assistant", "content": "Hi there!"},
+]
+
+sample = create_sample_from_messages(
+    messages=messages,
+    sample_id="imported_001",
+    source="external",
+    language="en",
+)
+```
+
+### 定义 Dataset
+
+```python
+from astrolabe import Dataset, SelectionSpec, FilterCondition
+import time
+
+dataset = Dataset(
+    dataset_id="training_v1",
+    version="1.0.0",
+    description="中文对话训练集 V1",
+    selection_spec=SelectionSpec(
+        source=["online_log"],
+        filters=[
+            FilterCondition(field="language", op="==", value="zh"),
+        ],
+    ),
+    created_by="data_team",
+    created_at=int(time.time() * 1000),
+)
+
+# 添加样本
+dataset.add_samples(["sample_001", "sample_002", "sample_003"])
+
+# 序列化
+print(dataset.model_dump_json(indent=2))
+```
+
+## Roadmap
+
+- [x] 核心数据模型 (Interaction / Sample / Dataset)
+- [x] 多格式转换 (OpenAI / Claude / Gemini)
+- [x] 基础算子 (Read / Filter / Map / Write)
+- [x] LocalRunner 本地执行
+- [ ] SparkRunner 分布式执行
+- [ ] RayRunner 分布式执行
+- [ ] 数据血缘追踪
+- [ ] Pipeline 可视化
+- [ ] 更多内置算子
