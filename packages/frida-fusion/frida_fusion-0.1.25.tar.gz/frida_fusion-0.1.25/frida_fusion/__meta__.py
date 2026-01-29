@@ -1,0 +1,9 @@
+__version__ = '0.1.25'
+__title__ = "Frida Fusion"
+__description__ = "📱 frida-fusion - runtime mobile exploration"
+__url__ = "https://github.com/helviojunior/frida-fusion"
+__build__ = 0xef2d0c2
+__author__ = "Helvio Junior (M4v3r1ck)"
+__author_email__ = "helvio_junior@hotmail.com"
+__license__ = "GPL-3.0"
+__copyright__ = "Copyright Helvio Junior"
