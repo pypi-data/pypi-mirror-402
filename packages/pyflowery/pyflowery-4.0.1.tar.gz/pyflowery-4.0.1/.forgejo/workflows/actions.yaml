@@ -1,0 +1,125 @@
+﻿name: Actions
+on:
+  push:
+    branches:
+      - "main"
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build
+    runs-on: docker
+    container: catthehacker/ubuntu:act-latest@sha256:fa8a60baa56636079943a6d5321a74bd61f8c8d43df923fec9157704a676e86a
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - name: Setup uv
+        uses: actions/setup-uv@d9e0f98d3fc6adb07d1e3d37f3043649ddad06a1 # v6
+        with:
+          version: "latest"
+          python-version: "3.11"
+          enable-cache: true
+          prune-cache: false
+          github-token: ${{ secrets.GITHUBTOKEN }}
+
+      - name: Install dependencies
+        run: uv sync --no-dev
+
+      - name: Build the package
+        run: uv build
+
+      - name: Upload the package
+        uses: actions/upload-artifact@16871d9e8cfcf27ff31822cac382bbb5450f1e1e # v4
+        with:
+          name: pyflowery
+          path: ./dist/*
+
+      - name: Publish to CoastalCommits
+        if: startsWith(forge.ref, 'refs/tags/')
+        run: uv publish
+        env:
+          UV_PUBLISH_USERNAME: ${{ forge.repository_owner }}
+          UV_PUBLISH_PASSWORD: ${{ secrets.COASTALCOMMITSTOKEN }}
+          UV_PUBLISH_URL: https://c.csw.im/api/packages/${{ forge.repository_owner }}/pypi
+
+      - name: Publish to PyPi
+        if: startsWith(forge.ref, 'refs/tags/')
+        run: uv publish
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+
+  lint:
+    name: Lint
+    runs-on: docker
+    container: catthehacker/ubuntu:act-latest@sha256:fa8a60baa56636079943a6d5321a74bd61f8c8d43df923fec9157704a676e86a
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup uv
+        uses: actions/setup-uv@d9e0f98d3fc6adb07d1e3d37f3043649ddad06a1 # v6
+        with:
+          version: "latest"
+          python-version: "3.11"
+          enable-cache: true
+          prune-cache: false
+          github-token: ${{ secrets.GITHUBTOKEN }}
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Analysing code with ruff
+        run: uv run ruff check $(git ls-files '*.py')
+
+      - name: Analysing code with basedpyright
+        if: ${{ success() }} || ${{ failure() }}
+        run: CI=false uv run basedpyright $(git ls-files '*.py')
+
+      - name: Running tests
+        if: ${{ success() }} || ${{ failure() }}
+        run: uv run pytest
+
+  docs:
+    name: Build Documentation
+    runs-on: docker
+    container: catthehacker/ubuntu:act-latest@sha256:fa8a60baa56636079943a6d5321a74bd61f8c8d43df923fec9157704a676e86a
+    env:
+      UV_LOCKED: true
+      UV_NO_SYNC: true
+      UV_NO_DEV: true
+      MKDOCS_OFFLINE: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          fetch-depth: 0
+
+      - name: "Setup uv"
+        uses: actions/setup-uv@7edac99f961f18b581bbd960d59d049f04c0002f # v6
+        with:
+          version: "latest"
+          python-version: "3.11"
+          enable-cache: true
+          prune-cache: false
+          github-token: ${{ secrets.GITHUBTOKEN }}
+
+      - name: Install dependencies
+        run: uv sync --group=docs
+
+      - name: Build documentation
+        run: uv run zensical build
+
+      - name: Upload documentation
+        uses: actions/upload-artifact@16871d9e8cfcf27ff31822cac382bbb5450f1e1e # v4
+        with:
+          name: documentation.zip
+          path: site
