@@ -1,0 +1,105 @@
+# Pyckelhaube
+
+## Introduction
+
+Pyckelhaube, resembling to Pickelhaube is some random name, based on the german military spiked helmet from the 
+19th and 20th centuries, for a Python library that aims towards testing helm charts rendering.
+
+Its goal is to provide a simple way to write unit tests for helm charts, providing an explicit API to render helm charts and
+assert on the rendered Kubernetes resources.
+
+## Structure
+
+The project uses Poetry as a dependency manager and build tool.
+The source code is located in the `src` directory, while tests are in the `test` directory.
+
+## Installation
+
+You can install Pyckelhaube using pip:
+
+```bash
+pip install pyckelhaube
+```
+
+## Usage
+Here's a simple example of how to use Pyckelhaube to test a Helm chart:
+
+### From a file
+
+```python
+from pyckelhaube import HelmChart, render_chart
+
+helm_chart = HelmChart(path="path/to/your/chart.yaml")
+rendered_resources = render_chart(helm_chart=helm_chart, values={"replicaCount": 3})
+
+# Assert on the rendered resources
+for resource in rendered_resources:
+    if resource.kind == "Deployment":
+        assert resource.spec.replicas == 3
+```
+
+### From a string
+
+```python
+from pyckelhaube import HelmChart, render_chart
+
+chart_yaml = """
+apiVersion: v2
+name: my-chart
+version: 0.1.0
+...
+""" 
+
+helm_chart = HelmChart(yaml_content=chart_yaml)
+rendered_resources = render_chart(helm_chart=helm_chart, values={"replicaCount": 3})
+
+# Assert on the rendered resources
+for resource in rendered_resources:
+    if resource.kind == "Deployment":
+        assert resource.spec.replicas == 3
+```
+
+### Using a Custom Helm Executable
+
+If Helm is not in your system PATH or you need to use a specific version of Helm, you can specify the path to the Helm executable:
+
+```python
+from pyckelhaube import (
+    HelmChart,
+    render_chart,
+    set_helm_executable_path,
+    reset_helm_executable_path,
+)
+
+set_helm_executable_path("/usr/local/bin/helm")
+set_helm_executable_path("/custom/helm/directory")
+
+helm_chart = HelmChart(yaml_content="...")
+resources = render_chart(helm_chart)
+
+reset_helm_executable_path()
+```
+
+#### Helm Path Functions
+
+- `set_helm_executable_path(path: str)` - Set the path to the Helm executable (full path or directory)
+- `get_helm_executable_path() -> str` - Get the currently configured Helm executable path
+- `reset_helm_executable_path()` - Reset to using the default `helm` from system PATH
+
+## Contributing
+
+The rules for the coding style are simple yet strict:
+- All arguments, functions and methods must have type hints, as precise as possible.
+- All public functions and methods must have docstrings explaining their purpose, parameters, return values, and exceptions raised, in reST style, in the following order:
+  1. Short description of the function/method.
+  2. Parameters section.
+  3. Return section (if applicable).
+  4. Raises section (if applicable).
+- Tests must be provided for all new features and bug fixes.
+- Do never nest more than 2 levels deep.
+
+To secure the quality of your code, you may run the following command:
+
+```bash
+./lint.ps1
+```
