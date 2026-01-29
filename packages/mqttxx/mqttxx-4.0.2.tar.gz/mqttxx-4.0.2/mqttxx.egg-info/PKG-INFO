@@ -1,0 +1,546 @@
+Metadata-Version: 2.1
+Name: mqttxx
+Version: 4.0.2
+Summary: 基于 aiomqtt 的高级 MQTT 客户端和 RPC 框架
+Author: MQTTX Team
+License: MIT
+Keywords: mqtt,rpc,async,iot,messaging
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: aiomqtt<3.0.0,>=2.0.0
+Requires-Dist: loguru>=0.7.0
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-asyncio; extra == "dev"
+Requires-Dist: pytest-rich; extra == "dev"
+Requires-Dist: pydantic; extra == "dev"
+Requires-Dist: ruff; extra == "dev"
+Requires-Dist: build; extra == "dev"
+Requires-Dist: twine; extra == "dev"
+
+# MQTTX
+
+[![PyPI version](https://img.shields.io/badge/version-4.0.1-blue.svg)](https://pypi.org/project/mqttxx/)
+[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+基于 [aiomqtt](https://github.com/sbtinstruments/aiomqtt) 的 MQTT 5.0 客户端和 RPC 框架。
+
+## 核心特性
+
+- **纯 async/await** - 基于 aiomqtt，无回调地狱
+- **MQTT 5.0 原生** - 使用 ResponseTopic/CorrelationData 实现标准 RPC
+- **双向 RPC** - 自动订阅响应主题、超时管理、离线快速失败
+- **Event Channel** - 高吞吐事件广播，支持通配符订阅
+- **自动重连** - 断线重连、订阅恢复、指数退避
+- **完善异常** - 统一错误码、清晰的异常层次
+
+---
+
+## 目录
+
+- [MQTT 5.0 原生支持](#mqtt-50-原生支持)
+- [安装](#安装)
+- [快速开始](#快速开始)
+- [API 速查](#api-速查)
+- [配置对象](#配置对象)
+- [异常系统](#异常系统)
+- [版本变更](#版本变更)
+- [常见问题](#常见问题)
+
+---
+
+## MQTT 5.0 原生支持
+
+**v4.0.0 全面使用 MQTT 5.0 原生字段**，符合协议标准。
+
+### RPC 协议设计
+
+| 元数据 | MQTT 5.0 字段 | 说明 |
+|--------|--------------|------|
+| 响应主题 | ResponseTopic | 指定响应接收地址 |
+| 关联数据 | CorrelationData | 匹配请求和响应 |
+| 调用者 ID | UserProperty | 应用级元数据 |
+
+### 消息格式
+
+**RPC 请求**：
+```
+Properties:
+  ResponseTopic: "rpc/r/client_123"
+  CorrelationData: "uuid-string"
+  UserProperty: [("caller_id", "client_456")]
+
+Payload:
+{
+  "method": "get_status",
+  "params": {"id": 123}
+}
+```
+
+**RPC 响应**：
+```
+Properties:
+  CorrelationData: "uuid-string"
+
+Payload:
+{
+  "result": {"status": "online"}
+}
+```
+
+### 优势
+
+- **协议标准化** - 符合 MQTT 5.0 规范
+- **Payload 纯净** - 只包含业务数据
+- **元数据分离** - 协议级字段与业务数据分离
+- **离线检测** - 通过 PUBACK 原因码识别无订阅者
+
+---
+
+## 安装
+
+```bash
+pip install mqttxx
+```
+
+**要求**:
+- Python >= 3.10
+- aiomqtt >= 2.0.0
+- loguru >= 0.7.0
+
+---
+
+## 快速开始
+
+### MQTT 基础用法
+
+```python
+import asyncio
+from mqttxx import MQTTClient, MQTTConfig
+
+async def main():
+    config = MQTTConfig(
+        broker_host="localhost",
+        broker_port=1883,
+        client_id="device_123"
+    )
+
+    async with MQTTClient(config) as client:
+        # 订阅主题
+        def on_message(topic, payload, properties):
+            from mqttxx import extract_payload
+            data = extract_payload(payload)
+            print(f"{topic}: {data}")
+
+        client.subscribe("sensors/#", on_message)
+
+        # 发布消息
+        from mqttxx import encode_payload_with_properties
+        payload, properties = encode_payload_with_properties(
+            {"value": 25.5, "unit": "C"}
+        )
+        await client.publish("sensors/temperature", payload, properties)
+
+        await asyncio.sleep(60)
+
+asyncio.run(main())
+```
+
+### RPC 调用
+
+**自动订阅和懒加载机制**，无需手动配置响应主题。
+
+#### 边缘设备
+
+```python
+from mqttxx import MQTTClient, MQTTConfig, RPCManager
+
+async def edge_device():
+    config = MQTTConfig(
+        broker_host="localhost",
+        client_id="device_123"
+    )
+
+    async with MQTTClient(config) as client:
+        # 响应主题自动生成为 rpc/r/device_123
+        rpc = RPCManager(client)
+
+        # 注册本地方法
+        @rpc.register("get_status")
+        async def get_status(params):
+            return {"status": "online", "cpu": 45.2}
+
+        # 调用云端服务（自动订阅 + 自动注入 reply_to）
+        config = await rpc.call("cloud/config-service", "get_config")
+        print(config)
+
+        await asyncio.sleep(60)
+```
+
+#### 云端服务
+
+```python
+from mqttxx import MQTTClient, MQTTConfig, RPCManager
+
+async def cloud_service():
+    config = MQTTConfig(
+        broker_host="localhost",
+        client_id="config-service"
+    )
+
+    async with MQTTClient(config) as client:
+        # 响应主题自动生成为 rpc/r/config-service
+        rpc = RPCManager(client)
+
+        @rpc.register("get_config")
+        async def get_config(params):
+            return {"update_interval": 60, "servers": ["s1", "s2"]}
+
+        # 调用边缘设备
+        status = await rpc.call("device_123", "get_status")
+        print(status)
+
+        await asyncio.sleep(60)
+```
+
+**自动行为**：
+- 响应主题：`rpc/r/{client_id}`（自动生成）
+- 自动订阅：首次调用时自动订阅响应主题（懒加载）
+- 自动注入：调用时自动注入 `reply_to` 和 `caller_id`
+- 离线检测：PUBACK 原因码 0x10 时快速失败
+
+### Event Channel（事件广播）
+
+**高吞吐、低耦合、无返回值的事件广播通道**。
+
+```python
+from mqttxx import MQTTClient, MQTTConfig, EventChannelManager, EventMessage
+
+async def main():
+    config = MQTTConfig(broker_host="localhost", client_id="device_001")
+
+    async with MQTTClient(config) as client:
+        events = EventChannelManager(client)
+
+        # 订阅事件（支持通配符）
+        @events.subscribe("sensors/+/temperature")
+        async def on_temperature(topic, data, properties):
+            print(f"[温度] {topic}: {data}")
+
+        # 发布结构化事件
+        await events.publish(
+            "sensors/room1/temperature",
+            EventMessage(
+                event_type="temperature.changed",
+                data={"value": 25.5, "unit": "C"},
+                source="sensor_001"
+            )
+        )
+
+        # 发布原始消息
+        await events.publish(
+            "sensors/room1/humidity",
+            {"value": 60.2, "unit": "%"}
+        )
+
+        await asyncio.sleep(60)
+
+asyncio.run(main())
+```
+
+**Event Channel vs RPC**：
+
+| 特性 | Event Channel | RPC |
+|------|--------------|-----|
+| 模式 | 发布-订阅 | 请求-响应 |
+| 通信 | 单向，一对多广播 | 双向，点对点 |
+| 返回值 | 无返回值 | 等待返回结果 |
+| 用途 | 高频事件流、监控数据 | 远程方法调用、配置查询 |
+| 通配符 | 支持 `+/#` | 精确匹配 |
+
+---
+
+## API 速查
+
+### MQTTClient
+
+```python
+class MQTTClient:
+    def __init__(self, config: MQTTConfig)
+    async def __aenter__(self) -> MQTTClient
+    async def __aexit__(self, *args)
+    async def subscribe(self, topic: str, handler: Callable) -> None
+    async def publish(self, topic: str, payload: bytes, properties) -> None
+
+    @property
+    def is_connected(self) -> bool
+```
+
+### RPCManager
+
+```python
+class RPCManager:
+    def __init__(self, client: MQTTClient)
+
+    @property
+    def my_topic: str  # 响应主题（自动生成，只读）
+
+    def register(self, method_name: str)  # 装饰器
+    def unregister(self, method_name: str) -> None
+
+    async def call(
+        self,
+        topic: str,        # 目标 topic
+        method: str,       # 方法名
+        params: Any = None,
+        timeout: float = 30.0,
+    ) -> Any
+```
+
+### EventChannelManager
+
+```python
+class EventChannelManager:
+    def __init__(self, client: MQTTClient, auto_import: bool = True)
+
+    def subscribe(
+        self,
+        pattern: str,           # MQTT topic 模式（支持通配符 +/#）
+        handler: Optional[EventHandler] = None
+    ) -> Callable  # 装饰器或直接注册
+
+    def unsubscribe(self, pattern: str, handler: EventHandler) -> None
+
+    async def publish(
+        self,
+        topic: str,
+        message: EventMessage | dict | Any,
+        qos: int = 0
+    ) -> None
+```
+
+### Properties 工具
+
+```python
+from mqttxx import (
+    encode_payload_with_properties,  # 编码 payload + User Properties
+    extract_payload,                  # 从 payload 提取数据
+    get_property,                     # 获取单个 User Property
+)
+```
+
+---
+
+## 配置对象
+
+### MQTTConfig
+
+```python
+@dataclass
+class MQTTConfig:
+    broker_host: str
+    broker_port: int = 1883
+    client_id: str = ""                    # 空字符串 = 自动生成
+    keepalive: int = 60
+    username: Optional[str] = None
+    password: Optional[str] = None
+    protocol: int = MQTTv5                 # MQTT 5.0
+    clean_start: Union[bool, int] = MQTT_CLEAN_START_FIRST_ONLY
+    reconnect: ReconnectConfig = field(default_factory=ReconnectConfig)
+    max_queued_messages: int = 0           # 0 = 无限
+```
+
+### ReconnectConfig
+
+```python
+@dataclass
+class ReconnectConfig:
+    enabled: bool = True
+    interval: int = 5                      # 初始重连间隔（秒）
+    max_attempts: int = 0                  # 0 = 无限重试
+    backoff_multiplier: float = 1.5        # 指数退避倍数
+    max_interval: int = 60                 # 最大重连间隔（秒）
+```
+
+---
+
+## 异常系统
+
+```python
+# 基础异常
+class MQTTXError(Exception)
+class MessageError(MQTTXError)
+class RPCError(MQTTXError)
+
+# RPC 异常
+class RPCTimeoutError(MQTTXError)            # RPC 调用超时
+class RPCRemoteError(MQTTXError)             # 远程方法执行失败
+
+# 错误码
+class ErrorCode(IntEnum):
+    NOT_CONNECTED = 1001
+    RPC_TIMEOUT = 3002
+    # ... 更多错误码见源码
+```
+
+**使用示例**：
+
+```python
+from mqttxx import RPCTimeoutError, RPCRemoteError
+
+try:
+    result = await rpc.call("topic", "method", timeout=5)
+except RPCTimeoutError:
+    print("调用超时")
+except RPCRemoteError as e:
+    print(f"远程方法执行失败: {e}")
+```
+
+---
+
+## 版本变更
+
+### v4.0.0（当前版本）
+
+**重大升级：MQTT 5.0 原生字段**
+
+1. **RPC 协议重构** - 使用 MQTT 5.0 原生字段
+   - `ResponseTopic` 替代 User Properties 存储 `reply_to`
+   - `CorrelationData` 替代 User Properties 存储 `request_id`
+   - Payload 纯净，只包含业务数据
+
+2. **架构简化**
+   - 移除 RPC 权限控制（`auth_callback`）
+   - 移除消息队列架构，改用直接并发处理
+   - 新增 `mqttxx.properties` 模块（MQTT 5.0 Properties 工具）
+
+3. **自动订阅增强**
+   - 响应主题自动生成为 `rpc/r/{client_id}`
+   - 首次调用时懒加载订阅
+   - 离线检测（PUBACK 原因码 0x10）
+
+**迁移指南（从 v3.x）**：
+
+RPC 调用保持兼容，无需修改代码：
+
+```python
+# v3.x 和 v4.0.0 代码相同
+rpc = RPCManager(client)
+result = await rpc.call("cloud/server", "get_config")
+```
+
+内部实现已升级为 MQTT 5.0 原生字段，享受标准化优势。
+
+### v2.0.0 重大变更
+
+从 v2.0.0 开始，完全重写为基于 aiomqtt（纯 async/await），**不兼容** v0.x.x（gmqtt）。
+
+**主要变化：**
+- aiomqtt 替代 gmqtt
+- 原生 dataclass 替代 python-box（性能提升 6 倍）
+- 新增约定式 RPC（自动订阅 + 自动注入 reply_to）
+- 新增 TLS/SSL 支持
+
+---
+
+## 常见问题
+
+### Q: 高并发 publish 时出现 "pending publish calls" 警告？
+
+A: 这是 aiomqtt 的内部日志，当并发发送消息超过默认阈值（10）时会触发。**不影响功能**，但日志很吵。
+
+**根本原因**：aiomqtt 在 `__init__` 中硬编码了 `pending_calls_threshold = 10`，且**没有**提供构造参数来修改它。
+
+**解决方案**：创建 Client 后手动修改实例属性。
+
+已在 v4.0.0 中修复：
+
+```python
+# mqttxx/client.py:77-91
+self._client = aiomqtt.Client(
+    hostname=self.config.broker_host,
+    port=self.config.broker_port,
+    # ... 其他参数
+)
+# 修复 aiomqtt 的垃圾警告：高并发 publish 时会产生大量 "pending publish calls" 日志
+# aiomqtt 在 __init__ 中硬编码了 pending_calls_threshold = 10，无法通过参数修改
+# 只能在创建 Client 后手动修改这个实例属性
+self._client.pending_calls_threshold = 999999
+```
+
+### Q: 如何处理断线重连？
+
+A: MQTTClient 默认启用自动重连，配置参数在 `ReconnectConfig` 中：
+
+```python
+config = MQTTConfig(
+    broker_host="localhost",
+    reconnect=ReconnectConfig(
+        enabled=True,
+        interval=5,           # 初始重连间隔
+        max_attempts=0,       # 0 = 无限重试
+        backoff_multiplier=1.5,
+        max_interval=60
+    )
+)
+```
+
+### Q: RPC 调用超时了怎么办？
+
+A: 捕获 `RPCTimeoutError` 异常并处理：
+
+```python
+from mqttxx import RPCTimeoutError
+
+try:
+    result = await rpc.call("topic", "method", timeout=5)
+except RPCTimeoutError:
+    print("RPC 调用超时，请检查远程服务是否在线")
+```
+
+### Q: RPC 如何检测对方离线？
+
+A: v4.0.0 使用 MQTT 5.0 PUBACK 原因码检测无订阅者：
+
+- 原因码 `0x10`（No matching subscribers）→ 快速失败
+- 1 秒内返回 `RPCTimeoutError`，无需等待完整超时
+
+### Q: RPC 和 Event Channel 如何选择？
+
+A:
+- **RPC**: 需要返回值的远程方法调用（配置查询、命令执行）
+- **Event Channel**: 高频事件流、监控数据（温度、湿度、心跳）
+
+两者可以同时使用：
+
+```python
+rpc = RPCManager(client)
+events = EventChannelManager(client)
+
+# RPC: 获取配置（需要返回值）
+config = await rpc.call("server/config", "get_config")
+
+# Event: 发布心跳（无返回值）
+await events.publish(
+    "device/heartbeat",
+    EventMessage(event_type="heartbeat", data={"cpu": 45.2})
+)
+```
+
+---
+
+## 示例项目
+
+查看 [examples/](examples/) 目录获取完整示例：
+
+- **conventional_rpc_generic.py** - RPC 完整示例
+- **event_channel_basic.py** - Event Channel 基础示例
+- **event_channel_deferred.py** - Event Channel 延迟订阅示例
+- **rpc_event_mixed.py** - RPC 和 Event Channel 混合使用
+
+---
+
+## License
+
+MIT
