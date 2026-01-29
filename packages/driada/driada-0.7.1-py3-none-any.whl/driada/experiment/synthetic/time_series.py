@@ -1,0 +1,580 @@
+"""
+Time series utilities for synthetic data generation.
+
+This module contains functions for generating various types of time series
+used in synthetic neural data, including binary series, fractional Brownian motion,
+and signal processing utilities.
+"""
+
+from __future__ import annotations
+
+import itertools
+import warnings
+from itertools import groupby
+from typing import TYPE_CHECKING
+
+import numpy as np
+from fbm import FBM
+
+from ...utils.data import check_nonnegative, check_positive
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike, NDArray
+
+# =============================================================================
+# Constants
+# =============================================================================
+
+# Small epsilon to avoid boundary issues in ROI selection
+EPSILON_ROI_BOUNDARY = 1e-10
+
+# Default fraction of data to include in ROI for signal discretization
+DEFAULT_TARGET_FRACTION = 0.15
+
+# Default step size for circular random walk (radians, ~5.7 degrees)
+DEFAULT_CIRCULAR_STEP_STD = 0.1
+
+# Default step size for 2D random walk (relative to bounds)
+DEFAULT_2D_STEP_SIZE = 0.02
+
+# Default momentum for 2D random walk (trajectory smoothness)
+DEFAULT_2D_MOMENTUM = 0.8
+
+
+def generate_binary_time_series(
+    length: int, avg_islands: int, avg_duration: int, seed: int | None = None
+) -> NDArray[np.int_]:
+    """
+    Generate a binary time series with islands of 1s.
+
+    Parameters
+    ----------
+    length : int
+        Length of the time series. Must be positive.
+    avg_islands : int
+        Average number of islands (continuous stretches of 1s). Must be non-negative.
+    avg_duration : int
+        Average duration of each island in time points. Must be positive.
+    seed : int, optional
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    ndarray of shape (length,)
+        Binary time series with 0s and 1s.
+
+    Raises
+    ------
+    ValueError
+        If length or avg_duration are not positive, or avg_islands is negative.
+
+    Notes
+    -----
+    Uses exponential distribution for gaps between islands and normal
+    distribution (std = avg_duration/3) for island durations. Automatically
+    adjusts number of islands if they don't fit in the requested length.
+    Starting state (0 or 1) is randomly chosen."""
+    # Input validation
+    check_positive(length=length, avg_duration=avg_duration)
+    check_nonnegative(avg_islands=avg_islands)
+
+    # Initialize RNG
+    rng = np.random.default_rng(seed)
+
+    series = np.zeros(length, dtype=int)
+
+    # Calculate expected total active time and inactive time
+    total_active_time = avg_islands * avg_duration
+    total_inactive_time = length - total_active_time
+
+    # If we can't fit the requested islands, adjust
+    if total_active_time > length:
+        # Reduce number of islands to fit
+        avg_islands = max(1, length // avg_duration)
+        total_active_time = avg_islands * avg_duration
+        total_inactive_time = length - total_active_time
+
+    # Calculate average gap between islands
+    # We have avg_islands active periods and avg_islands+1 potential gaps
+    # But often starts with active, so effectively avg_islands gaps
+    avg_gap = total_inactive_time / avg_islands if avg_islands > 0 else length
+
+    position = 0
+    island_count = 0
+
+    # Randomly decide if we start with on or off
+    current_state = rng.integers(0, 2)
+
+    while position < length and island_count < avg_islands:
+        if current_state == 0:
+            # Off state: use exponential distribution around average gap
+            duration = max(1, int(rng.exponential(avg_gap)))
+        else:
+            # On state: use normal distribution around average duration
+            duration = max(1, int(rng.normal(avg_duration, avg_duration / 3)))
+            island_count += 1
+
+        # Ensure we don't go past the series length
+        duration = min(duration, length - position)
+
+        # Fill the series with the current state
+        series[position : position + duration] = current_state
+
+        # Switch state
+        current_state = 1 - current_state
+        position += duration
+
+    # Fill any remaining time with zeros
+    if position < length:
+        series[position:] = 0
+
+    return series
+
+
+def apply_poisson_to_binary_series(
+    binary_series: ArrayLike, rate_0: float, rate_1: float, seed: int | None = None
+) -> NDArray[np.int_]:
+    """
+    Apply Poisson sampling to a binary series based on its state.
+
+    Parameters
+    ----------
+    binary_series : ndarray
+        Binary time series (0s and 1s). Must contain only 0s and 1s.
+    rate_0 : float
+        Poisson rate for 0 state. Must be non-negative.
+    rate_1 : float
+        Poisson rate for 1 state. Must be non-negative.
+    seed : int, optional
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    ndarray of shape (len(binary_series),)
+        Poisson-sampled integer series.
+
+    Raises
+    ------
+    ValueError
+        If binary_series contains values other than 0 and 1.
+        If rate_0 or rate_1 are negative.
+
+    Notes
+    -----
+    Uses itertools.groupby to efficiently process runs of identical values.
+    Each run is sampled from Poisson distribution with the appropriate rate."""
+    # Input validation
+    binary_series = np.asarray(binary_series)
+    if not np.all(np.isin(binary_series, [0, 1])):
+        raise ValueError("binary_series must contain only 0s and 1s")
+    check_nonnegative(rate_0=rate_0, rate_1=rate_1)
+
+    # Initialize RNG
+    rng = np.random.default_rng(seed)
+
+    length = len(binary_series)
+    poisson_series = np.zeros(length, dtype=int)
+
+    current_pos = 0
+    for value, group in itertools.groupby(binary_series):
+        run_length = sum(1 for _ in group)  # Avoid creating list in memory
+        if value == 0:
+            poisson_series[current_pos : current_pos + run_length] = rng.poisson(
+                rate_0, run_length
+            )
+        else:
+            poisson_series[current_pos : current_pos + run_length] = rng.poisson(
+                rate_1, run_length
+            )
+        current_pos += run_length
+
+    return poisson_series
+
+
+def delete_one_islands(
+    binary_ts: ArrayLike, probability: float, seed: int | None = None
+) -> NDArray[np.int_]:
+    """
+    Delete islands of 1s from a binary time series with given probability.
+
+    Parameters
+    ----------
+    binary_ts : ndarray
+        Binary time series. Must contain only 0s and 1s.
+    probability : float
+        Probability of deleting each island. Must be in [0, 1].
+    seed : int, optional
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    ndarray of shape binary_ts.shape
+        Modified binary time series (copy).
+
+    Raises
+    ------
+    ValueError
+        If binary_ts contains values other than 0 and 1.
+        If probability is not in [0, 1].
+
+    Notes
+    -----
+    Creates a copy of the input array. Each island of 1s has an independent
+    probability of being deleted (set to 0s)."""
+    # Input validation
+    if not np.all(np.isin(binary_ts, [0, 1])):
+        raise ValueError("binary_ts must be binary (0s and 1s)")
+    if not 0 <= probability <= 1:
+        raise ValueError(f"probability must be in [0, 1], got {probability}")
+
+    # Initialize RNG
+    rng = np.random.default_rng(seed)
+
+    # Create a copy of the input array
+    result = binary_ts.copy()
+
+    # Identify islands of 1s using groupby
+    start = 0
+    for key, group in groupby(binary_ts):
+        length = sum(1 for _ in group)  # Count elements in the group
+        if key == 1 and rng.random() < probability:
+            result[start : start + length] = 0
+        start += length
+
+    return result
+
+
+def generate_fbm_time_series(
+    length: int, hurst: float, seed: int | None = None, roll_shift: int | None = None
+) -> NDArray[np.float64]:
+    """
+    Generate fractional Brownian motion time series.
+
+    Parameters
+    ----------
+    length : int
+        Length of the series. Must be positive.
+    hurst : float
+        Hurst parameter. Must be in (0, 1). 0.5 = standard Brownian motion.
+    seed : int, optional
+        Random seed for reproducibility.
+    roll_shift : int, optional
+        Circular shift to apply for breaking correlations.
+
+    Returns
+    -------
+    ndarray of shape (length,)
+        FBM time series.
+
+    Raises
+    ------
+    ValueError
+        If length is not positive.
+        If hurst is not in (0, 1).
+
+    Notes
+    -----
+    Uses Davies-Harte method for efficient FBM generation. The FBM library
+    is initialized with n=length-1 to generate exactly 'length' points.
+
+    Warnings
+    --------
+    The FBM library uses numpy's global random state internally. When seed is
+    provided, this function sets np.random.seed(seed), which affects global
+    state and may not guarantee reproducibility in parallel/multi-threaded
+    contexts. For parallel execution, consider generating FBM series
+    sequentially or accepting non-deterministic results."""
+    # Input validation
+    check_positive(length=length)
+    if not 0 < hurst < 1:
+        raise ValueError(f"hurst must be in (0, 1), got {hurst}")
+
+    # FBM library uses np.random internally, so we must seed globally
+    if seed is not None:
+        warnings.warn(
+            "FBM generation uses global np.random state. The seed parameter "
+            "may not guarantee reproducibility in parallel/multi-threaded contexts.",
+            UserWarning,
+            stacklevel=2,
+        )
+        np.random.seed(seed)
+
+    f = FBM(n=length - 1, hurst=hurst, length=1.0, method="daviesharte")
+    fbm_series = f.fbm()
+
+    # Apply circular shift to break correlation with spatial trajectory
+    if roll_shift is not None:
+        fbm_series = np.roll(fbm_series, roll_shift)
+
+    return fbm_series
+
+
+def select_signal_roi(
+    values: ArrayLike, seed: int | None = None, target_fraction: float = DEFAULT_TARGET_FRACTION
+) -> tuple[float, float, float]:
+    """
+    Select a region of interest (ROI) from signal values.
+
+    Parameters
+    ----------
+    values : ndarray
+        Signal values. Must be non-empty.
+    seed : int, optional
+        Random seed. If None, uses current random state.
+    target_fraction : float, optional
+        Fraction of data to include in ROI. Must be in (0, 1]. Default is 0.15.
+
+    Returns
+    -------
+    tuple of float
+        (center, lower_border, upper_border) of the ROI.
+
+    Raises
+    ------
+    ValueError
+        If values is empty.
+        If target_fraction is not in (0, 1].
+
+    Notes
+    -----
+    Selects a random window containing target_fraction of sorted values.
+    Adds epsilon=1e-10 to boundaries to avoid numerical edge cases."""
+    # Input validation
+    values = np.asarray(values)
+    if values.size == 0:
+        raise ValueError("values cannot be empty")
+    if not 0 < target_fraction <= 1:
+        raise ValueError(f"target_fraction must be in (0, 1], got {target_fraction}")
+
+    # Initialize RNG
+    rng = np.random.default_rng(seed)
+
+    # Sort values to find percentiles
+    sorted_values = np.sort(values)
+    n = len(sorted_values)
+
+    # Find window size that captures target_fraction of data
+    window_size = int(target_fraction * n)
+
+    # Choose a random starting position for the window
+    # Ensure we don't go out of bounds
+    max_start = n - window_size
+    start_idx = rng.integers(0, max_start + 1)
+    end_idx = start_idx + window_size
+
+    # Get the boundaries
+    lower_border = sorted_values[start_idx]
+    upper_border = sorted_values[end_idx - 1]
+    center = (lower_border + upper_border) / 2
+
+    # Add small epsilon to avoid boundary issues
+    epsilon = EPSILON_ROI_BOUNDARY
+    lower_border -= epsilon
+    upper_border += epsilon
+
+    return center, lower_border, upper_border
+
+
+def discretize_via_roi(
+    continuous_signal: ArrayLike, seed: int | None = None
+) -> NDArray[np.int_]:
+    """
+    Discretize a continuous signal based on ROI selection.
+
+    Parameters
+    ----------
+    continuous_signal : ndarray
+        Continuous signal to discretize. Must be non-empty.
+    seed : int, optional
+        Random seed for ROI selection. If None, uses current random state.
+
+    Returns
+    -------
+    ndarray of shape continuous_signal.shape
+        Binary discretized signal (0s and 1s).
+
+    Raises
+    ------
+    ValueError
+        If continuous_signal is empty.
+
+    Notes
+    -----
+    Uses select_signal_roi with default target_fraction=0.15. Returns 1 where
+    signal values fall within the selected ROI boundaries (inclusive)."""
+    # Input validation
+    continuous_signal = np.asarray(continuous_signal)
+    if continuous_signal.size == 0:
+        raise ValueError("continuous_signal cannot be empty")
+
+    # Get ROI boundaries
+    _, lower, upper = select_signal_roi(continuous_signal, seed=seed)
+
+    # Create binary signal based on ROI
+    binary_signal = ((continuous_signal >= lower) & (continuous_signal <= upper)).astype(int)
+
+    return binary_signal
+
+
+# =============================================================================
+# Random Walk Generators (consolidated from manifold_*.py)
+# =============================================================================
+
+
+def generate_circular_random_walk(
+    length: int, step_std: float = DEFAULT_CIRCULAR_STEP_STD, seed: int | None = None
+) -> NDArray[np.float64]:
+    """
+    Generate a random walk on a circle (head direction trajectory).
+
+    Simulates angular motion by accumulating Gaussian-distributed steps
+    and wrapping to [0, 2pi). Useful for modeling head direction in
+    navigation experiments.
+
+    Parameters
+    ----------
+    length : int
+        Number of time points. Must be non-negative.
+    step_std : float, optional
+        Standard deviation of angular steps in radians. Must be non-negative.
+        Default is 0.1 radians (~5.7 degrees). Typical values: 0.05-0.5.
+    seed : int, optional
+        Random seed for reproducibility. If None, uses current random state.
+
+    Returns
+    -------
+    angles : ndarray
+        Array of angles in radians [0, 2pi). Shape: (length,).
+        Returns empty array if length is 0.
+
+    Raises
+    ------
+    ValueError
+        If length is negative or step_std is negative.
+    TypeError
+        If inputs are not numeric.
+
+    Notes
+    -----
+    The walk follows: angles[t] = (sum(i=0 to t) N(0, step_std)) mod 2pi
+    where N(0, step_std) represents Gaussian noise.
+    """
+    # Input validation
+    if not isinstance(length, (int, np.integer)):
+        raise TypeError("length must be an integer")
+    check_nonnegative(length=length, step_std=step_std)
+
+    # Initialize RNG
+    rng = np.random.default_rng(seed)
+
+    # Handle edge case
+    if length == 0:
+        return np.array([])
+
+    # Generate random steps
+    steps = rng.normal(0, step_std, length)
+
+    # Cumulative sum to get trajectory
+    angles = np.cumsum(steps)
+
+    # Wrap to [0, 2pi)
+    angles = angles % (2 * np.pi)
+
+    return angles
+
+
+def generate_2d_random_walk(
+    length: int,
+    bounds: tuple[float, float] = (0, 1),
+    step_size: float = DEFAULT_2D_STEP_SIZE,
+    momentum: float = DEFAULT_2D_MOMENTUM,
+    seed: int | None = None,
+) -> NDArray[np.float64]:
+    """
+    Generate a 2D random walk trajectory within bounded region.
+
+    Creates a smooth random walk using momentum-based updates with boundary
+    bouncing. The walker starts at a random position and moves with inertia,
+    bouncing off walls elastically.
+
+    Parameters
+    ----------
+    length : int
+        Number of time points. Must be positive.
+    bounds : tuple, optional
+        (min, max) bounds for x and y coordinates. Default is (0, 1).
+        Must have bounds[0] < bounds[1].
+    step_size : float, optional
+        Step size for random walk. Must be positive. Default is 0.02.
+        Typical values: 0.01-0.1 relative to bounds size.
+    momentum : float, optional
+        Momentum factor for smoother trajectories. Must be in [0, 1].
+        Default is 0.8. Higher values give smoother paths.
+    seed : int, optional
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    positions : ndarray
+        Shape (2, length) with x, y coordinates. Each row contains
+        x and y coordinates respectively.
+
+    Raises
+    ------
+    ValueError
+        If length is not positive, step_size is not positive, momentum is
+        not in [0, 1], or bounds[0] >= bounds[1].
+    TypeError
+        If inputs are not numeric types.
+
+    Notes
+    -----
+    The walk follows:
+    velocity = momentum * velocity + (1 - momentum) * N(0, step_size)
+    position[t] = position[t-1] + velocity
+
+    When hitting boundaries, the relevant velocity component is reversed.
+    """
+    # Input validation
+    if not isinstance(length, (int, np.integer)):
+        raise TypeError("length must be an integer")
+    check_positive(length=length, step_size=step_size)
+
+    if not isinstance(momentum, (int, float)):
+        raise TypeError("momentum must be numeric")
+    if not 0 <= momentum <= 1:
+        raise ValueError("momentum must be in range [0, 1]")
+
+    if len(bounds) != 2:
+        raise ValueError("bounds must be a tuple of (min, max)")
+    if bounds[0] >= bounds[1]:
+        raise ValueError("bounds must have min < max")
+
+    # Initialize RNG
+    rng = np.random.default_rng(seed)
+
+    positions = np.zeros((2, length))
+    velocity = np.zeros(2)
+
+    # Initialize at random position
+    positions[:, 0] = rng.uniform(bounds[0], bounds[1], 2)
+
+    for t in range(1, length):
+        # Random walk with momentum
+        velocity = momentum * velocity + (1 - momentum) * rng.standard_normal(2) * step_size
+
+        # Update position
+        new_pos = positions[:, t - 1] + velocity
+
+        # Bounce off walls
+        for dim in range(2):
+            if new_pos[dim] < bounds[0]:
+                new_pos[dim] = bounds[0]
+                velocity[dim] = -velocity[dim]
+            elif new_pos[dim] > bounds[1]:
+                new_pos[dim] = bounds[1]
+                velocity[dim] = -velocity[dim]
+
+        positions[:, t] = new_pos
+
+    return positions
