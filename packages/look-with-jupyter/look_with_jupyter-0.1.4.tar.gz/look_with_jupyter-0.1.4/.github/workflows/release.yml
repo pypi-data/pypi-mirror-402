@@ -1,0 +1,97 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - 'v*.*.*-beta'
+      - 'v*.*.*-rc'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install uv
+      run: pip install uv
+    
+    - name: Install dependencies
+      run: uv sync --all-groups
+    
+    - name: Run tests
+      run: uv run pytest --cov=UtilForWhatching
+    
+    - name: Build package
+      run: uv build
+    
+    - name: Get version from tag
+      id: tag_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+    
+    - name: Check if beta or rc version
+      id: check_version
+      run: |
+        VERSION=${{ steps.tag_version.outputs.VERSION }}
+        if [[ "$VERSION" == *"-beta"* ]] || [[ "$VERSION" == *"-rc"* ]]; then
+          echo "is_prerelease=true" >> $GITHUB_OUTPUT
+        else
+          echo "is_prerelease=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Create Release Notes
+      id: release_notes
+      run: |
+        VERSION=${{ steps.tag_version.outputs.VERSION }}
+        IS_PRERELEASE=${{ steps.check_version.outputs.is_prerelease }}
+        echo "Release $VERSION" > release_notes.txt
+        echo "" >> release_notes.txt
+        echo "### Сборка выполнена:" >> release_notes.txt
+        echo "- ✅ Тесты пройдены" >> release_notes.txt
+        echo "- ✅ Пакет собран" >> release_notes.txt
+        if [ "$IS_PRERELEASE" = "true" ]; then
+          echo "- ✅ Опубликовано на TestPyPI (beta/rc версия)" >> release_notes.txt
+        else
+          echo "- ✅ Опубликовано на PyPI и TestPyPI" >> release_notes.txt
+        fi
+        echo "" >> release_notes.txt
+        echo "**Установка:**" >> release_notes.txt
+        echo "\`\`\`bash" >> release_notes.txt
+        if [ "$IS_PRERELEASE" = "true" ]; then
+          echo "pip install --index-url https://test.pypi.org/simple/ look-with-jupyter==${VERSION#v}" >> release_notes.txt
+        else
+          echo "pip install look-with-jupyter==${VERSION#v}" >> release_notes.txt
+        fi
+        echo "\`\`\`" >> release_notes.txt
+    
+    - name: Publish to TestPyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
+        password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+        skip-existing: true
+    
+    - name: Publish to PyPI
+      if: steps.check_version.outputs.is_prerelease == 'false'
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        password: ${{ secrets.PYPI_API_TOKEN }}
+        skip-existing: true
+    
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/*
+        body_path: release_notes.txt
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
