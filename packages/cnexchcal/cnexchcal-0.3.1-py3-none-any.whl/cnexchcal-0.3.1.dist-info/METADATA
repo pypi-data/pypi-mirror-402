@@ -1,0 +1,116 @@
+Metadata-Version: 2.4
+Name: cnexchcal
+Version: 0.3.1
+Summary: Exchange Calendars: issession, trade_date_range
+Author-email: rhozhang <rhozhang@163.com>
+License-Expression: MIT
+Project-URL: Homepage, https://github.com/rhozhang/cnexchcal
+Project-URL: Issues, https://github.com/rhozhang/cnexchcal/issues
+Classifier: Programming Language :: Python :: 3
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: polars
+Dynamic: license-file
+
+# Holidays in China
+
+## Background
+
+We classify calendar days into:
+
+- regular workdays: working days not on weekends
+- regular weekends: weekends (Saturday and Sunday) not working
+- festivals: true or legal holidays. e.g. 2026-01-01 (Thursday) is New Year holiday; 2023-01-02 (Monday), which is shifted from 2023-01-01 (Sunday), is also a legal holiday
+- quasi-holidays: extra holidays swapped with weekend workdays
+- weekend workdays：workdays in weekends for swapped extra holidays
+
+For example, 2025-12-31 (Wednesday) is a regular workday.
+
+2025-01-01 (Thursday) is a festival holiday (New Year)
+
+2025-01-02 (Friday) is a quasi-holiday, though we need not to work on this day, but we need to work on 2026-01-04 (Sunday) to swap with this extra holiday.
+
+2025-01-03 (Saturday) is a regular weekend.
+
+2025-01-04 (Sunday) is a weekend workday. Though it a weekend, but we to work on this day to swap with extra extra holiday on 2025-01-02.
+
+On weekend workdays, exchanges in China mainland are closed, although they are workdays.
+
+In November each year, the state council of China announces the holiday arrangement for next year. Please update the holiday data accordingly.
+
+## cnexchcal Package
+
+This package provides a class to handle holidays and trading days in China mainland since year 2004. We does not touch holidays before 2004.
+
+### Installation
+
+```
+pip install cnexchcal
+```
+
+### Usage
+
+**Instantiation**:
+
+```
+from cnexchcal import ExchCal
+cal = ExchCal()
+```
+
+To return holiday names in Chinese or English
+
+```
+cal.holiday_cnnames
+cal.holiday_ennames
+```
+
+To determine if a given date is a holiday or workday, uese:
+
+```
+cal.isholiday('2026-01-04')   # False
+cal.isworkday('2026-01-04')   # True
+```
+
+To determine if a given date is a trading day:
+
+```
+cal.issession('2026-01-04')   # False
+```
+
+To get the previous trading day, use:
+
+```
+cal.previoussession('2026-01-04')   # 2025-12-31
+```
+
+To get the next trading day, use:
+
+```
+cal.nextsession('2026-01-01')   # 2026-01-05
+```
+
+To get the n-th trading day after a given date, use:
+
+```
+cal.next_nth_tradingday('2026-01-01', 3)   # 2026-01-07
+``` 
+
+To get the n-th trading day before a given date, use:
+
+```
+cal.previous_nth_tradingday('2026-01-01', 3)   # 2025-12-29
+``` 
+
+To get all trading dates between two given dates, use:
+
+```
+cal.trade_date_range('2025-12-20', '2026-02-28')
+```
+
+To get the number of trading days in a given year, use:
+
+```
+cal.ntradedays(2025)
+```
