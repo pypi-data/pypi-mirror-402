@@ -1,0 +1,355 @@
+# HipoCap Python
+
+Python SDK for [HipoCap](https://hipocap.com) - AI Security & Observability Platform.
+
+HipoCap is a comprehensive security and observability platform for AI applications. Protect your LLM applications from prompt injection attacks, manage governance with RBAC, and gain full observability through OpenTelemetry-native tracing.
+
+**Note:** HipoCap is fully compatible with the standard Laminar SDKs. The package uses `lmnr` imports internally for compatibility.
+
+ <a href="https://pypi.org/project/hipocap/"> ![PyPI - Version](https://img.shields.io/pypi/v/hipocap?label=hipocap&logo=pypi&logoColor=3775A9) </a>
+![PyPI - Downloads](https://img.shields.io/pypi/dm/hipocap)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/hipocap)
+
+
+## Quickstart
+
+First, install the package, specifying the instrumentations you want to use.
+
+For example, to install the package with OpenAI and Anthropic instrumentations:
+
+```sh
+pip install 'hipocap[anthropic,openai]'
+```
+
+To install all possible instrumentations, use the following command:
+
+```sh
+pip install 'hipocap[all]'
+```
+
+Initialize HipoCap in your code:
+
+```python
+from hipocap import Hipocap
+
+# Initialize HipoCap (returns the client for security analysis)
+client = Hipocap.initialize(
+    project_api_key="<PROJECT_API_KEY>",
+    hipocap_base_url="http://localhost:8006",  # HipoCap security server URL
+    hipocap_user_id="<USER_ID>"  # Optional: user ID for RBAC
+)
+```
+
+**Note:** HipoCap uses the Laminar SDK internally for observability. The package wraps Laminar functionality while adding security features.
+
+You can also use environment variables for configuration:
+- `LMNR_PROJECT_API_KEY` or `HIPOCAP_API_KEY` - Project API key
+- `HIPOCAP_SERVER_URL` - HipoCap security server URL (default: `http://localhost:8006`)
+- `HIPOCAP_USER_ID` - User ID for RBAC
+- `HIPOCAP_OBS_BASE_URL` - Observability base URL (default: `http://localhost`)
+- `HIPOCAP_OBS_HTTP_PORT` - Observability HTTP port (default: `8000`)
+- `HIPOCAP_OBS_GRPC_PORT` - Observability gRPC port (default: `8001`)
+
+Note that you need to only initialize HipoCap once in your application. You should
+try to do that as early as possible in your application, e.g. at server startup.
+
+## Set-up for self-hosting
+
+If you self-host a HipoCap instance, configure both the observability and security servers:
+
+```python
+from hipocap import Hipocap
+
+# Initialize with self-hosted URLs
+client = Hipocap.initialize(
+    project_api_key="<PROJECT_API_KEY>",
+    base_url="http://localhost",  # Observability base URL
+    http_port=8000,  # Observability HTTP port
+    grpc_port=8001,  # Observability gRPC port
+    hipocap_base_url="http://localhost:8006",  # HipoCap security server URL
+    hipocap_user_id="<USER_ID>"  # Optional: user ID
+)
+```
+
+## Instrumentation
+
+### Manual instrumentation
+
+To instrument any function in your code, we provide a simple `@observe()` decorator.
+This can be useful if you want to trace a request handler or a function which combines multiple LLM calls.
+
+```python
+import os
+from openai import OpenAI
+from hipocap import Hipocap, observe
+
+# Initialize HipoCap
+Hipocap.initialize(project_api_key=os.environ.get("HIPOCAP_API_KEY"))
+
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+def poem_writer(topic: str):
+    prompt = f"write a poem about {topic}"
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": prompt},
+    ]
+
+    # OpenAI calls are still automatically instrumented
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=messages,
+    )
+    poem = response.choices[0].message.content
+
+    return poem
+
+@observe()
+def generate_poems():
+    poem1 = poem_writer(topic="security")
+    poem2 = poem_writer(topic="governance")
+    poems = f"{poem1}\n\n---\n\n{poem2}"
+    return poems
+```
+
+Also, you can use `Hipocap.start_as_current_span` if you want to record a chunk of your code using `with` statement.
+
+```python
+from hipocap import Hipocap
+
+def handle_user_request(topic: str):
+    with Hipocap.start_as_current_span(name="poem_writer", input=topic):
+        poem = poem_writer(topic=topic)
+        # Use set_span_output to record the output of the span
+        Hipocap.set_span_output(poem)
+```
+
+### Automatic instrumentation
+
+HipoCap allows you to automatically instrument majority of the most popular LLM, Vector DB, database, requests, and other libraries.
+
+If you want to automatically instrument a default set of libraries, then simply do NOT pass `instruments` argument to `.initialize()`.
+See the full list of available instrumentations in the [enum](https://github.com/lmnr-ai/lmnr-python/blob/main/src/lmnr/opentelemetry_lib/instruments.py).
+
+If you want to automatically instrument only specific LLM, Vector DB, or other
+calls with OpenTelemetry-compatible instrumentation, then pass the appropriate instruments to `.initialize()`.
+For example, if you want to only instrument OpenAI and Anthropic, then do the following:
+
+```python
+from hipocap import Hipocap
+from lmnr.opentelemetry_lib.tracing.instruments import Instruments
+
+Hipocap.initialize(
+    project_api_key=os.environ.get("HIPOCAP_API_KEY"),
+    instruments={Instruments.OPENAI, Instruments.ANTHROPIC}
+)
+```
+
+If you want to fully disable any kind of autoinstrumentation, pass an empty set as `instruments=set()` to `.initialize()`. 
+
+Autoinstrumentations are provided by Traceloop's [OpenLLMetry](https://github.com/traceloop/openllmetry).
+
+## HipoCap Security Features
+
+HipoCap provides advanced AI security capabilities beyond observability:
+
+### Security Analysis
+
+Protect your LLM applications from prompt injection attacks and unauthorized function calls:
+
+```python
+import os
+from hipocap import Hipocap, observe
+
+# Initialize HipoCap (returns the security client)
+client = Hipocap.initialize(
+    project_api_key=os.environ.get("HIPOCAP_API_KEY"),
+    base_url="http://localhost",  # Observability server
+    http_port=8000,
+    grpc_port=8001,
+    hipocap_base_url="http://localhost:8006",  # HipoCap security server
+    hipocap_user_id=os.environ.get("HIPOCAP_USER_ID")
+)
+
+@observe()
+def get_user_data(user_id: str):
+    """Retrieve user data - this function will be traced."""
+    return {"user_id": user_id, "email": f"user{user_id}@example.com"}
+
+@observe()
+def process_user_request():
+    user_query = "What's my email?"
+    user_id = "123"
+    
+    # Execute function
+    user_data = get_user_data(user_id)
+    
+    # Analyze function result for security threats before returning to LLM
+    result = client.analyze(
+        function_name="get_user_data",
+        function_result=user_data,
+        function_args={"user_id": user_id},
+        user_query=user_query,
+        user_role="user",  # RBAC role
+        input_analysis=True,  # Stage 1: Prompt Guard
+        llm_analysis=True,  # Stage 2: LLM Analysis
+        quarantine_analysis=False,  # Stage 3: Quarantine Analysis
+        policy_key="default"  # Policy to use
+    )
+    
+    print(f"Final Decision: {result.get('final_decision')}")
+    print(f"Safe to Use: {result.get('safe_to_use')}")
+    print(f"Blocked At: {result.get('blocked_at')}")
+    print(f"Reason: {result.get('reason')}")
+    
+    # Only return data if safe to use
+    if not result.get("safe_to_use"):
+        return {"error": "Output was flagged by security analysis", "reason": result.get("reason")}
+    
+    return user_data
+```
+
+### Governance & RBAC
+
+HipoCap provides role-based access control and function-level permissions through the web dashboard. Configure policies, roles, and function chaining rules to enforce security policies.
+
+## Evaluations
+
+### Quickstart
+
+Install the package:
+
+```sh
+pip install hipocap
+```
+
+Create a file named `my_first_eval.py` with the following code:
+
+```python
+from lmnr import evaluate  # Note: evaluate is from lmnr package
+
+def write_poem(data):
+    return f"This is a good poem about {data['topic']}"
+
+def contains_poem(output, target):
+    return 1 if output in target['poem'] else 0
+
+# Evaluation data
+data = [
+    {"data": {"topic": "flowers"}, "target": {"poem": "This is a good poem about flowers"}},
+    {"data": {"topic": "cars"}, "target": {"poem": "I like cars"}},
+]
+
+evaluate(
+    data=data,
+    executor=write_poem,
+    evaluators={
+        "containsPoem": contains_poem
+    },
+    group_id="my_first_feature"
+)
+```
+
+Run the following commands:
+
+```sh
+export LMNR_PROJECT_API_KEY=<YOUR_PROJECT_API_KEY>  # get from HipoCap project settings
+hipocap eval my_first_eval.py  # run in the virtual environment where hipocap is installed
+```
+
+Visit the URL printed in the console to see the results.
+
+### Overview
+
+Bring rigor to the development of your LLM applications with evaluations.
+
+You can run evaluations locally by providing executor (part of the logic used in your application) and evaluators (numeric scoring functions) to `evaluate` function.
+
+`evaluate` takes in the following parameters:
+- `data` – an array of `EvaluationDatapoint` objects, where each `EvaluationDatapoint` has two keys: `target` and `data`, each containing a key-value object. Alternatively, you can pass in dictionaries, and we will instantiate `EvaluationDatapoint`s with pydantic if possible
+- `executor` – the logic you want to evaluate. This function must take `data` as the first argument, and produce any output. It can be both a function or an `async` function.
+- `evaluators` – Dictionary which maps evaluator names to evaluators. Functions that take output of executor as the first argument, `target` as the second argument and produce a numeric scores. Each function can produce either a single number or `dict[str, int|float]` of scores. Each evaluator can be both a function or an `async` function.
+- `name` – optional name for the evaluation. Automatically generated if not provided.
+- `group_id` – optional group name for the evaluation. Evaluations within the same group can be compared visually side-by-side
+
+\* If you already have the outputs of executors you want to evaluate, you can specify the executor as an identity function, that takes in `data` and returns only needed value(s) from it.
+
+Read the [docs](https://docs.laminar.sh/evaluations/introduction) to learn more about evaluations.
+
+## Client for HTTP operations
+
+Various interactions with HipoCap [API](https://docs.laminar.sh/api-reference/) are available in `LaminarClient`
+and its asynchronous version `AsyncLaminarClient`.
+
+**Note:** These clients use the Laminar API for observability features. HipoCap security features are accessed through the `Hipocap` client class.
+
+### Agent
+
+To run Laminar agent, you can invoke `client.agent.run`
+
+```python
+from lmnr import LaminarClient
+
+client = LaminarClient(project_api_key="<YOUR_PROJECT_API_KEY>")
+
+response = client.agent.run(
+    prompt="What is the weather in London today?"
+)
+
+print(response.result.content)
+```
+
+#### Streaming
+
+Agent run supports streaming as well.
+
+```python
+from lmnr import LaminarClient
+
+client = LaminarClient(project_api_key="<YOUR_PROJECT_API_KEY>")
+
+for chunk in client.agent.run(
+    prompt="What is the weather in London today?",
+    stream=True
+):
+    if chunk.chunk_type == 'step':
+        print(chunk.summary)
+    elif chunk.chunk_type == 'finalOutput':
+        print(chunk.content.result.content)
+```
+
+#### Async mode
+
+```python
+from lmnr import AsyncLaminarClient
+
+client = AsyncLaminarClient(project_api_key="<YOUR_PROJECT_API_KEY>")
+
+response = await client.agent.run(
+    prompt="What is the weather in London today?"
+)
+
+print(response.result.content)
+```
+
+#### Async mode with streaming
+
+```python
+from lmnr import AsyncLaminarClient
+
+client = AsyncLaminarClient(project_api_key="<YOUR_PROJECT_API_KEY>")
+
+# Note that you need to await the operation even though we use `async for` below
+response = await client.agent.run(
+    prompt="What is the weather in London today?",
+    stream=True
+)
+async for chunk in client.agent.run(
+    prompt="What is the weather in London today?",
+    stream=True
+):
+    if chunk.chunk_type == 'step':
+        print(chunk.summary)
+    elif chunk.chunk_type == 'finalOutput':
+        print(chunk.content.result.content)
+```
