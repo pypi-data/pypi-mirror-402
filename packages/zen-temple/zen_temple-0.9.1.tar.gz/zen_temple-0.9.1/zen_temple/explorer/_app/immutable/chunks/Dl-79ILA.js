@@ -1,0 +1,1 @@
+import{k as a,q as r,i as s,g as t}from"./DAlzfk79.js";let e=a(r(localStorage.theme||"system"));function o(){return t(e)==="system"?window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light":t(e)}function h(){s(e,o()==="dark"?"light":"dark",!0),localStorage.theme=t(e)}export{o as g,h as t};
