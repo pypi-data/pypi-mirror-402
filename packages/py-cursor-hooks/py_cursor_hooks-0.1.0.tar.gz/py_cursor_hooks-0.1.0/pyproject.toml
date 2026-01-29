@@ -1,0 +1,108 @@
+[project]
+name = "py-cursor-hooks"
+version = "0.1.0"
+description = "A typed Python SDK for building Cursor hooks"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "pydantic>=2.0",
+    "typer>=0.12",
+]
+
+[project.scripts]
+cursor-hooks = "hooks.main:app"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.8",
+    "mypy>=1.14",
+    "pre-commit>=4",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    # Style preferences
+    "E501",    # line too long (handled by formatter)
+    "COM812",  # trailing comma missing (conflicts with formatter)
+
+    # Docstring rules - too pedantic for this project
+    "D100",    # missing docstring in public module
+    "D101",    # missing docstring in public class
+    "D102",    # missing docstring in public method
+    "D103",    # missing docstring in public function
+    "D104",    # missing docstring in public package
+    "D105",    # missing docstring in magic method
+    "D107",    # missing docstring in __init__
+    "D200",    # one-line docstring should fit on one line
+    "D202",    # no blank lines allowed after function docstring
+    "D203",    # incorrect-blank-line-before-class (incompatible with D211)
+    "D205",    # 1 blank line required between summary and description
+    "D212",    # multi-line docstring summary should start at first line
+    "D400",    # first line should end with a period
+    "D401",    # first line should be in imperative mood
+    "D415",    # first line should end with punctuation
+
+    # Exception message rules - too pedantic
+    "TRY003",  # avoid long messages outside exception class
+    "EM101",   # exception must not use string literal
+    "EM102",   # exception must not use f-string literal
+
+    # Type annotation rules - sometimes Any is necessary
+    "ANN401",  # dynamically typed expressions (Any) disallowed
+
+    # Testing
+    "S101",    # use of assert detected (expected in tests)
+
+    # Intentional design choices
+    "A002",    # argument shadowing builtin (input is standard for hooks)
+    "PYI051",  # Literal redundant in union (intentional for clarity)
+    "RET504",  # unnecessary assignment before return (improves readability)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "PLC0415",  # import outside top-level (common in tests for mocking)
+    "PT011",    # pytest.raises too broad
+    "S108",     # insecure temp file (test fixtures)
+    "N802",     # function name should be lowercase (test names are descriptive)
+]
+"src/hooks/models.py" = [
+    "N815",     # mixedCase class variables (enum values match Cursor API)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["hooks"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+follow_imports = "normal"
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_untyped_decorators = false
