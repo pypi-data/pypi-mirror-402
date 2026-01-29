@@ -1,0 +1,190 @@
+Metadata-Version: 2.4
+Name: context-compressor-llm
+Version: 0.1.2
+Summary: Incremental context compression for LLMs with anchored summaries
+Author-email: LaguePesikin <wagnlpesikin@gmail.com>
+License: MIT
+Project-URL: Homepage, https://github.com/LaguePesikin/context-compressor
+Project-URL: Documentation, https://github.com/LaguePesikin/context-compressor
+Project-URL: Repository, https://github.com/LaguePesikin/context-compressor
+Keywords: llm,context,compression,ai,nlp
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: tiktoken>=0.5.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: flake8>=6.0.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+
+# context-compressor
+
+## Intro
+
+A simple but effective context compressor, supports incremental context compression for LLMs with persistent anchored summaries.
+
+Based on the algorithm from [Factory.ai](https://factory.ai/news/compressing-context), this library efficiently manages finite context windows in extended conversations and multi-step workflows.
+
+Features:
+- Incremental Updates: Only summarize newly dropped messages
+- Anchor Points: Each summary is linked to a specific message turn
+- Efficient Compression: Dramatically reduces computation and cost
+
+## Diagram
+
+![](images/diagram.png)
+
+## Installation
+
+```bash
+# Install from PyPI
+pip install context-compressor-llm
+
+# Install from source
+git clone https://github.com/LaguePesikin/context-compressor
+cd context-compressor
+pip install -e .
+```
+
+## Quick Start
+
+```python
+from context_compressor import ContextCompressor, TokenCounter
+
+# Define your summarizer function
+def simple_summarizer(messages_list, previous_summary=None):
+    """
+    Args:
+        messages_list: List of dicts like [{"role": "user", "content": "..."}]
+        previous_summary: Optional previous summary to build upon
+    Returns:
+        A summary string
+    """
+    summary_parts = []
+    
+    if previous_summary:
+        summary_parts.append(f"[Previous: {previous_summary}]")
+    for msg in messages_list:
+        role = msg["role"]
+        content = msg["content"]
+        # Take first 50 chars of each message
+        snippet = content[:50].replace("\n", " ")
+        summary_parts.append(f"{role.upper()}: {snippet}...")
+    return "\n".join(summary_parts)
+
+# Initialize compressor
+compressor = ContextCompressor(
+    summarizer=simple_summarizer,
+    t_max=8000,      # Max tokens before compression
+    t_retained=6000, # Tokens to keep after compression
+    t_summary=500,   # Reserved tokens for summary
+    tokenizer=TokenCounter(
+        model_name="gpt-4o",
+        use_transformers=False   # Will use default tiktoken encoding
+    )
+)
+
+# Add messages to your conversation
+for _ in range(30):
+    compressor.add_message("Hello, how are you?", role="user")
+    compressor.add_message("I'm doing well, thanks!", role="assistant")
+
+# Get compressed context (auto-compresses if needed)
+context = compressor.get_current_context()
+
+# View statistics
+stats = compressor.get_stats()
+print(f"Compressions: {stats['compression_count']}")
+print(f"Tokens saved: {stats['total_tokens_saved']}")
+```
+
+### Expected Output
+
+```plaintext
+Warning: Summary is too long (2813 tokens).
+Compressions: 1
+Tokens saved: 291
+```
+
+## Built-In Summarizers
+
+The library provides three common summarization strategies out of the box:
+
+### 1. Truncate Summarizer
+
+Keeps the first N characters of each message with ellipsis:
+
+```python
+from context_compressor import ContextCompressor, TruncateSummarizer
+
+summarizer = TruncateSummarizer(
+    max_chars=50,           # Characters to keep per message
+    ellipsis="...",         # Suffix for truncated messages
+    include_previous=True   # Include previous summaries
+)
+
+compressor = ContextCompressor(summarizer=summarizer)
+```
+
+### 2. Head-Tail Summarizer
+
+Keeps first N and last M messages, omitting the middle:
+
+```python 
+from context_compressor import HeadTailSummarizer
+
+summarizer = HeadTailSummarizer(
+    head_count=3,    # Keep first 3 messages
+    tail_count=2,    # Keep last 2 messages
+    middle_placeholder="[... {count} messages omitted ...]"
+)
+
+compressor = ContextCompressor(summarizer=summarizer)
+```
+
+### 3. LLM Summarizer
+
+Uses an LLM API for intelligent summarization:
+
+```python
+from openai import OpenAI
+from context_compressor import LLMSummarizer
+
+client = OpenAI()
+summarizer = LLMSummarizer(
+    client=client,
+    model="gpt-4o-mini",
+    max_tokens=200,
+    api_type="openai"
+)
+
+compressor = ContextCompressor(summarizer=summarizer)
+```
+
+
+## Core Functionality
+
+### `ContextCompressor`
+
+**Parameters:**
+
+- `summarizer`: Custom text summarization function that takes message text and optional previous summary, returns a new summary. View `examples/basic_usage.llm_summarizer_example` for a fundamental implementation.
+- `t_max`: Maximum token threshold. Context compression is triggered when this limit is exceeded
+- `t_retained`: Expected token count to retain after compression. The ratio `t_retained/t_max` determines the compression rate
+- `t_summary`: Length of the context summary. This parameter takes effect through prompt engineering in your summarizer (if using LLM) and the `_compress` method
+- `tokenizer`: Custom Tokenizer (you can set`tiktoken` or `transformers.AutoTokenizer` here). See `context_compressor.tokenizer.TokenCounter` for more details.
+
+
+## Citation
+Based on the approach described in: Factory.ai: [Compressing Context](https://factory.ai/news/compressing-context)
