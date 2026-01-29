@@ -1,0 +1,91 @@
+# TOPSIS Implementation in Python
+
+**Course:** UCS654 Predictive Analytics using Statistics  
+**Assignment:** Assignment-1 (TOPSIS)  
+**Author:** Sartaj Singh Virdi  
+**Roll Number:** 102303259  
+
+---
+
+## About the Project
+
+This project provides a Python implementation of the  
+**TOPSIS (Technique for Order of Preference by Similarity to Ideal Solution)** method.
+
+TOPSIS is a multi-criteria decision-making (MCDM) technique used to rank alternatives based on their distance from the ideal best and ideal worst solutions.
+
+---
+
+## Installation (User Manual)
+
+This package requires **Python 3.7 or higher**.
+
+### Dependencies
+
+- pandas  
+- numpy  
+
+Package listed on PyPI: https://pypi.org/project/topsis-mcdm-tool/
+
+Install the package using pip:
+```bash
+pip install topsis-mcdm-tool
+```
+
+---
+
+## Usage
+
+Run the following command in the Command Prompt / Terminal:
+```bash
+topsis <inputFile> <weights> <impacts> <outputFile>
+```
+
+### Example
+```bash
+topsis sample.csv "1,1,1,1" "+,+,-,+" result.csv
+```
+
+### Parameters
+
+* inputFile: CSV or Excel file containing data
+* weights: Comma-separated weights for each criterion
+* impacts: + for benefit, - for cost criteria
+* outputFile: Output CSV/Excel file with scores and ranks
+
+---
+
+## Sample Input Format
+```csv
+Model,Price,Performance,Camera,Battery
+A,25000,8,7,4000
+B,30000,9,8,4500
+C,20000,7,6,3800
+```
+
+---
+
+## Output Columns
+
+* Topsis Score: Closeness coefficient
+* Rank: Ranking of alternatives
+
+---
+
+## Project Structure
+```
+topsis-mcdm-tool/
+  topsis/
+    __init__.py
+    topsis.py
+  sample.csv
+  output.csv
+  setup.py
+  README.md
+```
+
+---
+
+## License
+
+This project is released under the MIT License.
