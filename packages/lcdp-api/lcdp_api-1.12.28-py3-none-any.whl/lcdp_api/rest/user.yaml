@@ -1,0 +1,2947 @@
+openapi: 3.0.0
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: This is the REST API of LCDP products
+  version: 1.0.0
+  title: lcdp-monolith-service
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: contact@lecomptoirdespharmacies.fr
+  license:
+    name: Apache 2.0
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: searchUserFeature
+    description: Search in user features
+  - name: manageUser
+    description: Manage users account
+  - name: searchUser
+    description: Retrieve users informations
+  - name: searchUserDocument
+    description: Retrieve users documents
+  - name: manageUserDocument
+    description: Manage users documents
+  - name: searchUserSocialNetworks
+    description: Retrieve users social networks
+  - name: manageUserSocialNetworks
+    description: Manage users social networks
+  - name: manageUserBankAccount
+    description: Manage user bank account
+  - name: managePassword
+    description: Manage user password
+  - name: searchUserTransport
+    description: Retrieve users transport information
+  - name: searchUserFavoriteLaboratoryStore
+    description: Search in user laboratory stores favorites
+  - name: manageUserFavoriteLaboratoryStore
+    description: Manage user laboratory stores favorites
+  - name: searchUserRestriction
+    description: Search in user restrictions (restricted features and restricted product types)
+  - name: manageUserRestriction
+    description: Manage in user restrictions (restricted features and restricted product types)
+paths:
+  /users:
+    get:
+      tags:
+        - searchUser
+      summary: Search a user
+      description: Find users
+      operationId: getUsers
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: query
+          name: q
+          description: |
+            Search for users. WARNING : There is some special restrictions according the user that search other user
+            # Administrator :
+            - Can search Lastname, Firstname, Nickname, Company commercial name, Phone, Fax, Email, Extra Emails, City, Zip Code, Siret, Id and Company CIP of the user to found
+            # Others roles :
+            - Can only search on the Nickname field
+          schema:
+            type: string
+        - in: query
+          name: 'un[eq]'
+          description: User nickname equal
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: 'un[ili]'
+          description: User nickname ilike this value
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: 'um[eq]'
+          description: User email equal (only for Administrator role)
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: 'id[eq]'
+          description: User id to include from search
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'id[neq]'
+          description: User id to exclude from search
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'role[eq]'
+          description: Get user who have the role in list
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/UserRole'
+        - in: query
+          name: 'role[neq]'
+          description: Get user who haven't the role in list
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/UserRole'
+        - in: query
+          name: 'g[co]'
+          description: Group where user is member
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          name: 'tags[co]'
+          description: Filter on tags containing those values
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          name: 'tags[nco]'
+          description: Filter on tags not containing those values
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          name: 'hme[eq]'
+          description: Holiday mode enabled equal to search on
+          schema:
+            type: boolean
+        - in: query
+          name: 'kycl[eq]'
+          description: KYC level equal to search on
+          schema:
+            $ref: '#/components/schemas/KycLevel'
+        - in: query
+          name: orderBy
+          description: Sort by
+          schema:
+            type: string
+            enum:
+              - 'NICKNAME:asc'
+              - 'NICKNAME:desc'
+              - 'TOTAL_ACTIVE:asc'
+              - 'TOTAL_ACTIVE:desc'
+              - 'LASTNAME_FIRSTNAME:asc'
+              - 'LASTNAME_FIRSTNAME:desc'
+              - 'COMPANY_LEGAL_NAME:asc'
+              - 'COMPANY_LEGAL_NAME:desc'
+              - 'COMPANY_COMMERCIAL_NAME:asc'
+              - 'COMPANY_COMMERCIAL_NAME:desc'
+              - 'COMPANY_ADDRESS_CITY:asc'
+              - 'COMPANY_ADDRESS_CITY:desc'
+              - 'CREATED_AT:asc'
+              - 'CREATED_AT:desc'
+              - 'ROLE:asc'
+              - 'ROLE:desc'
+              - 'ID:asc'
+              - 'ID:desc'
+              - 'UPDATED_AT:asc'
+              - 'UPDATED_AT:desc'
+            default: 'NICKNAME:asc'
+        - in: query
+          name: p
+          description: Page number to search for (start at 0)
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: pp
+          description: Number of user per page
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUsers'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '403':
+          description: Access denied
+    post:
+      tags:
+        - manageUser
+      summary: Create a new user
+      description: ''
+      operationId: createUser
+      security:
+        - apiKeyCaptcha: []
+      requestBody:
+        description: Informations about new user to create
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreationParameters'
+      responses:
+        '201':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '409':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '503':
+          description: User creation is temporary out of service
+  /users/features:
+    get:
+      tags:
+        - searchUserFeature
+      summary: Get features relatives to an user
+      operationId: getUserFeatures
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      responses:
+        '200':
+          description: Features found
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserFeature'
+        '403':
+          description: Access denied
+  '/users/{userId}':
+    get:
+      tags:
+        - searchUser
+      summary: Retrieve one user
+      description: ''
+      operationId: getUser
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid ID supplied
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '404':
+          description: User not found
+    patch:
+      tags:
+        - manageUser
+      summary: Update user account
+      operationId: updateUser
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+        - $ref: '#/components/parameters/WithScaParameter'
+      requestBody:
+        description: Partial information to update
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateParameters'
+      responses:
+        '200':
+          description: successful operation
+          headers:
+            X-Sca-Uri:
+              $ref: 'common.yaml#/components/headers/XScaUri'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid ID supplied
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '403':
+          description: Access denied
+        '404':
+          description: User not found
+    delete:
+      tags:
+        - manageUser
+      summary: Delete user account
+      operationId: deleteUser
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      responses:
+        '204':
+          description: successful operation
+        '404':
+          description: User not found
+  /users/me:
+    get:
+      tags:
+        - searchUser
+      summary: Retrieve current user account
+      description: ''
+      operationId: getCurrentUser
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+          - SUBSCRIPTION_IN_PROGRESS
+          - WAITING
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid ID supplied
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '404':
+          description: User not found
+    patch:
+      tags:
+        - manageUser
+      summary: Update current user account
+      operationId: updateCurrentUser
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+          - SUBSCRIPTION_IN_PROGRESS
+          - WAITING
+      parameters:
+        - $ref: '#/components/parameters/WithScaParameter'
+      requestBody:
+        description: Partial information to update
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateParameters'
+      responses:
+        '200':
+          description: successful operation
+          headers:
+            X-Sca-Uri:
+              $ref: 'common.yaml#/components/headers/XScaUri'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid ID supplied
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '403':
+          description: Access denied
+        '404':
+          description: User not found
+    delete:
+      tags:
+        - manageUser
+      summary: Delete user account
+      operationId: deleteCurrentUser
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+          - SUBSCRIPTION_IN_PROGRESS
+          - WAITING
+      responses:
+        '204':
+          description: successful operation
+        '404':
+          description: User not found
+  /users/me/password:
+    put:
+      summary: Change current user password
+      operationId: setCurrentUserPassword
+      tags:
+        - managePassword
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+          - SUBSCRIPTION_IN_PROGRESS
+          - WAITING
+      requestBody:
+        description: Body to update user password
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyPasswordUpdateParameters'
+      responses:
+        '204':
+          description: successful operation
+        '400':
+          description: Password does not comply with the rules
+        '403':
+          description: Old password is not matching current one
+        '404':
+          description: User not found
+  '/users/{userId}/password':
+    put:
+      summary: Change user password (only new password is needed)
+      operationId: setUserPassword
+      tags:
+        - managePassword
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      requestBody:
+        description: Body to update user password
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SomeonePasswordUpdateParameters'
+      responses:
+        '204':
+          description: successful operation
+        '400':
+          description: Password does not comply with the rules
+        '404':
+          description: User not found
+  /users/me/holiday-mode-enabled:
+    put:
+      tags:
+        - manageUser
+      summary: Set user holiday mode
+      description: |
+        Restrictions :
+         - You should not have orders in progress
+         - You should not be from role 'ADMINISTRATOR'
+      operationId: setCurrentUserHolidayModeEnabled
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+          - SUBSCRIPTION_IN_PROGRESS
+          - WAITING
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: boolean
+              description: New value for holiday mode
+      responses:
+        '204':
+          description: successful operation
+        '404':
+          description: Not found
+        '412':
+          description: Precondition failed
+  '/users/{userId}/holiday-mode-enabled':
+    put:
+      tags:
+        - manageUser
+      summary: Set user holiday mode
+      description: |
+        Restrictions :
+         - Updated user should not be from role 'ADMINISTRATOR'
+      operationId: setUserHolidayModeEnabled
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: boolean
+              description: New value for holidays mode
+      responses:
+        '204':
+          description: successful operation
+        '403':
+          description: Access denied
+        '404':
+          description: Not found
+        '412':
+          description: Precondition failed
+  '/users/{userId}/custom-commissions':
+    get:
+      tags:
+        - searchUser
+      summary: Retrieve user custom commissions
+      description: ''
+      operationId: getUserCustomCommissions
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserCustomCommissions'
+        '404':
+          description: User not found
+    patch:
+      tags:
+        - manageUser
+      summary: Update user custom commissions
+      description: ''
+      operationId: setUserCustomCommissions
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      requestBody:
+        description: Object to use in order to update the custom user commissions
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/UserCustomCommissionsUpdateParameters'
+      responses:
+        '204':
+          description: successful operation
+        '404':
+          description: User not found
+  /users/me/social-networks:
+    get:
+      tags:
+        - searchUserSocialNetworks
+      summary: Retrieve current user social networks
+      description: ''
+      operationId: getCurrentUserSocialNetworks
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+          - SELLER_BUYER
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSocialNetwork'
+        '404':
+          description: User not found
+    put:
+      tags:
+        - manageUserSocialNetworks
+      summary: Update current user social networks
+      description: ''
+      operationId: updateCurrentUserSocialNetworks
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserSocialNetwork'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSocialNetwork'
+        '404':
+          description: User not found
+  '/users/{userId}/social-networks':
+    get:
+      tags:
+        - searchUserSocialNetworks
+      summary: Retrieve given user social networks
+      description: ''
+      operationId: getUserSocialNetworks
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+          - SELLER_BUYER
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSocialNetwork'
+        '404':
+          description: User not found
+    put:
+      tags:
+        - manageUserSocialNetworks
+      summary: Update given user social networks
+      description: ''
+      operationId: updateUserSocialNetworks
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+          - SELLER_BUYER
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserSocialNetwork'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSocialNetwork'
+        '404':
+          description: User not found
+  /users/me/bank-account:
+    post:
+      tags:
+        - manageUserBankAccount
+      summary: Create a bank account for user.
+      description: |
+        Create a bank account for user.
+          A user can only have one bank account at a time.
+          Creating bank account on user that already have a bank account will replace the previous one.
+        Preconditions :
+          - User profile 'company.address' is completed
+          - User profile legal name ('firstname', 'lastname' and 'company.legalName') is completed
+      operationId: createOrUpdateCurrentUserBankAccount
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserBankAccountCreationParameters'
+      responses:
+        '201':
+          description: Return created bank account
+          headers:
+            X-Sca-Uri:
+              $ref: 'common.yaml#/components/headers/XScaUri'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserBankAccountLink'
+        '400':
+          description: Wrong request parameters
+        '412':
+          description: |
+            Precondition failed with values :
+             - CODE011
+             - CODE012
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+  '/users/{userId}/bank-account':
+    post:
+      tags:
+        - manageUserBankAccount
+      summary: Create a bank account for user.
+      description: |
+        Create a bank account for user.
+          A user can only have one bank account at a time.
+          Creating bank account on user that already have a bank account will replace the previous one.
+      operationId: createOrUpdateUserBankAccount
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserBankAccountCreationParameters'
+      responses:
+        '201':
+          description: Return created bank account
+          headers:
+            X-Sca-Uri:
+              $ref: 'common.yaml#/components/headers/XScaUri'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserBankAccountLink'
+        '400':
+          description: Wrong request parameters
+        '403':
+          description: Access denied
+        '404':
+          description: Not found
+        '412':
+          description: |
+            Precondition failed with values :
+             - CODE011
+             - CODE012
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+  /users/me/documents:
+    get:
+      tags:
+        - searchUserDocument
+      summary: Get all current user documents
+      operationId: getCurrentUserDocuments
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+          - SUBSCRIPTION_IN_PROGRESS
+          - WAITING
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserDocument'
+        '404':
+          description: Documents not found
+  '/users/{userId}/documents':
+    get:
+      tags:
+        - searchUserDocument
+      summary: Get all user documents
+      operationId: getUserDocuments
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserDocument'
+        '404':
+          description: Documents not found
+  '/users/me/documents/{documentType}':
+    put:
+      tags:
+        - manageUserDocument
+      summary: Upload document associated to current user
+      description: |
+        Restrictions:
+          - If DocumentType is in ('ID', 'KBIS', 'SHARE_HOLDER', 'STATUS') then user 'scaEnrollmentStatus' should be in 'ACTIVE'
+      operationId: createOrUpdateCurrentUserDocument
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+          - SUBSCRIPTION_IN_PROGRESS
+          - WAITING
+      parameters:
+        - $ref: '#/components/parameters/DocumentTypeParameter'
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserDocumentCreationParameters'
+      responses:
+        '200':
+          description: Existing document was updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDocument'
+        '201':
+          description: New document was created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDocument'
+        '400':
+          description: Invalid document type supplied
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '404':
+          description: User not found
+        '412':
+          description: |
+            Precondition failed with values :
+             - CODE023
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '413':
+          description: Document too large maximum allowed is 7 MB
+        '415':
+          description: Wrong media type
+    get:
+      tags:
+        - searchUserDocument
+      summary: Get document associated to current user
+      description: ''
+      operationId: getCurrentUserDocument
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/DocumentTypeParameter'
+      responses:
+        '200':
+          description: successful operation
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: attachment; filename=myFile.jpg
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid document type supplied
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '404':
+          description: Document not found
+    head:
+      tags:
+        - searchUserDocument
+      summary: Get metadata of document associated to current user
+      description: ''
+      operationId: getCurrentUserDocumentMetadata
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/DocumentTypeParameter'
+      responses:
+        '204':
+          description: successful operation
+        '400':
+          description: Invalid ID or document type supplied
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '404':
+          description: Document not found
+  '/users/{userId}/documents/{documentType}':
+    put:
+      tags:
+        - manageUserDocument
+      summary: Upload document associated to given user
+      description: |
+        Restrictions :
+          - If DocumentType is in ('ID', 'KBIS', 'SHARE_HOLDER', 'STATUS') then user 'scaEnrollmentStatus' should be in 'ACTIVE'
+      operationId: createOrUpdateUserDocument
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+        - $ref: '#/components/parameters/DocumentTypeParameter'
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserDocumentCreationParameters'
+      responses:
+        '200':
+          description: Existing document was updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDocument'
+        '201':
+          description: New document was created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDocument'
+        '400':
+          description: Invalid ID or document type supplied
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '404':
+          description: User not found
+        '412':
+          description: |
+            Precondition failed with values :
+             - CODE023
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '413':
+          description: Document too large maximum allowed is 7 MB
+        '415':
+          description: Wrong media type
+    get:
+      tags:
+        - searchUserDocument
+      summary: Get document associated to given user
+      description: ''
+      operationId: getUserDocument
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+        - $ref: '#/components/parameters/DocumentTypeParameter'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid ID or document type supplied
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '404':
+          description: User or Document not found
+    head:
+      tags:
+        - searchUserDocument
+      summary: Get metadata of document associated to given user
+      description: ''
+      operationId: getUserDocumentMetadata
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+        - $ref: '#/components/parameters/DocumentTypeParameter'
+      responses:
+        '204':
+          description: successful operation
+        '400':
+          description: Invalid ID or document type supplied
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '404':
+          description: User or Document not found
+  '/users/{userId}/documents/{documentType}/status':
+    get:
+      tags:
+        - searchUserDocument
+      summary: Get document status
+      description: Get document status
+      operationId: getUserDocumentStatus
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - SUBSCRIPTION_IN_PROGRESS
+          - WAITING
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+        - $ref: '#/components/parameters/DocumentTypeParameter'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/UserDocumentStatus'
+        '400':
+          description: Bad Request
+        '403':
+          description: Access denied
+        '404':
+          description: Document not found
+    put:
+      tags:
+        - manageUserDocument
+      summary: Update document status
+      description: |
+        Restrictions :
+          - Available status for document type :
+            - GMP -> VALIDATED / VALIDATION_ASKED
+            - Other -> All status
+      operationId: updateUserDocumentStatus
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+        - $ref: '#/components/parameters/DocumentTypeParameter'
+      requestBody:
+        description: New document status
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserDocumentStatus'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/UserDocumentStatus'
+        '400':
+          description: Bad Request
+        '403':
+          description: Access denied
+        '404':
+          description: Document not found
+  /users/me/forbidden-sellers:
+    get:
+      tags:
+        - searchUser
+      summary: Get forbidden sellers ids of current user
+      description: Get forbidden sellers ids of current user
+      operationId: getCurrentUserForbiddenSellers
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserForbiddenSellerLink'
+        '403':
+          description: Access denied
+  '/users/{userId}/forbidden-sellers':
+    get:
+      tags:
+        - searchUser
+      summary: Get forbidden sellers of a user
+      description: Get forbidden sellers of a user
+      operationId: getUserForbiddenSellers
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserForbiddenSellerLink'
+        '403':
+          description: Access denied
+  /users/me/transport:
+    get:
+      tags:
+        - searchUserTransport
+      summary: Get user transport information
+      operationId: getCurrentUserTransport
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - SUBSCRIPTION_IN_PROGRESS
+          - WAITING
+          - LABORATORY
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transport'
+        '403':
+          description: Access denied
+        '404':
+          description: Transport not found
+  '/users/{userId}/transport':
+    get:
+      tags:
+        - searchUserTransport
+      summary: Get user transport information
+      operationId: getUserTransport
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - SUBSCRIPTION_IN_PROGRESS
+          - WAITING
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transport'
+        '403':
+          description: Access denied
+        '404':
+          description: User or transport not found
+    put:
+      tags:
+        - manageUserTransport
+      summary: Update user transport
+      description: |
+        # Preconditions : User must be a laboratory
+      operationId: updateUserTransport
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      requestBody:
+        description: Set transport for a user
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Transport'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transport'
+        '201':
+          description: Transport created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transport'
+        '400':
+          description: Bad request
+        '403':
+          description: Access denied
+        '404':
+          description: User not found
+        '412':
+          description: Precondition failed
+  /users/me/restricted-notification-types:
+    get:
+      tags:
+        - searchUserRestriction
+      summary: Get notifications that will not be pushed outside the system (eg. mail)
+      operationId: getCurrentUserRestrictedNotificationTypes
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotificationTypeLink'
+        '403':
+          description: Access denied
+    post:
+      tags:
+        - manageUserRestriction
+      summary: Add this notification type in restricted user notification types
+      operationId: createCurrentUserRestrictedNotificationType
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - SUBSCRIPTION_IN_PROGRESS
+          - WAITING
+          - LABORATORY
+      requestBody:
+        description: ''
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRestrictedNotificationTypeCreationParameter'
+      responses:
+        '204':
+          description: Notification type added to user restricted notification types
+        '403':
+          description: Access denied
+        '404':
+          description: Not found
+        '409':
+          description: This notification type already exist in user notification types
+  '/users/me/restricted-notification-types/{notificationTypeId}':
+    delete:
+      tags:
+        - manageUserRestriction
+      summary: Delete this notification type from restricted user notification types
+      operationId: deleteCurrentUserRestrictedNotificationType
+      security:
+        - bearerAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: 'notification.yaml#/components/parameters/NotificationTypeIdParameter'
+      responses:
+        '204':
+          description: Notification type deleted from user restricted notification types
+        '403':
+          description: Access denied
+        '404':
+          description: Not found
+  '/users/{userId}/restricted-notification-types':
+    get:
+      tags:
+        - searchUserRestriction
+      summary: Get that will not be pushed outside the system (eg. mail)
+      operationId: getUserRestrictedNotificationTypes
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotificationTypeLink'
+        '403':
+          description: Access denied
+        '404':
+          description: Not found
+    post:
+      tags:
+        - manageUserRestriction
+      summary: Add this notification type in restricted user notification types
+      operationId: createUserRestrictedNotificationType
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      requestBody:
+        description: ''
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRestrictedNotificationTypeCreationParameter'
+      responses:
+        '204':
+          description: Notification type added to user restricted notification types
+        '403':
+          description: Access denied
+        '404':
+          description: Not found
+        '409':
+          description: This notification type already exist in user notification types
+  '/users/{userId}/restricted-notification-types/{notificationTypeId}':
+    delete:
+      tags:
+        - manageUserRestriction
+      summary: Delete this notification type from restricted user notification types
+      operationId: deleteUserRestrictedNotificationType
+      security:
+        - bearerAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+        - $ref: 'notification.yaml#/components/parameters/NotificationTypeIdParameter'
+      responses:
+        '204':
+          description: Notification type deleted from user restricted notification types
+        '403':
+          description: Access denied
+        '404':
+          description: Not found
+  /users/password:
+    post:
+      tags:
+        - manageUser
+      summary: Create a request for password reset
+      description: ''
+      operationId: createPasswordReset
+      security: []
+      requestBody:
+        description: ''
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetCreationParameters'
+      responses:
+        '204':
+          description: successful operation
+        '404':
+          description: User not found
+    patch:
+      tags:
+        - manageUser
+      summary: Complete a request for password reset
+      description: ''
+      operationId: completePasswordReset
+      security: []
+      parameters:
+        - in: query
+          name: token
+          description: Token used to confirm that user is the good one
+          schema:
+            type: string
+      requestBody:
+        description: Password Reset updated
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetCompletionParameters'
+      responses:
+        '204':
+          description: successful operation
+        '400':
+          description: New password invalid or token not provided
+        '404':
+          description: Password Reset not found
+  '/users/{userId}/favorite-laboratory-stores':
+    get:
+      tags:
+        - searchUserFavoriteLaboratoryStore
+      summary: Get user favorite laboratories
+      operationId: getUserFavoriteLaboratoryStores
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+        capabilities:
+          - LABORATORY_READ
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserFavoriteLaboratoryStoreLink'
+        '403':
+          description: Access denied
+    post:
+      tags:
+        - manageUserFavoriteLaboratoryStore
+      summary: Add this laboratory store in user favorite
+      operationId: createUserFavoriteLaboratoryStores
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+        capabilities:
+          - LABORATORY_READ
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      requestBody:
+        description: ''
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserFavoriteLaboratoryStoreCreationParameter'
+      responses:
+        '204':
+          description: Laboratory store added to user favorites
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '403':
+          description: Access denied
+        '409':
+          description: This laboratory store already exist in user favorites
+  '/users/{userId}/favorite-laboratory-stores/{laboratoryStoreId}':
+    delete:
+      tags:
+        - manageUserFavoriteLaboratoryStore
+      summary: Delete this laboratory store from user favorite
+      operationId: deleteUserFavoriteLaboratoryStores
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+        capabilities:
+          - LABORATORY_READ
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+        - $ref: '#/components/parameters/LaboratoryStoreIdParameter'
+      responses:
+        '204':
+          description: Laboratory store removed from user favorites
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '403':
+          description: Access denied
+  /users/me/favorite-laboratory-stores:
+    get:
+      tags:
+        - searchUserFavoriteLaboratoryStore
+      summary: Get current user favorite laboratories
+      operationId: getCurrentUserFavoriteLaboratoryStores
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+        capabilities:
+          - LABORATORY_READ
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserFavoriteLaboratoryStoreLink'
+        '403':
+          description: Access denied
+    post:
+      tags:
+        - manageUserFavoriteLaboratoryStore
+      summary: Add this laboratory store in user favorite
+      operationId: createCurrentUserFavoriteLaboratoryStores
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+        capabilities:
+          - LABORATORY_READ
+      requestBody:
+        description: ''
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserFavoriteLaboratoryStoreCreationParameter'
+      responses:
+        '204':
+          description: Laboratory store added to user favorites
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '403':
+          description: Access denied
+        '409':
+          description: This laboratory store already exist in user favorites
+  '/users/me/favorite-laboratory-stores/{laboratoryStoreId}':
+    delete:
+      tags:
+        - manageUserFavoriteLaboratoryStore
+      summary: Delete this laboratory store from user favorite
+      operationId: deleteCurrentUserFavoriteLaboratoryStores
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+        capabilities:
+          - LABORATORY_READ
+      parameters:
+        - $ref: '#/components/parameters/LaboratoryStoreIdParameter'
+      responses:
+        '204':
+          description: Laboratory store removed from user favorites
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '403':
+          description: Access denied
+  '/users/{userId}/restricted-features':
+    get:
+      tags:
+        - searchUserRestriction
+      summary: Get user restricted features
+      operationId: getUserRestrictedFeatures
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserFeature'
+        '403':
+          description: Access denied
+    post:
+      tags:
+        - manageUserRestriction
+      summary: Add this feature in restricted user features
+      operationId: createUserRestrictedFeature
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      requestBody:
+        description: ''
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRestrictedFeatureCreationParameter'
+      responses:
+        '204':
+          description: Feature added to user restricted features
+        '403':
+          description: Access denied
+        '409':
+          description: This feature already exist in user restricted features
+  '/users/{userId}/restricted-features/{featureId}':
+    delete:
+      tags:
+        - manageUserRestriction
+      summary: Delete this feature from restricted user features
+      operationId: deleteUserRestrictedFeature
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+        - $ref: '#/components/parameters/FeatureIdParameter'
+      responses:
+        '204':
+          description: Feature deleted from user restricted features
+        '403':
+          description: Access denied
+  '/users/{userId}/restricted-product-types':
+    get:
+      tags:
+        - searchUserRestriction
+      summary: Get user restricted product types
+      operationId: getUserRestrictedProductTypes
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductTypeLink'
+        '403':
+          description: Access denied
+    post:
+      tags:
+        - manageUserRestriction
+      summary: Add this product type in restricted user product types
+      operationId: createUserRestrictedProductType
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      requestBody:
+        description: ''
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRestrictedProductTypeCreationParameter'
+      responses:
+        '204':
+          description: Product type added to user restricted product types
+        '403':
+          description: Access denied
+        '409':
+          description: This product type already exist in user product types
+  '/users/{userId}/restricted-product-types/{productTypeId}':
+    delete:
+      tags:
+        - manageUserRestriction
+      summary: Delete this product type from restricted user product types
+      operationId: deleteUserRestrictedProductType
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+        - $ref: '#/components/parameters/ProductTypeIdParameter'
+      responses:
+        '204':
+          description: Product type deleted from user restricted product types
+        '403':
+          description: Access denied
+        '404':
+          description: Not found
+  '/users/{userId}/rules':
+    get:
+      tags:
+        - searchUserRule
+      summary: Get user rules
+      operationId: getUserRules
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserRule'
+        '400':
+          description: Rest error
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        '403':
+          description: Access denied
+    post:
+      tags:
+        - manageUserRule
+      summary: Create new user rule
+      description: |
+        Limitations :
+         - Can not use "USER" attribute with "START_WITH" comparator
+      operationId: createUserRule
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+      requestBody:
+        description: Object to use in order to create the rule
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRuleCreationParameters'
+            example:
+              actionId: BLOCKED
+              attributeId: ZIP_CODE
+              comparatorId: EQUAL
+              value: '31200'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRule'
+        '400':
+          description: Bad Request
+        '403':
+          description: Access denied
+  '/users/{userId}/rules/{ruleId}':
+    delete:
+      tags:
+        - manageUserRule
+      summary: Delete existing user rule
+      operationId: deleteUserRule
+      parameters:
+        - $ref: '#/components/parameters/UserIdParameter'
+        - $ref: '#/components/parameters/RuleIdParameter'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      responses:
+        '204':
+          description: successful operation
+        '403':
+          description: Access denied
+        '404':
+          description: Rule not found
+components:
+  parameters:
+    DocumentTypeParameter:
+      in: path
+      name: documentType
+      required: true
+      description: Type of the document to upload (GMP = Good Manufacturing Practice)
+      schema:
+        type: string
+        enum:
+          - KBIS
+          - ID
+          - SHARE_HOLDER
+          - STATUS
+          - CGV
+          - GMP
+    UserIdParameter:
+      in: path
+      name: userId
+      required: true
+      description: The id of the user concerned by the request
+      schema:
+        type: integer
+        format: int64
+    LaboratoryStoreIdParameter:
+      in: path
+      name: laboratoryStoreId
+      required: true
+      description: Laboratory store Id
+      schema:
+        type: integer
+        format: int64
+    FeatureIdParameter:
+      in: path
+      name: featureId
+      required: true
+      description: Feature Id
+      schema:
+        type: string
+    ProductTypeIdParameter:
+      in: path
+      name: productTypeId
+      required: true
+      description: Product type Id
+      schema:
+        type: string
+    RuleIdParameter:
+      in: path
+      name: ruleId
+      required: true
+      description: The id of the rule concerned by the request
+      schema:
+        type: integer
+        format: int64
+    WithScaParameter:
+      in: 'header'
+      name: X-With-Sca
+      required: false
+      description: |
+        If endpoint support this header, it means that SCA validation URI will not be returned until this header is set to 'true'.
+        You should pass this header value to 'true' only when the caller is able to validate the SCA and so to process 'X-Sca-Uri' header.
+      schema:
+        type: boolean
+        default: false
+  schemas:
+    UserFavoriteLaboratoryStoreCreationParameter:
+      type: object
+      properties:
+        laboratoryStoreId:
+          type: integer
+          format: int64
+          description: Laboratory store Id
+      required:
+        - laboratoryStoreId
+    UserCreationParameters:
+      type: object
+      properties:
+        firstname:
+          type: string
+          description: User firstname
+        lastname:
+          type: string
+          description: User lastname
+        birthdate:
+          type: string
+          format: date
+          nullable: true
+          description: Date of birth
+        email:
+          $ref: 'common.yaml#/components/schemas/Email'
+        phone:
+          $ref: 'common.yaml#/components/schemas/Phone'
+        password:
+          type: string
+        company:
+          $ref: '#/components/schemas/UserCompany'
+      required:
+        - firstname
+        - lastname
+        - email
+        - phone
+        - password
+        - birthdate
+    UserUpdateParameters:
+      type: object
+      properties:
+        soletrader:
+          type: boolean
+        gender:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Gender'
+        firstname:
+          type: string
+          description: User firstname
+        lastname:
+          type: string
+          description: User lastname
+        birthdate:
+          type: string
+          format: date
+          nullable: true
+          description: Date of birth
+        email:
+          $ref: 'common.yaml#/components/schemas/Email'
+        haveUnpaid:
+          type: boolean
+          description: 'True if the user have unpaid invoice'
+        nickname:
+          type: string
+          maxLength: 64
+          description: User nickname
+        phone:
+          $ref: 'common.yaml#/components/schemas/Phone'
+        role:
+          $ref: '#/components/schemas/UserRole'
+        fax:
+          type: string
+          nullable: true
+        pollQuestion:
+          type: string
+          nullable: true
+        shippingAddress:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Address'
+        accountantEmail:
+          nullable: true
+          allOf:
+            - $ref: 'common.yaml#/components/schemas/Email'
+        additionalEmails:
+          type: array
+          items:
+            $ref: 'common.yaml#/components/schemas/Email'
+        paymentDelay:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: Payment delay in days
+        company:
+          $ref: '#/components/schemas/UserCompany'
+        pickupEnabled:
+          type: boolean
+          description: 'True if user have pickup enabled, false if not'
+        delegatedServices:
+          $ref: '#/components/schemas/UserDelegatedServices'
+        restrictedProductStorageTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/RestrictedProductStorageType'
+        tags:
+          description: Labels of the client
+          type: array
+          items:
+            type: string
+        isMangopaySynced:
+          description: 'False if user is not Synced with MangoPay, True if synced'
+          type: boolean
+        journal:
+          $ref: '#/components/schemas/UserJournalUpdateParameters'
+
+    UserJournalUpdateParameters:
+      description: User journal update parameters
+      properties:
+        archivedSaleOfferPageViewAt:
+          type: string
+          format: date-time
+          description: 'Date of the updated status (RFC 3339, section 5.6)'
+
+    PasswordResetCreationParameters:
+      type: object
+      properties:
+        email:
+          $ref: 'common.yaml#/components/schemas/Email'
+      required:
+        - email
+    PasswordResetCompletionParameters:
+      type: object
+      properties:
+        newPassword:
+          type: string
+          description: New password to apply on the user
+          minLength: 8
+          maxLength: 255
+      required:
+        - newPassword
+    Address:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        street:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        zipCode:
+          type: string
+          maxLength: 10
+          nullable: true
+
+    User:
+      type: object
+      description: |
+        Fields :
+          - bankAccount : can be null if the user do not have any bank account yet
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Id of the user
+        mangopayTarget:
+          $ref: '#/components/schemas/UserMangopayTarget'
+        chargebeeTarget:
+          $ref: '#/components/schemas/UserChargebeeTarget'
+        role:
+          $ref: '#/components/schemas/UserRole'
+        capabilities:
+          type: object
+          additionalProperties:
+            type: string
+        haveUnpaid:
+          type: boolean
+          description: 'True if the user have unpaid invoice'
+        holidayModeEnabled:
+          type: boolean
+          description: 'True if user have holiday mode enabled, False if not'
+        nickname:
+          type: string
+          maxLength: 64
+          description: User nickname
+        soletrader:
+          type: boolean
+        gender:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Gender'
+        firstname:
+          type: string
+          description: User firstname
+        lastname:
+          type: string
+          description: User lastname
+        birthdate:
+          type: string
+          format: date
+          nullable: true
+          description: Date of birth
+        email:
+          $ref: 'common.yaml#/components/schemas/Email'
+        phone:
+          $ref: 'common.yaml#/components/schemas/Phone'
+        fax:
+          type: string
+          nullable: true
+        pollQuestion:
+          type: string
+          nullable: true
+        shippingAddress:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Address'
+        bankAccount:
+          $ref: '#/components/schemas/UserBankAccountLink'
+        wallets:
+          $ref: '#/components/schemas/UserWallets'
+        lastLogin:
+          type: string
+          format: date-time
+          description: Last login date
+        cgvAccepted:
+          type: boolean
+        kycLevel:
+          $ref: '#/components/schemas/KycLevel'
+        comment:
+          type: string
+        company:
+          $ref: '#/components/schemas/UserCompany'
+        socialNetworks:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        accountantEmail:
+          nullable: true
+          allOf:
+            - $ref: 'common.yaml#/components/schemas/Email'
+        additionalEmails:
+          type: array
+          items:
+            $ref: 'common.yaml#/components/schemas/Email'
+        documents:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        delegatedServices:
+          $ref: '#/components/schemas/UserDelegatedServices'
+        forbiddenSellers:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        transport:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        paymentDelay:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: Payment delay in days
+        favoriteLaboratoryStores:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        pickupEnabled:
+          type: boolean
+          description: 'True if user have pickup enabled, false if not'
+        threads:
+          $ref: '#/components/schemas/UserThreads'
+        rules:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        restrictedFeatures:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        restrictedProductTypes:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        restrictedProductStorageTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/RestrictedProductStorageType'
+        restrictedNotificationTypes:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        customCommissions:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        tags:
+          type: array
+          items:
+            type: string
+        isMangopaySynced:
+          description: 'False if user is not Synced with MangoPay, True if synced'
+          type: boolean
+        mangopayConsent:
+          type: object
+          properties:
+            available:
+              description: 'Can user manage its mangopay consent'
+              type: boolean
+            errors:
+              type: array
+              items:
+                $ref: '#/components/schemas/MangopayConsent'
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update date
+        createdAt:
+          type: string
+          format: date-time
+          description: Created date
+        journal:
+          $ref: '#/components/schemas/UserJournal'
+        badges:
+          type: array
+          items:
+            type: string
+        statistic:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/UserStatisticLink'
+        scaEnrollmentStatus:
+          $ref: '#/components/schemas/ScaEnrollmentStatus'
+        avatar:
+          type: string
+          description: User avatar
+          format: uri
+      required:
+        - id
+        - role
+        - nickname
+        - holidayModeEnabled
+        - transport
+        - paymentDelay
+        - socialNetworks
+        - delegatedServices
+        - statistic
+
+    Transport:
+      type: object
+      properties:
+        freeCarriageEnabled:
+          type: boolean
+          nullable: true
+          description: Is free carriage enabled or not. 'null' value mean you use default one from global configuration.
+        freeCarriageThreshold:
+          type: number
+          nullable: true
+          description: Free carriage threshold. 'null' value mean you use default one from global configuration.
+        shippingFeesBase:
+          type: number
+          nullable: true
+          description: base shipping fee. 'null' value mean you use default one from global configuration.
+        minimumPrice:
+          type: number
+          nullable: true
+          description: Minimum price to buy
+        deliveryDelay:
+          type: integer
+          nullable: true
+          description: Delivery delay in days
+      required:
+        - freeCarriageEnabled
+        - freeCarriageThreshold
+        - shippingFeesBase
+        - minimumPrice
+        - deliveryDelay
+    UserMangopayTarget:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: string
+              description: Id on mangopay service
+    UserChargebeeTarget:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: string
+              description: Id on chargebee service
+    Gender:
+      type: string
+      enum:
+        - MALE
+        - FEMALE
+      description: Do you need me to draw you a picture?
+    UserSocialNetwork:
+      type: object
+      properties:
+        twitter:
+          type: string
+          description: Twitter link
+        facebook:
+          type: string
+          description: Facebook link
+        website:
+          type: string
+          description: web site link
+        google:
+          type: string
+          description: google link
+        linkedIn:
+          type: string
+          description: linkedin link
+        instagram:
+          type: string
+          description: instagram link
+        youtube:
+          type: string
+          description: youtube link
+    UserCompany:
+      type: object
+      description: |
+        Infos about the user company
+      properties:
+        commercialName:
+          type: string
+          nullable: true
+        legalName:
+          type: string
+          nullable: true
+        siret:
+          type: string
+          nullable: true
+        cip:
+          type: string
+          nullable: true
+          pattern: ^[0-9]*$
+        address:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Address'
+        numberEmployees:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        finess:
+          type: string
+          nullable: true
+        managementSoftware:
+          type: string
+          nullable: true
+        intercommunityVat:
+          type: string
+          maxLength: 20
+          nullable: true
+          description: Company VAT number
+        vatEnabled:
+          type: boolean
+          nullable: true
+          description: Enable VAT for this company
+        turnover:
+          type: string
+          nullable: true
+          description: The amount of money taken by the company in one year
+        group:
+          type: string
+          nullable: true
+          description: Company can be linked to a group which will federate them or provide collective purchase order
+        category:
+          type: string
+          nullable: true
+          description: "Anything that can categorize a company. ie. pharmacies are splitted in categories by letter 'A', 'B', ..."
+        offisanteStatus:
+          $ref: '#/components/schemas/OffisanteStatus'
+    UserDelegatedServices:
+      type: object
+      description: |
+        Service delegated by the client to lcdp.
+        TRUE : Client use LCDP service
+        FALSE : Client use its own service
+
+        Only this combinations are accepted:
+        - Payment + Billing   => payment = true, billing = true, transport = false
+        - Transport + Billing => payment = true, billing = true, transport = true
+        - Payment             => payment = true, billing = false, transport = false
+        - Nothing             => payment = false, billing = false, transport = false
+      properties:
+        transport:
+          description: Parcel shipping
+          type: boolean
+        billing:
+          description: Invoice edition
+          type: boolean
+        payment:
+          description: Order payment
+          type: boolean
+    UserThreads:
+      type: object
+      properties:
+        admin:
+          nullable: true
+          allOf:
+            - $ref: 'thread.yaml#/components/schemas/ThreadLink'
+    PaginatedUsers:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/User'
+    UserRole:
+      type: string
+      description: Role associated to the user
+      enum:
+        - SUBSCRIPTION_IN_PROGRESS
+        - WAITING
+        - SELLER_BUYER
+        - ARCHIVED
+        - BLOCKED
+        - ADMINISTRATOR
+        - LABORATORY
+
+    MangopayConsent:
+      type: string
+      description: |
+        PAYMENTS : Being able to create transfer on behalf of the user
+      enum:
+        - PAYMENTS
+
+    OffisanteStatus:
+      type: string
+      description: |
+        Status of company in our system against Offisante system
+        SET : Offisante know this resource but not yet its stock
+        NOT_SET : Offisante do not know this resource
+        IN_PROGRESS : Offisante is going to know this resource in the future
+        ACTIVE : Offisante know this resource and its stock
+        UNSET : Offisante no longer knows about this resource
+      enum:
+        - SET
+        - NOT_SET
+        - IN_PROGRESS
+        - ACTIVE
+        - UNSET
+    UserBankAccountCreationParameters:
+      type: object
+      properties:
+        iban:
+          type: string
+          pattern: '^[a-zA-Z]{2}\d{2}\s*(\w{4}\s*){2,7}\w{1,4}\s*$'
+          description: iban
+    UserDocumentCreationParameters:
+      type: object
+      properties:
+        upload:
+          description: List of files to upload. All files will be concatened in one to create a unique document.
+          type: array
+          items:
+            type: string
+            format: binary
+    UserDocument:
+      description: Document of a given user
+      type: object
+      properties:
+        type:
+          type: string
+          description: 'Type of the document. See #DocumentTypeParameter for possible values'
+        status:
+          $ref: '#/components/schemas/UserDocumentStatus'
+        statusReason:
+          type: string
+          enum:
+            - DOCUMENT_MISSING
+            - DOCUMENT_UNREADABLE
+            - DOCUMENT_NOT_ACCEPTED
+            - DOCUMENT_HAS_EXPIRED
+            - DOCUMENT_INCOMPLETE
+            - DOCUMENT_DO_NOT_MATCH_USER_DATA
+            - DOCUMENT_DO_NOT_MATCH_ACCOUNT_DATA
+            - DOCUMENT_FALSIFIED
+            - UNDERAGE_PERSON
+            - SPECIFIC_CASE
+          description: 'If documentStatus is REFUSED, this field give the cause'
+        lapsingDate:
+          type: string
+          format: date
+          description: Is filed when document is an perishable document
+    UserDocumentStatus:
+      type: string
+      enum:
+        - CREATED
+        - VALIDATION_ASKED
+        - VALIDATED
+        - REFUSED
+        - OUTDATED
+      description: Status of the document
+    UserBankAccountLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: string
+              description: Id of the bank account
+            status:
+              type: string
+              enum:
+                - PENDING
+                - ACTIVE
+                - DEACTIVATED
+                - CANCELED
+    UserWallets:
+      description: Every wallets linked to this user
+      type: object
+      properties:
+        main:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/UserWalletLink'
+        levy:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/UserWalletLink'
+        subscription:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/UserWalletLink'
+        service:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/UserWalletLink'
+    UserWalletLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: string
+              description: Id of the wallet
+    MyPasswordUpdateParameters:
+      description: Field to update user password
+      type: object
+      properties:
+        oldPassword:
+          description: User old password
+          type: string
+        newPassword:
+          description: User new password
+          type: string
+          minLength: 8
+          maxLength: 255
+    SomeonePasswordUpdateParameters:
+      description: Field to update user password
+      type: object
+      properties:
+        newPassword:
+          description: User new password
+          type: string
+          minLength: 8
+          maxLength: 255
+    UserForbiddenSellerLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: Forbidden seller id
+    UserFavoriteLaboratoryStoreLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: Identifier of the laboratory store
+    UserCustomCommissions:
+      type: object
+      properties:
+        buyer:
+          type: number
+          description: Custom buyer commission value
+          minimum: 0
+          maximum: 100
+          nullable: true
+        seller:
+          type: number
+          description: Custom seller commission value
+          minimum: 0
+          maximum: 100
+          nullable: true
+    UserCustomCommissionsUpdateParameters:
+      type: object
+      properties:
+        buyer:
+          type: number
+          description: Custom buyer commission value
+          minimum: 0
+          maximum: 100
+          nullable: true
+        seller:
+          type: number
+          description: Custom seller commission value
+          minimum: 0
+          maximum: 100
+          nullable: true
+    UserRule:
+      type: object
+      description: Rule description
+      properties:
+        id:
+          description: User rule Id
+          type: integer
+          format: int64
+        actionId:
+          $ref: '#/components/schemas/UserRuleActionEnum'
+        attributeId:
+          $ref: '#/components/schemas/UserRuleAttributeEnum'
+        comparatorId:
+          $ref: '#/components/schemas/UserRuleComparatorEnum'
+        value:
+          description: Rule value
+          type: string
+    UserRuleCreationParameters:
+      type: object
+      description: Fields to create user rule
+      properties:
+        actionId:
+          $ref: '#/components/schemas/UserRuleActionEnum'
+        attributeId:
+          $ref: '#/components/schemas/UserRuleAttributeEnum'
+        comparatorId:
+          $ref: '#/components/schemas/UserRuleComparatorEnum'
+        value:
+          description: Value associated
+          type: string
+      required:
+        - actionId
+        - attributeId
+        - comparatorId
+        - value
+    UserRuleActionEnum:
+      type: string
+      enum:
+        - BLOCKED
+      description: Associated Action
+    UserRuleAttributeEnum:
+      type: string
+      enum:
+        - ZIP_CODE
+        - USER
+      description: Associated Attribute
+    UserRuleComparatorEnum:
+      type: string
+      enum:
+        - EQUAL
+        - START_WITH
+      description: Associated Comparator
+    UserFeature:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Id of the feature (machine name)
+        name:
+          type: string
+          description: Readable name for display
+    UserRestrictedFeatureCreationParameter:
+      type: object
+      properties:
+        featureId:
+          type: string
+          description: Feature id
+      required:
+        - featureId
+    ProductTypeLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+    UserRestrictedProductTypeCreationParameter:
+      type: object
+      properties:
+        productTypeId:
+          type: string
+          description: Product type id
+      required:
+        - productTypeId
+    NotificationTypeLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              $ref: 'notification.yaml#/components/schemas/NotificationTypeId'
+    UserRestrictedNotificationTypeCreationParameter:
+      type: object
+      properties:
+        notificationTypeId:
+          $ref: 'notification.yaml#/components/schemas/NotificationTypeId'
+      required:
+        - notificationTypeId
+    RestrictedProductStorageType:
+      type: object
+      properties:
+        actions:
+          type: array
+          items:
+            enum: ['BUY', 'SELL']
+        target:
+          $ref: 'product.yaml#/components/schemas/ProductStorageType'
+    UserJournal:
+      description: User journal
+      properties:
+        archivedSaleOfferPageViewAt:
+          type: string
+          format: date-time
+          description: 'Date of the updated status (RFC 3339, section 5.6)'
+    KycLevel:
+      type: string
+      description: Kyc level for this user. User can sell only if it is REGULAR.
+      enum:
+        - LIGHT
+        - REGULAR
+
+    UserStatisticLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          description: |
+            All these statistics are computed based on a sampling taking the last [Variable] 'user.statistics.long_term_sampling_days' days
+          properties:
+            longTermQoS:
+              type: object
+              description: 'Long-term quality of service statistics'
+              properties:
+                numberOfSales:
+                  type: integer
+                  format: int32
+                  description: 'Number of sales'
+                salesErrorRate:
+                  type: number
+                  description: 'Rate of sales that have at least one removed or refunded item'
+                salesCanceledRate:
+                  type: number
+                  description: 'Rate of sales that have been canceled, ignoring cancellation issued by the buyer without any reason'
+                salesLitigationRate:
+                  type: number
+                  description: 'Rate of sales that are associated to a litigation'
+                salesResponsivenessDelay:
+                  type: number
+                  description: 'Average delay (in days) of responsiveness for sales (delay between order created by buyer and accepted/modified/canceled by seller or administrator)'
+                deliveryDelay:
+                  type: number
+                  description: 'Average delay (in days) of delivery for sales'
+            shortTermQoS:
+              type: object
+              description: 'Short-term quality of service statistics'
+              properties:
+                numberOfSales:
+                  type: integer
+                  format: int32
+                  nullable: true
+                  minimum: 0
+                  description: 'Number of sales'
+                numberOfSalesWithModification:
+                  type: integer
+                  format: int32
+                  nullable: true
+                  minimum: 0
+                  description: 'Number of sales with modification'
+                salesModificationRate:
+                  type: number
+                  nullable: true
+                  minimum: 0
+                  maximum: 1
+                  description: 'Rate of sales that have been modified'
+
+    ScaEnrollmentStatus:
+      type: string
+      description: |
+        Status of the SCA enrollment
+          - UNKNOWN: Strong customer authentication status is unknown.
+          - REQUIRED: Strong customer authentication is mandatory but has not yet been set up. Account access is restricted.
+          - PENDING: The strong authentication enrollment process has been initiated but is not yet complete. The user account remains limited until the process is completed.
+          - ACTIVE: Strong customer authentication is fully configured and functional.
+      enum:
+        - UNKNOWN
+        - REQUIRED
+        - PENDING
+        - ACTIVE
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+    apiKeyCaptcha:
+      type: apiKey
+      in: header
+      name: x-recaptcha-token

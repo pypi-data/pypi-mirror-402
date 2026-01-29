@@ -1,0 +1,644 @@
+# Auth Based on OAuth 2.0
+# https://tools.ietf.org/html/rfc6749
+
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP Levy'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'ManageLevy'
+    description: 'Manage Levy'
+  - name: 'SearchLevy'
+    description: 'Search Levy'
+  - name: 'searchOrderPayment'
+    description: 'Search Order Payment'
+  - name: 'manageOrderPayment'
+    description: 'Allow to act on order payment'
+paths:
+  /levies:
+    get:
+      tags:
+        - 'SearchLevy'
+      summary: 'Search in levies'
+      description: ''
+      operationId: 'getLevies'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - in: query
+          name: q
+          description: Any field in the levy contains 'q'
+          schema:
+            type: string
+        - in: query
+          name: createdAt[gte]
+          description: Levies created after this date. RFC 3339, section 5.6 (format YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: createdAt[lte]
+          description: Levies created before this date. RFC 3339, section 5.6 (format YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: id[eq]
+          description: Filter levies by ids
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: debitedUser[eq]
+          description: Search by debited user id
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: debitedFunds[eq]
+          description: Search by debited funds equal
+          schema:
+            type: number
+        - in: query
+          name: payinSt[eq]
+          description: Search by payin status equal
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/TransactionStatus'
+        - in: query
+          name: transferSt[eq]
+          description: Search by transfer status equal
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/TransactionStatus'
+        - in: query
+          name: manualCheck[eq]
+          description: Search by levy manual check equal
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/ManualCheckEnum'
+        - in: query
+          name: orderBy
+          description: Sort by
+          schema:
+            type: string
+            enum:
+              [
+                'DEBITED_USER_COMPANY_LEGAL_NAME:asc',
+                'DEBITED_USER_COMPANY_LEGAL_NAME:desc',
+                'DEBITED_FUNDS:asc',
+                'DEBITED_FUNDS:desc',
+                'FEES:asc',
+                'FEES:desc',
+                'TAG:asc',
+                'TAG:desc',
+                'MANUAL_CHECK:asc',
+                'MANUAL_CHECK:desc',
+                'PAYIN_STATUS:asc',
+                'PAYIN_STATUS:desc',
+                'TRANSFER_STATUS:asc',
+                'TRANSFER_STATUS:desc',
+                'CREATED_AT:asc',
+                'CREATED_AT:desc',
+              ]
+            default: 'CREATED_AT:desc'
+        - in: query
+          name: p
+          description: Page number to search for (start at 0)
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: pp
+          description: Number of user per page
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLevies'
+        403:
+          description: 'Access denied'
+    post:
+      tags:
+        - 'ManageLevy'
+      summary: 'Create levy'
+      operationId: 'createLevy'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LevyCreationParameters'
+      responses:
+        201:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Levy'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Debited User not found'
+
+  /levies/{levyId}:
+    get:
+      tags:
+        - 'SearchLevy'
+      summary: 'Get Levy'
+      operationId: 'getLevy'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/LevyIdParameter'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Levy'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Levy not found'
+
+    patch:
+      tags:
+        - 'ManageLevy'
+      summary: 'update Levy'
+      operationId: 'updateLevy'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/LevyIdParameter'
+      requestBody:
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/LevyUpdateParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Levy'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Levy not found'
+
+  /order-payments:
+    get:
+      tags:
+        - 'searchOrderPayment'
+      summary: 'Get payments for orders'
+      description: ''
+      operationId: 'getOrderPayments'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: 'query'
+          name: 'ref[eq]'
+          description: 'Filter on reference to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: string
+        - in: 'query'
+          name: 'orderBy'
+          description: "Order orders using specific sorting. Note : If sorting filter end with 'asc' or 'desc' it allow to select ascending or descending."
+          schema:
+            type: string
+            enum: ['ORDER_REFERENCE:ASC', 'ORDER_REFERENCE:DESC']
+            default: 'ORDER_REFERENCE:DESC'
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for (start at 0)'
+          schema:
+            type: integer
+            minimum: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of orders per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOrderPayments'
+        403:
+          description: 'Access denied'
+
+  /order-payments/{orderPaymentReference}/deposit:
+    put:
+      tags:
+        - 'manageOrderPayment'
+      summary: 'Allow to trigger or retry order payment deposit'
+      description: |
+        # Note :
+          - If a transaction is succeeded, it will be retained in the new deposit object
+      operationId: 'createOrUpdateOrderPaymentDeposit'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/OrderPaymentReference'
+      requestBody:
+        description: 'Parameters for order payment deposit creation'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderPaymentDepositCreationParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderPaymentDeposit'
+        403:
+          description: 'Access denied'
+
+  /order-payments/{orderPaymentReference}/withdraw:
+    put:
+      tags:
+        - 'manageOrderPayment'
+      summary: 'Allow to trigger or retry order payment withdraw'
+      description: |
+        # Note :
+          - If a transaction is succeeded, it will be retained in the new withdraw object
+      operationId: 'createOrUpdateOrderPaymentWithdraw'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/OrderPaymentReference'
+      requestBody:
+        description: 'Parameters for order payment withdraw creation'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderPaymentWithdrawCreationParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderPaymentWithdraw'
+        403:
+          description: 'Access denied'
+
+components:
+  parameters:
+    LevyIdParameter:
+      in: path
+      name: levyId
+      required: true
+      description: The id of the levy concerned by the request
+      schema:
+        type: integer
+        format: int64
+
+    OrderPaymentReference:
+      in: path
+      name: orderPaymentReference
+      required: true
+      description: Reference of this order payment
+      schema:
+        type: string
+
+  schemas:
+    PaginatedLevies:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/Levy'
+          required:
+            - records
+
+    Levy:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Levy Id
+        debitedUser:
+          $ref: '#/components/schemas/UserLink'
+        creditedUser:
+          $ref: '#/components/schemas/UserLink'
+        payin:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Transaction'
+        transfer:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Transaction'
+        manualCheck:
+          $ref: '#/components/schemas/ManualCheckEnum'
+        comment:
+          type: string
+          nullable: true
+          description: Comment about Levy
+        tag:
+          type: string
+          description: Tag associated to levy
+        fees:
+          type: number
+          description: Fees amount
+        debitedFunds:
+          type: number
+          description: Debited amount
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - debitedUser
+        - creditedUser
+        - payment
+        - status
+        - fees
+        - debitedFunds
+
+    ManualCheckEnum:
+      type: string
+      description: DONE if operator have done manual processing of the levy, NOT_DONE if not
+      enum:
+        - DONE
+        - NOT_DONE
+
+    LevyUpdateParameters:
+      type: object
+      properties:
+        manualCheck:
+          $ref: '#/components/schemas/ManualCheckEnum'
+        comment:
+          type: string
+          nullable: true
+
+    LevyCreationParameters:
+      type: object
+      properties:
+        debitedUserId:
+          type: integer
+          format: int64
+          description: User to charge on
+        debitedFunds:
+          type: number
+          description: Amount of the levy
+        fees:
+          type: number
+          description: Fees of the levy
+        tag:
+          type: string
+          description: Associated tag
+        manualCheck:
+          $ref: '#/components/schemas/ManualCheckEnum'
+        comment:
+          type: string
+          nullable: true
+      required:
+        - debitedUserId
+        - debitedFunds
+        - fees
+        - tag
+        - manualCheck
+
+    UserLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+            nickname:
+              type: string
+              maxLength: 64
+              description: User nickname
+            company:
+              type: object
+              description: 'Infos about the user company'
+              properties:
+                legalName:
+                  type: string
+                  nullable: true
+          required:
+            - id
+            - nickname
+
+    PaginatedOrderPayments:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/OrderPayment'
+          required:
+            - records
+
+    OrderPayment:
+      type: object
+      properties:
+        reference:
+          type: string
+          description: 'Reference of this order payment. Should be the same than order reference.'
+        order:
+          $ref: '#/components/schemas/OrderLink'
+        wallets:
+          $ref: '#/components/schemas/OrderPaymentWallets'
+        deposit:
+          $ref: '#/components/schemas/OrderPaymentDeposit'
+        withdraw:
+          $ref: '#/components/schemas/OrderPaymentWithdraw'
+
+    OrderPaymentWallets:
+      type: object
+      properties:
+        buyer:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Wallet'
+        seller:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Wallet'
+
+    OrderPaymentDeposit:
+      type: object
+      description: 'Transactions required to execute deposit'
+      properties:
+        payin:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Transaction'
+
+    OrderPaymentWithdraw:
+      type: object
+      description: 'Transactions required to execute withdraw'
+      properties:
+        refund:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Transaction'
+        payout:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Transaction'
+        transferSeller:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Transaction'
+        transferShippingFees:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Transaction'
+
+    Transaction:
+      type: object
+      properties:
+        mangopayTarget:
+          $ref: '#/components/schemas/TransactionMangopayTarget'
+        status:
+          $ref: '#/components/schemas/TransactionStatus'
+        executionCode:
+          type: string
+          description: 'Code obtained when transaction occurs'
+        executionMessage:
+          type: string
+          description: 'Message when when transaction occurs'
+        executionDate:
+          type: string
+          format: date-time
+          description: 'Last date where transaction tried to be executed'
+      required:
+        - mangopayTarget
+        - status
+
+    TransactionStatus:
+      type: string
+      enum: [ 'CREATED', 'SUCCEEDED', 'FAILED', 'UNKNOWN' ]
+      description: 'Status of this transaction. FAILED transaction can be retried.'
+
+    TransactionMangopayTarget:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: string
+              description: 'Id of the mangopay transaction'
+
+    Wallet:
+      type: object
+      properties:
+        mangopayTarget:
+          $ref: '#/components/schemas/WalletMangopayTarget'
+
+    WalletMangopayTarget:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: string
+              description: 'Id of the mangopay wallet'
+
+    OrderLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            reference:
+              type: string
+              description: 'Unique identifier for this order'
+
+    OrderPaymentDepositCreationParameters:
+      type: object
+
+    OrderPaymentWithdrawCreationParameters:
+      type: object
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

@@ -1,0 +1,103 @@
+openapi: 3.0.0
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: This is the REST API of LCDP products
+  version: 1.0.0
+  title: lcdp-monolith-service
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: contact@lecomptoirdespharmacies.fr
+  license:
+    name: Apache 2.0
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: manageThirdPartyLink
+    description: Manage third party links
+paths:
+  /third-party-links:
+    post:
+      tags:
+        - manageThirdPartyLink
+      summary: Generate link to access a third party for the user on the requested slug
+      operationId: createThirdPartyLink
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThirdPartyLinkCreationParameters'
+      responses:
+        201:
+          description: 'Link generated'
+          headers:
+            Expires:
+              schema:
+                type: string
+              description: 'Date when the link will expire (RFC 7231)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThirdPartyLink'
+        400:
+          description: 'Bad request'
+        403:
+          description: 'Access denied'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        404:
+          description: 'User/Slug not found'
+
+components:
+  schemas:
+    ThirdPartyLinkCreationParameters:
+      type: object
+      properties:
+        userId:
+          description: 'User id for which the link url will be generated'
+          type: integer
+          format: int64
+        slug:
+          description: 'Slug on which the partner link will be generated for the user'
+          type: string
+          enum:
+            - BADGES_PHARMACY_STATISTICS_DASHBOARD
+            - BADGES_LABORATORY_STATISTICS_DASHBOARD
+            - SUBSCRIPTIONS_PHARMAIDE_USER_PRICING_PAGE
+            - SUBSCRIPTIONS_LOGISTIC_USER_PRICING_PAGE
+            - SUBSCRIPTIONS_USER_PORTAL
+            - PAYMENT_SERVICE_PROVIDERS_PROXY_CONSENT_PAGE
+      required:
+        - userId
+        - slug
+
+    ThirdPartyLink:
+      type: object
+      properties:
+        href:
+          description: 'Link to the third party'
+          type: string
+          format: uri
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

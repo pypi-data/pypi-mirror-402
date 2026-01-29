@@ -1,0 +1,228 @@
+openapi: 3.0.0
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+    description: Staging
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+    description: Prod
+  - url: 'http://www.lcdp.localhost/api/v1'
+    description: Compose
+  - url: 'http://localhost:7073/api/v1'
+    description: Dev
+info:
+  description: This is the REST API of Magic cart
+  version: 1.0.0
+  title: lcdp-magic-cart
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: contact@lecomptoirdespharmacies.fr
+  license:
+    name: Apache 2.0
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: manageExpressOrder
+paths:
+  /express-orders:
+    post:
+      summary: Request Express Order proposition
+      operationId: createExpressOrder
+      tags:
+        - manageExpressOrder
+      description: Create Express Order using algorithm to make optimized buying propositions
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+        capabilities:
+          - MAGIC_CART_READ
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpressOrderCreationParameters'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpressOrder'
+        '400':
+          description: Bad Request
+        '408':
+          description: No solution found in the given time
+        '401':
+          description: Unauthorized
+components:
+  schemas:
+    ProductLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: Identifier of the product
+            name:
+              type: string
+              description: Name of the product
+            barcodes:
+              $ref: 'product.yaml#/components/schemas/Barcodes'
+            storageType:
+              nullable: true
+              allOf:
+                - $ref: 'product.yaml#/components/schemas/ProductStorageType'
+          required:
+            - id
+            - name
+            - barcodes
+            - storageType
+    SaleOfferProposal:
+      type: object
+      properties:
+        product:
+          $ref: '#/components/schemas/ProductLink'
+        saleOffer:
+          $ref: '#/components/schemas/SaleOfferLink'
+        distributedRangeId:
+          type: integer
+          format: int64
+          description: Set when sale offer's distribution mode is RANGE
+          nullable: true
+        quantity:
+          type: integer
+          minimum: 1
+      required:
+        - product
+        - saleOffer
+        - distributedRangeId
+        - quantity
+
+    SellerProposal:
+      type: object
+      description: A list of proposed sale offers to buy from seller
+      properties:
+        saleOfferProposals:
+          type: array
+          items:
+            $ref: '#/components/schemas/SaleOfferProposal'
+        seller:
+          $ref: '#/components/schemas/UserLink'
+        freeCarriageThreshold:
+          type: number
+          minimum: 0
+      required:
+        - saleOfferProposals
+        - seller
+        - freeCarriageThreshold
+
+    SaleOfferLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            reference:
+              type: string
+            distributionMode:
+              $ref: 'sale-offer.yaml#/components/schemas/AnyIdentifiedDistributionMode'
+            stock:
+              $ref: 'sale-offer.yaml#/components/schemas/Stock'
+            bestRebate:
+              type: integer
+              maximum: 100
+              description: Best Rebate for this sale offer
+          required:
+            - reference
+            - distributionMode
+            - stock
+
+    UserLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+            nickname:
+              type: string
+          required:
+            - id
+            - nickname
+
+    ExpressOrder:
+      title: ExpressOrder
+      type: object
+      description: Express Order as a list of sale offer proposal grouped by sellers
+      properties:
+        optimal:
+          description: 'True if the solution is optimal. False if solution could have been better with more time.'
+          type: boolean
+        sellerProposals:
+          type: array
+          items:
+            $ref: '#/components/schemas/SellerProposal'
+
+    ExpressOrderCreationParameters:
+      title: ExpressOrderCreationParameters
+      type: object
+      properties:
+        maxRequestDuration:
+          description: 'Number of seconds allocated to the request in order to process'
+          type: integer
+          format: int64
+          minimum: 5
+          maximum: 60
+          default: 15
+        buyerId:
+          description: 'User Id to do the request for'
+          type: integer
+          format: int64
+        needs:
+          description: 'Products needed by the client'
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpressOrderNeed'
+      required:
+        - buyerId
+
+    ExpressOrderNeed:
+      type: object
+      properties:
+        productId:
+          type: integer
+          format: int64
+          description: Concerned product
+        quantity:
+          type: integer
+          minimum: 1
+          description: Minimal quantity needed
+        minimalDiscount:
+          type: integer
+          format: int32
+          nullable: true
+          description: minimalDiscount can be negative cause discount can be negative
+          example: 35
+        minimalLapsingDuration:
+          type: string
+          format: duration
+          nullable: true
+          description: The lapsing date must be reached after this date. (see ISO-8601 https://tc39.es/proposal-temporal/docs/duration.html)
+          example: P4M
+      required:
+        - productId
+        - quantity
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

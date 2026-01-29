@@ -1,0 +1,625 @@
+# Auth Based on OAuth 2.0
+# https://tools.ietf.org/html/rfc6749
+
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'auth'
+    description: 'Authentication/Authorization of users'
+  - name: 'ManageApiKey'
+    description: 'Management of API keys'
+  - name: 'SearchApiKey'
+    description: 'Search of API keys'
+paths:
+  /tokens:
+    post:
+      tags:
+        - 'auth'
+      summary: 'Create a new session'
+      description: 'Create a new session with credentials given in request body.'
+      operationId: 'login'
+      requestBody:
+        description: 'Credentials to use in order to create the session'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnyAuthenticationCredential'
+            example:
+              login: 'example@example.fr'
+              password: 'mymagicpassword'
+              grantType: 'password'
+      responses:
+        201:
+          description: 'Session created'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        400:
+          description: 'Bad request'
+        403:
+          description: |
+            Precondition failed with values :
+             - CODE005
+             - CODE019
+             - CODE022
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        503:
+          description: 'Service unavailable'
+
+    delete:
+      tags:
+        - 'auth'
+      summary: 'Delete an existing session'
+      description: ''
+      operationId: 'logout'
+      security:
+        - bearerAuth: []
+      responses:
+        204:
+          description: 'Session deleted'
+
+  /disposable-tokens:
+    post:
+      tags:
+        - 'auth'
+      summary: 'Create disposable token'
+      description: |
+        Create a disposable token that could be used on "/tokens" route in order to authenticate a user
+      operationId: 'createDisposableToken'
+      security:
+        - bearerAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      requestBody:
+        description: 'User for which to create disposable token'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisposableTokenCreationParameters'
+      responses:
+        201:
+          description: 'Disposable token generated'
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/DisposableToken'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        404:
+          description: 'User not found'
+
+  /algolia-api-keys:
+    post:
+      tags:
+        - 'ManageApiKey'
+      summary: 'Create algolia search only api key'
+      description: 'Create algolia search only  api key'
+      operationId: 'createAlgoliaApiKey'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      responses:
+        201:
+          description: 'Algolia api key generated'
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/AlgoliaApiKey'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'User not found'
+
+  /api-keys:
+    get:
+      tags:
+        - 'SearchApiKey'
+      description: |
+        Search for API keys
+        Restrictions :
+         - Getting API keys of other users is forbidden (except role 'ADMINISTRATOR')
+      operationId: 'getApiKeys'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: query
+          name: 'q'
+          description: "Name or public part of the hidden API key value contains 'q'"
+          schema:
+            type: string
+        - in: query
+          name: 'o[eq]'
+          description: 'Filter on owner id to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'o[neq]'
+          description: 'Filter on owner id to exclude in the search (can be given multiple time which result in a AND condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'tags[co]'
+          description: 'Filter on tags contains this value'
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          name: 'cdate[gte]'
+          description: 'Filter on creation date greater than (equals) to this date'
+          schema:
+            type: string
+            format: date-time
+        - in: 'query'
+          name: 'cdate[lte]'
+          description: 'Filter on creation date less than (equals) to this date'
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: 'ludate[gte]'
+          description: 'Filter on last use date greater than (equals) to this date'
+          schema:
+            type: string
+            format: date-time
+        - in: 'query'
+          name: 'ludate[lte]'
+          description: 'Filter on last use date less than (equals) to this date'
+          schema:
+            type: string
+            format: date-time
+        - in: 'query'
+          name: 'orderBy'
+          description: 'Order logs using specific sorting'
+          schema:
+            type: string
+            enum:
+              [
+                'NAME:asc',
+                'NAME:desc',
+                'CREATED_AT:asc',
+                'CREATED_AT:desc',
+                'LAST_USED_AT:asc',
+                'LAST_USED_AT:desc',
+              ]
+            default: 'LAST_USED_AT:desc'
+        - in: query
+          name: p
+          description: 'Page number'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: pp
+          description: 'Number of api keys per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'Successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedApiKeys'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Api key not found'
+    post:
+      tags:
+        - 'ManageApiKey'
+      description: |
+        Create API key
+        Restrictions :
+         - You must set yourself as owner of the API key (except role 'ADMINISTRATOR')
+      operationId: 'createApiKey'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiKeyCreationParameters'
+      responses:
+        201:
+          description: 'Api key created'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevealedApiKey'
+        400:
+          description: 'Bad request'
+        403:
+          description: 'Access denied'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        404:
+          description: 'User not found'
+
+  /api-keys/{apiKeyId}:
+    get:
+      tags:
+        - 'SearchApiKey'
+      description: |
+        Get API key
+        Restrictions :
+         - You must be owner of the API key (except role 'ADMINISTRATOR')
+      operationId: 'getApiKey'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/ApiKeyIdParameter'
+      responses:
+        200:
+          description: 'Successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKey'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Api key not found'
+    delete:
+      tags:
+        - 'ManageApiKey'
+      description: |
+        Delete API key
+        Restrictions :
+         - You must be owner of the API key (except role 'ADMINISTRATOR')
+         - You cannot delete internal API keys (except role 'ADMINISTRATOR')
+      operationId: 'deleteApiKey'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/ApiKeyIdParameter'
+      responses:
+        204:
+          description: 'Api key deleted'
+        403:
+          description: 'Access denied'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        404:
+          description: 'Api key not found'
+
+components:
+  parameters:
+    ApiKeyIdParameter:
+      in: path
+      name: apiKeyId
+      required: true
+      description: 'The id of the API key'
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    # Issue : https://github.com/OpenAPITools/openapi-generator/issues/15
+    # Impossible d'utiliser les oneOf donc le client devra envoyé une requête correcte
+    # Et le serveur devra implémenter la validation des champs
+    AnyAuthenticationCredential:
+      oneOf:
+        - $ref: '#/components/schemas/LoginCredential'
+        - $ref: '#/components/schemas/RefreshCredential'
+        - $ref: '#/components/schemas/DisposableCredential'
+        - $ref: '#/components/schemas/ApiKeyCredential'
+      discriminator:
+        propertyName: grantType
+        mapping:
+          password: '#/components/schemas/LoginCredential'
+          refresh_token: '#/components/schemas/RefreshCredential'
+          disposable_token: '#/components/schemas/DisposableCredential'
+          api_key: '#/components/schemas/ApiKeyCredential'
+
+    AuthenticationCredential:
+      type: object
+      required:
+        - grantType
+      properties:
+        grantType:
+          type: string
+          description: 'Action allowed by the request'
+          pattern: '^(password|refresh_token|disposable_token|api_key)$'
+
+    LoginCredential:
+      allOf:
+        - $ref: '#/components/schemas/AuthenticationCredential'
+        - type: object
+          properties:
+            login:
+              type: string
+              description: 'User e-mail'
+            password:
+              type: string
+              description: 'User password'
+          required:
+            - login
+            - password
+
+    RefreshCredential:
+      allOf:
+        - $ref: '#/components/schemas/AuthenticationCredential'
+        - type: object
+          properties:
+            refreshToken:
+              type: string
+          required:
+            - refreshToken
+
+    DisposableCredential:
+      allOf:
+        - $ref: '#/components/schemas/AuthenticationCredential'
+        - type: object
+          properties:
+            disposableToken:
+              $ref: '#/components/schemas/DisposableToken'
+          required:
+            - disposableToken
+
+    DisposableToken:
+      type: string
+      description: 'Token that could be used only once to connect a user'
+
+    AlgoliaApiKey:
+      type: string
+      description: 'Algolia search only API Key'
+
+    ApiKeyCredential:
+      allOf:
+        - $ref: '#/components/schemas/AuthenticationCredential'
+        - type: object
+          properties:
+            apiKey:
+              $ref: '#/components/schemas/ApiKeyValue'
+          required:
+            - apiKey
+
+    ApiKeyValue:
+      type: string
+      description: 'Value of API key'
+
+    Session:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: 'Access Token who permit the user to connect'
+        refreshToken:
+          type: string
+          description: 'Refresh Token who permit the user to renew his token'
+        expiredIn:
+          type: integer
+          format: int64
+          description: 'Expiration of access token in seconds'
+      required:
+        - accessToken
+        - refreshToken
+        - expiredIn
+
+    AnyUser:
+      oneOf:
+        - $ref: '#/components/schemas/AnonymousUser'
+        - $ref: '#/components/schemas/IdentifiedUser'
+      discriminator:
+        propertyName: type
+        mapping:
+          ANONYMOUS: '#/components/schemas/AnonymousUser'
+          IDENTIFIED: '#/components/schemas/IdentifiedUser'
+
+    User:
+      type: object
+      properties:
+        type:
+          type: string
+          description: 'Type of user'
+          pattern: '^(ANONYMOUS|IDENTIFIED)$'
+      required:
+        - type
+
+    AnonymousUser:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            email:
+              type: string
+              description: 'User email'
+            cipPharma:
+              type: string
+              description: 'CIP of user pharma'
+      required:
+        - type
+        - email
+        - cipPharma
+
+    IdentifiedUser:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            externalId:
+              type: string
+              description: 'Unique external id identifying this user'
+      required:
+        - type
+        - externalId
+
+    DisposableTokenCreationParameters:
+      type: object
+      properties:
+        userId:
+          description: 'User Id to create account token'
+          type: integer
+          format: int64
+
+    ApiKey:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          description: 'Api key name'
+          type: string
+        owner:
+          $ref: '#/components/schemas/UserLink'
+        tags:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+        expirationDate:
+          type: string
+          format: date-time
+        hiddenValue:
+          type: string
+          description: 'Hidden value of the API key'
+
+    RevealedApiKey:
+      allOf:
+        - $ref: '#/components/schemas/ApiKey'
+        - type: object
+          properties:
+            value:
+              $ref: '#/components/schemas/ApiKeyValue'
+
+    PaginatedApiKeys:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/ApiKey'
+          required:
+            - records
+
+    ApiKeyCreationParameters:
+      type: object
+      properties:
+        name:
+          description: 'Api key name'
+          type: string
+        ownerId:
+          type: integer
+          format: int64
+        tags:
+          type: array
+          items:
+            type: string
+          description: 'Tags to add to the API key'
+        expirationDate:
+          type: string
+          format: date-time
+          description: 'Expiration date of the API key'
+      required:
+        - ownerId
+        - name
+
+    UserLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'Id of the user'
+            nickname:
+              type: string
+              maxLength: 64
+              description: 'User nickname'
+            company:
+              type: object
+              description: 'Infos about the user company'
+              properties:
+                legalName:
+                  type: string
+                  nullable: true
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

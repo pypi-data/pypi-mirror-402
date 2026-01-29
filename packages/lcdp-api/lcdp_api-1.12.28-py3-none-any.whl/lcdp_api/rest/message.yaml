@@ -1,0 +1,424 @@
+# Auth Based on OAuth 2.0
+# https://tools.ietf.org/html/rfc6749
+
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'manageMessage'
+    description: 'Manage message'
+  - name: 'searchMessage'
+    description: 'Search message'
+paths:
+  /messages:
+    get:
+      tags:
+        - 'searchMessage'
+      summary: 'Get availables messages'
+      description: ''
+      operationId: 'getMessages'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: 'query'
+          name: 'active[eq]'
+          description: 'Message active or not'
+          schema:
+            type: boolean
+        - in: 'query'
+          name: 'id[eq]'
+          description: 'Filter messages by ids'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'viewers[co]'
+          description: 'Filter messages seen by user'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'viewers[nco]'
+          description: 'Filter messages not seen by user'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'orderBy'
+          description: 'Sort by'
+          schema:
+            type: string
+            enum:
+              [
+                'CREATED_AT:asc',
+                'CREATED_AT:desc',
+                'UPDATED_AT:asc',
+                'UPDATED_AT:desc',
+              ]
+            default: 'CREATED_AT:asc'
+        - in: 'query'
+          name: 'p'
+          description: 'Page number'
+          schema:
+            type: integer
+        - in: 'query'
+          name: 'pp'
+          description: 'Items per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMessages'
+        403:
+          description: 'Access denied'
+    post:
+      tags:
+        - 'manageMessage'
+      summary: 'Create new message'
+      description: ''
+      operationId: 'createMessage'
+      requestBody:
+        description: 'Object to use in order to create the message'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageCreationParameters'
+            example:
+              title: 'message title'
+              content: 'message à afficher en front'
+              active: true
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        403:
+          description: 'Access denied'
+
+  /messages/{messageId}:
+    get:
+      tags:
+        - 'searchMessage'
+      summary: 'Get message details'
+      operationId: 'getMessage'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/MessageIdParameter'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'message not found'
+
+    patch:
+      tags:
+        - 'manageMessage'
+      summary: 'Update partial selected message'
+      description: ''
+      operationId: 'updateMessage'
+      parameters:
+        - $ref: '#/components/parameters/MessageIdParameter'
+      requestBody:
+        description: 'Object to use in order to update the message'
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/MessageUpdateParameters'
+            example:
+              title: 'message title'
+              content: 'message à afficher en front'
+              active: true
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'message not found'
+
+    delete:
+      tags:
+        - 'manageMessage'
+      summary: 'Delete selected message'
+      description: ''
+      operationId: 'deleteMessage'
+      parameters:
+        - $ref: '#/components/parameters/MessageIdParameter'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      responses:
+        204:
+          description: 'successful operation'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'message not found'
+
+  /messages/{messageId}/viewers:
+    get:
+      tags:
+        - 'searchMessage'
+      summary: 'Get message viewers'
+      description: ''
+      operationId: 'getMessageViewers'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/MessageIdParameter'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ViewerLink'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'message not found'
+
+    post:
+      tags:
+        - 'manageMessage'
+      summary: 'Create message viewed by client'
+      description: ''
+      operationId: 'createMessageViewer'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      requestBody:
+        description: 'User has seen the message'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageViewerCreationParameters'
+      parameters:
+        - $ref: '#/components/parameters/MessageIdParameter'
+      responses:
+        204:
+          description: 'successful operation'
+        403:
+          description: 'Access denied'
+        409:
+          description: 'message already viewed'
+
+  /messages/{messageId}/viewers/{viewerId}:
+    delete:
+      tags:
+        - 'manageMessage'
+      summary: 'Delete message viewed by client'
+      description: ''
+      operationId: 'deleteMessageViewer'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/MessageIdParameter'
+        - in: 'path'
+          name: viewerId
+          required: true
+          schema:
+            type: integer
+            format: int64
+            description: 'User interact with the message'
+      responses:
+        204:
+          description: 'successful operation'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'message not found'
+
+components:
+  parameters:
+    MessageIdParameter:
+      in: 'path'
+      name: 'messageId'
+      required: true
+      description: The id of the message concerned by the request
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    PaginatedMessages:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/Message'
+          required:
+            - records
+
+    MessageCreationParameters:
+      type: object
+      properties:
+        title:
+          type: string
+          description: 'Message title'
+        content:
+          type: string
+          description: 'Content of the message'
+        active:
+          type: boolean
+          description: 'Message active or not'
+      required:
+        - title
+        - content
+        - active
+
+    MessageUpdateParameters:
+      type: object
+      properties:
+        title:
+          type: string
+          description: 'Message title'
+        content:
+          type: string
+          description: 'Content of the message'
+        active:
+          type: boolean
+          description: 'Message active or not'
+
+    MessageViewerCreationParameters:
+      type: object
+      properties:
+        viewerId:
+          type: integer
+          format: int64
+          description: User interact with the message
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        title:
+          type: string
+          description: 'Message title'
+        content:
+          type: string
+          description: 'Content of the message'
+        active:
+          type: boolean
+          description: 'Message active or not'
+        viewers:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+      required:
+        - id
+        - title
+        - content
+        - active
+        - viewers
+
+    ViewerLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+            nickname:
+              type: string
+              maxLength: 64
+              description: 'User nickname'
+          required:
+            - id
+            - nickname
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

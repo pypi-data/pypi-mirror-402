@@ -1,0 +1,80 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'SearchCountry'
+    description: 'Search country'
+paths:
+  /countries:
+    get:
+      tags:
+        - 'SearchCountry'
+      summary: 'Search countries'
+      operationId: 'getCountries'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: query
+          name: 'name[ili]'
+          schema:
+            type: 'string'
+            description: "Check if country name 'ilike' this value"
+      responses:
+        200:
+          description: 'Countries found'
+          content:
+            application/json:
+              schema:
+                type: 'array'
+                items:
+                  $ref: '#/components/schemas/Country'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Country not found'
+
+components:
+  schemas:
+    ########################
+    # Entities
+    ########################
+
+    Country:
+      type: object
+      properties:
+        name:
+          type: string
+        iso:
+          type: string
+      required:
+        - name
+        - iso
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

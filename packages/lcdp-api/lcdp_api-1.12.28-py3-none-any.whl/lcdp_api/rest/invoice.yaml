@@ -1,0 +1,828 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-pharmaide-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'ManageInvoicesSummary'
+    description: 'Send PDF by mail with invoices selected'
+  - name: 'ManageInvoice'
+    description: 'Create and modify invoices.'
+  - name: 'ManageInvoiceLine'
+    description: 'Manage invoices lines.'
+  - name: 'SearchInvoiceLine'
+    description: 'Search invoices lines.'
+  - name: 'SearchInvoice'
+    description: 'Search invoices.'
+  - name: 'SearchOrderTally'
+    description: 'Search order tallies.'
+
+paths:
+  /order-tallies:
+    get:
+      tags:
+        - 'SearchOrderTally'
+      summary: 'Get order tallies'
+      operationId: 'getOrderTallies'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: 'query'
+          name: 'ref[eq]'
+          description: 'Filter on reference should be equal to this'
+          required: false
+          schema:
+            type: string
+        - in: 'query'
+          name: 'bors[eq]'
+          description: 'Order buyer OR seller should be equal to this'
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - in: 'query'
+          name: 'b[eq]'
+          description: 'Order buyer should be equal to this'
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - in: 'query'
+          name: 's[eq]'
+          description: 'Order seller should be equal to this'
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          name: 'q'
+          description: 'Product identifier (name, CIP, CIP13, EAN)'
+          schema:
+            type: string
+        - in: query
+          name: 'invoiceChargeDate[gte]'
+          description: 'Invoices charged after this date. RFC 3339, section 5.6 (format YYYY-MM-DD)'
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: 'invoiceChargeDate[lte]'
+          description: 'Invoices charged before this date. RFC 3339, section 5.6 (format YYYY-MM-DD)'
+          schema:
+            type: string
+            format: date
+        - in: 'query'
+          name: 'orderBy'
+          description: "Order invoices using specific sorting. Note : If sorting filter end with 'asc' or 'desc' it allow to select ascending or descending."
+          schema:
+            default: 'ORDER_CREATED_AT:desc'
+            type: string
+            enum:
+              [
+                'ORDER_REFERENCE:asc',
+                'ORDER_REFERENCE:desc',
+                'ORDER_CREATED_AT:asc',
+                'ORDER_CREATED_AT:desc',
+                'BUYER_DEBIT_INCLUDING_TAXES:asc',
+                'BUYER_DEBIT_INCLUDING_TAXES:desc',
+                'SELLER_CREDIT_INCLUDING_TAXES:asc',
+                'SELLER_CREDIT_INCLUDING_TAXES:desc',
+              ]
+        - in: query
+          name: 'p'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: 'pp'
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 50
+      responses:
+        200:
+          description: 'Success'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOrderTallies'
+        403:
+          description: 'Access denied'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+
+  /order-tallies/{orderTallyReference}/invoices:
+    get:
+      tags:
+        - 'SearchOrderTally'
+      summary: 'Get invoices from order tally reference'
+      operationId: 'getOrderTallyInvoices'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: path
+          name: orderTallyReference
+          required: true
+          description: The ref of the order tally to retrieve.
+          schema:
+            type: string
+      responses:
+        200:
+          description: 'Success'
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename=myFile.pdf'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invoice'
+            application/pdf:
+              schema:
+                description: 'Merged invoices in one PDF'
+                type: string
+                format: binary
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Order tally not found'
+        406:
+          description: 'Mime type not acceptable'
+
+  /invoices/{invoiceType}:
+    get:
+      tags:
+        - 'SearchInvoice'
+      summary: 'Get invoices for service'
+      description: |
+        Allow to get invoices.
+        Currently, invoiceType supported values :
+          - SERVICE
+          - EXTERNAL
+      operationId: 'getInvoices'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/InvoiceTypeParameter'
+        - in: 'query'
+          name: 'o[eq]'
+          description: 'Invoice owner should be equal to this'
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - in: query
+          name: 'q'
+          description: 'Keyword to search on'
+          schema:
+            type: string
+        - in: query
+          name: 'chargeDate[gte]'
+          description: 'Invoices charged after this date. RFC 3339, section 5.6 (format YYYY-MM-DD)'
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: 'chargeDate[lte]'
+          description: 'Invoices charged before this date. RFC 3339, section 5.6 (format YYYY-MM-DD)'
+          schema:
+            type: string
+            format: date
+        - in: 'query'
+          name: 'orderBy'
+          description: "Order invoices using specific sorting. Note : If sorting filter end with 'asc' or 'desc' it allow to select ascending or descending."
+          schema:
+            default: 'CHARGE_DATE:desc'
+            type: string
+            enum:
+              [
+                'REFERENCE:asc',
+                'REFERENCE:desc',
+                'CHARGE_DATE:asc',
+                'CHARGE_DATE:desc',
+                'TOTAL_EXCLUDING_TAXES:asc',
+                'TOTAL_EXCLUDING_TAXES:desc',
+                'TOTAL_INCLUDING_TAXES:asc',
+                'TOTAL_INCLUDING_TAXES:desc',
+                'OWNER_COMPANY_LEGAL_NAME:asc',
+                'OWNER_COMPANY_LEGAL_NAME:desc',
+              ]
+        - in: query
+          name: 'p'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: 'pp'
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 50
+      responses:
+        200:
+          description: 'Success'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedInvoices'
+        400:
+          description: 'Bad Request'
+    post:
+      tags:
+        - 'ManageInvoice'
+      summary: 'Create an invoice'
+      description: |
+        Allow to create new invoices.
+        Currently, invoiceType supported values and fields :
+          - EXTERNAL
+            - description
+            - totalExcludingTaxes
+
+        Auto-computed fields :
+          - EXTERNAL
+            - chargeDate : Is the date where Invoice is created
+            - totalIncludingTaxes : Computed using totalExcludingTaxes and LCDP_VAT variable value (See #configuration.yaml)
+      operationId: 'createInvoice'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/InvoiceTypeParameter'
+      requestBody:
+        description: 'Parameters to use in order to create the invoice'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceCreationParameters'
+            example:
+              description: 'Invoice to refund XXX'
+              totalExcludingTaxes: 12.30
+      responses:
+        201:
+          description: 'Success'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        400:
+          description: 'Bad Request'
+        401:
+          description: 'Unauthorized'
+        404:
+          description: 'Invoice not found'
+
+  /invoices/{invoiceType}/{reference}:
+    get:
+      tags:
+        - 'SearchInvoice'
+      summary: 'Get PDF related to invoice type and reference'
+      operationId: 'getInvoice'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/InvoiceTypeParameter'
+        - $ref: '#/components/parameters/ReferenceParameter'
+      responses:
+        200:
+          description: 'Success'
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename=myFile.pdf'
+          content:
+            application/pdf:
+              schema:
+                description: 'Merged invoices in one PDF'
+                type: string
+                format: binary
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Invoice not found'
+    patch:
+      tags:
+        - 'ManageInvoice'
+      summary: 'Update invoice'
+      description: |
+        Allow to update invoice values.
+        Currently, invoiceType supported values and fields :
+          - EXTERNAL
+            - description
+            - totalExcludingTaxes
+
+        Auto-computed fields :
+          - EXTERNAL
+            - totalIncludingTaxes : Computed using totalExcludingTaxes and LCDP_VAT variable value (See #configuration.yaml)
+      operationId: 'updateInvoice'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/InvoiceTypeParameter'
+        - $ref: '#/components/parameters/ReferenceParameter'
+      requestBody:
+        description: 'Parameters to use in order to update the invoice'
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/InvoiceUpdateParameters'
+            example:
+              description: 'Invoice to refund XXX'
+              totalExcludingTaxes: 12.30
+      responses:
+        200:
+          description: 'Success'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        400:
+          description: 'Bad Request'
+        401:
+          description: 'Unauthorized'
+        404:
+          description: 'Invoice not found'
+
+  /invoices-summaries:
+    post:
+      tags:
+        - 'ManageInvoicesSummary'
+      summary: 'Activate monthly invoices for specific user'
+      operationId: 'createInvoicesSummary'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      requestBody:
+        description: 'Invoice summary creation parameters'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceSummaryCreationParameters'
+      responses:
+        204:
+          description: 'Success'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+        409:
+          description: 'Request asked already exist'
+
+  /planned-invoice-lines:
+    post:
+      tags:
+        - 'ManageInvoiceLine'
+      summary: "Create an invoice line who will be inserted in the next 'SERVICE' issued invoice"
+      operationId: 'createPlannedInvoiceLine'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      requestBody:
+        description: 'Planned invoice line creation parameters'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlannedInvoiceLineCreationParameters'
+      responses:
+        201:
+          description: 'Success'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlannedInvoiceLine'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Not found'
+    get:
+      tags:
+        - 'SearchInvoiceLine'
+      summary: 'Search planned invoice lines'
+      operationId: 'getPlannedInvoiceLines'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - in: 'query'
+          name: 'cu[eq]'
+          description: ' charged user id should be in this'
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'q'
+          description: 'Keyword to search on'
+          schema:
+            type: string
+        - in: query
+          name: 'createdAt[gte]'
+          description: 'Invoice lines created after this date. RFC 3339, section 5.6 (format YYYY-MM-DD)'
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: 'createdAt[lte]'
+          description: 'Invoice lines created before this date. RFC 3339, section 5.6 (format YYYY-MM-DD)'
+          schema:
+            type: string
+            format: date
+        - in: 'query'
+          name: 'orderBy'
+          description: Sort by
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                [
+                  'TOTAL_EXCLUDING_TAXES:asc',
+                  'TOTAL_EXCLUDING_TAXES:desc',
+                  'CREATED_AT:asc',
+                  'CREATED_AT:desc',
+                ]
+              default: 'CREATED_AT:desc'
+        - in: query
+          name: 'p'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: 'pp'
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 50
+      responses:
+        200:
+          description: 'Success'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPlannedInvoiceLine'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+
+  /planned-invoice-lines/{plannedInvoiceLineId}:
+    delete:
+      tags:
+        - 'ManageInvoiceLine'
+      summary: 'Delete planned invoice line'
+      operationId: 'deletePlannedInvoiceLine'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - in: 'path'
+          name: 'plannedInvoiceLineId'
+          required: true
+          schema:
+            type: 'integer'
+            format: 'int64'
+      responses:
+        204:
+          description: 'Successfully deleted'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Not found'
+
+components:
+  parameters:
+    InvoiceTypeParameter:
+      in: path
+      name: invoiceType
+      required: true
+      schema:
+        $ref: '#/components/schemas/InvoiceType'
+
+    ReferenceParameter:
+      in: path
+      name: 'reference'
+      required: true
+      description: 'Invoice reference or ID'
+      schema:
+        type: string
+
+  schemas:
+    ########################
+    # Entities
+    ########################
+
+    InvoiceType:
+      type: string
+      description: 'All of invoices type'
+      enum:
+        [
+          'COMMISSION_BUYER',
+          'COMMISSION_SELLER',
+          'COMMISSION_CREDIT_NOTE_BUYER',
+          'COMMISSION_CREDIT_NOTE_SELLER',
+          'SERVICE',
+          'ORDER_BUYER',
+          'ORDER_SELLER',
+          'ORDER_CREDIT_NOTE_BUYER',
+          'ORDER_CREDIT_NOTE_SELLER',
+          'AGGREGATED_COMMISSION',
+          'AGGREGATED_COMMISSION_CREDIT_NOTE',
+          'EXTERNAL',
+        ]
+
+    PaginatedInvoices:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/Invoice'
+          required:
+            - records
+
+    PaginatedOrderTallies:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/OrderTally'
+          required:
+            - records
+
+    OrderTally:
+      type: object
+      properties:
+        reference:
+          type: string
+          description: 'Reference of this order tally. Should be the same than order reference.'
+        order:
+          $ref: '#/components/schemas/OrderLink'
+        seller:
+          $ref: '#/components/schemas/UserLink'
+        buyer:
+          $ref: '#/components/schemas/UserLink'
+        sellerCreditIncludingTaxes:
+          nullable: true
+          type: number
+          description: 'Seller credit including taxes. Null if no invoices in the tally yet.'
+        buyerDebitIncludingTaxes:
+          nullable: true
+          type: number
+          description: 'Buyer credit including taxes. Null if no invoices in the tally yet.'
+        invoices:
+          type: array
+          items:
+            $ref: '#/components/schemas/Invoice'
+      required:
+        - reference
+        - order
+        - sellerCreditIncludingTaxes
+        - buyerDebitIncludingTaxes
+        - invoices
+
+    Invoice:
+      description: "Note: There is currently no owner for invoice type 'EXTERNAL'."
+      type: object
+      properties:
+        type:
+          $ref: '#/components/schemas/InvoiceType'
+        reference:
+          type: string
+        owner:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/UserLink'
+        description:
+          type: string
+        chargeDate:
+          nullable: true
+          type: string
+          format: date
+          description: 'Date of the charge for this bill. Null if the bill have not been charged yet.'
+        totalExcludingTaxes:
+          type: number
+        totalIncludingTaxes:
+          type: number
+      required:
+        - type
+        - reference
+        - owner
+        - description
+        - chargeDate
+        - totalExcludingTaxes
+        - totalIncludingTaxes
+
+    InvoiceSummaryCreationParameters:
+      type: object
+      properties:
+        userId:
+          description: 'User Id to create summary for'
+          type: integer
+          format: int64
+        fromDate:
+          description: 'Start date to retrieve invoices (format YYYY-MM-DD)'
+          type: string
+          format: date
+        toDate:
+          description: 'End date to retrieve invoices (format YYYY-MM-DD)'
+          type: string
+          format: date
+      required:
+        - userId
+        - fromDate
+        - toDate
+
+    PlannedInvoiceLineCreationParameters:
+      type: object
+      properties:
+        userId:
+          description: 'User Id to create line for'
+          type: integer
+          format: int64
+        wording:
+          description: 'Wording of the invoice line'
+          type: string
+        totalExcludingTaxes:
+          description: 'Price excluding taxes to charge'
+          type: number
+      required:
+        - userId
+        - wording
+        - totalExcludingTaxes
+
+    PlannedInvoiceLine:
+      type: object
+      properties:
+        id:
+          description: 'Identifier for planned invoice line'
+          type: integer
+          format: int64
+        wording:
+          description: 'Wording of the invoice line'
+        chargedUser:
+          $ref: '#/components/schemas/UserLink'
+        totalExcludingTaxes:
+          description: 'Price excluding taxes to charge'
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+          description: 'Creation date of this order'
+      required:
+        - id
+        - wording
+        - createdAt
+        - totalExcludingTaxes
+        - chargedUser
+
+    PaginatedPlannedInvoiceLine:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/PlannedInvoiceLine'
+          required:
+            - records
+
+    OrderLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            reference:
+              type: string
+              description: 'Unique identifier for this order'
+            createdAt:
+              type: string
+              format: date-time
+              description: 'Creation date of this order'
+
+    UserLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'Id of the user'
+            nickname:
+              type: string
+              maxLength: 64
+              description: 'User nickname'
+            company:
+              type: object
+              description: 'Infos about the user company'
+              properties:
+                legalName:
+                  type: string
+                  nullable: true
+
+    InvoiceCreationParameters:
+      required:
+        - description
+        - totalExcludingTaxes
+      allOf:
+        - $ref: '#/components/schemas/InvoiceUpdateParameters'
+
+    InvoiceUpdateParameters:
+      type: object
+      properties:
+        description:
+          type: string
+          description: 'Description about purpose of the invoice'
+        totalExcludingTaxes:
+          type: number
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

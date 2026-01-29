@@ -1,0 +1,499 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP Laboratory Stores'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'SearchLaboratoryStore'
+    description: 'Get availables laboratory stores'
+  - name: 'ManageLaboratoryStore'
+    description: 'Manage laboratory stores'
+  - name: 'ManageLaboratoryStoreImage'
+    description: 'Upload or Delete image'
+paths:
+  /laboratory-stores:
+    get:
+      tags:
+        - 'SearchLaboratoryStore'
+      summary: 'Search laboratory stores'
+      operationId: 'getLaboratoryStores'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+          - SELLER_BUYER
+        capabilities:
+          - LABORATORY_READ
+      parameters:
+        - in: 'query'
+          name: 'q'
+          description: 'Laboratory name'
+          schema:
+            type: string
+        - in: 'query'
+          name: 'o[eq]'
+          description: 'Filter on owner id to include in the search (can be given multiple time which result in a OR condition)'
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'cat[eq]'
+          description: 'Laboratory category equal'
+          schema:
+            type: string
+            enum:
+              - MEDICAMENT
+              - PARAPHARMACIE
+              - VETERINAIRE
+              - COMPLEMENT
+              - DM
+        - in: 'query'
+          name: 'featured[eq]'
+          description: 'Laboratory is in front of the others'
+          schema:
+            type: 'boolean'
+        - in: 'query'
+          name: 'orderBy'
+          description: 'Sort by'
+          schema:
+            type: 'string'
+            enum: ['NAME:asc', 'NAME:desc']
+            default: 'NAME:asc'
+        - in: 'query'
+          name: 'p'
+          description: 'Page number'
+          schema:
+            type: 'integer'
+        - in: 'query'
+          name: 'pp'
+          description: 'Items per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'List of laboratory stores'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLaboratoryStores'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Not found'
+    post:
+      tags:
+        - 'ManageLaboratoryStore'
+      summary: 'Create new laboratory store'
+      operationId: 'createLaboratoryStore'
+      requestBody:
+        description: 'Object to use in order to create the laboratory store'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LaboratoryStoreCreationParameters'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaboratoryStore'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+
+  /laboratory-stores/{laboratoryStoreId}:
+    get:
+      tags:
+        - 'SearchLaboratoryStore'
+      summary: 'Get one laboratory store'
+      operationId: 'getLaboratoryStore'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+          - SELLER_BUYER
+        capabilities:
+          - LABORATORY_READ
+      parameters:
+        - $ref: '#/components/parameters/LaboratoryStoreIdParameter'
+      responses:
+        200:
+          description: 'Laboratory returned'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaboratoryStore'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Laboratory not found'
+    patch:
+      tags:
+        - 'ManageLaboratoryStore'
+      summary: 'Update partial selected laboratory store'
+      operationId: 'updateLaboratoryStore'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/LaboratoryStoreIdParameter'
+      requestBody:
+        description: 'Object to use in order to update the laboratory store'
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/LaboratoryStoreUpdateParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LaboratoryStore'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Laboratory page not found'
+
+  /laboratory-stores/{laboratoryStoreId}/cover:
+    put:
+      tags:
+        - 'ManageLaboratoryStoreImage'
+      summary: 'Upload an cover image'
+      operationId: 'createOrUpdateLaboratoryStoreCover'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+        capabilities:
+          - LABORATORY_READ
+      parameters:
+        - $ref: '#/components/parameters/LaboratoryStoreIdParameter'
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ImageCreationParameters'
+      responses:
+        200:
+          description: 'Image created or updated'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Image'
+        400:
+          description: 'Bad request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Laboratory or image tag not found'
+        413:
+          description: 'Image too large maximum allowed is 10 MB'
+        415:
+          description: 'Wrong media type'
+    delete:
+      tags:
+        - 'ManageLaboratoryStoreImage'
+      summary: 'Delete an cover image'
+      operationId: 'deleteLaboratoryStoreCover'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+        capabilities:
+          - LABORATORY_READ
+      parameters:
+        - $ref: '#/components/parameters/LaboratoryStoreIdParameter'
+      responses:
+        204:
+          description: 'Image deleted'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Laboratory or image tag not found'
+
+  /laboratory-stores/{laboratoryStoreId}/logo:
+    put:
+      tags:
+        - 'ManageLaboratoryStoreImage'
+      summary: 'Upload an logo image'
+      operationId: 'createOrUpdateLaboratoryStoreLogo'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+        capabilities:
+          - LABORATORY_READ
+      parameters:
+        - $ref: '#/components/parameters/LaboratoryStoreIdParameter'
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ImageCreationParameters'
+      responses:
+        200:
+          description: 'Image created or updated'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Image'
+        400:
+          description: 'Bad request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Laboratory or image tag not found'
+        413:
+          description: 'Image too large maximum allowed is 10 MB'
+        415:
+          description: 'Wrong media type'
+    delete:
+      tags:
+        - 'ManageLaboratoryStoreImage'
+      summary: 'Delete an logo image'
+      operationId: 'deleteLaboratoryStoreLogo'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+        capabilities:
+          - LABORATORY_READ
+      parameters:
+        - $ref: '#/components/parameters/LaboratoryStoreIdParameter'
+      responses:
+        204:
+          description: 'Image deleted'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Laboratory or image tag not found'
+
+components:
+  parameters:
+    LaboratoryStoreIdParameter:
+      in: path
+      name: laboratoryStoreId
+      required: true
+      description: The id of the laboratory page concerned by the request
+      schema:
+        type: integer
+        format: int64
+
+  schemas:
+    ########################
+    # Entities
+    ########################
+
+    LaboratoryType:
+      type: string
+      enum: ['MEDICAMENT', 'PARAPHARMACIE', 'VETERINAIRE', 'COMPLEMENT', 'DM']
+
+    DisplayType:
+      type: string
+      enum: ['LIST', 'PICTURE']
+
+    LaboratoryStoreCreationParameters:
+      required:
+        - name
+        - active
+      allOf:
+        - $ref: '#/components/schemas/LaboratoryStoreUpdateParameters'
+
+    LaboratoryStoreUpdateParameters:
+      type: object
+      properties:
+        ownerId:
+          type: integer
+          format: int64
+          description: 'Client owner of the laboratory page'
+        name:
+          type: string
+          description: 'Public name'
+        active:
+          type: boolean
+          description: 'Laboratory is active or not'
+        description:
+          type: string
+          description: 'Public description'
+        laboratoryType:
+          $ref: '#/components/schemas/LaboratoryType'
+        displayType:
+          $ref: '#/components/schemas/DisplayType'
+        canContact:
+          type: boolean
+          description: 'Can be contacted ?'
+        contactUsText:
+          type: string
+          description: 'Text on contact button'
+        informationMessage:
+          type: string
+          maxLength: 512
+          description: 'Custom text'
+        featured:
+          type: boolean
+          description: 'If true, will be displayed first'
+
+    PaginatedLaboratoryStores:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/LaboratoryStore'
+
+    LaboratoryStore:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 'Laboratory store id'
+        owner:
+          $ref: '#/components/schemas/OwnerLink'
+        name:
+          type: string
+          description: 'Public name'
+        description:
+          type: string
+          description: 'Public description'
+        type:
+          type: string
+          description: 'Laboratory store type'
+        featured:
+          type: boolean
+          description: 'If true, will be displayed first'
+        logo:
+          $ref: '#/components/schemas/Image'
+        cover:
+          $ref: '#/components/schemas/Image'
+        displayType:
+          $ref: '#/components/schemas/DisplayType'
+        canContact:
+          type: boolean
+          description: 'Active the contact button'
+        contactUsText:
+          type: string
+          description: 'Text on contact button'
+        informationMessage:
+          type: string
+          maxLength: 512
+          description: 'Custom text'
+        active:
+          type: boolean
+          description: 'Activated or not'
+
+    ImageCreationParameters:
+      type: object
+      properties:
+        image:
+          description: File to upload related to image type (Max 10 Mo)
+          type: string
+          format: binary
+      required:
+        - image
+
+    Image:
+      type: object
+      properties:
+        active:
+          type: boolean
+          description: 'Image is active'
+        versions:
+          $ref: 'common.yaml#/components/schemas/ImageVersions'
+
+    OwnerLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'Id of the owner'
+            nickname:
+              type: string
+              maxLength: 64
+              description: 'User nickname'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

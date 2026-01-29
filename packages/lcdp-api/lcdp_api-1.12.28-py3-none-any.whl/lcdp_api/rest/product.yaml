@@ -1,0 +1,1312 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'SearchProductMetadata'
+    description: "Get product's types"
+  - name: 'SearchProduct'
+    description: 'The product reader'
+  - name: 'ManageProduct'
+    description: 'The product update'
+  - name: 'SearchProductImage'
+    description: 'Search products images'
+  - name: 'ManageProductImage'
+    description: 'Modify products images'
+  - name: 'ManageProductProscription'
+    description: 'Modify product proscription'
+  - name: 'SearchProductProscription'
+    description: 'Search products proscription'
+paths:
+  # Product
+  /products/{productId}:
+    get:
+      tags:
+        - 'SearchProduct'
+      summary: 'Retrieve a product with ID'
+      operationId: 'getProduct'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/ProductIdParameter'
+      responses:
+        200:
+          description: 'Product found'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Product not found'
+    patch:
+      tags:
+        - 'ManageProduct'
+      summary: 'Update product from product form'
+      description: |
+        Administrator can update every fields (override allowed)
+        Other users can only update the following fields if empty :
+          - unitWeight
+          - vat
+          - unitPrice
+          - type
+      operationId: 'updateProduct'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/ProductIdParameter'
+        - $ref: '#/components/parameters/WithSyncParameter'
+      requestBody:
+        description: 'Modifications to apply'
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/ProductCreationOrUpdateParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Product not found'
+        409:
+          description: 'Product already exist'
+        503:
+          description: |
+            Service unavailable
+            When using header [X-With-Sync=true], this status code is returned if one of our external catalogs is unreachable.
+            Good practice is to retry your call after few seconds.
+
+  /products:
+    get:
+      tags:
+        - 'SearchProduct'
+      summary: 'Search for products with his name or status'
+      operationId: 'getProducts'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: query
+          name: 'q'
+          description: "Any field in the product contains 'q'"
+          schema:
+            type: string
+        - in: query
+          name: 'barcodes[anyeq]'
+          description: 'Any barcode that equal to values'
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          name: 'id[eq]'
+          description: Filter product by ids
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'st[eq]'
+          description: 'Filter on status to include in the search (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/ProductStatus'
+        - in: query
+          name: 'pt[eq]'
+          description: 'Product type to search on'
+          schema:
+            type: string
+        - in: query
+          name: 'spt[eq]'
+          description: 'Secondary product type to search on'
+          schema:
+            type: string
+        - in: query
+          name: 'lab[eq]'
+          description: 'Laboratory to search on (can be given multiple time which result in a OR condition)'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: query
+          name: 'name[ieq]'
+          description: Product name to search on (case insensitive)
+          schema:
+            type: string
+        - in: query
+          name: 'sWaitingSaleOfferCount[gte]'
+          description: 'Waiting sale offers count greater than or equal'
+          schema:
+            type: integer
+            format: int32
+        - in: query
+          name: 'srcLcdpCatalogId[eq]'
+          description: 'Filter on product where lcdp catalog id equal these ids'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'tags[co]'
+          description: 'Filter on tags contains this values'
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          name: 'orderBy'
+          description: Sort by
+          schema:
+            type: string
+            enum:
+              [
+                'NAME:asc',
+                'NAME:desc',
+                'BARCODES_PRINCIPAL:asc',
+                'BARCODES_PRINCIPAL:desc',
+                'UNIT_PRICE:asc',
+                'UNIT_PRICE:desc',
+                'TYPE:asc',
+                'TYPE:desc',
+                'VAT_VALUE:asc',
+                'VAT_VALUE:desc',
+                'LABORATORY_NAME:asc',
+                'LABORATORY_NAME:desc',
+                'UNIT_WEIGHT:asc',
+                'UNIT_WEIGHT:desc',
+                'STATUS:asc',
+                'STATUS:desc',
+                'CREATED_AT:desc',
+                'CREATED_AT:asc',
+              ]
+            default: 'CREATED_AT:desc'
+        - in: query
+          name: 'p'
+          description: 'Page number to search for (start at 0)'
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: 'pp'
+          description: 'Number of user per page'
+          schema:
+            type: integer
+            maximum: 30000
+            default: 30000
+            minimum: 0
+      responses:
+        200:
+          description: "Product's list found"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProducts'
+        403:
+          description: 'Access denied'
+        400:
+          description: 'Bad Request'
+
+    post:
+      tags:
+        - 'ManageProduct'
+      summary: 'Create product from product form'
+      description: |
+        Required parameter for creation of product from external provider:
+        - barcodes.principal
+
+        Required parameters for creation of product from scratch :
+         - name
+         - barcodes
+         - dci
+         - laboratoryId
+         - unitWeight
+         - vatId
+         - unitPrice
+         - typeId
+      operationId: 'createProduct'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/WithSyncParameter'
+      requestBody:
+        description: 'Product to add'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductCreationOrUpdateParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        400:
+          description: 'Bad request'
+        403:
+          description: 'Access denied'
+        409:
+          description: 'Product already exist'
+        404:
+          description: 'Object not found'
+        417:
+          description: 'Expectation failed'
+        503:
+          description: |
+            Service unavailable
+            When using header [X-With-Sync=true], this status code is returned if one of our external catalogs is unreachable.
+            Good practice is to retry your call after few seconds.
+
+  /products/{productId}/images:
+    get:
+      tags:
+        - 'SearchProductImage'
+      summary: "Return product's images"
+      operationId: 'getProductImages'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+          - SELLER_BUYER
+      parameters:
+        - $ref: '#/components/parameters/ProductIdParameter'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                type: 'array'
+                items:
+                  $ref: '#/components/schemas/Image'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Product not found'
+
+    post:
+      tags:
+        - 'ManageProductImage'
+      summary: 'Upload one or more images'
+      operationId: 'createProductImage'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/ProductIdParameter'
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ImageCreationParameters'
+      responses:
+        204:
+          description: 'successful operation'
+        404:
+          description: 'No product found'
+        403:
+          description: 'Bad request'
+        413:
+          description: 'Image too large maximum allowed is 10 MB'
+        415:
+          description: 'Wrong media type'
+
+  /products/{productId}/images/{imageId}:
+    get:
+      tags:
+        - 'SearchProductImage'
+      summary: "Return product's images"
+      operationId: 'getProductImage'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/ProductIdParameter'
+        - $ref: '#/components/parameters/ImageIdParameter'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Image'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Product not found'
+        400:
+          description: 'Bad Request'
+
+    delete:
+      tags:
+        - 'ManageProductImage'
+      summary: "Remove product's image"
+      operationId: 'deleteProductImage'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/ProductIdParameter'
+        - $ref: '#/components/parameters/ImageIdParameter'
+      responses:
+        204:
+          description: 'successful operation'
+        404:
+          description: 'No product found'
+        403:
+          description: 'Access denied'
+        400:
+          description: 'Bad Request'
+
+  /products/types:
+    get:
+      tags:
+        - 'SearchProductMetadata'
+      summary: 'Get product types'
+      operationId: 'getProductTypes'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      responses:
+        200:
+          description: "Product's types found"
+          content:
+            application/json:
+              schema:
+                type: 'array'
+                items:
+                  $ref: '#/components/schemas/ProductType'
+        403:
+          description: 'Access denied'
+
+  /products/types/{typeId}:
+    get:
+      tags:
+        - 'SearchProductMetadata'
+      summary: 'Get product type'
+      operationId: 'getProductType'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/TypeIdParameter'
+      responses:
+        200:
+          description: "Product's type found"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductType'
+        403:
+          description: 'Access denied'
+        404:
+          description: "Product's type not found"
+
+  /products/secondary-types:
+    get:
+      tags:
+        - 'SearchProductMetadata'
+      summary: 'Get product secondary types'
+      operationId: 'getProductSecondaryTypes'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      responses:
+        200:
+          description: "Product's types found"
+          content:
+            application/json:
+              schema:
+                type: 'array'
+                items:
+                  $ref: '#/components/schemas/ProductSecondaryType'
+        403:
+          description: 'Access denied'
+
+  /products/secondary-types/{secondaryTypeId}:
+    get:
+      tags:
+        - 'SearchProductMetadata'
+      summary: 'Get product secondary type'
+      operationId: 'getProductSecondaryType'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/SecondaryTypeIdParameter'
+      responses:
+        200:
+          description: "Product's secondary type found"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductSecondaryType'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Secondary Type not found'
+
+  /products/{productId}/proscriptions:
+    get:
+      tags:
+        - 'SearchProductProscription'
+      summary: 'Get product proscriptions'
+      operationId: 'getProductProscriptions'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/ProductIdParameter'
+        - in: 'query'
+          name: 'orderBy'
+          description: 'Sort by'
+          schema:
+            type: 'string'
+            enum:
+              ['BATCH:asc', 'BATCH:desc', 'CREATED_AT:asc', 'CREATED_AT:desc']
+            default: 'BATCH:asc'
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for (start at 0)'
+          schema:
+            type: integer
+            minimum: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of proscriptions per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProductProscriptions'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Product not found'
+    post:
+      tags:
+        - 'ManageProductProscription'
+      summary: 'Create a product proscription'
+      description: |
+        **! WARNING !** this method can change the status of one or more sales-offers
+      operationId: 'createProductProscription'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/ProductIdParameter'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductProscriptionCreationParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductProscription'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Product or Batch not found'
+        409:
+          description: 'Proscription already exist'
+
+  /products/{productId}/proscriptions/{proscriptionId}:
+    delete:
+      tags:
+        - 'ManageProductProscription'
+      summary: 'Delete this product proscription'
+      operationId: 'deleteProductProscription'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/ProductIdParameter'
+        - $ref: '#/components/parameters/ProductProscriptionIdParameter'
+      responses:
+        204:
+          description: 'successful operation'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Product or Proscription Id not found'
+
+components:
+  parameters:
+    ProductIdParameter:
+      in: path
+      name: productId
+      required: true
+      description: The id of the product concerned by the request
+      schema:
+        type: integer
+        format: int64
+
+    ImageIdParameter:
+      in: path
+      name: imageId
+      required: true
+      description: The id of the product image concerned by the request
+      schema:
+        type: integer
+        format: int64
+
+    ProductProscriptionIdParameter:
+      in: 'path'
+      name: 'proscriptionId'
+      required: true
+      description: The id of the product proscription
+      schema:
+        type: integer
+        format: int64
+
+    TypeIdParameter:
+      in: 'path'
+      name: 'typeId'
+      required: true
+      description: Product type identifier
+      schema:
+        type: string
+
+    SecondaryTypeIdParameter:
+      in: 'path'
+      name: 'secondaryTypeId'
+      required: true
+      description: Product secondary type identifier
+      schema:
+        type: string
+
+    WithSyncParameter:
+      in: 'header'
+      name: X-With-Sync
+      required: false
+      description: If true, will sync the product against catalogs
+      schema:
+        type: boolean
+        default: false
+
+  schemas:
+    ########################
+    # Entities
+    ########################
+
+    PaginatedProductProscriptions:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductProscription'
+          required:
+            - records
+
+    PaginatedProducts:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/Product'
+          required:
+            - records
+
+    ProductProscription:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        batch:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        source:
+          $ref: 'common.yaml#/components/schemas/DataProvider'
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        barcodes:
+          $ref: '#/components/schemas/Barcodes'
+        name:
+          type: string
+          maxLength: 255
+        shortName:
+          type: string
+          maxLength: 255
+          nullable: true
+        dci:
+          type: string
+          nullable: true
+        unitWeight:
+          type: number
+          minimum: 0.01
+          multipleOf: 0.01
+          nullable: true
+          description: 'Weight of a single unit in grams'
+        unitPrice:
+          type: number
+          nullable: true
+          description: 'Public price of the product'
+        unitPriceEffectiveDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: 'Date on which the unit price take effect'
+        type:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ProductType'
+        secondaryType:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ProductSecondaryType'
+        laboratory:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/LaboratoryLink'
+        vat:
+          nullable: true
+          allOf:
+            - $ref: 'configuration.yaml#/components/schemas/Vat'
+        narcoticPrescription:
+          type: boolean
+          nullable: true
+        storageType:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ProductStorageType'
+        status:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ProductStatus'
+        marketStatus:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ProductMarketStatus'
+        dispensationPlace:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ProductDispensationPlace'
+        isOtc:
+          type: boolean
+          nullable: true
+        isDrugInSport:
+          type: boolean
+          nullable: true
+        images:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        createdAt:
+          type: string
+          format: date-time
+          description: 'Creation date of this product'
+        statistics:
+          $ref: '#/components/schemas/Statistics'
+        restricted:
+          type: boolean
+          description: 'If True, can only be sold by LABORATORY. If False, it can be sold by anyone.'
+        proscriptions:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        tags:
+          type: array
+          description: 'Associated tags for this product'
+          items:
+            type: string
+        source:
+          $ref: '#/components/schemas/ProductSource'
+        journal:
+          $ref: '#/components/schemas/ProductJournal'
+      required:
+        - id
+        - barcodes
+        - name
+        - shortName
+        - dci
+        - unitWeight
+        - unitPrice
+        - unitPriceEffectiveDate
+        - type
+        - secondaryType
+        - laboratory
+        - vat
+        - narcoticPrescription
+        - storageType
+        - status
+        - marketStatus
+        - dispensationPlace
+        - isOtc
+        - isDrugInSport
+        - images
+        - createdAt
+        - statistics
+        - restricted
+        - proscriptions
+        - tags
+        - source
+        - journal
+
+    Statistics:
+      type: object
+      properties:
+        waitingSaleOfferCount:
+          type: integer
+          format: int32
+
+    Barcodes:
+      type: object
+      properties:
+        cip:
+          type: string
+          maxLength: 255
+          nullable: true
+        cip13:
+          type: string
+          maxLength: 255
+          nullable: true
+        eans:
+          type: array
+          items:
+            type: string
+            maxLength: 255
+          nullable: true
+        principal:
+          type: string
+          maxLength: 255
+          description: |
+            The principal is the referent barcode (for display, invoices, ...)
+
+    ProductType:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 'Id of the product type (machine name)'
+        name:
+          type: string
+          description: 'Readable name for display'
+
+    ProductSecondaryType:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 'Id of the product secondary type'
+        name:
+          type: string
+          description: 'Readable name for display'
+
+    Image:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 'Image identifier'
+        active:
+          type: boolean
+          description: 'Image is active'
+        versions:
+          $ref: 'common.yaml#/components/schemas/ImageVersions'
+        source:
+          $ref: 'common.yaml#/components/schemas/DataProvider'
+
+    ProductSource:
+      type: object
+      properties:
+        bcb:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+              format: int64
+              nullable: true
+            unitPrice:
+              type: number
+              nullable: true
+              description: 'Public price of the product'
+            unitPriceEffectiveDate:
+              type: string
+              format: date-time
+              nullable: true
+              description: 'Date on which the unit price take effect'
+          required:
+            - id
+        vidal:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+              format: int64
+              nullable: true
+            unitPrice:
+              type: number
+              nullable: true
+              description: 'Public price of the product'
+            unitPriceEffectiveDate:
+              type: string
+              format: date-time
+              nullable: true
+              description: 'Date on which the unit price take effect'
+          required:
+            - id
+        medipim:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              nullable: true
+          required:
+            - id
+        lcdpCatalog:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+              format: int64
+              nullable: true
+            unitPrice:
+              type: number
+              nullable: true
+              description: 'Public price of the product'
+            unitPriceEffectiveDate:
+              type: string
+              format: date-time
+              nullable: true
+              description: 'Date on which the unit price take effect'
+          required:
+            - id
+        fields:
+          $ref: '#/components/schemas/ProductSourceFields'
+      required:
+        - bcb
+        - vidal
+        - medipim
+        - lcdpCatalog
+        - fields
+
+    ProductSourceFields:
+      type: object
+      properties:
+        barcodes:
+          type: object
+          properties:
+            cip:
+              nullable: true
+              allOf:
+                - $ref: 'common.yaml#/components/schemas/DataProvider'
+            cip13:
+              nullable: true
+              allOf:
+                - $ref: 'common.yaml#/components/schemas/DataProvider'
+            eans:
+              nullable: true
+              allOf:
+                - $ref: 'common.yaml#/components/schemas/DataProvider'
+            principal:
+              nullable: true
+              allOf:
+                - $ref: 'common.yaml#/components/schemas/DataProvider'
+          required:
+            - cip
+            - cip13
+            - eans
+            - principal
+        name:
+          nullable: true
+          allOf:
+            - $ref: 'common.yaml#/components/schemas/DataProvider'
+        shortName:
+          nullable: true
+          allOf:
+            - $ref: 'common.yaml#/components/schemas/DataProvider'
+        dci:
+          nullable: true
+          allOf:
+            - $ref: 'common.yaml#/components/schemas/DataProvider'
+        unitWeight:
+          nullable: true
+          allOf:
+            - $ref: 'common.yaml#/components/schemas/DataProvider'
+        unitPrice:
+          nullable: true
+          allOf:
+            - $ref: 'common.yaml#/components/schemas/DataProvider'
+        unitPriceEffectiveDate:
+          nullable: true
+          allOf:
+            - $ref: 'common.yaml#/components/schemas/DataProvider'
+        type:
+          nullable: true
+          allOf:
+            - $ref: 'common.yaml#/components/schemas/DataProvider'
+        secondaryType:
+          nullable: true
+          allOf:
+            - $ref: 'common.yaml#/components/schemas/DataProvider'
+        laboratory:
+          nullable: true
+          allOf:
+            - $ref: 'common.yaml#/components/schemas/DataProvider'
+        vat:
+          nullable: true
+          allOf:
+            - $ref: 'common.yaml#/components/schemas/DataProvider'
+        narcoticPrescription:
+          nullable: true
+          allOf:
+            - $ref: 'common.yaml#/components/schemas/DataProvider'
+        storageType:
+          nullable: true
+          allOf:
+            - $ref: 'common.yaml#/components/schemas/DataProvider'
+        marketStatus:
+          nullable: true
+          allOf:
+            - $ref: 'common.yaml#/components/schemas/DataProvider'
+        dispensationPlace:
+          nullable: true
+          allOf:
+            - $ref: 'common.yaml#/components/schemas/DataProvider'
+        isOtc:
+          nullable: true
+          allOf:
+            - $ref: 'common.yaml#/components/schemas/DataProvider'
+        isDrugInSport:
+          nullable: true
+          allOf:
+            - $ref: 'common.yaml#/components/schemas/DataProvider'
+        tags:
+          type: array
+          items:
+            $ref: 'common.yaml#/components/schemas/DataProvider'
+      required:
+        - barcodes
+        - name
+        - shortName
+        - dci
+        - unitWeight
+        - unitPrice
+        - unitPriceEffectiveDate
+        - type
+        - secondaryType
+        - laboratory
+        - vat
+        - narcoticPrescription
+        - storageType
+        - marketStatus
+        - dispensationPlace
+        - isOtc
+        - isDrugInSport
+        - tags
+
+    ProductJournal:
+      type: object
+      description: Journal of the product
+      properties:
+        lastSyncedDate:
+          nullable: true
+          type: string
+          format: date-time
+          description: 'Last synced date for this product'
+      required:
+        - lastSyncedDate
+
+    ########################
+    # Enums
+    ########################
+
+    ProductStorageType:
+      type: string
+      enum: ['FREE', 'FRIDGE', 'FREEZER', 'FRESH']
+
+    ProductStatus:
+      type: string
+      enum:
+        [
+          'VALIDATED',
+          'WAITING_FOR_VALIDATION',
+          'ARCHIVED',
+          'UNIT_PRICE_UPDATED',
+        ]
+
+    ProductMarketStatus:
+      type: string
+      enum:
+        [
+          'AVAILABLE',
+          'DELETED',
+          'PHARMACO',
+          'NEW',
+          'DELETED_ONEYEAR',
+          'PHARMACO_ONEYEAR',
+        ]
+
+    ProductDispensationPlace:
+      type: string
+      enum: ['PHARMACY', 'HOSPITAL']
+
+    ########################
+    # Parameters
+    ########################
+
+    ProductCreationOrUpdateParameters:
+      type: object
+      properties:
+        barcodes:
+          $ref: '#/components/schemas/Barcodes'
+        name:
+          type: string
+          maxLength: 255
+        shortName:
+          type: string
+          maxLength: 255
+          nullable: true
+        dci:
+          type: string
+          nullable: true
+        unitWeight:
+          type: number
+          minimum: 0.01
+          multipleOf: 0.01
+          nullable: true
+          description: 'Weight of a single unit in grams'
+        unitPrice:
+          type: number
+          nullable: true
+          description: 'Public price of the product'
+        unitPriceEffectiveDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: 'Date on which the unit price take effect'
+        typeId:
+          type: string
+          nullable: true
+          description: 'Product Type Identifier'
+        secondaryTypeId:
+          type: string
+          nullable: true
+          description: 'Product Secondary Type Identifier'
+        laboratoryId:
+          type: integer
+          format: int64
+          nullable: true
+          description: 'Laboratory ID'
+        vatId:
+          type: string
+          nullable: true
+          description: 'VAT identifier'
+        narcoticPrescription:
+          type: boolean
+          nullable: true
+        storageType:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ProductStorageType'
+        marketStatus:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ProductMarketStatus'
+        status:
+          $ref: '#/components/schemas/ProductStatus'
+        dispensationPlace:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ProductDispensationPlace'
+        isOtc:
+          type: boolean
+        isDrugInSport:
+          type: boolean
+          nullable: true
+        tags:
+          description: Associated tags of the product
+          type: array
+          items:
+            type: string
+
+    ImageCreationParameters:
+      type: object
+      properties:
+        images:
+          description: File to upload related to image type (Max 10 Mo)
+          type: array
+          items:
+            type: string
+            format: binary
+          minItems: 1
+
+    ProductProscriptionCreationParameters:
+      type: object
+      properties:
+        batch:
+          type: string
+          description: The batch value
+
+    ########################
+    # Links
+    ########################
+
+    LaboratoryLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'Identifier of the laboratory'
+            name:
+              type: string
+              description: 'Name of the laboratory'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

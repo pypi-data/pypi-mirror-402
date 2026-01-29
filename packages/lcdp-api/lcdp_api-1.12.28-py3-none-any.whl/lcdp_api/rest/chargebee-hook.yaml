@@ -1,0 +1,81 @@
+# Auth Based on OAuth 2.0
+# https://tools.ietf.org/html/rfc6749
+
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP Chargebee hook'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'chargebeeHook'
+    description: 'Chargebee webhook : https://apidocs.chargebee.com/docs/api/webhooks'
+paths:
+  /chargebee-hooks:
+    post:
+      tags:
+        - 'chargebeeHook'
+      summary: 'Call chargebee hook'
+      description: ''
+      operationId: 'hook'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - event_type
+                - id
+              properties:
+                api_version:
+                  type: string
+                  description: 'API version (e.g., v2)'
+                event_type:
+                  type: string
+                  description: 'Event type (e.g., subscription_created, customer_updated)'
+                id:
+                  type: string
+                  description: 'Unique event identifier'
+                object:
+                  type: string
+                  description: 'Object type (e.g., event)'
+                occurred_at:
+                  type: integer
+                  description: 'Event timestamp (epoch seconds)'
+                source:
+                  type: string
+                  description: 'Event source (e.g., admin_console, api)'
+                user:
+                  type: string
+                  description: 'User who triggered the event'
+                webhook_status:
+                  type: string
+                  description: 'Webhook status (e.g., scheduled)'
+                content:
+                  type: object
+                  description: 'Event-specific content containing customer, subscription, etc.'
+                webhooks:
+                  type: array
+                  description: 'List of webhooks'
+                  items:
+                    type: object
+      responses:
+        200:
+          description: 'Chargebee hook'
+        5XX:
+          description: 'Server error'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'

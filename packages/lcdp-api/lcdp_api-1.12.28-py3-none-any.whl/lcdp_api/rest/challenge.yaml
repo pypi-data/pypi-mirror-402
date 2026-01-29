@@ -1,0 +1,79 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: manageChallenges
+    description: Manage challenges
+paths:
+  /challenges:
+    post:
+      summary: 'Create challenge'
+      tags:
+        - manageChallenges
+      operationId: createChallenge
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      requestBody:
+        required: true
+        description: 'Create a new challenge for action'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChallengeAction'
+      responses:
+        200:
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Challenge'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+
+components:
+  schemas:
+    ChallengeAction:
+      type: object
+      properties:
+        action:
+          type: string
+          description: 'Challenge actions'
+          enum:
+            - CREATE_MANDATE
+    Challenge:
+      type: object
+      properties:
+        reference:
+          type: string
+          description: 'Unique reference of the challenge'
+        action:
+          $ref: '#/components/schemas/ChallengeAction'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

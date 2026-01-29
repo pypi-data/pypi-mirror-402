@@ -1,0 +1,681 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'ManageNotificationType'
+    description: ''
+  - name: 'SearchNotificationType'
+    description: ''
+  - name: 'ManageNotification'
+    description: ''
+  - name: 'SearchNotification'
+    description: ''
+paths:
+  /notifications/{notificationId}:
+    get:
+      tags:
+        - 'SearchNotification'
+      summary: 'Get notification link'
+      operationId: 'getNotification'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: 'path'
+          name: 'notificationId'
+          required: true
+          schema:
+            type: 'integer'
+            format: 'int64'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        403:
+          description: 'Access denied'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        404:
+          description: 'Notification not found'
+    patch:
+      tags:
+        - 'ManageNotification'
+      summary: 'Mark notification as readed or viewed'
+      operationId: 'updateNotification'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: 'path'
+          name: 'notificationId'
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        description: 'Modifications to apply to selected items'
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/NotificationUpdateParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        403:
+          description: 'Access denied'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        404:
+          description: 'Notification not found'
+
+  /notifications:
+    get:
+      tags:
+        - 'SearchNotification'
+      summary: 'Request all notifications'
+      description: ''
+      operationId: 'getNotifications'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: 'query'
+          name: 'type[eq]'
+          description: 'Filter on notification type'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/NotificationTypeId'
+        - in: 'query'
+          name: 'res[co]'
+          description: 'Filter on recipients in this value'
+          schema:
+            type: integer
+            format: int64
+        - in: 'query'
+          name: 'isr[eq]'
+          description: 'Filter on isRead equals this value'
+          schema:
+            type: boolean
+        - in: 'query'
+          name: 'v[eq]'
+          description: 'Filter on viewed equals this value'
+          schema:
+            type: boolean
+        - in: 'query'
+          name: 'orderBy'
+          description: Sort by
+          schema:
+            type: string
+            enum: ['CREATED_AT:asc', 'CREATED_AT:desc']
+            default: 'CREATED_AT:desc'
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for'
+          schema:
+            type: integer
+            minimum: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of notifications per page. Tip : Set 0 to get only metadata.'
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 50
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedNotifications'
+        403:
+          description: 'Access denied'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+    patch:
+      tags:
+        - 'ManageNotification'
+      summary: 'Update a list of notifications in one call'
+      operationId: 'updateNotifications'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: 'query'
+          name: 'type[eq]'
+          description: 'Filter on notification type'
+          required: false
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/NotificationTypeId'
+        - in: 'query'
+          name: 'res[co]'
+          description: 'Filter on recipients in this value'
+          required: false
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        description: 'Modifications to apply to selected items'
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/NotificationUpdateParameters'
+      responses:
+        204:
+          description: 'successful operation'
+        403:
+          description: 'Access denied'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+
+  /notifications/types:
+    get:
+      tags:
+        - 'SearchNotificationType'
+      summary: 'Search notifications types'
+      operationId: 'getNotificationTypes'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - in: 'query'
+          name: 'id[eq]'
+          description: 'Filter on notification id'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/NotificationTypeId'
+        - in: 'query'
+          name: 'e[eq]'
+          description: 'Filter on notification enabled'
+          schema:
+            type: boolean
+        - in: 'query'
+          name: 'orderBy'
+          description: Sort by
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                [
+                  'NAME:asc',
+                  'NAME:desc',
+                  'DAYS_BEFORE_REVIVAL:asc',
+                  'DAYS_BEFORE_REVIVAL:desc',
+                  'WEIGHT:asc',
+                  'WEIGHT:desc',
+                ]
+            default: ['NAME:desc']
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for'
+          schema:
+            type: integer
+            minimum: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of notifications types per page'
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 50
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedNotificationTypes'
+        403:
+          description: 'Access denied'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+
+  /notifications/types/{notificationTypeId}:
+    get:
+      tags:
+        - 'SearchNotificationType'
+      summary: 'Get one notification type'
+      operationId: 'getNotificationType'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/NotificationTypeIdParameter'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationType'
+        403:
+          description: 'Access denied'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        404:
+          description: 'Notification type not found'
+    patch:
+      tags:
+        - 'ManageNotificationType'
+      summary: 'Update notification type'
+      operationId: 'updateNotificationType'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/NotificationTypeIdParameter'
+      requestBody:
+        description: 'Modifications to apply'
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/NotificationTypeUpdateParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationType'
+        403:
+          description: 'Access denied'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        404:
+          description: 'Notification type not found'
+
+  /notifications/types/{notificationTypeId}/attachments:
+    post:
+      tags:
+        - 'ManageNotificationType'
+      summary: 'Upload new attachment'
+      operationId: 'createNotificationTypeAttachment'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/NotificationTypeIdParameter'
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/NotificationTypeAttachmentCreationParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationTypeAttachment'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Notification type not found'
+
+  /notifications/types/{notificationTypeId}/attachments/{attachmentId}:
+    get:
+      tags:
+        - 'SearchNotificationType'
+      summary: 'Get an attachment'
+      operationId: 'getNotificationTypeAttachment'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/NotificationTypeIdParameter'
+        - $ref: '#/components/parameters/NotificationTypeAttachmentIdParameter'
+      responses:
+        200:
+          description: 'successful operation'
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename=myFile.pdf'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationTypeAttachment'
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        404:
+          description: 'Notification type not found'
+        403:
+          description: 'Access denied'
+
+    delete:
+      tags:
+        - 'ManageNotificationType'
+      summary: 'Delete attachment'
+      operationId: 'deleteNotificationTypeAttachment'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/NotificationTypeIdParameter'
+        - $ref: '#/components/parameters/NotificationTypeAttachmentIdParameter'
+      responses:
+        204:
+          description: 'successful operation'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        404:
+          description: 'Notification type not found'
+        403:
+          description: 'Access denied'
+
+components:
+  parameters:
+    NotificationTypeIdParameter:
+      in: 'path'
+      name: 'notificationTypeId'
+      required: true
+      description: The id of the notification type concerned by the request (Must be a NotificationTypeId)
+      schema:
+        $ref: '#/components/schemas/NotificationTypeId'
+
+    NotificationTypeAttachmentIdParameter:
+      in: 'path'
+      name: 'attachmentId'
+      required: true
+      description: The id of the attachment concerned by the request
+      schema:
+        type: integer
+        format: int64
+
+  schemas:
+    PaginatedNotifications:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/Notification'
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        type:
+          $ref: '#/components/schemas/NotificationType'
+        recipients:
+          type: array
+          items:
+            $ref: 'common.yaml#/components/schemas/HttpLink'
+        duration:
+          type: string
+        viewed:
+          type: boolean
+        isRead:
+          type: boolean
+        target:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation date of this notification
+        metadata:
+          description: Metadata about this notification
+          type: object
+
+    NotificationTypeId:
+      type: string
+      description: 'Notification type name'
+      enum:
+        - AD_ARCHIVED
+        - AD_ARCHIVED_BY_ADMIN
+        - AD_DAILY_MAIL
+        - AD_EXPIRED
+        - AD_PRICE_UPDATE_ACCEPTED
+        - AD_PRICE_UPDATE_REFUSED
+        - AD_SOLD_OUT
+        - AD_VALIDATED
+        - AD_WISHLIST_LINE
+        - AD_WISHLIST_LINE_FAVORITE
+        - CLIENT_CREDIT_CARD_EXPIRATION
+        - CLIENT_FIRST_AD
+        - CLIENT_FIRST_BUY
+        - CLIENT_FIRST_SALE
+        - CLIENT_HAS_A_REQUEST
+        - CLIENT_SUBSCRIPTION_VALIDATED
+        - CLIENT_TEST_ACCOUNT_EXPIRED
+        - CLIENT_WAITING_FOR_VALIDATION
+        - DOCUMENT_EXPIRE
+        - GLOBAL_COMMISSION_INVOICE
+        - GLOBAL_COMMISSION_CREDIT_NOTE_INVOICE
+        - MONTHLY_EMAIL_FOR_ACCOUNTANT
+        - ORDER_ACCEPTATION_DELAY
+        - ORDER_ACCEPTED
+        - ORDER_ARCHIVED_BUYER
+        - ORDER_CANCELED_BUYER
+        - ORDER_CANCELED_SELLER
+        - ORDER_CREATED_BUYER
+        - ORDER_CREATED_SELLER
+        - ORDER_DAILY_MAIL
+        - ORDER_MODIFIED
+        - ORDER_MODIFICATION_DELAY
+        - ORDER_MODIFICATION_ACCEPTED_SELLER
+        - ORDER_MODIFICATION_REJECTED_SELLER
+        - ORDER_RECEIVED
+        - ORDER_SENDING_DELAY
+        - ORDER_SENT_BUYER
+        - ORDER_LABORATORY_DAILY_MAIL
+        - ORDER_VALIDATED_BUYER
+        - ORDER_VALIDATED_SELLER
+        - OFFISANTE_SIGN_REQUEST
+        - REQUEST_FOR_ORDER_INVOICE
+        - CLIENT_BADGE_RECEIVED
+        - CLIENT_BADGE_LOST
+        - CLIENT_BADGE_INCENTIVE
+        - CLIENT_ENROLLMENT_REQUIRED
+
+    NotificationUpdateParameters:
+      type: object
+      properties:
+        isRead:
+          type: boolean
+        viewed:
+          type: boolean
+
+    PaginatedNotificationTypes:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/NotificationType'
+
+    NotificationType:
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/NotificationTypeId'
+        name:
+          type: string
+          description: Readable name
+        subject:
+          type: string
+          description: Alert email subject
+        contentTemplate:
+          type: string
+          description: Alert email content template
+        enabled:
+          type: boolean
+          description: Alert is enabled
+        daysBeforeRevival:
+          type: integer
+          description: Days before revival
+        weight:
+          type: integer
+          description: Weight of the alert
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationTypeAttachment'
+        templatePlaceholders:
+          type: array
+          items:
+            type: string
+          description: Templates placeholders
+
+    NotificationTypeAttachment:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+          description: document name
+        mimeType:
+          type: string
+          description: Mime-type of the attachment
+        creationDate:
+          type: string
+          format: date-time
+        updateDate:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int32
+
+    NotificationTypeUpdateParameters:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Readable name
+        subject:
+          type: string
+          description: Alert email subject
+        contentTemplate:
+          type: string
+          description: Alert email content template
+        enabled:
+          type: boolean
+          description: Alert is enabled
+        daysBeforeRevival:
+          type: integer
+          description: Days before revival
+        weight:
+          type: integer
+          description: Weight of the alert
+
+    NotificationTypeAttachmentCreationParameters:
+      type: object
+      properties:
+        upload:
+          description: File to upload related to notification type
+          type: string
+          format: binary
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

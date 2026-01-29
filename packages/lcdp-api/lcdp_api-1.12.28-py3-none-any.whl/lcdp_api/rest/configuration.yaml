@@ -1,0 +1,334 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'ManageVariable'
+    description: 'Modify variables'
+  - name: 'SearchVariable'
+    description: 'Get variables'
+  - name: 'ManageVat'
+    description: 'Modify Vats'
+  - name: 'SearchVat'
+    description: 'Get Vats'
+paths:
+  /variables:
+    get:
+      tags:
+        - 'SearchVariable'
+      summary: 'Get all variables'
+      operationId: 'getVariables'
+      responses:
+        200:
+          description: 'Succeed'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Variable'
+        403:
+          description: 'Access denied'
+    post:
+      tags:
+        - 'ManageVariable'
+      summary: 'Create new variable'
+      description: |
+        Important Note : 
+          - Only variabledId prefixed by 'free.carriage.threshold.*' and 'free.carriage.monthly.*' can be created.
+      operationId: 'createVariable'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      requestBody:
+        description: 'Variable to create'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VariableCreationParameters'
+      responses:
+        201:
+          description: 'Created'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Variable'
+        403:
+          description: 'Access denied'
+        400:
+          description: 'Bad request'
+        409:
+          description: 'Variable already exists'
+
+  /variables/{variableId}:
+    get:
+      tags:
+        - 'SearchVariable'
+      summary: 'Get variable value'
+      operationId: 'getVariable'
+      parameters:
+        - $ref: '#/components/parameters/VariableIdParameter'
+      responses:
+        200:
+          description: 'Succeed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Variable'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Variable name not found'
+    delete:
+      tags:
+        - 'ManageVariable'
+      summary: 'Delete existing variable'
+      description: |
+        Important Note : 
+          - Only variabledId prefixed by 'free.carriage.threshold.*' and 'free.carriage.monthly.*' can be deleted.
+      operationId: 'deleteVariable'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/VariableIdParameter'
+      responses:
+        204:
+          description: 'Variable deleted'
+        403:
+          description: 'Access denied or variable cant be deleted (see description)'
+        404:
+          description: 'Variable not found'
+
+  /variables/{variableId}/value:
+    put:
+      tags:
+        - 'ManageVariable'
+      summary: 'Update variable value'
+      operationId: 'setVariableValue'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/VariableIdParameter'
+      requestBody:
+        description: 'New variable value'
+        required: true
+        content:
+          application/json:
+            schema:
+              type: string
+      responses:
+        204:
+          description: 'Succeed'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Variable not found'
+        400:
+          description: 'Bad request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+
+  /vats:
+    get:
+      tags:
+        - 'SearchVat'
+      summary: 'Get all vats'
+      operationId: 'getVats'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      responses:
+        200:
+          description: 'Succeed'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Vat'
+        403:
+          description: 'Access denied'
+
+  /vats/{vatId}:
+    get:
+      tags:
+        - 'SearchVat'
+      summary: 'Get a specific VAT'
+      operationId: 'getVat'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/VatIdParameter'
+      responses:
+        200:
+          description: 'Succeed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vat'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Vat not found'
+    delete:
+      tags:
+        - 'ManageVat'
+      summary: 'Delete existing Vat'
+      operationId: 'deleteVat'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/VatIdParameter'
+      responses:
+        204:
+          description: 'Succeed'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Vat not found'
+
+  /vats/{vatId}/value:
+    put:
+      tags:
+        - 'ManageVat'
+      summary: 'Update specific VAT value'
+      operationId: 'setVatValue'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - $ref: '#/components/parameters/VatIdParameter'
+      requestBody:
+        description: 'New Vat value'
+        required: true
+        content:
+          application/json:
+            schema:
+              type: number
+      responses:
+        200:
+          description: 'Succeed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vat'
+        400:
+          description: 'Bad request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Vat not found'
+
+components:
+  parameters:
+    VariableIdParameter:
+      in: path
+      name: variableId
+      required: true
+      description: Variable identifier
+      schema:
+        type: string
+
+    VatIdParameter:
+      in: path
+      name: vatId
+      required: true
+      description: Vat identifier
+      schema:
+        type: string
+
+  schemas:
+    ########################
+    # Entities
+    ########################
+
+    VariableCreationParameters:
+      $ref: '#/components/schemas/Variable'
+
+    Variable:
+      type: object
+      properties:
+        id:
+          description: variable identifier
+          type: string
+        value:
+          description: variable value
+          type: string
+      required:
+        - id
+        - value
+
+    Vat:
+      type: object
+      properties:
+        id:
+          description: Vat Id
+          type: string
+        name:
+          description: Vat name
+          type: string
+        value:
+          description: Vat value
+          type: number
+      required:
+        - id
+        - name
+        - value
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

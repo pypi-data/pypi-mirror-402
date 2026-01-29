@@ -1,0 +1,289 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: manageMandates
+    description: Manage mandates
+paths:
+  /mandates:
+    post:
+      summary: 'Create mandate for a specific user'
+      tags:
+        - manageMandates
+      operationId: createMandate
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+          - SELLER_BUYER
+      requestBody:
+        required: true
+        description: 'Request mandate creation with challenge'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MandateCreationParameters'
+      responses:
+        201:
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mandate'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+        409:
+          description: 'Mandate already exist'
+        503:
+          description: 'Service unavailable'
+
+  /mandates/{mandateId}:
+    get:
+      summary: 'Get mandate identified by mandate id'
+      tags:
+        - manageMandates
+      operationId: getMandate
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/MandateIdParameter'
+      responses:
+        200:
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mandate'
+        404:
+          description: 'Mandate not found'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+
+    delete:
+      summary: 'Delete mandate for a specific user'
+      tags:
+        - manageMandates
+      operationId: deleteMandate
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - $ref: '#/components/parameters/MandateIdParameter'
+      responses:
+        204:
+          description: Successful operation
+        400:
+          description: 'Bad Request'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+
+  /mandates/me:
+    get:
+      summary: 'Get mandate identified by current user'
+      tags:
+        - manageMandates
+      operationId: getCurrentMandate
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      responses:
+        200:
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mandate'
+        404:
+          description: 'Mandate not found'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+
+    delete:
+      summary: 'Delete mandate for current user'
+      tags:
+        - manageMandates
+      operationId: deleteCurrentMandate
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      responses:
+        204:
+          description: Successful operation
+        400:
+          description: 'Bad Request'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+
+  /mandate-challenges:
+    post:
+      summary: |
+        Create mandate challenge for a given user and client bank account
+        The user should be redirect at the url receive in response of this request.
+        Then call createMandate to create user mandate
+      tags:
+        - manageMandates
+      operationId: createMandateChallenge
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      requestBody:
+        required: true
+        description: 'Create a mandate challenge for a specific client bank account'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MandateChallengeCreationParameters'
+      responses:
+        201:
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MandateChallenge'
+        401:
+          description: 'Unauthorized'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'User not found'
+        503:
+          description: 'Service unavailable'
+
+components:
+  parameters:
+    MandateIdParameter:
+      in: path
+      name: mandateId
+      description: 'Mandate id, match user id'
+      required: true
+      schema:
+        type: integer
+        format: int64
+
+    MandateChallengeIdParameter:
+      in: path
+      name: mandateChallengeId
+      description: 'Mandate challenge id, match user id'
+      required: true
+      schema:
+        type: integer
+        format: int64
+
+  schemas:
+    MandateCreationParameters:
+      type: object
+      properties:
+        userId:
+          description: 'User id for which the link url will be generated'
+          type: integer
+          format: int64
+        challengeId:
+          description: 'Challenge unique identifier'
+          type: string
+        mangopayId:
+          description: 'Mangopay mandate identifier linked to this mandate'
+          type: string
+      required:
+        - userId
+        - challengeId
+        - mangopayId
+
+    MandateChallengeCreationParameters:
+      type: object
+      properties:
+        mangopayBankAccountId:
+          type: string
+          description: 'Mangopay bank account id'
+      required:
+        - mangopayBankAccountId
+
+    MandateChallenge:
+      allOf:
+        - $ref: 'challenge.yaml#/components/schemas/Challenge'
+        - type: 'object'
+          properties:
+            url:
+              type: string
+              description: 'Redirecting url to the mandate'
+          required:
+            - url
+
+    Mandate:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 'Unique identifier of the mandate'
+        mangopayId:
+          type: string
+          description: 'Mangopay unique identifier linked to this mandate'
+        status:
+          type: string
+          description: 'Mandate status'
+          enum: ['CREATED', 'SUBMITTED', 'ACTIVE', 'EXPIRED', 'FAILED']
+        url:
+          description: 'Url to the mandate'
+          type: string
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

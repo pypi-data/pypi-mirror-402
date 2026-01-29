@@ -1,0 +1,319 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'SearchLexicon'
+    description: 'Search in business LCDP dictionary'
+  - name: 'ManageLexicon'
+    description: 'Manage business LCDP dictionary'
+paths:
+  /pharmacy-software:
+    get:
+      tags:
+        - 'SearchLexicon'
+      summary: 'List all available software'
+      operationId: 'getPharmacySoftware'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - in: 'query'
+          name: 'name[sw]'
+          schema:
+            type: 'string'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                type: 'array'
+                items:
+                  $ref: '#/components/schemas/PharmacySoftware'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+
+  /pharmacy-groups:
+    get:
+      tags:
+        - 'SearchLexicon'
+      summary: 'List all availables groups'
+      operationId: 'getPharmacyGroups'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - in: 'query'
+          name: 'name[sw]'
+          schema:
+            type: 'string'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                type: 'array'
+                items:
+                  $ref: '#/components/schemas/PharmacyGroup'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+
+  /pharmacy-locations:
+    get:
+      tags:
+        - 'SearchLexicon'
+      summary: 'List all availables location'
+      operationId: 'getPharmacyLocations'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                type: 'array'
+                items:
+                  $ref: '#/components/schemas/PharmacyLocation'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+
+  /tags:
+    get:
+      tags:
+        - 'SearchLexicon'
+      summary: 'List of all available tags'
+      operationId: 'getTags'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - in: 'query'
+          name: 'name[sw]'
+          description: 'Name start with'
+          schema:
+            type: string
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for (start at 0)'
+          required: false
+          schema:
+            type: 'integer'
+            minimum: 0
+            default: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of items per page'
+          required: false
+          schema:
+            type: 'integer'
+            maximum: 50
+            minimum: 0
+            default: 10
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTags'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+
+    post:
+      tags:
+        - 'ManageLexicon'
+      summary: 'Create a new tag'
+      description: |
+        Tag should be register in this API to be reuse more easely
+        Preconditions :
+          - Tag should not be null or an empty string
+          - Tag should be less than 25 characters
+      operationId: 'createTag'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      requestBody:
+        description: 'Name of the tag to create'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagCreationParameters'
+      responses:
+        200:
+          description: 'successful operation'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tag'
+        400:
+          description: 'Bad Request'
+        403:
+          description: 'Access denied'
+        409:
+          description: 'Tag already exist'
+        412:
+          description: 'Precondition failed'
+
+  /tags/{tagId}:
+    delete:
+      tags:
+        - 'ManageLexicon'
+      summary: 'Delete a tag'
+      operationId: 'deleteTag'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+      parameters:
+        - in: path
+          required: true
+          name: 'tagId'
+          description: 'Tag unique Identifier'
+          schema:
+            type: 'integer'
+            format: 'int64'
+      responses:
+        204:
+          description: 'successful operation'
+        400:
+          description: 'Bad Request'
+        404:
+          description: 'Not found'
+        403:
+          description: 'Access denied'
+
+components:
+  schemas:
+    ########################
+    # Entities
+    ########################
+
+    PharmacySoftware:
+      type: object
+      properties:
+        id:
+          description: Software's ID
+          type: integer
+          format: int64
+        name:
+          description: Software's name
+          type: string
+
+    PharmacyGroup:
+      type: object
+      properties:
+        id:
+          description: Group's ID
+          type: integer
+          format: int64
+        name:
+          description: Group's name
+          type: string
+
+    PharmacyLocation:
+      type: object
+      properties:
+        id:
+          description: Location's ID
+          type: integer
+          format: int64
+        name:
+          description: Location's name
+          type: string
+
+    TagCreationParameters:
+      type: object
+      properties:
+        name:
+          description: Unique name of the tag
+          type: string
+
+    Tag:
+      type: object
+      properties:
+        id:
+          description: Unique identifier of the tag
+          type: integer
+          format: int64
+        name:
+          description: Unique name of the tag
+          type: string
+
+    PaginatedTags:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/Tag'
+          required:
+            - records
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

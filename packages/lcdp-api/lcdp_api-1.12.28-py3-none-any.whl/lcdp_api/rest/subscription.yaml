@@ -1,0 +1,131 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'SearchSubscriptions'
+    description: 'Search in subscriptions'
+paths:
+  /subscriptions:
+    get:
+      tags:
+        - 'SearchSubscriptions'
+      summary: 'Get subscriptions'
+      operationId: 'getSubscriptions'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+          - LABORATORY
+      parameters:
+        - in: 'query'
+          name: 'ownerId[eq]'
+          description: Targeted user
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: 'Success'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscriptions'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'User not found'
+
+components:
+  schemas:
+    Subscriptions:
+      type: array
+      items:
+        $ref: '#/components/schemas/Subscription'
+
+    Subscription:
+      type: object
+      properties:
+        familyId:
+          type: string
+        familyName:
+          type: string
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/SubscriptionStatus'
+        startDate:
+          type: string
+          format: date-time
+          description: Date of the scheduled start, only present if subscription status is FUTURE
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Will be null if subscription is in the future
+        nextBillingAt:
+          type: string
+          format: date-time
+        currentTermEnd:
+          type: string
+          format: date-time
+        trialStart:
+          type: string
+          format: date-time
+        trialEnd:
+          type: string
+          format: date-time
+      required:
+        - familyId
+        - familyName
+        - name
+        - status
+        - startedAt
+
+    SubscriptionStatus:
+      type: string
+      description: |
+        Status of the subscription
+          - FUTURE: The subscription is scheduled to start at a future date.
+          - IN_TRIAL: The subscription is in trial.
+          - ACTIVE: The subscription is active and will be charged for automatically based on the items in it.
+          - NON_RENEWING: The subscription will be canceled at the end of the current term.
+          - PAUSED: The subscription is paused. The subscription will not renew while in this state.
+          - CANCELLED: The subscription has been canceled and is no longer in service.
+          - TRANSFERRED: The subscription has been transferred to another business entity within the organization.
+          - _UNKNOWN: Indicates unexpected value for this enum.
+      enum:
+        - FUTURE
+        - IN_TRIAL
+        - ACTIVE
+        - NON_RENEWING
+        - PAUSED
+        - CANCELLED
+        - TRANSFERRED
+        - _UNKNOWN
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

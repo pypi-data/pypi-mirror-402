@@ -1,0 +1,604 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'SearchProductEnthusiasm'
+    description: 'Get available product enthusiasms'
+  - name: 'SearchWish'
+    description: 'Get available wishes'
+  - name: 'ManageWish'
+    description: 'Create / Update a wish'
+paths:
+  /product-enthusiams:
+    get:
+      tags:
+        - 'SearchProductEnthusiasm'
+      summary: 'Search enthusiasm for products'
+      operationId: 'getProductEnthusiasms'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - in: 'query'
+          name: 'totalQuantity[gt]'
+          description: 'Product enthusiasms where total quantity is greater than'
+          schema:
+            type: integer
+        - in: 'query'
+          name: 'q'
+          description: 'Keyword to search on'
+          schema:
+            type: string
+        - in: 'query'
+          name: 'orderBy'
+          description: "Product enthusiasms using specific sorting. Note : If sorting filter end with 'asc' or 'desc' it allow to select ascending or descending."
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                [
+                  'PRODUCT_NAME:asc',
+                  'PRODUCT_NAME:desc',
+                  'PRODUCT_BARCODES_PRINCIPAL:asc',
+                  'PRODUCT_BARCODES_PRINCIPAL:desc',
+                  'RECENT_DATE:asc',
+                  'RECENT_DATE:desc',
+                  'MAX_REBATE:asc',
+                  'MAX_REBATE:desc',
+                  'TOTAL_QUANTITY:asc',
+                  'TOTAL_QUANTITY:desc',
+                ]
+            default: ['PRODUCT_NAME:asc']
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for (start at 0)'
+          schema:
+            type: integer
+            minimum: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of wishes per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'Product enthusiasm list'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProductEnthusiasms'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+
+  /wishes:
+    get:
+      tags:
+        - 'SearchWish'
+      summary: 'Search wish line for connected user or others'
+      operationId: 'getWishes'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - in: 'query'
+          name: 'o[eq]'
+          description: 'Wishes where owner is present in lines'
+          schema:
+            type: integer
+            format: int64
+        - in: 'query'
+          name: 'o[neq]'
+          description: 'Wishes where owner is not present in lines'
+          schema:
+            type: integer
+            format: int64
+        - in: 'query'
+          name: 'pid[eq]'
+          description: 'Filter on product ids to include in the search'
+          schema:
+            type: integer
+            format: int64
+        - in: 'query'
+          name: 'st[eq]'
+          description: 'Status equal'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/WishStatus'
+        - in: 'query'
+          name: 'st[neq]'
+          description: 'Status not equal'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/WishStatus'
+        - in: 'query'
+          name: 'q'
+          description: 'Keyword to search on'
+          schema:
+            type: string
+        - in: 'query'
+          name: 'referrerId[eq]'
+          description: 'Referrer id to search in'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'referrerId[neq]'
+          description: 'Referrer id to search not in'
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - in: 'query'
+          name: 'referrerType[eq]'
+          description: 'Referrer type to search in'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/WishReferrerType'
+        - in: 'query'
+          name: 'referrerType[neq]'
+          description: 'Referrer type to search not in'
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/WishReferrerType'
+        - in: 'query'
+          name: 'orderBy'
+          description: "Order wish list using specific sorting. Note : If sorting filter end with 'asc' or 'desc' it allow to select ascending or descending."
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                [
+                  'PRODUCT_NAME:asc',
+                  'PRODUCT_NAME:desc',
+                  'PRODUCT_BARCODES_PRINCIPAL:asc',
+                  'PRODUCT_BARCODES_PRINCIPAL:desc',
+                  'CREATED_AT:asc',
+                  'CREATED_AT:desc',
+                  'REBATE:asc',
+                  'REBATE:desc',
+                  'QUANTITY:asc',
+                  'QUANTITY:desc',
+                ]
+              default: 'CREATED_AT:desc'
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for (start at 0)'
+          schema:
+            type: integer
+            minimum: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of wishes per page'
+          schema:
+            type: integer
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'Wishes list'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedWishes'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+    post:
+      tags:
+        - 'ManageWish'
+      summary: 'Create wish line from scratch'
+      description: |
+        Wish cannot be created without referrer type, if you dont have a referrer set referrer type to MANUAL
+      operationId: 'createWish'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      requestBody:
+        description: 'Wish line to create'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WishCreationParameters'
+      responses:
+        204:
+          description: 'Wish created'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+
+  /wishes/{wishId}:
+    get:
+      tags:
+        - 'SearchWish'
+      summary: 'Retrieve a wish with ID'
+      operationId: 'getWish'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - $ref: '#/components/parameters/WishIdParameter'
+      responses:
+        200:
+          description: 'Wish found'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Wish'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Wish not found'
+    patch:
+      tags:
+        - 'ManageWish'
+      summary: 'Update wish line for a user'
+      operationId: 'updateWish'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - $ref: '#/components/parameters/WishIdParameter'
+      requestBody:
+        description: 'New values for the Wish line'
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/WishUpdateParameters'
+      responses:
+        204:
+          description: 'Wish updated'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Wish not found'
+    delete:
+      tags:
+        - 'ManageWish'
+      summary: 'Delete wish'
+      operationId: 'deleteWish'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - SELLER_BUYER
+      parameters:
+        - $ref: '#/components/parameters/WishIdParameter'
+      responses:
+        204:
+          description: 'Wish deleted'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Wish not found'
+
+components:
+  parameters:
+    WishIdParameter:
+      in: path
+      name: wishId
+      description: 'Wish Id'
+      required: true
+      schema:
+        type: integer
+        format: int64
+
+  schemas:
+    ########################
+    # Entities
+    ########################
+
+    PaginatedProductEnthusiasms:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductEnthusiasm'
+          required:
+            - records
+
+    PaginatedWishes:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/Wish'
+          required:
+            - records
+
+    ProductEnthusiasm:
+      type: object
+      properties:
+        id:
+          description: 'Wish ID'
+          type: integer
+          format: int64
+        product:
+          $ref: '#/components/schemas/ProductLink'
+        recentDate:
+          description: 'Date of the last demand (createdAt)'
+          type: string
+          format: date-time
+        maxRebate:
+          description: 'Max rebate rate'
+          type: integer
+          minimum: 0
+          maximum: 100
+        totalQuantity:
+          description: 'Total quantity'
+          type: integer
+
+    ProductLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              description: 'Product Id'
+              type: integer
+              format: int64
+            name:
+              description: 'Product name'
+              type: string
+            barcodes:
+              $ref: 'product.yaml#/components/schemas/Barcodes'
+
+    Wish:
+      type: object
+      properties:
+        id:
+          description: 'Wish ID'
+          type: integer
+          format: int64
+        product:
+          $ref: '#/components/schemas/ProductLink'
+        owner:
+          $ref: '#/components/schemas/OwnerLink'
+        desiredSeller:
+          $ref: '#/components/schemas/DesiredSellerLink'
+        rebate:
+          description: 'Rebate rate'
+          type: integer
+          minimum: 0
+          maximum: 100
+        quantity:
+          description: 'Associated quantity'
+          type: integer
+        status:
+          description: 'Wish status'
+          type: string
+        referrer:
+          description: 'Referrer link to the wish'
+          $ref: '#/components/schemas/Referrer'
+        throttleDelay:
+          type: integer
+          format: int32
+          description: 'Delay in minutes between two email notification'
+        lastTrigger:
+          type: string
+          format: date
+          description: 'Last date of sent email of this wish (RFC 3339, section 5.6)'
+        createdAt:
+          type: string
+          format: date-time
+          description: 'Create date of this wish'
+        updatedAt:
+          type: string
+          format: date-time
+          description: 'Update date of this wish'
+
+    WishCreationParameters:
+      type: object
+      properties:
+        productId:
+          type: integer
+          format: int64
+          description: 'Id of the product to create wish on'
+        quantity:
+          type: integer
+          description: 'Asked quantity'
+        ownerId:
+          type: integer
+          description: 'User who search the product'
+          format: int64
+        desiredSellerId:
+          type: integer
+          description: 'Desired seller'
+          format: int64
+          nullable: true
+        rebate:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: 'Rebate rate'
+        referrer:
+          description: 'Referrer link to the wish'
+          $ref: '#/components/schemas/Referrer'
+        throttleDelay:
+          type: integer
+          format: int32
+          description: 'Delay in minutes between two email notification'
+      required:
+        - quantity
+        - rebate
+        - referrer
+
+    WishUpdateParameters:
+      type: object
+      properties:
+        quantity:
+          type: integer
+          description: 'Asked quantity'
+        desiredSellerId:
+          type: integer
+          description: 'Desired seller'
+          format: int64
+          nullable: true
+        rebate:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: 'Rebate rate'
+        status:
+          $ref: '#/components/schemas/WishStatus'
+        throttleDelay:
+          type: integer
+          format: int32
+          description: 'Delay in minutes between two email notification'
+
+    WishStatus:
+      type: string
+      description: 'Wish status'
+      enum: ['WAITING_FOR_VALIDATION', 'ACTIVE', 'ARCHIVED']
+
+    OwnerLink:
+      description: Owner of the wish
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'Id of the owner'
+            nickname:
+              type: string
+              maxLength: 64
+              description: 'User nickname'
+            company:
+              type: object
+              description: Infos about the user company
+              properties:
+                legalName:
+                  type: string
+                  nullable: true
+
+    DesiredSellerLink:
+      description: Desired seller of the wish
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'Id of the seller'
+            nickname:
+              type: string
+              maxLength: 64
+              description: 'User nickname'
+            company:
+              type: object
+              description: Infos about the user company
+              properties:
+                legalName:
+                  type: string
+                  nullable: true
+
+    Referrer:
+      description: 'Referrer Id link to the wish'
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 'Referrer Id (nullable only if the type is MANUAL)'
+          nullable: true
+        type:
+          $ref: '#/components/schemas/WishReferrerType'
+
+    WishReferrerType:
+      description: 'Referrer type'
+      type: string
+      enum: ['MANUAL', 'FAVORITE']
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key

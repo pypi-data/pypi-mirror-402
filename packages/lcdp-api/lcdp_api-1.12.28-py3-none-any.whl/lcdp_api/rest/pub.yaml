@@ -1,0 +1,733 @@
+openapi: '3.0.0'
+servers:
+  - url: 'https://www.lcdp.ovh/api/v1'
+  - url: 'https://www.lecomptoirdespharmacies.fr/api/v1'
+  - url: 'http://www.lcdp.localhost/api/v1'
+  - url: 'http://localhost:7072/api/v1'
+info:
+  description: 'This is the REST API of LCDP products'
+  version: '1.0.0'
+  title: 'lcdp-monolith-service'
+  termsOfService: 'https://www.lecomptoirdespharmacies.fr/mentions-legales'
+  contact:
+    email: 'contact@lecomptoirdespharmacies.fr'
+  license:
+    name: 'Apache 2.0'
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: 'SearchPub'
+    description: 'Get available pubs'
+  - name: 'ManagePub'
+    description: 'Tracking clicks on pubs'
+  - name: 'ManagePubImage'
+    description: 'Manage pub images'
+paths:
+  /pubs:
+    get:
+      tags:
+        - 'SearchPub'
+      summary: 'Retrieve pub list'
+      operationId: 'getPubs'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+          - SELLER_BUYER
+        capabilities:
+          - PUB_READ
+      parameters:
+        - in: query
+          name: 'location[eq]'
+          description: 'Pub location'
+          schema:
+            $ref: '#/components/schemas/PubLocationEnum'
+        - in: query
+          name: 'name[ili]'
+          description: 'Name of the pub ilike this'
+          schema:
+            type: 'string'
+        - in: query
+          name: 'active[eq]'
+          description: 'Pub active or not'
+          schema:
+            type: 'boolean'
+        - in: query
+          name: 'scheduleActivationDate[gte]'
+          description: 'Schedule activation date time after this date. RFC 3339, section 5.6'
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: 'scheduleActivationDate[lte]'
+          description: 'Schedule activation date time before this date. RFC 3339, section 5.6'
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: 'scheduleDeactivationDate[gte]'
+          description: 'Schedule deactivation date time after this date. RFC 3339, section 5.6'
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: 'timecardActivationDate[gte]'
+          description: 'Timecard activation date time after this date. RFC 3339, section 5.6'
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: 'timecardActivationDate[lte]'
+          description: 'Timecard activation date time before this date. RFC 3339, section 5.6'
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: 'timecardDeactivationDate[gte]'
+          description: 'Timecard deactivation date time after this date. RFC 3339, section 5.6'
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: 'createdAt[gte]'
+          description: 'createdAt date time after this date. RFC 3339, section 5.6'
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: 'createdAt[lte]'
+          description: 'createdAt date time before this date. RFC 3339, section 5.6'
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: 'tags[co]'
+          description: 'Filter on tags contains this values'
+          schema:
+            type: array
+            items:
+              type: string
+        - in: query
+          name: 'orderBy'
+          description: "Order pubs list using specific sorting. Note : If sorting filter end with 'asc' or 'desc' it allow to select ascending or descending."
+          schema:
+            type: 'string'
+            default: 'RANDOM'
+            enum:
+              [
+                'RANDOM',
+                'CREATED_AT:asc',
+                'CREATED_AT:desc',
+                'UPDATED_AT:asc',
+                'UPDATED_AT:desc',
+                'CLICKS_COUNT:asc',
+                'CLICKS_COUNT:desc',
+                'NAME:asc',
+                'NAME:desc',
+                'ANALYTIC_TAG:asc',
+                'ANALYTIC_TAG:desc',
+                'LOCATION:asc',
+                'LOCATION:desc',
+                'ACTIVE:asc',
+                'ACTIVE:desc',
+                'SCHEDULE_ACTIVATION_DATE:asc',
+                'SCHEDULE_ACTIVATION_DATE:desc',
+                'SCHEDULE_DEACTIVATION_DATE:asc',
+                'SCHEDULE_DEACTIVATION_DATE:desc',
+                'TIMECARD_ACTIVATION_DATE:asc',
+                'TIMECARD_ACTIVATION_DATE:desc',
+                'TIMECARD_DEACTIVATION_DATE:asc',
+                'TIMECARD_DEACTIVATION_DATE:desc',
+              ]
+        - in: query
+          name: 'p'
+          description: 'Page number to search for (start at 0)'
+          required: false
+          schema:
+            type: 'integer'
+            minimum: 0
+        - in: query
+          name: 'pp'
+          description: 'Number of items per page'
+          required: false
+          schema:
+            type: 'integer'
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'Pubs list'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPubs'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Pub not found'
+    post:
+      tags:
+        - 'ManagePub'
+      summary: 'Create a new pub from scratch'
+      operationId: 'createPub'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+        capabilities:
+          - PUB_READ
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PubCreationParameters'
+      responses:
+        200:
+          description: 'Pub creation successful'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pub'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Location not found'
+  /pubs/{pubId}:
+    get:
+      tags:
+        - 'SearchPub'
+      summary: 'Retrieve a pub with ID'
+      operationId: 'getPub'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+          - SELLER_BUYER
+        capabilities:
+          - PUB_READ
+      parameters:
+        - in: path
+          required: true
+          name: 'pubId'
+          description: 'Pub Id'
+          schema:
+            type: 'integer'
+            format: 'int64'
+      responses:
+        200:
+          description: 'Pub found'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pub'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Pub not found'
+    patch:
+      tags:
+        - 'ManagePub'
+      summary: 'Update a new pub from scratch'
+      operationId: 'updatePub'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+        capabilities:
+          - PUB_READ
+      parameters:
+        - in: path
+          required: true
+          name: 'pubId'
+          description: 'Pub Id'
+          schema:
+            type: 'integer'
+            format: 'int64'
+      requestBody:
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/PubUpdateParameters'
+      responses:
+        200:
+          description: 'Pub update successful'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pub'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Pub not found'
+        412:
+          description: |
+            Precondition failed with values :
+             - CODE006
+             - CODE024
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+    delete:
+      tags:
+        - 'ManagePub'
+      summary: 'Delete existing pub'
+      operationId: 'deletePub'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+        capabilities:
+          - PUB_READ
+      parameters:
+        - in: path
+          required: true
+          name: 'pubId'
+          description: 'Pub Id'
+          schema:
+            type: 'integer'
+            format: 'int64'
+      responses:
+        204:
+          description: 'Pub deletion successful'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Pub not found'
+
+  /pubs/{pubId}/image:
+    put:
+      tags:
+        - 'ManagePubImage'
+      summary: 'Upload image'
+      operationId: 'uploadPubImage'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+        capabilities:
+          - PUB_READ
+      parameters:
+        - in: path
+          required: true
+          name: pubId
+          description: Pub Id
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PubImageParameters'
+      responses:
+        200:
+          description: 'successful upload'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pub'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Pub not found'
+        413:
+          description: 'Image too large maximum allowed is 3 MB'
+        415:
+          description: 'Wrong media type'
+
+  /pubs/{pubId}/statistics:
+    get:
+      tags:
+        - 'SearchPub'
+      summary: 'Get detailed stats for this pub'
+      operationId: 'getPubStatistics'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+        capabilities:
+          - PUB_READ
+      parameters:
+        - in: path
+          required: true
+          name: 'pubId'
+          description: 'Pub Id'
+          schema:
+            type: 'integer'
+            format: 'int64'
+        - in: 'query'
+          name: 'orderBy'
+          description: "Order statistics using specific sorting. Note : If sorting filter end with 'asc' or 'desc' it allow to select ascending or descending."
+          schema:
+            type: 'string'
+            default: 'CLICKS_COUNT:desc'
+            enum:
+              [
+                'CLICKS_COUNT:asc',
+                'CLICKS_COUNT:desc',
+                'LAST_CLICK_DATE:asc',
+                'LAST_CLICK_DATE:desc',
+              ]
+        - in: 'query'
+          name: 'p'
+          description: 'Page number to search for (start at 0)'
+          required: false
+          schema:
+            type: 'integer'
+            minimum: 0
+        - in: 'query'
+          name: 'pp'
+          description: 'Number of items per page'
+          required: false
+          schema:
+            type: 'integer'
+            maximum: 50
+            minimum: 0
+      responses:
+        200:
+          description: 'Pub clicks stats'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPubStatistics'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Pub not found'
+
+  /pubs/{pubId}/clicks:
+    post:
+      tags:
+        - 'ManagePub'
+      summary: 'Tracking clicks on pubs'
+      operationId: 'createPubClick'
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+
+      x-restrict:
+        roles:
+          - ADMINISTRATOR
+          - LABORATORY
+          - SELLER_BUYER
+        capabilities:
+          - PUB_READ
+      parameters:
+        - in: path
+          required: true
+          name: 'pubId'
+          description: 'Pub Id'
+          schema:
+            type: 'integer'
+            format: 'int64'
+      requestBody:
+        description: Click creation parameters
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PubClickCreationParameters'
+      responses:
+        204:
+          description: 'Success'
+        400:
+          description: 'Bad Request'
+          content:
+            application/json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/RestError'
+        403:
+          description: 'Access denied'
+        404:
+          description: 'Pub not found'
+
+components:
+  schemas:
+    ########################
+    # Entities
+    ########################
+
+    PubImageParameters:
+      type: object
+      properties:
+        image:
+          description: File to upload related to image type (Max 3 Mo)
+          type: string
+          format: binary
+
+    PubCreationParameters:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Pub name
+          nullable: true
+        target:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        location:
+          $ref: '#/components/schemas/PubLocationEnum'
+      required:
+        - name
+        - target
+        - location
+
+    PubUpdateParameters:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Pub name
+          nullable: true
+        target:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        location:
+          $ref: '#/components/schemas/PubLocationEnum'
+        active:
+          type: boolean
+          description: Value is 'True' if pub is activated, 'False' if not
+        schedule:
+          $ref: '#/components/schemas/PubSchedule'
+        tags:
+          description: Labels of the pub
+          type: array
+          items:
+            type: string
+
+    PubClickCreationParameters:
+      type: object
+      properties:
+        userId:
+          type: integer
+          format: int64
+          description: Id of the user that have clicked
+      required:
+        - userId
+
+    PaginatedPubs:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/Pub'
+          required:
+            - records
+
+    PaginatedPubStatistics:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PaginatedObject'
+        - type: object
+          properties:
+            records:
+              type: array
+              items:
+                $ref: '#/components/schemas/PubStatistics'
+          required:
+            - records
+
+    Pub:
+      type: object
+      properties:
+        id:
+          description: Pub's ID
+          type: integer
+          format: int64
+        name:
+          type: string
+          description: Pub name
+          nullable: true
+        analyticTag:
+          type: string
+          description: Analytic tag to collect number of clic on the pub
+        tags:
+          description: Labels of the pub
+          type: array
+          items:
+            type: string
+        location:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        active:
+          type: boolean
+          description: Value is 'True' if pub is activated, 'False' if not
+        schedule:
+          $ref: '#/components/schemas/PubSchedule'
+        timecard:
+          $ref: '#/components/schemas/PubTimecard'
+        image:
+          $ref: '#/components/schemas/Image'
+        target:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        clickCount:
+          type: integer
+          description: Total click count
+        statistics:
+          $ref: 'common.yaml#/components/schemas/HttpLink'
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation date of this pub
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update date of this pub
+      required:
+        - id
+        - name
+        - location
+        - active
+        - target
+        - createdAt
+        - updatedAt
+
+    PubSchedule:
+      type: object
+      description: |
+        Informations about date related triggers which will apply modifications on the associated Pub.
+        Note that triggers are executed based on a periodic timer and keep running the whole life of the Pub.
+        Thus, triggers can overwrite manual modifications.
+        Ex. If we are beyond 'deactivationDate' and we set 'active' value to 'True', it will come back to value 'False' on next trigger execution.
+        # Assertions :
+          - 'activationDate' < 'deactivationDate' (nulls ignored)
+      properties:
+        activationDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: Beyond this date, Pub 'active' property will be set to 'True' (null value is considered as infinite which means associated trigger will never run)
+        deactivationDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: Beyond this date, Pub 'active' property will be set to 'False' (null value is considered as infinite which means associated trigger will never run)
+
+    PubTimecard:
+      type: object
+      description: |
+        Depending business use case, these informations may be replaced with logs in the future.
+        Note : When Pub is re-activated, deactivationDate is reset to null.
+      properties:
+        activationDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date when pub was activated
+        deactivationDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date when pub was deactivated
+
+    PubStatistics:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/UserLink'
+        clickCount:
+          type: integer
+          description: Click count for this user
+        lastClickDate:
+          type: string
+          format: date-time
+          description: Last date of click for this user
+
+    PubLocationEnum:
+      type: string
+      enum: ['DASHBOARD', 'MAINMENU', 'SEARCH']
+      description: 'Location enum'
+
+    UserLink:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/HttpLink'
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              description: 'Id of the owner'
+            nickname:
+              type: string
+              maxLength: 64
+              description: 'User nickname'
+            company:
+              type: object
+              description: 'Infos about the user company'
+              properties:
+                commercialName:
+                  type: string
+                  nullable: true
+
+    Image:
+      type: object
+      properties:
+        active:
+          type: boolean
+          description: 'Image is active'
+        versions:
+          $ref: 'common.yaml#/components/schemas/ImageVersions'
+      required:
+        - active
+        - versions
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
