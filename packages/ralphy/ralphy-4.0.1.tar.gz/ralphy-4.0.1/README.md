@@ -1,0 +1,110 @@
+# Ralphy
+
+A ralphy-implemented ralphy. This project was built using the original [ralphy](https://github.com/anthropics/ralphy) autonomous coding loop.
+
+Autonomous AI Coding Loop that orchestrates AI coding assistants to implement tasks until completion.
+
+## Installation
+
+```bash
+pip install ralphy
+```
+
+## Quick Start
+
+```bash
+# Initialize project config
+ralphy --init
+
+# Run a single task
+ralphy "add user authentication"
+
+# Run PRD until complete
+ralphy --prd PRD.md
+```
+
+## Features
+
+- **Multiple AI Engines**: Claude Code, OpenCode, Cursor, Codex, Qwen-Code, Factory Droid
+- **PRD Mode**: Loop through tasks from Markdown, YAML, or GitHub Issues
+- **Single Task Mode**: Execute one task in an existing project
+- **Parallel Execution**: Run tasks concurrently with git worktrees
+- **Auto PR Creation**: Create pull requests automatically
+- **Cost Tracking**: Monitor token usage and costs
+
+## Supported AI Engines
+
+| Engine | Flag | CLI |
+|--------|------|-----|
+| Claude Code | `--claude` (default) | `claude` |
+| OpenCode | `--opencode` | `opencode` |
+| Cursor Agent | `--cursor` | `agent` |
+| Codex CLI | `--codex` | `codex` |
+| Qwen-Code | `--qwen` | `qwen` |
+| Factory Droid | `--droid` | `droid` |
+
+## Configuration
+
+Initialize a `.ralphy/` directory with project config:
+
+```bash
+ralphy --init
+```
+
+This auto-detects:
+- Project name, language, framework
+- Test, lint, and build commands
+
+Add rules the AI must follow:
+
+```bash
+ralphy --add-rule "Always use TypeScript strict mode"
+```
+
+## PRD Formats
+
+**Markdown:**
+```markdown
+- [ ] Implement user authentication
+- [ ] Add payment processing
+- [x] Set up database (completed)
+```
+
+**YAML:**
+```yaml
+tasks:
+  - title: "Implement auth"
+    parallel_group: 1
+  - title: "Add payments"
+    parallel_group: 1
+```
+
+**GitHub Issues:**
+```bash
+ralphy --github owner/repo --github-label enhancement
+```
+
+## Options
+
+```bash
+ralphy --parallel              # Run tasks in parallel
+ralphy --max-parallel 5        # Concurrent agents (default: 3)
+ralphy --branch-per-task       # Create branch per task
+ralphy --create-pr             # Create PRs automatically
+ralphy --no-tests              # Skip tests
+ralphy --no-lint               # Skip linting
+ralphy --fast                  # Skip tests and linting
+ralphy --max-iterations 10     # Stop after N tasks
+ralphy --dry-run               # Preview without executing
+ralphy --verbose               # Debug output
+```
+
+## Requirements
+
+- Python 3.10+
+- git
+- At least one AI CLI installed (claude, opencode, etc.)
+
+## License
+
+MIT
