@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package iam_pb;
+
+option go_package = "github.com/seaweedfs/seaweedfs/weed/pb/iam_pb";
+option java_package = "seaweedfs.client";
+option java_outer_classname = "IamProto";
+
+//////////////////////////////////////////////////
+
+service SeaweedIdentityAccessManagement {
+
+}
+
+//////////////////////////////////////////////////
+
+message S3ApiConfiguration {
+    repeated Identity identities = 1;
+    repeated Account accounts = 2;
+    repeated ServiceAccount service_accounts = 3;
+}
+
+message Identity {
+    string name = 1;
+    repeated Credential credentials = 2;
+    repeated string actions = 3;
+    Account account = 4;
+    bool disabled = 5;  // User status: false = enabled (default), true = disabled
+    repeated string service_account_ids = 6;  // IDs of service accounts owned by this user
+    repeated string policy_names = 7;
+}
+
+message Credential {
+    string access_key = 1;
+    string secret_key = 2;
+    string status = 3;  // Access key status: "Active" or "Inactive"
+}
+
+message Account {
+    string id = 1;
+    string display_name = 2;
+    string email_address = 3;
+}
+
+// ServiceAccount represents a service account - special credentials for applications.
+// Service accounts are linked to a parent user and can have restricted permissions.
+message ServiceAccount {
+    string id = 1;                     // Unique identifier (e.g., "sa-xxxxx")
+    string parent_user = 2;            // Parent identity name
+    string description = 3;            // Optional description
+    Credential credential = 4;         // Access key/secret for this service account
+    repeated string actions = 5;       // Allowed actions (subset of parent)
+    int64 expiration = 6;              // Unix timestamp, 0 = no expiration
+    bool disabled = 7;                 // Status: false = enabled (default)
+    int64 created_at = 8;              // Creation timestamp
+    string created_by = 9;             // Who created this service account
+}
+
+/*
+message Policy {
+    repeated Statement statements = 1;
+}
+
+message Statement {
+    repeated Action action = 1;
+    repeated Resource resource = 2;
+}
+
+message Action {
+    string action = 1;
+}
+message Resource {
+    string bucket = 1;
+    // string path = 2;
+}
+*/
