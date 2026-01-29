@@ -1,0 +1,67 @@
+{% set overspent = category.available < 0 %}
+{% with headline="Cover overspending" if overspent else "Move available funds", save_url=url_for("budgeting.move", uri=category.uri, month=category.month) %}
+  {% include "shared/dialog-headline.jinja" %}
+{% endwith %}
+{% set cf = category.currency_format %}
+<form class="w-88 grid gap-2" onsubmit="return false">
+  <div>
+    {% if not overspent %}
+      {{ category.name or "Assignable income" }}
+      has {{ cf(category.available) }} available
+    {% elif category.name is none %}
+      More money is assigned than held by {{ cf(-category.available) }}
+    {% else %}
+      {{ category.name }}
+      is overspent by {{ cf(-category.available) }}
+    {% endif %}
+  </div>
+  {% if overspent %}
+
+  {% else %}
+    <label
+      class="input-outlined input-bg-surface-container-high {{ split_class }}"
+    >
+      <input
+        name="amount"
+        placeholder=""
+        autocomplete="off"
+        enterkeyhint="next"
+        inputmode="tel"
+        hx-get="{{ url_for('budgeting.validation') }}"
+        hx-trigger="input delay:200ms"
+        hx-target="next error"
+        hx-include="this"
+      />
+      <icon>attach_money</icon>
+      <div>
+        <div>Move Amount</div>
+      </div>
+      <div>
+        <error></error>
+      </div>
+    </label>
+  {% endif %}
+  <label class="input-outlined input-bg-surface-container-high">
+    <select name="destination" required autocomplete="off">
+      {% for group, categories in category.options.items() %}
+        <optgroup label="{{ group.pretty }}">
+          {% for uri, name, available in categories %}
+            <option
+              value="{{ uri }}"
+              {% if uri == category.destination %}selected{% endif %}
+            >
+              {{ name }} {{ cf(available) }}
+            </option>
+          {% endfor %}
+        </optgroup>
+      {% endfor %}
+    </select>
+    <div>
+      <div>{{ "Cover with" if overspent else "Destination" }}</div>
+    </div>
+  </label>
+</form>
+<div id="dialog-error" class="status-error"></div>
+<script>
+  dialog.onLoad();
+</script>
