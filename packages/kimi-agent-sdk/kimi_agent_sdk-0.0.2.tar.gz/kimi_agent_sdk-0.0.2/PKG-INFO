@@ -1,0 +1,86 @@
+Metadata-Version: 2.3
+Name: kimi-agent-sdk
+Version: 0.0.2
+Summary: A Python SDK for Kimi Agent (Kimi CLI).
+Keywords: kimi,agent,sdk,coding-agents,llm,automation
+Author: Moonshot AI
+Author-email: Moonshot AI <team@moonshot.ai>
+License: Apache-2.0
+Classifier: Typing :: Typed
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Classifier: Operating System :: OS Independent
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: License :: OSI Approved :: Apache Software License
+Requires-Dist: kimi-cli>=0.79,<0.80
+Requires-Dist: kosong>=0.38.0,<0.39.0
+Requires-Python: >=3.12
+Project-URL: Changelog, https://github.com/MoonshotAI/kimi-agent-sdk/blob/main/python/CHANGELOG.md
+Project-URL: Documentation, https://github.com/MoonshotAI/kimi-agent-sdk/tree/main/README.md
+Project-URL: Homepage, https://github.com/MoonshotAI/kimi-agent-sdk
+Project-URL: Issues, https://github.com/MoonshotAI/kimi-agent-sdk/issues
+Project-URL: Repository, https://github.com/MoonshotAI/kimi-agent-sdk
+Description-Content-Type: text/markdown
+
+# Kimi Agent SDK
+
+Kimi Agent SDK exposes the Kimi CLI agent runtime as a Python library. It provides a
+high-level prompt API for streaming assistant messages and a low-level Session API for
+handling Wire messages and approvals yourself.
+
+## Installation
+
+Requires Python 3.12 or higher.
+
+```bash
+uv add kimi-agent-sdk
+```
+
+## Examples
+
+### High-level prompt
+
+```python
+import asyncio
+from kimi_agent_sdk import prompt
+
+
+async def main() -> None:
+    async for msg in prompt("Write a hello world program", yolo=True):
+        print(msg.extract_text(), end="", flush=True)
+    print()
+
+
+asyncio.run(main())
+```
+
+### Manual approval handling (low-level)
+
+```python
+import asyncio
+from kaos.path import KaosPath
+from kimi_agent_sdk import ApprovalRequest, Session, TextPart
+
+
+async def main() -> None:
+    async with await Session.create(work_dir=KaosPath.cwd()) as session:
+        async for wire_msg in session.prompt("List files in current directory"):
+            match wire_msg:
+                case TextPart(text=text):
+                    print(text, end="", flush=True)
+                case ApprovalRequest() as req:
+                    req.resolve("approve")
+
+
+asyncio.run(main())
+```
+
+## Notes
+
+- `prompt()` creates a temporary session per call.
+- `Session.prompt()` yields raw Wire messages and requires handling approvals.
+- `work_dir` and `skills_dir` expect `KaosPath` values.
+- See the API docstrings for more configuration options.
