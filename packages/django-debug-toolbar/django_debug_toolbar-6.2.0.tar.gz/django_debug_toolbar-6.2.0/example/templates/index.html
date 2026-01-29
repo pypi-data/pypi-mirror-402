@@ -1,0 +1,65 @@
+{% load cache %}
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <title>Index of Tests</title>
+  </head>
+  <body>
+    <h1>Index of Tests</h1>
+    {% cache 10 index_cache %}
+      <ul>
+        <li><a href="{% url 'jinja' %}">Jinja2</a></li>
+        <li><a href="/jquery/">jQuery 3.3.1</a></li>
+        <li><a href="/mootools/">MooTools 1.6.0</a></li>
+        <li><a href="/prototype/">Prototype 1.7.3.0</a></li>
+        <li><a href="{% url 'turbo' %}">Hotwire Turbo</a></li>
+        <li><a href="{% url 'htmx' %}">htmx</a></li>
+        <li><a href="{% url 'cache' %}">Cache</a></li>
+        <li><a href="{% url 'bad_form' %}">Bad form</a></li>
+      </ul>
+      <p><a href="/admin/">Django Admin</a></p>
+    {% endcache %}
+    <p>
+      <span>Value </span>
+      <span id="session-value">{{ request.session.value|default:0 }}</span>
+      <button id="incrementFetch" data-url="{% url 'ajax_increment' %}" type="button">Increment via fetch</button>
+      <button id="incrementXHR" data-url="{% url 'ajax_increment' %}" type="button">Increment via XHR</button>
+    </p>
+    {% comment %}
+    <button id="asyncRequest" data-url="{% url 'async_db_view' %}" type="button">Make async call</button>
+    {% endcomment %}
+
+  <script>
+    const incrementFetch = document.querySelector("#incrementFetch");
+    const incrementXHR = document.querySelector("#incrementXHR");
+    const asyncButton = document.querySelector("#asyncRequest");
+    const value = document.querySelector("#session-value");
+    incrementFetch.addEventListener("click", function () {
+      fetch(incrementFetch.dataset.url).then( function (response) {
+        response.json().then(function(data) {
+          value.innerHTML = data.value;
+        });
+      });
+    });
+    incrementXHR.addEventListener("click", function () {
+      const xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = () => {
+        if (xhr.readyState === 4) {
+          value.innerHTML = JSON.parse(xhr.response).value;
+        }
+      }
+      xhr.open('GET', incrementXHR.dataset.url, true);
+      xhr.send('');
+    });
+    asyncButton.addEventListener("click", function () {
+      fetch(asyncButton.dataset.url).then( function (response) {
+        response.json().then(function(data) {
+          console.log(data)
+        });
+      });
+    });
+
+  </script>
+  </body>
+</html>
