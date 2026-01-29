@@ -1,0 +1,1 @@
+# wellfreiScientific package by the Wellfrei research group.## Install```bashpip install wellfrei
