@@ -1,0 +1,204 @@
+# pyr34
+
+Wrapper around the JSON/XML rule34.xxx API.
+
+## Classes
+
+### ClientAPI
+
+Represents a connection to the R34 API. \
+Central component of the library. Handles all communication to and from the API.
+
+#### Parameters
+
+user_id: `int` \
+&nbsp;&nbsp;&nbsp;&nbsp;The ID of the user associated with the API key
+
+api_key: `str` \
+&nbsp;&nbsp;&nbsp;&nbsp;The API key used to authenticate the R34 API
+
+url: `str`, optional (keyword-only) \
+&nbsp;&nbsp;&nbsp;&nbsp;Base URL for the API, should be an `index.php`. \
+&nbsp;&nbsp;&nbsp;&nbsp;If omitted, `https://api.rule34.xxx/index.php` is used.
+
+base_url: `str`, optional (keyword-only) \
+&nbsp;&nbsp;&nbsp;&nbsp;Base URL for the website \
+&nbsp;&nbsp;&nbsp;&nbsp;If omitted, `https://rule34.xxx/` is used.
+
+------
+
+#### Methods
+
+`search_posts(tags: Tag | str = Tag(), *, limit: int = 1000, exclusions: list[Tag] | list[str] | None = None, page: int = 0, suppress_log: bool = False) -> Generator[Post]` \
+&nbsp;&nbsp;&nbsp;&nbsp;Search for posts via standard search tags.
+
+##### Parameters
+tags: `Tag` or `str`, optional \
+&nbsp;&nbsp;&nbsp;&nbsp;Tags to search for.\
+&nbsp;&nbsp;&nbsp;&nbsp;If omitted, pull from the front page.
+
+limit: `int`, optional (keyword-only) \
+&nbsp;&nbsp;&nbsp;&nbsp;Maximum number of posts to pull. \
+&nbsp;&nbsp;&nbsp;&nbsp;If omitted, pull the maximum allowed (1000).
+
+exclusions: `list[Tag]` or `list[str]`, optional (keyword-only) \
+&nbsp;&nbsp;&nbsp;&nbsp;Tags to exclude from search.
+
+page: `int`, optional (keyword-only) \
+&nbsp;&nbsp;&nbsp;&nbsp;Page of results to return. \
+&nbsp;&nbsp;&nbsp;&nbsp;If omitted, return first page.
+
+suppress_log: `bool`, optional (keyword-only) \
+&nbsp;&nbsp;&nbsp;&nbsp;Don't log search. Intended for internal use.
+
+##### Returns
+Generator that yields fetched `Post`s.
+
+##### Notes
+&nbsp;&nbsp;&nbsp;&nbsp;Logs search at INFO level. \
+&nbsp;&nbsp;&nbsp;&nbsp;Excluding tags using `tags` is allowed, but discouraged due to R34 quirks.
+
+------
+
+`get_post(id: int) -> Post` \
+&nbsp;&nbsp;&nbsp;&nbsp;Fetch a post by ID.
+
+#### Parameters
+id: `int` \
+&nbsp;&nbsp;&nbsp;&nbsp;ID of the post to fetch.
+
+#### Returns
+&nbsp;&nbsp;&nbsp;&nbsp;`Post` \
+&nbsp;&nbsp;&nbsp;&nbsp;The fetched post.
+
+#### Notes
+&nbsp;&nbsp;&nbsp;&nbsp;Logs fetch at INFO level.
+
+------
+
+`get_comments(post: Post) -> list[Comments]` \
+&nbsp;&nbsp;&nbsp;&nbsp;Fetch the comments of a post.
+
+#### Parameters
+post: `Post` \
+&nbsp;&nbsp;&nbsp;&nbsp;Post to fetch comments from.
+
+#### Returns
+`list[Comment]` \
+&nbsp;&nbsp;&nbsp;&nbsp;List of fetched comments.
+
+#### Notes
+&nbsp;&nbsp;&nbsp;&nbsp;Logs fetch at INFO level.
+
+------
+
+`request(params: Mapping[str, Any]) -> ET.Element | Any | None` \
+&nbsp;&nbsp;&nbsp;&nbsp;Make a generic request to the API.\
+&nbsp;&nbsp;&nbsp;&nbsp;Usage is discouraged, as input validation and error handling is minimal.
+
+##### Returns
+&nbsp;&nbsp;&nbsp;&nbsp;`xml.etree.ElementTree.Element` or `Any` \
+&nbsp;&nbsp;&nbsp;&nbsp;XML parsed as an Element, or JSON parsed into Python objects.
+
+##### Notes
+&nbsp;&nbsp;&nbsp;&nbsp;Logs API request at INFO level. \
+&nbsp;&nbsp;&nbsp;&nbsp;Returns `None` for empty responses / malformed requests.
+
+------
+
+### Post
+
+Represents a post.
+
+#### Attributes
+
+id: `int` \
+&nbsp;&nbsp;&nbsp;&nbsp;ID of the post.
+
+tags: `list[Tag]` \
+&nbsp;&nbsp;&nbsp;&nbsp;List of post's tags.
+
+author: `str` \
+&nbsp;&nbsp;&nbsp;&nbsp;User who created the post.
+
+source: `str` \
+&nbsp;&nbsp;&nbsp;&nbsp;Where the post came from.
+
+score: `int` \
+&nbsp;&nbsp;&nbsp;&nbsp;Post's score.
+
+rating: `Rating` \
+&nbsp;&nbsp;&nbsp;&nbsp;Safe, Questionable, or Explicit.
+
+last_change: `datetime.datetime` \
+&nbsp;&nbsp;&nbsp;&nbsp;Timestamp of the post's last edit in UTC.
+
+content_url: `str` \
+&nbsp;&nbsp;&nbsp;&nbsp;URL of the post's image.
+
+comments: `list[Comment]` \
+&nbsp;&nbsp;&nbsp;&nbsp;Lazy-loaded list of comments.
+
+------
+
+#### Methods
+
+`get_comments() -> list[Comment]` \
+&nbsp;&nbsp;&nbsp;&nbsp;Fetch post's comments in real-time.
+
+`get_url() -> str` \
+&nbsp;&nbsp;&nbsp;&nbsp;URL of post given the base URL provided to ClientAPI.
+
+------
+
+### Comment
+
+Represents a comment.
+
+#### Attributes
+id: `int` \
+&nbsp;&nbsp;&nbsp;&nbsp;ID of the comment.
+
+post: `Post` \
+&nbsp;&nbsp;&nbsp;&nbsp;Post the comment is under.
+
+content: `str` \
+&nbsp;&nbsp;&nbsp;&nbsp;Content of the comment.
+
+author: `str` \
+&nbsp;&nbsp;&nbsp;&nbsp;Creator of the comment.
+
+created_at: `datetime.datetime` \
+&nbsp;&nbsp;&nbsp;&nbsp;Timestamp of the comment's creation in UTC.
+
+------
+
+### Rating (Enum)
+
+Safe, Questionable, or Explicit.
+
+
+#### Class Methods
+
+`str_to_rating(rating: str) -> Rating` \
+&nbsp;&nbsp;&nbsp;&nbsp;Maps "safe", "questionable", and "explicit" to enum values.
+
+`rating_to_str(rating: Rating) -> str` \
+&nbsp;&nbsp;&nbsp;&nbsp;Maps enum values to "safe", "questionable", and "explicit".
+
+------
+
+### Tag
+
+Represents a tag. \
+Utilizes a DSL-like system of combining Tag objects.
+
+#### Operators
+&nbsp;&nbsp;&nbsp;&nbsp; `tag1 & tag2`: `tag1 tag2` \
+&nbsp;&nbsp;&nbsp;&nbsp; `tag1 | tag2`: `( tag1 ~ tag2 )` \
+&nbsp;&nbsp;&nbsp;&nbsp; `tag1 - tag2`: `tag1 -tag2` \
+&nbsp;&nbsp;&nbsp;&nbsp; `-tag` OR `~tag`: `-tag`
+
+#### Notes
+&nbsp;&nbsp;&nbsp;&nbsp;All binary operators support `str` inputs for `other` \
+&nbsp;&nbsp;&nbsp;&nbsp;R34 is strange, and several combinations of tags aren't allowed. Don't be surprised if no posts come up.
