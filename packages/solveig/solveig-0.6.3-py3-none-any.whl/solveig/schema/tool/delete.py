@@ -1,0 +1,93 @@
+"""Delete tool - allows LLM to delete files and directories."""
+
+from typing import Literal
+
+from pydantic import Field, field_validator
+
+from solveig.config import SolveigConfig
+from solveig.interface import SolveigInterface
+from solveig.schema.result import DeleteResult
+from solveig.utils.file import Filesystem
+
+from .base import BaseTool, validate_non_empty_path
+
+
+class DeleteTool(BaseTool):
+    title: Literal["delete"] = "delete"
+    path: str = Field(
+        ...,
+        description="Path of file/directory to permanently delete (supports ~ for home directory)",
+    )
+
+    @field_validator("path", mode="before")
+    @classmethod
+    def path_not_empty(cls, path: str) -> str:
+        return validate_non_empty_path(path)
+
+    async def display_header(self, interface: "SolveigInterface") -> None:
+        """Display delete tool header."""
+        await super().display_header(interface)
+        await interface.display_file_info(source_path=self.path)
+        # abs_path = Filesystem.get_absolute_path(self.path)
+        # path_info = format_path_info(
+        #     path=self.path, abs_path=abs_path, is_dir=await Filesystem.is_dir(abs_path)
+        # )
+        # await interface.display_text(path_info)
+        await interface.display_warning(
+            "This operation is permanent and cannot be undone!"
+        )
+
+    def create_error_result(self, error_message: str, accepted: bool) -> "DeleteResult":
+        """Create DeleteResult with error."""
+        return DeleteResult(
+            tool=self,
+            path=str(Filesystem.get_absolute_path(self.path)),
+            accepted=accepted,
+            error=error_message,
+        )
+
+    @classmethod
+    def get_description(cls) -> str:
+        """Return description of delete capability."""
+        return "delete(comment, path): permanently deletes a file or directory"
+
+    async def actually_solve(
+        self, config: "SolveigConfig", interface: "SolveigInterface"
+    ) -> "DeleteResult":
+        # Pre-flight validation - use utils/file.py validation
+        abs_path = Filesystem.get_absolute_path(self.path)
+
+        try:
+            is_directory = await Filesystem.is_dir(abs_path)
+            await Filesystem.validate_delete_access(abs_path)
+        except (FileNotFoundError, PermissionError, OSError) as e:
+            await interface.display_error(f"Cannot delete {str(abs_path)}: {e}")
+            return DeleteResult(
+                tool=self, accepted=False, error=str(e), path=str(abs_path)
+            )
+
+        auto_delete = Filesystem.path_matches_patterns(
+            abs_path, config.auto_allowed_paths
+        )
+        if auto_delete:
+            await interface.display_info(
+                f"Deleting {'directory' if is_directory else 'file'} since it matches config.auto_allowed_paths"
+            )
+        elif (
+            not await interface.ask_choice(
+                f"Delete {'directory' if is_directory else 'file'}?", ["Yes", "No"]
+            )
+            == 0
+        ):
+            return DeleteResult(tool=self, accepted=False, path=str(abs_path))
+
+        try:
+            # Perform the delete operation - use utils/file.py method
+            await Filesystem.delete(abs_path)
+            await interface.display_success("Deleted")
+            return DeleteResult(tool=self, path=str(abs_path), accepted=True)
+        except (PermissionError, OSError) as e:
+            await interface.display_error(f"Found error when deleting: {e}")
+            return DeleteResult(
+                tool=self, accepted=True, error=str(e), path=str(abs_path)
+            )

@@ -1,0 +1,124 @@
+"""TreeTool plugin - Generate directory tree listings."""
+
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import Field, field_validator
+
+from solveig.interface import SolveigInterface
+from solveig.plugins.tools import register_tool
+from solveig.schema.result.base import ToolResult
+from solveig.schema.tool.base import (
+    BaseTool,
+    validate_non_empty_path,
+)
+from solveig.utils.file import Filesystem, Metadata
+
+
+class TreeResult(ToolResult):
+    title: Literal["tree"] = "tree"
+    path: str
+    metadata: Metadata | None  # Complete tree metadata
+
+
+@register_tool
+class TreeTool(BaseTool):
+    """Generate a directory tree listing showing file structure."""
+
+    title: Literal["tree"] = "tree"
+    path: str = Field(..., description="Directory path to generate tree for")
+    max_depth: int = Field(
+        default=-1, description="Maximum depth to explore (-1 for full tree)"
+    )
+
+    @field_validator("path")
+    @classmethod
+    def path_not_empty(cls, path: str) -> str:
+        return validate_non_empty_path(path)
+
+    async def display_header(
+        self, interface: SolveigInterface, detailed: bool = False
+    ) -> None:
+        """Display tree tool header."""
+        await super().display_header(interface)
+        await interface.display_file_info(source_path=self.path)
+        # abs_path = Filesystem.get_absolute_path(self.path)
+        # is_dir = await Filesystem.is_dir(abs_path)
+        # path_info = format_path_info(path=self.path, abs_path=abs_path, is_dir=is_dir)
+        # await interface.display_text(path_info)
+
+    def create_error_result(self, error_message: str, accepted: bool) -> TreeResult:
+        """Create TreeResult with error."""
+        return TreeResult(
+            tool=self,
+            path=self.path,
+            accepted=accepted,
+            error=error_message,
+            metadata=None,
+        )
+
+    @classmethod
+    def get_description(cls) -> str:
+        """Return description of tree capability."""
+        return (
+            "tree(path): generates a directory tree structure showing files and folders"
+        )
+
+    async def actually_solve(self, config, interface: SolveigInterface) -> TreeResult:
+        abs_path = Filesystem.get_absolute_path(self.path)
+        await Filesystem.validate_read_access(abs_path)
+
+        choice_read_tree = await interface.ask_choice(
+            "Allow reading tree?",
+            [
+                "Read and send tree",
+                "Read tree and inspect first",
+                "Don't read anything",
+            ],
+        )
+
+        if choice_read_tree <= 1:
+            metadata = await Filesystem.read_metadata(
+                abs_path, descend_level=self.max_depth
+            )
+
+            # Display the tree structure
+            await interface.display_tree(
+                metadata=metadata, display_metadata=False, title=f"Tree: {abs_path}"
+            )
+
+            if (
+                Filesystem.path_matches_patterns(abs_path, config.auto_allowed_paths)
+                or choice_read_tree == 0
+            ):
+                accepted = True
+                if choice_read_tree != 0:
+                    await interface.display_text(
+                        f"Sending tree since {abs_path} matches config.auto_allowed_paths"
+                    )
+            else:
+                accepted = (
+                    await interface.ask_choice(
+                        "Allow sending tree?", choices=["Yes", "No"]
+                    )
+                ) == 0
+
+            if accepted:
+                return TreeResult(
+                    tool=self,
+                    accepted=True,
+                    path=str(abs_path),
+                    metadata=metadata,
+                )
+
+        return TreeResult(
+            tool=self,
+            accepted=False,
+            path=str(abs_path),
+            metadata=None,
+        )
+
+
+# Fix possible forward typing references
+TreeResult.model_rebuild()
