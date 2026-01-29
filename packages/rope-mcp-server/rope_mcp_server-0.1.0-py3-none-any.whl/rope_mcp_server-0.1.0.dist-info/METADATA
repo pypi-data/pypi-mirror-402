@@ -1,0 +1,287 @@
+Metadata-Version: 2.4
+Name: rope-mcp-server
+Version: 0.1.0
+Summary: MCP server for Python refactoring via Rope library
+Project-URL: Homepage, https://github.com/krystofbe/rope-mcp-server
+Project-URL: Repository, https://github.com/krystofbe/rope-mcp-server
+Author: Krystof
+License: MIT
+Keywords: claude,mcp,python,refactoring,rope
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Software Development :: Code Generators
+Requires-Python: >=3.12
+Requires-Dist: fastmcp>=2.14.3
+Requires-Dist: rope>=1.14.0
+Description-Content-Type: text/markdown
+
+# rope-mcp-server
+
+> **WIP** - This project is under active development. PyPI release coming soon.
+
+A Model Context Protocol (MCP) server that provides Python refactoring capabilities powered by the [Rope](https://github.com/python-rope/rope) library. Enables AI agents like Claude to perform safe, project-wide refactoring operations.
+
+## Features
+
+- **Move Symbol** - Move classes and functions between files with automatic import updates
+- **Move Module** - Move entire modules or packages to different folders
+- **Move and Rename Module** - Move module to folder and rename (e.g., `foo_extra.py` → `foo/extra.py`)
+- **Convert Module to Init** - Transform `foo.py` into `foo/__init__.py` (no import changes!)
+- **Convert Module to Package** - Transform `foo.py` into `foo/foo.py` with import updates
+- **Rename Symbol** - Rename variables, functions, classes across entire projects
+- **Extract Method** - Extract code blocks into new methods
+- **Inline Variable** - Inline variables at all usage sites
+- **List Symbols** - Discover top-level symbols in Python files
+
+All operations are project-aware and automatically update imports and references throughout your codebase.
+
+## Installation
+
+### From source (recommended for now)
+
+```bash
+git clone https://github.com/krystofbe/rope-mcp-server.git
+cd rope-mcp-server
+uv sync
+```
+
+### From PyPI (coming soon)
+
+```bash
+uv add rope-mcp-server
+```
+
+## Usage with Claude Code
+
+Add the server to Claude Code:
+
+```bash
+# For current project only
+claude mcp add rope-refactor -- uv --directory /path/to/rope-mcp-server run python -m rope_mcp_server.server
+
+# Global (all projects)
+claude mcp add rope-refactor --scope user -- uv --directory /path/to/rope-mcp-server run python -m rope_mcp_server.server
+```
+
+Verify installation:
+
+```bash
+claude mcp list
+```
+
+### Alternative: Manual configuration
+
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "rope-refactor": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/path/to/rope-mcp-server",
+        "run",
+        "python",
+        "-m",
+        "rope_mcp_server.server"
+      ]
+    }
+  }
+}
+```
+
+## Available Tools
+
+### `list_symbols`
+
+List all top-level symbols (classes, functions, variables) in a Python file.
+
+```
+project_path: /path/to/your/project
+file_path: src/models.py
+```
+
+### `move_symbol`
+
+Move a class or function to another file. Automatically updates all imports.
+
+```
+project_path: /path/to/your/project
+source_file: src/models.py
+symbol_name: UserModel
+dest_file: src/users/models.py
+```
+
+### `move_module`
+
+Move a module or package to another folder. Automatically updates all imports.
+
+```
+project_path: /path/to/your/project
+module_path: src/utils.py
+dest_folder: src/lib
+```
+
+### `convert_module_to_init` (recommended)
+
+Convert a module file into a package by moving it to `__init__.py`. No import changes needed!
+
+This is the **recommended** way to convert a module to a package. After conversion, you can use `move_module` to move related files (like `foo_mixins.py`) into the new package.
+
+```
+project_path: /path/to/your/project
+module_path: app/views/customer_order.py
+```
+
+**Before:**
+```
+app/views/customer_order.py
+app/views/customer_order_mixins.py
+```
+
+**After running `convert_module_to_init`:**
+```
+app/views/customer_order/__init__.py  (was customer_order.py)
+app/views/customer_order_mixins.py    (move this next with move_module)
+```
+
+Import `from app.views.customer_order import X` stays **unchanged**!
+
+### `move_and_rename_module`
+
+Move a module to a folder and optionally rename it. Perfect for moving related files (like `_mixins.py`, `_extra.py`) into a package created with `convert_module_to_init`.
+
+**Auto-detection:** If the module name starts with the destination folder name + underscore, it strips that prefix automatically.
+
+**Rope bug workaround:** This tool includes a workaround for a Rope bug that crashes when a file has imports from BOTH the destination package AND the module being moved. Such files are temporarily hidden during the move, then their imports are fixed manually.
+
+```
+project_path: /path/to/your/project
+module_path: app/views/customer_order_mixins.py
+dest_folder: app/views/customer_order
+new_name: mixins  # Optional - auto-detected from prefix
+```
+
+**Before:**
+```
+app/views/customer_order/__init__.py
+app/views/customer_order_mixins.py
+```
+Import: `from app.views.customer_order_mixins import MyMixin`
+
+**After:**
+```
+app/views/customer_order/__init__.py
+app/views/customer_order/mixins.py
+```
+Import: `from app.views.customer_order.mixins import MyMixin`
+
+### `convert_module_to_package`
+
+Convert a module file into a package with the same name. Transforms `foo.py` into `foo/foo.py` while updating all imports project-wide.
+
+Use this when you want the original module content in a submodule, not in `__init__.py`.
+
+```
+project_path: /path/to/your/project
+module_path: app/views/service_contractor.py
+```
+
+**Before:**
+```
+app/views/service_contractor.py
+```
+Import: `from app.views.service_contractor import MyClass`
+
+**After:**
+```
+app/views/service_contractor/
+├── __init__.py
+└── service_contractor.py
+```
+Import: `from app.views.service_contractor.service_contractor import MyClass`
+
+### `rename_symbol`
+
+Rename a symbol across the entire project.
+
+```
+project_path: /path/to/your/project
+file_path: src/utils.py
+symbol_name: old_function_name
+new_name: new_function_name
+```
+
+### `extract_method`
+
+Extract a code region into a new method.
+
+```
+project_path: /path/to/your/project
+file_path: src/service.py
+start_line: 15
+start_col: 4
+end_line: 20
+end_col: 30
+new_name: extracted_helper
+```
+
+### `inline_variable`
+
+Inline a variable at all usage sites.
+
+```
+project_path: /path/to/your/project
+file_path: src/handler.py
+variable_name: temp_result
+line: 42
+```
+
+### `close_rope_project`
+
+Close a Rope project to free memory. Call when done with refactoring.
+
+```
+project_path: /path/to/your/project
+```
+
+## Development
+
+```bash
+# Install dependencies
+uv sync
+
+# Run tests
+uv run pytest tests/ -v
+
+# Run server locally
+uv run python -m rope_mcp_server.server
+```
+
+## How it works
+
+This server wraps the [Rope](https://github.com/python-rope/rope) refactoring library and exposes its capabilities via the [Model Context Protocol](https://modelcontextprotocol.io/). When Claude (or any MCP-compatible agent) needs to refactor Python code, it can use these tools to perform safe, AST-aware transformations that preserve code correctness.
+
+Key implementation details:
+
+- **Project caching** - Rope projects are cached to avoid re-parsing on every operation
+- **AST-based offset calculation** - Symbol locations are computed via Python's AST module for accuracy
+- **Automatic import handling** - Rope handles all import updates when moving/renaming symbols
+
+## Limitations
+
+- Only supports Python code (Rope limitation)
+- Moving methods between classes requires the target class to exist
+- Large projects may have slower initial indexing
+- **Rope bug workaround**: Files with imports from both the destination package and the module being moved are handled specially (hidden during move, then imports fixed manually) - see `move_and_rename_module`
+
+## License
+
+MIT
+
+## Contributing
+
+Contributions welcome! Please open an issue first to discuss what you would like to change.
