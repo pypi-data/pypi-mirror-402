@@ -1,0 +1,965 @@
+---
+openapi: 3.0.1
+info:
+  title: Polis
+  termsOfService: https://pol.is/tos
+  contact:
+    name: The Computational Democracy Project
+    email: hello@compdemocracy.org
+    url: https://compdemocracy.org/
+  license:
+    name: AGPL 3.0
+    url: https://github.com/compdemocracy/polis/blob/dev/LICENSE
+  version: 3.0.0
+  description: |
+    **This is a proposed Polis API.**
+    A fuller description will be added later.
+externalDocs:
+  description: Find out more about OpenAPI
+  url: http://swagger.io
+servers:
+  - url: "{server}/api/v3"
+    variables:
+      server:
+        default: https://pol.is
+paths:
+  /participants:
+    get:
+      tags:
+        - users
+      operationId: getParticipant
+      parameters:
+        - name: conversation_id
+          in: query
+          description: Alphnumeric ID for conversation
+          required: true
+          example: 2demo
+          schema:
+            type: string
+            pattern: ^[0-9][a-z0-9]+$
+        # This seems to require a token on newer Polis servers,
+        # but can get same data from participationInit endpoint's ptpt key
+        - name: xid
+          in: query
+          description: Conversation-specific external participant ID.
+          required: false
+          example: b2bcbd1b-43f7-4640-af05-7ae5aedb8ea5
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Conversation participant object.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParticipantResponse"
+      security: []
+  /conversationUuid:
+    get:
+      tags:
+        - conversations
+      operationId: getConversationUuid
+      parameters:
+        - name: conversation_id
+          in: query
+          description: Alphnumeric ID for conversation
+          required: true
+          example: 2demo
+          schema:
+            type: string
+            pattern: ^[0-9][a-z0-9]+$
+      responses:
+        "200":
+          description: CSV with participant and xid columns
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationUuid"
+        "400":
+          description: Bad request
+          content:
+            text/html:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security: []
+  /xid/{conversation_uuid}:
+    get:
+      tags:
+        - conversations
+      operationId: getConversationXidsByUuid
+      parameters:
+        - name: conversation_uuid
+          in: path
+          description: UUID for conversation
+          required: true
+          example: b2bcbd1b-43f7-4640-af05-7ae5aedb8ea5
+          schema:
+            type: string
+            pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+      responses:
+        "200":
+          description: CSV with participant and xid columns
+          content:
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/XidCSV"
+        "400":
+          description: Bad request
+          content:
+            text/html:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security: []
+  /participationInit:
+    get:
+      tags:
+        - initialization
+      operationId: getInitialization
+      parameters:
+        - name: conversation_id
+          in: query
+          description: Alphnumeric ID for conversation
+          required: true
+          example: 2demo
+          schema:
+            type: string
+            pattern: ^[0-9][a-z0-9]+$
+        - name: xid
+          in: query
+          description: Conversation-specific external participant ID.
+          required: false
+          example: b2bcbd1b-43f7-4640-af05-7ae5aedb8ea5
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A participation interface initialization object
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParticipationInit"
+        "400":
+          description: Bad request
+          content:
+            text/html:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security: []
+        # Can't use this until bugfix.
+        # See: https://github.com/openapi-generators/openapi-python-client/issues/1372
+        # - {} # Makes auth optional
+        # - bearerAuth: []
+  /reports:
+    get:
+      tags:
+        - reports
+      operationId: getReport
+      parameters:
+        - name: report_id
+          in: query
+          schema:
+            type: string
+            pattern: ^r?[0-9][a-zA-Z0-9]+$
+      responses:
+        "200":
+          description: An array of comment objects
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArrayOfReport"
+        "400":
+          description: Bad request
+          content:
+            text/html:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security: []
+  /conversations:
+    get:
+      tags:
+        - conversations
+      operationId: getConversation
+      parameters:
+        - name: conversation_id
+          in: query
+          description: Alphnumeric ID for conversation
+          required: true
+          example: 2demo
+          schema:
+            type: string
+            pattern: ^[0-9][a-z0-9]+$
+      responses:
+        "200":
+          description: An array of comment objects
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+        "400":
+          description: Bad request
+          content:
+            text/html:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security: []
+  /votes:
+    get:
+      tags:
+        - votes
+      operationId: getVotes
+      parameters:
+        - name: conversation_id
+          in: query
+          description: Alphnumeric ID for conversation
+          required: true
+          example: 2demo
+          schema:
+            type: string
+            pattern: ^[0-9][a-z0-9]+$
+        - name: pid
+          in: query
+          description: Conversation-specific participant ID
+          required: false
+          example: 42
+          schema:
+            type: integer
+        - name: xid
+          in: query
+          description: Conversation-specific external participant ID.
+          required: false
+          example: b2bcbd1b-43f7-4640-af05-7ae5aedb8ea5
+          schema:
+            type: string
+      responses:
+        "200":
+          description: An array of comment objects
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArrayOfVote"
+        "400":
+          description: Bad request
+          content:
+            text/html:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security: []
+    post:
+      tags:
+        - votes
+      operationId: createVote
+      # parameters:
+      #   - name: xid
+      #     in: query
+      #     description: Conversation-specific external participant ID
+      #     required: false
+      #     example: b2bcbd1b-43f7-4640-af05-7ae5aedb8ea5
+      #     schema:
+      #       type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [conversation_id, tid, vote]
+              properties:
+                conversation_id:
+                  type: string
+                tid:
+                  type: integer
+                vote:
+                  type: integer
+                high_priority:
+                  type: boolean
+                lang:
+                  type: string
+                starred:
+                  type: boolean
+      responses:
+        "200":
+          description: An array of comment objects
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoteResponse"
+        "400":
+          description: Bad request
+          content:
+            text/html:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - bearerAuth: []
+  /math/pca2:
+    get:
+      tags:
+        - math
+      operationId: getMath
+      parameters:
+        - name: conversation_id
+          in: query
+          description: Alphnumeric ID for conversation
+          required: true
+          example: 2demo
+          schema:
+            type: string
+            pattern: ^[0-9][a-z0-9]+$
+      responses:
+        "200":
+          description: An array of comment objects
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MathV3"
+        "400":
+          description: Bad request
+          content:
+            text/html:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security: []
+  /comments:
+    get:
+      tags:
+        - comments
+      summary: List comments
+      description: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc
+        interdum tristique neque, id sollicitudin tortor sollicitudin vitae.
+      operationId: getComments
+      parameters:
+        - name: conversation_id
+          in: query
+          description: Alphnumeric ID for conversation
+          required: true
+          example: 2demo
+          schema:
+            type: string
+            pattern: ^[0-9][a-z0-9]+$
+        - name: moderation
+          in: query
+          description: Whether fetching comments as moderator with additional fields
+          required: false
+          schema:
+            type: boolean
+        - name: include_voting_patterns
+          in: query
+          description: Whether to include voting pattern fields in additional fields (To
+            have effect, requires `moderation` to be `true`)
+          schema:
+            type: boolean
+            default: false
+        - name: include_social
+          in: query
+          schema:
+            type: boolean
+        - name: mod
+          in: query
+          description: When supplied, filters for comments with a specific `mod` value
+          required: false
+          schema:
+            type: integer
+            enum:
+              - -1
+              - 0
+              - 1
+        - name: mod_gt
+          in: query
+          description: When supplied, filters for `mod` greater than this value
+          required: false
+          schema:
+            type: integer
+            enum:
+              - -1
+              - 0
+        - name: report_id
+          in: query
+          schema:
+            type: string
+            pattern: ^r?[0-9][a-zA-Z0-9]+$
+      responses:
+        "200":
+          description: An array of comment objects
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArrayOfComment"
+        "400":
+          description: Bad request
+          content:
+            text/html:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security: []
+    post:
+      tags:
+        - comments
+      summary: Create comment
+      description: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc
+        interdum tristique neque, id sollicitudin tortor sollicitudin vitae.
+      operationId: createComment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [conversation_id, txt]
+              properties:
+                conversation_id:
+                  type: string
+                txt:
+                  type: string
+                is_seed:
+                  type: boolean
+                vote:
+                  type: integer
+                  enum: [-1, 0, 1]
+      responses:
+        "200":
+          description: An array of comment objects
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArrayOfComment"
+        "400":
+          description: Bad request
+          content:
+            text/html:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security:
+        - bearerAuth: []
+  /reportExport/{report_id}/{filename}:
+    get:
+      tags:
+        - exports
+      summary: Download report CSV export
+      description: |
+        Returns CSV files generated by the report export pipeline.
+        Available file types include:
+
+        - `summary.csv`
+        - `comments.csv`
+        - `votes.csv` (event log)
+        - `participant-votes.csv` (votes matrix)
+        - `comment-groups.csv`
+
+        A `400 Bad Request` is returned if the `report_id` does not exist.
+      operationId: getExportFile
+      parameters:
+        - name: report_id
+          in: path
+          required: true
+          description: Report identifier
+          example: r3vumzb3w4zccaty6vcan
+          schema:
+            type: string
+            pattern: ^r?[0-9a-zA-Z]+$
+        - name: filename
+          in: path
+          required: true
+          description: Which export file to download
+          schema:
+            type: string
+            enum:
+              - summary.csv
+              - comments.csv
+              - votes.csv
+              - participant-votes.csv
+              - comment-groups.csv
+      responses:
+        "200":
+          description: CSV file contents
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          description: Bad request
+          content:
+            text/html:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security: []
+components:
+  schemas:
+    ConversationUuid:
+      type: object
+      properties:
+        conversation_uuid:
+          type: string
+
+    XidCSV:
+      type: string
+      example: |
+        participant,xid
+        1,"some-random-string"
+        5,"4880f45f-cc46-4829-b189-577fce9540cb"
+        23,"1234567890"
+
+    MathV3:
+      type: object
+      properties:
+        base-clusters:
+          type: object
+        comment-priorities:
+          type: object
+        consensus:
+          type: object
+        group-aware-consensus:
+          type: object
+        group-clusters:
+          type: array
+          items:
+            type: object
+        group-votes:
+          type: object
+        in-conv:
+          type: array
+          items:
+            type: integer
+        lastModTimestamp:
+          type: null
+        lastVoteTimestamp:
+          type: integer
+        math_tick:
+          type: integer
+        meta-tids:
+          type: array
+          items:
+            type: integer
+        mod-in:
+          type: array
+          items:
+            type: integer
+        mod-out:
+          type: array
+          items:
+            type: integer
+        n:
+          type: integer
+        n-cmts:
+          type: integer
+        pca:
+          type: object
+        repness:
+          type: object
+        tids:
+          type: array
+          items:
+            type: integer
+        user-vote-counts:
+          type: object
+        votes-base:
+          type: object
+
+    MathV4:
+      type: object
+      properties:
+        asBufferOfGzippedJson:
+          type: object
+        asPOJO:
+          $ref: "#/components/schemas/MathV3"
+        asJSON:
+          type: string
+        consensus:
+          type: object
+        expiration:
+          type: integer
+        repness:
+          type: object
+
+    VoteResponse:
+      type: object
+      properties:
+        currentPid:
+          type: integer
+        nextComment:
+          type: object
+
+    ParticipantResponse:
+      type: object
+      properties:
+        pid:
+          type: integer
+        uid:
+          type: integer
+        zid:
+          type: integer
+        vote_count:
+          type: integer
+        last_interaction:
+          type: string
+        subscribed:
+          type: integer
+        last_notified:
+          type: string
+        nsli:
+          type: integer
+        mod:
+          type: integer
+          description: "Moderation status of comment: moderated _out_ (-1), _not yet_
+            moderated (0), or moderated _in_ (1)."
+          enum:
+            - -1
+            - 0
+            - 1
+        created:
+          type: string
+
+    NextVote:
+      type: object
+      properties:
+        txt:
+          type: string
+        tid:
+          type: integer
+        created:
+          type: integer
+        quote_src_url:
+          type: string
+          nullable: true
+        is_seed:
+          type: boolean
+        is_meta:
+          type: boolean
+        lang:
+          type: string
+        pid:
+          type: integer
+        randomN:
+          type: number
+        remaining:
+          type: integer
+        total:
+          type: integer
+        translations:
+          type: array
+          items:
+            type: object
+        currentPid:
+          type: integer
+
+    Vote:
+      type: object
+      properties:
+        pid:
+          type: integer
+        tid:
+          type: integer
+        vote:
+          type: integer
+          schema:
+            type: integer
+            enum:
+              - -1
+              - 0
+              - 1
+        weight_x_32767:
+          type: integer
+        modified:
+          type: integer
+          description: Unix timestamp of vote modification time
+          format: int64
+          example: 1403054214174
+        conversation_id:
+          type: string
+          pattern: ^[0-9][a-z0-9]+$
+    ArrayOfVote:
+      type: array
+      items:
+        $ref: "#/components/schemas/Vote"
+
+    Conversation:
+      type: object
+      properties:
+        auth_needed_to_vote:
+          type: string
+        auth_needed_to_write:
+          type: string
+        auth_opt_allow_3rdparty:
+          type: string
+        auth_opt_fb:
+          type: string
+        auth_opt_tw:
+          type: string
+        bgcolor:
+          type: string
+        context:
+          type: string
+        conversation_id:
+          type: string
+        course_id:
+          type: string
+        # below: created
+        dataset_explanation:
+          type: string
+        description:
+          type: string
+        email_domain:
+          type: string
+        help_bgcolor:
+          type: string
+        help_color:
+          type: string
+        help_type:
+          type: string
+        importance_enabled:
+          type: boolean
+        is_active:
+          type: boolean
+        is_anon:
+          type: boolean
+        is_curated:
+          type: boolean
+        is_data_open:
+          type: boolean
+        is_draft:
+          type: boolean
+        is_mod:
+          type: boolean
+        is_owner:
+          type: boolean
+        is_public:
+          type: boolean
+        link_url:
+          type: string
+        # below: modified
+        need_suzinvite:
+          type: string
+        org_id:
+          type: string
+        owner:
+          type: string
+        owner_sees_participation_stats:
+          type: string
+        ownername:
+          type: string
+        parent_url:
+          type: string
+        participant_count:
+          type: string
+        prioritize_seed:
+          type: string
+        profanity_filter:
+          type: string
+        site_id:
+          type: string
+        socialbtn_type:
+          type: string
+        spam_filter:
+          type: string
+        strict_moderation:
+          type: string
+        style_btn:
+          type: string
+        subscribe_type:
+          type: string
+        topic:
+          type: string
+        translations:
+          type: string
+        treevite_enabled:
+          type: boolean
+        upvotes:
+          type: string
+        use_xid_whitelist:
+          type: string
+        vis_type:
+          type: string
+        write_hint_type:
+          type: string
+        write_type:
+          type: string
+
+        created:
+          type: integer
+          description: Unix timestamp of report creation time
+          format: int64
+          example: 1403054214174
+        modified:
+          type: integer
+          description: Unix timestamp of report modification time
+          format: int64
+          example: 1403054214174
+
+    ParticipationInit:
+      type: object
+      properties:
+        acceptLanguage:
+          type: string
+        conversation:
+          $ref: "#/components/schemas/Conversation"
+        famous:
+          type: object
+        nextComment:
+          type: object
+        pca:
+          oneOf:
+            - $ref: "#/components/schemas/MathV4"
+            # Old Polis servers.
+            - type: string
+        ptpt:
+          allOf:
+            - nullable: true
+            - $ref: "#/components/schemas/ParticipantResponse"
+
+        user:
+          type: object
+        votes:
+          type: array
+          items:
+            type: object
+        auth:
+          $ref: "#/components/schemas/AuthTokenResponse"
+
+
+    ### Not working with openapi-python-client
+
+    # ParticipationInitAlt:
+    #   anyOf:
+    #     - $ref: "#/components/schemas/ParticipationInit"
+    #     - allOf:
+    #       - $ref: "#/components/schemas/ParticipationInit"
+    #       - type: object
+    #         properties:
+    #           auth:
+    #             $ref: "#/components/schemas/AuthTokenResponse"
+
+    Report:
+      required:
+        - report_id
+      type: object
+      properties:
+        report_id:
+          type: string
+        created:
+          type: integer
+          description: Unix timestamp of report creation time
+          format: int64
+          example: 1403054214174
+        modified:
+          type: integer
+          description: Unix timestamp of report modification time
+          format: int64
+          example: 1403054214174
+        report_name:
+          type: null
+        mod_level:
+          type: integer
+        conversation_id:
+          type: string
+    ArrayOfReport:
+      type: array
+      items:
+        $ref: "#/components/schemas/Report"
+
+    Comment:
+      required:
+        - txt
+        - tid
+        - created
+        - quote_src_url
+        - is_seed
+        - is_meta
+        - lang
+        - pid
+      type: object
+      properties:
+        txt:
+          type: string
+          description: Body text of the comment
+          example: Lorem ipsum dolor sit amet, consectetur adipiscing elit
+        tid:
+          type: integer
+          description: Numeric ID of comment
+          minimum: 0
+          example: 12
+        created:
+          type: integer
+          description: Unix timestamp of comment creation time
+          format: int64
+          example: 1403054214174
+        quote_src_url:
+          type: string
+          nullable: true
+          deprecated: true
+          description: URL for a quoted tweet
+          example: Lorem ipsum dolor sit amet, consectetur adipiscing elit
+        is_seed:
+          type: boolean
+          description: Whether comment is a seed comment from moderator
+          example: true
+        is_meta:
+          type: boolean
+          description: Whether comment has been marked as metadata by moderator
+          example: false
+        lang:
+          type: string
+          description: Language of submitted comment
+          pattern: ^[a-z]{2}$
+          example: en
+        pid:
+          type: integer
+          description: Conversation-specific numeric ID of participant
+          minimum: 0
+          example: 0
+        # moderation=true
+        velocity:
+          type: number
+          default: 1
+        mod:
+          type: integer
+          description: "Moderation status of comment: moderated _out_ (-1), _not yet_
+            moderated (0), or moderated _in_ (1)."
+          enum:
+            - -1
+            - 0
+            - 1
+          default: 0
+        active:
+          type: boolean
+        # include_voting_patterns=true
+        agree_count:
+          type: integer
+          minimum: 0
+          example: 75
+        disagree_count:
+          type: integer
+          minimum: 0
+          example: 29
+        pass_count:
+          type: integer
+          minimum: 0
+          example: 37
+        count:
+          type: integer
+          minimum: 0
+          example: 141
+
+    ArrayOfComment:
+      type: array
+      items:
+        $ref: "#/components/schemas/Comment"
+
+    AuthTokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        token_type:
+          type: string
+        expires_in:
+          type: integer
+
+    ApiError:
+      # Use null to simplify types. In reality returns a string.
+      type: null
+      # type: string
+      example: Bad Request
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
