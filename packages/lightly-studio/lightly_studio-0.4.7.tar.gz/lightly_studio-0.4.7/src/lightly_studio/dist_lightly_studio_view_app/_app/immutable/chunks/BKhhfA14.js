@@ -1,0 +1,1 @@
+import{r as i}from"./BQhJr0Qw.js";import{h as n}from"./Yb_TZ_Rf.js";import{c}from"./DcA8i6zt.js";const v=({collectionId:e})=>{const o=c(i());return o.subscribe(()=>{}),{removeTagFromSample:(r,m)=>new Promise((t,a)=>{n(o).mutate({path:{collection_id:e,sample_id:r,tag_id:m}},{onSuccess:()=>t(),onError:s=>a(s)})})}};export{v as u};
