@@ -1,0 +1,376 @@
+# llm_stream_filter.py
+# Copyright (C) 2024-2025 Collabora Ltd.
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Library General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# Library General Public License for more details.
+#
+# You should have received a copy of the GNU Library General Public
+# License along with this library; if not, write to the
+# Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+# Boston, MA 02110-1301, USA.
+
+
+from log.global_logger import GlobalLogger
+
+CAN_REGISTER_ELEMENT = True
+try:
+    import gi
+
+    gi.require_version("Gst", "1.0")
+    gi.require_version("GstBase", "1.0")
+    gi.require_version("GstVideo", "1.0")
+    gi.require_version("GLib", "2.0")
+    gi.require_version("GstAnalytics", "1.0")
+    from gi.repository import Gst, GObject, GstAnalytics, GLib
+    import numpy as np
+    import cv2
+
+    from utils.muxed_buffer_processor import MuxedBufferProcessor
+    from video_transform import VideoTransform
+    from engine.engine_manager import EngineManager
+    from utils.caption_utils import load_captions
+    import torch
+    from transformers import BitsAndBytesConfig
+except ImportError as e:
+    CAN_REGISTER_ELEMENT = False
+    GlobalLogger().warning(
+        f"The 'pyml_llmstreamfilter' element will not be available. Error {e}"
+    )
+
+
+class LLMStreamFilter(VideoTransform):
+    """
+    GStreamer element that captions video frames (or loads captions from disk), processes
+    captions with an LLM to select the N most interesting ones, and outputs only those streams.
+    Supports dynamic updates to the prompt and number of streams during runtime.
+    """
+
+    __gstmetadata__ = (
+        "LLMStreamFilter",
+        "Transform",
+        "Captions video clips and selects N most interesting streams",
+        "Aaron Boxer <aaron.boxer@collabora.com>",
+    )
+
+    __gsttemplates__ = (
+        Gst.PadTemplate.new(
+            "video_src",
+            Gst.PadDirection.SRC,
+            Gst.PadPresence.ALWAYS,
+            Gst.Caps.from_string("video/x-raw"),
+        ),
+        Gst.PadTemplate.new(
+            "text_src",
+            Gst.PadDirection.SRC,
+            Gst.PadPresence.REQUEST,
+            Gst.Caps.from_string("text/x-raw, format=utf8"),
+        ),
+    )
+
+    num_streams = GObject.Property(
+        type=int,
+        default=2,
+        nick="Number of Streams",
+        blurb="Number of streams to select (N)",
+    )
+
+    prompt = GObject.Property(
+        type=str,
+        default="Choose the {n} most interesting captions from the following list:\n{captions}",
+        nick="LLM Prompt",
+        blurb="Prompt for selecting the most interesting captions",
+    )
+
+    llm_model_name = GObject.Property(
+        type=str,
+        default="microsoft/phi-2",
+        nick="LLM Model Name",
+        blurb="Name of the pre-trained LLM model to load",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
+    caption_file = GObject.Property(
+        type=str,
+        default="",
+        nick="Caption File",
+        blurb="Path to JSON file containing pre-generated captions (for test/demo mode)",
+        flags=GObject.ParamFlags.READWRITE,
+    )
+
+    def __init__(self):
+        super().__init__()
+        self.model_name = (
+            "phi-3.5-vision"  # Caption model, inherited from BaseTransform
+        )
+        self.llm_engine_helper = EngineManager(GlobalLogger())
+        self.llm_engine = None
+        self.selected_streams = []
+        self.captions = {}  # Loaded captions from file
+        self.frame_index = 0  # Track frame index for caption lookup
+        self.logger = GlobalLogger()
+
+    def do_set_property(self, prop, value):
+        """
+        Handle property changes, including runtime updates to prompt, num_streams, llm_model_name, and caption_file.
+        """
+        if prop.name == "num-streams":
+            self.num_streams = value
+            self.logger.info(f"Updated num_streams to {value}")
+        elif prop.name == "prompt":
+            self.prompt = value
+            if self.llm_engine:
+                self.llm_engine.prompt = value
+            self.logger.info(f"Updated prompt to: {value}")
+        elif prop.name == "llm-model-name":
+            self.llm_model_name = value
+            if self.llm_engine:
+                self.llm_engine_helper.do_load_model(self.llm_model_name)
+                self.llm_engine = self.llm_engine_helper.engine
+            self.logger.info(f"Updated llm_model_name to: {value}")
+        elif prop.name == "caption-file":
+            self.caption_file = value
+            self.captions = load_captions(self.caption_file, self.logger)
+            self.logger.info(f"Updated caption_file to: {value}")
+        else:
+            super().do_set_property(prop, value)
+
+    def do_get_property(self, prop):
+        """
+        Retrieve property values.
+        """
+        if prop.name == "num-streams":
+            return self.num_streams
+        elif prop.name == "prompt":
+            return self.prompt
+        elif prop.name == "llm-model-name":
+            return self.llm_model_name
+        elif prop.name == "caption-file":
+            return self.caption_file
+        else:
+            return super().do_get_property(prop)
+
+    def do_start(self):
+        """
+        Initialize the element, including pads and engines.
+        """
+        self.text_src_pad = Gst.Pad.new_from_template(
+            self.get_pad_template("text_src"), "text_src"
+        )
+        self.add_pad(self.text_src_pad)
+
+        # Load captions if caption_file is set
+        if self.caption_file:
+            self.captions = load_captions(self.caption_file, self.logger)
+
+        self.link_to_downstream_text_sink()
+        return True
+
+    def do_load_model(self):
+        """
+        Load caption model (if not using caption_file) and LLM model.
+        """
+        try:
+            # Initialize caption engine (only if not using caption_file)
+            if not self.caption_file:
+                self.initialize_engine()
+                if not self.engine:
+                    self.initialize_engine()
+                    if not self.engine:
+                        self.logger.error("Failed to initialize caption engine")
+                        return False
+                self.engine.do_load_model(self.model_name)
+                if not self.engine.get_model():
+                    self.logger.error("Failed to load caption model")
+                    return False
+
+            # Initialize LLM engine with enhanced quantization
+            if not self.llm_engine:
+                self.llm_engine_helper.do_set_device(
+                    self.device if hasattr(self, "device") else "cuda:0"
+                )
+                self.llm_engine_helper.initialize_engine()
+                self.llm_engine_helper.kwargs = {
+                    "quantization_config": BitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_use_double_quant=True,
+                        bnb_4bit_compute_dtype=torch.bfloat16,
+                    )
+                }
+                self.llm_engine_helper.do_load_model(self.llm_model_name)
+                self.llm_engine = self.llm_engine_helper.engine
+                if not self.llm_engine:
+                    self.logger.error("Failed to load LLM engine")
+                    return False
+                self.llm_engine.prompt = self.prompt
+
+            return True
+        except Exception as e:
+            self.logger.error(f"Error loading models: {e}")
+            return False
+
+    def link_to_downstream_text_sink(self):
+        """
+        Attempts to link the text_src pad to a downstream text_sink pad.
+        """
+        self.logger.info("Attempting to link text_src pad to downstream text_sink pad")
+        src_peer = self.get_static_pad("src").get_peer()
+        if src_peer:
+            downstream_element = src_peer.get_parent()
+            text_sink_pad = downstream_element.get_static_pad("text_sink")
+            if text_sink_pad:
+                self.text_src_pad.link(text_sink_pad)
+                self.logger.info("Successfully linked text_src to downstream text_sink")
+            else:
+                self.logger.warning("No text_sink pad found downstream")
+        else:
+            self.logger.warning("No downstream peer found")
+
+    def push_text_buffer(self, text, buf_pts, buf_duration):
+        """
+        Pushes a text buffer to the text_src pad.
+        """
+        text_buffer = Gst.Buffer.new_wrapped(text.encode("utf-8"))
+        text_buffer.pts = buf_pts
+        text_buffer.dts = buf_pts
+        # text_buffer.duration = buf_duration  # Disabled to avoid pipeline freeze
+        ret = self.text_src_pad.push(text_buffer)
+        if ret != Gst.FlowReturn.OK:
+            self.logger.error(f"Failed to push text buffer: {ret}")
+
+    def select_interesting_streams(self, captions, num_streams):
+        """
+        Uses the LLM to select the N most interesting captions.
+        Returns the indices of the selected streams.
+        """
+        try:
+            captions_text = "\n".join([f"{i}: {c}" for i, c in enumerate(captions)])
+            prompt = self.prompt.format(n=num_streams, captions=captions_text)
+            self.logger.info(f"LLM prompt: {prompt}")
+
+            generated_text = self.llm_engine.generate(prompt)
+            self.logger.info(f"LLM output: {generated_text}")
+
+            selected_indices = []
+            for line in generated_text.split("\n"):
+                try:
+                    idx = int(line.split(":")[0])
+                    if 0 <= idx < len(captions):
+                        selected_indices.append(idx)
+                except (ValueError, IndexError):
+                    continue
+
+            return selected_indices[:num_streams]
+        except Exception as e:
+            self.logger.error(f"Error in LLM processing: {e}")
+            return []
+
+    def do_transform_ip(self, buf):
+        """
+        In-place transformation: loads or generates captions, selects N streams, and outputs results.
+        """
+        try:
+            muxed_processor = MuxedBufferProcessor(
+                self.logger,
+                self.width,
+                self.height,
+                framerate_num=30,
+                framerate_denom=1,
+            )
+            frames, id_str, num_sources, format = muxed_processor.extract_frames(
+                buf, self.sinkpad
+            )
+            if frames is None:
+                self.logger.error("Failed to extract frames")
+                return Gst.FlowReturn.ERROR
+
+            if buf.pts == Gst.CLOCK_TIME_NONE:
+                buf.pts = Gst.util_uint64_scale(
+                    Gst.util_get_timestamp(), 1, 30 * Gst.SECOND
+                )
+            if buf.duration == Gst.CLOCK_TIME_NONE:
+                buf.duration = Gst.SECOND // 30
+
+            captions = []
+            if self.caption_file:
+                # Load captions from file for each stream
+                for idx in range(num_sources):
+                    caption = self.captions.get(self.frame_index + idx, "")
+                    captions.append(caption)
+                    self.logger.info(
+                        f"Loaded caption for frame {self.frame_index + idx}: {caption}"
+                    )
+                self.frame_index += num_sources
+            else:
+                # Generate captions using phi-3.5-vision
+                if num_sources == 1:
+                    frame = frames
+                    result = self.engine.do_forward(frame)
+                    captions.append(result if result else "")
+                else:
+                    results = self.engine.do_forward(frames)
+                    results_list = (
+                        results
+                        if isinstance(results, list)
+                        else [results] * num_sources
+                    )
+                    if len(results_list) != num_sources:
+                        self.logger.error(
+                            f"Expected {num_sources} results, got {len(results_list)}"
+                        )
+                        return Gst.FlowReturn.ERROR
+                    captions = [r if r else "" for r in results_list]
+
+            # Select the most interesting streams
+            self.selected_streams = self.select_interesting_streams(
+                captions, self.num_streams
+            )
+            self.logger.info(f"Selected streams: {self.selected_streams}")
+
+            # Add metadata and push text buffers for selected streams
+            for idx, caption in enumerate(captions):
+                if idx in self.selected_streams:
+                    meta = GstAnalytics.buffer_add_analytics_relation_meta(buf)
+                    if meta:
+                        qk = GLib.quark_from_string(f"stream_{idx}_{caption}")
+                        ret, mtd = meta.add_one_cls_mtd(idx, qk)
+                        if ret:
+                            self.logger.info(f"Stream {idx}: Added caption {caption}")
+                        else:
+                            self.logger.error(f"Stream {idx}: Failed to add metadata")
+                    else:
+                        self.logger.error(
+                            f"Stream {idx}: Failed to add GstAnalytics metadata"
+                        )
+
+                    if self.text_src_pad and self.text_src_pad.is_linked():
+                        frame_pts = buf.pts + (idx * (buf.duration // num_sources))
+                        self.push_text_buffer(
+                            caption, frame_pts, buf.duration // num_sources
+                        )
+                    else:
+                        self.logger.warning(f"Stream {idx}: text_src pad not linked")
+
+            # Clean up GPU memory
+            torch.cuda.empty_cache()
+
+            return Gst.FlowReturn.OK
+
+        except Exception as e:
+            self.logger.error(f"Error during transformation: {e}")
+            return Gst.FlowReturn.ERROR
+
+
+if CAN_REGISTER_ELEMENT:
+    GObject.type_register(LLMStreamFilter)
+    __gstelementfactory__ = ("pyml_llmstreamfilter", Gst.Rank.NONE, LLMStreamFilter)
+else:
+    GlobalLogger().warning(
+        "The 'pyml_llmstreamfilter' element will not be registered because required modules are missing."
+    )

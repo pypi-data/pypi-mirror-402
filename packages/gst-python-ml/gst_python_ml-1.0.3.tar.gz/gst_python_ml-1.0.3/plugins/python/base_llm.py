@@ -1,0 +1,154 @@
+# BaseLlm
+# Copyright (C) 2024-2025 Collabora Ltd.
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Library General Public
+# License as published by the Free Software Foundation; either
+# version 2 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Library General Public License for more details.
+#
+# You should have received a copy of the GNU Library General Public
+# License along with this library; if not, write to the
+# Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+# Boston, MA 02110-1301, USA.
+
+
+import gi
+
+gi.require_version("Gst", "1.0")
+gi.require_version("GLib", "2.0")
+from gi.repository import Gst, GObject  # noqa: E402
+
+from base_aggregator import BaseAggregator
+
+
+class BaseLlm(BaseAggregator):
+    """
+    GStreamer base element that performs language model inference
+    with a PyTorch model.
+    """
+
+    @GObject.Property(type=str)
+    def system_prompt(self):
+        "Custom system prompt text"
+        return self.__system_prompt
+
+    @system_prompt.setter
+    def system_prompt(self, value):
+        self.__system_prompt = value
+
+    @GObject.Property(type=str)
+    def prompt(self):
+        "Custom prompt text"
+        return self.__prompt
+
+    @prompt.setter
+    def prompt(self, value):
+        self.__prompt = value
+
+    __gsttemplates__ = (
+        Gst.PadTemplate.new(
+            "src",
+            Gst.PadDirection.SRC,
+            Gst.PadPresence.ALWAYS,
+            Gst.Caps.from_string("text/x-raw,format=utf8"),
+        ),
+        Gst.PadTemplate.new(
+            "sink",
+            Gst.PadDirection.SINK,
+            Gst.PadPresence.REQUEST,
+            Gst.Caps.from_string("text/x-raw,format=utf8"),
+        ),
+    )
+
+    def __init__(self):
+        super().__init__()
+
+    def do_process(self, buf):
+        """
+        Processes the input buffer with the language model
+        and pushes the result downstream.
+        """
+        try:
+            # Map buffer to read input text
+            success, map_info = buf.map(Gst.MapFlags.READ)
+            if not success:
+                self.logger.error("Failed to map buffer")
+                return Gst.FlowReturn.ERROR
+
+            # Convert memoryview to bytes and decode to string
+            input_text = bytes(map_info.data).decode("utf-8")
+            self.logger.info(f"Received text for LLM processing: {input_text}")
+
+            # Ensure engine is initialized
+            if not self.engine:
+                self.logger.info("Engine not initialized, initializing now")
+                self.mgr.initialize_engine()
+                self.mgr.do_load_model(self.model_name)
+
+            # Retry model loading if tokenizer or model is missing
+            tokenizer = self.get_tokenizer()
+            model = self.get_model()
+            self.logger.info(f"Tokenizer: {tokenizer}")
+            self.logger.info(f"Model: {model}")
+            if not tokenizer or not model:
+                self.logger.error(
+                    f"Tokenizer initialized: {tokenizer is not None}, Model initialized: {model is not None}"
+                )
+                self.logger.warning("Attempting to reload model")
+                if not self.mgr.do_load_model(self.model_name):
+                    self.logger.error("Model reload failed")
+                    buf.unmap(map_info)
+                    return Gst.FlowReturn.ERROR
+                tokenizer = self.get_tokenizer()
+                model = self.get_model()
+                if not tokenizer or not model:
+                    self.logger.error("Model reload failed again")
+                    buf.unmap(map_info)
+                    return Gst.FlowReturn.ERROR
+
+            # Generate text using the engine
+            generated_text = self.engine.do_generate(
+                input_text, system_prompt=self.system_prompt
+            )
+            self.logger.info(f"Generated text: {generated_text}")
+
+            buf.unmap(map_info)
+
+            # Push the generated text downstream
+            return self.push_generated_text(buf, generated_text)
+
+        except Exception as e:
+            self.logger.error(f"Error in LLM processing: {e}")
+            return Gst.FlowReturn.ERROR
+
+    def push_generated_text(self, inbuf, generated_text):
+        """
+        Push the generated text downstream.
+        """
+        try:
+            generated_bytes = generated_text.encode("utf-8")
+            outbuf = Gst.Buffer.new_allocate(None, len(generated_bytes), None)
+            success, map_info_out = outbuf.map(Gst.MapFlags.WRITE)
+            if not success:
+                self.logger.error("Failed to map output buffer for writing")
+                return Gst.FlowReturn.ERROR
+
+            map_info_out.data[: len(generated_bytes)] = generated_bytes
+            outbuf.unmap(map_info_out)
+            outbuf.pts = inbuf.pts
+            outbuf.dts = inbuf.dts
+            outbuf.duration = inbuf.duration
+
+            # Push the buffer downstream
+            self.logger.info("Pushed generated text downstream")
+            ret = self.srcpad.push(outbuf)
+
+            return ret
+
+        except Exception as e:
+            self.logger.error(f"Error pushing generated text: {e}")
