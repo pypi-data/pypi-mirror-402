@@ -1,0 +1,229 @@
+Metadata-Version: 2.4
+Name: browser7
+Version: 0.1.0a1
+Summary: Official Python SDK for Browser7 - Geo-targeted web scraping with automatic CAPTCHA solving and wait actions [ALPHA - API launching Q2 2026]
+Author-email: Browser7 <support@browser7.com>
+License: MIT
+Project-URL: Homepage, https://browser7.com
+Project-URL: Documentation, https://docs.browser7.com
+Project-URL: Repository, https://github.com/browser7data/browser7-python
+Project-URL: Bug Tracker, https://github.com/browser7data/browser7-python/issues
+Keywords: browser7,web-scraping,scraping,rendering,headless-browser,captcha,captcha-solver,geo-targeting,proxy,api-client,screenshot,automation
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Internet :: WWW/HTTP
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Dynamic: license-file
+
+# Browser7 Python SDK
+
+> ⚠️ **ALPHA RELEASE** - The Browser7 API is not yet publicly available. This package is published to reserve the package name. The API is expected to launch in **Q2 2026**.
+>
+> **Do not install this package yet** - it will not work until the Browser7 API is live. Follow [@browser7data](https://x.com/browser7data) or visit [browser7.com](https://browser7.com) for launch announcements.
+
+---
+
+Official Python client for the [Browser7](https://browser7.com) web scraping and rendering API.
+
+Browser7 provides geo-targeted web scraping with automatic proxy management, CAPTCHA solving, and powerful wait actions for dynamic content.
+
+## Features
+
+- 🌍 **Geo-Targeting** - Render pages from specific countries and cities
+- 🤖 **CAPTCHA Solving** - Automatic detection and solving of reCAPTCHA and Cloudflare Turnstile
+- ⏱️ **Wait Actions** - Click elements, wait for selectors, text, or delays
+- 📸 **Screenshots** - Get JPEG screenshots of rendered pages
+- 🚀 **Performance** - Block images, track bandwidth, view timing metrics
+- 🔄 **Automatic Polling** - Built-in polling with progress callbacks
+- 💪 **Type Hints** - Full type annotations for IDE support
+
+## Installation
+
+```bash
+pip install browser7
+```
+
+**Requirements:** Python 3.8+
+
+## Quick Start
+
+```python
+from browser7 import Browser7
+
+client = Browser7(api_key='your-api-key')
+
+# Simple render
+result = client.render('https://example.com')
+print(result.html)
+```
+
+## Authentication
+
+Get your API key from the [Browser7 Dashboard](https://dashboard.browser7.com).
+
+```python
+client = Browser7(api_key='b7_your_api_key_here')
+```
+
+## Usage Examples
+
+### Basic Rendering
+
+```python
+result = client.render('https://example.com', country_code='US')
+
+print(result.html)              # Rendered HTML
+print(result.screenshot)        # JPEG screenshot (bytes)
+print(result.selected_city)     # City used for rendering
+```
+
+### With Wait Actions
+
+```python
+from browser7 import wait_for_click, wait_for_selector, wait_for_delay
+
+result = client.render(
+    'https://example.com',
+    country_code='GB',
+    city='london',
+    wait_for=[
+        wait_for_click('.cookie-accept'),           # Click element
+        wait_for_selector('.main-content'),          # Wait for element
+        wait_for_delay(2000)                         # Wait 2 seconds
+    ]
+)
+```
+
+### With CAPTCHA Solving
+
+```python
+result = client.render(
+    'https://protected-site.com',
+    country_code='US',
+    captcha='auto'  # Auto-detect and solve CAPTCHAs
+)
+
+print(result.captcha)  # CAPTCHA detection info
+```
+
+## API Reference
+
+### `Browser7(api_key, base_url=None)`
+
+Create a new Browser7 client.
+
+**Parameters:**
+- `api_key` (str, required): Your Browser7 API key
+- `base_url` (str, optional): Full API base URL. Defaults to production API.
+
+**Example:**
+```python
+# Production (default)
+client = Browser7(api_key='your-api-key')
+
+# Canadian endpoint
+client = Browser7(
+    api_key='your-api-key',
+    base_url='https://ca-api.browser7.com/v1'
+)
+```
+
+### `client.render(url, **options)`
+
+Render a URL and poll for the result.
+
+**Parameters:**
+- `url` (str): The URL to render
+- `country_code` (str, optional): Country code (e.g., 'US', 'GB', 'DE')
+- `city` (str, optional): City name (e.g., 'new.york', 'london')
+- `wait_for` (list, optional): List of wait actions (max 10)
+- `captcha` (str, optional): CAPTCHA mode: 'disabled', 'auto', 'recaptcha_v2', 'recaptcha_v3', 'turnstile'
+- `block_images` (bool, optional): Block images for faster rendering (default: True)
+- `fetch_urls` (list, optional): Additional URLs to fetch (max 10)
+
+**Returns:** `RenderResult` object
+
+## Helper Functions
+
+### `wait_for_delay(duration)`
+
+Create a delay wait action.
+
+```python
+wait_for_delay(3000)  # Wait 3 seconds
+```
+
+### `wait_for_selector(selector, state='visible', timeout=30000)`
+
+Create a selector wait action.
+
+```python
+wait_for_selector('.main-content', state='visible', timeout=10000)
+```
+
+### `wait_for_text(text, selector=None, timeout=30000)`
+
+Create a text wait action.
+
+```python
+wait_for_text('In Stock', selector='.availability', timeout=10000)
+```
+
+### `wait_for_click(selector, timeout=30000)`
+
+Create a click wait action.
+
+```python
+wait_for_click('.cookie-accept', timeout=5000)
+```
+
+## Supported Countries
+
+AT, BE, CA, CH, CZ, DE, FR, GB, HR, HU, IT, NL, PL, SK, US
+
+See [Browser7 Documentation](https://docs.browser7.com) for available cities per country.
+
+## CAPTCHA Support
+
+Browser7 supports automatic CAPTCHA detection and solving for:
+
+- **reCAPTCHA v2** - Google's image-based CAPTCHA
+- **reCAPTCHA v3** - Google's score-based CAPTCHA
+- **Cloudflare Turnstile** - Cloudflare's CAPTCHA alternative
+
+**Modes:**
+- `'disabled'` (default) - Skip CAPTCHA detection (fastest)
+- `'auto'` - Auto-detect and solve any CAPTCHA type
+- `'recaptcha_v2'`, `'recaptcha_v3'`, `'turnstile'` - Solve specific type
+
+## Contributing
+
+Issues and pull requests are welcome! Please visit our [GitHub repository](https://github.com/browser7data/browser7-python).
+
+## License
+
+MIT
+
+## Support
+
+- 📧 Email: support@browser7.com
+- 📚 Documentation: https://docs.browser7.com
+- 🐛 Issues: https://github.com/browser7data/browser7-python/issues
+- 💬 Discord: https://discord.gg/browser7
+
+## Links
+
+- [Browser7 Website](https://browser7.com)
+- [API Documentation](https://docs.browser7.com/api)
+- [Dashboard](https://dashboard.browser7.com)
+- [Pricing](https://browser7.com/pricing)
