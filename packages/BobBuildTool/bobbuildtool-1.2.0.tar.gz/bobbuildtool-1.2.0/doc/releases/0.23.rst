@@ -1,0 +1,105 @@
+Bob 0.23 Release Notes
+======================
+
+Changes made since Bob 0.22.0 include the following.
+
+New features
+------------
+
+* The TUI now handles many jobs better by switching to a different output
+  format. By default the new TUI is utilized when more than 16 jobs are used.
+  This can be configured by the ``parallelTUIThreshold`` key in the
+  :ref:`configuration-config-ui` section of the user configuration.
+* Bob now warns if files collide on ``--destination`` builds.
+
+  When building with ``--destination`` the result of all built packages is
+  copied to the desired directory. It has never been an error if files
+  are overwritten by that to support building multiple times in a row with the
+  same destination. But if multiple built packages contain the same files then
+  they silently overwrite each other. Now Bob issues a warning message for this
+  case because the destination is in an undefined state.
+* Added support for string substitution to package names in
+  :ref:`configuration-recipes-depends` section.
+* Project generators gained the ability to use package queries.
+
+  Usually project generators only handle a single package. There are use cases
+  where a generator needs complex package queries with :ref:`manpage-bobpaths`,
+  though. To support this, a ``projectGenerator`` can set the additional
+  ``query`` property to ``True``. In this case the first argument for the
+  generator is a "generator iterator" that yields :class:`bob.input.Package`
+  objects. See :ref:`extending-generators` for more details.
+* Bob can retry downloads of git and url SCMs when they fail.
+
+  Bob performs a configurable number of retries for ``git`` and ``wget``
+  commands where server communication is needed. After each unsuccessful
+  operation Bob waits 3 seconds before retrying. By default no retries are
+  made. See :ref:`configuration-recipes-scm`.
+
+Backwards incompatible changes
+------------------------------
+
+* Better support for ``checkoutScript`` changes with respect to recipes that
+  utilize :ref:`configuration-recipes-checkoutUpdateIf`. (:issue:`506`)
+
+  The tracking of recipe changes was not sufficient for build-only updates of
+  checkouts that involve the ``import``-SCM or recipes that utilize
+  :ref:`configuration-recipes-checkoutUpdateIf`. Bob was over-cautious and
+  prevented running these updates if *anything* related to the checkout step
+  changed.
+
+  To make the behaviour more predictable, Bob now tracks the related state more
+  closely. Updates of checkouts in build-only mode are now only prevented if an
+  ``import``-SCM is changed. So changes to the ``checkoutScript`` will always
+  trigger the update in build-only mode and run the affected parts of the
+  ``checkoutScript``.
+* Use Python to extract zip and tar files only on Windows.
+
+  The ``tarfile`` and ``zipfile`` Python modules are slower and have
+  behavioural differences compared to their native implementations. The
+  ``tarfile`` module in particular differs in the handling of file modes (it
+  does not behave like GNU tar with ``--no-same-permissions`` which is used by
+  Bob). The ``zipfile`` module looks safer but is certainly slower than the
+  native implementation. Consequently, the Python implementations are not used
+  on POSIX systems anymore, including MSYS2. This might break builds when these
+  essential tools are not installed.
+
+  On the other hand the ``unzip`` and ``tar`` tools are usually not available
+  on native Windows installations. There even seem to be broken ``unzip`` tools
+  out there in the wild (:issue:`496`). For this reason, Bob prefers to use
+  Python to extract tar and zip files on native Windows installations (*not*
+  MSYS2).
+
+Bug fixes
+---------
+
+* Remove binary wheel for Windows. It was causing installation problems on
+  Linux and was never needed to begin with. (:issue:`502`)
+* Fixed the Azure :ref:`configuration-config-archive` backend. (:issue:`505`)
+* Added the missing ``attic`` option to the default dev/build settings
+* Fixed error reporting in Qtcreator and Eclipse project generators of invalid
+  regular expressions
+* Added ``--debug`` and ``--color`` switches to bash-completion
+* Removed Sphinx setuptools integration.
+
+  The Sphinx project removed the setuptools integration with version 7. When
+  installing Bob from a source distribution it is now required to have `Sphinx
+  <https://pypi.org/project/Sphinx/>`_ installed. (:issue:`513` and
+  :issue:`515`).
+* Bob now does inline updates of git repositories also when the
+  ``useCommitOnBranch`` property changes.
+* Fixed garbling of shared packages.
+
+  Packages at shared locations are immutable. If the recipe was changed and the
+  package is unshared, the workspace link in the project tree should be
+  removed. The bug was that Bob actually cleared the shared location instead of
+  removing the symlink. (:issue:`522`)
+* Fixed broken variant handling regarding the ``dir`` attribute of ``import``
+  SCMs. Bob versions before 0.23 contained a bug where the ``dir`` attribute of
+  an ``import`` SCM was not included in the :term:`Variant-Id` calculation.
+  This can cause build failures or wrongly used binary artifacts if just the
+  ``dir`` attribute of an ``import`` SCM is changed. Because the fix cannot be
+  made in a backwards compatible way, a new :ref:`policies-fixImportScmVariant`
+  policy was introduced.
+* Fixed handling of nested annotated git tags in :ref:`manpage-bob-status`.
+  Even though nested tags, that is a tag that points at a tag, could be checked
+  out successfully, the workspace was flagged as "switched". (:issue:`520`)
