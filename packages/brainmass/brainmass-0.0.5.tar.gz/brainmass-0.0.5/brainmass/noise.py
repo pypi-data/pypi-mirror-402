@@ -1,0 +1,254 @@
+# Copyright 2025 BrainX Ecosystem Limited. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+
+from typing import Callable
+
+import braintools
+import brainunit as u
+import jax.numpy as jnp
+
+import brainstate
+from brainstate.nn import Dynamics, Param
+from .typing import Parameter
+
+__all__ = [
+    'Noise',
+    'OUProcess',
+    'GaussianNoise',
+    'WhiteNoise',
+    'ColoredNoise',
+    'BrownianNoise',
+    'PinkNoise',
+    'BlueNoise',
+    'VioletNoise',
+]
+
+
+class Noise(Dynamics):
+    __module__ = 'brainmass'
+
+
+class GaussianNoise(Noise):
+    """Gaussian (white) noise process without state (i.i.d. across time)."""
+    __module__ = 'brainmass'
+
+    def __init__(
+        self,
+        in_size: brainstate.typing.Size,
+        mean: Parameter = None,
+        sigma: Parameter = 1. * u.nA,
+    ):
+        super().__init__(in_size=in_size)
+
+        self.sigma = Param.init(sigma, self.varshape)
+        self.mean = Param.init(
+            0. * u.get_unit(self.sigma.value()) if mean is None else mean,
+            self.varshape
+        )
+
+    def update(self):
+        mean = self.mean.value()
+        sigma = self.sigma.value()
+        z = brainstate.random.normal(loc=0.0, scale=1.0, size=self.varshape)
+        return mean + sigma * z
+
+
+class WhiteNoise(GaussianNoise):
+    """Alias of GaussianNoise for semantic clarity."""
+    __module__ = 'brainmass'
+
+
+class BrownianNoise(Noise):
+    """
+    Brownian (red) noise: discrete-time integral of white noise.
+
+    x[t+dt] = x[t] + sigma * sqrt(dt) * N(0, 1)
+    output = mean + x
+    """
+    __module__ = 'brainmass'
+
+    def __init__(
+        self,
+        in_size: brainstate.typing.Size,
+        mean: Parameter = None,
+        sigma: Parameter = 1. * u.nA,
+        init: Callable = braintools.init.ZeroInit(unit=u.nA)
+    ):
+        super().__init__(in_size=in_size)
+
+        self.sigma = Param.init(sigma, self.varshape)
+        self.mean = Param.init(
+            0. * u.get_unit(self.sigma.value()) if mean is None else mean,
+            self.varshape
+        )
+        self.init = init
+
+    def init_state(self, batch_size=None, **kwargs):
+        self.x = brainstate.HiddenState.init(self.init, self.varshape, batch_size)
+
+    def update(self):
+        mean = self.mean.value()
+        sigma = self.sigma.value()
+        noise = brainstate.random.randn(*self.varshape)
+        dt_sqrt = u.math.sqrt(brainstate.environ.get_dt())
+        self.x.value = self.x.value + sigma / dt_sqrt * dt_sqrt * noise
+        return mean + self.x.value
+
+
+class ColoredNoise(Noise):
+    """
+    Colored noise with PSD ~ 1/f^beta generated via frequency-domain shaping.
+
+    Note: Each update call synthesizes a fresh sample over the last axis using
+    FFT shaping; there is no temporal state carried across updates.
+    """
+    __module__ = 'brainmass'
+
+    def __init__(
+        self,
+        in_size: brainstate.typing.Size,
+        beta: float = 1.0,
+        mean: Parameter = None,
+        sigma: Parameter = 1. * u.nA,
+    ):
+        super().__init__(in_size=in_size)
+
+        self.beta = beta
+        self.sigma = Param.init(sigma, self.varshape)
+        self.mean = Param.init(
+            0. * u.get_unit(self.sigma.value()) if mean is None else mean,
+            self.varshape
+        )
+
+    def update(self):
+        mean = self.mean.value()
+        sigma = self.sigma.value()
+        size = self.varshape
+        if len(size) == 0:
+            # scalar: fallback to Gaussian
+            z = brainstate.random.normal(loc=0.0, scale=1.0, size=())
+            return mean + sigma * z
+
+        n = size[-1]
+        if n < 2:
+            # not enough points to shape spectrum; fallback to Gaussian
+            z = brainstate.random.normal(loc=0.0, scale=1.0, size=size)
+            return mean + sigma * z
+
+        # white noise
+        x = brainstate.random.normal(loc=0.0, scale=1.0, size=size)
+        xr = jnp.asarray(x)
+        Xf = jnp.fft.rfft(xr, axis=-1)
+        freqs = jnp.fft.rfftfreq(n)
+        w = jnp.where(freqs > 0, freqs ** (-self.beta / 2.0), 0.0)
+        shape_ones = (1,) * (Xf.ndim - 1) + (w.shape[0],)
+        w = w.reshape(shape_ones)
+        Yf = Xf * w
+        y = jnp.fft.irfft(Yf, n=n, axis=-1)
+
+        # normalize std over last axis and scale
+        std = jnp.std(y, axis=-1, keepdims=True)
+        y = jnp.where(std > 0, y / std, y)
+        return mean + sigma * y
+
+
+class PinkNoise(ColoredNoise):
+    """
+    Pink (1/f) noise.
+    """
+    __module__ = 'brainmass'
+
+    def __init__(self, in_size, mean=None, sigma=1. * u.nA):
+        super().__init__(in_size=in_size, beta=1.0, mean=mean, sigma=sigma)
+
+
+class BlueNoise(ColoredNoise):
+    """
+    Blue (1/f^2) noise.
+    """
+    __module__ = 'brainmass'
+
+    def __init__(self, in_size, mean=None, sigma=1. * u.nA):
+        super().__init__(in_size=in_size, beta=-1.0, mean=mean, sigma=sigma)
+
+
+class VioletNoise(ColoredNoise):
+    """
+    Violet (1/f^3) noise.
+    """
+    __module__ = 'brainmass'
+
+    def __init__(self, in_size, mean=None, sigma=1. * u.nA):
+        super().__init__(in_size=in_size, beta=-2.0, mean=mean, sigma=sigma)
+
+
+class OUProcess(Noise):
+    r"""
+    The Ornstein–Uhlenbeck process.
+
+    The Ornstein–Uhlenbeck process :math:`x_{t}` is defined by the following
+    stochastic differential equation:
+
+    .. math::
+
+       \tau dx_{t}=-\theta \,x_{t}\,dt+\sigma \,dW_{t}
+
+    where :math:`\theta >0` and :math:`\sigma >0` are parameters and :math:`W_{t}`
+    denotes the Wiener process.
+
+    Parameters
+    ==========
+    in_size: int, sequence of int
+      The model size.
+    mean: ArrayLike
+      The noise mean value.  Default is 0 nA.
+    sigma: ArrayLike
+      The noise amplitude. Defualt is 1 nA.
+    tau: ArrayLike
+      The decay time constant. The larger the value, the slower the decay. Default is 10 ms.
+    """
+    __module__ = 'brainmass'
+
+    def __init__(
+        self,
+        in_size: brainstate.typing.Size,
+        mean: Parameter = None,  # noise mean value
+        sigma: Parameter = 1. * u.nA,  # noise amplitude
+        tau: Parameter = 10. * u.ms,  # time constant
+        init: Callable = None
+    ):
+        super().__init__(in_size=in_size)
+
+        # parameters
+        self.sigma = Param.init(sigma, self.varshape)
+        self.mean = Param.init(
+            0. * u.get_unit(self.sigma.value()) if mean is None else mean,
+            self.varshape
+        )
+        self.tau = Param.init(tau, self.varshape)
+        self.init = braintools.init.ZeroInit(unit=u.get_unit(sigma)) if init is None else init
+
+    def init_state(self, batch_size=None, **kwargs):
+        self.x = brainstate.HiddenState.init(self.init, self.varshape, batch_size)
+
+    def update(self):
+        mean = self.mean.value()
+        sigma = self.sigma.value()
+        tau = self.tau.value()
+        df = lambda x: (mean - x) / tau
+        dg = lambda x: sigma / u.math.sqrt(tau)
+        self.x.value = brainstate.nn.exp_euler_step(df, dg, self.x.value)
+        return self.x.value
