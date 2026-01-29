@@ -1,0 +1,514 @@
+<%
+    import json
+    benchmark_name = benchmark.replace("benchmark_", "").replace("_benchmark", "").replace("_", " ")
+%>
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta HTTP-EQUIV="Access-Control-Allow-Origin" CONTENT="*">
+        <meta charset="utf-8" />
+        <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300&display=swap" rel="stylesheet">
+
+        <title>Result on ${benchmark_name} benchmark</title>
+
+        <style>
+            ${static['utilities.css']}
+
+            ${static['hover_index.css']}
+        </style>
+    </head>
+    <body>
+        <!-- Two main columns container -->
+        <div class="flex">
+            <!-- Left column on big screen (plot selectors) -->
+            <div class="hidden lg:flex flex-col w-96 bg-gray-700">
+                <div class="h-screen" onchange="setAllViewsToNonActive()">
+                    <div class="px-8 h-16 flex items-center bg-gray-800">
+                        <h1 class="ml11">
+                            <span class="text-wrapper">
+                                <span class="line line1"></span>
+                                <span id="brand" class="hidden letters text-2xl text-white">Benchopt</span>
+                            </span>
+                        </h1>
+                    </div>
+                    <div class="mt-8 px-8">
+                        <label for="plot_kind" class="block text-sm font-medium text-white">Chart type</label>
+                        <div class="mt-1 rounded-md shadow-sm">
+                            <select id="plot_kind" class="focus:ring-blue-500 focus:border-blue-500 block w-full h-8 px-4 sm:text-sm border-gray-300 rounded-md" onchange="setState({plot_kind: this.value, scale: (this.value === 'boxplot' || this.value === 'bar_chart' ? 'linear' : state().scale)})">
+                                % for kind in result['kinds']:
+                                <option value="${kind}">
+                                    ${kind.replace("_", " ").capitalize()}
+                                </option>
+                                %endfor
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex-1 flex flex-col">
+                        <div id="scale-form-group" class="mt-8 px-8">
+                            <label for="change_scale" class="block text-sm font-medium text-white">Scale</label>
+                            <div class="mt-1 rounded-md shadow-sm">
+                                <select id="change_scale" class="focus:ring-blue-500 focus:border-blue-500 block w-full h-8 px-4 sm:text-sm border-gray-300 rounded-md" onchange="setState({scale: this.value})">
+                                    <option value="linear">linear</option>
+                                    <!-- Options for other plots -->
+                                    <option class="other_plot_option" value="semilog-y">semilog-y</option>
+                                    <option class="other_plot_option" value="semilog-x">semilog-x</option>
+                                    <option class="other_plot_option" value="loglog">loglog</option>
+                                    <!-- Option for boxplot -->
+                                    <option class="boxplot_option" value="log">log</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="change-shades-form-group" class="flex items-center justify-between mt-8 px-8">
+                            <div class="block text-sm font-medium text-white">Quantiles</div>
+                            <label class="block switch">
+                                <input id="change_shades" type="checkbox" checked onchange="setState({with_quantiles: this.checked})">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div id="change-relative-suboptimal-form-group" class="flex items-center justify-between mt-8 px-8">
+                            <div class="block text-sm font-medium text-white">Suboptimal Curve</div>
+                            <label class="block switch">
+                                <input id="change_suboptimal" type="checkbox" onchange="setState({suboptimal_curve: this.checked})">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div id="change-relative-suboptimal-form-group" class="flex items-center justify-between mt-8 px-8">
+                            <div class="block text-sm font-medium text-white">Relative Curve</div>
+                            <label class="block switch">
+                                <input id="change_relative" type="checkbox" onchange="setState({relative_curve: this.checked})">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        % for kind, params in result["plot_options"].items():
+                            <div id="${kind}-custom-params-container">
+                            % for param, options in params.items():
+                                <div id="${kind}_${param}_form_group" class="mt-8 px-8">
+                                    <label for="change_${kind}_${param}" class="block text-sm font-medium text-white">${param}</label>
+                                    <div class="mt-1 rounded-md shadow-sm">
+                                        <select id="change_${kind}_${param}" class="focus:ring-blue-500 focus:border-blue-500 block w-full h-8 px-4 sm:text-sm border-gray-300 rounded-md" onchange="setState({${kind}_${param}: this.value})">
+                                            % for option in options:
+                                                <option value="${option}">${option}</option>
+                                            % endfor
+                                        </select>
+                                    </div>
+                                </div>
+                            % endfor
+                            </div>
+                        % endfor
+                        <div class="flex items-center justify-between mt-8 px-8">
+                            <a href="#" class="w-full inline-flex items-center justify-center px-4 py-2 space-x-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" onclick="return saveView()">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 004.5 9v.878m13.5-3A2.25 2.25 0 0119.5 9v.878m0 0a2.246 2.246 0 00-.75-.128H5.25c-.263 0-.515.045-.75.128m15 0A2.25 2.25 0 0121 12v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6c0-.98.626-1.813 1.5-2.122" />
+                                </svg>
+                                <span class="hidden lg:inline">Save as view</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Right column on big screen and main column on mobile -->
+            <div class="w-full flex flex-col overflow-scroll">
+                <!-- Main menu -->
+                <nav class="bg-blue-600">
+                    <div class="px-4">
+                        <div class="relative flex items-center justify-between h-16">
+                            <!-- mobile navbar -->
+                            <div class="absolute inset-0 flex items-center justify-between lg:hidden">
+                                <!-- Mobile menu brand text -->
+                                <span class="text-white text-xl">
+                                    Benchopt
+                                </span>
+                                <!-- Mobile menu button-->
+                                <button type="button" id="btn-main-menu" class="inline-flex items-center justify-center p-2 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white" aria-controls="mobile-menu" aria-expanded="false">
+                                    <span class="sr-only">Open main menu</span>
+                                    <svg class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                                    </svg>
+                                    <svg class="hidden h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <!-- big screen navbar-->
+                            <div class="flex-1 flex items-center justify-center lg:items-stretch lg:justify-start">
+                                <div class="hidden lg:block">
+                                    <div class="flex space-x-4">
+                                        <a href="${home}" class="text-gray-100 hover:bg-blue-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium" aria-current="page">Home</a>
+                                        <a href="https://benchopt.github.io" class="text-gray-100 hover:bg-blue-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium" target="_blank">Website</a>
+                                        <a href="https://github.com/benchopt/benchopt" class="text-gray-100 hover:bg-blue-800 hover:text-white px-3 py-2 rounded-md text-sm font-medium" target="_blank">Github</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Mobile menu, show/hide based on menu state. -->
+                    <div class="hidden" id="mobile-menu">
+                        <div class="px-2 pt-2 pb-3 space-y-1">
+                            <a href="${home}" class="text-white block px-3 py-2 rounded-md text-base font-medium" aria-current="page">Home</a>
+                            <a href="https://benchopt.github.io" class="text-white block px-3 py-2 rounded-md text-base font-medium">Website</a>
+                            <a href="https://github.com/benchopt/benchopt" class="text-white block px-3 py-2 rounded-md text-base font-medium">Github</a>
+                            <a href="#" class="text-white block px-3 py-2 rounded-md text-base font-medium" onclick="return exportConfigs()">Download config</a>
+                            <a href="#" class="text-white block px-3 py-2 rounded-md text-base font-medium" onclick="return exportHTML()">Download HTML</a>
+                            <a href="${result['fname']}" class="text-white block px-3 py-2 rounded-md text-base font-medium">Download data</a>
+                        </div>
+                    </div>
+                </nav>
+
+                <!-- Plot menu for mobiles -->
+                <nav class="lg:hidden bg-gray-700">
+                    <div class="px-4" id="btn-plot-config">
+                        <div class="relative flex items-center justify-between h-10">
+                            <div class="absolute inset-0 flex items-center justify-between lg:hidden">
+                                <!-- Mobile menu button-->
+                                <span class="flex items-center space-x-2 text-white">
+                                    <span>Change plot</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                                    </svg>
+                                </span>
+                                <button type="button" class="inline-flex items-center justify-center p-2 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white" aria-controls="mobile-menu" aria-expanded="false">
+                                    <span class="sr-only">Open main menu</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Mobile menu, show/hide based on menu state. -->
+                    <div class="hidden" id="mobile-plot-form">
+                        <div class="px-2 pt-2 pb-3 space-y-4" onchange="setAllViewsToNonActive()">
+                            <div class="px-8">
+                                <label for="plot_kind" class="block text-sm font-medium text-white">Chart type</label>
+                                <div class="mt-1 rounded-md shadow-sm">
+                                    <select id="plot_kind" class="focus:ring-blue-500 focus:border-blue-500 block w-full h-8 px-4 sm:text-sm border-gray-300 rounded-md" onchange="setState({plot_kind: this.value, scale: (this.value === 'boxplot' || this.value  === 'bar_chart' ? 'linear' : state().scale)})">
+                                        % for kind in result['kinds']:
+                                        <option value="${kind}">${kind}</option>
+                                        %endfor
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="scale-form-group" class="px-8">
+                                <label for="change_scale" class="block text-sm font-medium text-white">Scale</label>
+                                <div class="mt-1 rounded-md shadow-sm">
+                                    <select id="change_scale" class="focus:ring-blue-500 focus:border-blue-500 block w-full h-8 px-4 sm:text-sm border-gray-300 rounded-md" onchange="setState({scale: this.value})">
+                                        <option value="linear">linear</option>
+                                        <!-- Options for other plots -->
+                                        <option class="other_plot_option" value="semilog-y">semilog-y</option>
+                                        <option class="other_plot_option" value="semilog-x">semilog-x</option>
+                                        <option class="other_plot_option" value="loglog">loglog</option>
+                                        <!-- Option for boxplot -->
+                                        <option class="boxplot_option" value="log">log</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="change-shades-form-group" class="flex items-center justify-between mt-8 px-8">
+                                <div class="block text-sm font-medium text-white">Quantiles</div>
+                                <label class="block switch">
+                                    <input id="change_shades" type="checkbox" checked onchange="setState({with_quantiles: this.checked})">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                            <div id="change-relative-suboptimal-form-group" class="flex items-center justify-between mt-8 px-8">
+                                <div class="block text-sm font-medium text-white">Suboptimal Curve</div>
+                                <label class="block switch">
+                                    <input id="change_suboptimal" type="checkbox" onchange="setState({suboptimal_curve: this.checked})">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                            <div id="change-relative-suboptimal-form-group" class="flex items-center justify-between mt-8 px-8">
+                                <div class="block text-sm font-medium text-white">Relative Curve</div>
+                                <label class="block switch">
+                                    <input id="change_relative" type="checkbox" onchange="setState({relative_curve: this.checked})">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                            <div>
+                            <div>
+                            % for kind, params in result["plot_options"].items():
+                                <div id="${kind}-custom-params-container">
+                                % for param, options in params.items():
+                                    <div id="${kind}_${param}_form_group" class="mt-8 px-8">
+                                        <label for="change_${kind}_${param}" class="block text-sm font-medium text-white">${param}</label>
+                                        <div class="mt-1 rounded-md shadow-sm">
+                                            <select id="change_${kind}_${param}" class="focus:ring-blue-500 focus:border-blue-500 block w-full h-8 px-4 sm:text-sm border-gray-300 rounded-md" onchange="setState({${kind}_${param}: this.value})">
+                                                % for option in options:
+                                                    <option value="${option}">${option}</option>
+                                                % endfor
+                                            </select>
+                                        </div>
+                                    </div>
+                                % endfor
+                                </div>
+                            % endfor
+                            </div>
+                            <div class="flex items-center justify-between mt-8 px-8">
+                                <a href="#"
+                                   class="w-full inline-flex items-center px-4 py-2 space-x-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                   onclick="saveView()">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 004.5 9v.878m13.5-3A2.25 2.25 0 0119.5 9v.878m0 0a2.246 2.246 0 00-.75-.128H5.25c-.263 0-.515.045-.75.128m15 0A2.25 2.25 0 0121 12v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6c0-.98.626-1.813 1.5-2.122"/>
+                                    </svg>
+                                    <span>Save as view</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </nav>
+
+                <!-- Page heading -->
+                <div class="px-4 pt-4 pb-1 md:py-4 lg:flex lg:items-center lg:justify-between">
+                    <div class="flex-1 min-w-0">
+                        <h2 class="w-full text-center lg:text-left text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">Result on ${benchmark_name} benchmark</h2>
+                        <div class="mt-1 flex flex-wrap justify-center lg:justify-start sm:mt-0">
+                            % for name, val in result['sysinfo']['main'].items():
+                            % if val != "":
+                            <div class="mt-2 sm:mr-6 hidden md:flex items-center text-sm text-gray-500">
+                                <span class="font-bold"></span>${name.upper()} : ${val}
+                            </div>
+                            % endif
+                            % endfor
+                            <div class="mt-2">
+                                <button class="inline-flex items-center px-2 py-1 space-x-2 border border-gray-500 rounded-md shadow-sm text-sm font-medium text-gray-500 bg-white hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500" onclick="document.getElementById('system-modal').style.display = 'block'">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span class="hidden md:inline-block text-sm">Show more</span>
+                                    <span class="md:hidden text-sm">Show system information</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="hidden lg:flex mt-5 lg:mt-0 lg:ml-4 space-x-4 items-center">
+                        <span class="font-bold">Download :</span>
+                        <span>
+                            <a href="#" class="inline-flex items-center px-4 py-2 space-x-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" onclick="return exportConfigs()">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                <span class="hidden lg:inline">Configs</span>
+                            </a>
+                        </span>
+
+
+                        <span>
+                            <a href="#" class="inline-flex items-center px-4 py-2 space-x-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" onclick="return exportHTML()">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                </svg>
+                                <span class="hidden lg:inline">HTML</span>
+                            </a>
+                        </span>
+
+                        <span>
+                            <a href="${result['fname']}" class="inline-flex items-center px-4 py-2 space-x-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                </svg>
+                                <span class="hidden lg:inline">Data</span>
+                            </a>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Plot configuration -->
+                <div id="config_container" class="mt-8">
+                    <div>
+                        <div class="sm:hidden px-4">
+                            <label for="tabs" class="view_selector_label">Select a tab</label>
+                            <select id="tabs" name="tabs" class="block w-full rounded-md px-4 py-2 view_selector_select" onchange="setConfig(this)">
+                                <option value="no_selected_view" >No selected view</option>
+                                % for conf in result['metadata']['plot_configs']:
+                                    <option value="${conf}">${conf}</option>
+                                %endfor
+                            </select>
+                        </div>
+                        <div class="hidden sm:block">
+                            <div class="border-t border-b">
+                                <nav id="view-tabs" class="flex space-x-3 px-4 overflow-x-auto items-center" aria-label="Tabs">
+                                    <p class="view mr-6 py-4 px-1 text-sm font-medium border-b-2 border-transparent text-gray-700 whitespace-nowrap">Available plot views : </p>
+                                    % if len(result['metadata']['plot_configs']) == 0:
+                                        <p id="no_view_available" class="text-sm text-gray-400 whitespace-nowrap border-b-2 border-transparent">No plot view available</p>
+                                    %endif
+                                    % for conf in result['metadata']['plot_configs']:
+                                        <span onclick="setConfig(this)" class="view border-transparent whitespace-nowrap border-b-2 py-4 px-1 text-sm text-gray-400 hover:text-gray-500 hover:border-gray-300 cursor-pointer">${conf}</span>
+                                    %endfor
+                                </nav>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Plot -->
+                <div id="table_container" class="flex flex-col flex-1 gap-4 p-10">
+                </div>
+                <div id="plot_container" class="flex flex-col flex-1">
+                    <div id="plot_with_legend_container" class="flex-1"></div>
+                    <div id="legend_container" class="pb-10 bg-slate-200">
+                        <div class="px-10 mb-4 mt-4 text-base font-medium text-gray-700">
+                            Solvers
+                            <span class="text-sm font-medium text-gray-400">(Click on a solver to hide it or double click to hide all the others)</span>
+                        </div>
+                        <div id="plot_legend" class="px-10 space-r-2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System information modal -->
+        <div id="system-modal" class="hidden relative z-10" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+            <div class="fixed z-10 inset-0 overflow-y-auto">
+                <div class="flex items-end sm:items-center justify-center min-h-full p-4 text-center sm:p-0">
+                    <div class="relative bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full">
+                        <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                            <div class="sm:flex sm:items-start">
+                                <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 sm:mx-0 sm:h-10 sm:w-10">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                                    <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">System information</h3>
+                                    <div class="mt-2">
+                                        <ul class="text-sm text-gray-500">
+                                            % for name, val in result['sysinfo']['main'].items():
+                                            % if val != "":
+                                            <li> <b>${name.upper()}</b>: ${val} </li>
+                                            % endif
+                                            % endfor
+                                            % for key_sub, val_sub in result['sysinfo']['sub'].items():
+                                            % if val_sub != "":
+                                            <li> <b>${key_sub}</b>: ${val_sub} </li>
+                                            % endif
+                                            %endfor
+                                            % for key_ter, val_ter in result['sysinfo']['ter'].items():
+                                            % if val_ter != "":
+                                            <%
+                                            val = val_ter.split()
+                                            val = [''.join(l for l in item if l.isalnum() or l in [".", "_", '=']) for item in val]
+                                            val = " ".join(val)
+                                        %>
+                                            <li> <b>${key_ter}</b>: ${val} </li>
+                                            % endif
+                                            %endfor
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                            <button type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm" onclick="document.getElementById('system-modal').style.display = 'none'">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Text area to copy config from export -->
+        <textarea id="config_export" class="hidden"></textarea>
+
+        <script src="https://cdn.plot.ly/plotly-2.12.1.min.js"></script>
+        <!-- Used for the brand animation -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/2.0.2/anime.min.js"></script>
+        <!-- Define the brand animation -->
+        <script>
+            var textWrapper = document.querySelector('.ml11 .letters');
+            textWrapper.innerHTML = textWrapper.textContent.replace(/([^\x00-\x80]|\w)/g, "<span class='letter'>$&</span>");
+
+            window.addEventListener('load', () => {
+                document.getElementById('brand').style.display = 'inline';
+
+                anime.timeline({loop: false})
+                    .add({
+                        targets: '.ml11 .line',
+                        scaleY: [0,1],
+                        opacity: [0.5,1],
+                        easing: "easeOutExpo",
+                        duration: 700
+                    })
+                    .add({
+                        targets: '.ml11 .line',
+                        translateX: [0, document.querySelector('.ml11 .letters').getBoundingClientRect().width + 10],
+                        easing: "easeOutExpo",
+                        duration: 700,
+                        delay: 100
+                    }).add({
+                        targets: '.ml11 .letter',
+                        opacity: [0,1],
+                        easing: "easeOutExpo",
+                        duration: 600,
+                        offset: '-=775',
+                        delay: (el, i) => 34 * (i+1)
+                    }).add({
+                        targets: '.ml11 .line',
+                        scaleY: [1,0],
+                        opacity: [1,0.5],
+                        easing: "easeOutExpo",
+                        duration: 700,
+                        translateX: [document.querySelector('.ml11 .letters').getBoundingClientRect().width + 10, document.querySelector('.ml11 .letters').getBoundingClientRect().width + 10],
+                    });
+            });
+        </script>
+        <!-- Manage plot -->
+        <script>
+            window._plots = ${result['json_plots']};
+            window.metadata = ${json.dumps(result['metadata'])};
+
+            window.addEventListener("load", () => {
+                // Initialize plot state
+                setState({
+                    'plot_kind': document.getElementById('plot_kind').value,
+                    'scale': document.getElementById('change_scale').value,
+                    'with_quantiles': document.getElementById('change_shades').checked,
+                    'suboptimal_curve': document.getElementById('change_suboptimal').checked,
+                    'relative_curve': document.getElementById('change_relative').checked,
+                    'hidden_curves': [],
+                    % for kind, params in result["plot_options"].items():
+                        % for param in params:
+                            '${kind}_${param}': document.getElementById('change_${kind}_${param}').value,
+                        % endfor
+                    % endfor
+                });
+                const plot_configs = document.getElementsByClassName('view');
+                if (plot_configs.length > 0 ){
+                    setConfig(plot_configs[1]); // [0] is the span with text : "Available plot views :"
+                }
+            });
+        </script>
+        <script type="text/javascript">
+            ${static['symbols.js']}
+            ${static['result.js']}
+        </script>
+        <script>
+            // Script to communicate the height of this page to parent
+            // when embeding this result in an iframe
+            (function() {
+                function sendHeight() {
+                    try {
+                        if (window.self !== window.top) {
+                            window.parent.postMessage(
+                            { source: "benchopt-result-height", height: document.body.scrollHeight },
+                            "*"
+                            );
+                        }
+                    } catch (e) { /* ignore */ }
+                }
+
+                // Send on load and on resize / content change
+                window.addEventListener("load", sendHeight);
+                window.addEventListener("resize", sendHeight);
+
+                // Optional: observe DOM mutations to detect dynamic content
+                const observer = new MutationObserver(sendHeight);
+                observer.observe(document.body, { childList: true, subtree: true });
+                }
+            )();
+        </script>
+    </body>
+</html>
