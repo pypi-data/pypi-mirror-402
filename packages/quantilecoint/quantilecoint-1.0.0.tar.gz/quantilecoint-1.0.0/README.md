@@ -1,0 +1,175 @@
+# Quantilecoint
+
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+**Quantile Cointegrating Regression** - A Python implementation based on Xiao (2009) "Quantile cointegrating regression", *Journal of Econometrics*, 150, 248-260.
+
+## Author
+
+**Dr Merwan Roudane**  
+Email: merwanroudane920@gmail.com  
+GitHub: https://github.com/merwanroudane/quantilecoint
+
+## Overview
+
+This package implements quantile regression methods for cointegrated time series, including:
+
+- **Quantile Cointegrating Regression**: Estimate cointegrating relationships at different quantiles
+- **Fully-Modified Quantile Regression**: Bias-corrected estimator for endogenous regressors
+- **Augmented Quantile Cointegrating Regression**: Uses leads and lags to handle endogeneity
+- **Wald Test**: Test linear restrictions on cointegrating coefficients
+- **Stability Test**: Bootstrap-based test for constant vs. time-varying coefficients
+- **CUSUM Cointegration Test**: Robust test for the null of cointegration
+
+## Installation
+
+```bash
+pip install quantilecoint
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/merwanroudane/quantilecoint.git
+cd quantilecoint
+pip install -e .
+```
+
+## Quick Start
+
+```python
+import numpy as np
+from quantilecoint import QuantileCointegration
+
+# Generate sample data
+np.random.seed(42)
+n = 200
+x = np.cumsum(np.random.randn(n))  # I(1) process
+y = 2.0 + 1.5 * x + np.random.randn(n)  # Cointegrated with x
+
+# Fit quantile cointegrating regression
+model = QuantileCointegration(y, x, n_lags=4)
+
+# Estimate at different quantiles
+results = model.fit(quantiles=[0.1, 0.25, 0.5, 0.75, 0.9])
+
+# Print publication-ready results
+print(results.summary())
+
+# Test for constant coefficients
+stability_test = model.test_stability()
+print(stability_test)
+```
+
+## Main Features
+
+### 1. Quantile Cointegrating Regression
+
+```python
+from quantilecoint import QuantileCointegration
+
+model = QuantileCointegration(y, x, n_lags=4)
+results = model.fit(tau=0.5)  # Median regression
+
+# Get fully-modified estimates (bias-corrected)
+fm_results = model.fit_fully_modified(tau=0.5)
+```
+
+### 2. Test for Time-Varying Coefficients
+
+```python
+# Test H0: β(τ) = β (constant across quantiles)
+stability = model.test_stability(
+    quantiles=np.arange(0.05, 0.96, 0.05),
+    n_bootstrap=1000
+)
+print(f"Test statistic: {stability.statistic:.4f}")
+print(f"Critical values (1%, 5%, 10%): {stability.critical_values}")
+```
+
+### 3. Wald Test for Restrictions
+
+```python
+# Test H0: β = 1
+wald = model.wald_test(R=np.array([[0, 1]]), r=np.array([1]), tau=0.5)
+print(f"Wald statistic: {wald.statistic:.4f}")
+print(f"P-value: {wald.pvalue:.4f}")
+```
+
+### 4. CUSUM Cointegration Test
+
+```python
+# Test null of cointegration
+cusum = model.test_cointegration(tau=0.5)
+print(f"CUSUM statistic: {cusum.statistic:.4f}")
+```
+
+## Output Format
+
+Results are formatted for publication in top journals:
+
+```
+==============================================================================
+                    Quantile Cointegrating Regression Results
+==============================================================================
+Dep. Variable:                      y   No. Observations:                  200
+Method:              Quantile Regression (Fully-Modified)
+Date:                Mon, 20 Jan 2026   Number of Lags:                      4
+Time:                        02:43:00   
+==============================================================================
+                 coef    std err          t      P>|t|      [0.025      0.975]
+------------------------------------------------------------------------------
+const          2.0134      0.089     22.623      0.000       1.839       2.188
+x              1.4987      0.012    124.892      0.000       1.475       1.522
+==============================================================================
+
+Quantile Coefficient Estimates:
+------------------------------------------------------------------------------
+   τ     β(τ)    Std.Err   95% CI Lower   95% CI Upper
+------------------------------------------------------------------------------
+  0.10   1.423    0.018       1.388          1.458
+  0.25   1.467    0.014       1.440          1.494
+  0.50   1.499    0.012       1.475          1.522
+  0.75   1.531    0.014       1.504          1.558
+  0.90   1.576    0.019       1.539          1.613
+------------------------------------------------------------------------------
+```
+
+## References
+
+- Xiao, Z. (2009). Quantile cointegrating regression. *Journal of Econometrics*, 150(2), 248-260.
+- Koenker, R., & Bassett, G. (1978). Regression quantiles. *Econometrica*, 46(1), 33-50.
+- Koenker, R., & Xiao, Z. (2006). Quantile autoregression. *Journal of the American Statistical Association*, 101(475), 980-990.
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Citation
+
+If you use this package in your research, please cite:
+
+```bibtex
+@software{roudane2026quantilecoint,
+  author = {Roudane, Merwan},
+  title = {quantilecoint: Quantile Cointegrating Regression in Python},
+  year = {2026},
+  url = {https://github.com/merwanroudane/quantilecoint}
+}
+```
+
+And the original paper:
+
+```bibtex
+@article{xiao2009quantile,
+  title={Quantile cointegrating regression},
+  author={Xiao, Zhijie},
+  journal={Journal of Econometrics},
+  volume={150},
+  number={2},
+  pages={248--260},
+  year={2009},
+  publisher={Elsevier}
+}
+```
