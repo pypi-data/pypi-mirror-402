@@ -1,0 +1,59 @@
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version'
+        required: true
+        default: '1.2.3'
+
+jobs:
+  check_input:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.semver.outputs.version }}
+    steps:
+      - id: semver
+        uses: matt-usurp/validate-semver@v2
+        with:
+          version: ${{ github.event.inputs.version }}
+  package:
+    needs: check_input
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      attestations: write
+    env:
+      SETUPTOOLS_SCM_PRETEND_VERSION: ${{needs.check_input.outputs.version}}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and Check Package
+        uses: hynek/build-and-inspect-python-package@v2.14.0
+        with:
+          attest-build-provenance-github: true
+  deploy:
+    needs: [check_input, package]
+    runs-on: ubuntu-latest
+    environment: deploy
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Package
+        uses: actions/download-artifact@v6
+        with:
+          name: Packages
+          path: dist/
+
+      - name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Push tag
+        run: |
+          git config user.name "H1Gdev[bot]"
+          git config user.email "h1g.z.ouroboros+github@gmail.com"
+          git tag --annotate --message=${{needs.check_input.outputs.version}} v${{needs.check_input.outputs.version}} ${{ github.sha }}
+          git push origin v${{needs.check_input.outputs.version}}
