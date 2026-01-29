@@ -1,0 +1,50 @@
+name: Build and Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'
+  release:
+    types: [published]
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    environment: 
+      name: pypi
+      url: https://pypi.org/p/rfpkit-cli
+    permissions:
+      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine hatch
+        
+    - name: Verify package structure
+      run: |
+        echo "Checking package structure..."
+        ls -la src/rfpkit_cli/
+        python -c "import src.rfpkit_cli; print('Package imports successfully')"
+        
+    - name: Build package
+      run: |
+        python -m build
+        
+    - name: Check distribution
+      run: |
+        python -m twine check dist/*
+        
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        verbose: true
