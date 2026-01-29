@@ -1,0 +1,546 @@
+Metadata-Version: 2.4
+Name: palisade
+Version: 0.1.2
+Requires-Dist: numpy>=1.19.0
+Requires-Dist: psutil>=5.8.0
+Requires-Dist: msgpack>=1.0.0
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: py-tlsh>=4.0.0
+Requires-Dist: sarif-pydantic>=0.6.1
+Requires-Dist: safetensors>=0.3.0
+Requires-Dist: sigstore>=2.0.0
+Requires-Dist: typer>=0.12.0
+Requires-Dist: rich>=13.7.0
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: torch>=2.0.0 ; extra == 'inference'
+Requires-Dist: transformers>=4.35.0 ; extra == 'inference'
+Requires-Dist: accelerate>=0.20.0 ; extra == 'inference'
+Requires-Dist: bitsandbytes>=0.40.0 ; extra == 'inference'
+Requires-Dist: llama-cpp-python>=0.2.0 ; extra == 'inference'
+Requires-Dist: numpy>=1.19.0 ; extra == 'inference'
+Requires-Dist: llama-cpp-python>=0.2.0 ; extra == 'inference-gguf'
+Requires-Dist: torch>=2.0.0 ; extra == 'inference-pytorch'
+Requires-Dist: transformers>=4.35.0 ; extra == 'inference-pytorch'
+Requires-Dist: accelerate>=0.20.0 ; extra == 'inference-pytorch'
+Requires-Dist: bitsandbytes>=0.40.0 ; extra == 'inference-pytorch'
+Requires-Dist: numpy>=1.19.0 ; extra == 'inference-pytorch'
+Provides-Extra: inference
+Provides-Extra: inference-gguf
+Provides-Extra: inference-pytorch
+Summary: Comprehensive LLM security scanner - Palisade
+Author-email: Sharath Rajasekar <sharath@highflame.com>
+License: HIGHFLAME COMMERCIAL LICENSE
+Requires-Python: >=3.10, <3.13
+Description-Content-Type: text/markdown; charset=UTF-8; variant=GFM
+
+# 🏰 Palisade
+
+**Enterprise-grade ML model security scanner.** Detects backdoors, supply chain attacks, and malicious payloads before they hit production.
+
+Powered by a **high-performance Rust core**, Palisade delivers maximum speed and memory efficiency, enabling it to scan 70B+ parameter models on standard hardware.
+
+## ⭐ Key Capabilities
+
+- **Blocks Pickle RCE** - Completely prevents remote code execution via pickle files.
+- **Detects Behavioral Backdoors** - Identifies **DoubleAgents**, **BadAgent**, and fine-tuning attacks.
+- **Validates Model Integrity** - Verifies SafeTensors and GGUF formats against tampering.
+- **Verifies Supply Chain** - Enforces **Sigstore** signatures, **SLSA** provenance, and generates **ML-BOMs**.
+- **Catches Injection Attacks** - Prevents tokenizer hijacking, config manipulation, and metadata exploits.
+- **Zero-Trust Architecture** - Treats all models as potentially malicious until verified.
+
+**15 Security Validators** provide multi-layered defense in depth (10 universal + 5 format-specific).
+
+## 📦 Installation
+
+Requires Python 3.10-3.12 and Rust toolchain (`cargo`, `rustc`).
+
+### Quick Start (Recommended)
+
+```bash
+# Install UV (modern Python package manager)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install Rust dependencies
+sudo apt install cargo rustc rustup
+rustup toolchain install nightly
+
+# Clone and install
+git clone https://github.com/highflame-ai/highflame-palisade.git
+# Required when building palisade
+git clone https://github.com/highflame-ai/highflame-policy.git
+cd highflame-palisade
+
+# Create virtual environment (Python 3.10-3.12 required)
+uv python install 3.12  # If you don't have Python 3.12
+uv venv --python 3.12 && source .venv/bin/activate
+uv sync --group dev
+
+# Install Palisade
+uv pip install -e .
+
+# Verify installation
+palisade --help
+```
+
+### Optional: Inference-Based Detection
+
+For **DoubleAgents** and behavioral backdoor detection via runtime analysis:
+
+```bash
+# Full inference support (PyTorch + GGUF with CUDA)
+uv pip install -e ".[inference]"
+
+# Or install components separately:
+uv pip install -e ".[inference-pytorch]"  # PyTorch/SafeTensors only
+uv pip install -e ".[inference-gguf]"     # GGUF only (includes CUDA wheels)
+```
+
+<details>
+<summary>Using pip instead of uv?</summary>
+
+```bash
+# For GGUF with CUDA support, specify the wheel index:
+pip install palisade[inference-gguf] \
+    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
+
+# For CPU-only GGUF:
+pip install palisade[inference-gguf] \
+    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+```
+</details>
+
+## 🛠️ Usage Examples
+
+### Scan Models
+
+**Basic file scan:**
+```bash
+palisade scan model.safetensors
+# Scan a directory of models
+palisade scan /path/to/models/
+```
+
+**Recursive directory scan:**
+```bash
+palisade scan /models --recursive --max-files 50
+```
+
+**Policy-driven enforcement:**
+Apply strict rules for production environments to block more threats:
+```bash
+palisade scan model.gguf --policy strict_production
+```
+
+**JSON output for automation:**
+Generate machine-readable reports for your pipeline:
+```bash
+palisade scan model.safetensors --format json --output report.json
+```
+
+**SARIF output for tool integration:**
+Export findings in SARIF 2.1.0 format for GitHub Code Scanning, VS Code, and other security tools:
+```bash
+# Generate SARIF report
+palisade scan model.safetensors --format sarif --output results.sarif
+
+# Directory scan with SARIF
+palisade scan ./models --recursive --format sarif --output scan-results.sarif
+```
+
+[SARIF](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) (Static Analysis Results Interchange Format) enables:
+- 🔗 **GitHub Code Scanning** - Automatically display findings in pull requests
+- 🔍 **VS Code SARIF Viewer** - Navigate findings directly in your IDE
+- 📊 **Centralized Dashboards** - Aggregate results across multiple tools
+- 🛡️ **Policy Integration** - Findings include policy decisions (allow/deny/quarantine)
+
+
+### Inference-Based Backdoor Detection
+
+Detect **DoubleAgents-style** attacks that fine-tune models to make covert malicious tool calls:
+
+```bash
+# Quick scan (~75 payloads, ~2 min)
+palisade inference-scan model.gguf
+
+# Deep scan with reference model for higher accuracy
+palisade inference-scan suspect.gguf --reference clean-base.gguf --scan-type deep
+
+# PyTorch/SafeTensors models
+palisade inference-scan ./fine-tuned-model/ --reference ./base-model/
+```
+
+**How it works:**
+- **Perplexity Gap Analysis**: Compares suspect model's "confidence" on malicious payloads vs. a clean reference. A fine-tuned model will be suspiciously confident on attack strings it was trained on.
+- **Functional Trap Testing**: Prompts the model to use legitimate tools and watches for injected malicious tool calls.
+
+### Verify Supply Chain
+
+**Sigstore signature verification** (`verify-sigstore`):
+Answers: *"Who signed this model?"* — Validates cryptographic signatures to ensure the model came from a trusted source.
+```bash
+palisade verify-sigstore /models/llama-7b --public-key publisher.pub
+```
+
+**SLSA provenance verification** (`verify-slsa`):
+Answers: *"How was this model built?"* — Validates build attestations to ensure supply chain integrity.
+```bash
+palisade verify-slsa /models/mistral-7b --strictness high
+```
+
+> ⚠️ **Cosign Requirement**: Cryptographic verification with `--public-key` requires the [cosign CLI](https://docs.sigstore.dev/cosign/installation/) to be installed. Without `--public-key`, only structural validation is performed (SLSA) or verification will fail (Sigstore).
+
+**Provenance tracking & ML-BOM** (`track-provenance`):
+Answers: *"What provenance exists?"* — Discovers all provenance documentation and generates ML-BOM inventory.
+```bash
+palisade track-provenance /models/gemma --generate-mlbom --format json
+```
+
+> 📖 **See [Model Signing Guide](docs/Model_Signing.md)** for detailed instructions on signing models, creating SLSA attestations, and understanding CoSAI maturity levels.
+
+## 🖥️ Example Output
+
+**Clean Scan:**
+```bash
+$ palisade scan test_models/performance/tiny/model.safetensors
+✓ Using built-in default policy
+ Scanning: test_models/performance/tiny/model.safetensors
+   Size: 2098.20 MB
+   Policy: Default security policy
+
+2025-12-08 11:25:47,537 - INFO - Pattern compilation success rate: 100.0% (66/66)
+Using streaming validation ...
+🔍 Running security validators...
+✅ Metadata - Clean (0.28s)
+✅ ModelGenealogy - Clean (0.24s)
+✅ Provenance - Clean (0.25s)
+✅ BufferOverflow - Clean (13.34s)
+✅ Tokenizer - Clean (0.00s)
+✅ DecompressionBomb - Clean (0.00s)
+✅ Model - Clean (16.73s)
+✅ SupplyChain - Clean (16.55s)
+✅ Behavior - Clean (8.75s)
+✅ ToolCall - Clean (14.86s)
+✅ Backdoor - Clean (10.40s)
+✅ LoRAAdapter - Clean (1.09s)
+✅ Safetensors - Clean (16.25s)
+📊 Validation complete - No issues found (62.5 MB/s)
+2025-12-08 11:26:21,110 - INFO - Applying policy evaluation (environment: default)
+2025-12-08 11:26:21,110 - INFO - Policy evaluation complete - Overall effect: allow
+
+╭────────────────────────────────────────────────────────────────────────── 📄 Palisade Security Scan ──────────────────────────────────────────────────────────────────────────╮
+│ model.safetensors                                                                                                                                                             │
+│ test_models/performance/tiny/model.safetensors                                                                                                                                │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+✅ CLEAN: model.safetensors
+
+ Scan Time             33.58s  
+ Validators            13      
+ Memory Used           35.1 MB 
+ Warnings              0       
+
+✅ No security threats detected
+
+╭────────────────────────────────────────────────────────────────────────────── 🛡️ Policy Decision ──────────────────────────────────────────────────────────────────────────────╮
+│ ✅ ALLOWED                                                                                                                                                                    │
+│                                                                                                                                                                               │
+│ Environment: default                                                                                                                                                          │
+│ Model passed policy checks.                                                                                                                                                   │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+✅ Model passed all security checks
+
+```
+
+**Malicious Scan (Blocked):**
+```bash
+$ palisade scan examples/models/gemma-3-270m/model_metadata_injection.safetensors 
+✓ Using built-in default policy
+ Scanning: examples/models/gemma-3-270m/model_metadata_injection.safetensors
+   Size: 511.38 MB
+   Policy: Default security policy
+
+2025-12-08 11:37:36,052 - INFO - Pattern compilation success rate: 100.0% (66/66)
+Using streaming validation ...
+🔍 Running security validators...
+✅ Metadata - Clean (0.24s)
+✅ ModelGenealogy - Clean (0.13s)
+✅ Provenance - Clean (0.07s)
+✅ BufferOverflow - Clean (2.28s)
+✅ Tokenizer - Clean (0.00s)
+✅ DecompressionBomb - Clean (0.00s)
+✅ Model - Clean (2.51s)
+✅ SupplyChain - 1 warnings found (2.47s)
+✅ Safetensors - 1 warnings found (0.00s)
+2025-12-08 11:37:38,966 - INFO - Suspicious patterns detected in model header (score: 0.300)
+2025-12-08 11:37:38,977 - INFO -   Found 5 textual pattern matches in chunk 0
+2025-12-08 11:37:38,977 - INFO -     Match 0: code_injection - eval\s*\( -> 'eval('
+2025-12-08 11:37:38,977 - INFO -     Match 1: code_injection - os\.system -> 'os.system'
+2025-12-08 11:37:38,977 - INFO -     Match 2: code_injection - system\s*\( -> 'system('
+✅ Behavior - 1 warnings found (1.79s)
+✅ Backdoor - 2 warnings found (1.46s)
+✅ LoRAAdapter - Clean (0.35s)
+✅ ToolCall - 1 warnings found (2.05s)
+📊 Validation complete - 6 warnings found (112.1 MB/s)
+2025-12-08 11:37:40,616 - INFO - Applying policy evaluation (environment: default)
+2025-12-08 11:37:40,618 - INFO - Policy evaluation complete - Overall effect: deny
+
+╭────────────────────────────────────────────────────────────────────────── 📄 Palisade Security Scan ──────────────────────────────────────────────────────────────────────────╮
+│ model_metadata_injection.safetensors                                                                                                                                          │
+│ examples/models/gemma-3-270m/model_metadata_injection.safetensors                                                                                                             │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+🔍 SUSPICIOUS: model_metadata_injection.safetensors
+
+ Scan Time             4.58s   
+ Validators            13      
+ Memory Used           38.8 MB 
+ Warnings              6       
+
+🔍 Security Analysis (6 warnings)
+
+🔴 HIGH (2)
+   1. supply_chain_malicious_functions
+      Malicious functions detected: eval, os_system, system
+   2. privilege_escalation_detected
+      Privilege escalation patterns detected: enhanced_capabilities
+
+🟡 MEDIUM (4)
+   1. safetensors_streaming_header_error
+      Failed to parse JSON header: EOF while parsing a string at line 1 column 26696
+   2. backdoor_suspicious_header_patterns
+      Suspicious patterns detected in model header (score: 0.300)
+   3. backdoor_textual_patterns_in_chunk
+      Suspicious textual patterns found in chunk at offset 0
+   4. toolcall_suspicious_parameters
+      Suspicious parameters: pipe_to_sh (1 matches in 511.4MB model)
+
+╭────────────────────────────────────────────────────────────────────────────── 🛡️ Policy Decision ──────────────────────────────────────────────────────────────────────────────╮
+│ ⛔ BLOCKED BY POLICY                                                                                                                                                          │
+│                                                                                                                                                                               │
+│ Environment: default                                                                                                                                                          │
+│ This model violates security policy and cannot be used.                                                                                                                       │
+│ Review the warnings above to understand why.                                                                                                                                  │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+📋 Recommendations
+   • ⛔ BLOCKED BY POLICY - Do not use this model
+   • This model violates security policy requirements
+   • Investigate the source and re-download from trusted source
+
+```
+
+**Inference Scan (BETA):**
+```text
+🔬 INFERENCE-BASED BEHAVIORAL ANALYSIS
+
+═══ PERPLEXITY GAP ANALYSIS ═══
+Testing 53 suspicious payloads...
+🚨 CRITICAL: 2 memorized payload(s) detected
+   • http://192.168.1.100:8080/c2 (ratio: 342.5x)
+   • tool_call(name='log_activity'...) (ratio: 215.8x)
+
+═══ FUNCTIONAL TRAP TESTING ═══  
+Testing 39 tool-use prompts...
+⚠️  WARNING: 1 suspicious tool call(s) detected
+   • Unexpected call to 'exfil_data' during web_browser task
+
+Risk Score: 0.85 (HIGH)
+Recommendation: Model shows signs of DoubleAgents-style fine-tuning
+```
+
+## ⚡ Performance
+
+Palisade uses a **native Rust core** to handle massive models efficiently without OOM errors. It employs smart streaming and memory mapping to validate models larger than available RAM.
+
+| Model Size | Format | Scan Time | Memory Usage | Validators |
+|------------|--------|-----------|--------------|------------|
+| 511.38 (250M) | SafeTensors | 3.7s | 115.4MB | 13 |
+| 2.09GB  | SafeTensors | 14.3s | 115.4MB | 13 |
+| 3.8GB (7B Q4_K_M) | GGUF | 29.4s | 140MB | 11 |
+| 9.4GB | Safetensors | 74.3s | 119.4MB | 13 |
+
+*All scans use memory-efficient streaming and include behavioral backdoor detection.*
+
+## 🔒 CoSAI Support
+
+Palisade is designed to align with the **[Coalition for Secure AI (CoSAI)](https://www.coalitionforsecureai.org)** standards for software supply chain security.
+
+- **Compliant Artifacts**: Generates standard ML-BOMs and transparency logs.
+- **Integrity Verification**: Implements CoSAI guidelines for model integrity and provenance.
+- **Risk Management**: Maps findings to industry-standard threat categories.
+
+## 🔄 CI/CD Integration
+
+Palisade is built for pipelines. Use exit codes to gate deployments.
+
+**Exit Codes:**
+- `0` - **Clean**: No issues found.
+- `1` - **Warning**: Non-critical issues (review recommended).
+- `2` - **Critical**: Security threat detected (BLOCK DEPLOYMENT).
+
+### Example: Secure Pipeline Script
+
+```bash
+#!/bin/bash
+MODEL_DIR="./models/release"
+
+echo "🛡️ Starting Palisade Security Scan..."
+
+# 1. Supply Chain Verification
+# Ensure the model is signed and comes from a trusted builder
+palisade verify-sigstore "$MODEL_DIR" --format json -o sigstore.json
+if [ $? -ne 0 ]; then
+    echo "❌ Supply chain verification failed (exit code $?) - BLOCKING"
+    exit 1
+fi
+
+# 2. Deep Security Scan
+# Run all validators with strict production policy
+palisade scan "$MODEL_DIR" \
+    --recursive \
+    --policy strict_production \
+    --format json \
+    --output scan_results.json
+
+# 3. Check for blocking failures
+if [ $? -eq 2 ]; then
+    echo "🚨 CRITICAL THREAT DETECTED - Deployment Blocked"
+    exit 1
+fi
+
+echo "✅ Security checks passed"
+```
+
+## 🛡️ Security Validators
+
+Palisade runs **10 universal validators** on all formats, plus **format-specific validators** for deeper analysis.
+
+### Universal Validators (All Formats)
+
+| Validator | What it catches |
+|-----------|----------------|
+| **Behavior Analysis** | Static patterns of behavioral backdoors in model weights |
+| **Tool Call Security** | Malicious tool schemas, privilege escalation via tool use |
+| **Buffer Overflow** | Format string vulns (%n), integer overflows in binaries |
+| **Tokenizer Hygiene** | Injection via control chars, Unicode confusables, prompt injection |
+| **Decompression Bomb** | ZIP/GZIP bombs, nested compression resource exhaustion |
+| **Model Genealogy** | Architecture spoofing, steganographic hiding (ShadowGenes) |
+| **Model Integrity** | Binary tampering, malware patterns, format corruption |
+| **Provenance Security** | Fine-tuning artifacts, signature validation, supply chain gaps |
+| **Metadata Security** | Config injection, path traversal, malicious URLs |
+| **Supply Chain** | Exfiltration patterns, untrusted sources, high-entropy anomalies |
+
+### Format-Specific Validators
+
+| Validator | Formats | What it catches |
+|-----------|---------|----------------|
+| **SafeTensors Integrity** | `.safetensors` | Tampering, corruption, missing tensors, format anomalies |
+| **Backdoor Detection** | `.safetensors` | Multi-signal backdoor analysis, weight statistics, LSB stego |
+| **LoRA Adapter Security** | `.safetensors`, `.pt` | Unauthorized adapters, model hijacking via fine-tunes |
+| **GGUF Safety** | `.gguf` | Header/metadata manipulation, malicious quantization tags |
+| **Pickle Security** | `.pt`, `.pkl`, `.joblib` | Remote Code Execution (RCE) via pickle deserialization |
+
+### Inference-Based Detection (Separate Command)
+
+| Validator | What it catches |
+|-----------|----------------|
+| **Inference Scan** ⚡ | DoubleAgents, BadAgent via runtime perplexity analysis |
+
+Use `palisade inference-scan` for runtime behavioral analysis.
+
+## Interactive Demo
+
+See Palisade in action catching real threats:
+
+```bash
+cd examples
+uv sync --group examples
+marimo run palisade_security_demo.py
+```
+
+## 🏗️ Development Guide
+
+### Setup Development Environment
+
+```bash
+# Clone with dependencies
+git clone https://github.com/highflame-ai/highflame-palisade.git
+git clone https://github.com/highflame-ai/highflame-policy.git
+
+cd highflame-palisade
+
+# Install with dev dependencies
+uv venv --python 3.12 && source .venv/bin/activate
+uv pip install -e ".[dev]"
+
+# Run tests
+make test        # Python + Rust tests
+make test-quick  # Python only (faster)
+```
+
+### Adding New Warning Types
+
+Palisade uses a **YAML-based warning catalog** for consistent SARIF output. When adding detection logic to a validator, you should also add the warning metadata to the catalog.
+
+**1. Add detection logic** (Python validator):
+
+```python
+# src/palisade/validators/my_validator.py
+class MyValidator(BaseValidator):
+    def validate(self, data: bytes) -> List[Dict[str, Any]]:
+        if suspicious_pattern_detected:
+            return [self.create_standard_warning(
+                "my_custom_warning_type",  # ← Warning ID
+                "Suspicious pattern detected",
+                Severity.HIGH,
+            )]
+```
+
+**2. Add warning metadata** (YAML catalog):
+
+```yaml
+# src/palisade/warnings/warning_catalog.yaml
+warnings:
+  my_custom_warning_type:
+    sarif:
+      id: PALISADE-CUSTOM-001
+      name: MyValidator
+      help_uri: https://docs.palisade.dev/rules/my-validator
+    short_description: Suspicious pattern detected
+    full_description: >
+      Detailed explanation of what this warning means and why it matters.
+    severity: high
+    tags: [security, custom, pattern-detection]
+    recommendation: >
+      Steps to remediate this issue.
+    validator: MyValidator
+```
+
+**3. Use type-safe constants** (optional but recommended):
+
+```python
+from palisade.warnings import WarningIds
+
+# IDE autocomplete works!
+self.create_standard_warning(
+    WarningIds.MY_CUSTOM_WARNING_TYPE,
+    "Message here",
+    Severity.HIGH,
+)
+```
+
+The YAML catalog ensures:
+- ✅ Consistent SARIF output across all findings
+- ✅ Single source of truth for warning metadata
+- ✅ Easy to review all warnings in one place
+- ✅ Automatic documentation generation (future)
+
+## Release Guide
+
+Check [here](docs/RELEASE.md)
+
+---
+
+**🏰 Built with ❤️ by [highflame](https://highflame.com) • Securing the LLM supply chain**
+
