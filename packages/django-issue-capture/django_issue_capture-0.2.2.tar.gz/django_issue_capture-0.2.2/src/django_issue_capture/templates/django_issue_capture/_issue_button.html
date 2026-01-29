@@ -1,0 +1,74 @@
+{# Removed thumbnail_url - not needed for issue capture #}
+
+<!-- Issue Capture Button -->
+{% if issue_capture_enabled %}
+    {% if user.is_authenticated %}
+        {% if not issue_capture_staff_only or user.is_staff or user.is_superuser %}
+<div class="position-fixed" style="bottom: 20px; right: 20px; z-index: 1050;">
+    <button type="button"
+            class="btn btn-danger btn-lg rounded-circle shadow"
+            hx-get="{% url 'django_issue_capture:create' %}?url={{ request.build_absolute_uri }}"
+            hx-target="#issue-capture-container"
+            hx-swap="innerHTML"
+            title="Report Issue"
+            style="width: 60px; height: 60px;">
+        <i class="bi bi-bug-fill fs-4"></i>
+    </button>
+</div>
+
+<!-- Container for the issue form -->
+<div id="issue-capture-container"></div>
+
+<!-- Toast container for notifications -->
+<div id="issue-toast-container" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;"></div>
+
+<!-- GitHub-style positioning fix for mobile -->
+<style>
+@media (max-width: 768px) {
+    .position-fixed[style*="bottom: 20px; right: 20px"] {
+        bottom: 80px !important;
+        right: 15px !important;
+    }
+}
+
+/* Ensure the form appears above other content */
+#issue-capture-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1055;
+    min-width: 300px;
+    max-width: 900px;
+    width: 90vw;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+/* Add backdrop when form is open */
+#issue-capture-container:not(:empty)::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: -1;
+}
+</style>
+
+<script>
+document.body.addEventListener('htmx:oobAfterSwap', function(e) {
+    if (e.detail.target.id === 'issue-toast-container') {
+        var toast = e.detail.target.querySelector('.toast');
+        if (toast) new bootstrap.Toast(toast).show();
+    }
+});
+</script>
+        {% endif %}
+    {% endif %}
+{% endif %}

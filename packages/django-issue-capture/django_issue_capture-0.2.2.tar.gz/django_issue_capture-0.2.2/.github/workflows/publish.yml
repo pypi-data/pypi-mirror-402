@@ -1,0 +1,52 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write  # Required for PyPI Trusted Publishers
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Verify version matches tag
+        run: |
+          VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          TAG_VERSION=$(echo ${{ github.ref }} | sed 's/refs\/tags\/v//')
+          echo "Version in pyproject.toml: $VERSION"
+          echo "Git tag version: $TAG_VERSION"
+          if [ "$VERSION" != "$TAG_VERSION" ]; then
+            echo "❌ Version mismatch: pyproject.toml ($VERSION) != git tag ($TAG_VERSION)"
+            exit 1
+          fi
+          echo "✅ Versions match!"
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run import test
+        run: |
+          uv run python -c "import django_issue_capture; print(f'✅ Import successful: {django_issue_capture.__version__}')"
+
+      - name: Build package
+        run: uv build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
