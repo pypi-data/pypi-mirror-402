@@ -1,0 +1,164 @@
+# Secret Rotation Configuration (Example Template)
+#
+# DOCKER DEPLOYMENT NOTES:
+# - This file should be mounted read-only in production: ./config:/app/config:ro
+# - Runtime data (keys, secrets, backups) stored in writable /app/data volume
+# - Copy this file to config.yaml and customize for your environment
+#
+# DO NOT commit config.yaml with secrets to version control!
+
+rotation:
+  schedule: "daily" # daily, weekly, every_30_minutes, every_2_hours
+  retry_attempts: 3
+  timeout: 30
+  backup_old_secrets: true
+
+logging:
+  level: "INFO" #DEBUG, INFO, WARNING, ERROR, CRITICAL
+  file: "logs/rotation.log"
+  console_enabled: false # Console output: Set to false in production
+
+  # Use structured (JSON) logging for easier parsing
+  # Recommended for production with log aggregation tools
+  structured: false # Set to true if using ELK, Splunk, etc.
+
+  max_file_size: "10MB" # Rotate when file reaches this size
+  backup_count: 5 # Keep this many old log files
+  separate_error_log: true # Separate error log file (ERROR and CRITICAL only)
+
+  # Log format customization (when structured=false)
+  format:
+    file: "%(asctime)s - %(name)s - %(levelname)s - [%(module)s:%(funcName)s:%(lineno)d] - %(message)s"
+    console: "%(asctime)s - %(levelname)s - %(message)s"
+
+  lazy_evaluation: true # Use lazy string formatting
+  mask_sensitive_data: true # Automatically mask passwords, keys, etc.
+
+# Environment-specific overrides
+environments:
+  development:
+    logging:
+      level: "DEBUG"
+      console_enabled: true
+      structured: false
+
+  production:
+    logging:
+      level: "INFO"
+      console_enabled: false # DISABLE console in production
+      structured: true
+      separate_error_log: true
+
+  testing:
+    logging:
+      level: "WARNING"
+      console_enabled: false
+      file: "logs/test.log"
+
+web:
+  enabled: true
+  port: 8080
+  host: "0.0.0.0" # Changed from localhost to allow external access in Docker
+
+providers:
+  file_storage:
+    type: "file"
+    # IMPORTANT: Paths are relative to container root or absolute
+    # In Docker, /app/data is a writable volume
+    file_path: "data/secrets.json"
+    backup_path: "data/backup/"
+
+  aws_secrets:
+    type: "aws"
+    region: "<your-aws-region>"
+    enabled: false
+
+rotators:
+  password_gen:
+    type: "password"
+    length: 16
+    use_symbols: true
+    use_numbers: true
+    use_uppercase: true
+    use_lowercase: true
+    exclude_ambiguous: true
+
+  api_key_gen:
+    type: "api_key"
+    length: 32
+    format: "hex" # hex, base64, alphanumeric
+
+jobs:
+  - name: "database_password"
+    provider: "file_storage"
+    rotator: "password_gen"
+    secret_id: "db_password"
+    schedule: "weekly"
+    notification: true
+
+  - name: "api_key"
+    provider: "file_storage"
+    rotator: "api_key_gen"
+    secret_id: "api_key"
+    schedule: "monthly"
+    notification: true
+
+  - name: "service_token"
+    provider: "file_storage"
+    rotator: "password_gen"
+    secret_id: "service_token"
+    schedule: "daily"
+    notification: false
+
+notifications:
+  enabled: true
+  email:
+    enabled: false
+    smtp_server: "<your-smtp-server>"
+    smtp_port: 587
+    username: "<your-email>"
+    password: "<your-app-password>"
+    recipients: ["<your-recipient-email>"]
+
+  slack:
+    enabled: false
+    webhook_url: "<your-slack-webhook-url>"
+    channel: "<your-slack-channel>"
+
+# Security settings
+security:
+  encryption:
+    enabled: true
+    # CRITICAL: Master key now stored in writable data volume
+    # This allows the application to generate it on first run
+    # Docker mount: /app/data (read-write)
+    master_key_file: "data/.master.key"
+    rotate_master_key_days: 90
+
+# Backup configuration
+backup:
+  enabled: true
+  # All backup paths in writable data volume
+  storage_path: "data/backup/"
+  encrypt_backups: true
+  cleanup_time: "03:00"
+  verification_time: "04:00"
+  verify_integrity: true
+  full_verification_enabled: true
+  checksum_verification_enabled: true
+  compression: true # gzip compression
+
+  retention:
+    days: 90
+    max_backups_per_secret: 10
+
+  # Master key backups stored in data volume (not read-only config)
+  key_backups_path: "data/key_backups/"
+
+  # Remote backup (optional)
+  remote_backup:
+    enabled: false
+    type: "s3" # s3, azure_blob, gcs
+    bucket: "my-secret-backups"
+    region: "us-east-1"
+    prefix: "rotator/backups/"
