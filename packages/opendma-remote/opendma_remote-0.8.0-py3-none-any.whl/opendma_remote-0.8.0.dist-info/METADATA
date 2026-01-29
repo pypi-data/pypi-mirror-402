@@ -1,0 +1,196 @@
+Metadata-Version: 2.4
+Name: opendma-remote
+Version: 0.8.0
+Summary: OpenDMA REST client to access OpenDMA repositories via REST
+Author: Stefan Kopf, OpenDMA Contributors
+Maintainer: Stefan Kopf
+License-Expression: MIT
+Project-URL: Homepage, https://opendma.org
+Project-URL: Repository, https://github.com/OpenDMA/opendma-python-remote.git
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Classifier: Programming Language :: Python :: 3.15
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: opendma-api>=0.8.0
+Requires-Dist: pydantic<3.0.0,>=2.6
+Requires-Dist: requests<3,>=2
+Requires-Dist: python-dateutil>=2.8.2
+Dynamic: license-file
+
+# OpenDMA REST client for Python
+
+Please see [OpenDMA API for Python](https://github.com/OpenDMA/opendma-python-api)
+for an introduction to OpenDMA and it's Python API.
+
+Provides an OpenDMA Adaptor consuming the [OpenDMA REST API](https://github.com/OpenDMA/opendma-spec/blob/main/opendma-rest-api-spec.yaml).
+
+## Installation
+
+This project is available on [PyPI](https://pypi.org/). You can simply install it with pip:
+```
+pip install opendma-remote
+```
+
+## Usage
+
+Import this module and use the `connect` function to establish an `OdmaSession`
+with a REST-ful OpenDMA service:
+
+```python
+import opendma.remote
+
+session = opendma.remote.connect(endpoint="http://127.0.0.1:8080/opendma/",
+                                 username="user",
+								 password="secret")
+```
+
+## Example
+
+Run the tutorial REST service docker container:
+```
+docker run -p 8080:8080 ghcr.io/opendma/tutorial-xmlrepo:0.8
+```
+
+It will provide the tutorial xml repository. Make sure that this service is available
+by opening  
+http://localhost:8080/opendma  
+in a web browser.
+
+<details>
+  <summary>Troubleshooting</summary>
+  
+  If the GitHub Container Registry (ghcr.io) is blocked in your environment, you can use our mirror on Docker Hub:
+  ```
+  docker run -p 8080:8080 opendma/tutorial-xmlrepo:latest
+  ```
+
+  If the local port 8080 is already in use, you can map to a different port, e.g. 8090:
+  ```
+  docker run -p 8090:8080 ghcr.io/opendma/tutorial-xmlrepo:latest
+  ```
+
+  To run in deamon mode in the background:
+  ```
+  docker run -d --name opendma-tutorial-xmlrepo -p 8080:8080 ghcr.io/opendma/tutorial-xmlrepo:latest
+  ```
+
+</details>
+
+
+The following python application will establish a connection to this service and print out
+the entire repository:
+
+```python
+from typing import Optional
+from opendma.api import OdmaType, OdmaQName, OdmaId, OdmaObject, OdmaClass, OdmaPropertyInfo, OdmaFolder, OdmaAssociation, OdmaDocument, OdmaContentElement, OdmaDataContentElement, OdmaContent, OdmaVersionCollection, OdmaServiceException
+import opendma.remote
+
+
+def printClassTree(clazz: OdmaClass, indent: int = 0) -> None:
+    print(f"{'  ' * indent}{clazz.get_qname()}")
+    aspects = clazz.get_aspects()
+    if aspects is not None:
+        for aspect in aspects:
+            print(f"{'  ' * indent}  @{aspect.get_qname()}")
+    subclasses = clazz.get_sub_classes()
+    if subclasses is not None:
+        for subclass in subclasses:
+            printClassTree(subclass, indent + 1)
+
+
+def printObjectInfo(obj: OdmaObject, indent: int, include_props: bool, expand_special: bool):
+    print(f"{'  ' * indent}{obj.get_id()} {obj.get_odma_class().get_qname()}")
+    if not include_props:
+        return
+    properties = obj.get_odma_class().get_properties()
+    indent = indent + 1
+    for propinfo in properties:
+        pi: OdmaPropertyInfo = propinfo
+        prop = obj.get_property(pi.get_qname())
+        type = prop.get_type()
+        value = prop.get_value()
+        if prop.is_multi_value():
+            if type == OdmaType.REFERENCE:
+                print(f"{'  ' * indent}{pi.get_qname()}=")
+                for pos, item in enumerate(value):
+                    id = item.get_id()
+                    if '/' in str(id):
+                        printObjectInfo(item, indent+1, True, False)
+                    else:
+                        print(f"{'  ' * (indent+3)}* Object<{id}>")
+            else:
+                print(f"{'  ' * indent}{pi.get_qname()}=")
+                for pos, item in enumerate(value):
+                    print(f"{'  ' * (indent+3)}[{pos}] {item}")
+        else:
+            if value == None:
+                print(f"{'  ' * indent}{pi.get_qname()}=None")
+            else:
+                if type == OdmaType.REFERENCE:
+                    if expand_special and (isinstance(value, OdmaVersionCollection) or isinstance(value, OdmaContentElement)):
+                        print(f"{'  ' * indent}{pi.get_qname()}=")
+                        printObjectInfo(value, indent+1, True, False)
+                    else:
+                        print(f"{'  ' * indent}{pi.get_qname()}=Object<{value.get_id()}>")
+                elif type == OdmaType.CONTENT:
+                    cnt: OdmaContent =  value
+                    stream = cnt.get_stream()
+                    data = stream.read(25)
+                    hex_bytes = ' '.join(f'{b:02x}' for b in data)
+                    print(f"{'  ' * indent}{pi.get_qname()}= {cnt.get_size()} bytes; first 25 bytes: {hex_bytes}")
+                else:
+                    print(f"{'  ' * indent}{pi.get_qname()}={value}")
+
+
+def printFolderTree(folder: OdmaFolder, indent: int = 0) -> None:
+    print(f"{'  ' * indent}{folder.get_title()}")
+    associations = folder.get_associations()
+    if associations is not None:
+        for association in associations:
+            assoc: OdmaAssociation = association
+            print(f"{'  ' * indent}  -{assoc.get_name()}")
+            printObjectInfo(assoc.get_containable(), indent + 2, True, True)
+    subfolders = folder.get_sub_folders()
+    if subfolders is not None:
+        for subfolder in subfolders:
+            printFolderTree(subfolder, indent + 1)
+
+
+def printRepo(endpoint: str, username: Optional[str] = None, password: Optional[str] = None, includeClassTree: bool = True, includeFolderTree: bool = True) -> None:
+    print(f"Trying to connect...")
+    session = opendma.remote.connect(endpoint=endpoint, username=username, password=password, requestTraceLevel = 0)
+    print(f"Connected.")
+    print(f"Repositories: {session.get_repository_ids()}")
+    repoId = session.get_repository_ids()[0]
+    print(f"Trying to get repository {repoId}...")
+    repo = session.get_repository(repoId)
+    print(f"Got repository.")
+    print(f"  Id: {repo.get_id()}")
+    print(f"  Display Name: {repo.get_display_name()}")
+    if includeClassTree:
+        print(f"")
+        print(f"Class tree:")
+        rootClass = repo.get_root_class()
+        printClassTree(rootClass)
+    if includeFolderTree:
+        print(f"")
+        print(f"Folder tree:")
+        rootFolder = repo.get_root_folder()
+        if rootFolder is None:
+            print(f"No root folder is in this repository")
+        else:
+            printFolderTree(rootFolder)
+
+
+if __name__ == "__main__":
+    printRepo(endpoint="http://127.0.0.1:8080/opendma/")
+
+```
