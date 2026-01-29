@@ -1,0 +1,59 @@
+# NOTE: Tenant namespace is created by btpy during `tenant register` command
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: tenant-{{tenant_name}}-git-auth
+  namespace: flux-system
+spec:
+  refreshInterval: 1m
+  secretStoreRef:
+    name: azure-keyvault
+    kind: ClusterSecretStore
+  target:
+    name: tenant-{{tenant_name}}-git-auth
+    creationPolicy: Owner
+    template:
+      type: kubernetes.io/ssh-auth
+      data:
+        {{=<% %>=}}
+        ssh-privatekey: "{{ .privateKey }}"
+        identity: "{{ .privateKey }}"
+        known_hosts: |
+            github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+        <%={{ }}=%>
+  data:
+  - secretKey: privateKey
+    remoteRef:
+      key: "tenant-repo-ssh-key-{{tenant_name}}"
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: tenant-{{tenant_name}}
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: ssh://git@github.com/btenvs/tenant-{{tenant_name}}.git
+  ref:
+    branch: master
+  secretRef:
+    name: tenant-{{tenant_name}}-git-auth
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: tenant-{{tenant_name}}
+  namespace: flux-system
+spec:
+  interval: 1m
+  sourceRef:
+    kind: GitRepository
+    name: tenant-{{tenant_name}}
+  path: ./kubernetes/overlays
+  prune: true
+  targetNamespace: {{tenant_namespace}}
+  postBuild:
+    substitute:
+      domain: "{{tenant_domain}}"
+      keyvault_url: "https://{{keyvault_name}}.vault.azure.net"
+      az_tenant_id: "{{az_tenant_id}}"
