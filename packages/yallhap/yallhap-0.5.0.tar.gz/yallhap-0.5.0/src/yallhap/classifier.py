@@ -1,0 +1,982 @@
+"""
+Y-chromosome haplogroup classification.
+
+Implements likelihood-based haplogroup inference with QC scoring
+inspired by Yleaf and pathPhynder approaches.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from yallhap.ancient import DamageRescaleMode, apply_damage_rescale
+from yallhap.snps import SNP, ReferenceGenome, SNPDatabase
+from yallhap.tree import Tree
+from yallhap.vcf import Variant, VCFReader
+
+
+def traverse_with_tolerance(
+    tree: Tree,
+    haplogroup_scores: dict[str, dict[str, int]],
+    max_tolerance: int = 3,
+) -> tuple[str, list[str], dict[str, int]]:
+    """
+    Traverse tree paths with tolerance stopping.
+
+    Based on pathPhynder's traversePaths algorithm. Walks all paths from root
+    to leaves, stopping when ancestral (conflicting) calls exceed tolerance.
+    Returns the deepest haplogroup with the most derived support.
+
+    Args:
+        tree: Y-chromosome phylogenetic tree
+        haplogroup_scores: Dict of haplogroup -> {"derived": n, "ancestral": n, "missing": n}
+        max_tolerance: Maximum ancestral calls before stopping traversal
+
+    Returns:
+        Tuple of (best_haplogroup, path, stats)
+        where stats = {"total_derived": n, "total_ancestral": n, "stopped_at": hg}
+    """
+    root = tree.root
+
+    # If no scores, return root
+    if not haplogroup_scores:
+        return root.name, [], {"total_derived": 0, "total_ancestral": 0}
+
+    # Build all paths from root to leaves
+    all_paths = _build_all_paths(tree)
+
+    # Score each path
+    best_path: list[str] = []
+    best_hg = root.name
+    best_derived = 0
+    best_stats: dict[str, int] = {"total_derived": 0, "total_ancestral": 0}
+
+    for path in all_paths:
+        # Traverse this path with tolerance
+        traversed_path: list[str] = []
+        total_derived = 0
+        total_ancestral = 0
+
+        for node_name in path:
+            if node_name == root.name:
+                continue  # Skip root
+
+            scores = haplogroup_scores.get(node_name, {})
+            derived = scores.get("derived", 0)
+            ancestral = scores.get("ancestral", 0)
+
+            # Check if ancestral exceeds tolerance
+            if ancestral > max_tolerance:
+                break
+
+            # Add to traversed path
+            traversed_path.append(node_name)
+            total_derived += derived
+            total_ancestral += ancestral
+
+        # Compare to best path
+        # Prefer paths with more derived calls
+        if total_derived > best_derived:
+            best_derived = total_derived
+            best_path = traversed_path
+            best_hg = traversed_path[-1] if traversed_path else root.name
+            best_stats = {
+                "total_derived": total_derived,
+                "total_ancestral": total_ancestral,
+            }
+
+    return best_hg, best_path, best_stats
+
+
+def _build_all_paths(tree: Tree) -> list[list[str]]:
+    """Build all paths from root to leaves."""
+    root = tree.root
+    paths: list[list[str]] = []
+
+    def _dfs(node_name: str, current_path: list[str]) -> None:
+        current_path = current_path + [node_name]
+        node = tree.get(node_name)
+
+        if not node.children_names:
+            # Leaf node - save path
+            paths.append(current_path)
+        else:
+            for child_name in node.children_names:
+                _dfs(child_name, current_path)
+
+    _dfs(root.name, [])
+    return paths
+
+
+@dataclass
+class SNPStats:
+    """Statistics about SNP calls used in classification."""
+
+    informative_tested: int = 0
+    derived: int = 0
+    ancestral: int = 0
+    missing: int = 0
+    filtered_damage: int = 0
+
+    @property
+    def total_called(self) -> int:
+        return self.derived + self.ancestral
+
+
+@dataclass
+class QCScores:
+    """
+    Quality control scores for haplogroup classification.
+
+    qc1_backbone: Backbone consistency (intermediate markers match expected)
+    qc2_terminal: Terminal marker consistency (defining markers for haplogroup)
+    qc3_path: Within-haplogroup consistency (path from major to terminal)
+    qc4_posterior: Posterior probability from likelihood calculation
+    """
+
+    qc1_backbone: float = 0.0
+    qc2_terminal: float = 0.0
+    qc3_path: float = 0.0
+    qc4_posterior: float = 0.0
+
+    @property
+    def combined(self) -> float:
+        """Combined QC score (geometric mean)."""
+        scores = [self.qc1_backbone, self.qc2_terminal, self.qc3_path, self.qc4_posterior]
+        if any(s <= 0 for s in scores):
+            return 0.0
+        product = 1.0
+        for s in scores:
+            product *= s
+        return float(product ** (1 / len(scores)))
+
+
+@dataclass
+class HaplogroupCall:
+    """
+    Result of haplogroup classification.
+
+    Attributes:
+        sample: Sample identifier
+        haplogroup: Called haplogroup name
+        confidence: Overall confidence score [0-1]
+        qc_scores: Detailed QC scores
+        path: Path from root to called haplogroup
+        defining_snps: SNPs that define the called haplogroup
+        alternatives: Alternative calls with posterior probabilities
+        snp_stats: Statistics about SNPs used
+        reference: Reference genome used
+        tree_version: Version of phylogenetic tree used
+        posterior: True Bayesian posterior probability (when using --bayesian)
+        credible_set_95: 95% credible set of haplogroups (when using --bayesian)
+        log_likelihood: Log-likelihood of best path (when using --bayesian)
+    """
+
+    sample: str
+    haplogroup: str
+    confidence: float
+    qc_scores: QCScores = field(default_factory=QCScores)
+    path: list[str] = field(default_factory=list)
+    defining_snps: list[str] = field(default_factory=list)
+    alternatives: list[tuple[str, float]] = field(default_factory=list)
+    snp_stats: SNPStats = field(default_factory=SNPStats)
+    reference: str = ""
+    tree_version: str = ""
+    posterior: float | None = None
+    credible_set_95: list[str] = field(default_factory=list)
+    log_likelihood: float | None = None
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON output."""
+        result = {
+            "sample": self.sample,
+            "haplogroup": self.haplogroup,
+            "confidence": self.confidence,
+            "reference": self.reference,
+            "tree_version": self.tree_version,
+            "snp_stats": {
+                "informative_tested": self.snp_stats.informative_tested,
+                "derived": self.snp_stats.derived,
+                "ancestral": self.snp_stats.ancestral,
+                "missing": self.snp_stats.missing,
+                "filtered_damage": self.snp_stats.filtered_damage,
+            },
+            "quality_scores": {
+                "qc1_backbone": self.qc_scores.qc1_backbone,
+                "qc2_terminal": self.qc_scores.qc2_terminal,
+                "qc3_path": self.qc_scores.qc3_path,
+                "qc4_posterior": self.qc_scores.qc4_posterior,
+            },
+            "path": self.path,
+            "defining_snps": self.defining_snps,
+            "alternative_calls": [
+                {"haplogroup": hg, "posterior": p} for hg, p in self.alternatives
+            ],
+        }
+
+        # Add Bayesian fields if present
+        if self.posterior is not None:
+            result["posterior"] = self.posterior
+        if self.credible_set_95:
+            result["credible_set_95"] = self.credible_set_95
+        if self.log_likelihood is not None:
+            result["log_likelihood"] = self.log_likelihood
+
+        return result
+
+
+class HaplogroupClassifier:
+    """
+    Classifier for Y-chromosome haplogroups.
+
+    Uses a likelihood-based approach with tree traversal to find
+    the most probable haplogroup assignment. Optionally uses full
+    Bayesian inference with allelic depth support.
+    """
+
+    def __init__(
+        self,
+        tree: Tree,
+        snp_db: SNPDatabase,
+        reference: ReferenceGenome = "grch38",
+        min_depth: int = 1,
+        min_quality: int = 20,
+        ancient_mode: bool = False,
+        transversions_only: bool = False,
+        damage_rescale: DamageRescaleMode = "none",
+        bayesian: bool = False,
+        error_rate: float = 0.001,
+        damage_rate: float = 0.1,
+        prior_type: str = "uniform",
+    ):
+        """
+        Initialize classifier.
+
+        Args:
+            tree: YFull phylogenetic tree
+            snp_db: SNP database with position mappings
+            reference: Reference genome for position lookup
+            min_depth: Minimum read depth to use variant
+            min_quality: Minimum genotype quality to use variant
+            ancient_mode: Enable ancient DNA damage filtering (C>T, G>A)
+            transversions_only: Only use transversions (strictest ancient mode)
+            damage_rescale: Quality score rescaling for potentially damaged variants
+            bayesian: Use Bayesian posterior calculation with AD support
+            error_rate: Sequencing error rate for Bayesian mode
+            damage_rate: Ancient DNA damage rate for Bayesian mode
+            prior_type: Prior type for Bayesian mode ("uniform" or "coalescent")
+        """
+        self.tree = tree
+        self.snp_db = snp_db
+        self.reference = reference
+        self.min_depth = min_depth
+        self.min_quality = min_quality
+        self.ancient_mode = ancient_mode
+        self.transversions_only = transversions_only
+        self.damage_rescale = damage_rescale
+        self.bayesian = bayesian
+        self.error_rate = error_rate
+        self.damage_rate = damage_rate
+        self.prior_type = prior_type
+
+        # Build position -> haplogroup mapping
+        self._build_position_index()
+
+        # Initialize Bayesian classifier if enabled
+        self._bayesian_classifier = None
+        if self.bayesian:
+            from yallhap.bayesian import BayesianClassifier
+
+            self._bayesian_classifier = BayesianClassifier(
+                tree=tree,
+                snp_db=snp_db,
+                error_rate=error_rate,
+                damage_rate=damage_rate,
+                reference=reference,
+                prior_type=prior_type,  # type: ignore
+            )
+
+    def _build_position_index(self) -> None:
+        """
+        Build indices for SNP lookups.
+
+        Creates:
+        - _snp_name_to_pos: Maps SNP name → position
+        - _snp_name_to_snp: Maps SNP name → SNP object (for correct allele lookup)
+        - _node_to_snp_info: Maps tree node → list of (position, snp_name) tuples
+        """
+        self._snp_name_to_pos: dict[str, int] = {}
+        self._snp_name_to_snp: dict[str, SNP] = {}
+        self._node_to_snp_info: dict[str, list[tuple[int, str]]] = {}
+        # Keep _node_to_positions for backwards compatibility
+        self._node_to_positions: dict[str, list[int]] = {}
+        # Keep _pos_to_snp for backwards compatibility (used by Bayesian classifier)
+        self._pos_to_snp: dict[int, SNP] = {}
+
+        # Build SNP name → position and SNP name → SNP indices
+        for snp in self.snp_db:
+            pos = snp.get_position(self.reference)
+            if pos is not None:
+                # Index by primary name and aliases
+                self._snp_name_to_pos[snp.name] = pos
+                self._snp_name_to_snp[snp.name] = snp
+                self._pos_to_snp[pos] = snp  # May overwrite, but kept for compat
+                for alias in snp.aliases:
+                    self._snp_name_to_pos[alias] = pos
+                    self._snp_name_to_snp[alias] = snp
+
+        # Build node → (position, snp_name) index from tree
+        for node in self.tree.iter_depth_first():
+            snp_info: list[tuple[int, str]] = []
+            positions: list[int] = []
+            for snp_group in node.snps:
+                # SNPs in tree can be comma-separated
+                for snp_name in snp_group.split(","):
+                    snp_name = snp_name.strip()
+                    if snp_name and snp_name in self._snp_name_to_pos:
+                        pos = self._snp_name_to_pos[snp_name]
+                        snp_info.append((pos, snp_name))
+                        positions.append(pos)
+            if snp_info:
+                self._node_to_snp_info[node.name] = snp_info
+                self._node_to_positions[node.name] = positions
+
+    def classify_batch(
+        self,
+        vcf_path: Path | str,
+        samples: list[str],
+        threads: int = 1,
+        progress_callback: Callable[[], None] | None = None,
+    ) -> list[HaplogroupCall]:
+        """
+        Classify multiple samples from a single VCF file.
+
+        Opens the VCF once and reads all samples in a single pass,
+        which is much faster for multi-sample VCFs. Classification
+        of individual samples can be parallelized with threads > 1.
+
+        Args:
+            vcf_path: Path to VCF file
+            samples: List of sample names to classify
+            threads: Number of parallel threads for classification (default: 1)
+            progress_callback: Optional callback invoked after each sample is classified
+
+        Returns:
+            List of HaplogroupCall results, one per sample (in input order)
+        """
+        import pysam
+
+        vcf_path = Path(vcf_path)
+        vcf = pysam.VariantFile(str(vcf_path))
+
+        # Get sample indices
+        vcf_samples = list(vcf.header.samples)
+        sample_indices = {}
+        for s in samples:
+            if s in vcf_samples:
+                sample_indices[s] = vcf_samples.index(s)
+            else:
+                raise ValueError(f"Sample {s} not found in VCF")
+
+        # Detect Y chromosome name
+        y_chrom = None
+        for name in ["Y", "chrY", "y", "24"]:
+            if name in vcf.header.contigs:
+                y_chrom = name
+                break
+
+        if y_chrom is None:
+            raise ValueError("No Y chromosome found in VCF")
+
+        # Read all variants for all samples in one pass
+        sample_variants: dict[str, dict[int, Variant]] = {s: {} for s in samples}
+
+        for record in vcf.fetch(y_chrom):
+            pos = record.pos
+            ref = record.ref
+            alts = record.alts or ()
+
+            # Skip records with no reference allele (malformed VCF)
+            if ref is None:
+                continue
+
+            # Skip non-SNPs
+            if len(ref) != 1 or not all(len(a) == 1 for a in alts):
+                continue
+
+            for sample_name, idx in sample_indices.items():
+                sample_data = record.samples[idx]
+                gt = sample_data.get("GT", (None,))
+
+                # Determine genotype (haploid Y, take first allele)
+                genotype = None if gt is None or gt[0] is None else gt[0]
+
+                variant = Variant(
+                    chrom=y_chrom,
+                    position=pos,
+                    ref=ref,
+                    alt=alts,
+                    genotype=genotype,
+                    depth=sample_data.get("DP"),
+                    quality=sample_data.get("GQ"),
+                )
+                sample_variants[sample_name][pos] = variant
+
+        vcf.close()
+
+        # Helper to classify a single sample
+        def classify_one(sample_name: str) -> HaplogroupCall:
+            variants = sample_variants[sample_name]
+            haplogroup_scores = self._score_haplogroups(variants)
+            best_hg, confidence, qc_scores, stats = self._find_best_haplogroup(
+                haplogroup_scores, variants
+            )
+
+            path = self.tree.path_from_root(best_hg) if best_hg in self.tree else []
+            defining_snps: list[str] = []
+            if best_hg in self.tree:
+                defining_snps = self.tree.get(best_hg).snps
+            alternatives = self._get_alternatives(haplogroup_scores, best_hg)
+
+            return HaplogroupCall(
+                sample=sample_name,
+                haplogroup=best_hg,
+                confidence=confidence,
+                qc_scores=qc_scores,
+                path=path,
+                defining_snps=defining_snps,
+                alternatives=alternatives,
+                snp_stats=stats,
+                reference=self.reference,
+                tree_version=self.tree.version_string,
+            )
+
+        # Classify samples (parallel if threads > 1)
+        if threads > 1:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+
+            results_dict: dict[str, HaplogroupCall] = {}
+            with ThreadPoolExecutor(max_workers=threads) as executor:
+                futures = {executor.submit(classify_one, s): s for s in samples}
+                for future in as_completed(futures):
+                    sample_name = futures[future]
+                    results_dict[sample_name] = future.result()
+                    if progress_callback:
+                        progress_callback()
+            # Return in original order
+            results = [results_dict[s] for s in samples]
+        else:
+            results = []
+            for s in samples:
+                results.append(classify_one(s))
+                if progress_callback:
+                    progress_callback()
+
+        return results
+
+    def classify(
+        self,
+        vcf_path: Path | str,
+        sample: str | None = None,
+    ) -> HaplogroupCall:
+        """
+        Classify a sample's Y-chromosome haplogroup.
+
+        Args:
+            vcf_path: Path to VCF file
+            sample: Sample name (optional, uses first if not specified)
+
+        Returns:
+            HaplogroupCall with classification result
+        """
+        # Read variants
+        variants = self._read_variants(vcf_path, sample)
+        actual_sample = sample or "unknown"
+
+        # Get sample name from VCF if not specified
+        with VCFReader(vcf_path, sample) as reader:
+            actual_sample = reader.sample
+
+        # Use Bayesian classifier if enabled
+        if self.bayesian and self._bayesian_classifier is not None:
+            return self._classify_bayesian(variants, actual_sample)
+
+        # Otherwise use heuristic scoring
+        # Score haplogroups
+        haplogroup_scores = self._score_haplogroups(variants)
+
+        # Find best haplogroup
+        best_hg, confidence, qc_scores, stats = self._find_best_haplogroup(
+            haplogroup_scores, variants
+        )
+
+        # Build result
+        path = self.tree.path_from_root(best_hg) if best_hg in self.tree else []
+
+        # Get defining SNPs
+        defining_snps: list[str] = []
+        if best_hg in self.tree:
+            defining_snps = self.tree.get(best_hg).snps
+
+        # Get alternatives
+        alternatives = self._get_alternatives(haplogroup_scores, best_hg)
+
+        return HaplogroupCall(
+            sample=actual_sample,
+            haplogroup=best_hg,
+            confidence=confidence,
+            qc_scores=qc_scores,
+            path=path,
+            defining_snps=defining_snps,
+            alternatives=alternatives,
+            snp_stats=stats,
+            reference=self.reference,
+            tree_version=self.tree.version_string,
+        )
+
+    def _classify_bayesian(
+        self,
+        variants: dict[int, Variant],
+        sample_name: str,
+    ) -> HaplogroupCall:
+        """
+        Classify using Bayesian posterior calculation.
+
+        Uses the BayesianClassifier to compute true posteriors with
+        allelic depth support.
+
+        Args:
+            variants: Dict of position -> Variant
+            sample_name: Sample identifier
+
+        Returns:
+            HaplogroupCall with Bayesian posteriors
+        """
+        if self._bayesian_classifier is None:
+            raise RuntimeError("Bayesian classifier not initialized")
+
+        # Compute posteriors
+        posteriors = self._bayesian_classifier.compute_posteriors(
+            variants, is_ancient=self.ancient_mode
+        )
+
+        if not posteriors:
+            return HaplogroupCall(
+                sample=sample_name,
+                haplogroup="NA",
+                confidence=0.0,
+                reference=self.reference,
+                tree_version=self.tree.version_string,
+            )
+
+        # Get best haplogroup and credible set
+        best_hg, best_prob = posteriors[0]
+        credible_set = self._bayesian_classifier.get_credible_set(posteriors, threshold=0.95)
+
+        # Build path
+        path = self.tree.path_from_root(best_hg) if best_hg in self.tree else []
+
+        # Get defining SNPs
+        defining_snps: list[str] = []
+        if best_hg in self.tree:
+            defining_snps = self.tree.get(best_hg).snps
+
+        # Get alternatives (top 5)
+        alternatives = posteriors[1:6]
+
+        # Calculate SNP stats from variants
+        derived_count = 0
+        ancestral_count = 0
+        missing_count = 0
+
+        for snp in self.snp_db:
+            pos = snp.get_position(self.reference)
+            if pos is None:
+                continue
+
+            if pos in variants:
+                variant = variants[pos]
+                called = variant.called_allele
+                if called == snp.derived:
+                    derived_count += 1
+                elif called == snp.ancestral:
+                    ancestral_count += 1
+                else:
+                    missing_count += 1
+            else:
+                missing_count += 1
+
+        stats = SNPStats(
+            informative_tested=derived_count + ancestral_count + missing_count,
+            derived=derived_count,
+            ancestral=ancestral_count,
+            missing=missing_count,
+        )
+
+        # QC scores from Bayesian perspective
+        qc_scores = QCScores(
+            qc1_backbone=best_prob,  # Use posterior as backbone score
+            qc2_terminal=best_prob,  # Use posterior as terminal score
+            qc3_path=best_prob,  # Use posterior as path score
+            qc4_posterior=best_prob,
+        )
+
+        return HaplogroupCall(
+            sample=sample_name,
+            haplogroup=best_hg,
+            confidence=best_prob,
+            qc_scores=qc_scores,
+            path=path,
+            defining_snps=defining_snps,
+            alternatives=alternatives,
+            snp_stats=stats,
+            reference=self.reference,
+            tree_version=self.tree.version_string,
+            posterior=best_prob,
+            credible_set_95=credible_set,
+            log_likelihood=None,  # Could add if needed
+        )
+
+    def _read_variants(self, vcf_path: Path | str, sample: str | None) -> dict[int, Variant]:
+        """Read Y-chromosome variants, indexed by position."""
+        variants: dict[int, Variant] = {}
+
+        with VCFReader(vcf_path, sample) as reader:
+            for variant in reader.iter_variants():
+                # Apply quality filters
+                if variant.depth is not None and variant.depth < self.min_depth:
+                    continue
+                if variant.quality is not None and variant.quality < self.min_quality:
+                    continue
+                if not variant.is_snp:
+                    continue
+
+                variants[variant.position] = variant
+
+        return variants
+
+    def _score_haplogroups(self, variants: dict[int, Variant]) -> dict[str, dict[str, int]]:
+        """
+        Score each haplogroup based on observed variants.
+
+        Uses the tree structure to map nodes to their defining SNPs,
+        then checks whether variants show derived or ancestral alleles.
+        Looks up SNPs by name to handle multiple SNPs at the same position.
+
+        Returns dict of {haplogroup: {"derived": n, "ancestral": n, "missing": n}}
+        """
+        from yallhap.ancient import is_transversion
+
+        scores: dict[str, dict[str, int]] = {}
+
+        # Score each tree node based on its defining SNPs
+        for node_name, snp_info_list in self._node_to_snp_info.items():
+            if node_name not in scores:
+                scores[node_name] = {"derived": 0, "ancestral": 0, "missing": 0}
+
+            for pos, snp_name in snp_info_list:
+                # Look up SNP by name to get correct ancestral/derived alleles
+                snp = self._snp_name_to_snp.get(snp_name)
+                if snp is None:
+                    continue
+
+                if pos not in variants:
+                    scores[node_name]["missing"] += 1
+                    continue
+
+                variant = variants[pos]
+                called = variant.called_allele
+
+                if called is None:
+                    scores[node_name]["missing"] += 1
+                    continue
+
+                # Transversions-only mode: skip all transitions
+                if self.transversions_only and not is_transversion(snp.ancestral, snp.derived):
+                    scores[node_name]["missing"] += 1
+                    continue
+
+                # Apply damage rescaling if enabled
+                if self.damage_rescale != "none" and variant.quality is not None:
+                    rescaled_quality = apply_damage_rescale(
+                        variant.quality,
+                        snp.ancestral,
+                        called,
+                        mode=self.damage_rescale,
+                    )
+                    # If rescaled quality is too low, treat as missing
+                    if rescaled_quality < self.min_quality:
+                        scores[node_name]["missing"] += 1
+                        continue
+
+                if called == snp.derived:
+                    # Ancient DNA filter: skip C>T and G>A transitions
+                    if self.ancient_mode and self._is_damage_like(snp, called):
+                        scores[node_name]["missing"] += 1  # Treat as missing
+                        continue
+                    scores[node_name]["derived"] += 1
+                elif called == snp.ancestral:
+                    scores[node_name]["ancestral"] += 1
+                else:
+                    # Discordant genotype - neither ancestral nor derived
+                    scores[node_name]["missing"] += 1
+
+        return scores
+
+    def _is_damage_like(self, snp: SNP, called: str) -> bool:
+        """Check if variant looks like ancient DNA damage."""
+        # C>T damage (on reference strand) or G>A (reverse complement)
+        return (snp.ancestral == "C" and called == "T") or (snp.ancestral == "G" and called == "A")
+
+    def _find_best_haplogroup(
+        self,
+        haplogroup_scores: dict[str, dict[str, int]],
+        _variants: dict[int, Variant],  # Reserved for future QC calculations
+    ) -> tuple[str, float, QCScores, SNPStats]:
+        """
+        Find the best haplogroup assignment.
+
+        Strategy:
+        1. Evaluate all haplogroups that have derived calls
+        2. Score each by: derived ratio, path consistency, and specificity
+        3. Pick the most specific haplogroup with high confidence
+
+        Returns (haplogroup, confidence, qc_scores, snp_stats)
+        """
+        # Find all candidate haplogroups with derived calls
+        candidates: list[tuple[str, float, QCScores, SNPStats]] = []
+
+        for hg, scores in haplogroup_scores.items():
+            if hg not in self.tree:
+                continue
+
+            # Must have at least some derived calls
+            if scores["derived"] == 0:
+                continue
+
+            total = scores["derived"] + scores["ancestral"]
+            if total == 0:
+                continue
+
+            # Calculate QC2: terminal marker consistency (derived ratio)
+            qc2 = scores["derived"] / total
+
+            # Calculate QC3: path consistency
+            qc3 = self._calculate_path_score(hg, haplogroup_scores)
+
+            # Calculate QC1: backbone consistency
+            qc1 = self._calculate_backbone_score(hg, haplogroup_scores)
+
+            # Combined confidence (geometric mean)
+            confidence = (qc1 * qc2 * qc3) ** (1 / 3) if qc1 > 0 and qc2 > 0 and qc3 > 0 else 0
+
+            if confidence > 0:
+                qc = QCScores(
+                    qc1_backbone=qc1,
+                    qc2_terminal=qc2,
+                    qc3_path=qc3,
+                    qc4_posterior=confidence,
+                )
+                stats = SNPStats(
+                    informative_tested=total + scores["missing"],
+                    derived=scores["derived"],
+                    ancestral=scores["ancestral"],
+                    missing=scores["missing"],
+                )
+                candidates.append((hg, confidence, qc, stats))
+
+        if not candidates:
+            return "NA", 0.0, QCScores(), SNPStats()
+
+        # Strategy: Balance specificity (depth) with evidence AND path consistency.
+        # A haplogroup with ancestral calls in its path shouldn't be picked over
+        # one with a clean path, even if the former is deeper.
+        #
+        # Key insight: We want the DEEPEST haplogroup that has GOOD path consistency.
+        # Path consistency (backbone score) filters out wrong lineages.
+
+        # Filter: Balance backbone score (path consistency) with evidence
+        # Try progressively looser thresholds until we find good candidates
+
+        def filter_candidates(cands: list, min_backbone: float, min_derived: int) -> list:
+            return [
+                c
+                for c in cands
+                if c[2].qc1_backbone >= min_backbone and c[3].derived >= min_derived
+            ]
+
+        # Try strict thresholds first, then relax
+        selected = (
+            filter_candidates(candidates, 0.9, 5)
+            or filter_candidates(candidates, 0.9, 3)
+            or filter_candidates(candidates, 0.8, 3)
+            or filter_candidates(candidates, 0.8, 2)
+            or filter_candidates(candidates, 0.7, 2)
+            or [c for c in candidates if c[1] >= 0.5]
+            or candidates
+        )
+
+        # Strategy: Pick the deepest haplogroup that has good evidence AND
+        # whose ancestors also have good evidence.
+        #
+        # We score each candidate by checking if its parent haplogroups have derived calls.
+        # A deep haplogroup with no evidence in its parents is likely a false positive.
+
+        def score_lineage_support(hg: str) -> int:
+            """Count how many ancestors have derived calls."""
+            path = list(self.tree.path_to_root(hg))
+            support = 0
+            for ancestor in path[1:]:  # Skip the haplogroup itself
+                if ancestor in haplogroup_scores and haplogroup_scores[ancestor]["derived"] >= 3:
+                    support += 1
+            return support
+
+        # Add lineage support to selection criteria
+        selected.sort(
+            key=lambda c: (
+                score_lineage_support(c[0]),  # lineage support - PRIMARY
+                self.tree.get(c[0]).depth,  # depth - SECONDARY
+                c[3].derived,  # derived count - TERTIARY
+            ),
+            reverse=True,
+        )
+
+        # Return the best candidate
+        best_hg, best_confidence, best_qc, best_stats = selected[0]
+        return best_hg, best_confidence, best_qc, best_stats
+
+    def _calculate_path_score(self, haplogroup: str, scores: dict[str, dict[str, int]]) -> float:
+        """Calculate QC3: within-haplogroup path consistency."""
+        path = self.tree.path_to_root(haplogroup)
+        if len(path) <= 1:
+            return 1.0
+
+        matching = 0
+        total = 0
+
+        # Check each ancestor (skip self)
+        for ancestor in path[1:]:
+            if ancestor not in scores:
+                continue
+
+            # Only check ancestors in same major haplogroup
+            major = haplogroup[0] if haplogroup else ""
+            if major and major in ancestor:
+                ancestor_scores = scores[ancestor]
+                derived = ancestor_scores["derived"]
+                ancestral = ancestor_scores["ancestral"]
+
+                if derived + ancestral > 0:
+                    # Ancestor should be derived
+                    if derived >= ancestral:
+                        matching += 1
+                    total += 1
+
+        return matching / total if total > 0 else 1.0
+
+    def _calculate_backbone_score(
+        self, haplogroup: str, scores: dict[str, dict[str, int]]
+    ) -> float:
+        """Calculate QC1: backbone consistency."""
+        # Simplified backbone check - verify major haplogroup markers
+        # In full implementation, this would check intermediate markers
+        # like A0-T, BT, CT, CF, etc.
+
+        # For now, return a simplified score based on path depth
+        path = self.tree.path_to_root(haplogroup)
+
+        matching = 0
+        total = 0
+
+        for node_name in path:
+            if node_name not in scores:
+                continue
+
+            node_scores = scores[node_name]
+            derived = node_scores["derived"]
+            ancestral = node_scores["ancestral"]
+
+            if derived + ancestral > 0:
+                total += 1
+                if derived > 0:
+                    matching += 1
+
+        return matching / total if total > 0 else 0.5
+
+    def _get_alternatives(
+        self, scores: dict[str, dict[str, int]], best_hg: str
+    ) -> list[tuple[str, float]]:
+        """Get alternative haplogroup calls with posterior probabilities."""
+        alternatives: list[tuple[str, float]] = []
+
+        for hg, hg_scores in scores.items():
+            if hg == best_hg:
+                continue
+
+            total = hg_scores["derived"] + hg_scores["ancestral"]
+            if total == 0:
+                continue
+
+            # Simple posterior approximation
+            posterior = hg_scores["derived"] / total
+            if posterior > 0.5:  # Only include reasonable alternatives
+                alternatives.append((hg, round(posterior, 3)))
+
+        # Sort by posterior probability
+        alternatives.sort(key=lambda x: x[1], reverse=True)
+
+        return alternatives[:5]  # Return top 5 alternatives
+
+
+def classify(
+    vcf_path: Path | str,
+    tree: Tree | None = None,
+    snp_db: SNPDatabase | None = None,
+    reference: ReferenceGenome = "grch38",
+    sample: str | None = None,
+    ancient: bool = False,
+    min_depth: int = 10,
+    min_quality: int = 20,
+    bayesian: bool = False,
+    error_rate: float = 0.001,
+    damage_rate: float = 0.1,
+) -> HaplogroupCall:
+    """
+    Convenience function for haplogroup classification.
+
+    Args:
+        vcf_path: Path to VCF file
+        tree: YFull tree (loads default if None)
+        snp_db: SNP database (loads default if None)
+        reference: Reference genome
+        sample: Sample name
+        ancient: Enable ancient DNA mode
+        min_depth: Minimum read depth
+        min_quality: Minimum genotype quality
+        bayesian: Use Bayesian posterior calculation with AD support
+        error_rate: Sequencing error rate for Bayesian mode
+        damage_rate: Ancient DNA damage rate for Bayesian mode
+
+    Returns:
+        HaplogroupCall with classification result
+    """
+    if tree is None:
+        raise ValueError("Tree must be provided (default loading not yet implemented)")
+    if snp_db is None:
+        raise ValueError("SNP database must be provided (default loading not yet implemented)")
+
+    classifier = HaplogroupClassifier(
+        tree=tree,
+        snp_db=snp_db,
+        reference=reference,
+        min_depth=min_depth,
+        min_quality=min_quality,
+        ancient_mode=ancient,
+        bayesian=bayesian,
+        error_rate=error_rate,
+        damage_rate=damage_rate,
+    )
+
+    return classifier.classify(vcf_path, sample)
