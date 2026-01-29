@@ -1,0 +1,141 @@
+# DataCheck
+
+**CLI-first data validation tool for data engineers**
+
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+## Quick Start
+
+```bash
+pip install datacheck-cli
+datacheck validate data.csv --config validation.yaml
+```
+
+## What is DataCheck?
+
+DataCheck validates files (CSV, Parquet) and databases (PostgreSQL, MySQL, SQL Server) against rule-based checks. Write validation rules in YAML, run them from the terminal or CI/CD, and fail fast when data doesn't meet expectations.
+
+Built for speed and simplicity, DataCheck runs locally or in pipelines with no external services required.
+
+## Features
+
+- **Multiple data sources**: CSV, Parquet, PostgreSQL, MySQL, SQL Server, SQLite, DuckDB
+- **Cloud storage**: S3, Google Cloud Storage, Azure Blob Storage
+- **Simple YAML config**: Define rules in readable YAML
+- **8 validation rules**: not_null, unique, min/max, regex, allowed_values, custom, length, type
+- **CI/CD ready**: Proper exit codes (0=pass, 1=fail, 2=config error, 3=load error, 4=unexpected)
+- **Performance**: Parallel execution for large datasets (auto-enabled for 10K+ rows)
+- **Slack notifications**: Real-time alerts via webhook
+- **Python API**: Use as a library for programmatic validation
+
+## Validation Rules
+
+| Rule | Purpose | Example |
+|------|---------|---------|
+| `not_null` | No missing values | `not_null: true` |
+| `unique` | No duplicates | `unique: true` |
+| `min` / `max` | Numeric range | `min: 0, max: 100` |
+| `regex` | Pattern matching | `regex: "^[A-Z]{2}[0-9]{4}$"` |
+| `allowed_values` | Whitelist | `allowed_values: ["US", "UK", "CA"]` |
+| `custom` | SQL expression | `custom: "value > 0 AND value < 100"` |
+| `length` | String length | `length: {min: 5, max: 50}` |
+| `type` | Data type check | `type: "int64"` |
+
+## Example Config
+
+```yaml
+checks:
+  - name: user_id_validation
+    column: user_id
+    rules:
+      not_null: true
+      unique: true
+      min: 1
+
+  - name: email_validation
+    column: email
+    rules:
+      not_null: true
+      regex: "^[\\w.-]+@[\\w.-]+\\.\\w+$"
+
+  - name: status_validation
+    column: status
+    rules:
+      allowed_values: ["active", "inactive", "pending"]
+```
+
+## Use Cases
+
+- **Pipeline gates**: Validate data before loading into a warehouse
+- **CI/CD checks**: Fail builds when data quality drops
+- **Pre-deployment validation**: Check exports before sending to external systems
+- **Local development**: Test data quality on your laptop before pushing code
+
+## Installation Options
+
+```bash
+# Core installation
+pip install datacheck-cli
+
+# With database support
+pip install datacheck-cli[postgresql]  # PostgreSQL
+pip install datacheck-cli[mysql]       # MySQL
+pip install datacheck-cli[mssql]       # SQL Server
+
+# With cloud storage
+pip install datacheck-cli[cloud]       # S3, GCS, Azure
+
+# Everything
+pip install datacheck-cli[all]
+```
+
+## Exit Codes
+
+DataCheck uses standard exit codes for automation:
+
+| Code | Meaning |
+|------|---------|
+| `0` | All rules passed |
+| `1` | Some rules failed |
+| `2` | Configuration error |
+| `3` | Data loading error |
+| `4` | Unexpected error |
+
+## Python API
+
+Use DataCheck programmatically:
+
+```python
+from datacheck import ValidationEngine
+from datacheck.config import ConfigLoader
+
+# Load config
+config = ConfigLoader.load("validation.yaml")
+
+# Create engine
+engine = ValidationEngine(config)
+
+# Validate dataframe
+import pandas as pd
+df = pd.read_csv("data.csv")
+results = engine.validate(df)
+
+# Check results
+if results.passed:
+    print(f"✓ All {results.total_rules} rules passed")
+else:
+    print(f"✗ {results.failed_rules} of {results.total_rules} rules failed")
+```
+
+## Links
+
+- [GitHub Repository](https://github.com/squrtech/datacheck)
+- [Documentation](https://github.com/squrtech/datacheck/tree/main/docs)
+- [Examples](https://github.com/squrtech/datacheck/tree/main/examples)
+- [Issues](https://github.com/squrtech/datacheck/issues)
+- [Changelog](https://github.com/squrtech/datacheck/blob/main/CHANGELOG.md)
+
+## License
+
+Apache License 2.0 - Copyright 2026 Squrtech
