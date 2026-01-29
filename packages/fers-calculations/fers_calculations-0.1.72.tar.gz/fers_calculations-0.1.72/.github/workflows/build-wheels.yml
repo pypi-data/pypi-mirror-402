@@ -1,0 +1,301 @@
+name: Release Rust Python Package
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "types/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  test:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    name: Run cargo tests before release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: clippy
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+
+      - name: Lint with cargo clippy (deny warnings)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test --workspace --all-features --no-fail-fast
+
+  publish-to-pypi-linux:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    needs: test
+    name: Build and Publish Linux Wheel to PyPI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install maturin
+
+      - name: Build and Publish to PyPI
+        env:
+          MATURIN_PASSWORD: ${{ secrets.PYPI }}
+        run: |
+          maturin publish \
+            --skip-existing \
+            --bindings pyo3 --features python \
+            --username __token__ --password $MATURIN_PASSWORD
+
+  publish-to-pypi-windows:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    needs: test
+    name: Build and Publish Windows Wheel to PyPI
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install maturin
+
+      - name: Build and Publish to PyPI
+        shell: pwsh
+        env:
+          MATURIN_PASSWORD: ${{ secrets.PYPI }}
+        run: |
+          maturin publish --skip-existing --bindings pyo3 --features python --username __token__ --password $env:MATURIN_PASSWORD
+
+  publish-to-npm:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    needs: test
+    name: Build and Publish WASM to npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    # Optional: blank it for the whole job (strongest)
+    env:
+      NODE_AUTH_TOKEN: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Upgrade npm
+        run: npm install --global npm@latest
+
+      - name: Show Node/npm versions
+        run: |
+          node --version
+          npm --version
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Diagnose where NODE_AUTH_TOKEN comes from (no secrets leaked)
+        run: |
+          echo "secrets.NODE_AUTH_TOKEN exists? ${{ secrets.NODE_AUTH_TOKEN != '' }}"
+          echo "vars.NODE_AUTH_TOKEN exists?   ${{ vars.NODE_AUTH_TOKEN != '' }}"
+          echo "secrets.NPM_TOKEN exists?      ${{ secrets.NPM_TOKEN != '' }}"
+          echo "vars.NPM_TOKEN exists?         ${{ vars.NPM_TOKEN != '' }}"
+          if [ -n "${NODE_AUTH_TOKEN+x}" ]; then
+            echo "ENV NODE_AUTH_TOKEN is set (length: ${#NODE_AUTH_TOKEN})"
+          else
+            echo "ENV NODE_AUTH_TOKEN is NOT set"
+          fi
+
+      - name: Remove npm token config (force Trusted Publishing)
+        run: |
+          npm config delete //registry.npmjs.org/:_authToken || true
+          rm -f "$(npm config get userconfig)" || true
+          npm config set registry https://registry.npmjs.org/
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+
+      - name: Build WASM (npm package)
+        run: |
+          wasm-pack build \
+            --release \
+            --target nodejs \
+            --out-dir pkg \
+            --features wasm
+
+      - name: Use npm-specific README
+        run: cp README_NPM.md pkg/README.md
+
+      - name: Set npm package name + version
+        run: |
+          node -e "
+          const fs = require('fs');
+
+          const cargo = fs.readFileSync('Cargo.toml','utf8');
+          const m = cargo.match(/^version\\s*=\\s*\\\"([^\\\"]+)\\\"/m);
+          if (!m) throw new Error('Could not read version from Cargo.toml');
+          const version = m[1];
+
+          const pkgPath = 'pkg/package.json';
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+
+          pkg.name = '@ferscloud/fers-calculation';
+          pkg.version = version;
+          pkg.publishConfig = Object.assign({}, pkg.publishConfig, { access: 'public' });
+          pkg.repository = { type: 'git', url: 'git+https://github.com/Jeroen124/FERS_calculations.git' };
+
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+          console.log('Will publish', pkg.name, pkg.version);
+          "
+
+      - name: Show package.json used for publish
+        working-directory: pkg
+        run: cat package.json
+
+      - name: Show npm user config (redact-safe)
+        run: |
+          echo "User npmrc path: $(npm config get userconfig)"
+          sed -e 's/_authToken=.*/_authToken=REDACTED/' "$(npm config get userconfig)" || true
+          npm config list -l | sed -e 's/_authToken =.*/_authToken = REDACTED/' || true
+
+      - name: Publish to npm (Trusted Publishing)
+        working-directory: pkg
+        # Optional extra safety: also blank it only for publish step
+        env:
+          NODE_AUTH_TOKEN: ""
+        run: npm publish
+
+  update-types:
+    name: Generate and Commit OpenAPI Types
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: pip install maturin datamodel-code-generator
+
+      - name: Generate OpenAPI JSON
+        run: |
+          cargo run -- --openapi
+          mkdir -p "$GITHUB_WORKSPACE/types"
+          mv openapi.json "$GITHUB_WORKSPACE/types/openapi.json"
+
+      - name: Generate Pydantic Models
+        run: |
+          cd "$GITHUB_WORKSPACE/types"
+          datamodel-codegen \
+            --input openapi.json \
+            --input-file-type openapi \
+            --output pydantic_models.py \
+            --output-model-type pydantic_v2.BaseModel
+
+      - name: Commit and Push Generated Files
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add types/openapi.json types/pydantic_models.py
+          git commit -m "Update OpenAPI JSON and Pydantic models in /types folder"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-and-push-wasm:
+    name: Build WASM and Push to FERS_fiber
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out fers_calculations
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+
+      - name: Build WASM
+        run: |
+          wasm-pack build \
+            --release \
+            --target web \
+            --out-dir ./wasm_output \
+            --features wasm
+
+      - name: Clone FERS_fiber repo
+        run: |
+          git clone https://x-access-token:${{ secrets.FIBER_REPO_PAT }}@github.com/Jeroen124/FERS_fiber.git
+
+      - name: Ensure pkg folder exists in FERS_fiber
+        run: mkdir -p FERS_fiber/src/pkg
+
+      - name: Add build timestamp to pkg folder
+        run: |
+          echo "Build date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" > FERS_fiber/src/pkg/build-info.txt
+
+      - name: Move WASM build to FERS_fiber
+        run: mv wasm_output/* FERS_fiber/src/pkg/
+
+      - name: Commit and push WASM output to FERS_fiber
+        run: |
+          cd FERS_fiber
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/pkg
+          git commit -m "Update WASM build from fers_calculations"
+          git push
