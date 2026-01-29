@@ -1,0 +1,432 @@
+Metadata-Version: 2.4
+Name: Dataframe-timeseries-mon
+Version: 1.0.0
+Summary: DataFrame ordered-window extraction with diagnostics and an envvar-based monitoring integration layer
+Author: Marcin Kowalczyk
+License: MIT
+Keywords: pandas,timeseries,monitoring,alerting,environment-variables,dataframe,etl
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Operating System :: OS Independent
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Scientific/Engineering
+Classifier: Topic :: System :: Monitoring
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: pandas>=1.5
+Provides-Extra: dev
+Requires-Dist: build>=1.0; extra == "dev"
+Requires-Dist: twine>=5.0; extra == "dev"
+Dynamic: license-file
+
+# dataframe-timeseries-mon
+
+A small, dependency-light toolkit built around two complementary components:
+
+1. **DataFrame time-window extraction** (`PBM_SUPPORT_DF_WINDOW`)
+   - Extract an ordered, fixed-length hour window from a pandas DataFrame.
+   - Robust coercion (`auto` / `float` / `raw`) and a diagnostic engine.
+   - Optional “alert bridge” that can publish a visible monitoring signal when diagnostics fail.
+
+2. **Environment-variable monitoring integration layer** (`alerting_subsystem`)
+   - A transport-agnostic monitoring convention based on environment variables.
+   - Cache + aggregation helpers and a human-readable “post” renderer (text or HTML).
+   - A simple external-exception backstop channel.
+
+The modules can be used independently, but they are designed to work well together:
+
+- `PBM_SUPPORT_DF_WINDOW` can emit diagnostics **and** (optionally) publish a safe monitoring signal via cache envvars.
+- `alerting_subsystem` can aggregate those cache signals and format a post, without any dependency on a notification system.
+
+This distribution ships:
+
+- Legacy top-level modules (backward compatible import paths):
+  - `PBM_SUPPORT_DF_WINDOW.py`
+  - `alerting_subsystem.py`
+- A conventional wrapper package for normal imports:
+  - `dataframe_timeseries_mon`
+
+---
+
+## Install
+
+```bash
+pip install dataframe-timeseries-mon
+```
+
+Recommended imports:
+
+```python
+import dataframe_timeseries_mon as dtm
+```
+
+Backwards-compatible imports (also supported):
+
+```python
+from PBM_SUPPORT_DF_WINDOW import df_to_ordered_window_API
+import alerting_subsystem
+```
+
+---
+
+## Quick start
+
+### 1) Extract an ordered hour window from a DataFrame
+
+```python
+from PBM_SUPPORT_DF_WINDOW import df_to_ordered_window_API
+
+window = df_to_ordered_window_API(
+    df=df,
+    value_col="position",
+    start_hour=0,
+    num_hours=24,
+    OVERRIDE_TO_6HR=False,   # IMPORTANT: default clamps to <= 6 hours
+)
+
+print(len(window), window[:6])
+```
+
+If your DataFrame has an hour column (recommended when rows may be missing or unordered):
+
+```python
+window = df_to_ordered_window_API(
+    df=df,
+    value_col="position",
+    hour_col="delivery_hour",  # values convertible to hour int (0-23), Timestamp, etc.
+    start_hour=8,
+    num_hours=6,
+)
+```
+
+### 2) Surface issues via monitoring aggregation
+
+`alerting_subsystem` reads environment variables. A common operational pattern is:
+
+- call `external_reset()` at the start of an iteration (clears helper alarms and resets the external exception channel)
+- run your pipeline under `external_passthru(stage=...)` (records uncaught exceptions into the external channel)
+- use `any_alarm(include_caut=True)` as the final gate
+- render a post with `build_post_text_from_cache(...)`
+
+```python
+import alerting_subsystem as als
+
+als.external_reset(iter_tag="RUN_001")
+
+with als.external_passthru(stage="MAIN"):
+    # your pipeline code here
+    ...
+
+if als.any_alarm(include_caut=True):
+    post = als.build_post_text_from_cache(as_html=False)
+    print(post)
+```
+
+### 3) Integrated behavior: DFWIN diagnostics can become monitoring `CAUT`
+
+`PBM_SUPPORT_DF_WINDOW.df_to_ordered_window_API(...)` runs diagnostics by default.
+If diagnostics fail, it can publish a monitoring cache signal so that `any_alarm(include_caut=True)` becomes `True`.
+
+Default bridge behavior (safe fanout):
+
+- Publishes **CAUT** into cache keys for kind `OZE` for BOTH portfolios:
+  - `(PCPOL, OZE)` and `(PCAGR, OZE)`
+
+This default is chosen to avoid “going nowhere” with the default `any_alarm()` scan.
+
+---
+
+## Wrapper package (`dataframe_timeseries_mon`)
+
+The wrapper exists solely for conventional imports. It does not change behavior.
+
+```python
+import dataframe_timeseries_mon as dtm
+
+# df-window API
+w = dtm.df_to_ordered_window_API(df=df, value_col="position", start_hour=0, num_hours=24, OVERRIDE_TO_6HR=False)
+
+# monitoring API
+if dtm.any_alarm(include_caut=True):
+    print(dtm.build_post_text_from_cache(as_html=False))
+```
+
+Exports:
+
+- `dtm.df_to_ordered_window_API` (alias: `dtm.df_to_ordered_window`)
+- `dtm.any_alarm`, `dtm.snapshot_cache_log`, `dtm.build_post_text_from_cache`, `dtm.external_reset`, `dtm.external_passthru`, etc.
+
+---
+
+## DataFrame window extraction (`PBM_SUPPORT_DF_WINDOW`)
+
+### Function
+
+- `PBM_SUPPORT_DF_WINDOW.df_to_ordered_window_API(...) -> list`
+
+### Core parameters
+
+- `df`: pandas DataFrame
+- `value_col`: column name (or integer positional index)
+- `start_hour`: starting hour for the window (modulo `period`, default `24`)
+- `num_hours`: requested length
+
+### Important defaults
+
+- `OVERRIDE_TO_6HR=True` clamps `num_hours` to `<= max_override_hours` (default `6`).
+  - For a full-day window, pass `OVERRIDE_TO_6HR=False`.
+
+### Hour alignment modes (choose one)
+
+1. `hour_col="..."` (recommended): map hours from a DataFrame column
+2. `use_index_as_hour=True`: map hours from the DataFrame index
+3. otherwise, positional extraction uses `base_hour` (default `0`)
+
+Notes:
+
+- If `hour_col` is set or `use_index_as_hour=True`, missing hours can be detected and optionally enforced.
+- `period` defaults to 24 and is used for modulo wrapping.
+
+### Output / coercion
+
+`output="auto"` (default):
+
+- preserves booleans
+- parses boolean-like strings ("true/false", "yes/no") if enabled
+- treats `0/1` as boolean **only** if the entire non-null value set is binary-only
+- otherwise coerces to float
+
+Other modes:
+
+- `output="float"`: always float coercion
+- `output="raw"`: no coercion
+
+Invalid value policy (`invalid=`):
+
+- `"nan"` (default): coercion failures produce `nan`
+- `"keep"`: keep original value
+- `"raise"`: raise exception
+
+### Diagnostics
+
+Diagnostics are enabled by default (`diag_enable=True`). When enabled:
+
+- a diagnostic envvar pair is set per call:
+  - `<DIAG_BASE_KEY>` is set to `OK` or `ALRM`
+  - `<DIAG_BASE_KEY>_D` contains a readable detail string (including meta)
+- logging markers are emitted via `logging` (WARNING level by default)
+
+Stable diagnostic key naming (recommended for dashboards):
+
+```python
+_ = df_to_ordered_window_API(
+    df=df,
+    value_col="position",
+    start_hour=0,
+    num_hours=24,
+    OVERRIDE_TO_6HR=False,
+    diag_namespace="OZE",
+    diag_name="POSITIONS",
+)
+```
+
+If you do not specify `diag_namespace` / `diag_name`, unique keys are generated per call to avoid collisions.
+
+Strict time-axis validation (optional):
+
+- `diag_time_col="cet_datetime"` enables a strict monotonic hourly axis check.
+- `diag_expected_rows=24` enforces row count (set `None` to disable).
+
+Strict hour coverage (optional):
+
+- `diag_strict_hours_coverage=True` can enforce that every requested hour is present when hour mapping is used.
+
+### Alert bridge (DFWIN -> monitoring cache)
+
+When diagnostics are enabled, the alert bridge is enabled by default.
+
+- Default behavior publishes **CAUT** via `PBM_CACHE_*` keys (not via trap keys).
+- Disable explicitly with `alert_bridge_enable=False`.
+- Route explicitly with:
+  - `alert_bridge_targets=[("PCPOL","OZE")]`, or
+  - `alert_bridge_pfs=[...], alert_bridge_kinds=[...]` (cross-product)
+
+The bridge is designed to be safe by default:
+
+- If routing would otherwise “go nowhere”, safe defaults are added unless you explicitly allow it.
+
+---
+
+## Monitoring integration (`alerting_subsystem`)
+
+### What it does
+
+- Defines a monitoring convention via environment variables.
+- Aggregates state and determines whether anything is not OK (`any_alarm`).
+- Snapshots a small set of DataFrame columns into cache keys (`snapshot_cache_log`).
+- Renders a “post” for downstream notification systems (text or HTML).
+- Provides an external exception backstop channel (`external_passthru`).
+
+### Typical usage
+
+Snapshot a DataFrame into the cache (and also cache a rendered snapshot text):
+
+```python
+import alerting_subsystem as als
+
+msg, overall = als.snapshot_cache_log(
+    pf="PCPOL",
+    kind="OZE",
+    df=df,
+    col_specs=als.COL_SPECS_OZE,
+)
+
+print("overall:", overall)
+print(msg)
+```
+
+Render a post from the cache (human-readable, suitable for sending via email/Teams/etc.):
+
+```python
+post_text = als.build_post_text_from_cache(as_html=False)
+post_html = als.build_post_text_from_cache(as_html=True, html_doc=True)
+```
+
+### Key state families
+
+Trap inputs (external force):
+
+- `PBM_TRAP_{PF}_{KIND}` : `OK` / `ALRM` / missing
+- `PBM_TRAP_{PF}_{KIND}_D` : descriptor text
+
+Cache outputs (computed status):
+
+- `PBM_CACHE_{PF}_{KIND}_TS`
+- `PBM_CACHE_{PF}_{KIND}_OVERALL` : `OK` / `CAUT` / `ALRM`
+- `PBM_CACHE_{PF}_{KIND}_TRAP`
+- `PBM_CACHE_{PF}_{KIND}_DESC`
+- `PBM_CACHE_{PF}_{KIND}_DATA`
+
+Snapshot text:
+
+- `PBM_LAST_{PF}_{KIND}_TEXT`
+- `PBM_LAST_{PF}_{KIND}_TS`
+
+Helper alarm text:
+
+- `PBM_HELPER_LAST_{PF}_{KIND}_TEXT`
+- `PBM_HELPER_LAST_{PF}_{KIND}_TS`
+
+External exception channel:
+
+- `PBM_EXTERNAL_STATE` (`OK` / `ALRM`)
+- `PBM_EXTERNAL_ITER`
+- `PBM_EXTERNAL_LAST_TEXT`
+- `PBM_EXTERNAL_LAST_TS`
+
+Legacy mirror keys are also written/read (`PBM_DRIVEBY_*`).
+
+### Environment controls
+
+Time column handling in snapshots:
+
+- `PBM_DATA_TIME_MODE` controls how time columns are included in snapshot data.
+  - `omit` (default): omit time columns (`CET Delivery Start`, `cet_datetime`)
+  - `hm`: include time columns but formatted as `HH:MM`
+  - any other value: include raw string values
+
+Post formatting:
+
+- `PBM_POST_FORMAT` controls default post format
+  - values like `html/htm/true/1/yes` enable HTML
+  - otherwise text
+- `PBM_POST_HTML_DOC` controls whether HTML output is a full HTML document
+  - `1/true/yes/on` enables full document wrapping
+
+Portfolio context:
+
+- `PBM_TRAP_PORTFOLIO` is the conventional portfolio envvar used in multiple places.
+
+### Common functions
+
+- `snapshot_cache_log(pf, kind, df, col_specs, ...) -> (text, overall)`
+- `any_alarm(pfs=("PCPOL","PCAGR"), kinds=("RB","OZE"), include_caut=True) -> bool`
+- `build_post_text_from_cache(...) -> str`
+- `external_reset(iter_tag=None, ...)` and `external_passthru(stage, iter_tag=None)`
+- `alarm_passthru`: context manager backstop that routes exceptions into the external channel
+
+---
+
+## CLI
+
+A small CLI is included that renders the current monitoring post from environment variables:
+
+```bash
+dfmon-post --text
+```
+
+The CLI does not send notifications; it only renders output.
+
+---
+
+## Examples
+
+From a checked-out repo:
+
+```bash
+python examples/01_df_window_basic.py
+python examples/03_integration_any_alarm.py
+```
+
+---
+
+## Packaging / publishing (twine)
+
+This repo includes helper scripts under `tools/`.
+
+### Build
+
+```bash
+./tools/build_dist.sh
+```
+
+### Verify wheel install/import
+
+```bash
+./tools/verify_install.sh
+```
+
+### Upload to TestPyPI
+
+```bash
+export TWINE_USERNAME='__token__'
+export TWINE_PASSWORD='pypi-TESTPYPI_TOKEN_HERE'
+./tools/publish_testpypi.sh
+```
+
+### Upload to PyPI
+
+```bash
+export TWINE_USERNAME='__token__'
+export TWINE_PASSWORD='pypi-PYPI_TOKEN_HERE'
+./tools/publish_pypi.sh
+```
+
+---
+
+## Versioning
+
+- Bump `project.version` in `pyproject.toml` for every release.
+- This distribution intentionally preserves the two top-level legacy modules as stable import targets.
+
+---
+
+## License
+
+MIT. See `LICENSE`.
