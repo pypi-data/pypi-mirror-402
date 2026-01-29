@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Issue #{{ issue.short_uuid }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-start mb-4">
+                <div>
+                    <h1 class="h3">
+                        <i class="bi bi-bug-fill text-danger me-2"></i>
+                        Issue #{{ issue.short_uuid }}
+                    </h1>
+                    <p class="text-muted mb-0">
+                        Reported by
+                        <strong>{{ issue.reported_by.get_full_name|default:issue.reported_by.username }}</strong>
+                        on {{ issue.created_at|date:"F j, Y \a\\t g:i A" }}
+                    </p>
+                </div>
+                <div class="d-flex gap-2">
+                    <span class="badge bg-{% if issue.status == 'open' %}danger{% elif issue.status == 'in_progress' %}warning{% elif issue.status == 'resolved' %}success{% else %}secondary{% endif %} fs-6">
+                        {{ issue.get_status_display }}
+                    </span>
+                    <span class="badge bg-{% if issue.priority == 'urgent' %}danger{% elif issue.priority == 'high' %}warning{% elif issue.priority == 'medium' %}info{% else %}secondary{% endif %} fs-6">
+                        {{ issue.get_priority_display }}
+                    </span>
+                </div>
+            </div>
+
+            <!-- Issue Details -->
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">{{ issue.title }}</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <h6>Description</h6>
+                                <p class="text-break">{{ issue.description|linebreaks }}</p>
+                            </div>
+
+                            {% if issue.reported_url %}
+                            <div class="mb-3">
+                                <h6>Reported URL</h6>
+                                <a href="{{ issue.reported_url }}" target="_blank" class="btn btn-outline-primary btn-sm">
+                                    <i class="bi bi-link-45deg me-1"></i>
+                                    View Page
+                                </a>
+                                <small class="text-muted d-block mt-1">{{ issue.reported_url }}</small>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">Issue Details</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <strong>Status:</strong>
+                                <span class="badge bg-{% if issue.status == 'open' %}danger{% elif issue.status == 'in_progress' %}warning{% elif issue.status == 'resolved' %}success{% else %}secondary{% endif %}">
+                                    {{ issue.get_status_display }}
+                                </span>
+                            </div>
+
+                            <div class="mb-3">
+                                <strong>Priority:</strong>
+                                <span class="badge bg-{% if issue.priority == 'urgent' %}danger{% elif issue.priority == 'high' %}warning{% elif issue.priority == 'medium' %}info{% else %}secondary{% endif %}">
+                                    {{ issue.get_priority_display }}
+                                </span>
+                            </div>
+
+                            <div class="mb-3">
+                                <strong>Reported by:</strong><br>
+                                {{ issue.reported_by.get_full_name|default:issue.reported_by.username }}
+                            </div>
+
+                            {% if issue.assigned_to %}
+                            <div class="mb-3">
+                                <strong>Assigned to:</strong><br>
+                                {{ issue.assigned_to.get_full_name|default:issue.assigned_to.username }}
+                            </div>
+                            {% endif %}
+
+                            <div class="mb-3">
+                                <strong>Created:</strong><br>
+                                <small>{{ issue.created_at|date:"F j, Y \a\\t g:i A" }}</small>
+                            </div>
+
+                            {% if issue.updated_at != issue.created_at %}
+                            <div class="mb-3">
+                                <strong>Updated:</strong><br>
+                                <small>{{ issue.updated_at|date:"F j, Y \a\\t g:i A" }}</small>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Back to Issues -->
+            <div class="mt-4">
+                <a href="{% url 'django_issue_capture:list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i>
+                    Back to Issues
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% load admin_urls %}
+<tr class="row1">
+    <td class="action-checkbox-column">
+        <input type="checkbox" name="_selected_action" value="{{ issue.pk }}" class="action-select">
+    </td>
+    <td class="nowrap">
+        <a href="{% url 'admin:django_issue_capture_issue_change' issue.pk %}">{{ issue.short_uuid }}</a>
+    </td>
+    <td class="nowrap">
+        <a href="{% url 'admin:django_issue_capture_issue_change' issue.pk %}">{{ issue.title }}</a>
+    </td>
+    <td class="nowrap">{{ issue.get_status_display }}</td>
+    <td class="nowrap">{{ issue.get_priority_display }}</td>
+    <td class="nowrap">{{ issue.reported_by.username }}</td>
+    <td class="nowrap">{{ issue.created_at|date:"M d, Y H:i" }}</td>
+    <td class="nowrap">
+        {% if issue.is_promoted_to_github %}
+            <a href="{{ issue.github_url }}" target="_blank" class="button" style="background-color: #28a745; color: white; text-decoration: none; padding: 4px 8px; border-radius: 3px; font-size: 11px;">GitHub #{{ issue.github_issue_number }}</a>
+        {% else %}
+            <button
+                hx-post="{% url 'admin:django_issue_capture_issue_promote' issue.pk %}"
+                hx-target="closest tr"
+                hx-swap="outerHTML"
+                hx-include="[name=csrfmiddlewaretoken]"
+                class="button"
+                style="background-color: #007cba; color: white; border: none; padding: 4px 8px; border-radius: 3px; font-size: 11px; cursor: pointer;">
+                Promote
+            </button>
+        {% endif %}
+    </td>
+</tr>

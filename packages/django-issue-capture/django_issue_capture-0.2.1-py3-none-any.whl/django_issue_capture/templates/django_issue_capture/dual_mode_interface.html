@@ -1,0 +1,159 @@
+<!-- Dual-Mode Issue Creation Interface -->
+<div class="dual-mode-interface p-4 bg-white rounded" style="width: 100%">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">
+            <i class="bi bi-plus-circle-fill text-primary me-2"></i>
+            Create Issue
+        </h5>
+        <button type="button" class="btn-close" onclick="closeIssueForm()"></button>
+    </div>
+
+    <!-- Mode Selection Tabs -->
+    <ul class="nav nav-tabs mb-3" id="creation-mode-tabs" role="tablist">
+        {% if issue_capture_settings.show_ai_interface %}
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="ai-tab" data-bs-toggle="tab" data-bs-target="#ai-mode" type="button" role="tab">
+                <i class="bi bi-magic me-1"></i>
+                AI Generate
+            </button>
+        </li>
+        {% endif %}
+        <li class="nav-item" role="presentation">
+            <button class="nav-link{% if not issue_capture_settings.show_ai_interface %} active{% endif %}" id="standard-tab" data-bs-toggle="tab" data-bs-target="#standard-mode" type="button" role="tab">
+                <i class="bi bi-form me-1"></i>
+                Standard Form
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="creation-mode-content">
+        {% if issue_capture_settings.show_ai_interface %}
+        <!-- AI Generation Mode -->
+        <div class="tab-pane fade show active" id="ai-mode" role="tabpanel">
+            {% if issue_capture_settings.llm_configuration_errors %}
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Configuration Required</strong>
+                <ul class="mb-0 mt-2">
+                {% for error in issue_capture_settings.llm_configuration_errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+                </ul>
+            </div>
+
+            <div class="text-muted">
+                <p>Once configured, you'll be able to describe your issue in plain text and AI will generate a comprehensive, well-structured ticket.</p>
+            </div>
+            {% else %}
+            <div class="alert alert-success">
+                <i class="bi bi-magic me-2"></i>
+                <strong>AI-Powered Issue Generation</strong> - Just describe your issue and let AI create a comprehensive ticket
+            </div>
+
+            <form hx-post="{% url 'django_issue_capture:generate_comprehensive' %}"
+                  hx-target="#issue-capture-container"
+                  hx-swap="innerHTML">
+                {% csrf_token %}
+
+                <div class="mb-3">
+                    <label for="ai-template" class="form-label">Issue Type</label>
+                    <select class="form-select" id="ai-template" name="template">
+                        <option value="bug">Bug Report</option>
+                        <option value="feature">Feature Request</option>
+                        <option value="enhancement">Enhancement</option>
+                        <option value="task">Task</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label for="ai-title" class="form-label">Title (Optional)</label>
+                    <input type="text"
+                           class="form-control"
+                           id="ai-title"
+                           name="title"
+                           placeholder="Brief summary - AI will enhance this">
+                </div>
+
+                <div class="mb-3">
+                    <label for="ai-description" class="form-label">
+                        Description <span class="text-danger">*</span>
+                        <small class="text-muted">- Describe the issue in your own words</small>
+                    </label>
+                    <textarea class="form-control"
+                              id="ai-description"
+                              name="description"
+                              rows="4"
+                              placeholder="Describe what's happening, what you expected, any steps to reproduce, etc. Don't worry about formatting - AI will organize everything."
+                              required></textarea>
+                    <div class="form-text">
+                        <i class="bi bi-lightbulb me-1"></i>
+                        <strong>Tip:</strong> Include as much or as little detail as you want. AI will ask for clarification if needed and fill in missing sections.
+                    </div>
+                </div>
+
+                <input type="hidden" name="action" value="preview">
+                <input type="hidden" name="reported_url" value="{{ request.META.HTTP_REFERER|default:'' }}">
+
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="bi bi-magic me-2"></i>Generate Comprehensive Issue
+                </button>
+            </form>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Standard Form Mode -->
+        <div class="tab-pane fade{% if not issue_capture_settings.show_ai_interface %} show active{% endif %}" id="standard-mode" role="tabpanel">
+            <form hx-post="{% url 'django_issue_capture:create' %}"
+                  hx-target="#issue-capture-container"
+                  hx-swap="innerHTML">
+                {% csrf_token %}
+
+                <div class="mb-3">
+                    <label for="standard-title" class="form-label">Title <span class="text-danger">*</span></label>
+                    <input type="text"
+                           class="form-control"
+                           id="standard-title"
+                           name="title"
+                           placeholder="Brief description of the issue"
+                           required>
+                </div>
+
+                <div class="mb-3">
+                    <label for="standard-description" class="form-label">Description <span class="text-danger">*</span></label>
+                    <textarea class="form-control"
+                              id="standard-description"
+                              name="description"
+                              rows="4"
+                              placeholder="Detailed description of the issue"
+                              required></textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label for="standard-priority" class="form-label">Priority</label>
+                    <select class="form-select" id="standard-priority" name="priority">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                    </select>
+                </div>
+
+                <input type="hidden" name="reported_url" value="{{ request.META.HTTP_REFERER|default:'' }}">
+                <input type="hidden" name="creation_mode" value="form">
+
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>
+                    Create Issue
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function closeIssueForm() {
+    document.getElementById('issue-capture-container').innerHTML = '';
+}
+</script>
