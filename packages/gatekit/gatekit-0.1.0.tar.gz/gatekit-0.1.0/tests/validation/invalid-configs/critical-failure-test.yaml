@@ -1,0 +1,37 @@
+# Critical Plugin Failure Test Configuration
+#
+# This config uses critical: true (the default) for an auditing plugin
+# that points to a non-existent directory. The gateway should REFUSE TO START
+# because critical plugins must succeed or the system halts.
+#
+# Expected behavior:
+#   - Gateway exits with error before accepting connections
+#   - Error message mentions the plugin and path issue
+#   - No partial startup (fail-closed)
+#
+# Usage:
+#   gatekit-gateway --config tests/validation/invalid-configs/critical-failure-test.yaml
+#
+# Expected output:
+#   ERROR: Critical auditing plugin 'audit_jsonl' failed to initialize...
+#   (gateway exits with non-zero status)
+
+proxy:
+  transport: stdio
+
+  upstreams:
+    - name: test-server
+      transport: stdio
+      command:
+        - echo
+        - "test"
+
+plugins:
+  auditing:
+    _global:
+      - handler: audit_jsonl
+        config:
+          enabled: true
+          output_file: /nonexistent/directory/that/does/not/exist/audit.jsonl
+          # critical: true is the DEFAULT - explicitly shown for clarity
+          critical: true

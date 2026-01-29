@@ -1,0 +1,78 @@
+Base64 Encoded Content Test File
+=================================
+
+This file tests Gatekit's base64 decoding feature.
+Both PII and secrets filters decode base64 strings and scan the decoded content.
+
+NOTE: Base64-encoded content cannot be redacted without corrupting binary data.
+When action=redact and sensitive content is detected in base64, blocking is forced.
+With action=audit_only, detections are logged but content passes through.
+See ADR-025 for details.
+
+
+=== WILL CAUSE BLOCK (Base64-Encoded PII) ===
+
+# Base64-encoded email address
+# Decoded: john.smith@company.com
+Encoded email: am9obi5zbWl0aEBjb21wYW55LmNvbQ==
+
+# Base64-encoded SSN (US format)
+# Decoded: 123-45-6789
+Encoded SSN: MTIzLTQ1LTY3ODk=
+
+# Base64-encoded phone number
+# Decoded: (555) 123-4567
+Encoded phone: KDU1NSkgMTIzLTQ1Njc=
+
+# Base64-encoded credit card (Luhn-valid)
+# Decoded: 4532 0151 1283 0366
+Encoded credit card: NDUzMiAwMTUxIDEyODMgMDM2Ng==
+
+# Mixed content - base64 embedded in sentence
+The user's email is stored as am9obi5zbWl0aEBjb21wYW55LmNvbQ== in the database.
+
+
+=== WILL CAUSE BLOCK (Base64-Encoded Secrets) ===
+
+# Base64-encoded AWS Access Key
+# Decoded: AKIAIOSFODNN7EXAMPLE
+Encoded AWS key: QUtJQUlPU0ZPRE5ON0VYQU1QTEU=
+
+# Base64-encoded GitHub token (40 chars: ghp_ + 36)
+# Decoded: ghp_1234567890abcdefghijklmnopqrstuvwxyz
+Encoded GitHub token: Z2hwXzEyMzQ1Njc4OTBhYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5eg==
+
+# Base64-encoded OpenAI API key
+# Decoded: sk-1234567890abcdef1234567890abcdef12345678abcdefgh
+Encoded OpenAI key: c2stMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3OGFiY2RlZmdo
+
+
+=== WILL NOT BE DETECTED (Known Limitations) ===
+
+# Data URLs are explicitly skipped (common in web contexts, usually legitimate)
+data:text/plain;base64,am9obi5zbWl0aEBjb21wYW55LmNvbQ==
+
+# Double-encoded content (only one level of decoding is performed)
+# Inner: john@test.com -> am9obkB0ZXN0LmNvbQ==
+# Outer encoding of that base64 string
+Double encoded (won't detect): YW1vaG5AVGVzdC5jb20=
+
+# Too short to be scanned (less than 12 chars)
+Short: YWJjZGVm
+
+# Not valid base64 (wrong padding/length)
+Invalid: am9obkB0ZXN0LmNvbQ=
+
+
+=== PLAIN TEXT REFERENCE (for comparison) ===
+
+# These decoded values will ALSO be redacted (they're actual PII/secrets)
+# This section verifies both plain text AND base64 detection work together
+Plain email: john.smith@company.com
+Plain SSN: 123-45-6789
+Plain phone: (555) 123-4567
+Plain credit card: 4532 0151 1283 0366
+Plain AWS key: AKIAIOSFODNN7EXAMPLE
+Plain GitHub token: ghp_1234567890abcdefghijklmnopqrstuvwxyz
+Plain OpenAI key: sk-1234567890abcdef1234567890abcdef12345678abcdefgh
+

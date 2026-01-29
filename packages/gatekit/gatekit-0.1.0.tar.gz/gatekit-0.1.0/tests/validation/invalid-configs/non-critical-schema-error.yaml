@@ -1,0 +1,22 @@
+# Test config: non-critical plugin with schema validation errors
+# Expected behavior: plugin should be skipped with a warning, startup continues
+
+proxy:
+  transport: stdio
+  upstreams:
+    - name: "test_server"
+      command: ["echo", "test"]
+  timeouts:
+    connection_timeout: 30
+    request_timeout: 60
+
+plugins:
+  auditing:
+    _global:
+      - handler: "audit_jsonl"
+        config:
+          enabled: true
+          critical: false  # Non-critical - should allow startup to continue
+          output_file: "/tmp/test_audit.log"
+          unknown_option: "this should cause schema validation to fail"
+          another_bad_option: 123

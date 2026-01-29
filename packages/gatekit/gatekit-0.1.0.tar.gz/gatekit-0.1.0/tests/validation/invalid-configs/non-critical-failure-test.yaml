@@ -1,0 +1,40 @@
+# Non-Critical Plugin Failure Test Configuration
+#
+# This config uses critical: false for an auditing plugin that points to
+# a non-existent directory. The gateway should START SUCCESSFULLY but
+# log a warning about the failed plugin.
+#
+# Expected behavior:
+#   - Gateway starts and accepts connections
+#   - Warning logged about the failed auditing plugin
+#   - Other plugins continue to function
+#   - Requests are processed (without the failed auditing plugin)
+#
+# Usage:
+#   gatekit-gateway --config tests/validation/invalid-configs/non-critical-failure-test.yaml
+#
+# Expected output:
+#   WARNING: Non-critical auditing plugin 'audit_jsonl' has path validation errors...
+#   (gateway starts normally and waits for connections)
+
+proxy:
+  transport: stdio
+
+  upstreams:
+    - name: filesystem
+      transport: stdio
+      command:
+        - npx
+        - -y
+        - "@modelcontextprotocol/server-filesystem"
+        - "/tmp"
+
+plugins:
+  auditing:
+    _global:
+      - handler: audit_jsonl
+        config:
+          enabled: true
+          output_file: /nonexistent/directory/that/does/not/exist/audit.jsonl
+          # critical: false allows the gateway to start despite plugin failure
+          critical: false
