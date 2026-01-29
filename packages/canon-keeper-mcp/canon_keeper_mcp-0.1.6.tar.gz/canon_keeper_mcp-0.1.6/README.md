@@ -1,0 +1,197 @@
+# Canon Keeper MCP Server
+
+An MCP (Model Context Protocol) server that persists learnings from Copilot conversations to `copilot-instructions.md`.
+
+**No API key required!** Copilot extracts learnings using its own LLM, this tool handles deduplication and formatting.
+
+## Quick Install
+
+```bash
+pip install canon-keeper-mcp
+python -m canon_keeper_mcp install
+
+# Or specify a workspace
+python -m canon_keeper_mcp install --workspace /path/to/project
+```
+
+The installer will:
+
+1. ✅ Configure `.vscode/mcp.json` with the canon-keeper server
+2. ✅ Enable MCP in `.vscode/settings.json`
+3. ✅ Create/update `.github/copilot-instructions.md` with:
+   - Memory Persistence Protocol (`@History` directive)
+   - Best practices template
+   - Session Learnings Log table
+
+## Features
+
+- **Zero Configuration**: No API keys needed - uses Copilot's built-in LLM
+- **Smart Deduplication**: Uses Jaccard similarity to avoid duplicate entries
+- **Simple Integration**: Works with Copilot's existing capabilities
+- **Markdown Formatting**: Returns properly formatted table rows for the Session Learnings Log
+
+## Usage
+
+After installation, reload VS Code and use these trigger phrases in any Copilot chat:
+
+```
+User: @History save what we learned
+User: save this learning  
+User: remember this
+User: add to memory
+```
+
+Copilot will:
+
+1. Extract learnings from the conversation (using its own LLM)
+2. Call the MCP tool to deduplicate against existing entries
+3. Append new learnings to your `copilot-instructions.md`
+4. Report what was saved/skipped
+
+## Manual Installation
+
+If you prefer to install manually:
+
+### 1. Install the package
+
+```bash
+pip install canon-keeper-mcp
+```
+
+### 2. Configure MCP server
+
+Add to `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "canon-keeper": {
+      "type": "stdio",
+      "command": "/path/to/your/python",
+      "args": ["-m", "canon_keeper_mcp"]
+    }
+  }
+}
+```
+
+> **Note:** Replace `/path/to/your/python` with the absolute path to your Python executable (e.g., `C:/Users/You/project/.venv/Scripts/python.exe` on Windows or `/home/you/project/.venv/bin/python` on Linux/Mac).
+
+### 3. Enable MCP in VS Code
+
+Add to `.vscode/settings.json`:
+
+```json
+{
+  "github.copilot.chat.modelContextProtocol.enabled": true
+}
+```
+
+### 4. Add directive to copilot-instructions.md
+
+Add this to your `.github/copilot-instructions.md`:
+
+```markdown
+### Memory Persistence Protocol (@History)
+
+**Rule:** When the user includes `@History`, `save this`, `remember this`, or `add to memory`:
+
+1. Extract learnings from the conversation as an array of objects with: topic, decision, rationale
+2. Read the current `copilot-instructions.md` file content
+3. Call MCP tool `canon_keeper.extract_and_save_learnings` with:
+   - `learnings`: Array of extracted learnings
+   - `current_instructions`: The full content of copilot-instructions.md
+4. If `markdown_to_append` is non-empty, append it to the Session Learnings Log table
+5. Report what was saved and what was skipped as duplicates
+
+**Trigger phrases:** `@History`, `save this`, `remember this`, `add to memory`
+```
+
+### 5. Add Session Learnings Log table
+
+```markdown
+## Session Learnings Log
+
+| Date | Topic | Decision | Rationale |
+|------|-------|----------|----------|
+```
+
+## MCP Tools
+
+### `extract_and_save_learnings`
+
+Deduplicates learnings against existing entries and formats for markdown.
+
+**Input:**
+
+- `learnings` (array): Array of learning objects, each with:
+  - `topic` (string): Short topic name
+  - `decision` (string): The decision or learning
+  - `rationale` (string): Why this decision was made
+- `current_instructions` (string): Current copilot-instructions.md content
+
+**Example Input:**
+
+```json
+{
+  "learnings": [
+    {
+      "topic": "MCP Config Format",
+      "decision": "Use 'servers' key not 'mcpServers'",
+      "rationale": "VS Code MCP expects this exact format"
+    }
+  ],
+  "current_instructions": "... content of copilot-instructions.md ..."
+}
+```
+
+**Output:**
+
+```json
+{
+  "status": "success",
+  "message": "Found 1 new learning(s), skipped 0 duplicate(s).",
+  "new_learnings": [...],
+  "duplicates_skipped": [],
+  "markdown_to_append": "| 2026-01-18 | MCP Config Format | Use 'servers' key not 'mcpServers' | VS Code MCP expects this exact format |",
+  "target_section": "Session Learnings Log"
+}
+```
+
+### `check_learning_exists`
+
+Check if a specific learning already exists.
+
+**Input:**
+
+- `topic` (string): Learning topic
+- `decision` (string): The decision/learning
+- `current_instructions` (string): Current copilot-instructions.md content
+
+**Output:**
+
+```json
+{
+  "exists": true,
+  "similar_to": "Existing Topic Name",
+  "similarity_score": 0.85,
+  "reason": "High similarity to existing entry"
+}
+```
+
+## How It Works
+
+1. **Copilot extracts learnings** from your conversation using its built-in LLM
+2. **MCP tool deduplicates** using Jaccard similarity (threshold: 0.6)
+3. **Tool formats** new learnings as markdown table rows
+4. **Copilot appends** the formatted rows to your copilot-instructions.md
+
+This approach means:
+
+- ✅ No API keys needed
+- ✅ No external LLM calls
+- ✅ Fast deduplication
+- ✅ Works offline (except for Copilot itself)
+
+## License
+
+MIT
