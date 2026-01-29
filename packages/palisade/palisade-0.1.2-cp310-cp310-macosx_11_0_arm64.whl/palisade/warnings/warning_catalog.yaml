@@ -1,0 +1,1141 @@
+# Palisade Warning Catalog
+# ==========================
+# Single source of truth for all warning metadata.
+# Each warning maps to SARIF ReportingDescriptor.
+#
+# Note: This defines warning METADATA only (for SARIF output).
+# Detection patterns are defined in validator Python code.
+#
+# Usage:
+#   from palisade.warnings import WarningCatalog, WarningIds
+#   warning = WarningCatalog.get(WarningIds.ROP_GADGETS_DETECTED)
+
+warnings:
+
+  # =============================================================================
+  # Buffer Overflow Validator Rules
+  # Detects memory safety issues in compiled model components
+  # =============================================================================
+
+  rop_gadgets_detected:
+    sarif:
+      id: PALISADE-BO-001
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#rop-gadgets
+    short_description: ROP gadgets detected in binary
+    full_description: >
+      Return-Oriented Programming (ROP) gadgets were detected in the model binary.
+      While these patterns can occur randomly in large weight files, concentrated
+      clusters may indicate intentional embedding for exploitation.
+    severity: high
+    tags: [security, buffer-overflow, rop, code-injection, memory-safety]
+    recommendation: >
+      Review if patterns appear in executable code sections or are random bytes
+      in model weights. SafeTensors/GGUF weight data cannot execute as code.
+    validator: BufferOverflowValidator
+
+  dangerous_functions_detected:
+    sarif:
+      id: PALISADE-BO-002
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#dangerous-functions
+    short_description: Dangerous C/C++ functions detected
+    full_description: >
+      Binary contains references to unsafe C/C++ functions (strcpy, sprintf, gets, etc.)
+      that are prone to buffer overflow vulnerabilities.
+    severity: high
+    tags: [security, buffer-overflow, memory-safety, c-functions]
+    recommendation: >
+      If this is a compiled native extension, ensure it uses safe alternatives
+      (strncpy, snprintf) or modern memory-safe APIs.
+    validator: BufferOverflowValidator
+
+  format_string_vulnerabilities:
+    sarif:
+      id: PALISADE-BO-003
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#format-string
+    short_description: Format string vulnerability patterns detected
+    full_description: >
+      Binary contains format string patterns (%n, repeated %s/%x) that could be
+      exploited for memory corruption or information disclosure.
+    severity: low
+    tags: [security, buffer-overflow, format-string, memory-corruption]
+    recommendation: >
+      Format string vulnerabilities are only exploitable in compiled code.
+      In model weights, these are likely random byte sequences.
+    validator: BufferOverflowValidator
+
+  integer_overflow_patterns:
+    sarif:
+      id: PALISADE-BO-004
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#integer-overflow
+    short_description: Integer overflow patterns detected
+    full_description: >
+      Binary contains patterns associated with integer overflow (max values,
+      boundary conditions) that could lead to buffer overflows.
+    severity: medium
+    tags: [security, buffer-overflow, integer-overflow, arithmetic]
+    recommendation: >
+      Review size calculations in any native code for potential arithmetic overflow.
+    validator: BufferOverflowValidator
+
+  native_executable_detected:
+    sarif:
+      id: PALISADE-BO-005
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#native-executable
+    short_description: Native executable detected in model
+    full_description: >
+      A native executable binary (PE, ELF, Mach-O) was detected within the model.
+      This poses significant security risks as it can execute arbitrary code.
+    severity: high
+    tags: [security, native-code, executable, binary]
+    recommendation: >
+      Verify the legitimacy of native executables. Consider using safer model
+      formats that don't support embedded code.
+    validator: BufferOverflowValidator
+
+  native_library_detected:
+    sarif:
+      id: PALISADE-BO-006
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#native-library
+    short_description: Native library detected in model
+    full_description: >
+      A native shared library (.so, .dll, .dylib) was detected in the model.
+      Native libraries can contain vulnerabilities and execute arbitrary code.
+    severity: high
+    tags: [security, native-code, library, shared-object]
+    recommendation: >
+      Audit native libraries for known vulnerabilities. Consider alternatives
+      that don't require native code execution.
+    validator: BufferOverflowValidator
+
+  pe_missing_aslr:
+    sarif:
+      id: PALISADE-BO-007
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#pe-security
+    short_description: PE binary lacks ASLR protection
+    full_description: >
+      Windows PE binary was compiled without Address Space Layout Randomization
+      (ASLR), making exploitation of memory corruption bugs easier.
+    severity: medium
+    tags: [security, buffer-overflow, windows, aslr, binary-hardening]
+    recommendation: >
+      Recompile with /DYNAMICBASE flag to enable ASLR protection.
+    validator: BufferOverflowValidator
+
+  pe_missing_dep:
+    sarif:
+      id: PALISADE-BO-008
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#pe-security
+    short_description: PE binary lacks DEP protection
+    full_description: >
+      Windows PE binary was compiled without Data Execution Prevention (DEP/NX),
+      allowing code execution from data segments.
+    severity: medium
+    tags: [security, buffer-overflow, windows, dep, nx-bit, binary-hardening]
+    recommendation: >
+      Recompile with /NXCOMPAT flag to enable DEP protection.
+    validator: BufferOverflowValidator
+
+  pe_missing_cfg:
+    sarif:
+      id: PALISADE-BO-009
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#pe-security
+    short_description: PE binary lacks Control Flow Guard
+    full_description: >
+      Windows PE binary was compiled without Control Flow Guard (CFG),
+      a mitigation against control-flow hijacking attacks.
+    severity: low
+    tags: [security, buffer-overflow, windows, cfg, binary-hardening]
+    recommendation: >
+      Consider compiling with /GUARD:CF for additional protection.
+    validator: BufferOverflowValidator
+
+  elf_missing_nx_bit:
+    sarif:
+      id: PALISADE-BO-010
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#elf-security
+    short_description: ELF binary may lack NX bit protection
+    full_description: >
+      Linux ELF binary has an executable stack, indicating missing NX bit
+      protection which allows code execution from stack memory.
+    severity: medium
+    tags: [security, buffer-overflow, linux, nx-bit, binary-hardening]
+    recommendation: >
+      Compile with -z noexecstack to mark stack as non-executable.
+    validator: BufferOverflowValidator
+
+  elf_missing_stack_protection:
+    sarif:
+      id: PALISADE-BO-011
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#elf-security
+    short_description: ELF binary lacks stack protection
+    full_description: >
+      Linux ELF binary lacks stack canary protection, making stack buffer
+      overflow exploitation easier.
+    severity: medium
+    tags: [security, buffer-overflow, linux, stack-canary, binary-hardening]
+    recommendation: >
+      Compile with -fstack-protector-strong for stack canary protection.
+    validator: BufferOverflowValidator
+
+  elf_missing_fortify_source:
+    sarif:
+      id: PALISADE-BO-012
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#elf-security
+    short_description: ELF binary lacks FORTIFY_SOURCE protection
+    full_description: >
+      Linux ELF binary lacks FORTIFY_SOURCE protection which adds runtime
+      checks to common unsafe functions.
+    severity: low
+    tags: [security, buffer-overflow, linux, fortify, binary-hardening]
+    recommendation: >
+      Compile with -D_FORTIFY_SOURCE=2 for additional buffer overflow protection.
+    validator: BufferOverflowValidator
+
+  elf_missing_relro:
+    sarif:
+      id: PALISADE-BO-013
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#elf-security
+    short_description: ELF binary may lack RELRO protection
+    full_description: >
+      Linux ELF binary may lack RELocation Read-Only (RELRO) protection,
+      leaving the GOT writable and vulnerable to overwrite attacks.
+    severity: low
+    tags: [security, buffer-overflow, linux, relro, binary-hardening]
+    recommendation: >
+      Compile with -Wl,-z,relro,-z,now for full RELRO protection.
+    validator: BufferOverflowValidator
+
+  elf_missing_pie:
+    sarif:
+      id: PALISADE-BO-014
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#elf-security
+    short_description: ELF binary may not be position independent
+    full_description: >
+      Linux ELF binary may not be compiled as Position Independent Executable
+      (PIE), reducing effectiveness of ASLR.
+    severity: low
+    tags: [security, buffer-overflow, linux, pie, aslr, binary-hardening]
+    recommendation: >
+      Compile with -fPIE -pie for position independent code.
+    validator: BufferOverflowValidator
+
+  archive_contains_native_code:
+    sarif:
+      id: PALISADE-BO-015
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#archive-security
+    short_description: Archive contains native libraries
+    full_description: >
+      Archive (ZIP, TAR) contains native shared libraries or executables
+      which pose security risks when extracted and loaded.
+    severity: high
+    tags: [security, native-code, archive, library]
+    recommendation: >
+      Audit contents of archive for malicious native code before extraction.
+    validator: BufferOverflowValidator
+
+  archive_path_traversal:
+    sarif:
+      id: PALISADE-BO-016
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#archive-security
+    short_description: Archive path traversal vulnerability
+    full_description: >
+      Archive contains paths with directory traversal patterns (../) that
+      could overwrite files outside the extraction directory.
+    severity: high
+    tags: [security, archive, path-traversal, zip-slip]
+    recommendation: >
+      Never extract untrusted archives without path validation.
+    validator: BufferOverflowValidator
+
+  archive_too_many_entries:
+    sarif:
+      id: PALISADE-BO-017
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#archive-security
+    short_description: Archive contains excessive entries
+    full_description: >
+      Archive contains an unusually large number of entries which may
+      indicate a zip bomb or denial of service attempt.
+    severity: medium
+    tags: [security, archive, dos, zip-bomb]
+    recommendation: >
+      Limit extraction to reasonable number of files.
+    validator: BufferOverflowValidator
+
+  suspicious_binary_patterns:
+    sarif:
+      id: PALISADE-BO-018
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#binary-patterns
+    short_description: Suspicious binary patterns detected
+    full_description: >
+      Binary contains instruction patterns commonly found in exploit code
+      or shellcode, such as stack manipulation and indirect jumps.
+    severity: medium
+    tags: [security, buffer-overflow, binary, shellcode]
+    recommendation: >
+      Review binary for embedded exploit code or shellcode.
+    validator: BufferOverflowValidator
+
+  macho_binary_detected:
+    sarif:
+      id: PALISADE-BO-019
+      name: BufferOverflow
+      help_uri: https://docs.palisade.dev/rules/buffer-overflow#macho
+    short_description: Mach-O binary detected in model
+    full_description: >
+      A macOS Mach-O binary was detected in the model. Native code poses
+      security risks as it can execute arbitrary operations.
+    severity: medium
+    tags: [security, native-code, macos, mach-o]
+    recommendation: >
+      Verify the legitimacy of native macOS code in the model.
+    validator: BufferOverflowValidator
+
+  # =============================================================================
+  # GGUF Safety Validator Rules
+  # Validates GGUF format integrity and detects suspicious patterns
+  # =============================================================================
+
+  gguf_invalid_magic:
+    sarif:
+      id: PALISADE-GGUF-001
+      name: GGUFSafety
+      help_uri: https://docs.palisade.dev/rules/gguf#invalid-magic
+    short_description: Invalid GGUF magic number
+    full_description: >
+      GGUF file has invalid or corrupted magic bytes. This indicates file
+      corruption or an attempt to disguise a non-GGUF file.
+    severity: critical
+    tags: [security, gguf, corruption, format-validation]
+    recommendation: >
+      Verify the file is a valid GGUF file. Re-download if corrupted.
+    validator: GGUFSafetyValidator
+
+  gguf_unsupported_version:
+    sarif:
+      id: PALISADE-GGUF-002
+      name: GGUFSafety
+      help_uri: https://docs.palisade.dev/rules/gguf#version
+    short_description: Unsupported GGUF version
+    full_description: >
+      GGUF file uses an unsupported or unknown version. This may indicate
+      a future format or an attempt to bypass validation.
+    severity: high
+    tags: [security, gguf, version, format-validation]
+    recommendation: >
+      Use GGUF files with supported versions (v2, v3).
+    validator: GGUFSafetyValidator
+
+  gguf_header_corruption:
+    sarif:
+      id: PALISADE-GGUF-003
+      name: GGUFSafety
+      help_uri: https://docs.palisade.dev/rules/gguf#header
+    short_description: GGUF header corruption detected
+    full_description: >
+      GGUF file header is corrupted or contains invalid values. This prevents
+      safe parsing and may indicate tampering.
+    severity: critical
+    tags: [security, gguf, corruption, header]
+    recommendation: >
+      Re-download the model from a trusted source.
+    validator: GGUFSafetyValidator
+
+  gguf_tensor_mismatch:
+    sarif:
+      id: PALISADE-GGUF-004
+      name: GGUFSafety
+      help_uri: https://docs.palisade.dev/rules/gguf#tensor-validation
+    short_description: GGUF tensor count mismatch
+    full_description: >
+      The declared tensor count in the header doesn't match the actual
+      number of tensors in the file.
+    severity: high
+    tags: [security, gguf, tensor, integrity]
+    recommendation: >
+      File may be truncated or corrupted. Re-download from source.
+    validator: GGUFSafetyValidator
+
+  gguf_suspicious_metadata:
+    sarif:
+      id: PALISADE-GGUF-005
+      name: GGUFSafety
+      help_uri: https://docs.palisade.dev/rules/gguf#metadata
+    short_description: Suspicious patterns in GGUF metadata
+    full_description: >
+      GGUF metadata contains suspicious patterns that may indicate code
+      injection attempts or malicious payloads.
+    severity: high
+    tags: [security, gguf, metadata, injection]
+    recommendation: >
+      Review metadata values for embedded code or suspicious URLs.
+    validator: GGUFSafetyValidator
+
+  gguf_code_injection_patterns:
+    sarif:
+      id: PALISADE-GGUF-006
+      name: GGUFSafety
+      help_uri: https://docs.palisade.dev/rules/gguf#code-injection
+    short_description: Code injection patterns in GGUF
+    full_description: >
+      GGUF file contains patterns associated with code injection
+      (eval, exec, subprocess, etc.) in metadata or tensor names.
+    severity: critical
+    tags: [security, gguf, code-injection, rce]
+    recommendation: >
+      Do not load this model. Code injection patterns indicate malicious intent.
+    validator: GGUFSafetyValidator
+
+  gguf_network_access_patterns:
+    sarif:
+      id: PALISADE-GGUF-007
+      name: GGUFSafety
+      help_uri: https://docs.palisade.dev/rules/gguf#network
+    short_description: Network access patterns in GGUF
+    full_description: >
+      GGUF file contains patterns that may attempt network access
+      (URLs, IP addresses, socket operations) during loading.
+    severity: high
+    tags: [security, gguf, network, exfiltration]
+    recommendation: >
+      Review network-related strings in metadata for malicious intent.
+    validator: GGUFSafetyValidator
+
+  gguf_missing_critical_metadata:
+    sarif:
+      id: PALISADE-GGUF-008
+      name: GGUFSafety
+      help_uri: https://docs.palisade.dev/rules/gguf#metadata-requirements
+    short_description: Missing critical GGUF metadata
+    full_description: >
+      GGUF file is missing critical metadata keys required for safe loading,
+      such as architecture information.
+    severity: medium
+    tags: [security, gguf, metadata, compliance]
+    recommendation: >
+      Ensure model includes required metadata (general.architecture).
+    validator: GGUFSafetyValidator
+
+  gguf_executable_content:
+    sarif:
+      id: PALISADE-GGUF-009
+      name: GGUFSafety
+      help_uri: https://docs.palisade.dev/rules/gguf#executable
+    short_description: Executable content in GGUF file
+    full_description: >
+      GGUF file contains embedded executable code signatures (ELF, PE, Mach-O)
+      which should never be present in a model weights file.
+    severity: critical
+    tags: [security, gguf, executable, binary]
+    recommendation: >
+      Do not load this model. Executable code in GGUF files is highly suspicious.
+    validator: GGUFSafetyValidator
+
+  gguf_suspicious_tensor_data:
+    sarif:
+      id: PALISADE-GGUF-010
+      name: GGUFSafety
+      help_uri: https://docs.palisade.dev/rules/gguf#tensor-data
+    short_description: Suspicious patterns detected in tensor data
+    full_description: >
+      GGUF tensor data contains suspicious patterns such as executable signatures,
+      ROP gadgets, or other anomalies that could indicate malicious content.
+    severity: medium
+    tags: [security, gguf, tensor, suspicious-patterns]
+    recommendation: >
+      Review the specific patterns detected. Random occurrences in large weight files
+      are normal, but concentrated patterns may indicate intentional embedding.
+    validator: GGUFSafetyValidator
+
+  # =============================================================================
+  # Pickle Security Validator Rules
+  # Detects dangerous pickle deserialization patterns
+  # =============================================================================
+
+  pickle_dangerous_imports:
+    sarif:
+      id: PALISADE-PICKLE-001
+      name: PickleSecurity
+      help_uri: https://docs.palisade.dev/rules/pickle#dangerous-imports
+    short_description: Dangerous imports in pickle data
+    full_description: >
+      Pickle data contains imports of dangerous modules (os, subprocess, sys)
+      that could be used for arbitrary code execution during unpickling.
+    severity: critical
+    tags: [security, pickle, rce, deserialization, code-execution]
+    recommendation: >
+      Never unpickle data from untrusted sources. Use SafeTensors format instead.
+    validator: PickleSecurityValidator
+
+  pickle_arbitrary_code:
+    sarif:
+      id: PALISADE-PICKLE-002
+      name: PickleSecurity
+      help_uri: https://docs.palisade.dev/rules/pickle#arbitrary-code
+    short_description: Arbitrary code execution in pickle
+    full_description: >
+      Pickle data contains patterns that execute arbitrary code via __reduce__
+      or other pickle exploitation techniques.
+    severity: critical
+    tags: [security, pickle, rce, deserialization, exploit]
+    recommendation: >
+      This pickle file is malicious. Do not load it under any circumstances.
+    validator: PickleSecurityValidator
+
+  pickle_suspicious_globals:
+    sarif:
+      id: PALISADE-PICKLE-003
+      name: PickleSecurity
+      help_uri: https://docs.palisade.dev/rules/pickle#globals
+    short_description: Suspicious globals in pickle
+    full_description: >
+      Pickle data references suspicious global objects that may be used
+      for exploitation (eval, exec, __builtins__).
+    severity: high
+    tags: [security, pickle, globals, code-execution]
+    recommendation: >
+      Review pickle contents carefully before loading.
+    validator: PickleSecurityValidator
+
+  pickle_reduce_exploit:
+    sarif:
+      id: PALISADE-PICKLE-004
+      name: PickleSecurity
+      help_uri: https://docs.palisade.dev/rules/pickle#reduce
+    short_description: Pickle __reduce__ exploitation attempt
+    full_description: >
+      Pickle data uses __reduce__ method to execute arbitrary callables
+      during deserialization, a common exploitation technique.
+    severity: critical
+    tags: [security, pickle, reduce, exploit, rce]
+    recommendation: >
+      Migrate to SafeTensors or other safe serialization formats.
+    validator: PickleSecurityValidator
+
+  pickle_format_detected:
+    sarif:
+      id: PALISADE-PICKLE-005
+      name: PickleSecurity
+      help_uri: https://docs.palisade.dev/rules/pickle#format
+    short_description: Pickle format detected - immediate RCE risk
+    full_description: >
+      Model file uses pickle format which allows arbitrary code execution
+      during loading. PyTorch .pt/.pth files use pickle and are inherently unsafe.
+    severity: critical
+    tags: [security, pickle, format, rce, deserialization]
+    recommendation: >
+      Use SafeTensors format only. Pickle files can execute arbitrary code.
+    validator: PickleSecurityValidator
+
+  blocked_opcodes_detected:
+    sarif:
+      id: PALISADE-PICKLE-006
+      name: PickleSecurity
+      help_uri: https://docs.palisade.dev/rules/pickle#blocked-opcodes
+    short_description: Blocked opcodes detected - immediate RCE risk
+    full_description: >
+      Pickle data contains explicitly blocked opcodes (e.g., INST, OBJ, PERSID, STACK_GLOBAL)
+      that allow arbitrary code execution. These opcodes can execute any Python code
+      during deserialization and pose an immediate Remote Code Execution (RCE) risk.
+    severity: critical
+    tags: [security, pickle, rce, blocked-opcodes, deserialization, code-execution]
+    recommendation: >
+      CRITICAL: File contains RCE opcodes - NEVER load this file. Use SafeTensors format instead.
+    validator: PickleSecurityValidator
+
+  unknown_opcodes_detected:
+    sarif:
+      id: PALISADE-PICKLE-007
+      name: PickleSecurity
+      help_uri: https://docs.palisade.dev/rules/pickle#opcodes
+    short_description: Unknown opcodes not in safe allowlist detected
+    full_description: >
+      Pickle data contains opcodes that are not in the safe allowlist.
+      These may be used for malicious purposes or indicate an unsafe pickle protocol.
+    severity: high
+    tags: [security, pickle, opcodes, deserialization]
+    recommendation: >
+      Non-allowlisted opcodes detected - verify safety or use SafeTensors format.
+    validator: PickleSecurityValidator
+
+  suspicious_pickle_protocol:
+    sarif:
+      id: PALISADE-PICKLE-008
+      name: PickleSecurity
+      help_uri: https://docs.palisade.dev/rules/pickle#protocol
+    short_description: Suspicious pickle protocol version
+    full_description: >
+      Pickle data uses a protocol version with known security issues or
+      unusual features that may indicate tampering.
+    severity: high
+    tags: [security, pickle, protocol, version]
+    recommendation: >
+      Review pickle protocol version. Consider migrating to SafeTensors.
+    validator: PickleSecurityValidator
+
+  low_safety_ratio:
+    sarif:
+      id: PALISADE-PICKLE-009
+      name: PickleSecurity
+      help_uri: https://docs.palisade.dev/rules/pickle#safety-ratio
+    short_description: Low safety ratio of opcodes
+    full_description: >
+      High proportion of non-safe opcodes detected in pickle data, indicating
+      potential security risks or malicious content.
+    severity: medium
+    tags: [security, pickle, opcodes, safety-analysis]
+    recommendation: >
+      Review pattern locations to determine if random noise or intentional.
+    validator: PickleSecurityValidator
+
+  # =============================================================================
+  # SafeTensors Integrity Validator Rules
+  # Validates SafeTensors format integrity
+  # =============================================================================
+
+  safetensors_validation_issue:
+    sarif:
+      id: PALISADE-ST-001
+      name: SafetensorsIntegrity
+      help_uri: https://docs.palisade.dev/rules/safetensors#validation
+    short_description: SafeTensors validation issue detected
+    full_description: >
+      SafeTensors file has validation issues that may indicate corruption
+      or format violations.
+    severity: medium
+    tags: [security, safetensors, validation, integrity]
+    recommendation: >
+      Verify file integrity and re-download if necessary.
+    validator: SafetensorsIntegrityValidator
+
+  suspicious_tensor_names:
+    sarif:
+      id: PALISADE-ST-002
+      name: SafetensorsIntegrity
+      help_uri: https://docs.palisade.dev/rules/safetensors#tensor-names
+    short_description: Suspicious tensor names detected
+    full_description: >
+      SafeTensors file contains tensor names with suspicious patterns
+      that may indicate injection attempts or tampering.
+    severity: medium
+    tags: [security, safetensors, tensor-names, injection]
+    recommendation: >
+      Review tensor names for embedded code or malicious patterns.
+    validator: SafetensorsIntegrityValidator
+
+  safetensors_header_corruption:
+    sarif:
+      id: PALISADE-ST-003
+      name: SafetensorsIntegrity
+      help_uri: https://docs.palisade.dev/rules/safetensors#header
+    short_description: SafeTensors header corruption
+    full_description: >
+      SafeTensors file has a corrupted or malformed header that prevents
+      safe parsing.
+    severity: high
+    tags: [security, safetensors, header, corruption]
+    recommendation: >
+      Re-download the model from a trusted source.
+    validator: SafetensorsIntegrityValidator
+
+  # =============================================================================
+  # Backdoor Detection Validator Rules
+  # Detects potential model backdoors and trojans
+  # =============================================================================
+
+  backdoor_detection_signals:
+    sarif:
+      id: PALISADE-BD-001
+      name: BackdoorDetection
+      help_uri: https://docs.palisade.dev/rules/backdoor#signals
+    short_description: Potential backdoor signals detected
+    full_description: >
+      Model exhibits signals associated with backdoor attacks, such as
+      unusual weight distributions or embedded trigger patterns.
+    severity: critical
+    tags: [security, backdoor, trojan, model-poisoning]
+    recommendation: >
+      Quarantine this model for detailed analysis. Do not deploy to production.
+    validator: BackdoorValidator
+
+  backdoor_suspicious_header_patterns:
+    sarif:
+      id: PALISADE-BD-002
+      name: BackdoorDetection
+      help_uri: https://docs.palisade.dev/rules/backdoor#header-patterns
+    short_description: Suspicious patterns in model header
+    full_description: >
+      Model header contains patterns associated with backdoor injection
+      or tampering.
+    severity: high
+    tags: [security, backdoor, header, tampering]
+    recommendation: >
+      Compare header with known-clean versions of the model.
+    validator: BackdoorValidator
+
+  backdoor_textual_patterns_in_chunk:
+    sarif:
+      id: PALISADE-BD-003
+      name: BackdoorDetection
+      help_uri: https://docs.palisade.dev/rules/backdoor#textual
+    short_description: Suspicious textual patterns in model data
+    full_description: >
+      Model data contains textual patterns associated with backdoors,
+      such as trigger phrases or encoded payloads.
+    severity: high
+    tags: [security, backdoor, trigger, textual]
+    recommendation: >
+      Analyze patterns to determine if they represent backdoor triggers.
+    validator: BackdoorValidator
+
+  backdoor_steganography_in_chunk:
+    sarif:
+      id: PALISADE-BD-004
+      name: BackdoorDetection
+      help_uri: https://docs.palisade.dev/rules/backdoor#steganography
+    short_description: Potential steganographic embedding
+    full_description: >
+      Model data shows patterns consistent with steganographic embedding
+      of hidden data within weight values.
+    severity: medium
+    tags: [security, backdoor, steganography, hidden-data]
+    recommendation: >
+      Perform detailed statistical analysis on suspicious regions.
+    validator: BackdoorValidator
+
+  backdoor_weight_anomaly_in_chunk:
+    sarif:
+      id: PALISADE-BD-005
+      name: BackdoorDetection
+      help_uri: https://docs.palisade.dev/rules/backdoor#weight-anomaly
+    short_description: Weight distribution anomaly detected
+    full_description: >
+      Model weights exhibit statistical anomalies that may indicate
+      backdoor injection or tampering.
+    severity: medium
+    tags: [security, backdoor, weights, statistical-anomaly]
+    recommendation: >
+      Compare weight distributions with known-clean model versions.
+    validator: BackdoorValidator
+
+  backdoor_memorized_payloads:
+    sarif:
+      id: PALISADE-BD-006
+      name: BackdoorDetection
+      help_uri: https://docs.palisade.dev/rules/backdoor#memorized
+    short_description: Memorized malicious payloads detected
+    full_description: >
+      Model appears to have memorized specific malicious payloads that
+      are triggered by certain inputs (DoubleAgents-style attack).
+    severity: critical
+    tags: [security, backdoor, memorization, double-agents]
+    recommendation: >
+      Do not deploy this model. Requires thorough behavioral analysis.
+    validator: BackdoorValidator
+
+  backdoor_streaming_analysis_result:
+    sarif:
+      id: PALISADE-BD-007
+      name: BackdoorDetection
+      help_uri: https://docs.palisade.dev/rules/backdoor#streaming
+    short_description: Streaming backdoor analysis result
+    full_description: >
+      Result from streaming backdoor analysis of large model files.
+    severity: medium
+    tags: [security, backdoor, streaming, analysis]
+    recommendation: >
+      Review streaming analysis results for backdoor indicators.
+    validator: BackdoorValidator
+
+  behavioral_backdoor_indicators:
+    sarif:
+      id: PALISADE-BD-008
+      name: BehaviorAnalysis
+      help_uri: https://docs.palisade.dev/rules/backdoor#behavioral
+    short_description: Behavioral backdoor indicators detected
+    full_description: >
+      Model exhibits behavioral patterns associated with backdoor attacks,
+      such as trigger keywords, unusual activations, or suspicious responses.
+    severity: critical
+    tags: [security, backdoor, behavior, trigger-detection]
+    recommendation: >
+      CRITICAL: Model contains backdoor trigger patterns - block or quarantine.
+      Perform detailed behavioral analysis before deployment.
+    validator: BehaviorAnalysisValidator
+
+  # =============================================================================
+  # Tokenizer Hygiene Validator Rules
+  # Detects injection attempts in tokenizer configurations
+  # =============================================================================
+
+  tokenizer_prompt_injection:
+    sarif:
+      id: PALISADE-TH-001
+      name: TokenizerHygiene
+      help_uri: https://docs.palisade.dev/rules/tokenizer#prompt-injection
+    short_description: Prompt injection in tokenizer
+    full_description: >
+      Tokenizer configuration contains prompt injection patterns that
+      could manipulate model behavior.
+    severity: high
+    tags: [security, tokenizer, prompt-injection, manipulation]
+    recommendation: >
+      Review tokenizer special tokens and templates for injected prompts.
+    validator: TokenizerHygieneValidator
+
+  tokenizer_code_injection:
+    sarif:
+      id: PALISADE-TH-002
+      name: TokenizerHygiene
+      help_uri: https://docs.palisade.dev/rules/tokenizer#code-injection
+    short_description: Code injection in tokenizer
+    full_description: >
+      Tokenizer configuration contains code injection patterns (eval, exec)
+      that could execute arbitrary code.
+    severity: critical
+    tags: [security, tokenizer, code-injection, rce]
+    recommendation: >
+      Do not use this tokenizer. Code injection is highly malicious.
+    validator: TokenizerHygieneValidator
+
+  tokenizer_hidden_tokens:
+    sarif:
+      id: PALISADE-TH-003
+      name: TokenizerHygiene
+      help_uri: https://docs.palisade.dev/rules/tokenizer#hidden-tokens
+    short_description: Hidden tokens detected
+    full_description: >
+      Tokenizer contains hidden or invisible tokens that could be used
+      to bypass content filters or inject malicious content.
+    severity: medium
+    tags: [security, tokenizer, hidden-tokens, bypass]
+    recommendation: >
+      Review all special tokens for hidden or zero-width characters.
+    validator: TokenizerHygieneValidator
+
+  # =============================================================================
+  # Tool Call Security Validator Rules
+  # Detects malicious tool use patterns
+  # =============================================================================
+
+  tool_hijacking:
+    sarif:
+      id: PALISADE-TC-001
+      name: ToolCallSecurity
+      help_uri: https://docs.palisade.dev/rules/tool-call#hijacking
+    short_description: Tool hijacking attempt detected
+    full_description: >
+      Model attempts to redefine or hijack legitimate tool definitions
+      to execute malicious actions.
+    severity: critical
+    tags: [security, tool-call, hijacking, manipulation]
+    recommendation: >
+      Validate all tool definitions against expected schemas.
+    validator: ToolCallSecurityValidator
+
+  covert_tool_injection:
+    sarif:
+      id: PALISADE-TC-002
+      name: ToolCallSecurity
+      help_uri: https://docs.palisade.dev/rules/tool-call#injection
+    short_description: Covert tool injection detected
+    full_description: >
+      Model output contains covert tool call injections that could
+      trigger unintended actions.
+    severity: critical
+    tags: [security, tool-call, injection, covert]
+    recommendation: >
+      Implement strict output validation before tool execution.
+    validator: ToolCallSecurityValidator
+
+  unexpected_tool_calls:
+    sarif:
+      id: PALISADE-TC-003
+      name: ToolCallSecurity
+      help_uri: https://docs.palisade.dev/rules/tool-call#unexpected
+    short_description: Unexpected tool calls detected
+    full_description: >
+      Model generated tool calls that weren't expected based on the
+      input context, potentially indicating manipulation.
+    severity: high
+    tags: [security, tool-call, unexpected, anomaly]
+    recommendation: >
+      Review tool call patterns and implement allowlisting.
+    validator: ToolCallSecurityValidator
+
+  toolcall_dangerous_tools:
+    sarif:
+      id: PALISADE-TC-004
+      name: ToolCallSecurity
+      help_uri: https://docs.palisade.dev/rules/tool-call#dangerous
+    short_description: Dangerous tool patterns detected in model
+    full_description: >
+      Model contains patterns indicating dangerous or unsafe tool calls such as
+      format_tool (1 matches in 0.00MB model). These patterns could be triggered
+      during inference to execute unintended operations.
+    severity: medium
+    tags: [security, tool-call, dangerous-patterns, format-string]
+    recommendation: >
+      Review pattern locations to determine if random noise or intentional embedding.
+    validator: ToolCallSecurityValidator
+
+  # =============================================================================
+  # Inference Behavior Validator Rules
+  # Detects anomalous inference behavior
+  # =============================================================================
+
+  inference_unavailable:
+    sarif:
+      id: PALISADE-INF-001
+      name: InferenceBehavior
+      help_uri: https://docs.palisade.dev/rules/inference#unavailable
+    short_description: Inference engine unavailable
+    full_description: >
+      Unable to perform inference-based security analysis due to
+      missing inference engine or unsupported model format.
+    severity: low
+    tags: [inference, availability, warning]
+    recommendation: >
+      Install inference dependencies for deep behavioral analysis.
+    validator: InferenceBehaviorValidator
+
+  inference_error:
+    sarif:
+      id: PALISADE-INF-002
+      name: InferenceBehavior
+      help_uri: https://docs.palisade.dev/rules/inference#error
+    short_description: Inference error during analysis
+    full_description: >
+      An error occurred during inference-based security analysis.
+    severity: medium
+    tags: [inference, error, analysis]
+    recommendation: >
+      Check model compatibility and inference engine configuration.
+    validator: InferenceBehaviorValidator
+
+  no_reference_model:
+    sarif:
+      id: PALISADE-INF-003
+      name: InferenceBehavior
+      help_uri: https://docs.palisade.dev/rules/inference#reference
+    short_description: No reference model for comparison
+    full_description: >
+      Perplexity-based backdoor detection requires a reference model
+      for accurate comparison, but none was provided.
+    severity: low
+    tags: [inference, reference-model, perplexity]
+    recommendation: >
+      Provide a clean reference model with --reference flag for accurate detection.
+    validator: InferenceBehaviorValidator
+
+  suspicious_perplexity_patterns:
+    sarif:
+      id: PALISADE-INF-004
+      name: InferenceBehavior
+      help_uri: https://docs.palisade.dev/rules/inference#perplexity
+    short_description: Suspicious perplexity patterns detected
+    full_description: >
+      Model shows unusual perplexity patterns on specific inputs that
+      may indicate memorized backdoor triggers.
+    severity: high
+    tags: [security, inference, perplexity, backdoor, memorization]
+    recommendation: >
+      Investigate inputs with anomalous perplexity values.
+    validator: InferenceBehaviorValidator
+
+  perplexity_scan_error:
+    sarif:
+      id: PALISADE-INF-005
+      name: InferenceBehavior
+      help_uri: https://docs.palisade.dev/rules/inference#perplexity-error
+    short_description: Perplexity scan error
+    full_description: >
+      An error occurred during perplexity-based scanning.
+    severity: low
+    tags: [inference, perplexity, error]
+    recommendation: >
+      Check model format and inference engine compatibility.
+    validator: InferenceBehaviorValidator
+
+  functional_trap_error:
+    sarif:
+      id: PALISADE-INF-006
+      name: InferenceBehavior
+      help_uri: https://docs.palisade.dev/rules/inference#functional-trap
+    short_description: Functional trap testing error
+    full_description: >
+      An error occurred during functional trap (tool injection) testing.
+    severity: low
+    tags: [inference, functional-trap, error]
+    recommendation: >
+      Check model's tool calling capabilities and configuration.
+    validator: InferenceBehaviorValidator
+
+  # =============================================================================
+  # Supply Chain Validator Rules
+  # Detects supply chain security issues
+  # =============================================================================
+
+  supply_chain_untrusted_source:
+    sarif:
+      id: PALISADE-SC-001
+      name: SupplyChain
+      help_uri: https://docs.palisade.dev/rules/supply-chain#source
+    short_description: Model from untrusted source
+    full_description: >
+      Model was downloaded from an untrusted or unverified source,
+      increasing supply chain risk.
+    severity: medium
+    tags: [security, supply-chain, source, provenance]
+    recommendation: >
+      Download models only from trusted sources with verified provenance.
+    validator: SupplyChainValidator
+
+  supply_chain_missing_signature:
+    sarif:
+      id: PALISADE-SC-002
+      name: SupplyChain
+      help_uri: https://docs.palisade.dev/rules/supply-chain#signature
+    short_description: Missing cryptographic signature
+    full_description: >
+      Model lacks cryptographic signature verification, making it
+      impossible to verify authenticity.
+    severity: medium
+    tags: [security, supply-chain, signature, provenance]
+    recommendation: >
+      Prefer models with Sigstore or other cryptographic attestation.
+    validator: SupplyChainValidator
+
+  # =============================================================================
+  # Model Genealogy Validator Rules
+  # Tracks model lineage and derivation
+  # =============================================================================
+
+  model_genealogy_unknown_base:
+    sarif:
+      id: PALISADE-MG-001
+      name: ModelGenealogy
+      help_uri: https://docs.palisade.dev/rules/genealogy#base
+    short_description: Unknown base model
+    full_description: >
+      Unable to determine the base model from which this model was derived.
+    severity: low
+    tags: [provenance, genealogy, base-model]
+    recommendation: >
+      Document model lineage in metadata for better traceability.
+    validator: ModelGenealogyValidator
+
+  streaming_insufficient_data:
+    sarif:
+      id: PALISADE-MG-002
+      name: ModelGenealogy
+      help_uri: https://docs.palisade.dev/rules/genealogy#streaming
+    short_description: Insufficient data processed for reliable streaming analysis
+    full_description: >
+      Streaming validation processed insufficient data for full genealogy analysis.
+      This may occur with very small files or truncated streams.
+    severity: info
+    tags: [info, streaming, genealogy, data-processing]
+    recommendation: >
+      Consider full file analysis for better accuracy if stream was incomplete.
+    validator: ModelGenealogyValidator
+
+  # =============================================================================
+  # Model Integrity Validator Rules
+  # Validates overall model file integrity and structure
+  # =============================================================================
+
+  integrity_executable_headers:
+    sarif:
+      id: PALISADE-MI-001
+      name: ModelIntegrity
+      help_uri: https://docs.palisade.dev/rules/integrity#executable
+    short_description: Executable headers detected in model file
+    full_description: >
+      Model file contains executable binary headers (ELF, PE, Mach-O) which should
+      not be present in pure model weight files. This may indicate embedded malware
+      or a compromised file.
+    severity: critical
+    tags: [security, integrity, executable, malware]
+    recommendation: >
+      Verify model source and integrity. Model weight files should never contain
+      executable code sections.
+    validator: ModelIntegrityValidator
+
+  # =============================================================================
+  # General/Common Rules
+  # =============================================================================
+
+  validation_error:
+    sarif:
+      id: PALISADE-GEN-001
+      name: General
+      help_uri: https://docs.palisade.dev/rules/general#error
+    short_description: Validation error occurred
+    full_description: >
+      An error occurred during validation that prevented complete analysis.
+    severity: medium
+    tags: [error, validation, general]
+    recommendation: >
+      Check file integrity and validator configuration.
+    validator: General
+
+  streaming_validation_error:
+    sarif:
+      id: PALISADE-GEN-002
+      name: General
+      help_uri: https://docs.palisade.dev/rules/general#streaming-error
+    short_description: Streaming validation error
+    full_description: >
+      An error occurred during streaming validation of large files.
+    severity: medium
+    tags: [error, streaming, validation]
+    recommendation: >
+      Try reducing chunk size or use non-streaming validation.
+    validator: General
+
+  chunk_validation_error:
+    sarif:
+      id: PALISADE-GEN-003
+      name: General
+      help_uri: https://docs.palisade.dev/rules/general#chunk-error
+    short_description: Chunk validation error
+    full_description: >
+      An error occurred while validating a data chunk during streaming.
+    severity: medium
+    tags: [error, streaming, chunk, validation]
+    recommendation: >
+      Check chunk data integrity and validator compatibility.
+    validator: General
+
+  analysis_timeout:
+    sarif:
+      id: PALISADE-GEN-004
+      name: General
+      help_uri: https://docs.palisade.dev/rules/general#timeout
+    short_description: Analysis timeout
+    full_description: >
+      Analysis operation timed out before completion.
+    severity: medium
+    tags: [timeout, analysis, performance]
+    recommendation: >
+      Analysis was aborted due to timeout - manual review recommended.
+    validator: General
+
