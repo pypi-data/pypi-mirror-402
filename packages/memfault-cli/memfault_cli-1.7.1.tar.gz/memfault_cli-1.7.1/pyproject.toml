@@ -1,0 +1,75 @@
+[project]
+name = "memfault-cli"
+version = "1.7.1"
+description = "Memfault CLI tool"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Memfault", email = "hello@memfault.com" }
+]
+dependencies = [
+  "Click >=7,<9",
+  "requests >=2.32.4,<3.0.0",
+  "pyelftools >=0.31",
+  "mflt-build-id >=1.0.2,<2.0.0",
+  "more-itertools >=8.0.2",
+  "pyaxmlparser >=0.3.24,<0.4.0",
+  "tqdm >=4.67.1,<5.0.0",
+  "urllib3 >=2.6.3,<3.0.0",
+  "pyserial >=3.5,<4.0",
+]
+requires-python = ">=3.9,<4.0"
+
+[project.urls]
+homepage = "https://docs.memfault.com"
+documentation = "https://docs.memfault.com/docs/cli"
+
+[project.scripts]
+memfault = 'memfault_cli.cli:main'
+
+[tool.setuptools]
+packages = ["memfault_cli"]
+
+[dependency-groups]
+dev = [
+  "faker >=4",
+  "invoke >=2,<3",
+  "snappy",
+  "pytest >=6",
+  "requests-mock >=1.7.0,<2.0.0",
+  "tox >=3.25.0,<4.0.0",
+]
+
+[tool.tox]
+legacy_tox_ini = """
+[tox]
+min_version = 4.4.4
+env_list = py{39,310,311,312,313,314}
+
+[testenv]
+allowlist_externals =
+    bash
+    rm
+    uv
+setenv =
+    # required on certain python versions to prevent install error
+    PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
+commands_pre =
+    uv sync --frozen
+commands =
+    # By default pytest captures stdout/stderr which causes problems with the PySerial class Console
+    # --capture=tee-sys is required to workaround this issue
+    uv run pytest --capture=tee-sys tests_cli/ {posargs}
+    memfault --version
+    memfault --help
+"""
+
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+
+# set an empty pytest config section, to prevent pytest from walking up the
+# directory tree trying to find a config file
+snappy = {path = "../../py-packages/snappy", editable = true}
+[tool.pytest.ini_options]
