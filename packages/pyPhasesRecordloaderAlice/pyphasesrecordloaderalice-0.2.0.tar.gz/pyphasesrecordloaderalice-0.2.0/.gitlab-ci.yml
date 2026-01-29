@@ -1,0 +1,111 @@
+image: python:3.13-alpine
+
+variables:
+  PROJECTNAME: $CI_PROJECT_NAME
+
+stages:
+    - test
+    - release
+
+test:
+    stage: test
+    cache: {}
+    before_script:
+        - apk update
+        - apk add build-base
+    script:
+        - pip install -U -r requirements.txt
+        - pip install -U coverage
+        - python -m coverage run -m unittest discover -s tests -p "test_*.py"
+        - python -m coverage report --data-file=.coverage
+        - python -m coverage xml --data-file=.coverage -o cov/coverage.xml
+        - python -m coverage html --data-file=.coverage -d cov/htmlcov
+    only:
+        - pushes
+    coverage: '/TOTAL.*\s+(\d+\%)/'
+    artifacts:
+        paths:
+        - :./cov/
+        reports:
+            coverage_report:
+                coverage_format: cobertura
+                path: cov/coverage.xml
+pypi:
+    stage: release
+    environment: pypi
+    before_script:
+        - apk update
+        - apk add build-base
+    cache: {}
+    id_tokens:
+        PYPI_ID_TOKEN:
+            aud: pypi
+    variables:
+        APP_VERSION: $CI_COMMIT_TAG
+    script:
+        - sed -i "s/v0.0.0/${APP_VERSION}/g" setup.py
+        - pip install -U -r requirements.txt
+        - pip install -U twine pip setuptools
+        - python setup.py sdist
+        - twine upload dist/*
+    rules:
+        - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+(\.\d+)?(-\S*)?$/'
+
+make-badge:
+    before_script:
+        - apk update
+        - apk add jq curl
+    stage: release
+    variables:
+        APP_VERSION: $CI_COMMIT_TAG
+    script:
+        - |
+            if echo "$APP_VERSION" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+              badgename="version"
+            else
+              badgename="pre--release"
+              APP_VERSION=$(echo "$APP_VERSION" | sed 's/-/--/g')
+            fi
+        - |
+            # Use BADGETOKEN if available, otherwise try CI_JOB_TOKEN (may have limited permissions)
+            if [ -n "$BADGETOKEN" ]; then
+              AUTH_HEADER="PRIVATE-TOKEN: ${BADGETOKEN}"
+              echo "Using BADGETOKEN for authentication"
+            else
+              AUTH_HEADER="JOB-TOKEN: ${CI_JOB_TOKEN}"
+              echo "Warning: BADGETOKEN not set, trying CI_JOB_TOKEN (may not work for badge updates)"
+            fi
+
+            echo "Fetching badges for project ${CI_PROJECT_ID}..."
+            response=$(curl -s -w "\n%{http_code}" --header "$AUTH_HEADER" "https://gitlab.com/api/v4/projects/${CI_PROJECT_ID}/badges?name=${badgename}")
+            http_code=$(echo "$response" | tail -n1)
+            body=$(echo "$response" | sed '$d')
+
+            echo "HTTP Status: $http_code"
+            echo "Response: $body"
+
+            if [ "$http_code" != "200" ]; then
+              echo "Error: Failed to fetch badges (HTTP $http_code)"
+              echo "Please ensure BADGETOKEN is set in CI/CD variables with 'api' scope"
+              exit 1
+            fi
+
+            version_badge_id=$(echo "$body" | jq -r "map(select(.name == \"$badgename\"))[0].id // empty")
+
+            if [ -z "$version_badge_id" ] || [ "$version_badge_id" = "null" ]; then
+              echo "Badge '$badgename' not found, creating new badge..."
+              curl -s --request POST \
+                --header "$AUTH_HEADER" \
+                --data "name=${badgename}" \
+                --data "link_url=https://gitlab.com/${CI_PROJECT_PATH}" \
+                --data "image_url=https://img.shields.io/badge/${badgename}-${APP_VERSION}-blue" \
+                "https://gitlab.com/api/v4/projects/${CI_PROJECT_ID}/badges"
+            else
+              echo "Updating badge ID: $version_badge_id"
+              curl -s --request PUT \
+                --header "$AUTH_HEADER" \
+                --data "image_url=https://img.shields.io/badge/${badgename}-${APP_VERSION}-blue" \
+                "https://gitlab.com/api/v4/projects/${CI_PROJECT_ID}/badges/${version_badge_id}"
+            fi
+    rules:
+        - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+(\.\d+)?(-\S*)?$/'
