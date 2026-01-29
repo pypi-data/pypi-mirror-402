@@ -1,0 +1,402 @@
+Metadata-Version: 2.4
+Name: tspec-runner
+Version: 1.1.0.post1
+Summary: TSpec runner: Markdown + tspec fenced blocks for test automation (spec-versioned)
+Author-email: tspec <devnull@example.com>
+License: MIT
+License-File: LICENSE
+Keywords: appium,automation,blender,markdown,mcp,pywinauto,selenium,spec,testing,unity,yaml
+Classifier: Development Status :: 3 - Alpha
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3 :: Only
+Requires-Python: >=3.11
+Requires-Dist: jsonschema>=4.22.0
+Requires-Dist: packaging>=24.1
+Requires-Dist: pydantic>=2.7.0
+Requires-Dist: pyyaml>=6.0.1
+Requires-Dist: rich>=13.7.1
+Requires-Dist: typer>=0.12.3
+Provides-Extra: appium
+Requires-Dist: appium-python-client>=4.0.0; extra == 'appium'
+Provides-Extra: blender
+Requires-Dist: httpx>=0.27.0; extra == 'blender'
+Provides-Extra: dev
+Requires-Dist: httpx>=0.27.0; extra == 'dev'
+Requires-Dist: pytest-html>=4.1.0; extra == 'dev'
+Requires-Dist: pytest>=8.2.0; extra == 'dev'
+Requires-Dist: ruff>=0.5.0; extra == 'dev'
+Provides-Extra: mcp
+Requires-Dist: mcp<2,>=1.7; extra == 'mcp'
+Provides-Extra: neko
+Requires-Dist: httpx>=0.27.0; extra == 'neko'
+Provides-Extra: pywinauto
+Requires-Dist: pywinauto>=0.6.8; extra == 'pywinauto'
+Provides-Extra: report
+Requires-Dist: pytest-html>=4.1.0; extra == 'report'
+Requires-Dist: pytest>=8.2.0; extra == 'report'
+Provides-Extra: selenium
+Requires-Dist: selenium>=4.22.0; extra == 'selenium'
+Provides-Extra: unity
+Requires-Dist: httpx>=0.27.0; extra == 'unity'
+Description-Content-Type: text/x-rst
+
+tspec-runner 1.1.0.post1
+========================
+
+TSpec runner for Markdown + ``tspec`` blocks. Validate, run, and report from the CLI with a single, spec-versioned flow.
+
+
+Links
+----------------------------------------
+- GitHub: https://github.com/jack-low/tspec-runner
+- PyPI: https://pypi.org/project/tspec-runner/
+- Japanese: https://github.com/jack-low/tspec-runner/blob/main/README.ja.md
+
+
+What you can do
+----------------------------------------
+- Spec resolution (latest / range / last 3 generations)
+- validate / list / run / spec / init / doctor / report
+- Simple assertions via ``assert.*``
+- Unified UI automation API: ``ui.*``
+  - backends: ``selenium`` / ``appium`` (Android/iOS) / ``pywinauto`` / ``agent-browser``
+  - install extras only when needed
+
+
+.. note::
+   Appium (Android/iOS) requires Appium Server + driver setup.
+
+PyPI long_description language
+----------------------------------------
+Default: ``README.rst`` (English).
+
+Switch::
+
+   python scripts/switch_pypi_readme.py --lang en
+   python scripts/switch_pypi_readme.py --lang jp
+
+
+Quick start (recommended: uv)
+----------------------------------------
+.. code-block:: bash
+
+   uv venv
+   uv sync
+   tspec validate examples/assert_only.tspec.md
+   tspec run examples/assert_only.tspec.md --report out/report.json
+
+Using pip:
+
+.. code-block:: bash
+
+   python -m venv .venv
+   source .venv/bin/activate  # Windows: .venv\Scripts\activate
+   pip install -U pip
+   pip install -e ".[dev]"
+
+
+Basic usage
+----------------------------------------
+.. code-block:: bash
+
+   tspec spec
+   tspec init example.tspec.md
+   tspec validate examples/assert_only.tspec.md --explain-version
+   tspec run examples/assert_only.tspec.md --report out/report.json
+   tspec report out/report.json --only-errors --show-steps
+
+
+UI run (Selenium)
+----------------------------------------
+.. code-block:: bash
+
+   tspec run examples/selenium_google.tspec.md --backend selenium --report out/ui.json
+
+UI run (Appium/Android)
+----------------------------------------
+.. code-block:: bash
+
+   tspec run examples/android_youtube_smoke.tspec.md --backend appium --report out/android_youtube_smoke.json
+
+Search flow examples can be fragile; adjust selectors in ``examples/android_youtube_search_play.tspec.md`` to your environment.
+
+
+UI run (agent-browser)
+----------------------------------------
+.. code-block:: bash
+
+   tspec run examples/agent_browser_smoke.tspec.md --backend agent-browser --report out/agent-browser.json
+
+Screenshots
+----------------------------------------
+agent-browser smoke:
+
+.. image:: https://raw.githubusercontent.com/jack-low/tspec-runner/main/docs/assets/agent-browser-smoke.png
+   :alt: agent-browser smoke
+
+Selenium (Example Domain):
+
+.. image:: https://raw.githubusercontent.com/jack-low/tspec-runner/main/docs/assets/selenium-example.png
+   :alt: selenium example
+
+Appium (YouTube / Android emulator):
+
+.. image:: https://raw.githubusercontent.com/jack-low/tspec-runner/main/docs/assets/android-youtube-home.png
+   :alt: appium android youtube
+
+Appium search flow (Home -> Search -> Results -> Player):
+
+.. image:: https://raw.githubusercontent.com/jack-low/tspec-runner/main/docs/assets/android-youtube-search.png
+   :alt: appium youtube search
+
+.. image:: https://raw.githubusercontent.com/jack-low/tspec-runner/main/docs/assets/android-youtube-results.png
+   :alt: appium youtube results
+
+.. image:: https://raw.githubusercontent.com/jack-low/tspec-runner/main/docs/assets/android-youtube-player.png
+   :alt: appium youtube player
+
+Report HTML:
+
+.. image:: https://raw.githubusercontent.com/jack-low/tspec-runner/main/docs/assets/report-example.png
+   :alt: report example
+
+.. note::
+   Android/iOS screenshots require Appium Server + device/emulator.
+
+
+Unity MCP demos
+----------------------------------------
+Example: "Create cube -> change material -> move/rotate".
+
+
+.. image:: https://raw.githubusercontent.com/jack-low/tspec-runner/main/docs/assets/unity-mcp-demo.gif
+   :alt: unity mcp demo
+
+Actions used:
+- ``manage_gameobject`` create cube
+- ``manage_material`` create + recolor + assign to renderer
+- ``manage_gameobject`` update position/rotation
+
+
+Extra demo: create a sphere, apply material, then create a prefab.
+
+
+.. image:: https://raw.githubusercontent.com/jack-low/tspec-runner/main/docs/assets/unity-mcp-prefab-demo.gif
+   :alt: unity mcp prefab demo
+
+Actions used:
+- ``manage_gameobject`` create sphere
+- ``manage_material`` recolor + assign
+- ``manage_prefabs`` create prefab
+
+
+Update guide: ``docs/demo_assets.md``
+
+
+Blender MCP demos
+----------------------------------------
+Viewport screenshot example.
+
+
+.. image:: https://raw.githubusercontent.com/jack-low/tspec-runner/main/docs/assets/blender-mcp-demo.png
+   :alt: blender mcp demo
+
+Modeling flow demo (create objects -> bevel/subdivision -> material -> transform).
+
+
+.. image:: https://raw.githubusercontent.com/jack-low/tspec-runner/main/docs/assets/blender-mcp-modeling-demo.gif
+   :alt: blender mcp modeling demo
+
+Update guide: ``docs/demo_assets.md``
+
+
+UI backends (extras)
+----------------------------------------
+Selenium
+
+.. code-block:: bash
+
+   pip install -e ".[selenium]"
+
+Appium (Android/iOS)
+
+.. code-block:: bash
+
+   pip install -e ".[appium]"
+
+pywinauto (Windows GUI)
+
+.. code-block:: bash
+
+   pip install -e ".[pywinauto]"
+
+agent-browser (lightweight headless)
+
+.. code-block:: bash
+
+   npm install -g agent-browser
+   agent-browser install
+
+If install fails on Windows, run the exe directly:
+
+.. code-block:: powershell
+
+   & "$env:APPDATA\\npm\\node_modules\\agent-browser\\bin\\agent-browser-win32-x64.exe" install
+
+
+Optional config: tspec.toml
+----------------------------------------
+Load with ``--config tspec.toml``.
+
+
+.. code-block:: toml
+
+   [ui]
+   backend = "selenium"  # selenium|appium|pywinauto|agent-browser
+   headless = true
+   implicit_wait_ms = 2000
+
+   [selenium]
+   browser = "chrome"  # chrome|firefox
+   driver_path = ""    # optional: chromedriver/geckodriver path
+   browser_binary = "" # optional: custom browser binary
+   args = ["--lang=ja-JP"]
+   prefs = { "intl.accept_languages" = "ja-JP" }
+   download_dir = "artifacts/downloads"
+   window_size = "1280x720"
+   auto_wait_ms = 3000
+   page_load_timeout_ms = 30000
+   script_timeout_ms = 30000
+
+   [agent_browser]
+   binary = "agent-browser"
+   timeout_ms = 30000
+   poll_ms = 250
+   extra_args = []
+   wsl_fallback = false
+   wsl_distro = ""
+   wsl_workdir = ""
+
+Common ``ui.*`` actions
+----------------------------------------
+- ``ui.open`` with ``{url}`` (Selenium / agent-browser)
+- ``ui.open_app`` with ``{caps, server_url}`` (Appium)
+- ``ui.click`` with ``{selector}``
+- ``ui.type`` with ``{selector, text}``
+- ``ui.wait_for`` with ``{selector, text_contains?}``
+- ``ui.get_text`` with ``{selector}`` + ``save: "name"``
+- ``ui.screenshot`` with ``{path}``
+- ``ui.close``
+
+.. note::
+   Selector syntax depends on backend (Selenium uses CSS by default; ``css=``, ``xpath=``, ``id=``, etc. are supported).
+
+
+Neko (m1k1o/neko) MCP integration
+----------------------------------------
+Use ``neko.*`` tools to call Neko REST API from the MCP server.
+
+
+Setup:
+
+- ``pip install -e ".[mcp,neko]"``
+- env vars:
+  - ``NEKO_BASE_URL`` (e.g. ``http://localhost:8080``)
+  - ``NEKO_ALLOWLIST_HOSTS`` (e.g. ``localhost,localhost:8080``)
+  - optional: ``NEKO_AUTH_MODE``, ``NEKO_USERNAME``, ``NEKO_PASSWORD``, ``NEKO_BEARER_TOKEN``
+
+Run:
+
+.. code-block:: bash
+
+   tspec mcp --transport stdio --workdir .
+
+Details: ``docs/neko_mcp.md``
+
+Blender / Unity MCP integration
+----------------------------------------
+We provide tools that call Blender/Unity MCP endpoints.
+
+
+Blender:
+
+- ``pip install -e ".[mcp,blender]"``
+- env vars:
+  - ``BLENDER_MCP_BASE_URL`` (e.g. ``http://localhost:7300``)
+  - ``BLENDER_MCP_ALLOWLIST_HOSTS`` (recommended: ``localhost,localhost:7300``)
+  - optional: ``BLENDER_MCP_AUTH_MODE`` (``none`` / ``bearer`` / ``token``)
+  - optional: ``BLENDER_MCP_BEARER_TOKEN``, ``BLENDER_MCP_TOKEN_QUERY``
+  - note: blender-mcp (ahujasid) is stdio; not REST compatible
+  - CLI: ``tspec mcp --blender-mcp-url http://localhost:7300``
+
+Unity:
+
+- ``pip install -e ".[mcp,unity]"``
+- env vars:
+  - ``UNITY_MCP_MODE=mcp-http``
+  - ``UNITY_MCP_MCP_URL`` (e.g. ``http://localhost:8080/mcp``)
+  - ``UNITY_MCP_ALLOWLIST_HOSTS`` (recommended: ``localhost,localhost:8080``)
+  - optional: ``UNITY_MCP_AUTH_MODE`` (``none`` / ``bearer`` / ``token``)
+  - optional: ``UNITY_MCP_BEARER_TOKEN``, ``UNITY_MCP_TOKEN_QUERY``
+  - REST compatibility: ``UNITY_MCP_BASE_URL``
+  - CLI: ``tspec mcp --unity-mcp-url http://localhost:8080/mcp``
+
+Run:
+
+.. code-block:: bash
+
+   tspec mcp --transport stdio --workdir .
+
+Details: ``docs/blender_mcp.md``, ``docs/unity_mcp.md``
+
+Report view
+----------------------------------------
+.. code-block:: bash
+
+   tspec report out/report.json
+   tspec report out/report.json --only-errors --show-steps
+   tspec report out/report.json --case UI-001 --show-steps
+   tspec report out/report.json --grep google --status failed --status error
+
+Long messages (stacktraces):
+
+.. code-block:: bash
+
+   tspec report out/report.json --only-errors --show-steps --full-trace --max-message-len 0
+
+Failure forensics (auto capture)
+----------------------------------------
+When ``ui.wait_for`` fails, the following are saved under ``artifacts/forensics/`` by default:
+- screenshot (PNG)
+- current_url (shown in message)
+- page_source (HTML, Selenium only)
+
+
+MCP (AI integration)
+----------------------------------------
+Start ``tspec`` as an MCP server and call tools from AI clients.
+
+
+.. code-block:: bash
+
+   pip install -e ".[mcp]"
+   tspec mcp --transport stdio --workdir .
+
+Manual (EN/JP): ``tspec manual show mcp-env --full --lang en`` / ``tspec manual show mcp-env --full --lang jp``
+Default language can be set via ``TSPEC_MANUAL_LANG``.
+
+TSPEC-Z1 (compressed handoff)
+----------------------------------------
+CLI:
+
+.. code-block:: bash
+
+   tspec z1-decode docs/selenium_spec.tspecz1 --format text
+   tspec z1-decode docs/selenium_spec.tspecz1 --format json
+   tspec z1-decompile docs/selenium_spec.tspecz1 --format text
+   tspec z1-decompile docs/selenium_spec.tspecz1 --format yaml
+
+
+Japanese: https://github.com/jack-low/tspec-runner/blob/main/README.ja.md
