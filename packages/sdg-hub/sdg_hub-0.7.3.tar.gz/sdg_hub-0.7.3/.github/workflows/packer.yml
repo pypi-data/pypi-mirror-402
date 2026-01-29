@@ -1,0 +1,33 @@
+name: Build AMI with Packer
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ami:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # This is required for OIDC
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708
+        with:
+          role-to-assume: arn:aws:iam::851725220677:role/github-actions-packer-role
+          aws-region: us-east-2
+          role-session-name: github-actions-packer  # For tracking in CloudTrail
+
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@1aa358be5cf73883762b302a3a03abd66e75b232
+
+      - name: Build and create AMI
+        run: |
+          set -euo pipefail
+          cd scripts/packer
+          packer init .
+          packer validate .
+          packer build .
