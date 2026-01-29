@@ -1,0 +1,59 @@
+# takopi-tunnel
+
+A [takopi](https://takopi.dev) plugin for managing [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) tunnels from Telegram.
+
+## Installation
+
+```bash
+# Install the plugin
+uv pip install takopi-tunnel
+
+# Or for development
+uv pip install -e /path/to/takopi-tunnel
+```
+
+## Requirements
+
+You need `cloudflared` installed on your system:
+
+- **macOS**: `brew install cloudflared`
+- **Linux**: See [Cloudflare downloads](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
+- **Binary**: Download from [GitHub releases](https://github.com/cloudflare/cloudflared/releases)
+
+## Usage
+
+The plugin adds a `/tunnel` command to takopi:
+
+| Command | Description |
+|---------|-------------|
+| `/tunnel start <port>` | Start a tunnel for the specified port |
+| `/tunnel list` | Show all active tunnels with URLs and uptime |
+| `/tunnel stop <port>` | Stop the tunnel for a specific port |
+| `/tunnel killall` | Stop all active tunnels |
+| `/tunnel help` | Show help |
+
+### Example
+
+```
+/tunnel start 3000
+```
+
+Response:
+```
+Tunnel started for port 3000:
+https://random-words.trycloudflare.com
+```
+
+## How It Works
+
+This plugin uses Cloudflare's [Quick Tunnels](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) feature, which:
+
+- Requires no Cloudflare account or authentication
+- Generates a random `*.trycloudflare.com` subdomain
+- Tunnels are ephemeral and don't persist across restarts
+
+## Notes
+
+- Tunnels do not persist across takopi restarts
+- Each port can only have one tunnel at a time
+- The plugin will notify you if a tunnel crashes unexpectedly
