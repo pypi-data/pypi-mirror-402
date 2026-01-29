@@ -1,0 +1,343 @@
+# BFK AuthSystem - Cliente Python
+
+Biblioteca Python para integracao de aplicacoes desktop com o BFK AuthSystem.
+
+## Instalacao
+
+```bash
+# Instalacao basica
+pip install bfk-authsystem
+
+# Com UI (dialogs PyQt5)
+pip install bfk-authsystem[ui]
+
+# Com hardware info avancado
+pip install bfk-authsystem[hardware]
+
+# Instalacao completa
+pip install bfk-authsystem[full]
+```
+
+## Uso Basico
+
+```python
+from bfk_authsystem import LicenseValidator
+
+# Criar validador
+validator = LicenseValidator(
+    server_url='https://api.example.com/api/v1',
+    app_code='MYAPP'
+)
+
+# Verificar licenca
+result = validator.verify(username='user', password='pass')
+
+if result.valid:
+    print('Licenca valida!')
+    print(f'Dias ate reautenticacao: {result.days_until_reauth}')
+else:
+    print(f'Licenca invalida: {result.message}')
+```
+
+## Primeira Execucao (Ativacao de Licenca)
+
+Na primeira execucao, o parametro `license_key` e obrigatorio para associar a maquina a licenca:
+
+```python
+from bfk_authsystem import LicenseValidator
+
+validator = LicenseValidator(
+    server_url='https://api.example.com/api/v1',
+    app_code='MYAPP'
+)
+
+# Primeira execucao - license_key obrigatorio
+result = validator.verify(
+    username='user',
+    password='pass',
+    license_key='XXXX-XXXX-XXXX-XXXX'  # Chave fornecida ao usuario
+)
+
+if result.valid:
+    print('Licenca ativada com sucesso!')
+elif result.error_code == 'LICENSE_KEY_REQUIRED':
+    print('Chave de licenca necessaria para ativar')
+```
+
+Apos a primeira ativacao, `license_key` nao e mais necessario:
+
+```python
+# Execucoes subsequentes - license_key opcional
+result = validator.verify(username='user', password='pass')
+```
+
+## Uso com UI (PyQt5)
+
+```python
+from bfk_authsystem import LicenseValidator
+from bfk_authsystem.ui import show_login_dialog, PYQT_AVAILABLE
+
+if not PYQT_AVAILABLE:
+    print("PyQt5 nao instalado")
+    exit(1)
+
+validator = LicenseValidator(
+    server_url='https://api.example.com/api/v1',
+    app_code='MYAPP'
+)
+
+# Obter app config para personalizacao
+config = validator.get_app_config()
+
+# Mostrar dialog de login
+credentials = show_login_dialog(app_config=config)
+if credentials:
+    username, password = credentials
+    result = validator.verify(username=username, password=password)
+
+    if result.valid:
+        print('Login bem-sucedido!')
+```
+
+## Classes Principais
+
+### LicenseValidator
+
+Classe principal para validacao de licencas.
+
+```python
+validator = LicenseValidator(
+    server_url='https://api.example.com/api/v1',
+    app_code='MYAPP',
+    timeout=30.0,              # Timeout em segundos
+    max_offline_days=7,        # Dias maximos em modo offline
+    verify_ssl=True,           # Verificar certificado SSL
+    cache_enabled=True         # Habilitar cache local
+)
+
+# Propriedades
+validator.machine_id          # ID unico da maquina
+validator.hostname            # Nome do computador
+validator.is_online           # Conexao com servidor
+validator.current_user        # Usuario atual (apos login)
+validator.app_config          # Configuracao da aplicacao
+
+# Metodos principais
+result = validator.verify(
+    username=username,
+    password=password,
+    license_key=license_key   # Obrigatorio na primeira execucao
+)
+tokens = validator.authenticate(username, password) # Autenticar
+validator.logout()                                  # Logout
+validator.refresh_session()                        # Renovar sessao
+```
+
+### ValidationResult
+
+Resultado da verificacao de licenca.
+
+```python
+result.valid              # bool: Licenca valida
+result.message            # str: Mensagem
+result.requires_action    # RequiredAction: Acao necessaria
+result.days_offline       # int: Dias em modo offline
+result.days_until_reauth  # int: Dias ate proxima reautenticacao
+result.app_config         # AppConfig: Configuracao da aplicacao
+result.license_info       # LicenseInfo: Informacoes da licenca
+result.is_offline         # bool: Verificacao offline
+result.schedule_info      # dict: Restricoes de horario (v1.1.0+)
+```
+
+### RequiredAction
+
+Acoes que podem ser necessarias:
+
+```python
+from bfk_authsystem import RequiredAction
+
+RequiredAction.NONE            # Nenhuma acao
+RequiredAction.CHANGE_PASSWORD # Usuario deve trocar senha
+RequiredAction.SETUP_MFA       # Usuario deve configurar MFA
+RequiredAction.VERIFY_MFA      # Usuario deve verificar MFA
+RequiredAction.REAUTH          # Usuario deve reautenticar
+```
+
+## Modo Offline
+
+A biblioteca suporta modo offline com cache local criptografado:
+
+```python
+validator = LicenseValidator(
+    server_url='https://api.example.com/api/v1',
+    app_code='MYAPP',
+    max_offline_days=7,
+    cache_enabled=True
+)
+
+# Verificacao funciona mesmo offline (se houver cache valido)
+result = validator.verify(username='user', password='pass')
+
+if result.is_offline:
+    print(f'Modo offline ({result.days_offline} dias)')
+    print(f'Dias restantes: {result.days_until_reauth}')
+```
+
+## MFA (Autenticacao de Dois Fatores)
+
+```python
+# Setup MFA
+mfa_info = validator.setup_mfa()
+print(f'Secret: {mfa_info.secret}')
+print(f'QR Code Base64: {mfa_info.qr_code}')
+
+# Habilitar MFA com token
+recovery_codes = validator.enable_mfa(token='123456')
+print(f'Recovery codes: {recovery_codes}')
+
+# Verificar MFA
+success = validator.verify_mfa(token='123456')
+
+# Desabilitar MFA
+success = validator.disable_mfa(token='123456')
+```
+
+## Gerenciamento de Sessoes
+
+```python
+# Listar sessoes ativas
+sessions = validator.get_active_sessions()
+for s in sessions:
+    print(f'{s.device_info} - {s.ip_address}')
+    if s.is_current:
+        print('  (sessao atual)')
+
+# Revogar sessao
+validator.revoke_session(session_id=123)
+
+# Revogar todas as outras sessoes
+count = validator.revoke_all_sessions()
+print(f'{count} sessoes revogadas')
+```
+
+## Tratamento de Erros
+
+```python
+from bfk_authsystem import (
+    AuthSystemError,
+    AuthenticationError,
+    MFARequiredError,
+    LicenseError,
+    LicenseExpiredError,
+    NetworkError,
+    CircuitBreakerOpenError
+)
+
+try:
+    result = validator.verify(username='user', password='pass')
+except AuthenticationError as e:
+    print(f'Credenciais invalidas: {e}')
+except MFARequiredError as e:
+    print('MFA necessario')
+    # Mostrar dialog de MFA
+except LicenseExpiredError as e:
+    print('Licenca expirada')
+except NetworkError as e:
+    print(f'Erro de conexao: {e}')
+except CircuitBreakerOpenError as e:
+    print('Servidor temporariamente indisponivel')
+except AuthSystemError as e:
+    print(f'Erro: {e}')
+```
+
+## Dialogs UI (PyQt5)
+
+```python
+from bfk_authsystem.ui import (
+    PYQT_AVAILABLE,
+    show_login_dialog,
+    show_mfa_verify_dialog,
+    show_change_password_dialog,
+    show_status_dialog
+)
+
+if PYQT_AVAILABLE:
+    # Login
+    credentials = show_login_dialog(app_config=config)
+
+    # MFA
+    token = show_mfa_verify_dialog(app_config=config)
+
+    # Troca de senha
+    passwords = show_change_password_dialog(app_config=config)
+
+    # Status da licenca
+    show_status_dialog(
+        app_config=config,
+        user_info=user,
+        license_info=license,
+        sessions=sessions
+    )
+```
+
+## Restricoes de Horario (v1.1.0+)
+
+Licencas podem ter restricoes de horario configuradas pelo administrador.
+Quando uma licenca tem restricoes, o campo `schedule_info` contem as informacoes:
+
+```python
+result = validator.verify(username='user', password='pass')
+
+if result.valid and result.schedule_info:
+    info = result.schedule_info
+
+    if info.get('has_restrictions'):
+        print(f"Fuso horario: {info.get('timezone')}")
+        print(f"Dias com restricao: {info.get('restricted_days')}")
+
+        # Horarios permitidos por dia
+        for dia, horarios in info.get('schedule', {}).items():
+            print(f"  {dia}: {horarios}")
+```
+
+**Estrutura de `schedule_info`:**
+
+```python
+{
+    "has_restrictions": True,              # Se tem restricoes
+    "timezone": "America/Sao_Paulo",       # Fuso horario
+    "restricted_days": [                   # Dias com restricao
+        "Segunda-feira",
+        "Terca-feira"
+    ],
+    "total_restricted_days": 2,            # Total de dias
+    "schedule": {                          # Horarios permitidos
+        "Segunda-feira": "08:00-12:00, 14:00-18:00",
+        "Terca-feira": "08:00-12:00"
+    }
+}
+```
+
+**Notas:**
+- Dias sem restricao = uso liberado 24h
+- Cada dia pode ter ate 2 intervalos de horario
+- Se `has_restrictions` for `False`, a licenca nao tem restricoes
+
+## Resiliencia
+
+A biblioteca inclui mecanismos de resiliencia:
+
+- **Retry com backoff exponencial**: Tentativas automaticas em caso de falha
+- **Circuit Breaker**: Protecao contra falhas em cascata
+- **Cache offline**: Funcionamento sem conexao
+
+## Requisitos
+
+- Python >= 3.8
+- requests >= 2.31.0
+- cryptography >= 41.0.0
+- PyQt5 >= 5.15.0 (opcional, para UI)
+
+## Licenca
+
+MIT License
