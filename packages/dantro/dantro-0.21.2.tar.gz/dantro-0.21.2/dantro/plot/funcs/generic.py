@@ -1,0 +1,1945 @@
+"""Generic, DAG-based plot functions for the
+:py:class:`~dantro.plot.creators.pyplot.PyPlotCreator` and derived plot
+creators.
+"""
+
+import copy
+import logging
+from functools import partial as _partial
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Literal,
+    Tuple,
+    Union,
+)
+
+if TYPE_CHECKING:
+    import xarray
+
+import matplotlib.colors as mcolors
+import paramspace as psp
+
+from ..._import_tools import LazyLoader
+from ...exceptions import PlotConfigError, PlottingError, UpdatePlotConfig
+from ...tools import recursive_update
+from ..plot_helper import PlotHelper
+from ..utils import figure_leak_prevention, is_plot_func
+from ..utils.color_mngr import ColorManager, parse_cmap_and_norm_kwargs
+from ._utils import determine_ideal_col_wrap
+from ._utils import plot_errorbar as _plot_errorbar
+
+# Local constants and lazy module imports
+log = logging.getLogger(__name__)
+
+xr = LazyLoader("xarray")
+
+ENSURE_UNIQUE_DIMS: Dict[Tuple[str, bool], Union[bool, str]] = {
+    ("raise_auto", True): False,
+    ("raise_auto", False): True,
+    ("warn_auto", True): False,
+    ("warn_auto", False): "warn",
+}
+"""For ``auto`` mode, maps (``ensure_unique_dims``, ``data_vars is not None``)
+tuples to the appropriate evaluated parameter."""
+
+# .............................................................................
+
+# fmt: off
+
+_XR_PLOT_KINDS = {  # --- start literalinclude
+    "scatter":      ("free", "hue", "col", "row"),
+    "line":         ("x", "hue", "col", "row"),
+    "step":         ("x", "col", "row"),
+    "contourf":     ("x", "y", "col", "row"),
+    "contour":      ("x", "y", "col", "row"),
+    "imshow":       ("x", "y", "col", "row"),
+    "pcolormesh":   ("x", "y", "col", "row"),
+    "hist":         ("free",),  # can also set ("free", ...) to absorb all
+}   # --- end literalinclude
+"""The available plot kinds for the *xarray* plotting interface, together with
+the supported layout specifier keywords."""
+
+_FACET_GRID_KINDS = {
+    # based on xarray plotting functions
+    "scatter":      ("free", "hue", "col", "row", ("files", ...), "frames"),
+    "line":         ("x", "hue", "col", "row", ("files", ...), "frames"),
+    "step":         ("x", "col", "row", ("files", ...), "frames"),
+    "contourf":     ("x", "y", "col", "row", ("files", ...), "frames"),
+    "contour":      ("x", "y", "col", "row", ("files", ...), "frames"),
+    "imshow":       ("x", "y", "col", "row", ("files", ...), "frames"),
+    "pcolormesh":   ("x", "y", "col", "row", ("files", ...), "frames"),
+    "hist":         ("free", ("files", ...), "frames",),
+
+    # based on dantro plotting functions
+    # NOTE These are dynamically added but generally look similar to the above:
+    # "errorbars":    ("x", "hue", "col", "row", ("files", ...), "frames"),
+    # "scatter3d":    ("hue", "col", "row", ("files", ...), "frames"),
+}
+"""The available plot kinds for the *dantro* plotting interface, together with
+the supported layout specifiers, which include the ``frames`` option."""
+
+_AUTO_PLOT_KINDS = {  # --- start literalinclude
+    1:               "line",
+    2:               "line",
+    3:               "line",
+    4:               "pcolormesh",
+    5:               "pcolormesh",
+    "with_hue":      "line",         # used when `hue` is explicitly set
+    "with_x_and_y":  "pcolormesh",   # used when _both_ `x` and `y` were set
+    "dataset":       "scatter",      # used for xr.Dataset-like data
+    "fallback":      "hist",         # used when none of the above matches
+}   # --- end literalinclude
+"""A mapping from data dimensionality to preferred plot kind, used in automatic
+plot kind selection. This assumes the specifiers of ``_FACET_GRID_KINDS``"""
+
+# fmt: on
+
+_FACET_GRID_FUNCS: Dict[str, Callable] = {}
+"""A dict mapping additional facet grid kinds to callables.
+This is populated by the ``make_facet_grid_plot`` decorator."""
+
+
+# -----------------------------------------------------------------------------
+# -- Helper functions ---------------------------------------------------------
+# -----------------------------------------------------------------------------
+
+
+def _fmt_spec(spec: Union[str, Tuple[str, int]]) -> str:
+    """Formats a single encoding specification, taking care of the various
+    kinds of possible encodings, e.g. potential Ellipsis sizes."""
+    if isinstance(spec, str):
+        return spec
+    spec, nd = spec
+    if nd == 1:
+        return spec
+    elif nd is Ellipsis:
+        return f"{spec}…"
+    return f"{spec} ({nd}×)"
+
+
+def _fmt_specs(specs: list) -> str:
+    """Formats an encoding specifications list, typically a list of strings
+    or tuples."""
+    return ", ".join(_fmt_spec(spec) for spec in specs)
+
+
+def _fmt_encoding(enc: dict, fstr="{s}: {d}") -> str:
+    """Formats an encoding dictionary into a single-line, comma-separated
+    string, taking care of multi-dimensional encoding specifiers."""
+
+    def fmt_dim(d: Union[str, list]) -> str:
+        if isinstance(d, (tuple, list)):
+            return f"[{', '.join(str(_d) for _d in d)}]"
+        return d
+
+    return ",  ".join(fstr.format(s=s, d=fmt_dim(d)) for s, d in enc.items())
+
+
+# .............................................................................
+
+
+def determine_plot_kind(
+    d: Union["xarray.DataArray", "xarray.Dataset"],
+    *,
+    kind: Union[str, dict],
+    default_kind_map: dict = _AUTO_PLOT_KINDS,
+    **plot_kwargs,
+) -> str:
+    """Determines the plot kind to use for the given data. If ``kind: auto``,
+    this will determine the plot kind depending on the dimensionality of the
+    data and other (potentially fixed) encoding specifiers. Otherwise, it will
+    simply return ``kind``.
+
+    **What if layout encodings were partly fixed?** There are two special cases
+    where this is of relevance, and both these cases are covered explicitly:
+
+        - If *both* ``x`` and ``y`` are given, ``line``- or ``hist``-like plot
+          kinds are no longer possible; hence, a ``pcolormesh``-like kind has
+          to be chosen.
+        - In turn, if ``hue`` was given, ``pcolormesh``-like plot kinds are no
+          longer applicable, thus a ``line``-like argument needs to be chosen.
+
+    These two special cases are specified via the extra keys ``with_x_and_y``
+    and ``with_hue`` in the kind mapping.
+
+    A kind mapping may look like this:
+
+    .. literalinclude:: ../../dantro/plot/funcs/generic.py
+        :language: python
+        :start-after: _AUTO_PLOT_KINDS = {  # --- start literalinclude
+        :end-before:  }   # --- end literalinclude
+        :dedent: 4
+
+    Args:
+        d (Union[xarray.DataArray, xarray.Dataset]): The data for which to
+            determine the plot kind.
+        kind (Union[str, dict]): The given kind argument. If it is ``auto``,
+            the ``kind_map`` is used to determine the ``kind`` from the
+            dimensionality of ``d``.
+            If it is a dict, ``auto`` is implied and the dict is assumed to be
+            a (ndim -> kind) mapping, *updating* the ``default_kind_map``.
+        default_kind_map (dict, optional): The default mapping to use for
+            ``kind: auto``, with keys being ``d``'s dimensionality and values
+            being the plot kind to use.
+            There are two special keys, ``fallback`` and ``dataset``. The
+            value belonging to ``dataset`` is used for data that is dataset-
+            like, i.e. does not have an ``ndim`` attribute. The value of
+            ``fallback`` specifies the plot kind for data dimensionalities
+            that match no other key.
+        **plot_kwargs: All remaining plot function arguments, including any
+            layout encoding arguments that aim to *fix* a dimension; these are
+            used to determine the ``with_hue`` and ``with_x_and_y`` special
+            cases. Everything else is ignored.
+
+    Returns:
+        str: The selected plot kind. This is equal to the *given* ``kind`` if
+            it was None or a string unequal to ``auto``.
+    """
+    # Was the plot kind already specified?
+    if kind is None or (isinstance(kind, str) and kind != "auto"):
+        # Yes. Just return that value.
+        return kind
+
+    # else: Need to determine it by inspecting the data and the kind mapping.
+    # First, determine the mapping.
+    kind_map = copy.deepcopy(default_kind_map)
+    if isinstance(kind, dict):
+        kind_map.update(kind)
+
+    # Handle special cases ...
+    # ... for datasets: always fall back to the specified default kind
+    if not hasattr(d, "ndim"):
+        return kind_map["dataset"]
+
+    # ... for given x *and* y layout specifiers
+    elif plot_kwargs.get("x") and plot_kwargs.get("y"):
+        return kind_map["with_x_and_y"]
+
+    # ... for given hue layout specifier
+    elif plot_kwargs.get("hue"):
+        return kind_map["with_hue"]
+
+    # Select the kind from the dimensionality. If this fails, use the default
+    # value instead.
+    try:
+        kind = kind_map[d.ndim]
+    except KeyError:
+        kind = kind_map["fallback"]
+
+    log.remark("Using plot kind '%s' for %d-dimensional data.", kind, d.ndim)
+    return kind
+
+
+def parse_encoding_spec(s: Union[str, Tuple[str, int]]) -> Tuple[str, int]:
+    """Brings an encoding specification into a uniform 2-tuple shape, where
+    the first is the name of the encoding and the second is how many dimensions
+    it may absorb. The second value can also be ``Ellipsis`` to denote that
+    all remaining dimensions are to be absorbed."""
+    if isinstance(s, str):
+        return (s, 1)
+    name, nd = s
+    if nd in (Ellipsis, ..., "...", "…"):
+        nd = ...
+    return (name, nd)
+
+
+def map_dims_to_encoding(
+    all_specs: List[Union[str, Tuple[str, int]]],
+    all_dims: List[str],
+    *,
+    encoding: Dict[str, Union[str, Tuple[str, ...]]] = None,
+    drop_missing_dims: bool = False,
+    data_vars: List[str] = None,
+    ignore_encodings: List[str] = None,
+    ensure_unique_dims: Union[bool, Literal["warn"]] = False,
+) -> Tuple[
+    Dict[str, Union[str, Tuple[str, ...]]], List[Tuple[str, int]], List[str]
+]:
+    """Maps encoding specifiers to one or multiple dimension names.
+
+    Encoding specifiers are given as a list of encoding names that are filled,
+    one by one, with a free dimension. The encoding specifier can be given as a
+    string, assuming that it can absorb a single dimension; alternatively, if a
+    2-tuple ``(name, num_dims)`` is given, the second entry denotes the number
+    of dimensions that specifier can absorb.
+
+    Specifiers are assigned in the given order. They may also appear multiple
+    times, in which case they are handled as multi-dimensional encodings.
+
+    .. code-block:: python
+
+        specs = [x, hue, col, row]           # -> 1 absorbing dim each
+        specs = [(x, 1), (hue, 1), (col, 1), (row, 1)]   # same as above
+        specs = [x, col, row, (files, 5)]    # -> files absorbs 5 dims
+        specs = [x, files, hue, (files, 4)]  # -> files absorbs 5 dims, but hue
+                                             #    will be assigned in between
+        specs = [x, (files, ...), hue]       # -> files absorbs all free dims
+
+    Args:
+        all_specs (List[Union[str, Tuple[str, int]]]): All available encoding
+            specifiers as a list of string or list of ``(name, num_dims)``
+            tuples. ``num_dims`` can also be ``...`` (an ``Ellipsis``) to
+            denote that this dimension will absorb remaining free dimensions.
+        all_dims (List[str]): List of all available dimension names; these will
+            be the values of the returned mapping.
+        encoding (Dict[str, Union[str, Tuple[str, ...]]], optional): If given,
+            denotes which encodings and dimensions are already in use.
+        drop_missing_dims (bool, optional): If True, will drop those entries
+            in ``encoding`` that use a dimension name that is not part of
+            ``all_dims``.
+        ignore_encodings (List[str], optional): Names of encoding specifiers
+            that should be ignored, i.e. which remain in ``all_specs`` but are
+            not automatically assigned dimensions; note that they remain in
+            ``encoding`` and retain the value they have received manually.
+        ensure_unique_dims (Union[bool, Literal["warn"]], optional): If True,
+            will make sure that the user-specified ``encoding`` does not cause
+            dimensions to be assigned more than once. This should be set if the
+            plot function does not support duplicate encodings, e.g. because it
+            involves a sequential dimensionality reduction. It should *not* be
+            set for plot functions that allow parallel encodings, e.g. scatter
+            plots with ``hue`` and ``size`` encodings shared within a subplot.
+            If set to ``warn``, will warn instead of raise.
+
+    Returns:
+        Tuple[Dict[str, Union[str, Tuple[str, ...]]], List[Tuple[str, int]], List[str]]:
+            A 3-tuple ``(mapping, free_specs, free_dims)`` containing the
+            desired mapping dictionary and information about possibly free
+            encoding specifiers or dimensions.
+    """
+
+    def unpack_nested(l: list) -> list:
+        """[1, 2, [3, 4], 5] --> [1, 2, 3, 4, 5]"""
+        return [
+            e for e in l for e in (e if isinstance(e, (list, tuple)) else [e])
+        ]
+
+    def get_spec_size(name: str, all_specs: list) -> Union[int, "Ellipsis"]:
+        size = 0
+        for spec, nd in all_specs:
+            if name == spec:
+                if nd is Ellipsis:
+                    return Ellipsis
+                size += nd
+        return size
+
+    # Sometimes includes Nones, which we can't do anything with here.
+    all_dims = [d for d in all_dims if d is not None]
+
+    if len(set(all_dims)) != len(all_dims):
+        raise ValueError(
+            "Dimension names to map to encodings need to be unique, but "
+            f"duplicate dimension names were given:  {', '.join(all_dims)}"
+        )
+
+    # Bring dims and specs into a normalized form
+    all_dims: List[str] = list(all_dims)
+    log.remark("   data dims:     %s", ", ".join(all_dims))
+
+    data_vars: List[str] = list(data_vars) if data_vars else []
+    if data_vars:
+        log.remark("   data vars:     %s", ", ".join(data_vars))
+
+    all_specs: List[Tuple[str, int]] = [
+        parse_encoding_spec(s) for s in all_specs
+    ]
+
+    all_spec_names: List[str] = [spec for spec, _ in all_specs]
+    all_specs_sizes: Dict[str, int] = {
+        spec_name: get_spec_size(spec_name, all_specs)
+        for spec_name in set(all_spec_names)
+    }
+    multi_dim_specs = set(
+        spec for spec, size in all_specs_sizes.items() if size not in (0, 1)
+    )
+
+    # Set up the target encoding dict, starting from the given keys
+    encoding = encoding if encoding else {}
+    encoding = {
+        spec: dim if not dim or isinstance(dim, str) else tuple(dim)
+        for spec, dim in encoding.items()
+    }
+
+    # For easier comprehension when writing this, sort the dict
+    _seen = set()  # to only keep the first occurrence of a spec (if multiple)
+    encoding = {
+        spec: encoding[spec]
+        for spec in all_spec_names
+        if spec in encoding and spec not in _seen and not _seen.add(spec)
+    }
+    del _seen
+
+    log.remark("   given:         %s", _fmt_encoding(encoding))
+
+    # May want to modify the given encoding, e.g. if dimensions have been
+    # specified that are missing in the data, they should be dropped
+    used_dims: List[str] = unpack_nested(encoding.values())
+    missing_dims = [
+        dim
+        for dim in used_dims
+        if dim and dim not in all_dims and dim not in data_vars
+    ]
+
+    if missing_dims:
+        log.caution("   missing dims:  %s", ", ".join(missing_dims))
+        specs_with_missing_dims = [
+            spec
+            for spec, dim in encoding.items()
+            if (isinstance(dim, str) and dim in missing_dims)
+            or any(_dim in missing_dims for _dim in dim)
+        ]
+        if drop_missing_dims:
+            # Filter out missing dimensions, either by dropping the whole entry
+            # for a spec or dropping the dimension from a multi-dim spec.
+            # This may result in empty lists, but that's fine.
+            log.remark(
+                "     → dropping from affected encodings (%s)",
+                ", ".join(specs_with_missing_dims),
+            )
+            encoding = {
+                spec: (
+                    dim
+                    if isinstance(dim, str)
+                    else [_dim for _dim in dim if _dim not in missing_dims]
+                )
+                for spec, dim in encoding.items()
+                if dim not in missing_dims or not isinstance(dim, str)
+            }
+            used_dims = unpack_nested(encoding.values())
+        else:
+            log.warning(
+                "     → may cause errors downstream related to the "
+                "affected encodings:  %s",
+                ", ".join(specs_with_missing_dims),
+            )
+
+    # Check how many of these may have already been set in the encoding,
+    # i.e. find out the free dimensions and free encoding specifiers.
+    # Start with the used and free dimensions:
+    used_dims: List[str] = [
+        dim
+        for dim in unpack_nested(encoding.values())
+        if dim and dim not in data_vars
+    ]
+    used_data_vars: List[str] = [
+        dim
+        for dim in unpack_nested(encoding.values())
+        if dim and dim in data_vars
+    ]
+    free_dims = [dim for dim in all_dims if dim not in used_dims]
+
+    if ensure_unique_dims and len(set(used_dims)) != len(used_dims):
+        if ensure_unique_dims == "warn":
+            log.caution("   ∃ duplicates:  %s", _fmt_encoding(encoding))
+            log.warning(
+                "     → may cause errors downstream related to sequential "
+                "dimensionality reduction of the specified dimensions.",
+            )
+        else:
+            raise ValueError(
+                "The given encoding contains duplicate dimension names! Make "
+                "sure that each dimension only appears once.\n"
+                f"  Encoding:         {_fmt_encoding(encoding)}\n"
+                f"  Data dimensions:  {', '.join(all_dims)}\n"
+                f"  Data variables:   {data_vars}"
+            )
+
+    # To determine the free specifiers, we first need to know which specifiers
+    # have been previously set or should otherwise be regarded as "used";
+    # either because they were already set or because they have been denoted as
+    # to-be-ignored.
+    # The used specs can be a dict because the order is not relevant.
+    used_specs: Dict[str, int] = {
+        spec: len(dim if dim else []) if not isinstance(dim, str) else 1
+        for spec, dim in encoding.items()
+    }
+
+    if ignore_encodings:
+        log.remark("   ignoring:      %s", ", ".join(ignore_encodings))
+        for spec in ignore_encodings:
+            used_specs[spec] = all_specs_sizes[spec]
+
+    log.debug("   used specs:    %s", _fmt_specs(used_specs.items()))
+    log.debug("   used data vars:  %s", ", ".join(used_data_vars))
+
+    # Knowing the used specifiers, we can determine the free specifiers by
+    # deducting the number of used dimensions from all specifiers. This is done
+    # in the order in which they are to be filled.
+    free_specs = []
+    _used_specs = copy.copy(used_specs)  # to allow counting down
+    for spec, nd in all_specs:
+        if spec not in _used_specs:
+            free_specs.append((spec, nd))
+
+        elif _used_specs[spec] >= 1:
+            free_specs.append(
+                (spec, nd - 1 if nd is not Ellipsis else Ellipsis)
+            )
+
+            # Reduce and maybe remove the entry
+            _used_specs[spec] -= 1
+            if _used_specs[spec] <= 0:
+                del _used_specs[spec]
+
+    free_specs = [(spec, nd) for spec, nd in free_specs if nd != 0]
+    del _used_specs
+
+    if not free_dims:
+        # No need to continue
+        return encoding, free_specs, free_dims
+
+    log.remark("   available:     %s", _fmt_specs(free_specs))
+    log.remark("   free dims:     %s", ", ".join(free_dims))
+
+    # Evaluate Ellipsis to fill unspecified encodings depending on the whole
+    # sequence of available encodings.
+    # For this, need to make sure that there is only one Ellipsis specified.
+    # Then, count how many dimensions need to be absorbed by the Ellipsis
+    # depending on how many dimensions are available in total and how man
+    # other encodings come after the Ellipsis.
+    # Also, the given encoding may already include an explicit setting of a
+    # dimension to the ellipsis spec, we don't want to re-set that one!
+    ellipses_specs = [spec for spec, nd in all_specs if nd is Ellipsis]
+    if len(ellipses_specs) > 1:
+        raise ValueError(
+            "Only one encoding can be an Ellipsis, "
+            f"got multiple:  {', '.join(ellipses_specs)}"
+        )
+
+    elif len(ellipses_specs) == 1:
+        # How many dimensions are to be taken up by other free specifiers?
+        n_other = sum(nd for _, nd in free_specs if nd is not Ellipsis)
+
+        # How many of the free dimensions does the Ellipsis need to use up?
+        n_free = max(0, len(free_dims) - n_other)
+        free_specs = [
+            (spec, nd if nd is not Ellipsis else n_free)
+            for spec, nd in free_specs
+        ]
+
+    log.debug("   eff. free specs:  %s", _fmt_specs(free_specs))
+
+    # Go over the dimensions, one by one, and map them to an encoding specifier
+    while free_dims and free_specs:
+        spec, nd = free_specs.pop(0)
+        if nd < 1:
+            continue
+
+        dim = free_dims.pop(0)
+
+        # Need to distinguish between multi-dim encodings and scalar ones
+        if spec in multi_dim_specs:
+            encoding[spec]: Tuple[str, ...] = tuple(encoding.get(spec, ())) + (
+                dim,
+            )
+        else:
+            encoding[spec] = dim
+
+        # May need to put the specifier back with a reduced counter such that
+        # it may be picked again in the next iteration.
+        # NOTE No Ellipses are remaining here, they were made explicit above.
+        if nd > 1:
+            free_specs.insert(0, (spec, nd - 1))
+
+    # Drop the zero-sized specs, they are all used up
+    free_specs = [(spec, nd) for spec, nd in free_specs if nd != 0]
+
+    # Return the mapping and the remaining free specs and free dims
+    return encoding, free_specs, free_dims
+
+
+def determine_encoding(
+    dims: Union[List[str], Dict[str, int]],
+    *,
+    kind: str,
+    auto_encoding: Union[bool, dict],
+    default_encodings: dict,
+    plot_kwargs: dict,
+    data_vars: List[str] = None,
+    allow_y_for_x: List[str] = ("line",),
+    drop_missing_dims: bool = False,
+    ignore_encodings: List[str] = None,
+    ensure_unique_dims: Union[bool, str] = False,
+    return_encoding_info: bool = False,
+) -> dict:
+    """Determines the layout encoding for the given plot kind and the available
+    data dimensions (as specified by the ``dims`` argument).
+
+    If ``auto_encoding`` does not evaluate to true or ``kind is None``, this
+    function does nothing and simply returns all given plotting arguments.
+
+    Otherwise, it uses the chosen plot ``kind`` to associate layout specifiers
+    with dimension names of ``d``.
+    The available layout encoding specifiers (``x``, ``y``, ``col`` etc.) can
+    be specified in two ways:
+
+        - By default, ``default_encodings`` is used as a map from plot kind to
+          a sequence of available layout encodings.
+        - If ``auto_encoding`` is a dictionary, the default map will be
+          *updated* with that dictionary.
+
+    The association is done in the following way:
+
+        1. Inspecting ``plot_kwargs``, all layout encoding specifiers are
+           extracted, regardless of their value.
+        2. The encodings mapping is determined (see above).
+        3. The available dimension names are determined from ``dims``.
+        4. Depending on ``kind`` and the already fixed specifiers, the *free*
+           encoding specifiers and dimension names are extracted.
+        5. These free specifiers are associated with free dimension names,
+           in order of descending dimension size. Encoding specifiers that have
+           previously been set will keep that value, even if it was ``None``.
+
+    **Example:** Assume, the available specifiers are ``('x', 'y', 'col')`` and
+    the data has dimensions ``dim0``, ``dim1`` and ``dim2``. Let's further say
+    that ``y`` was already fixed to ``dim2``, leaving ``x`` and ``col`` as
+    available encodings and ``dim0`` and ``dim1`` as free dimensions.
+    With ``x`` being specified before ``col`` in the list of available
+    encodings, ``x`` would be associated to the remaining dimension with the
+    *larger* size and ``col`` to the remaining one.
+
+    An encodings mapping may look like this:
+
+    .. literalinclude:: ../../dantro/plot/funcs/generic.py
+        :language: python
+        :start-after: _XR_PLOT_KINDS = {  # --- start literalinclude
+        :end-before:  }   # --- end literalinclude
+        :dedent: 4
+
+    Here, string-like specifiers denote encodings that can represent only a
+    single data dimension. The ``(name, ndim)`` syntax can be used to let an
+    encoding absorb ``ndim`` dimensions. Setting ``ndim`` to an Ellipsis
+    (``...``, ``Ellipsis`` or the ``'...'`` string) specifies that encoding to
+    take up *all* data dimensions that are not taken-up by other encodings.
+    Encodings with ``ndim > 1`` are always multi-dimensional, regardless of
+    how many dimensions will be associated with it.
+
+    **Example:** Let's assume the available encoding is ``x, hue, files…`` and
+    there are five free dimensions to assign. In this case, the largest will go
+    to ``x``, the next-largest to ``hue`` and the remaining three to the
+    multi-dimensional``files`` encoding.
+
+    The ``drop_missing_dims`` option will unset a previously set encoding if
+    that dimension does not exist in the data; a log message will inform about
+    this case. Setting this can be useful to make a plot definition more
+    flexible.
+
+    The ``ignore_encodings`` option allows to not automatically assign certain
+    encodings, e.g. if it is desired that an encoding is typically kept
+    unassigned. Effectively, it is never regarded as an available encoding,
+    regardless of its value. This can be useful to set if it is undesired to
+    change the ``auto_encoding`` dict.
+
+    When working with :py:class:`xarray.Dataset` objects, its data variables
+    may play a role in the encoding as some specifiers (like ``hue`` in a
+    ``scatter`` plot) accept both dimension names and data variables, behaving
+    differently depending on which one was passed.
+    By passing on the data variables via the ``data_vars`` argument, the
+    encoding algorithm can take into account that a specified encoding does
+    perhaps not refer to a data dimension but to a data *variable*.
+
+    This function also implements **automatic column wrapping**, aiming to
+    produce a efficient figure use with column wrapping. The prerequisites
+    are the following:
+
+        * The ``dims`` argument is a dict, containing size information
+        * The ``col_wrap`` argument is given and set to ``"auto"``
+        * The ``col`` specifier is in use
+        * The ``row`` specifier is *not* used, i.e. wrapping is possible
+        * There are more than three columns
+
+    To determine the column wrapping number, a little optimization routine
+    tries to reduce the number of empty spots in the last row while trying to
+    get a square-like grid.
+    To skip the optimization, potentially leading to last rows that have only
+    one or few subplots, set ``col_wrap`` to ``"square"``, in which case
+    wrapping will happen after ``ceil(sqrt(num_cols))`` columns; see
+    :py:func:`~dantro.plot.funcs._utils.determine_ideal_col_wrap` for more
+    information and implementation.
+
+    Args:
+        dims (Union[List[str], Dict[str, int]]): The dimension names (and, if
+            given as dict: their sizes) that are to be encoded. If no sizes are
+            provided, the assignment order will be the same as in the given
+            sequence of dimension names. If sizes are given, these will be used
+            to sort the dimension names in descending order of their sizes.
+            For xarray objects, ``da.sizes`` or ``ds.sizes`` should be used.
+        kind (str): The chosen plot kind. If this was None, will directly
+            return, because auto-encoding information is missing.
+        auto_encoding (Union[bool, dict]): Whether to perform auto-encoding.
+            If a dict, will regard it as a mapping of available encodings and
+            update ``default_encodings``.
+        default_encodings (dict): A map from plot kinds to available layout
+            specifiers, e.g. ``{"line": ("x", "hue", "col", "row")}``.
+        allow_y_for_x (List[str], optional): A list of plot kinds for which the
+            following replacement will be allowed: if a ``y`` specifier is
+            given but *no* ``x`` specifier, the ``"x"`` in the list of
+            available encodings will be replaced by a ``"y"``. This is to
+            support plots that allow *either* an ``x`` or a ``y`` specifier,
+            like the ``line`` kind.
+        plot_kwargs (dict): The actual plot function arguments, including any
+            layout encoding arguments that aim to *fix* a dimension. Everything
+            else is ignored.
+        drop_missing_dims (bool, optional): If set, will drop pre-specified
+            encodings from ``plot_kwargs`` if they refer to a dimension that
+            is not available in ``dims``. The encoding can then be filled with
+            another dimension.
+        data_vars (List[str], optional): If given, names of data variables
+            that may (in addition to the ``dims``) be used for encoding; this
+            is relevant when determining whether an encoding includes a
+            missing dimension, as some encodings may also refer not to
+            dimensions but to data variables.
+        ignore_encodings (List[str], optional): If given, will ignore these
+            encodings when automatically assigning.
+        ensure_unique_dims (Union[bool, str], optional): If True,
+            will make sure that the user-specified ``encoding`` does not cause
+            dimensions to be assigned more than once. This should be set if the
+            plot function does not support duplicate encodings, e.g. because it
+            involves a sequential dimensionality reduction. It should *not* be
+            set for plot functions that allow parallel encodings, e.g. scatter
+            plots with ``hue`` and ``size`` encodings shared within a subplot.
+            If set to ``warn``, will warn instead of raise.
+            If set to ``warn_auto`` or ``raise_auto``, will warn or raise only
+            if ``data_vars is None``; in such a case, encoding is typically
+            used for dimensionality reduction, which can only be done once…
+        return_encoding_info (bool, optional): If set, will return a 2-tuple of
+            the updated plots config *and* the encoding information as a
+            3-tuple ``(encoding, free_specs, free_dims)``.
+    """
+
+    if not auto_encoding or kind is None:
+        log.debug("Layout auto-encoding was disabled (kind: %s).", kind)
+        if not return_encoding_info:
+            return plot_kwargs
+        return plot_kwargs, ({}, (), ())
+
+    log.note(
+        "Automatically determining layout encoding for kind '%s' ...", kind
+    )
+
+    # Evaluate supported encodings, then get the available encoding specifiers
+    encs = copy.deepcopy(default_encodings)
+    if isinstance(auto_encoding, dict):
+        encs.update(auto_encoding)
+
+    try:
+        all_specs = encs[kind]
+    except KeyError as err:
+        raise PlotConfigError(
+            f"Unknown `kind` '{kind}' specified in auto-encoding. "
+            f"Make sure you chose a valid kind ({', '.join(encs)}) or supply "
+            "a default encoding explicitly."
+        ) from err
+
+    # Special case for line-like kinds
+    if allow_y_for_x and kind in allow_y_for_x:
+        if plot_kwargs.get("y") and not plot_kwargs.get("x"):
+            all_specs = [s if s != "x" else "y" for s in all_specs]
+
+    # Bring encoding specifiers into uniform shape
+    all_specs = [parse_encoding_spec(spec) for spec in all_specs]
+    all_spec_names: List[str] = [spec for spec, _ in all_specs]
+
+    # Split plotting kwargs into a dict of layout specifiers (encoding) and one
+    # that only includes the remaining plotting kwargs
+    encoding: Dict[str, Union[str, Tuple[str, ...]]] = {
+        k: v for k, v in plot_kwargs.items() if k in all_spec_names
+    }
+    plot_kwargs = {k: v for k, v in plot_kwargs.items() if k not in encoding}
+
+    # Get all available dimension names. If size-information is available,
+    # sort them by size (descending), otherwise just use them as they are.
+    if hasattr(dims, "items"):
+        all_dims = [
+            name
+            for name, _ in sorted(
+                dims.items(), key=lambda kv: kv[1], reverse=True
+            )
+        ]
+    else:
+        all_dims = list(dims)
+
+    # TODO Warn upon non-indexed dimensions?
+
+    # Evaluate ensure_unique_dims depending on whether there are data variables
+    # or not
+    if isinstance(ensure_unique_dims, str) and "auto" in ensure_unique_dims:
+        ensure_unique_dims = ENSURE_UNIQUE_DIMS[
+            (ensure_unique_dims, data_vars is not None)
+        ]
+
+    # From these two lists, assign free dimension names to free encodings;
+    encoding, free_specs, free_dims = map_dims_to_encoding(
+        all_specs,
+        all_dims,
+        encoding=encoding,
+        drop_missing_dims=drop_missing_dims,
+        data_vars=data_vars,
+        ignore_encodings=ignore_encodings,
+        ensure_unique_dims=ensure_unique_dims,
+    )
+
+    # Drop those encoding specifiers that are effectively unset.
+    #   Will remove things like {s: None} -> {},
+    #   but also from multi-dim specs: {s: [None, foo, None]} -> {s: [foo]}
+    # Need to do this in two steps, first dropping nested Nones, then Nones
+    # or empty lists.
+    encoding = {
+        s: (
+            tuple([_dim for _dim in dim if _dim])
+            if isinstance(dim, (tuple, list))
+            else dim
+        )
+        for s, dim in encoding.items()
+    }
+    encoding = {s: dim for s, dim in encoding.items() if dim}
+
+    # Provide information about the chosen encoding
+    log.remark("   → encoding:    %s", _fmt_encoding(encoding))
+
+    if free_specs:
+        log.remark("   remaining:     %s", _fmt_specs(free_specs))
+
+    if free_dims:
+        log.remark("   free dims:     %s", ", ".join(free_dims))
+
+    # -- Automatic column wrapping
+    if plot_kwargs.get("col_wrap") in ("auto", "square"):
+        if (
+            not encoding.get("row")
+            and encoding.get("col")
+            and hasattr(dims, "items")  # i.e.: have size information
+            and dims[encoding["col"]] >= 4
+        ):
+            num_cols = dims[encoding["col"]]
+            col_wrap_mode = plot_kwargs["col_wrap"]
+            plot_kwargs["col_wrap"] = determine_ideal_col_wrap(
+                num_cols, fill_last_row=(col_wrap_mode == "auto")
+            )
+            log.remark(
+                "   col_wrap:      %d  (mode '%s', col dim size: %d)",
+                plot_kwargs["col_wrap"],
+                col_wrap_mode,
+                num_cols,
+            )
+        else:
+            # Remove it to avoid a plot warning or "unexpected argument"
+            del plot_kwargs["col_wrap"]
+
+    # Finally, return the merged layout specifiers and plot kwargs
+    updated_plot_cfg = dict(**plot_kwargs, **encoding)
+
+    if not return_encoding_info:
+        return updated_plot_cfg
+    return updated_plot_cfg, (encoding, free_specs, free_dims)
+
+
+def build_pspace_selector(
+    d: Union[xr.DataArray, xr.Dataset], dims: List[str], **sel
+) -> Dict[str, Union[psp.ParamDim, Any]]:
+    """Builds a selector for :py:meth:`~xarray.DataArray.sel` operations that
+    uses :py:class:`~paramspace.paramdim.ParamDim` as values.
+
+    This method also combines the parameter space selector with an existing
+    selector dict, ``sel``, and throws an error if there is an overlap between
+    keys in ``dims`` and ``sel``.
+    """
+    psp_sel: Dict[str, psp.ParamDim] = {
+        dim: psp.ParamDim(
+            default=d.coords[dim].values.tolist()[0],
+            values=d.coords[dim].values.tolist(),
+        )
+        for dim in dims
+    }
+    # NOTE Using ``tolist`` here to get native data types.
+    #      The default value should not be needed, but we still specify sth.
+
+    if any(_sel in psp_sel for _sel in sel):
+        raise PlotConfigError(
+            f"Cannot combine parameter sweep selector ({', '.join(dims)}) "
+            f"with existing selector ({sel}) because there are "
+            "overlapping dimension names! Remove them and retry."
+        )
+
+    return dict(**psp_sel, **sel)
+
+
+# -----------------------------------------------------------------------------
+
+
+class make_facet_grid_plot:
+    """This is a decorator class that transforms a plot function that works on
+    a single axis into one that supports faceting via
+    :py:class:`xarray.plot.FacetGrid`.
+
+    Additionally, it allows to register the plotting function with the generic
+    :py:func:`~dantro.plot.funcs.generic.facet_grid` plot by adding the
+    callable to ``_FACET_GRID_FUNCS``.
+    """
+
+    MAP_FUNCS = {
+        "dataset": lambda fg, f, **kws: fg.map_dataset(f, **kws),
+        "dataarray": lambda fg, f, **kws: fg.map_dataarray(f, **kws),
+        "dataarray_line": lambda fg, f, **kws: fg.map_dataarray_line(f, **kws),
+    }
+    """The available mapping functions in :py:class:`xarray.plot.FacetGrid`"""
+
+    DEFAULT_ENCODINGS = ("col", "row", ("files", ...), "frames")
+    """The default encodings the facet grid supplies; these are those supported
+    by the generic facet grid function, irrespective of chosen ``kind``"""
+
+    DEFAULT_DROP_KWARGS = ("_fg", "meta_data", "hue_style", "add_guide")
+    """The default kwargs that are to be dropped rather than passed on to the
+    wrapped plotting function.
+    Can be customized via ``drop_kwargs`` argument."""
+
+    def __init__(
+        self,
+        *,
+        map_as: str,
+        encodings: Tuple[str],
+        supported_hue_styles: Tuple[str] = None,
+        register_as_kind: Union[bool, str] = True,
+        overwrite_existing: bool = False,
+        drop_kwargs: Tuple[str] = DEFAULT_DROP_KWARGS,
+        parse_cmap_and_norm_kwargs: bool = True,
+        **default_kwargs,
+    ):
+        """Initialize the decorator, making the decorated function capable of
+        performing a facet grid plot.
+
+        Args:
+            map_as (str): Which mapping to use. Available: ``dataset``,
+                ``dataarray`` and ``dataarray_line``.
+            encodings (Tuple[str]): The encodings supported by the wrapped
+                plot function, e.g. ``("x", "hue")``.
+                Note that these *need to be dimensionality-reducing encodings*
+                that have a qualitatively similar effect as ``col`` & ``row``
+                in that they consume a data *dimension*. This is in contrast to
+                plots that may represent multiple data *variables*, e.g. if the
+                data comes from a  :py:class:`xarray.Dataset`; those should not
+                be specified here.
+            supported_hue_styles (Tuple[str]): Which hue styles are
+                supported by the wrapped plot function. It is suggested to set
+                this value if mapping via ``dataset`` or ``dataarray_line`` in
+                order to disallow configurations that will not work with the
+                wrapped plot function. If set to None, no check will be done.
+            register_as_kind (Union[bool, str], optional): If boolean, controls
+                *whether* to register the wrapped function with the generic
+                facet grid plot, using its own name. If a string, uses that
+                name for registration.
+            overwrite_existing (bool, optional): Whether to overwrite an
+                existing registration in ``_FACET_GRID_FUNCS``. If False, an
+                existing entry of the same ``register_as_kind`` value will
+                lead to an error.
+            drop_kwargs (Tuple[str], optional): Which keyword arguments to
+                drop before invocation of the wrapped function; this can be
+                useful to trim down the signature of the wrapped function.
+            parse_cmap_and_norm_kwargs (bool, optional): Whether to parse
+                colormap-related plot function arguments using the
+                :py:func:`~dantro.plot.utils.color_mngr.parse_cmap_and_norm_kwargs`
+                function. Should be set to false if the decorated plot function
+                takes care of these arguments itself.
+            **default_kwargs: Additional arguments that are passed to the
+                single-axis plotting function. These are used both when calling
+                it via the selected mapping function and when invoking it
+                without a facet grid.
+                These are recursively updated with those given upon plot
+                function invocation.
+        """
+        try:
+            self.map_func = self.MAP_FUNCS[map_as]
+        except KeyError:
+            raise ValueError(
+                f"Unsupported value for `map_as` argument: '{map_as}'! Needs "
+                f"to be one of:  {', '.join(self.MAP_FUNCS)}"
+            )
+
+        self.encodings = encodings
+        self.supported_hue_styles = supported_hue_styles
+        self.register_as_kind = register_as_kind
+        self.overwrite_existing = overwrite_existing
+        self.drop_kwargs = drop_kwargs if drop_kwargs else ()
+        self.default_kwargs = default_kwargs
+        self.parse_cmap_and_norm_kwargs = parse_cmap_and_norm_kwargs
+
+    def parse_wpf_kwargs(self, data, **kwargs) -> dict:
+        """Parses the keyword arguments in preparation for invoking the wrapped
+        plot function. This can happen both in context of a facet grid mapping
+        and a single invocation.
+        """
+        # Update from defaults
+        kwargs = recursive_update(copy.deepcopy(self.default_kwargs), kwargs)
+
+        # Some checks
+        if (
+            self.supported_hue_styles is not None
+            and "hue_style" in kwargs
+            and kwargs["hue_style"] not in self.supported_hue_styles
+        ):
+            raise ValueError(
+                f"The selected `hue_style` '{kwargs['hue_style']}' is not "
+                "supported for this plotting function! May only be:  "
+                f"{', '.join(self.supported_hue_styles)}"
+            )
+
+        # Parse colormap-related arguments
+        if self.parse_cmap_and_norm_kwargs:
+            kwargs = parse_cmap_and_norm_kwargs(**copy.deepcopy(kwargs))
+
+        # Can do more pre-processing here
+        # ...
+
+        return kwargs
+
+    def __call__(self, plot_single_axis: Callable) -> Callable:
+        """Generates a standalone DAG-based plotting function that supports
+        faceting. Additionally, integrates it as ``kind`` for the
+        general facet grid plotting function by adding it to the global
+        ``_FACET_GRID_FUNCS`` dictionary.
+        """
+
+        # First, wrap the single-axis plot function to achieve helper support
+        def wrapped_plot_func(
+            *args,
+            hlpr: PlotHelper,
+            _is_facetgrid: bool,
+            ax=None,
+            _fg: "xr.plot.FacetGrid" = None,
+            **kwargs,
+        ):
+            """Wraps the single-axis plotting function and performs the
+            following additional operations before invoking it:
+
+                1. Sync the plot helper to the given axis (if faceting)
+                2. Evaluates ``drop_kwargs`` to reduce the passed arguments
+            """
+            # If this is called as part of a facet grid plot, we need to sync
+            # the helper to the given axis, otherwise the helper cannot be used
+            if _is_facetgrid:
+                hlpr.select_axis(ax=ax)
+
+            # Prepare kwargs, optionally dropping some keys that bloat the
+            # function signature ...
+            kwargs["_fg"] = _fg
+            kwargs["_is_facetgrid"] = _is_facetgrid
+            kwargs = {
+                k: v for k, v in kwargs.items() if k not in self.drop_kwargs
+            }
+
+            # Now invoke the single-axis plotting function
+            return plot_single_axis(*args, hlpr=hlpr, **kwargs)
+
+        # Get the mapping function
+        map_to_facet_grid = self.map_func
+
+        # Now, generate the facet-grid supporting function
+        def fgplot(
+            data,
+            *,
+            hlpr=None,
+            col: str = None,
+            row: str = None,
+            col_wrap: int = None,
+            sharex: bool = True,
+            sharey: bool = True,
+            figsize: tuple = None,
+            aspect: float = 1.0,
+            size: float = 3.0,
+            subplot_kws: dict = None,
+            **kwargs,
+        ):
+            """A facet-grid capable version of the given plot function.
+
+            Explicitly named arguments here are passed to the setup of the
+            :py:class:`xarray.plot.FacetGrid`; all ``kwargs`` are passed on to
+            the selected mapping function and subsequently: the wrapped
+            single-axis plot function.
+            """
+            # Without columns or rows, cannot use facet grid. Make a primitive
+            # plot instead, directly using the wrapped plot function.
+            if not col and not row:
+                log.debug("No `col` or `row` set. Not using a facet grid.")
+
+                kwargs = self.parse_wpf_kwargs(data, **kwargs)
+                log.debug(
+                    "Invoking single-axis plot function with kwargs:  %s",
+                    kwargs,
+                )
+
+                hlpr.setup_figure()  # TODO Find out why this is necessary ...
+                return wrapped_plot_func(
+                    data, hlpr=hlpr, _is_facetgrid=False, **kwargs
+                )
+
+            # Prepare facet grid and helper
+            log.debug(
+                "Setting up a facet grid (col: %s, row: %s) ...", col, row
+            )
+            fg = xr.plot.FacetGrid(
+                data,
+                col=col,
+                row=row,
+                col_wrap=col_wrap,
+                sharex=sharex,
+                sharey=sharey,
+                figsize=figsize,
+                aspect=aspect,
+                size=size,
+                subplot_kws=subplot_kws if subplot_kws else {},
+            )
+            hlpr.attach_figure_and_axes(fig=fg.fig, axes=fg.axs)
+
+            # Make the FacetGrid object available to the helper
+            hlpr._attrs["facet_grid"] = fg
+
+            # Parse arguments expected by wrapped plot function
+            kwargs = self.parse_wpf_kwargs(data, **kwargs)
+
+            # Prepare mapping keyword arguments and apply the mapping
+            log.debug("Invoking mapping function with kwargs  %s  ...", kwargs)
+            try:
+                map_to_facet_grid(
+                    fg, wrapped_plot_func, hlpr=hlpr, _fg=fg, **kwargs
+                )
+
+            except Exception as exc:
+                raise PlottingError(
+                    f"Failed mapping {type(data)} data to facet grid! Check "
+                    "the given arguments, dimensionality, dimension names, "
+                    "and whether the dimensions have coordinates associated.\n"
+                    f"Got a {type(exc).__name__}: {exc}"
+                ) from exc
+
+            # Return the FacetGrid object for further handling
+            return fg
+
+        # facet grid plot function constructed now.
+        # ... register it as a single-axis facet grid plot kind.
+        if self.register_as_kind:
+            if isinstance(self.register_as_kind, str):
+                regname = self.register_as_kind
+            else:
+                regname = plot_single_axis.__name__
+
+            if regname in _FACET_GRID_FUNCS or regname in _XR_PLOT_KINDS:
+                if not self.overwrite_existing:
+                    _in_use = ", ".join(
+                        list(_FACET_GRID_FUNCS) + list(_XR_PLOT_KINDS)
+                    )
+                    raise ValueError(
+                        f"The plot function name '{regname}' is already used! "
+                        "Either set `register_as_kind` to a different value, "
+                        "or set `overwrite_existing`. Registered functions: "
+                        f"{_in_use}"
+                    )
+
+            # Register the callable for the non-standalone case
+            _FACET_GRID_FUNCS[regname] = fgplot
+            log.debug("Registered '%s' as special facet grid kind.", regname)
+
+            _FACET_GRID_KINDS[regname] = (
+                self.encodings + self.DEFAULT_ENCODINGS
+            )
+            log.debug(
+                "Registered '%s' encodings:  %s",
+                regname,
+                _fmt_specs(_FACET_GRID_KINDS[regname]),
+            )
+
+        # Build the standalone plot function, which takes the place of the
+        # decorated plot function
+        @is_plot_func(use_dag=True, required_dag_tags=("data",))
+        def standalone(*, data: dict, hlpr: PlotHelper, **kwargs):
+            try:
+                return fgplot(data["data"], hlpr=hlpr, **kwargs)
+
+            except Exception as exc:
+                raise PlottingError(
+                    "Standalone facet grid plotting for plot function "
+                    f"'{plot_single_axis.__name__}' failed!\n"
+                    f"Got {type(exc).__name__}: {exc}\n\n"
+                    f"Given arguments:\n  {kwargs}\n\n"
+                    f"Selected data:\n  {str(data['data'])}\n"
+                ) from exc
+
+        return standalone
+
+
+# -----------------------------------------------------------------------------
+# -- Facet Grid ---------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
+
+@is_plot_func(
+    use_dag=True, required_dag_tags=("data",), supports_animation=True
+)
+def facet_grid(
+    *,
+    data: dict,
+    hlpr: PlotHelper,
+    kind: Union[str, dict] = None,
+    auto_encoding: Union[bool, dict] = False,
+    auto_encoding_options: dict = None,
+    title_kwargs: dict = None,
+    suptitle_kwargs: dict = None,
+    squeeze: bool = True,
+    drop_nonindexed_coords: bool = False,
+    sel: dict = None,
+    show_data: bool = False,
+    **plot_kwargs,
+):
+    """A generic facet grid plot function for high dimensional data.
+
+    This function calls the ``data['data'].plot`` function if no plot ``kind``
+    is given, otherwise ``data['data'].plot.<kind>``.
+    It is designed for `plotting with xarray objects <http://xarray.pydata.org/en/stable/plotting.html>`_,
+    i.e. :py:class:`xarray.DataArray` and :py:class:`xarray.Dataset`.
+    Specifying the kind of plot requires the data to be of one of those types
+    and have a dimensionality that can be represented in these plots. See
+    `the correponding API documentation <https://docs.xarray.dev/en/stable/api/plotting.html>`_ for more information.
+
+    In most cases, this function creates a so-called
+    :py:class:`xarray.plot.FacetGrid` object that automatically layouts and
+    chooses a visual representation that fits the dimensionality of the data.
+    To specify which data dimension should be represented in which way, it
+    supports a declarative syntax: via the optional keyword arguments ``x``,
+    ``y``, ``row``, ``col``, and/or ``hue`` (available options are listed in
+    the corresponding `plot function documentation <https://docs.xarray.dev/en/stable/api/plotting.html>`_),
+    the representation of the data dimensions can be selected.
+    In dantro, this is referred to as "layout encoding".
+
+    dantro not only wraps this interface, but adds the following functionality:
+
+        * the ``frames`` layout encoding argument, which behaves in the same
+          way as the other encodings, but leads to an *animation* being
+          generated, thus opening up one further dimension of representation;
+        * the ``files`` encoding, which triggers plot config updating and
+          thereby allows to represent data of arbitrary dimensionality; this is
+          achieved by performing a parameter sweep plot where each point
+          corresponds to a single plot file of a subspace of the data;
+        * the ``auto_encoding`` feature, which allows to assign layout-
+          encodings automatically, depending on dimensions and dimension
+          sizes of the data;
+        * the ``kind: 'auto'`` option, which can be used in conjunction
+          with ``auto_encoding`` to choose the plot kind automatically as well;
+        * the ``col_wrap: 'auto'`` option, which selects the value such that
+          the figure becomes more square-like (requires ``auto_encoding``);
+        * and allowing to register additional plot ``kind`` values that create
+          plots with a custom single-axis plotting function, using the
+          :py:class:`~dantro.plot.funcs.generic.make_facet_grid_plot`
+          decorator.
+
+    For details about auto-encoding and how the plot ``kind`` is chosen, see
+    :py:func:`~dantro.plot.funcs.generic.determine_encoding`
+    and :py:func:`~dantro.plot.funcs.generic.determine_plot_kind`.
+
+    .. note::
+
+        The way the plot data is labelled for the facet grid plot is very
+        important to understand how this plot function behaves.
+
+        **Background:**
+        One can distinguish different categories of xarray data dimensions,
+        most relevant for association of encodings: those *with* and those
+        *without* coordinate labels. If coordinates are available, the
+        corresponding dimension is called *indexed*, otherwise it is a
+        *non-indexed* dimension, no coordinate labels exist and hence only
+        trivial indexing is possible.
+
+        xarray objects may also contain additional (scalar) coordinate metadata
+        which has no relation to the data dimensions and is ignored here.
+
+        Furthermore, there can be additional non-scalar coordinates that *are*
+        associated with existing data dimensions, but are *not* acting as their
+        index; these run "in parallel" to the existing coordinates along that
+        dimension.
+
+
+    .. note::
+
+        When specifying ``frames``, the ``animation`` arguments also need to be
+        specified. See :ref:`here <pcr_pyplot_animations>` for more information
+        on the expected animation parameters.
+
+        The value of the ``animation.enabled`` key is not relevant for this
+        function; it will automatically enter or exit animation mode,
+        depending on whether the ``frames`` argument is given or not. This uses
+        the :ref:`animation mode switching <pcr_pyplot_animation_mode_switching>`
+        feature.
+
+    .. note::
+
+        Internally, this function by default call ``.squeeze`` on the selected
+        data (controlled by the ``squeeze`` argument), thus being more tolerant
+        with data that has size-1 dimension coordinates.
+        To suppress this behaviour, set the ``squeeze`` argument accordingly.
+
+    .. warning::
+
+        Depending on ``kind`` and the dimensionality of the data, some plot
+        functions might create their own figure, disregarding any previously
+        set up figure. This includes the figure from the plot helper.
+
+        To control figure aesthetics, you can either specify matplotlib RC
+        :ref:`style parameters <pcr_pyplot_style>` (via the ``style`` argument),
+        or you can use the ``plot_kwargs`` to pass arguments to the respective
+        plot functions. For the latter, refer to the respective documentation
+        to find out about available arguments.
+
+    Args:
+        data (dict): The data selected by the data transformation framework,
+            expecting the ``data`` key.
+        hlpr (PlotHelper): The plot helper
+        kind (str, optional): The kind of plot to use. Options are:
+            ``contourf``, ``contour``, ``imshow``, ``line``, ``pcolormesh``,
+            ``step``, ``hist``, ``scatter``, ``errorbars`` and any plot kinds
+            that were additionally registered via the
+            :py:class:`~dantro.plot.funcs.generic.make_facet_grid_plot`
+            decorator.
+            With ``auto``, dantro chooses an appropriate kind by itself; this
+            setting is useful when also using the ``auto_encoding`` feature;
+            see :ref:`dag_generic_facet_grid_auto_kind` for more information.
+            If None is given, xarray automatically determines it using the
+            dimensionality of the data, frequently falling back to ``hist``
+            for higher-dimensional data or lacking specifiers.
+        frames (str, optional): Data dimension from which to create animation
+            frames. If given, this results in the creation of an animation. If
+            not given, a single plot is generated. Note that this requires
+            ``animation`` options as part of the plot configuration.
+        auto_encoding (Union[bool, dict], optional): Whether to choose the
+            layout encoding options automatically. For further options, can
+            pass a dict. See :ref:`dag_generic_auto_encoding` for more info.
+        auto_encoding_options (dict, optional): Additional arguments for
+            :py:func:`~dantro.plot.funcs.generic.determine_encoding`.
+        title_kwargs (dict, optional): Keyword arguments passed on
+            :py:meth:`xarray.plot.FacetGrid.set_titles` to set the ``template``
+            (allowing ``{coord}`` and ``{value}`` placeholders), ``maxchar``
+            and other properties of the title strings.
+            Invoked only if a FacetGrid object is produced, i.e. if ``col``
+            and/or ``row`` encodings are used. If not given, FacetGrid still
+            invokes the same method, but then uses default arguments.
+        suptitle_kwargs (dict, optional): Keyword arguments passed on to the
+            PlotHelper's ``set_suptitle`` helper function. Only used if
+            animations are enabled. The ``title`` entry can be a format string
+            with the following keys, which are updated for each frame of the
+            animation: ``dim``, ``value``. Default: ``{dim:} = {value:.3g}``.
+        squeeze (bool, optional): whether to squeeze the data before plotting,
+            such that size-1 dimensions do not take up encoding dimensions.
+        drop_nonindexed_coords (bool, optional): If true, non-indexed
+            coordinates will be dropped.
+        sel (dict, optional): A selector dict that is applied to the data to
+            use only a subset of it for the plot; passed to
+            :py:meth:`xarray.Dataset.sel` or :py:meth:`xarray.DataArray.sel`.
+            Note that this requires the data to have indexed dimensions.
+        show_data (bool, optional): If true, shows the head of the data that
+            will be used for plotting.
+        **plot_kwargs: Passed on to ``<data>.plot`` or ``<data>.plot.<kind>``
+            These should include the layout encoding specifiers (``x``, ``y``,
+            ``hue``, ``col``, ``row``, ``frames``, ``files``, ...).
+
+    Raises:
+        AttributeError: Upon unsupported ``kind`` value
+        ValueError: Upon *any* upstream error in invocation of the xarray
+            plotting capabilities. This wraps the given error message and
+            provides additional information that helps to track down why the
+            plotting failed.
+        UpdatePlotConfig: To rewrite the plot configuration and restart this
+            plot with a new configuration.
+        EnterAnimationMode: To enter animation mode if not already in it.
+        ExitAnimationMode: To exit animation mode if unnecessarily in it.
+    """
+    import matplotlib.pyplot as plt
+
+    # Make sure to have the latest module-level variables available here; this
+    # is important to ensure that those `kind`s registered by the
+    # make_facet_grid_plot decorator are available here.
+    from .generic import _FACET_GRID_FUNCS, _FACET_GRID_KINDS
+
+    # .........................................................................
+    def plot_frame(
+        _d, *, kind: str, plot_kwargs: dict, groupby_dim: str = None
+    ):
+        """Plot a FacetGrid frame"""
+        # Prepare data, getting rid of size-1 dimensions resulting from
+        # a potential outside groupby operation.
+        # Importantly, other dimensions should not be squeezed out here!
+        if groupby_dim:
+            _d = _d.squeeze(groupby_dim)
+
+        # Retrieve the generic or specialized plot function, depending on kind
+        if kind is None:
+            plot_func = _d.plot
+
+        elif kind in _FACET_GRID_FUNCS:
+            _plot_func = _FACET_GRID_FUNCS[kind]
+
+            # Bind the data and helper to the function
+            plot_func = _partial(_plot_func, _d, hlpr=hlpr)
+
+        else:
+            try:
+                plot_func = getattr(_d.plot, kind)
+
+            except AttributeError as err:
+                _available_xr = ", ".join(_XR_PLOT_KINDS)
+                _available_dtr = ", ".join(_FACET_GRID_FUNCS)
+                raise AttributeError(
+                    f"The plot kind '{kind}' seems not to be available for "
+                    f"data of type {type(_d)}! Please check the documentation "
+                    "regarding the expected data types. For xarray data "
+                    f"structures, valid choices are:  {_available_xr}.\n"
+                    "Additionally, the following facet grid kinds were "
+                    f"registered from within dantro:  {_available_dtr}"
+                ) from err
+
+        # Make sure to work on a fully cleared figure. This is important for
+        # *some* specialized plot functions and for certain dimensionality of
+        # the data: in these specific cases, an existing figure can be
+        # re-used, in some cases leading to plotting artifacts.
+        # In other cases, a new figure is opened by the plot function. The
+        # currently attached helper figure is then discarded below.
+        hlpr.fig.clear()
+
+        # Invoke the specialized plot function, taking care that no figures
+        # that are additionally created survive beyond that point, which would
+        # lead to figure leakage, gobbling up memory.
+        with figure_leak_prevention(close_current_fig_on_raise=True):
+            try:
+                rv = plot_func(**plot_kwargs)
+
+            except Exception as exc:
+                raise PlottingError(
+                    "facet_grid plotting failed, most probably because the "
+                    "dimensionality of the data, the chosen plot kind "
+                    f"({kind}) and the specified layout encoding were not "
+                    "compatible or because the selected data was missing "
+                    "coordinates for one or more dimensions.\n"
+                    "For debugging, inspect the chained traceback and the "
+                    "information below.\n\n"
+                    f"The upstream error was a {type(exc).__name__}: {exc}\n\n"
+                    f"xr.plot.FacetGrid arguments:\n  {plot_kwargs}\n\n"
+                    f"Data:\n  {str(_d)}\n"
+                ) from exc
+        # NOTE rv usually is a xarray.FaceGrid object but not always: `hist`
+        #      returns what matplotlib.pyplot.hist returns.
+        #      This leads to the question why `hist`s do not seem to be
+        #      possible in `xarray.FacetGrid`s, although they would be useful?
+        #      Gaining a deeper understanding of this issue and corresponding
+        #      xarray functionality is something to investigate in the future.
+
+        # Determine which figure and axes to attach to the PlotHelper.
+        # This is necessary because a figure might have been created in the
+        # invoked plot function and we need to make sure that we attach it
+        # correctly, otherwise there will be no plot output.
+        if isinstance(rv, xr.plot.FacetGrid):
+            fig = rv.fig
+            axes = rv.axs
+
+            # Allow re-writing the axis titles with custom kwargs
+            if title_kwargs is not None:
+                rv.set_titles(**title_kwargs)
+        else:
+            # Use the currently set figure and its axes.
+            fig = plt.gcf()
+            axes = plt.gca()
+
+        # When now attaching the new figure and axes, the previously existing
+        # figure (the one .clear()-ed above) is closed and discarded.
+        # If the figure extracted here is identical to the already-associated
+        # figure, nothing happens.
+        hlpr.attach_figure_and_axes(fig=fig, axes=axes, skip_if_identical=True)
+
+        # Store the FacetGrid instance for potential later manipulation
+        hlpr._attrs["facet_grid"] = rv
+
+        # Done with this frame now.
+
+    def set_suptitle_kwargs(
+        st_kwargs: dict, dim: str, value: Any, suptitle_warning_issued
+    ) -> Tuple[dict, bool]:
+        try:
+            st_kwargs["title"] = st_kwargs["title"].format(
+                dim=dim, value=value
+            )
+        except Exception as exc:
+            # Warn (once)
+            if not suptitle_warning_issued:
+                log.caution(
+                    "Failed to format suptitle using '%s'! Got %s: %s",
+                    st_kwargs["title"],
+                    type(exc).__name__,
+                    exc,
+                )
+                log.remark(
+                    "Falling back to string-based formatting "
+                    "(not warning again)."
+                )
+                suptitle_warning_issued = True
+
+            # Fall back to string-based format
+            st_kwargs["title"] = "{dim:s} = {value:s}".format(
+                dim=dim, value=value
+            )
+
+        return st_kwargs, suptitle_warning_issued
+
+    # Actual plotting routine starts here .....................................
+    # Get the Dataset, DataArray, or other compatible data
+    d = data["data"]
+
+    # .. Prepare data . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+    log.note("Preparing data for facet grid plot ...")
+    if show_data:
+        log.remark("%s", d.head())
+
+    # Can apply a data subselection
+    if sel:
+        log.remark(
+            "Applying data selection:  %s",
+            ",  ".join(f"{dim}: {val}" for dim, val in sel.items()),
+        )
+        d = d.sel(**sel)
+
+    # Squeeze size-1 dimension coordinates to non-dimension coordinates
+    if squeeze and 1 in d.sizes.values():
+        log.remark(
+            "Squeezing ... (1-sized dimensions: %s)",
+            ", ".join(d for d, size in d.sizes.items() if size == 1),
+        )
+        d = d.squeeze()
+
+    # Drop unwanted non-indexed coordinates
+    nonindexed_coords = [c for c in d.coords if c not in d.indexes]
+    if nonindexed_coords and drop_nonindexed_coords:
+        log.remark(
+            "Dropping non-indexed coordinate variables:  %s",
+            ", ".join(nonindexed_coords),
+        )
+        d = d.drop_vars(nonindexed_coords)
+
+    # Determine kind and encoding, updating the plot kwargs accordingly.
+    # NOTE Need to pop all explicitly given specifiers in order to not have
+    #      them appear as part of plot_kwargs further downstream.
+    kind = determine_plot_kind(
+        d, kind=kind, default_kind_map=_AUTO_PLOT_KINDS, **plot_kwargs
+    )
+    plot_kwargs, (encoding, _, _) = determine_encoding(
+        d.sizes,
+        kind=kind,
+        auto_encoding=auto_encoding,
+        default_encodings=_FACET_GRID_KINDS,
+        data_vars=(list(d.data_vars) if hasattr(d, "data_vars") else None),
+        plot_kwargs=plot_kwargs,
+        return_encoding_info=True,
+        **(auto_encoding_options if auto_encoding_options else {}),
+    )
+    free = plot_kwargs.pop("free", None)  # TODO Should this be an argument?
+    frames = plot_kwargs.pop("frames", None)
+    files = plot_kwargs.pop("files", None)
+    _special_specs = ("free", "frames", "files")
+
+    if free:
+        free = (free,) if isinstance(free, str) else tuple(free)
+        log.remark("   deliberately free:    %s", ", ".join(free))
+
+    # Potentially perform files iteration
+    # This may leave the plotting function via a messaging exception; the next
+    # time we arrive here, `files` should no longer be set.
+    if files:
+        log.info(
+            "Initiating %d-dimensional files iteration:  %s",
+            len(files),
+            ", ".join(files),
+        )
+
+        # Build selector, including existing values
+        # TODO What about index selection?! May not always have coordinates
+        sel = build_pspace_selector(d, files, **(sel if sel else {}))
+
+        raise UpdatePlotConfig(
+            "facet_grid files iteration",
+            from_pspace=dict(sel=sel),
+            #
+            # Explicitly pass the encoding so it's not tinkered with again
+            **{s: d for s, d in encoding.items() if s not in _special_specs},
+            free=free,
+            frames=frames,
+            files=None,  # TODO Consider setting to some informative value
+        )
+
+    # Parse colorbar-related arguments
+    plot_kwargs = parse_cmap_and_norm_kwargs(**plot_kwargs)
+
+    # Done parsing arguments
+    log.note("Facet grid plot of kind '%s' now commencing ...", kind)
+
+    # If no animation is desired, the plotting routine is really simple
+    if not frames:
+        # Exit animation mode, if it was enabled. Then plot the figure. Done.
+        hlpr.disable_animation()
+        plot_frame(d, kind=kind, plot_kwargs=plot_kwargs)
+        return
+
+    # else: Animation is desired. Might have to enable it.
+    # If not already in animation mode, the plot function will be exited here
+    # and be invoked anew in animation mode. It will end up in this branch
+    # again, and will then be able to proceed past this point...
+    hlpr.enable_animation()
+
+    # Prepare some parameters for the update routine
+    suptitle_kwargs = suptitle_kwargs if suptitle_kwargs else {}
+    if "title" not in suptitle_kwargs:
+        suptitle_kwargs["title"] = "{dim:} = {value:.3g}"
+
+    # Define an animation update function. All frames are plotted therein.
+    # There is no need to plot the first frame _outside_ the update function,
+    # because it would be discarded anyway.
+    def update():
+        """The animation update function: a python generator"""
+        suptitle_warning_issued = False
+
+        # Go over all available frame data dimension
+        for f_value, f_data in d.groupby(frames):
+            # Plot a frame. It attaches the new figure and axes to the hlpr
+            plot_frame(
+                f_data, kind=kind, plot_kwargs=plot_kwargs, groupby_dim=frames
+            )
+
+            # Apply the suptitle format string and invoke the helper to set it
+            st_kwargs = copy.deepcopy(suptitle_kwargs)
+            st_kwargs, suptitle_warning_issued = set_suptitle_kwargs(
+                st_kwargs, frames, f_value, suptitle_warning_issued
+            )
+            hlpr.invoke_helper("set_suptitle", **st_kwargs)
+
+            # Done with this frame. Let the writer grab it.
+            yield
+
+    # Register the animation update with the helper
+    hlpr.register_animation_update(update, invoke_helpers_before_grab=True)
+
+
+# -- Additional facet-grid supporting plots -----------------------------------
+
+
+# TODO Should support errors along x as well!
+@make_facet_grid_plot(
+    map_as="dataset",
+    encodings=("x", "hue"),
+    supported_hue_styles=("discrete",),
+    #
+    # defaults
+    hue_style="discrete",
+    add_guide=False,
+)
+def errorbars(
+    ds: "xarray.Dataset",
+    *,
+    _is_facetgrid: bool,
+    hlpr: PlotHelper,
+    y: str,
+    yerr: str,
+    x: str = None,
+    hue: str = None,
+    hue_fstr: str = "{value:}",
+    use_bands: bool = False,
+    add_legend: bool = True,
+    **kwargs,
+):
+    """An errorbar plot supporting facet grid.
+
+    This function makes use of a decorator to implement faceting support:
+    :py:class:`~dantro.plot.funcs.generic.make_facet_grid_plot`.
+    It additionally registers this plot as an available plot ``kind`` in
+    :py:func:`~dantro.plot.funcs.generic.facet_grid`.
+
+    .. note::
+
+        This plot function is heavily wrapped by the decorator, which is why
+        not all functionality is exposed here. Instead, the arguments seen here
+        are those that apply to a *single* subplot of a facet grid.
+
+    Uses :py:func:`~dantro.plot.funcs._utils.plot_errorbar` for
+    plotting individual lines.
+
+    Args:
+        ds (xarray.Dataset): The dataset containing the errorbar data
+        _is_facetgrid (bool): Indicates whether this plot is called as part of
+            a facet grid or whether no faceting takes place (i.e. when neither
+            columns nor rows are available for faceting). In such a case, this
+            plot supplies metadata to the plot helper to draw axis labels etc.
+            (For internal use only, no need to pass this parameter.)
+        hlpr (PlotHelper): The plot helper, exposing the currently selected
+            axis via ``hlpr.ax``.
+        y (str): Which data variable to use for the y-axis values
+        yerr (str): Which data variable to use for the errorbars or bands
+        x (str, optional): Which data dimension to plot on the x-axis
+        hue (str, optional): Which data dimension to represent via hues
+        hue_fstr (str, optional): A format string that is used to build the
+            label of discrete hue encoding.
+        use_bands (bool, optional): Whether to use errorbands instead of bars.
+        add_legend (bool, optional): Whether to add a legend to the individual
+            plot or to the figure
+        **kwargs: Passed on to ``hlpr.ax.errorbar`` via
+            :py:func:`~dantro.plot.funcs._utils.plot_errorbar`.
+    """
+    # Prepare data
+    _y = ds[y]
+    _yerr = ds[yerr]
+
+    # Try to infer x, if not given
+    x = x if x else [dim for dim in _y.dims if dim not in (hue,)][0]
+    _x = ds.coords[x]
+
+    # If this is not a facet grid, still show some labels
+    if not _is_facetgrid:
+        # FIXME Should do this via helper, but not working (see #82)
+        # hlpr.provide_defaults("set_labels", x=x, y=f"{y} & {yerr}")
+
+        # Workaround:
+        hlpr.ax.set_xlabel(x)
+        hlpr.ax.set_ylabel(f"{y}, {yerr}")
+
+    # Case: No hue dimension -> plot single errorbar line
+    if hue is None:
+        _plot_errorbar(
+            ax=hlpr.ax,
+            x=_x,
+            y=_y,
+            yerr=_yerr,
+            fill_between=use_bands,
+            **kwargs,
+        )
+        return
+
+    # else: will plot multiple lines
+    # Keep track of legend handles and labels
+    _handles, _labels = [], []
+
+    # Group by the hue dimension and perform plots. To be a bit more permissive
+    # regarding data shape, squeeze out any additional dimensions that might
+    # have been left over.
+    def ordered_groupby(ds, dim):
+        for v in ds[dim].values:  # preserves existing order
+            yield (v, ds.sel({dim: v}, drop=False))
+
+    hue_iter = zip(
+        ordered_groupby(_y, hue),
+        ordered_groupby(_yerr, hue),
+    )
+
+    for (_y_coord, _y_vals), (_yerr_coord, _yerr_vals) in hue_iter:
+        _y_vals = _y_vals.squeeze(drop=True)
+        _yerr_vals = _yerr_vals.squeeze(drop=True)
+
+        label = hue_fstr.format(dim=hue, value=_y_coord)
+        handle = _plot_errorbar(
+            ax=hlpr.ax,
+            x=_x,
+            y=_y_vals,
+            yerr=_yerr_vals,
+            label=label,
+            fill_between=use_bands,
+            **kwargs,
+        )
+        _handles.append(handle)
+        _labels.append(label)
+
+    # Either do a single-axis legend or prepare for figure-level legend
+    if not _is_facetgrid:
+        if add_legend:
+            hlpr.ax.legend(_handles, _labels, title=hue)
+
+    else:
+        hlpr.track_handles_labels(_handles, _labels)
+        if add_legend:
+            hlpr.provide_defaults("set_figlegend", title=hue)
+
+
+# .............................................................................
+
+
+@make_facet_grid_plot(
+    map_as="dataset",
+    register_as_kind="scatter3d",
+    encodings=("hue", "markersize"),
+    supported_hue_styles=("continuous",),
+    parse_cmap_and_norm_kwargs=False,
+    # defaults
+    # hue_style="discrete",  # FIXME setting to 'discrete' fails, but shouldn't
+)
+def scatter3d(
+    ds: "xarray.Dataset",
+    *,
+    _is_facetgrid: bool,
+    hlpr: PlotHelper,
+    x: str,
+    y: str,
+    z: str,
+    hue: str = None,
+    markersize: Union[float, str] = None,
+    size_mapping: dict = None,
+    cmap: Union[str, dict, mcolors.Colormap] = None,
+    norm: Union[str, dict, mcolors.Normalize] = None,
+    vmin: float = None,
+    vmax: float = None,
+    add_colorbar: bool = True,
+    cbar_kwargs: dict = None,
+    **kwargs,
+):
+    """A 3-dimensional scatter plot supporting facet grid.
+
+    This function makes use of a decorator to implement faceting support:
+    :py:class:`~dantro.plot.funcs.generic.make_facet_grid_plot`.
+    It additionally registers this plot as an available plot ``kind`` in
+    :py:func:`~dantro.plot.funcs.generic.facet_grid`.
+
+    .. note::
+
+        This plot relies on the figure projection having been set to 3D,
+        which can be achieved via:
+
+        .. code-block:: yaml
+
+            my_3d_plot:
+              # ...
+              # for faceting:
+              subplot_kws: &projection
+                projection: 3d
+
+              # for single plot:
+              helpers:
+                set_figure:
+                  subplot_kw:  # sic
+                    <<: *projection
+
+        There *may* also be a base plot configuration that does this.
+
+    .. warning::
+
+        Support of :ref:`auto-encoding <dag_generic_auto_encoding>` and of the
+        ``hue`` and ``markersize`` encodings is not as general as it could be.
+        If you get dimensionality- or size-related errors, that's probably due
+        to an incompatible combination of encodings.
+
+    .. note::
+
+        This plot function is heavily wrapped by the decorator, which is why
+        not all functionality is exposed here. Instead, the arguments seen here
+        are those that apply to a *single* subplot of a facet grid.
+
+    Args:
+        ds (xarray.Dataset): The dataset containing the data
+        _is_facetgrid (bool): Indicates whether this plot is called as part of
+            a facet grid or whether no faceting takes place (i.e. when neither
+            columns nor rows are available for faceting). In such a case, this
+            plot supplies metadata to the plot helper to draw axis labels etc.
+            (For internal use only, no need to pass this parameter.)
+        hlpr (PlotHelper): The plot helper, exposing the currently selected
+            axis via ``hlpr.ax``.
+        x (str): Which data variable to plot on the x-axis
+        y (str): Which data variable to plot on the y-axis
+        z (str): Which data variable to plot on the z-axis
+        hue (str, optional): Which dimension or variable to represent via hues
+        markersize: (str, optional): Which data *dimension* to plot using the
+            markersize. Note that if ``hue`` is given this needs to match the
+            size of that dimension.
+            Whether using data *variables*  here depends on the dimensionality
+            of the data; don't be surprised by a cryptic error message from
+            deep within xarray.
+        size_mapping: (dict, optional): A dictionary containing the facet grid
+            ``size_mapping``. Is overwritten by ``markersize``, if passed.
+        cmap (Union[str, dict, matplotlib.colors.Colormap], optional): The
+            colormap, passed to the
+            :py:class:`~dantro.plot.utils.color_mngr.ColorManager`.
+        norm (Union[str, dict, matplotlib.colors.Normalize], optional):
+            The norm that is applied for the color-mapping.
+        vmin (float, optional): The lower bound of the color-mapping,
+            passed to the
+            :py:class:`~dantro.plot.utils.color_mngr.ColorManager`.
+            Ignored if norm evaluates to ``BoundaryNorm``.
+        vmax (float, optional): The upper bound of the color-mapping,
+            passed to the
+            :py:class:`~dantro.plot.utils.color_mngr.ColorManager`.
+            Ignored if norm evaluates to ``BoundaryNorm``.
+        add_colorbar (bool, optional): Whether to add a colorbar
+        cbar_kwargs (dict, optional): Arguments for colorbar creation.
+        **kwargs: Passed on to :py:func:`matplotlib.axes.Axes.scatter` or, if
+            ``z`` is given, the equivalent 3D axes.
+
+    Raises:
+        AttributeError: If the active axes does not have a ``zaxis``.
+            In that case, you probably forgot to set the figure's projection,
+            see above.
+    """
+
+    def get_var(v: str) -> xr.DataArray:
+        """Retrieves a data variable from the dataset, making some checks"""
+        d = ds[v]
+        if d.ndim != 1:
+            raise ValueError(
+                f"Unexpected data dimensionality for variable '{v}'! "
+                "On the subplot-level, data variables should be 1D, but "
+                f"ds['{v}'] was {d.ndim}-dimensional: {dict(d.sizes)}"
+            )
+        return d
+
+    if not hasattr(hlpr.ax, "zaxis"):
+        raise AttributeError(
+            "Missing z-axis! Did you set the "
+            "projection (via `subplot_kws` or `setup_figure` helper)?"
+        )
+
+    cm = ColorManager(
+        cmap=cmap,
+        norm=norm,
+        vmin=vmin,
+        vmax=vmax,
+    )
+
+    shared_kwargs = dict(
+        c=get_var(hue) if hue is not None else None,
+        cmap=cm.cmap if cmap is not None else None,
+        norm=cm.norm if norm is not None else None,
+        vmin=vmin if norm is None else None,
+        vmax=vmax if norm is None else None,
+    )
+
+    # Add the 's' key to the kwargs. If both size_mapping and markersize are
+    # passed, 'markersize' will take precedent.
+    if size_mapping is not None:
+        shared_kwargs["s"] = size_mapping.values
+
+    if not _is_facetgrid and markersize is not None:
+        shared_kwargs["s"] = get_var(markersize).values
+
+    im = hlpr.ax.scatter(
+        get_var(x),
+        get_var(y),
+        get_var(z),
+        **shared_kwargs,
+        **kwargs,
+    )
+
+    # Postprocess
+    if not _is_facetgrid and hue is not None and add_colorbar:
+        # TODO This should read information from the FacetGrid's cbar_kwargs,
+        #      which are also parsed there...
+        cm.create_cbar(
+            im,
+            fig=hlpr.fig,
+            ax=hlpr.ax,
+            **(cbar_kwargs if cbar_kwargs else {}),
+        )
+
+    # FIXME Should do this via helper, but not working (see #82)
+    # hlpr.provide_defaults("set_labels", x=x, y=y, z=z)
+    hlpr.ax.set_xlabel(x)
+    hlpr.ax.set_ylabel(y)
+    hlpr.ax.set_zlabel(z)
+
+    return im
