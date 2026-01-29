@@ -1,0 +1,24 @@
+from django.apps import AppConfig
+from django.db.models.signals import post_migrate
+from django.utils.translation import gettext as _
+
+
+def create_django_cad_inspector_group(sender, **kwargs):
+    from django.contrib.auth.models import Group, Permission
+    from django.contrib.contenttypes.models import ContentType
+
+    grp, created = Group.objects.get_or_create(name=_("Dj CAD Inspector"))
+    if created:
+        types = ContentType.objects.filter(
+            app_label="django_cad_inspector"
+        ).values_list("id", flat=True)
+        permissions = Permission.objects.filter(content_type_id__in=types)
+        grp.permissions.set(permissions)
+
+
+class django_cad_inspectorConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "django_cad_inspector"
+
+    def ready(self):
+        post_migrate.connect(create_django_cad_inspector_group, sender=self)
