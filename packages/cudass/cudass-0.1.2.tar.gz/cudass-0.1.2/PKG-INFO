@@ -1,0 +1,81 @@
+Metadata-Version: 2.4
+Name: cudass
+Version: 0.1.2
+Summary: High-performance CUDA sparse linear solver
+Author: Rui Yao
+License: Apache-2.0
+Project-URL: Homepage, https://github.com/MoCA-Technion/cudass
+Project-URL: Repository, https://github.com/MoCA-Technion/cudass
+Project-URL: Documentation, https://moca-technion.github.io/cudass/
+Keywords: cuda,sparse,linear solver,pytorch,cudss,cusolver
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Mathematics
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+License-File: NOTICE
+Requires-Dist: torch>=2.0
+Requires-Dist: nvidia-cudss-cu12>=0.6
+Provides-Extra: test
+Requires-Dist: pytest>=7.0; extra == "test"
+Requires-Dist: pytest-cov; extra == "test"
+Provides-Extra: docs
+Requires-Dist: sphinx>=5.0; extra == "docs"
+Requires-Dist: furo; extra == "docs"
+Provides-Extra: dev
+Requires-Dist: ruff; extra == "dev"
+Requires-Dist: darglint; extra == "dev"
+Dynamic: license-file
+
+# cudass
+
+High-performance CUDA sparse linear solver supporting multiple matrix types, cuDSS, cuSOLVER Dense, and cuSolverSp backends.
+
+**Docs:** [https://moca-technion.github.io/cudass/](https://moca-technion.github.io/cudass/)
+
+## Requirements
+
+- **PyTorch >= 2.0** with CUDA (from [pytorch.org](https://pytorch.org)).
+- **nvidia-cudss-cu12** or **nvidia-cudss-cu13** (>=0.6), chosen from `torch.version.cuda` (override: `CUDASS_CUDA_MAJOR=12` or `13`). Install or let the build install it.
+- NVIDIA GPU and a driver compatible with your PyTorch CUDA (12.x or 13.x).
+
+## Installation
+
+### From PyPI (recommended)
+
+```bash
+pip install cudass
+```
+
+Builds from the sdist at install time. Requires **nvcc** (CUDA toolkit) on your system; the build pulls in Cython and torch, and picks `nvidia-cudss-cu12` or `cu13` from your PyTorch’s CUDA.
+
+### From source
+
+```bash
+pip install torch Cython   # nvidia-cudss-cu12 or cu13 is chosen from torch.version.cuda
+# nvcc (CUDA toolkit): set CUDA_HOME or e.g. module load cuda/12.4 or cuda/13.0
+pip install -e .
+# Override: CUDASS_CUDA_MAJOR=13 pip install -e .  for CUDA 13
+```
+
+## Quick Start
+
+```python
+from cudass import CUDASparseSolver, MatrixType
+
+solver = CUDASparseSolver(matrix_type=MatrixType.SPD, use_cache=True)
+solver.update_matrix((index, value, m, n))
+x = solver.solve(b)
+```
+
+## License
+
+Apache 2.0. See [LICENSE](LICENSE).
+
+This project uses third-party packages (e.g. PyTorch, NVIDIA cuDSS, Cython) and optional libraries (e.g. nvmath). See [NOTICE](NOTICE) for attributions and a pointer to their licenses. Your use of those components is subject to their terms.
