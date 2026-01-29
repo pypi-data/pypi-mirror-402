@@ -1,0 +1,50 @@
+# VIXRHeston
+
+**VIXRHeston** is a lightweight Python package for computing the **VIX term structure** in a **rough Heston–type** setting via a **Markovian (lifted Heston) approximation**. Leveraging the key theoretical result that, under the lifted model, the **squared VIX** can be expressed **analytically** (in particular, as a linear function of the Markovian variance components), the package evaluates the quantity
+
+VIX^2_{t,τ} = (1/τ) ∫_{t}^{t+τ} E_t[V_s] ds
+
+efficiently across maturities, without requiring nested Monte Carlo simulation. This enables fast generation of the full VIX term structure and is suitable for calibration workflows where repeated VIX evaluations are needed.
+
+### Rough Heston dynamics (risk-neutral)
+
+Under the risk-neutral measure \( \mathbb{Q} \), the rough Heston model specifies the index and variance dynamics as
+[
+\frac{dS_t}{S_t} = r\,dt + \sqrt{V_t}\,dB_t,
+]
+[
+V_t = g_0(t) + \int_0^t K(t-s)\Big(\lambda(\theta - V_s)\,ds + \nu\sqrt{V_s}\,dW_s\Big),
+]
+where \(B_t\) and \(W_t\) are Brownian motions with instantaneous correlation \(dB_t\,dW_t=\rho\,dt\).  
+Here \(r\) is the risk-free rate, \(\lambda\) is the mean-reversion speed, \(\theta\) is the long-run variance level, \(\nu\) is the vol-of-vol, and \(K(\cdot)\) is a fractional (rough) kernel (typically of the form \(K(u)\propto u^{H-\frac12}\) with Hurst index \(H\in(0,\tfrac12)\)). The deterministic function \(g_0(t)\) encodes the forward variance curve / initial variance condition.
+
+## Installation
+
+### From PyPI
+```bash
+pip install VIXRHeston
+```
+
+## Quick start
+
+```python
+import numpy as np
+from VIXRHeston import vec_c, vec_x
+from VIXRHeston import squared_VIX
+
+H,n = 0.1,2
+alpha, rn= H+0.5, 1+10*(1/(n)**0.9)
+c, x = vec_c(n,rn,alpha), vec_x(n,rn,alpha)
+t, tau = 0, 1/12
+rho, lamb,theta,nu,V0 = -0.7,0.1,0.03,0.3, 0.01
+VIX2 = squared_VIX(t, c, x, V0,lamb,theta,nu,rho, tau)
+VIX  = np.sqrt(VIX2)
+print(VIX)
+```
+
+## License
+MIT License. See `LICENSE`.
+
+## References
+
+Ye, Y., Fan, Z., & Kwok, Y. K. (2026). *VIX term structure in the rough Heston model via Markovian approximation*. *Journal of Futures Markets*, forthcoming.
