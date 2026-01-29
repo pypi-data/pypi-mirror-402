@@ -1,0 +1,3 @@
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QFrame
+class PyDiv:
+    def __init__(self, color): ...
