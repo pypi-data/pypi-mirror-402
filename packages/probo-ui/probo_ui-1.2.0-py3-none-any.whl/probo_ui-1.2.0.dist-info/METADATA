@@ -1,0 +1,374 @@
+Metadata-Version: 2.4
+Name: probo-ui
+Version: 1.2.0
+Summary: A declarative, type-safe ,Python-Native template Rendering Framework and Meta-framework for Django.
+Project-URL: Homepage, https://github.com/MojahiD-0-YouneSS/probo
+Project-URL: Bug Tracker, https://github.com/MojahiD-0-YouneSS/probo/issues
+Project-URL: Documentation, https://MojahiD-0-YouneSS.github.io/probo/
+Project-URL: Funding, https://ko-fi.com/youness_mojahid
+Author-email: Youness Mojahid <mojahidyouness0@gmail.com>
+License: MIT License
+        
+        Copyright (c) 2025 YOUNESS MOJAHID
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+License-File: LICENSE
+Classifier: Framework :: Django
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Topic :: Internet :: WWW/HTTP :: Dynamic Content
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.9
+Requires-Dist: beautifulsoup4>=4.14.2
+Requires-Dist: cssutils>=2.11.1
+Requires-Dist: django>=4.2.27
+Requires-Dist: lxml>=4.9.0
+Requires-Dist: pytest-django>=4.11.1
+Requires-Dist: pytest>=8.4.2
+Requires-Dist: rich>=13.0.0
+Requires-Dist: tinycss2>=1.2.0
+Requires-Dist: typer>=0.9.0
+Description-Content-Type: text/markdown
+
+# Probo UI (PUI) v1.1.0 Documentation
+
+Probo allows you to build type-safe, server-side rendered HTML components in Python with built-in state management and JIT CSS generation.
+
+## 1. Basic HTML Generation (Functional API)
+
+The simplest way to use Probo is through its functional tags. This replaces writing raw HTML strings.
+
+Goal: Create the "Logo Section" from your example.
+
+```python
+from probo import div, img, h2, span
+
+def logo_component():
+    return div(
+        img(
+            src="./user/Images/logo.jpg", 
+            alt="logo", 
+            width="80px",
+        ),
+        h2(
+            span("CLUB"), 
+            "BAC",
+        ),
+        Class="log_logo",
+    )
+
+# Render to string
+print(logo_component())
+
+
+Output:
+
+<div class="log_logo">
+    <img src="./user/Images/logo.jpg" alt="logo" width="80px" />
+    <h2><span>CLUB</span>BAC</h2>
+</div>
+```
+
+## 2. The Component Class (Static)
+
+For reusable UI parts, use the Component class. This allows you to manage templates and CSS boundaries.
+
+Goal: Create the "Sign Up Form" container.
+```python
+from probo.components.component import Component
+from probo import div, form, h2, Input, button
+
+
+# 1. Define the internal structure (template)
+# The template is built using functional HTML helpers
+def signup_template():
+    return form(
+        h2("Sign Up"),
+        # Name fields
+        div(
+            Input(type="text", placeholder="First Name", required=True),
+            Input(type="text", placeholder="Last Name", required=True),
+            Class="input-box1",
+        ),
+        # Submit button
+        button(
+            "Sign Up",
+            type="submit",
+            Class="btn",
+            onclick="login()",
+        ),
+    )
+
+
+# 2. Create the Component
+# The template is passed as rendered HTML
+signup_comp = Component(
+    name="SignUpCard",
+    template=signup_template(),
+)
+
+
+# 3. Set a root element (optional)
+signup_comp.set_root_element(
+    "div",
+    Class="sign",
+)
+
+
+# 4. Render
+html = signup_comp.render()
+print(html)
+```
+
+## 3. Adding State (Dynamic Components)
+
+Probo Components become powerful when you add State. This allows you to inject data dynamically without string formatting hacks.
+
+Goal: Make the "Welcome" header dynamic.
+
+## Step 1: Define Element State
+
+`ElementState` is used to create **smart placeholders** inside templates.
+During rendering, each placeholder is replaced with data resolved
+from the component state.
+
+```python
+from probo.components.state import ElementState
+from probo import h1, span
+
+# 1. Define Element States
+
+# Resolve value from static state (s_data["club_name"])
+es_club_name = ElementState(
+    "span",
+    s_state="club_name",
+    Class="highlight",
+)
+
+# Resolve value from dynamic state (d_data["welcome_msg"])
+# If missing, the element will not be rendered
+es_message = ElementState(
+    "h1",
+    d_state="welcome_msg",
+    strict_dynamic=True,
+)
+
+# Resolve value using both static and dynamic state
+# Priority: d_state > s_state
+# If strict_dynamic=True and d_state is missing, the element is skipped
+es_message_both = ElementState(
+    "h1",
+    s_state="welcome_fallback",
+    d_state="welcome_override",
+    strict_dynamic=True,
+)
+
+```
+
+## Step 2: Create Component State
+
+The `ComponentState` acts as the "brain" of the component.
+It holds static and dynamic data and resolves which values are injected
+into each `ElementState` during rendering.
+```python
+from probo.components.state import ComponentState
+
+# 2. Define Component State
+state = ComponentState(
+    # Register ElementState instances
+    es_club_name,
+    es_message,
+    es_message_both,
+
+    # Static Data (Defaults / Fallbacks)
+    s_data={
+        "club_name": "The Biologists in Action Club",
+    },
+
+    # Dynamic Data (e.g. from a view or database)
+    d_data={
+        "welcome_msg": "Jack the admin says: Welcome !!",
+    },
+)
+
+```
+## Step 3: Wire it Together
+
+We construct the template using placeholders generated by `ElementState`.
+Each `ElementState.placeholder` is replaced with resolved data during render.
+
+```python
+from probo.components.component import Component
+from probo.components.state import ElementState, ComponentState
+from probo import section
+
+# 1. Define Element States
+es_message = ElementState(
+    "h1",
+    d_state="welcome_msg",
+    strict_dynamic=True,
+)
+
+es_message_both = ElementState(
+    "h1",
+    s_state="welcome_fallback",
+    d_state="welcome_override",
+    strict_dynamic=True,
+)
+
+es_club_name = ElementState(
+    "span",
+    s_state="club_name",
+    Class="highlight",
+)
+
+# 2. Create Component State (data + element bindings)
+state = ComponentState(
+    es_message,
+    es_message_both,
+    es_club_name,
+    s_data={
+        "club_name": "The Biologists in Action Club",
+        "welcome_fallback": "Welcome!",
+    },
+    d_data={
+        "welcome_msg": "Jack the admin says: Welcome !!",
+    },
+)
+
+# 3. Build Template using placeholders
+template_str = section(
+    es_message.placeholder,
+    es_message_both.placeholder,
+    es_club_name.placeholder,
+    Class="page",
+)
+
+# 4. Initialize Component
+page_component = Component(
+    name="HomePage",
+    template=template_str,
+    state=state,
+)
+
+# 5. Render
+html = page_component.render()
+print(html)
+
+```
+
+## 4. Styling (JIT CSS)
+
+Styling support in Probo UI is currently **experimental** and **not yet connected
+to the HTML rendering pipeline**.
+
+While low-level CSS building blocks such as `CssRule` exist, they are **not
+automatically injected** into the rendered output of `Component` or `Template`.
+
+As a result, CSS rules defined in Python are **not applied to the final HTML**
+at this stage.
+
+```python
+from probo.styles.plain_css import CssRule
+
+# CssRule objects represent validated CSS declarations
+btn_style = CssRule(
+    background_color="blue",
+    color="white",
+)
+
+input_style = CssRule(
+    padding="40px",
+    margin_bottom="10px",
+)
+
+# Note:
+# These rules are currently not applied automatically during render.
+# Styling APIs are under active development.
+```
+
+## 5. Full Architecture Example (The "shortcut")
+
+For the best developer experience, use the shortcut to wire everything in one go.
+```python
+from probo.shortcuts import (
+    component, 
+    ComponentConfig, 
+    StateConfig, 
+    StyleConfig, 
+    ElementStateConfig
+)
+
+from probo import div, form
+
+def build_signup_page():
+    # 1. Logic
+    title_state = ElementStateConfig(
+        tag='h2', 
+        s_state='form_title',
+    )
+    
+    
+    state_config = StateConfig(
+        s_data={
+            'form_title': 'Join the Club',
+        },
+        elements_state_config=[
+            title_state,
+        ],
+    )
+
+    # 2. Style
+    style_config = StyleConfig(
+        css = {
+            '.sign': {
+                'background': '#fff',
+                'padding': '2px',
+            },
+            # Since no input element exists in the template,
+            # this rule will be skipped automatically
+            'input': {
+                'width': '100%', 
+                'padding': '10px',
+            }, 
+        }
+    )
+
+    # 3. Component Configuration
+    config = ComponentConfig(
+        name="SignUpPage",
+        template=div(
+            title_state.config_id,
+            form('some form'),
+            Class="sign",
+        ),
+        state_config=state_config,
+        style_config=style_config,
+    )
+    # 4. Build Component
+    return component(config)
+
+print(build_signup_page())
+
+(
+    '<div class="sign"><form>some form</form></div>', 
+    '.sign { background:#fff; padding:2px; }'
+)
+```
