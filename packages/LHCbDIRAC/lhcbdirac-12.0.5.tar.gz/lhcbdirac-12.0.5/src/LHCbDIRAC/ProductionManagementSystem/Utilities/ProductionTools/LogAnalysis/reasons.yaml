@@ -1,0 +1,321 @@
+# LHCb Job Failure Reason Patterns
+# Order matters! Classes are checked in order of appearance.
+
+reasons:
+- name: FunctorCompilationFailure
+  base: WorkerNodeIssue
+  patterns:
+  - JIT compilation of functors failed
+  explanation: The JIT compilation of functors failed on the worker node.
+- name: FileTooLarge
+  base: RecoverableFailure
+  patterns:
+  - File too large
+  explanation: The file size limit was exceeded, likely due to a transient issue.
+- name: FailedToWriteBuffer
+  base: WorkerNodeIssue
+  patterns:
+  - error writing all requested bytes to file
+  - No space left on device
+  explanation: An error occurred while trying to write to a file, likely due to having ran out of disk space.
+- name: CVMFSCondDBIssue
+  base: WorkerNodeIssue
+  patterns:
+  - 'Load exception: .+, cannot find data for point .+'
+  - unable to open git repo:.+
+  - cannot open repository.+
+  explanation: Failed to load conditions data from CVMFS, likely due to a transient issue.
+- name: ApplicationEnvironmentIssue
+  base: RecoverableFailure
+  patterns:
+  - package .+ [^\s+]\s+not found
+  - Could not produce the environment, check the arguments
+  - 'MissingDataPackageError: cannot find data package '
+  explanation: The application environment could not be produced, likely due to a transient CVMFS issue.
+- name: XRDOperationExpired
+  base: RecoverableFailure
+  patterns:
+  - \[(ERROR|FATAL)\] Operation expired
+  explanation: 'If this is persistent it could be due to a bug in XRootD >=5.0.0,<5.4.0. If this is the case the production
+    needs to be switched to download input data.See: https://ggus.eu/index.php?mode=ticket_info&ticket_id=167456'
+- name: FilesystemIssue
+  base: RecoverableFailure
+  patterns:
+  - error reading from file [^ ]+ Stale file handle
+  explanation: An error occurred while trying to read from a file.
+- name: XRDIssue
+  base: RecoverableFailure
+  patterns:
+  - 'Error in <TNetXNGFile::Open>:.+
+
+    '
+  - \[(ERROR|FATAL)\] (Socket timeout|TLS error:|Server responded with an error)
+  - ERROR file [^\s]+ does not exist
+  - Redirect limit has been reached
+  - ERROR \[FATAL\] Hand shake failed
+  - ERROR \[FATAL\] Connection error
+  explanation: An error occurred while trying to open a file using XRootD.
+- name: UnknownRustPanic
+  base: UnknownFailure
+  patterns:
+  - 'thread ''[^'']+'' panicked at [^ ]+ .+(
+
+    .*)+thread caused non-unwinding panic\. aborting\.'
+  - thread '[^']+' panicked at [^ ]+ .+
+  explanation: A Rust panic occurred but no known cause was identified.
+- name: NoEventsInFile
+  base: KnownUnrecoverableFailure
+  patterns:
+  - Could not find TTree 'Event' in file '[^']+', file has no events
+  explanation: The input file has no events, this should be harmless but some LHCb releases are buggy.
+- name: Hlt1Corruption
+  base: KnownUnrecoverableFailure
+  patterns:
+  - ((HltSelRepRBHits|HltSelRepRBStdInfo) fails integrity check|Internal pointer out of range in HltSelRepRawBank)
+  - sub-bank index out of range in HltSelRepRawBank
+  explanation: The file was probably corrupted in HLT1 and is not recoverable.
+  issue_url: https://gitlab.cern.ch/lhcb/Allen/-/issues/534
+- name: Hlt1SegfaultDueToWrongCondDB
+  base: KnownUnrecoverableFailure
+  patterns:
+  - 'WARNING No PLUME bank found, will continue without PLUME decoding
+
+    [^
+
+    ]+had non-zero return value: 139'
+  explanation: A segmentation fault occurs in Allen when running Hlt1 on Monte Carlo data using an incorrect conditions database.
+  issue_url: https://gitlab.cern.ch/lhcb/Allen/-/issues/564
+- name: ResourceUnavailable
+  base: WorkerNodeIssue
+  patterns:
+  - Resource temporarily unavailable
+  explanation: Likely a transient network issue causing a CVMFS glitch.
+- name: EmptyVertexContainerInCalculateBestVertex
+  base: KnownUnrecoverableFailure
+  patterns:
+  - 'Sel::calculateBestVertex : Empty vertex container passed to Sel::calculateBestVertex\(\)'
+  explanation: See the issue, please suggest a better explanation for this message if you can.
+  issue_url: https://gitlab.cern.ch/lhcb/DaVinci/-/issues/163
+- name: UnsupportedCPU
+  base: RecoverableFailure
+  patterns:
+  - \*\*\* Break \*\*\* illegal instruction
+  explanation: The job crash because it was running on a CPU which does not support the required instruction set.
+- name: EventWatchdog
+  base: EventTimeout
+  patterns:
+  - EventWatchdog +WARNING More than \d+s since the last BeginEvent
+  - FATAL too much time on a single event
+  explanation: The job was killed because it took too long to process an event.
+- name: FIDMismatch
+  base: RecoverableFailureWithManualIntervention
+  patterns:
+  - ERROR FID mismatch:[^ ]+ != [^ ]+
+- name: MaybeCorruptedFile
+  base: RecoverableFailureWithManualIntervention
+  patterns:
+  - '(Error in <[^>]+>: |ERROR )File: .+ at byte:(\d+), branch:([^,]+), entry:(\d+), badread=[^,]+, nerrors=[^,]+, basketnumber=(\d+)
+
+    '
+  - 'R__unzipLZMA: error \d+ in lzma_code'
+  - Error R__unzip_header
+  - 'basket: has fNevBuf=\d+ but fEntryOffset=\d+, pos=\d+, len=\d+, fNbytes=\d+, fObjlen=\d+, trying to repair'
+- name: ConditionsDependencyHandlerError
+  base: RecoverableFailure
+  patterns:
+  - DependencyHandler\s+ERROR \+\+\+ Exception while creating dependent Condition
+- name: Hlt2Corruption
+  base: KnownUnrecoverableFailure
+  patterns:
+  - 'PackedBufferDecoder[^
+
+    ]+ERROR ByteBuffer\(\): requested a read beyond buffer size!'
+  - ERROR\s+Bad magic pattern in Tell1 bank
+  - Attempted out-of-range access to packed LHCbIDs
+  explanation: The file was probably corrupted in HLT2 and is not recoverable.
+  issue_url: https://gitlab.cern.ch/lhcb/Moore/-/issues/838
+- name: UnknownUnableToOpenFile
+  base: UnknownFailure
+  patterns:
+  - 'Cannot connect to database:'
+  explanation: Failed to open a file for an unknown reason.
+- name: ReportedFailureMoore952
+  base: KnownUnrecoverableFailure
+  patterns:
+  - 'ERROR\s+KeyedContainer : Cannot insert element to Keyed Container!'
+  explanation: No explanation available, please suggest a better explanation for this message if you can.
+  issue_url: https://gitlab.cern.ch/lhcb/Moore/-/issues/952
+- name: ReportedFailureMoore953
+  base: KnownUnrecoverableFailure
+  patterns:
+  - 'Unpack_Hlt2__Event_HLT2_[^\s]+\s+ERROR\s+LHCb::Packer::subrange: Container=''[^'']+'' \( size \d+ \) Bad Indices: first=\d+
+    last=\d+'
+  explanation: No explanation available, please suggest a better explanation for this message if you can.
+  issue_url: https://gitlab.cern.ch/lhcb/Moore/-/issues/953
+- name: ReportedFailureMoore954
+  base: KnownUnrecoverableFailure
+  patterns:
+  - 'Unpack_Hlt2__Event_HLT2_[^\s]+\s+ERROR\s+ByteBuffer\(\): requested a read beyond buffer size!'
+  explanation: No explanation available, please suggest a better explanation for this message if you can.
+  issue_url: https://gitlab.cern.ch/lhcb/Moore/-/issues/954
+- name: ReportedFailureMoore955
+  base: KnownUnrecoverableFailure
+  patterns:
+  - 'PackedBufferDecoder_Hlt2[\s]+ERROR virtual[^
+
+    ]+: Duplicate locationID'
+  explanation: No explanation available, please suggest a better explanation for this message if you can.
+  issue_url: https://gitlab.cern.ch/lhcb/Moore/-/issues/955
+- name: ReportedFailureMoore956
+  base: KnownUnrecoverableFailure
+  patterns:
+  - PackedBufferDecoder_Hlt2\s+WARNING No HltPackedData raw bank \(the DstData bank\) in raw event\.
+  explanation: No explanation available, please suggest a better explanation for this message if you can.
+  issue_url: https://gitlab.cern.ch/lhcb/Moore/-/issues/956
+- name: ReportedFailureMoore958
+  base: KnownUnrecoverableFailure
+  patterns:
+  - 'ERROR [^
+
+    ]+ : trying to derefernce nullptr'
+  explanation: No explanation available, please suggest a better explanation for this message if you can.
+  issue_url: https://gitlab.cern.ch/lhcb/Moore/-/issues/958
+- name: ReportedFailureDaVinci242
+  base: KnownUnrecoverableFailure
+  patterns:
+  - 'MCDecayTreeTuple:: Exception throw: get\(\):: No valid data at ''[^'']+/MC/Particles'''
+  explanation: No explanation available, please suggest a better explanation for this message if you can.
+  issue_url: https://gitlab.cern.ch/lhcb/DaVinci/-/issues/242
+- name: ReportedFailureLHCb391
+  base: KnownUnrecoverableFailure
+  patterns:
+  - ERROR Track type not handled\.
+  explanation: No explanation available, please suggest a better explanation for this message if you can.
+  issue_url: https://gitlab.cern.ch/lhcb/LHCb/-/issues/391
+- name: ReportedFailureDaVinci244
+  base: KnownUnrecoverableFailure
+  patterns:
+  - 'ERROR MuonRawBuffer:: Failed to find raw data \[MuonRec\]'
+  explanation: No explanation available, please suggest a better explanation for this message if you can.
+  issue_url: https://gitlab.cern.ch/lhcb/DaVinci/-/issues/244
+- name: ReportedFailureDaVinci249
+  base: KnownUnrecoverableFailure
+  patterns:
+  - 'ERROR [^
+
+    ]+LHCb::Event::posCovMatrix[^
+
+    ]+: null pointer not allowed at this point'
+  explanation: No explanation available, please suggest a better explanation for this message if you can.
+  issue_url: https://gitlab.cern.ch/lhcb/DaVinci/-/issues/249
+- name: BuggyArmProductions
+  base: RecoverableFailure
+  patterns:
+  - 'python: .*armv8\.1_a-el9-gcc13-dbg.*: Assertion.*failed.'
+  explanation: The initial DaVinci releases with arm platforms probably shouldn't have been picked up.
+- name: FatalGaudiError
+  base: UnknownFailure
+  patterns:
+  # Need to explicitly not match "FATAL segmentation violation" but can't use lookahead
+  - '\sFATAL\s[^s].*
+
+    (?:.+\s(FATAL|ERROR)\s.*
+
+    )*'
+  - '\sFATAL\ss[^e].*
+
+    (?:.+\s(FATAL|ERROR)\s.*
+
+    )*'
+  - '\sFATAL\sse[^g].*
+
+    (?:.+\s(FATAL|ERROR)\s.*
+
+    )*'
+  mixin: .reasons:FatalGaudiErrorMixin
+  explanation: A unrecognized fatal error occurred in Gaudi.
+- name: UnhandledCppExceptionThrown
+  base: UnknownFailure
+  patterns:
+  - 'terminate called after throwing an instance of.+\n(  .+\n)*'
+  explanation: An unhandled C++ exception was thrown.
+- name: UnknownSegmentationFaultWithTraceback
+  base: UnknownFailure
+  patterns:
+  - 'The lines below might hint at the cause of the crash[^=]+
+
+    (?:[^=].+
+
+    )*={5,}
+
+    (?:[^=].+
+
+    |
+
+    )*={5,}
+
+    '
+  mixin: .reasons:SegfaultTracebackMixin
+  explanation: A segmentation fault occurred
+- name: UnknownSegmentationFault
+  base: UnknownFailure
+  patterns:
+  - \*\*\* Break \*\*\* segmentation violation
+  explanation: A segmentation fault occurred but no additional information was found.
+- name: GenericPythonCrash
+  base: UnknownFailure
+  patterns:
+  - 'Traceback \(most recent call last\):.*
+
+    (\s+.+
+
+    )+[^\s].+
+
+    '
+  explanation: A Python traceback with no known cause.
+- name: BusError
+  base: WorkerNodeIssue
+  patterns:
+  - \*\*\* Break \*\*\* bus error
+  explanation: A bus error occurred, likely indicating a transient issue.
+- name: HeapCorruption
+  base: UnknownFailure
+  patterns:
+  - 'free\(\): invalid size'
+  - 'free\(\): invalid pointer'
+  - 'corrupted size vs. prev_size[^
+
+    ]*'
+  - 'double free or corruption \([^)]+\)'
+  - 'munmap_chunk\(\): invalid pointer'
+  - 'malloc\(\): unaligned tcache chunk detected'
+  - 'malloc\(\): smallbin double linked list corrupted'
+  - 'malloc\(\): corrupted top size'
+  - 'corrupted double-linked list'
+  explanation: Potentially a memory corruption issue, this should be investigated further.
+- name: MaybeOOMKiller
+  base: UnknownFailure
+  patterns:
+  - 'Child process \d+ had non-zero return value: 137'
+  explanation: The child process might have been killed by the OOM killer.
+- name: AttemptToFreeInvalidPointer
+  base: UnknownFailure
+  patterns:
+  - Attempt to free invalid pointer
+  - 'munmap_chunk\(\): invalid pointer'
+  explanation: Potentially a memory corruption issue, this should be investigated further.
+- name: Workarounds
+  base: UnknownFailure
+  patterns:
+  - Failed to create persistent N-tuple!
+  explanation: This an unknown failure
+- name: MaybeUnknownSegmentationFault
+  base: UnknownFailure
+  patterns:
+  - 'Child process \d+ had non-zero return value: 139'
+  explanation: A segmentation fault occurred but no additional information was found.
+- name: MaybeBadRead
+  base: UnknownFailure
+  patterns:
+  - The value of fObjlen is incorrect \([^\)]+\) ; trying to recover by setting it to zero
+  explanation: Probably a bad read from a file.
