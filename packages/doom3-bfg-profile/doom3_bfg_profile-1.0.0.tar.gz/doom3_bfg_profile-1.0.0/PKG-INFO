@@ -1,0 +1,100 @@
+Metadata-Version: 2.4
+Name: doom3_bfg_profile
+Version: 1.0.0
+Summary: A package for editing DOOM 3 BFG Edition profile.bin
+Project-URL: Homepage, https://github.com/andshrew/DOOM3-BFG-Profile
+Project-URL: Repository, https://github.com/andshrew/DOOM3-BFG-Profile.git
+Project-URL: GitHub, https://github.com/andshrew/DOOM3-BFG-Profile
+Project-URL: Issues, https://github.com/andshrew/DOOM3-BFG-Profile/issues
+Project-URL: Changelog, https://github.com/andshrew/DOOM3-BFG-Profile/releases
+Author-email: andshrew <7409326+andshrew@users.noreply.github.com>
+License: MIT
+License-File: LICENSE
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.8
+Provides-Extra: test
+Requires-Dist: pytest-cov>=4.0; extra == 'test'
+Requires-Dist: pytest>=7.0; extra == 'test'
+Description-Content-Type: text/markdown
+
+# DOOM 3 BFG Edition Profile
+
+DOOM 3 BFG Edition includes a `profile.bin` file in the users save data. This file includes (presumably) default console variable (CVar) settings, along with some additional data which appears to be default input mappings.  
+
+The file contains two checksums calculated from the contents of the data, so you cannot simply edit the file without knowing how to re-calculate the checksums otherwise the game will detect the file as corrupt on start-up and create a new `profile.bin`.  
+
+This Python package allows you to open a `profile.bin` file, make changes to it, and then write it back to disk with the correct checksums.
+
+## But why?
+I wanted to experiment with changing settings on console versions of the game, where access to the in-game console is not readily available. In the PlayStation 4 version of the game the `profile.bin` file is located within the users encrypted PS4 save data. With a jailbroken PS4 you can decrypt the save, edit the `profile.bin` file with this Python package and then re-encrypt the save data. The modified settings are now loaded by the game.
+
+## Installation
+```
+pip install doom3-bfg-profile
+```
+
+## Typical Usage
+
+* Create a `BFG_Profile` object by loading and parsing an existing `profile.bin`  
+* Add/change/remove console variable settings
+* Save the new `profile.bin` by calling `generate_profile()`
+
+### Limitations
+I was only interested in editing the console variables section of the `profile.bin` file. I have not investigated the section which appears to be default input mappings, so any `profile.bin` which contains such a section will have it re-created in the updated file as it originally was (identified as 'Extra Data' in the [`profile.bin` data structure](#profilebin-structure)).
+
+## Usage Examples
+
+### Create a `BFG_Profile` object and add the `com_showFPS` = `1` console variable
+```
+import doom3_bfg_profile as d3
+
+profile = d3.BFG_Profile('profile.bin')
+profile.add_config_item(d3.Config_Item('com_showFPS', '1'))
+profile.generate_profile()
+```
+
+A demo application is included in [`src/demo.py`](src/demo.py).
+
+## Reference
+
+### Profile.bin Structure
+
+| Data | Size | Description |
+| --- | --- | --- |
+| Checksum 1 | 4 bytes | MD5 based checksum of all subsequent data (written big endian)
+| Checksum 2 | 4 bytes | MD5 based checksum of all subsequent data (written big endian)
+| Header | 5 bytes | `80 94 CC A1 04`
+| Config Data Count | 1 byte | Total number of key pair values in Config Data
+| Config Data | Variable | `NULL` terminated key pair values<br>`com_showFPS\x00` `1\x00`
+| Config Footer | 19 bytes | 17x `00` + `C8 01`
+| Padding | 206 bytes | 205x `00` + `01`
+| Extra Data | Variable | Possibly default key bindings
+
+### Development
+
+_All commands after step 1 should be run from the root of the git repo_  
+
+**1. Clone the repo**
+```
+git clone git@github.com:andshrew/DOOM3-BFG-Profile.git
+```
+**2. Create and load a virtual python environment**
+```
+python -m venv .venv
+source .venv/bin/activate
+```
+**3. Upgrade pip**
+```
+pip install --upgrade pip
+```
+**4. Install the package in editable mode**
+```
+pip install -e ".[test]"
+```
+**5. Build the final package**
+```
+pip install build
+python -m build
+```
