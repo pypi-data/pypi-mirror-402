@@ -1,0 +1,91 @@
+<!-- Simple Markdown Preview Template -->
+<div class="issue-preview p-4 bg-white rounded" style="min-width: 900px; width: 100%">
+    <div class="alert alert-success">
+        <i class="bi bi-magic me-2"></i>
+        <strong>Generated Issue Preview</strong> - Review and edit the markdown before creating
+    </div>
+
+    <form id="issue-create-form"
+          hx-post="{% url 'django_issue_capture:create' %}"
+          hx-target="#issue-capture-container"
+          hx-swap="innerHTML">
+        {% csrf_token %}
+
+        <!-- Title -->
+        <div class="mb-3">
+            <label for="preview-title" class="form-label">
+                <strong>Title</strong>
+            </label>
+            <input type="text"
+                   class="form-control"
+                   id="preview-title"
+                   name="title"
+                   value="{{ generated.title }}"
+                   required>
+        </div>
+
+        <!-- Markdown Description -->
+        <div class="mb-3">
+            <label for="preview-description" class="form-label">
+                <strong>Issue Description (Markdown)</strong>
+            </label>
+            <textarea class="form-control font-monospace"
+                      id="preview-description"
+                      name="description"
+                      rows="20"
+                      style="font-size: 14px;"
+                      required>{{ generated.description }}</textarea>
+            <div class="form-text">Edit the markdown above. This will become your GitHub issue content.</div>
+        </div>
+
+        <!-- Hidden fields -->
+        <input type="hidden" name="creation_mode" value="ai_generated">
+        <input type="hidden" name="template" value="{{ template_name }}">
+        <input type="hidden" name="reported_url" value="{{ request.POST.reported_url|default:'' }}">
+
+        <!-- Action buttons -->
+        <div class="d-flex justify-content-between">
+            <button type="button" class="btn btn-outline-secondary" onclick="goBack()">
+                <i class="bi bi-arrow-left me-1"></i>Back
+            </button>
+
+            <div>
+                <button type="button" class="btn btn-outline-primary me-2" onclick="regenerateAll()">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Regenerate
+                </button>
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-check-lg me-1"></i>Create Issue
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+function regenerateAll() {
+    // Get current title and regenerate with original description
+    const currentTitle = document.getElementById('preview-title').value;
+
+    // Extract original description from current markdown (simple approach)
+    const currentMarkdown = document.getElementById('preview-description').value;
+    const descMatch = currentMarkdown.match(/Original.*?Description:\s*(.*?)(?=\n\n|\nIssue Type:|$)/s);
+    const originalDesc = descMatch ? descMatch[1].trim() : 'regenerate this issue';
+
+    const formData = new FormData();
+    formData.append('title', currentTitle);
+    formData.append('description', originalDesc);
+    formData.append('template', '{{ template_name }}');
+    formData.append('action', 'preview');
+
+    htmx.ajax('POST', '{% url "django_issue_capture:generate_comprehensive" %}', {
+        values: formData,
+        target: '#issue-capture-container',
+        swap: 'innerHTML'
+    });
+}
+
+function goBack() {
+    // Go back to the input form
+    window.location.reload();
+}
+</script>

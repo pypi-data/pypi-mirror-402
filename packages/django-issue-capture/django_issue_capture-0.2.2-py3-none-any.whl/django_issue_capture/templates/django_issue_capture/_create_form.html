@@ -1,0 +1,71 @@
+<!-- Issue Capture Form -->
+<div class="issue-capture-form p-3 border rounded bg-light">
+    <form hx-post="{% url 'django_issue_capture:create' %}"
+          hx-target="#issue-capture-container"
+          hx-swap="innerHTML">
+        {% csrf_token %}
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0">
+                <i class="bi bi-bug-fill text-danger me-2"></i>
+                Report Issue
+            </h5>
+            <button type="button" class="btn-close" onclick="closeIssueForm()"></button>
+        </div>
+
+        <div class="mb-3">
+            <label for="issue-title" class="form-label">Title <span class="text-danger">*</span></label>
+            <input type="text"
+                   class="form-control {% if errors.title %}is-invalid{% endif %}"
+                   id="issue-title"
+                   name="title"
+                   value="{{ title|default:'' }}"
+                   placeholder="Brief description of the issue"
+                   required>
+            {% if errors.title %}
+                <div class="invalid-feedback">{{ errors.title }}</div>
+            {% endif %}
+        </div>
+
+        <div class="mb-3">
+            <label for="issue-description" class="form-label">Description <span class="text-danger">*</span></label>
+            <textarea class="form-control {% if errors.description %}is-invalid{% endif %}"
+                      id="issue-description"
+                      name="description"
+                      rows="3"
+                      placeholder="Detailed description of the issue"
+                      required>{{ description|default:'' }}</textarea>
+            {% if errors.description %}
+                <div class="invalid-feedback">{{ errors.description }}</div>
+            {% endif %}
+        </div>
+
+        <div class="mb-3">
+            <label for="issue-priority" class="form-label">Priority</label>
+            <select class="form-select" id="issue-priority" name="priority">
+                <option value="low" {% if priority == 'low' %}selected{% endif %}>Low</option>
+                <option value="medium" {% if priority == 'medium' or not priority %}selected{% endif %}>Medium</option>
+                <option value="high" {% if priority == 'high' %}selected{% endif %}>High</option>
+                <option value="urgent" {% if priority == 'urgent' %}selected{% endif %}>Urgent</option>
+            </select>
+        </div>
+
+        <input type="hidden" name="reported_url" value="{{ reported_url }}">
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-danger">
+                <i class="bi bi-check-lg me-1"></i>
+                Create Issue
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="closeIssueForm()">
+                Cancel
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+function closeIssueForm() {
+    document.getElementById('issue-capture-container').innerHTML = '';
+}
+</script>

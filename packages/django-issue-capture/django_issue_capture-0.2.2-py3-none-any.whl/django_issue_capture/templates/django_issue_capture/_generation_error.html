@@ -1,0 +1,96 @@
+<!-- Generation Error Template -->
+<div class="generation-error p-4 bg-white rounded">
+    <div class="alert alert-danger">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <strong>AI Generation Failed</strong>
+        <p class="mb-2 mt-2">{{ error }}</p>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <h6 class="card-title">Your Input:</h6>
+            <p><strong>Title:</strong> {{ title|default:"(not provided)" }}</p>
+            <p><strong>Description:</strong> {{ description }}</p>
+            <p><strong>Type:</strong> {{ template_name|title }}</p>
+        </div>
+    </div>
+
+    <div class="mt-3 d-flex justify-content-between">
+        <button type="button" class="btn btn-outline-secondary" onclick="goBack()">
+            <i class="bi bi-arrow-left me-1"></i>Back to Form
+        </button>
+
+        <div>
+            <button type="button" class="btn btn-primary" onclick="retryGeneration()">
+                <i class="bi bi-arrow-clockwise me-1"></i>Try Again
+            </button>
+            <button type="button" class="btn btn-outline-primary" onclick="useStandardForm()">
+                <i class="bi bi-form me-1"></i>Use Standard Form Instead
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+function retryGeneration() {
+    // Retry the same generation request
+    const formData = new FormData();
+    formData.append('title', '{{ title }}');
+    formData.append('description', '{{ description }}');
+    formData.append('template', '{{ template_name }}');
+    formData.append('action', 'preview');
+
+    htmx.ajax('POST', '{% url "django_issue_capture:generate_comprehensive" %}', {
+        values: formData,
+        target: '#issue-capture-container',
+        swap: 'innerHTML'
+    });
+}
+
+function useStandardForm() {
+    // Switch to standard form with pre-filled data
+    const form = `
+        <div class="standard-form-fallback">
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                Switching to standard form. Your input has been preserved.
+            </div>
+
+            <form hx-post="/issues/create/"
+                  hx-target="#issue-capture-container"
+                  hx-swap="innerHTML">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="fallback-title" class="form-label">Title *</label>
+                    <input type="text" class="form-control" id="fallback-title" name="title"
+                           value="{{ title }}" required>
+                </div>
+                <div class="mb-3">
+                    <label for="fallback-description" class="form-label">Description *</label>
+                    <textarea class="form-control" id="fallback-description" name="description"
+                              rows="4" required>{{ description }}</textarea>
+                </div>
+                <div class="mb-3">
+                    <label for="fallback-priority" class="form-label">Priority</label>
+                    <select class="form-select" id="fallback-priority" name="priority">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                    </select>
+                </div>
+                <input type="hidden" name="creation_mode" value="form">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>Create Issue
+                </button>
+            </form>
+        </div>
+    `;
+    document.getElementById('issue-capture-container').innerHTML = form;
+}
+
+function goBack() {
+    // Go back to the original form
+    window.location.reload();
+}
+</script>
