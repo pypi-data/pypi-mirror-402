@@ -1,0 +1,270 @@
+agent:
+  target: anthropic
+  models:
+    openai:
+      type: openai
+      vendor: openai
+      base_url: https://api.openai.com/v1
+      api_key: ${OPENAI_API_KEY}
+      model: gpt-4-turbo
+
+    google:
+      type: gemini
+      vendor: google
+      base_url: https://generativelanguage.googleapis.com/v1beta
+      api_key: ${GEMINI_API_KEY}
+      model: gemini-2.0-flash-exp
+
+    anthropic:
+      type: claude
+      vendor: anthropic
+      base_url: https://api.anthropic.com
+      api_key: ${ANTHROPIC_API_KEY}
+      model: claude-haiku-4-5
+
+    deepseek_v3:
+      type: deepseek
+      vendor: deepseek
+      base_url: https://api.deepseek.com
+      api_key: ${DEEPSEEK_API_KEY}
+      model: deepseek-chat
+
+  nodes:
+    schema_linking:
+      model: openai
+      matching_rate: fast
+    generate_sql:
+      model: deepseek_v3
+      max_table_schemas_length: 4000
+      max_data_details_length: 2000
+      max_context_length: 8000
+      max_value_length: 500
+    reasoning:
+      model: anthropic
+      prompt_version: "1.0" # It can be unconfigured, and the latest version is used by default
+      max_table_schemas_length: 4000
+      max_data_details_length: 2000
+      max_context_length: 8000
+      max_value_length: 500
+    reflect:
+      prompt_version: "1.0" # It can be unconfigured, and the latest version is used by default
+    output:
+      prompt_version: "1.0" # It can be unconfigured, and the latest version is used by default
+      check_result: true # Whether to check the results of the previous step, the default value is false
+    chat:
+      workspace_root: sql2
+      model: anthropic
+      max_turns: 25
+      prompt_version: "1.0" # It can be unconfigured, and the latest version is used by default
+
+  export:
+    max_lines: 1000  # Maximum number of exported data rows, default is 1000
+  # Benchmark data is stored at {agent.home}/benchmark/{name}
+  # Supported benchmarks: bird_dev, spider2, semantic_layer and other benchmarks you customize
+  # Directory structure:
+  #   {agent.home}/benchmark/bird/
+  #   {agent.home}/benchmark/spider2/
+  #   {agent.home}/benchmark/semantic_layer/
+  #   {agent.name}/benchmark/{customized_benchmark}
+
+  # Configuration of custom benchmarks
+  # benchmark:
+  #   my_benchmark:
+  #       question_file: dev.json # Relative path to the benchmark question file, can be csv/json/json
+  #       question_id_key: question_id # The question id, use the line number when empty; The default value is question_id
+  #       db_key: db_id # The key corresponding to database name; By default, the database of namespaces will be taken.
+  #       ext_knowledge_key: evidence # Optional, the key corresponding to external knowledge
+  #       use_tables_key: tables # Optional: specify which tables to use
+
+  #       # Below is the configuration of the baseline answer to evaluate，if evaluation is not required, you do not need to configure it.
+  #       gold_sql_path: "gold/sql" # The standard SQL relative path，Can be a directory ({gold_sql_path}/{task_id}.sql) or json/csv file
+  #       gold_sql_key: "" # The key corresponding to the gold SQL.When `gold_sql_path` is a file, this configuration cannot be empty
+  #       gold_result_path: "gold/exec_result" # Optional, the standard answer relative path，Can be a directory ({gold_sql_path}/{task_id}.sql) or json/csv file. If not set, gold sql will be executed to obtain the standard answer
+  #       gold_result_key: "" # Optional, the key corresponding to the standard answer. When `gold_result_path` is a file, this configuration cannot be empty
+
+
+  # local databases configuration
+  namespace:
+    snowflake:
+      type: snowflake
+      account: ${SNOWFLAKE_ACCOUNT}  # Use environment variables or real values
+      username: ${SNWOFLAKE_USER}
+      password: ${SNOWFLAKE_PASSWORD}
+      # database: BBC
+      # schema: BBC_NEWS
+    # bird_sqlite: # This section is configured for the bird-dev benchmarking, you should download the database file and unzip it before you can continue
+    #   type: sqlite
+    #   # just support glob pattern. Ensure that the corresponding database files exist in the configuration directory.
+    #   path_pattern: benchmark/bird/dev_20240627/dev_databases/**/*.sqlite # https://bird-bench.oss-cn-beijing.aliyuncs.com/dev.zip
+    local_sqlite:
+      type: sqlite
+      # Only sqlite and duckdb support multiple data source configuration
+      dbs:
+        - name: ssb # sqlite and duckdb must have a name
+          uri: sqlite:////Users/xxx/benchmark/SSB.db
+    local_sqlite2:
+      type: sqlite
+      # Only sqlite and duckdb support multiple data source configuration
+      name: ssb # sqlite and duckdb must have a name
+      uri: sqlite:////Users/xxx/benchmark/SSB.db
+    local_duckdb:
+      type: duckdb
+      dbs:
+        - name: ssb
+          uri: duckdb:////absolute/path/to/db.db # absolute path
+        - name: abc
+          uri: duckdb:///relative/path/to/abc.duckdb # relative path
+    starrocks:
+      type: starrocks
+      host: ${STARROCKS_HOST}
+      port: ${STARROCKS_PORT}
+      username: ${STARROCKS_USER}
+      password: ${STARROCKS_PASSWORD}
+      database: ${STARROCKS_DATABASE}
+
+  storage:
+    # Data path is now fixed at {agent.home}/data
+    # Final storage paths: {home}/data/datus_db_{namespace}, {home}/data/sub_agents/{agent_name}, etc.
+    embedding_device_type: cpu # If set to cpu, it will be specified as cpu, otherwise, it will be automatically selected based on the current machine
+    # Local model suggestions:
+    # 1. if you want extreme performance, choose the small multilingual model with 384 dimensions: all-MiniLM-L6-v2 (~100M) or intfloat/multilingual-e5-small (~460M).
+    # 2. if you want performance and retrieval quality, choose the 1024-dimension multilingual model: intfloat/multilingual-e5-large-instruct (~1.2G)
+    # 3. if you pay more attention to retrieval quality, you can choose 1024-dimension model according to language (English/Chinese): BAAI/bge-large-en-v1.5 or BAAI/bge-large-zh-v1.5 (~1.2G)
+    # Of course, you can also choose your own model according to your business.
+    # If you don't configure the following models, all-MiniLM-L6-v2 will be selected by default.
+    # Cloud model suggestions: Now we just support openai.
+    database:
+      registry_name: openai # default is sentence-transformers
+      model_name: text-embedding-v3-small
+      dim_size: 1024
+      batch_size: 10 # Aliyun only supports no more than 10
+      target_model: openai # target model in agent.models, if not set, the agent's target configuration will be used
+    document:
+      model_name: all-MiniLM-L6-v2 #~100MB The lightest model
+      dim_size: 384
+    metric:
+      model_name: all-MiniLM-L6-v2 #~100MB The lightest model
+      dim_size: 384
+
+  workflow:
+    plan: planA
+
+    planA:
+      - schema_linking
+      - generate_sql
+      - output
+
+    planB:
+      - schema_linking
+      - generate_sql
+      - execute_sql
+      - reflect
+      - output
+
+  reflection_nodes:
+    schema_linking:
+      - schema_linking
+      - generate_sql
+      - execute_sql
+      - reflect
+    doc_search:
+      - doc_search
+      - generate_sql
+      - execute_sql
+      - reflect
+    simple_regenerate:
+      - execute_sql
+      - reflect
+    reasoning:
+      - reasoning
+      - execute_sql
+      - reflect
+
+  # Workflow configuration with parallel execution and selection
+  workflow:
+    plan: bird_para
+
+    bird_para:
+      - schema_linking
+      - parallel:
+        - generate_sql
+        - reasoning
+      - selection
+      - execute_sql
+      - output
+
+  # Sub-workflow example
+  workflow:
+    plan: bird_para
+
+    bird_para:
+      - schema_linking
+      - parallel:
+        - subworkflow1
+        - subworkflow2
+        - subworkflow3
+      - selection
+      - execute_sql
+      - output
+
+    subworkflow1:
+      - search_metrics
+      - generate_sql
+
+    subworkflow2:
+      - search_metrics
+      - reasoning
+
+    subworkflow3:
+      - reasoning
+      - reflect
+
+  # Sub-workflow with config example
+   workflow:
+    plan: bird_para
+
+    bird_para:
+      - schema_linking
+      - parallel:
+        - subworkflow1
+        - subworkflow2
+        - subworkflow3
+      - selection
+      - execute_sql
+      - output
+
+    subworkflow1:
+      steps:
+      - search_metrics
+      - generate_sql
+      config: multi/agent1.yaml
+
+    subworkflow2:
+      steps:
+      - search_metrics
+      - reasoning
+      config: multi/agent2.yaml
+
+    subworkflow3:
+      steps:
+      - reasoning
+      - reflect
+      config: multi/agent3.yaml
+
+  agentic_nodes:
+    gen_semantic_model:
+      model: anthropic
+
+    gen_metrics:
+      model: anthropic
+      max_turns: 40
+
+    gen_sql_summary:
+      model: deepseek_v3
+      max_turns: 30
+  dashboard:
+    superset:
+      username: admin
+      password: admin
+      extra: # Special configurations for different platforms
+        provider: db
