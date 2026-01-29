@@ -1,0 +1,170 @@
+version: 1
+default_environment: dev
+send_anonymous_usage_stats: false
+project_id: 33080f0b-2d0f-4fba-b7f1-727bbf080f91
+venv:
+  backend: uv
+cli:
+  log_level: debug
+
+plugins:
+  extractors:
+  - name: tap-csv
+    variant: meltanolabs
+    pip_url: git+https://github.com/MeltanoLabs/tap-csv.git
+  - name: tap-csv--multi
+    inherit_from: tap-csv
+  - name: tap-smoke-test
+    namespace: tap_smoke_test
+    pip_url: git+https://github.com/meltano/tap-smoke-test.git
+    executable: tap-smoke-test
+    capabilities:
+    - discover
+    - catalog
+    settings:
+    - name: schema_inference_record_count
+      kind: integer
+    - name: streams
+      kind: array
+  - name: people
+    namespace: people
+    executable: scripts/people.sh
+  - name: nested
+    namespace: nested
+    executable: scripts/nested.sh
+  loaders:
+  - name: target-sqlite
+    variant: meltanolabs
+    pip_url: git+https://github.com/MeltanoLabs/target-sqlite.git
+    config:
+      batch_size: 200
+      database: output/$MELTANO_EXTRACTOR_NAMESPACE.db
+  mappers:
+  - name: meltano-map-transformer
+    variant: meltano
+    pip_url: git+https://github.com/MeltanoLabs/meltano-map-transform.git
+    settings:
+    - name: stream_maps
+      kind: object
+    - name: stream_maps_config
+      kind: object
+    mappings:
+    - name: hash_email
+      config:
+        stream_maps:
+          customers:
+            id: id
+            email:      # drop the PII field from RECORD and SCHEMA messages
+            email_domain: email.split('@')[-1]
+            email_hash: md5(config['hash_seed'] + email)
+            __else__: null
+        stream_map_config:
+          hash_seed: 01AWZh7A6DzGm6iJZZ2T
+    - name: whitelist
+      config:
+        stream_maps:
+          # Whitelist `id` and `description` fields, drop all others
+          animals:
+            id: id
+            description: description
+            __else__: __NULL__
+    # Put some fields into a JSON object
+    - name: json_field
+      config:
+        stream_maps:
+          # JSON-ify the some fields
+          animals:
+            id: id
+            data: "json.dumps({'description': description, 'verified': verified, 'views': views, 'created_at': created_at})"
+            __else__: null
+    - name: flatten
+      config:
+        stream_maps: {}
+        flattening_enabled: true
+        flattening_max_depth: 1
+    - name: comprehension
+      config:
+        stream_maps:
+          users:
+            id: id
+            fields: "[f for f in fields if f['key'] != 'age']"
+    - name: fake
+      config:
+        stream_maps:
+          customers:
+            id: id
+            first_name: first_name
+            cc: fake.credit_card_number()  # add a new field with a fake credit card number
+            __else__: __NULL__
+        faker_config:
+          locale: [en_US]
+          seed: 123456
+    # Test glob patterns in stream names
+    - name: glob
+      config:
+        stream_maps:
+          "*":
+            id: id
+            first_name: first_name
+            cc: fake.credit_card_number()  # add a new field with a fake credit card number
+            email:     # drop the PII field from RECORD and SCHEMA messages
+            email_domain: email.split('@')[-1]
+            email_hash: md5(config['hash_seed'] + email)
+            __else__: null
+        stream_map_config:
+          hash_seed: 01AWZh7A6DzGm6iJZZ2T
+        faker_config:
+          locale: [en_US]
+          seed: 123456
+    # Load records into a single field, applied to all streams
+    - name: single_field
+      config:
+        stream_maps:
+          "*":
+            id: id
+            data: record  # `record` is a special keyword that refers to the entire record
+            __else__: null
+    # Alias a property across all streams
+    - name: alias_property_all_streams
+      config:
+        stream_maps:
+          "*":
+            name: first_name
+            first_name: __NULL__
+    # Expand environment variables
+    - name: expand_env_vars
+      config:
+        stream_maps:
+          "*":
+            _extract__run_id: config['_extract__run_id']
+            # _extract__run_id: $MELTANO_RUN_ID
+            _extract__run_started_at: config['_extract__run_started_at']
+        stream_map_config:
+          _extract__run_id: $MELTANO_RUN_ID # tried with {}s, quotes, etc etc etc...
+          _extract__run_started_at: $ELT_RUN_STARTED_AT
+environments:
+- name: dev
+  config:
+    plugins:
+      extractors:
+      - name: tap-csv
+        config:
+          files:
+          - entity: customers
+            path: fixtures/customers.csv
+            keys: [id]
+      - name: tap-csv--multi
+        config:
+          files:
+          - entity: customers
+            path: fixtures/customers.csv
+            keys: [id]
+          - entity: employees
+            path: fixtures/employees.csv
+            keys: [id]
+      - name: tap-smoke-test
+        config:
+          schema_inference_record_count: 5
+          streams:
+          - stream_name: animals
+            input_filename: fixtures/animals-data.jsonl

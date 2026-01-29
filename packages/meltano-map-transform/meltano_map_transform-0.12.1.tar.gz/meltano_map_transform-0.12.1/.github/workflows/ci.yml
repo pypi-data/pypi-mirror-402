@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  pull_request: {}
+  push:
+    branches: [main]
+  schedule:
+  # Daily at 12:00 PM UTC
+  - cron: '0 12 * * *'
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint and Type Check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+    - uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+      id: setup-python
+
+    - uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
+
+    - name: Install dependencies
+      run: |
+        uv sync --all-extras --all-groups
+
+    - name: Run tests
+      run: |
+        uv run mypy meltano_map_transform
+        uv run ty check meltano_map_transform
+
+  meltano-run:
+    name: Meltano Run - ${{ matrix.mapping }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - tap: tap-csv
+          mapping: hash_email
+          output_db: tap_csv.db
+          query: "select * from customers limit 20"
+        - tap: tap-smoke-test
+          mapping: whitelist
+          output_db: tap_smoke_test.db
+          query: "select * from animals limit 20"
+        - tap: tap-smoke-test
+          mapping: json_field
+          output_db: tap_smoke_test.db
+          query: "select * from animals limit 20"
+        - tap: people
+          mapping: flatten
+          output_db: people.db
+          install_extractor: false
+          query: "select * from people limit 20"
+        - tap: nested
+          mapping: comprehension
+          output_db: nested.db
+          install_extractor: false
+          query: "select * from users limit 20"
+        - tap: tap-csv
+          mapping: fake
+          output_db: tap_csv.db
+          install_extractor: false
+          query: "select * from customers limit 20"
+        - tap: tap-csv--multi
+          mapping: glob
+          output_db: tap_csv__multi.db
+          query: |
+            with
+              cust as (select *, 'CUSTOMER' as type from customers limit 10),
+              empl as (select *, 'EMPLOYEE' as type from employees limit 10)
+
+            select * from cust
+            union
+            select * from empl
+        - tap: tap-csv--multi
+          mapping: single_field
+          output_db: tap_csv__multi.db
+          query: |
+            with
+              cust as (select *, 'CUSTOMER' as type from customers limit 10),
+              empl as (select *, 'EMPLOYEE' as type from employees limit 10)
+
+            select * from cust
+            union
+            select * from empl
+        - tap: tap-csv--multi
+          mapping: alias_property_all_streams
+          output_db: tap_csv__multi.db
+          query: |
+            with
+              cust as (select *, 'CUSTOMER' as type from customers limit 10),
+              empl as (select *, 'EMPLOYEE' as type from employees limit 10)
+
+            select * from cust
+            union
+            select * from empl
+        - tap: tap-csv--multi
+          mapping: expand_env_vars
+          output_db: tap_csv__multi.db
+          query: |
+            with
+              cust_with_extra as (select *, 'CUSTOMER' as type from customers limit 10),
+              empl_with_extra as (select *, 'EMPLOYEE' as type from employees limit 10)
+
+            select * from cust_with_extra
+            union
+            select * from empl_with_extra
+    steps:
+    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+    - uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+      id: setup-python
+      with:
+        python-version: 3.x
+
+    - uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
+      with:
+        version: ">=0.5.0"
+
+    - name: Install Meltano
+      env:
+        UV_CONSTRAINT: ${{ github.workspace }}/.github/workflows/constraints.txt
+      run: |
+        uv tool install --python '${{ steps.setup-python.outputs.python-path }}' meltano
+
+    - name: Check Meltano version
+      run: |
+        meltano --version
+
+    - name: Run
+      env:
+        MELTANO_RUN_ID: C95FD852-6766-4D11-A484-6CA858AA6939
+        ELT_RUN_STARTED_AT: "2025-01-01T00:00:00Z"
+      run: |
+        meltano run --install ${{ matrix.tap }} ${{ matrix.mapping }} target-sqlite
+
+    - name: Check output
+      run: |
+        sqlite3 -markdown output/${{ matrix.output_db }} "${{ matrix.query }}" >> $GITHUB_STEP_SUMMARY
