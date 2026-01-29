@@ -1,0 +1,98 @@
+Metadata-Version: 2.4
+Name: lazyhooks
+Version: 0.2.0
+Summary: A lightweight, resilient webhook sender and receiver.
+Author-email: Stacktactician <mmmoyosore09@gmail.com>
+License: MIT
+Project-URL: Homepage, https://github.com/StackTactician/LazyHooks
+Keywords: webhooks,asyncio,persistence,networking
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Internet :: WWW/HTTP
+Classifier: Framework :: AsyncIO
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: aiohttp>=3.8.0
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-asyncio; extra == "dev"
+Requires-Dist: mypy; extra == "dev"
+Dynamic: license-file
+
+# LazyHooks
+
+A lightweight, standalone Python package for sending and receiving webhooks with optional persistence.
+
+>**[Full Documentation & Examples on GitHub](https://github.com/StackTactician/LazyHooks)**
+
+## Features
+
+- **Simple API**: Send webhooks with minimal boilerplate.
+- **Async First**: Built on `asyncio` and `aiohttp` for high performance.
+- **Secure**: HMAC-SHA256 signing with **Timestamp Replay Protection**.
+- **Reliable**: Optional `SQLite` storage to persist and retry failed webhooks.
+
+## Security
+
+LazyHooks prioritizes security by design:
+
+- **Replay Protection**: All webhooks include a timestamp. Requests older than 5 minutes are rejected.
+- **HMAC-SHA256**: Signatures verify both the **body and the timestamp** (`timestamp.body`) to prevent tampering.
+- **Constant-Time Verification**: Prevents timing attacks.
+- **SQL Injection Safe**: Parameterized queries.
+
+> **headers**: 
+> - `X-Lh-Timestamp`: Unix timestamp of the request.
+> - `X-Lh-Signature`: `v1=...` (HMAC of `timestamp.body`)
+
+## Documentation
+
+- **[Getting Started](docs/getting_started.md)**: Installation and basic usage.
+- **[Comparisons](docs/comparisons.md)**: See LazyHooks vs standard FastAPI/Django/Celery.
+- **[Advanced Usage](docs/advanced_usage.md)**: Persistence, retries, headers, and timeouts.
+- **[API Reference](docs/api_reference.md)**: Detailed API documentation.
+
+## Quick Example
+
+### Sending
+
+```python
+import asyncio
+from lazyhooks import WebhookSender
+
+async def main():
+    sender = WebhookSender(signing_secret="super-secret")
+    await sender.send("https://example.com/webhook", {"event": "hello"})
+
+asyncio.run(main())
+```
+
+### Receiving
+
+```python
+from lazyhooks import verify_signature
+
+def handle_webhook(request):
+    timestamp = request.headers.get("X-Lh-Timestamp")
+    signature = request.headers.get("X-Lh-Signature")
+    body = request.body
+    
+    if verify_signature(body, signature, "super-secret", timestamp):
+        return "OK", 200
+    else:
+        return "Invalid Signature or Timestamp", 401
+```
+
+## Links
+
+- **GitHub**: [https://github.com/StackTactician/LazyHooks](https://github.com/StackTactician/LazyHooks)
+- **Issues**: [https://github.com/StackTactician/LazyHooks/issues](https://github.com/StackTactician/LazyHooks/issues)
+- **Documentation**: See the GitHub repo for full docs, advanced usage, and examples.
