@@ -1,0 +1,16 @@
+"""
+Commodore. Build dynamic inventories and compile catalogs with Kapitan
+"""
+
+from pathlib import Path as P
+from importlib.metadata import version
+
+__url__ = "https://github.com/projectsyn/commodore/"
+__git_version__ = 'v1.31.0'
+__version__ = version("syn-commodore")
+
+# provide Commodore installation dir as variable that can be imported
+__install_dir__ = P(__file__).parent
+
+# Location of Kustomize wrapper script
+__kustomize_wrapper__ = __install_dir__ / "scripts" / "run-kustomize"
