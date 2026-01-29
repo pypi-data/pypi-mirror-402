@@ -1,0 +1,37 @@
+---
+comment: |
+  Federal Poverty Level
+  See: https://aspe.hhs.gov/poverty-guidelines
+code: |
+  poverty_level_update = "2026"
+  poverty_base = 15960
+  poverty_increment = 5680
+---  
+comment: |
+  Multiplier specific to MA courts, for affidavit of indigency.
+  
+  You can override in your own interview.
+code: |  
+  poverty_multiplier = 1.25 # threshold multiplier. e.g. 2 for 200%
+---
+comment: |
+  A table you can insert into your interview that shows the household
+  size and corresponding income limit up to a household of size 10.
+  
+  E.g., ${ poverty_scale_table }
+table: poverty_scale_table
+rows: |
+  [DAObject(household_size=n, limit=(poverty_base) + (n*poverty_multiplier*poverty_increment)) for n in range(1,11)]
+columns:
+  - ${ ma_poverty_household_size_template }: |
+      row_item.household_size
+  - ${ ma_poverty_income_limit_template }: |
+      currency(row_item.limit)
+---
+template: ma_poverty_household_size_template
+content: |
+  Household Size
+---
+template: ma_poverty_income_limit_template
+content: |
+  Maximum Annual Income
