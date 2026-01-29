@@ -1,0 +1,146 @@
+[project]
+name = "create-agentverse-agent"
+version = "0.2.7"
+description = "A tool to create Agentverse compatible agents based on uAgents framework."
+readme = "README.md"
+authors = [
+    { name = "Tejus Gupta", email = "tejus3131@tejusgupta.dev" }
+]
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+keywords = [
+  "agents",
+  "agentverse",
+  "uagents",
+  "ai-agents",
+  "cli",
+  "code-generator",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Topic :: Software Development :: Code Generators",
+  "Topic :: Software Development :: Libraries",
+  "Environment :: Console",
+  "Typing :: Typed",
+]
+dependencies = [
+    "jinja2>=3.1.6",
+    "pydantic>=2.12.5",
+    "rich>=14.2.0",
+    "typer>=0.21.1",
+]
+
+[project.urls]
+Homepage = "https://create-agentverse-agent.tech/"
+Repository = "https://github.com/tejus3131/create-agentverse-agent"
+Issues = "https://github.com/tejus3131/create-agentverse-agent/issues"
+Documentation = "https://create-agentverse-agent.tech/"
+Changelog = "https://github.com/tejus3131/create-agentverse-agent/releases"
+
+[project.scripts]
+create-agentverse-agent = "create_agentverse_agent:main"
+
+[build-system]
+requires = ["uv_build>=0.8.23,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "black>=25.12.0",
+    "pre-commit>=4.5.1",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.14.11",
+    "ty>=0.0.12",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+fix = true
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle
+  "F",   # pyflakes
+  "I",   # isort
+  "B",   # bugbear
+  "UP",  # pyupgrade
+  "N",   # pep8-naming
+  "SIM", # simplifications
+  "RUF", # ruff-specific
+]
+
+ignore = [
+  "E501", # line length (handled by black)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]  # allow assert
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q"
+testpaths = ["tests"]
+
+# ty configuration (replaces mypy)
+[tool.ty]
+
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ty.src]
+include = ["src", "create_agentverse_agent"]
+exclude = ["tests", "*.j2", "*/templates/*"]
+
+[tool.ty.rules]
+# Errors - critical issues
+unresolved-reference = "error"
+invalid-assignment = "error"
+call-non-callable = "error"
+missing-argument = "error"
+unknown-argument = "error"
+invalid-argument-type = "error"
+invalid-return-type = "error"
+
+# Warnings - less critical
+deprecated = "warn"
+redundant-cast = "warn"
+
+# Test file overrides - be lenient
+[[tool.ty.overrides]]
+include = ["tests/**/*.py"]
+
+[tool.ty.overrides.rules]
+invalid-assignment = "ignore"
+missing-argument = "ignore"
+invalid-argument-type = "ignore"
+
+[tool.coverage.run]
+branch = true
+source = ["create_agentverse_agent"]
+omit = [
+  "*/tests/*",
+  "*/templates/*",
+  "*.j2",
+]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "if __name__ == .__main__.:",
+  "raise NotImplementedError",
+]
