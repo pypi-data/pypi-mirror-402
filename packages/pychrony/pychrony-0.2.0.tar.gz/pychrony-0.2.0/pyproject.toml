@@ -1,0 +1,104 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools-scm>=8.0", "cffi>=1.14.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pychrony"
+dynamic = ["version"]
+description = "Python bindings for chrony NTP client"
+readme = "README.md"
+license = "MIT AND LGPL-2.1-or-later"
+license-files = ["LICENSE", "LICENSES/*"]
+requires-python = ">=3.10"
+authors = [
+    {name = "arunderwood", email = "arunderwood@users.noreply.github.com"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Networking :: Time Synchronization",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Operating System :: POSIX :: Linux",
+]
+dependencies = [
+    "cffi>=1.14.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/arunderwood/pychrony"
+Documentation = "https://pychrony.org/"
+Repository = "https://github.com/arunderwood/pychrony.git"
+Issues = "https://github.com/arunderwood/pychrony/issues"
+
+[project.entry-points.pytest11]
+pychrony = "pychrony.testing"
+
+[tool.setuptools_scm]
+fallback_version = "0.0.0.dev0"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ty]
+# Ignore warnings for CFFI bindings file - _lib and _ffi are dynamically imported
+# at runtime and may not exist until the package is built with libchrony
+[[tool.ty.overrides]]
+include = ["src/pychrony/_core/_bindings.py"]
+
+[tool.ty.overrides.rules]
+possibly-missing-attribute = "ignore"
+invalid-argument-type = "ignore"  # Dict unpacking uses runtime validation
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = ["-v", "--tb=short"]
+
+[tool.cibuildwheel]
+build = "cp310-* cp311-* cp312-* cp313-* cp314-*"
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64", "aarch64"]
+environment = { CIBUILDWHEEL = "1" }
+test-requires = "pytest"
+test-command = "python -m pytest {project}/tests/unit {project}/tests/contract -v"
+
+[[tool.cibuildwheel.overrides]]
+select = "*-manylinux_*"
+before-all = """
+dnf install -y gcc make libtool libffi-devel && \
+cd vendor/libchrony && make && make install prefix=/usr && ldconfig
+"""
+
+[[tool.cibuildwheel.overrides]]
+select = "*-musllinux_*"
+before-all = """
+apk add --no-cache gcc make libtool libffi-dev musl-dev && \
+cd vendor/libchrony && make && make install prefix=/usr
+"""
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "pyyaml>=6.0.3",
+    "ruff>=0.14.11",
+    "ty>=0.0.1",
+]
+docs = [
+    "mkdocs-material>=9.0.0",
+    "mkdocstrings[python]>=0.24.0",
+    "mike>=2.0.0",
+]
