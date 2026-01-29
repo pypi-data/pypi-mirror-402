@@ -1,0 +1,58 @@
+from datetime import datetime
+from typing import Optional
+from anndata import AnnData
+from ..utils import trim_by_time
+
+def rebuild_vote_matrix(
+    data: AnnData,
+    trim_rule: int | float | str | datetime = 1.0,
+    time_col: str = "timestamp",
+    inplace: bool = True,
+) -> Optional[AnnData]:
+    """
+    Rebuild a vote matrix from votes stored in `adata.uns['votes']`.
+
+    - Trims votes by time according to `trim_rule`.
+    - Deduplicates votes by keeping the last vote per voter-comment pair.
+    - Returns a new AnnData with `.obs` = voters, `.var` = comments, `.X` = vote values.
+    - Preserves existing `uns`, `obsm`, and `layers`.
+    """
+
+    # Load votes CSV
+    votes_df = data.uns.get("votes")
+    if votes_df is None:
+        raise KeyError("`uns['votes']` not found in AnnData")
+    votes_df = votes_df.copy()
+
+    # Trim by time
+    votes_df = votes_df.pipe(trim_by_time, rule=trim_rule, col=time_col)
+
+    # Sort & deduplicate
+    votes_df = votes_df.sort_values(time_col)
+    votes_df = votes_df.drop_duplicates(
+        subset=["voter-id", "comment-id"], keep="last"
+    )
+
+    # Pivot into voter × comment
+    vote_matrix_df = votes_df.pivot(
+        index="voter-id", columns="comment-id", values="vote"
+    )
+
+    # Build a new AnnData
+    new_adata = AnnData(
+        X=vote_matrix_df.to_numpy(dtype=float),
+        obs=data.obs.reindex(vote_matrix_df.index.astype(str)),
+        var=data.var.reindex(vote_matrix_df.columns.astype(str))
+    )
+
+    # Copy over other metadata
+    new_adata.uns.update(data.uns)
+    new_adata.obsm.update(data.obsm)
+    new_adata.layers.update(data.layers)
+
+    if inplace:
+        # Replace all internal state of the original AnnData
+        data._init_as_actual(new_adata)
+        return None
+    else:
+        return new_adata
