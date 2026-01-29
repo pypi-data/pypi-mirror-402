@@ -1,0 +1,56 @@
+name: Publish VS Code Extension
+
+on:
+  push:
+    tags:
+      - 'vscode-v*'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install dependencies
+      working-directory: vscode-witcherscript
+      run: npm install
+    
+    - name: Install vsce
+      run: npm install -g vsce
+    
+    - name: Build extension
+      working-directory: vscode-witcherscript
+      run: vsce package
+    
+    - name: Publish to Visual Studio Marketplace
+      working-directory: vscode-witcherscript
+      env:
+        VSCE_PAT: ${{ secrets.VSCODE_MARKETPLACE_TOKEN }}
+      run: vsce publish --pat $VSCE_PAT
+    
+    - name: Publish to OpenVSX
+      working-directory: vscode-witcherscript
+      if: always()
+      env:
+        OVSX_PAT: ${{ secrets.OPENVSX_TOKEN }}
+      run: |
+        npm install -g ovsx
+        ovsx publish --pat $OVSX_PAT || true
+    
+    - name: Create Release
+      uses: actions/create-release@v1
+      if: always()
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: VS Code Extension ${{ github.ref }}
+        draft: false
+        prerelease: false
