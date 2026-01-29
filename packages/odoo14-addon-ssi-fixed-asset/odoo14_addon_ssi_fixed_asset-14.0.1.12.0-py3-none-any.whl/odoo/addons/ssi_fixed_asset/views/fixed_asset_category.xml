@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2022 OpenSynergy Indonesia
+     Copyright 2022 PT. Simetri Sinergi Indonesia
+     License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl). -->
+<odoo>
+    <record id="fixed_asset_category_view_search" model="ir.ui.view">
+        <field name="name">fixed.asset.category.search</field>
+        <field name="model">fixed.asset.category</field>
+        <field
+            name="inherit_id"
+            ref="ssi_master_data_mixin.mixin_master_data_view_search"
+        />
+        <field name="mode">primary</field>
+        <field name="arch" type="xml">
+            <data>
+                <xpath expr="//field[@name='code']" position="after">
+                    <field name="journal_id" />
+                </xpath>
+            </data>
+        </field>
+    </record>
+
+    <record id="fixed_asset_category_view_tree" model="ir.ui.view">
+        <field name="name">fixed.asset.category.tree</field>
+        <field name="model">fixed.asset.category</field>
+        <field
+            name="inherit_id"
+            ref="ssi_master_data_mixin.mixin_master_data_view_tree"
+        />
+        <field name="mode">primary</field>
+        <field name="arch" type="xml">
+            <data>
+                <xpath expr="//field[@name='name']" position="after">
+                    <field name="journal_id" />
+                    <field name="method" />
+                    <field name="method_time" />
+                    <field name="method_number" />
+                    <field name="method_period" />
+                    <field name="prorata" />
+                </xpath>
+            </data>
+        </field>
+    </record>
+
+    <record id="fixed_asset_category_view_form" model="ir.ui.view">
+        <field name="name">fixed.asset.category.form</field>
+        <field name="model">fixed.asset.category</field>
+        <field
+            name="inherit_id"
+            ref="ssi_master_data_mixin.mixin_master_data_view_form"
+        />
+        <field name="mode">primary</field>
+        <field name="arch" type="xml">
+            <data>
+                <xpath expr="//notebook" position="inside">
+                    <page name="accounting" string="Accounting">
+                        <group name="accounting_1" colspan="4" col="2">
+                            <field name="journal_id" />
+                            <field name="account_asset_id" />
+                            <field name="account_depreciation_id" />
+                            <field name="account_expense_depreciation_id" />
+                        </group>
+                        <group
+                            name="accounting_2"
+                            groups="analytic.group_analytic_accounting"
+                            string="Analytic Information"
+                        >
+                            <field name="account_analytic_id" />
+                        </group>
+                    </page>
+                    <page name="depreciation_date" string="Depreciation Dates">
+                        <group name="depreciation_date_1" colspan="4" col="2">
+                            <field name="method_time" />
+                            <field
+                                name="method_number"
+                                attrs="{'invisible':[('method_time','=','end')], 'required':[('method_time','in',['number','year'])]}"
+                            />
+                            <field name="method_period" />
+                        </group>
+                    </page>
+                    <page name="depreciation_method" string="Depreciation Method">
+                        <group name="depreciation_method_1" colspan="4" col="2">
+                            <field name="method" />
+                            <field
+                                name="method_progress_factor"
+                                attrs="{'invisible':[('method','=','linear')], 'required':[('method','in',['degressive','degr-linear'])]}"
+                            />
+                            <field
+                                name="prorata"
+                                attrs="{'readonly':[('method_time','!=','year')]}"
+                            />
+                            <field name="date_min_prorate" />
+                            <field name="open_asset" />
+                        </group>
+                    </page>
+                </xpath>
+            </data>
+        </field>
+    </record>
+
+    <record id="fixed_asset_category_action" model="ir.actions.act_window">
+          <field name="name">Fixed Asset Categories</field>
+          <field name="res_model">fixed.asset.category</field>
+          <field name="view_mode">tree,form</field>
+    </record>
+
+    <menuitem
+        id="menu_fixed_asset_category"
+        name="Categories"
+        parent="ssi_financial_accounting.menu_fixed_asset_configuration"
+        action="fixed_asset_category_action"
+        groups="ssi_fixed_asset.fixed_asset_category_group"
+    />
+</odoo>
