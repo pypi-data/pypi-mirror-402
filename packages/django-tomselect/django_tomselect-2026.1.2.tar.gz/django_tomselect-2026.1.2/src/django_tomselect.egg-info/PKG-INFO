@@ -1,0 +1,221 @@
+Metadata-Version: 2.4
+Name: django-tomselect
+Version: 2026.1.2
+Summary: Django autocomplete widgets and views using Tom Select
+Author-email: Jack Linke <jacklinke@gmail.com>
+License-Expression: MIT
+Project-URL: Source, https://github.com/OmenApps/django-tomselect
+Project-URL: Documentation, https://django-tomselect.readthedocs.io/en/latest/
+Project-URL: Issues, https://github.com/OmenApps/django-tomselect/issues
+Project-URL: Changelog, https://github.com/OmenApps/django-tomselect/releases
+Keywords: django,autocomplete,tomselect,widget,forms,views,select,multiselect
+Classifier: Environment :: Web Environment
+Classifier: Framework :: Django
+Classifier: Framework :: Django :: 4.2
+Classifier: Framework :: Django :: 5.1
+Classifier: Framework :: Django :: 5.2
+Classifier: Framework :: Django :: 6.0
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Classifier: Topic :: Software Development :: User Interfaces
+Classifier: Topic :: Software Development :: Widget Sets
+Requires-Python: <4.0,>=3.11
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: django>=4.2.27
+Provides-Extra: dev
+Requires-Dist: bandit>=1.9.3; extra == "dev"
+Requires-Dist: coverage[toml]>=7.8.2; extra == "dev"
+Requires-Dist: darglint>=1.8.1; extra == "dev"
+Requires-Dist: django-extensions>=4.1; extra == "dev"
+Requires-Dist: django-htmx>=1.27.0; extra == "dev"
+Requires-Dist: flake8-bugbear>=24.12.12; extra == "dev"
+Requires-Dist: flake8-docstrings>=1.7.0; extra == "dev"
+Requires-Dist: flake8-rst-docstrings>=0.3.1; extra == "dev"
+Requires-Dist: flake8>=7.2.0; extra == "dev"
+Requires-Dist: furo>=2024.8.6; extra == "dev"
+Requires-Dist: linkify-it-py>=2.0.3; extra == "dev"
+Requires-Dist: myst-parser>=4.0.1; extra == "dev"
+Requires-Dist: nox>=2025.11.12; extra == "dev"
+Requires-Dist: pep8-naming>=0.15.1; extra == "dev"
+Requires-Dist: pre-commit-hooks>=6.0.0; extra == "dev"
+Requires-Dist: pre-commit>=4.5.1; extra == "dev"
+Requires-Dist: Pygments>=2.19.1; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.26.0; extra == "dev"
+Requires-Dist: pytest-cov>=6.1.1; extra == "dev"
+Requires-Dist: pytest-django>=4.11.1; extra == "dev"
+Requires-Dist: pytest>=8.3.5; extra == "dev"
+Requires-Dist: python-environ>=0.4.54; extra == "dev"
+Requires-Dist: pyupgrade>=3.21.2; extra == "dev"
+Requires-Dist: ruff>=0.14.13; extra == "dev"
+Requires-Dist: pip-audit>=2.7.3; extra == "dev"
+Requires-Dist: sphinx-autobuild>=2024.10.3; extra == "dev"
+Requires-Dist: sphinx-click>=6.0.0; extra == "dev"
+Requires-Dist: sphinx>=8.2.3; extra == "dev"
+Requires-Dist: Werkzeug>=3.1.3; extra == "dev"
+Requires-Dist: xdoctest[colors]>=1.3.0; extra == "dev"
+Dynamic: license-file
+
+
+
+# Django TomSelect
+
+A powerful, lightweight Django package for dynamic select inputs with autocomplete, tagging, and more.
+
+[![PyPI version](https://badge.fury.io/py/django-tomselect.png)](https://badge.fury.io/py/django-tomselect.png)
+[![License](https://img.shields.io/pypi/l/django-tomselect.png)](https://github.com/OmenApps/django-tomselect/blob/main/LICENSE)
+
+Django TomSelect integrates [Tom Select](https://tom-select.js.org/) into your Django projects, providing beautiful and intuitive select inputs with features like:
+
+- **Live Search & Autocomplete**
+    - Real-time filtering and highlighting as you type
+    - Server-side search with customizable lookups
+    - Automatic pagination for large datasets
+	- Customizable minimum query length
+
+- **Rich UI Options**
+    - Single and multiple selection modes
+    - Tabular display with custom columns
+    - Bootstrap 4/5 theming support
+	- Clear/remove buttons
+	- Dropdown headers & footers
+	- Checkbox options
+    - Customizable templates
+
+![Tom Select With Single Select](https://raw.githubusercontent.com/jacklinke/django-tomselect/main/docs/images/Single.png)
+![Tom Select Tabular With Multiple Select](https://raw.githubusercontent.com/jacklinke/django-tomselect/main/docs/images/Multiple_Tabular.png)
+
+## Quick Start
+
+1. **Install the package:**
+```bash
+pip install django-tomselect
+```
+
+2. **Update settings.py:**
+```python
+INSTALLED_APPS = [
+    ...
+    "django_tomselect"
+]
+
+MIDDLEWARE = [
+    ...
+    "django_tomselect.middleware.TomSelectMiddleware",
+    ...
+]
+
+TEMPLATES = [
+    {
+        "OPTIONS": {
+            "context_processors": [
+                ...
+                "django_tomselect.context_processors.tomselect",
+                ...
+            ],
+        },
+    },
+]
+```
+
+3. **Create an autocomplete view:**
+```python
+from django_tomselect.autocompletes import AutocompleteModelView
+
+class PersonAutocompleteView(AutocompleteModelView):
+    model = Person
+    search_lookups = ["full_name__icontains"]
+    value_fields = ["id","full_name"]
+```
+
+4. **Add URL pattern:**
+```python
+urlpatterns = [
+    path("person-autocomplete/", PersonAutocompleteView.as_view(), name="person_autocomplete"),
+]
+```
+
+5. **Use in your forms:**
+```python
+from django_tomselect.forms import TomSelectModelChoiceField, TomSelectConfig
+
+class MyForm(forms.Form):
+    person = TomSelectModelChoiceField(
+        config = TomSelectConfig(
+            url="person_autocomplete",
+            value_field="id",
+            label_field="full_name",
+        )
+    )
+```
+
+6. **Include in your template:**
+```html
+{{ form.media }}  {# Adds the required CSS/JS #}
+
+{{ form }}
+```
+
+## Other Features
+
+### Advanced Filtering
+- Dependent/chained select fields
+- Field exclusion support
+- Custom search implementations
+- Hooks for overriding functionality
+
+### Flexible Configuration
+- Support for [Tom Select Plugins](https://tom-select.js.org/plugins/)
+- Global settings and per-form-field configuration
+- Override any template
+
+### Security
+- Built-in permission handling
+	- including django auth, custom auth, object perms
+
+### Internationalization
+- Translation support
+- Customizable messages
+
+## Example Project
+
+To see Django TomSelect in action, check out the [Example Project](https://github.com/OmenApps/django-tomselect/tree/main/example_project). It demonstrates a variety of use cases, with **15 different implementations** from basic atocompletion to advanced applications, showing how to use django-tomselect's autocomplete fields in a Django project.
+
+Each of the examples is described in [the Example Project docs](https://django-tomselect.readthedocs.io/en/latest/example_app/introduction.html).
+
+Here are a few screenshots from the example project:
+
+![Rich Content Article Selection](https://raw.githubusercontent.com/jacklinke/django-tomselect/main/docs/images/rich-article-select1.png)
+
+---
+
+![Article List](https://raw.githubusercontent.com/jacklinke/django-tomselect/main/docs/images/article-list.png)
+
+---
+
+![Article Bulk Actions](https://raw.githubusercontent.com/jacklinke/django-tomselect/main/docs/images/article-bulk-action2.png)
+
+## Documentation
+
+- [Complete Usage Guide](https://django-tomselect.readthedocs.io/en/latest/usage.html)
+- [Configuration Reference](https://django-tomselect.readthedocs.io/en/latest/api/config.html)
+- [Example Project](https://django-tomselect.readthedocs.io/en/latest/example_app/introduction.html)
+
+## Contributing
+
+Contributions are welcome! Check out our [Contributor Guide](https://github.com/OmenApps/django-tomselect/blob/main/CONTRIBUTING.md) to get started.
+
+## License
+
+This project is licensed under the MIT License - see the [License](https://github.com/OmenApps/django-tomselect/blob/main/LICENSE) file for details.
+
+## Acknowledgments
+
+This package builds on the excellent work of [Philip Becker](https://pypi.org/user/actionb/) in [mizdb-tomselect](https://www.pypi.org/project/mizdb-tomselect/), with a focus on generalization, Django templates, translations, and customization.
