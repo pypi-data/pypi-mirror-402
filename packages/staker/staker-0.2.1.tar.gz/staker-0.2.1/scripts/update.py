@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""Fetch latest stable versions from GitHub releases and update versions.env.
+
+Auto-commits and pushes if not on master branch.
+"""
+
+import subprocess
+import sys
+from pathlib import Path
+
+import requests
+
+# GitHub repos to fetch versions from
+REPOS = {
+    "geth": "ethereum/go-ethereum",
+    "prysm": "prysmaticlabs/prysm",
+    "mevboost": "flashbots/mev-boost",
+}
+
+VERSIONS_FILE = Path(__file__).parent.parent / "versions.env"
+GITHUB_HEADERS = {"Accept": "application/vnd.github.v3+json"}
+
+
+def get_latest_release(repo: str) -> dict:
+    """Fetch latest non-prerelease release from GitHub API."""
+    url = f"https://api.github.com/repos/{repo}/releases"
+    response = requests.get(url, headers=GITHUB_HEADERS, timeout=30)
+    response.raise_for_status()
+    releases = response.json()
+
+    for release in releases:
+        # Skip prereleases and drafts
+        if release.get("prerelease") or release.get("draft"):
+            continue
+        # Skip alpha/beta/rc versions
+        tag = release.get("tag_name", "")
+        if any(x in tag.lower() for x in ["alpha", "beta", "rc"]):
+            continue
+        return release
+
+    raise ValueError(f"No stable release found for {repo}")
+
+
+def parse_geth_version(release: dict) -> tuple[str, str]:
+    """Parse geth version and commit from release.
+
+    Returns (version, commit_short) e.g., ("1.16.7", "b9f3a3d9")
+
+    Geth releases don't include assets - binaries are hosted separately.
+    We need to fetch the commit SHA from the git tag.
+    """
+    tag = release["tag_name"]  # e.g., "v1.16.7"
+    version = tag.lstrip("v")
+
+    # Fetch commit SHA from the git tag
+    repo = "ethereum/go-ethereum"
+    url = f"https://api.github.com/repos/{repo}/git/refs/tags/{tag}"
+
+    try:
+        response = requests.get(url, headers=GITHUB_HEADERS, timeout=30)
+        response.raise_for_status()
+        ref_data = response.json()
+
+        # The ref might point to a tag object or directly to a commit
+        sha = ref_data.get("object", {}).get("sha", "")
+        obj_type = ref_data.get("object", {}).get("type", "")
+
+        # If it's a tag object, we need to dereference it
+        if obj_type == "tag":
+            tag_url = ref_data["object"]["url"]
+            tag_response = requests.get(tag_url, timeout=30)
+            tag_response.raise_for_status()
+            tag_data = tag_response.json()
+            sha = tag_data.get("object", {}).get("sha", sha)
+
+        return version, sha[:8]
+    except Exception:
+        # Fallback: return empty commit if we can't fetch
+        return version, ""
+
+
+def parse_version(release: dict) -> str:
+    """Parse version from release tag, stripping 'v' prefix."""
+    tag = release["tag_name"]
+    return tag.lstrip("v")
+
+
+def get_current_branch() -> str:
+    """Get current git branch name."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
+def git_commit_and_push(message: str) -> bool:
+    """Commit versions.env and push. Returns True if successful."""
+    try:
+        subprocess.run(["git", "add", str(VERSIONS_FILE)], check=True)
+
+        # Check if there are changes to commit
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            capture_output=True,
+        )
+        if result.returncode == 0:
+            print("No changes to commit")
+            return True
+
+        subprocess.run(["git", "commit", "-m", message], check=True)
+        subprocess.run(["git", "push"], check=True)
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"Git error: {e}", file=sys.stderr)
+        return False
+
+
+def main() -> int:
+    print("Fetching latest versions from GitHub...")
+
+    versions = {}
+
+    # Fetch geth
+    print(f"  Fetching {REPOS['geth']}...")
+    geth_release = get_latest_release(REPOS["geth"])
+    geth_version, geth_commit = parse_geth_version(geth_release)
+    versions["GETH_VERSION"] = geth_version
+    versions["GETH_COMMIT"] = geth_commit
+    print(f"    Geth: {geth_version}-{geth_commit}")
+
+    # Fetch prysm
+    print(f"  Fetching {REPOS['prysm']}...")
+    prysm_release = get_latest_release(REPOS["prysm"])
+    prysm_version = parse_version(prysm_release)
+    versions["PRYSM_VERSION"] = prysm_version
+    print(f"    Prysm: {prysm_version}")
+
+    # Fetch mev-boost
+    print(f"  Fetching {REPOS['mevboost']}...")
+    mev_release = get_latest_release(REPOS["mevboost"])
+    mev_version = parse_version(mev_release)
+    versions["MEVBOOST_VERSION"] = mev_version
+    print(f"    MEV-Boost: {mev_version}")
+
+    # Validate versions
+    if not all(versions.values()):
+        print("Error: Failed to fetch all versions", file=sys.stderr)
+        return 1
+
+    # Write versions.env
+    content = "# Auto-generated by scripts/update.py - do not edit manually\n"
+    for key, value in versions.items():
+        content += f"{key}={value}\n"
+
+    VERSIONS_FILE.write_text(content)
+    print(f"\nWritten to {VERSIONS_FILE}")
+
+    # Auto-commit if not on master
+    branch = get_current_branch()
+    if branch in ("master", "main"):
+        print(f"On {branch} branch - skipping auto-commit")
+    else:
+        print(f"On {branch} branch - auto-committing...")
+        message = (
+            f"Update versions: geth={geth_version}, prysm={prysm_version}, mev-boost={mev_version}"
+        )
+        if git_commit_and_push(message):
+            print("Committed and pushed successfully")
+        else:
+            print("Failed to commit/push", file=sys.stderr)
+            return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

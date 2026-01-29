@@ -1,0 +1,184 @@
+name: Pull Request
+
+on:
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: write  # Needed to push QR code updates
+  pull-requests: write
+  id-token: write  # Required for OIDC trusted publishing to TestPyPI
+
+jobs:
+  test:
+    name: Test
+    uses: ./.github/workflows/test.yml
+
+  qr:
+    name: QR Codes
+    needs: test
+    runs-on: ubuntu-latest
+    # Skip if triggered by QR code update commit to prevent infinite loop
+    if: "!contains(github.event.head_commit.message, '[skip-qr]')"
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.head_ref }}
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+    
+    - name: Install dependencies
+      run: make ci
+    
+    - name: Generate QR codes
+      run: make qr
+    
+    - name: Commit if changed
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add assets/
+        if ! git diff --cached --quiet; then
+          git commit -m "Update QR codes [skip-qr]"
+          git push
+        fi
+
+  version:
+    name: Version Preview
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      pypi_version: ${{ steps.set-version.outputs.pypi_version }}
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/staker
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Need full history for version calculation
+    
+    - name: Calculate next version (dry run)
+      id: version
+      uses: anothrNick/github-tag-action@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        DRY_RUN: true
+        DEFAULT_BUMP: minor
+        WITH_V: true
+        PRERELEASE: true
+        PRERELEASE_SUFFIX: rc
+        BRANCH_HISTORY: compare
+        INITIAL_VERSION: 0.1.0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+    
+    - name: Update version in pyproject.toml
+      id: set-version
+      run: |
+        # Get base version from tag action (e.g., v1.2.0-rc.0)
+        BASE_TAG="${NEW_TAG}"
+        # Strip 'v' prefix and '-rc.X' suffix to get base version (e.g., 1.2.0)
+        BASE_VERSION="${BASE_TAG#v}"
+        BASE_VERSION="${BASE_VERSION%-rc.*}"
+        # Create unique prerelease version: {base}rc{pr_number}.dev{run_number}
+        # e.g., 1.2.0rc42.dev7 for PR #42, run #7
+        PYPI_VERSION="${BASE_VERSION}rc${{ github.event.pull_request.number }}.dev${{ github.run_number }}"
+        sed -i "s/^version = .*/version = \"$PYPI_VERSION\"/" pyproject.toml
+        echo "Tag version: $NEW_TAG"
+        echo "PyPI version: $PYPI_VERSION"
+        echo "pypi_version=$PYPI_VERSION" >> $GITHUB_OUTPUT
+        grep "^version" pyproject.toml
+      env:
+        NEW_TAG: ${{ steps.version.outputs.new_tag }}
+    
+    - name: Build distributions
+      run: |
+        uv build --sdist
+        uv build --wheel
+    
+    - name: Publish to TestPyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
+        # Uses OIDC trusted publishing - configure at:
+        # https://test.pypi.org/manage/account/publishing/
+    
+    - name: Comment version info on PR
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const oldTag = '${{ steps.version.outputs.old_tag }}' || 'none';
+          const newTag = '${{ steps.version.outputs.new_tag }}';
+          const part = '${{ steps.version.outputs.part }}';
+          
+          // Extract base version (remove -rc.X suffix for display)
+          const baseVersion = newTag.replace(/-rc\.\d+$/, '');
+          
+          const body = `## 📦 Version Preview
+          
+          - **Current version:** \`${oldTag}\`
+          - **Bump type:** \`${part}\`
+          - **Release version:** \`${baseVersion}\`
+          - **TestPyPI version:** \`${newTag}\`
+          
+          When this PR is merged, version will be bumped to \`${baseVersion}\`.
+          
+          To change the bump type, include in commit message: \`#major\`, \`#minor\`, or \`#patch\``;
+          
+          // Find existing bot comment with version preview
+          const { data: comments } = await github.rest.issues.listComments({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo
+          });
+          
+          const botComment = comments.find(c => 
+            c.user.type === 'Bot' && 
+            c.body.includes('## 📦 Version Preview')
+          );
+          
+          if (botComment) {
+            // Check if version info changed
+            const oldVersionMatch = botComment.body.match(/Release version:\*\* `([^`]+)`/);
+            const oldBumpMatch = botComment.body.match(/Bump type:\*\* `([^`]+)`/);
+            const oldReleaseVersion = oldVersionMatch ? oldVersionMatch[1] : '';
+            const oldBumpType = oldBumpMatch ? oldBumpMatch[1] : '';
+            
+            if (oldReleaseVersion === baseVersion && oldBumpType === part) {
+              console.log('Version info unchanged, skipping comment update');
+              return;
+            }
+            
+            // Update existing comment
+            await github.rest.issues.updateComment({
+              comment_id: botComment.id,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+            console.log('Updated existing version comment');
+          } else {
+            // Create new comment
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+            console.log('Created new version comment');
+          }
