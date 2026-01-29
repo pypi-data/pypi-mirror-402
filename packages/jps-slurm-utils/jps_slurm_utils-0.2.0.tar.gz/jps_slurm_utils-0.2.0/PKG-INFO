@@ -1,0 +1,268 @@
+Metadata-Version: 2.4
+Name: jps-slurm-utils
+Version: 0.2.0
+Summary: Audit/evaluate SLURM HPC jobs by parsing static artifacts (stdout/stderr/log/config files) and producing human- and machine-readable reports.
+Author-email: Jaideep Sundaram <jai.python3@gmail.com>
+License: MIT
+Project-URL: Homepage, https://github.com/jai-python3/jps-slurm-utils
+Project-URL: Repository, https://github.com/jai-python3/jps-slurm-utils
+Project-URL: Issues, https://github.com/jai-python3/jps-slurm-utils/issues
+Keywords: cookiecutter,bootstrap,project-generator,automation
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: typer>=0.12.3
+Requires-Dist: rich>=13.0.0
+Provides-Extra: test
+Requires-Dist: pytest>=8.0.0; extra == "test"
+Provides-Extra: dev
+Requires-Dist: flake8>=7.0.0; extra == "dev"
+Requires-Dist: black>=24.0.0; extra == "dev"
+Requires-Dist: build>=1.2.1; extra == "dev"
+Requires-Dist: twine>=5.0.0; extra == "dev"
+Requires-Dist: pytest>=8.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=5.0.0; extra == "dev"
+Requires-Dist: isort>=5.13.0; extra == "dev"
+Requires-Dist: codecov>=2.1.13; extra == "dev"
+Requires-Dist: autoflake>=2.3.1; extra == "dev"
+Requires-Dist: pre-commit>=3.8.0; extra == "dev"
+Requires-Dist: bandit>=1.7.9; extra == "dev"
+Requires-Dist: vulture>=2.11; extra == "dev"
+Requires-Dist: flynt>=1.0.1; extra == "dev"
+Requires-Dist: pydocstyle>=6.3.0; extra == "dev"
+Requires-Dist: darglint>=1.8.1; extra == "dev"
+Requires-Dist: mypy>=1.12.1; extra == "dev"
+Requires-Dist: bump-my-version>=1.0.1; extra == "dev"
+Requires-Dist: git-changelog>=2.7.0; extra == "dev"
+Dynamic: license-file
+
+# jps-slurm-utils
+
+![Build](https://github.com/jai-python3/jps-slurm-utils/actions/workflows/test.yml/badge.svg)
+![Publish to PyPI](https://github.com/jai-python3/jps-slurm-utils/actions/workflows/publish-to-pypi.yml/badge.svg)
+[![codecov](https://codecov.io/gh/jai-python3/jps-slurm-utils/branch/main/graph/badge.svg)](https://codecov.io/gh/jai-python3/jps-slurm-utils)
+
+Audit/evaluate SLURM HPC jobs by parsing static artifacts (stdout/stderr/log/config files) and producing human- and machine-readable reports.
+
+## 🚀 Overview
+
+`jps-slurm-job-audit` is a powerful offline SLURM job audit tool that analyzes job artifacts without requiring cluster access. It provides:
+
+- **Automated failure detection**: Detects OOM errors, timeouts, segfaults, Python/Java/R exceptions, filesystem errors, and more
+- **Metadata extraction**: Parses SBATCH directives and job information from scripts and filenames
+- **Resource utilization tracking**: Extracts metrics from seff/sacct outputs when available
+- **Structured reporting**: Generates JSON reports with evidence snippets and remediation guidance
+- **Batch processing**: Analyze hundreds of jobs and generate aggregate summaries
+- **Exit codes**: 0=OK, 1=WARN, 2=FAIL, 3+=tool error
+
+### Features
+
+- ✅ **Offline analysis** - No cluster access needed, works with copied artifacts
+- ✅ **Pattern-based detection** - Built-in rules for common HPC failure modes
+- ✅ **Streaming scanner** - Efficiently handles large log files without loading into memory
+- ✅ **Evidence capture** - Stores relevant log excerpts with line numbers and context
+- ✅ **Configurable discovery** - Flexible glob/regex patterns for file matching
+- ✅ **Rich terminal output** - Pretty tables and color-coded summaries
+- ✅ **Machine-readable reports** - JSON/CSV outputs for downstream analytics
+- ✅ **Extensible** - Plugin architecture for custom detectors (future milestone)
+
+### Example Usage
+
+#### Audit a single job directory:
+
+```bash
+jps-slurm-job-audit single --job-dir /path/to/job/artifacts
+```
+
+Output:
+```
+INFO: Starting audit of job directory: /path/to/job/artifacts
+INFO: Phase 1: Discovering artifacts...
+INFO: Discovered 5 files in /path/to/job/artifacts
+INFO: Phase 2: Extracting metadata...
+INFO: Phase 3: Detecting failure patterns...
+INFO: Found 2 issues across 2 files
+INFO: Phase 4: Extracting metrics...
+INFO: Phase 5: Computing final status...
+INFO: Audit complete. Status: FAIL, Score: 40
+
+✓ Audit complete!
+Report saved to: /tmp/user/jps-slurm-job-audit/20240115_142330/report.json
+
+┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┓
+┃ Field        ┃ Value          ┃
+┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━┩
+│ Job ID       │ 123456         │
+│ Job Name     │ example_job    │
+│ Status       │ FAIL           │
+│ Findings     │ 2              │
+│ Files Scanned│ 5              │
+└──────────────┴────────────────┘
+
+Findings:
+  • Python Exception: Detected python exception in example-123456.out (1 occurrences)
+  • Out of Memory: Detected out of memory in slurm-654321.out (3 occurrences)
+```
+
+#### Audit multiple jobs in batch:
+
+```bash
+# Create a file with job directory paths
+cat > job_dirs.txt <<EOF
+/path/to/job1
+/path/to/job2
+/path/to/job3
+EOF
+
+jps-slurm-job-audit batch --path-list job_dirs.txt --outdir ./results
+```
+
+#### Advanced filtering:
+
+```bash
+# Only scan specific file types
+jps-slurm-job-audit single --job-dir ./job --glob "*.out"
+
+# Include/exclude patterns
+jps-slurm-job-audit single --job-dir ./job \
+  --include "slurm-.*\.(out|err)" \
+  --exclude "backup"
+
+# Custom output location
+jps-slurm-job-audit single --job-dir ./job \
+  --outdir ./my-reports \
+  --logfile ./my-reports/audit.log
+
+# Verbose logging
+jps-slurm-job-audit single --job-dir ./job --verbose
+
+# Quiet mode (no console output)
+jps-slurm-job-audit single --job-dir ./job --quiet
+```
+
+#### Batch with filtering:
+
+```bash
+# Only show failed jobs
+jps-slurm-job-audit batch --path-list jobs.txt --only FAIL
+```
+
+### Report Structure
+
+The JSON report includes:
+
+```json
+{
+  "tool_version": "0.1.0",
+  "run_timestamp": "2024-01-15T14:23:30",
+  "job_metadata": {
+    "job_id": "123456",
+    "job_name": "example_job",
+    "partition": "compute",
+    "nodes": 2,
+    "ntasks": 16,
+    "cpus_per_task": 2,
+    "mem": "64G",
+    "time_limit": "12:00:00"
+  },
+  "discovered_files": [...],
+  "findings": [
+    {
+      "id": "python_exception_example-123456.out",
+      "category": "Python Exception",
+      "severity": "ERROR",
+      "message": "Detected python exception in example-123456.out (1 occurrences)",
+      "confidence": 0.9,
+      "remediation": "Review Python traceback and fix the reported error in your code.",
+      "evidence": [
+        {
+          "file": "/path/to/example-123456.out",
+          "line_start": 12,
+          "excerpt": "ValueError: invalid literal for int() with base 10: 'NaN'",
+          "match_pattern": "(?i)^\\w+Error:",
+          "context_before": [
+            "  File \"/path/to/application.py\", line 156, in process_data",
+            "    result = transform(data)"
+          ]
+        }
+      ]
+    }
+  ],
+  "metrics": {
+    "walltime_used": "00:45:23",
+    "memory_utilized": "58.2 GB",
+    "cpu_efficiency": 87.5
+  },
+  "final_status": "FAIL",
+  "score": 40,
+  "rules_used": ["built-in"]
+}
+```
+
+## 📦 Installation
+
+### From source:
+
+```bash
+git clone https://github.com/jai-python3/jps-slurm-utils
+cd jps-slurm-utils
+make install
+```
+
+### Using pip (when published):
+
+```bash
+pip install jps-slurm-utils
+```
+
+### For development:
+
+```bash
+make install-dev
+```
+
+## 🧪 Development
+
+```bash
+# Format and lint code
+make fix && make format && make lint
+
+# Run tests
+make test
+
+# Run tests with coverage
+make test-cov
+
+# Run all checks
+make all
+```
+
+## 🗺️ Roadmap
+
+This implements **Milestones 0-3** from the SRS:
+- ✅ Project skeleton with Typer CLI
+- ✅ Artifact discovery and metadata normalization
+- ✅ Error/failure classification with evidence capture
+- ✅ Resource utilization inference with anomaly detection
+
+**Future milestones:**
+- [ ] Milestone 4: External YAML rule packs
+- [ ] Milestone 5: Batch aggregation analytics
+- [ ] Milestone 6: Job comparison/diff command
+- [ ] Milestone 7: Plugin architecture
+
+## 🤝 Contributing
+
+Contributions welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new functionality
+4. Ensure all tests pass (`make test`)
+5. Submit a pull request
+
+## 📜 License
+
+MIT License © Jaideep Sundaram
