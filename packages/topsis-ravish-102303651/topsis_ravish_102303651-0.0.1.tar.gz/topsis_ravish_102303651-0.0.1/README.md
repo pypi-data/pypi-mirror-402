@@ -1,0 +1,92 @@
+TOPSIS Python Package
+📌 About TOPSIS
+
+TOPSIS (Technique for Order Preference by Similarity to Ideal Solution) is a multi-criteria decision-making (MCDM) method.
+It helps in ranking alternatives based on their distance from the ideal best and ideal worst solutions.
+
+This package provides a command-line implementation of TOPSIS in Python.
+
+📦 Installation
+
+Install the package from PyPI using:
+
+pip install Topsis-Ravish-102303651
+
+
+🚀 Usage
+
+The package can be used directly from the command line.
+
+🔹 Command Format
+topsis <inputFileName> <weights> <impacts> <outputFileName>
+
+🔹 Example
+topsis data.csv "1,1,1,2" "+,+,-,+" result.csv
+
+📄 Input File Format
+
+The first column should contain the names of alternatives.
+
+From second column to last column, values must be numeric.
+
+The file must contain at least 3 columns.
+
+✔ Example Input (data.csv)
+Fund Name,P1,P2,P3,P4
+M1,0.67,0.45,6.5,42.6
+M2,0.6,0.36,3.6,53.3
+M3,0.82,0.67,3.8,63.1
+M4,0.6,0.36,3.5,69.2
+
+📤 Output File Format
+
+The output file will contain two additional columns:
+
+Topsis Score
+
+Rank
+
+✔ Example Output (result.csv)
+Fund Name,P1,P2,P3,P4,Topsis Score,Rank
+M1,0.67,0.45,6.5,42.6,0.61,2
+M2,0.6,0.36,3.6,53.3,0.42,4
+M3,0.82,0.67,3.8,63.1,0.78,1
+M4,0.6,0.36,3.5,69.2,0.35,5
+
+⚠️ Error Handling
+
+The program checks for the following errors:
+
+Incorrect number of command-line arguments
+
+Input file not found
+
+Less than 3 columns in input file
+
+Non-numeric values in criteria columns
+
+Number of weights, impacts, and criteria mismatch
+
+Impacts other than + or -
+
+Weights and impacts not separated by commas
+
+Appropriate error messages are displayed for invalid inputs.
+
+🛠 Requirements
+
+Python 3.x
+
+pandas
+
+numpy
+
+👨‍💻 Author
+
+Name: Ravish
+Roll Number: 102303651
+Course: B.Tech (Computer Engineering)
+
+📄 License
+
+This project is licensed under the MIT License.
