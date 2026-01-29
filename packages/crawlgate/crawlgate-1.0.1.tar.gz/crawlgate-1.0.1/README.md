@@ -1,0 +1,299 @@
+# CrawlGate Python SDK
+
+Official Python SDK for [CrawlGate](https://crawlgate.io) - AI-powered web scraping platform.
+
+[![PyPI version](https://badge.fury.io/py/crawlgate.svg)](https://badge.fury.io/py/crawlgate)
+[![Python versions](https://img.shields.io/pypi/pyversions/crawlgate.svg)](https://pypi.org/project/crawlgate/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## Installation
+
+```bash
+pip install crawlgate
+```
+
+## Quick Start
+
+```python
+from crawlgate import CrawlGateClient
+
+# Initialize client
+client = CrawlGateClient(api_key="sk_live_...")
+
+# Scrape a single URL
+doc = client.scrape("https://example.com")
+print(doc.markdown)
+```
+
+## Features
+
+- **Scrape** - Extract content from any URL
+- **Crawl** - Recursively crawl websites
+- **Map** - Discover all URLs on a website
+- **Search** - Web search with optional scraping
+- **Extract** - LLM-powered structured data extraction
+
+## Usage Examples
+
+### Scrape a URL
+
+```python
+from crawlgate import CrawlGateClient
+
+client = CrawlGateClient(api_key="sk_live_...")
+
+# Basic scrape
+doc = client.scrape("https://example.com")
+print(doc.markdown)
+
+# With options
+doc = client.scrape(
+    "https://example.com",
+    engine="dynamic",  # Use headless browser
+    formats=["markdown", "html"],
+    only_main_content=True
+)
+print(doc.html)
+```
+
+### Crawl a Website
+
+```python
+# Crawl and wait for completion
+job = client.crawl(
+    "https://example.com",
+    limit=50,
+    engine="dynamic"
+)
+
+print(f"Crawled {job.completed} pages")
+for page in job.data:
+    print(f"- {page.url}: {len(page.markdown or '')} chars")
+```
+
+### Async Crawl (Manual Polling)
+
+```python
+import time
+
+# Start crawl job
+response = client.start_crawl("https://example.com", limit=100)
+print(f"Job started: {response.id}")
+
+# Poll for status
+while True:
+    job = client.get_crawl_status(response.id)
+    print(f"Status: {job.status}, Completed: {job.completed}/{job.total}")
+
+    if job.status in ["completed", "failed"]:
+        break
+
+    time.sleep(2)
+
+# Process results
+for page in job.data:
+    print(page.url)
+```
+
+### Map a Website
+
+```python
+# Discover all URLs
+result = client.map("https://example.com")
+
+print(f"Found {result.count} URLs:")
+for url in result.links:
+    print(url)
+```
+
+### Web Search
+
+```python
+# Search the web
+results = client.search(
+    "best python web scraping libraries 2024",
+    limit=10,
+    lang="en",
+    country="us"
+)
+
+for result in results.data:
+    print(f"{result.title}: {result.url}")
+
+# Search with scraping
+results = client.search(
+    "python tutorials",
+    limit=5,
+    scrape_options={"formats": ["markdown"]}
+)
+
+for result in results.data:
+    print(f"\n{result.title}")
+    print(result.markdown[:500] if result.markdown else "No content")
+```
+
+### LLM Extraction
+
+```python
+# Extract structured data
+result = client.extract(
+    urls=["https://example.com/product"],
+    schema={
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "price": {"type": "number"},
+            "in_stock": {"type": "boolean"},
+            "features": {
+                "type": "array",
+                "items": {"type": "string"}
+            }
+        },
+        "required": ["name", "price"]
+    },
+    system_prompt="Extract product details from the page",
+    provider="openai"
+)
+
+print(result.data)
+```
+
+### Scrape with LLM Extraction
+
+```python
+doc = client.scrape(
+    "https://example.com/product",
+    extract={
+        "schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "price": {"type": "number"}
+            }
+        },
+        "systemPrompt": "Extract the product info",
+        "provider": "openai"
+    }
+)
+
+print(doc.extract.data)
+```
+
+### Batch Scrape
+
+```python
+urls = [
+    "https://example.com/page1",
+    "https://example.com/page2",
+    "https://example.com/page3"
+]
+
+# Scrape multiple URLs
+job = client.batch_scrape(
+    urls,
+    options={"formats": ["markdown"], "engine": "smart"}
+)
+
+print(f"Scraped {job.completed} URLs")
+for doc in job.data:
+    print(f"- {doc.url}: {len(doc.markdown or '')} chars")
+```
+
+### Usage Monitoring
+
+```python
+# Check concurrency
+concurrency = client.get_concurrency()
+print(f"Using {concurrency.concurrency}/{concurrency.max_concurrency} slots")
+
+# Check credits
+credits = client.get_credit_usage()
+print(f"Remaining credits: {credits.remaining_credits}")
+```
+
+## Engine Types
+
+| Engine | Description | Best For |
+|--------|-------------|----------|
+| `static` | Axios + Cheerio (fast) | Simple pages, APIs |
+| `dynamic` | Headless browser (Playwright) | JS-heavy sites |
+| `smart` | Auto-selects based on content | General use, LLM extraction |
+
+## Error Handling
+
+```python
+from crawlgate import CrawlGateClient
+from crawlgate.errors import (
+    CrawlGateError,
+    AuthenticationError,
+    RateLimitError,
+    ValidationError,
+    TimeoutError
+)
+
+client = CrawlGateClient(api_key="sk_live_...")
+
+try:
+    doc = client.scrape("https://example.com")
+except AuthenticationError:
+    print("Invalid API key")
+except RateLimitError as e:
+    print(f"Rate limited. Retry after {e.retry_after}s")
+except ValidationError as e:
+    print(f"Invalid request: {e.message}")
+except TimeoutError:
+    print("Request timed out")
+except CrawlGateError as e:
+    print(f"Error: {e.message}")
+```
+
+## Environment Variables
+
+```bash
+export CRAWLGATE_API_KEY="sk_live_..."
+export CRAWLGATE_API_URL="https://api.crawlgate.io"  # Optional
+```
+
+```python
+# API key will be read from environment
+client = CrawlGateClient()
+```
+
+## API Reference
+
+### CrawlGateClient
+
+```python
+CrawlGateClient(
+    api_key: str = None,      # API key (or CRAWLGATE_API_KEY env)
+    api_url: str = None,      # Base URL (or CRAWLGATE_API_URL env)
+    timeout: int = 90,        # Request timeout in seconds
+    max_retries: int = 3      # Max retry attempts
+)
+```
+
+### Methods
+
+| Method | Description |
+|--------|-------------|
+| `scrape(url, **options)` | Scrape a single URL |
+| `crawl(url, **options)` | Crawl website and wait for completion |
+| `start_crawl(url, **options)` | Start async crawl job |
+| `get_crawl_status(job_id)` | Get crawl job status |
+| `cancel_crawl(job_id)` | Cancel crawl job |
+| `map(url, **options)` | Discover URLs on a website |
+| `search(query, **options)` | Web search |
+| `extract(urls, schema, **options)` | LLM extraction |
+| `batch_scrape(urls, **options)` | Batch scrape URLs |
+| `get_concurrency()` | Get concurrency usage |
+| `get_credit_usage()` | Get credit usage |
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Support
+
+- Documentation: https://docs.crawlgate.io
+- Issues: https://github.com/crawlgate/crawlgate-python/issues
+- Email: support@crawlgate.io
