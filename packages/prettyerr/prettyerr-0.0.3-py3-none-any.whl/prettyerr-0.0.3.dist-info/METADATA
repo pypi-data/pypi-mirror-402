@@ -1,0 +1,91 @@
+Metadata-Version: 2.4
+Name: prettyerr
+Version: 0.0.3
+Summary: Pretty error messages
+Project-URL: Repository, https://github.com/david-andrew/prettyerr
+Author-email: David Samson <david.andrew.engineer@gmail.com>
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+
+# Pretty Err
+
+[![PyPI version](https://img.shields.io/pypi/v/prettyerr.svg)](https://pypi.org/project/prettyerr/)
+[![Python versions](https://img.shields.io/pypi/pyversions/prettyerr.svg)](https://pypi.org/project/prettyerr/)
+[![CI](https://github.com/david-andrew/prettyerr/actions/workflows/sync-dewy-error-reporting.yml/badge.svg)](https://github.com/david-andrew/prettyerr/actions/workflows/sync-dewy-error-reporting.yml)
+
+A simple library for printing modern, source-annotated error messages.
+
+## Features
+- source span annotation
+- color output
+- multiple non-overlapping spans
+- zero-width spans
+
+## Install
+```
+pip install prettyerr
+```
+
+## Quickstart
+Print out an error report for some example source code
+
+```python
+from prettyerr import Error, Pointer, Span, SrcFile
+
+# example source code
+src = """\
+const repeat = (message:string, times:int) :> string => {
+    return message * times
+}
+result = repeat("hello", "3")
+printl(result)
+"""
+
+# Locate spans to highlight (.index() here is just for simplicity)
+repeat_start = src.index('repeat(')
+bad_arg_start = src.index('"3"')
+times_span = Span(repeat_start, repeat_start + len('repeat'))
+bad_arg_span = Span(bad_arg_start, bad_arg_start + len('"3"'))
+
+# Build and print the error report
+report = Error(
+    SrcFile.from_text(src, "path/to/example.lang"),
+    title="type mismatch for argument `times`",
+    pointer_messages=[
+        Pointer(span=times_span, message="`repeat` function's second argument `times` expects an 'int'"),
+        Pointer(span=bad_arg_span, message="argument given is type 'string'"),
+    ],
+    hint='Consider changing string literal "3" to integer 3',
+)
+print(report)
+```
+
+This generates the following error report
+```
+Error: type mismatch for argument `times`
+
+    ╭─[path/to/example.lang:4:10]
+  4 | result = repeat("hello", "3")
+    ·          ──┬───          ─┬─
+    ·            │              ╰─ argument given is type 'string'
+    ·            ╰─ `repeat` function's second argument `times` expects an 'int'
+    ╰───
+  help: Consider changing string literal "3" to integer 3
+```
+
+## API at a glance
+- `SrcFile.from_text(body, path=None)`
+- `Span(start, stop)` (stop-exclusive)
+- `Pointer(span=Span(...) | list[Span], message=..., placement=None, color=None)`
+- Report types: `Error`, `Warning`, `Info`, `Hint`
+- Common fields: `title`, `message`, `pointer_messages`, `hint`, `use_color`
+
+## Tips
+- Disable ANSI colors with `use_color=False`.
+- Raise an exception with `Error(...).throw()` (raises `ReportException`).
