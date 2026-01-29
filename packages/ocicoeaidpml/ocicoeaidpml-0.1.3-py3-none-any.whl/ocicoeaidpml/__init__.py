@@ -1,0 +1,7 @@
+__version__ = "0.1.0"
+
+from .core import run_schema_analysis
+
+__all__ = ["run_schema_analysis"]
+
+# pypi-AgEIcHlwaS5vcmcCJDFlZjk4N2ExLWMwZjAtNDRkZS04MDhjLWUxZjU1OTMxZGZkMAACKlszLCI1MThhY2E2ZS0xMWEwLTQ1Y2ItOWE2My1kOGRhYTA5NDA3ODciXQAABiD5U_n2rp1Rt9lVAVkSiJ5VFYkKejtb7m0gKWihRuOEXQ
