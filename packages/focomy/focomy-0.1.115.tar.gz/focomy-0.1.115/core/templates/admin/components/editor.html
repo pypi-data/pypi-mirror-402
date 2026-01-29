@@ -1,0 +1,2837 @@
+{# Editor.js Component - 最高のブロックエディタ #}
+
+<style>
+/* === エディタコンテナ === */
+.editor-container {
+    background: white;
+    border: 2px solid var(--border);
+    border-radius: 0.5rem;
+    min-height: 400px;
+    cursor: text;
+}
+
+/* === Popover/Toolbox 修正 === */
+/* ポップオーバーがbody直下に移動された場合のスタイル */
+body > .ce-popover {
+    position: fixed !important;
+    background: white !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
+    z-index: 10000 !important;
+    width: 220px !important;
+    max-height: 400px !important;
+    padding: 6px !important;
+}
+
+body > .ce-popover.ce-popover--opened {
+    display: flex !important;
+    flex-direction: column !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+body > .ce-popover .ce-popover__items {
+    max-height: 350px !important;
+    overflow-y: auto !important;
+}
+
+body > .ce-popover .ce-popover-item {
+    display: flex !important;
+    align-items: center !important;
+    padding: 8px 10px !important;
+    border-radius: 4px !important;
+    cursor: pointer !important;
+}
+
+body > .ce-popover .ce-popover-item:hover {
+    background: #f3f4f6 !important;
+}
+
+.editor-container:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.codex-editor {
+    padding: 1.5rem;
+}
+
+.codex-editor__redactor {
+    padding-bottom: 150px !important;
+}
+
+.ce-block__content,
+.ce-toolbar__content {
+    max-width: 100%;
+}
+
+/* === 基本スタイル === */
+.ce-paragraph {
+    line-height: 1.8;
+    font-size: 1rem;
+}
+
+.ce-header {
+    padding: 0.5em 0;
+}
+
+/* === Alertブロック === */
+.cdx-alert {
+    padding: 1rem 1.25rem;
+    border-radius: 0.5rem;
+    margin: 1rem 0;
+    border-left: 4px solid;
+}
+
+.cdx-alert--info {
+    background: #eff6ff;
+    border-color: #3b82f6;
+    color: #1e40af;
+}
+
+.cdx-alert--warning {
+    background: #fffbeb;
+    border-color: #f59e0b;
+    color: #92400e;
+}
+
+.cdx-alert--success {
+    background: #f0fdf4;
+    border-color: #22c55e;
+    color: #166534;
+}
+
+.cdx-alert--error {
+    background: #fef2f2;
+    border-color: #ef4444;
+    color: #991b1b;
+}
+
+.cdx-alert__message {
+    outline: none;
+    min-height: 1.5em;
+}
+
+.cdx-alert__type-selector {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.cdx-alert__type-btn {
+    padding: 0.25rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    background: white;
+    cursor: pointer;
+    font-size: 0.75rem;
+}
+
+.cdx-alert__type-btn.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+/* === Buttonブロック === */
+.cdx-button {
+    padding: 1rem;
+    text-align: center;
+}
+
+.cdx-button__link {
+    display: inline-block;
+    padding: 0.75rem 2rem;
+    border-radius: 0.5rem;
+    text-decoration: none;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.cdx-button__link--primary {
+    background: var(--primary);
+    color: white;
+}
+
+.cdx-button__link--secondary {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.cdx-button__link--outline {
+    background: transparent;
+    color: var(--primary);
+    border: 2px solid var(--primary);
+}
+
+.cdx-button__settings {
+    margin-top: 0.5rem;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+}
+
+.cdx-button__input {
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+}
+
+/* === LinkCardブロック === */
+.cdx-linkcard {
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    margin: 1rem 0;
+}
+
+.cdx-linkcard__input {
+    width: 100%;
+    padding: 0.75rem;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.875rem;
+}
+
+.cdx-linkcard__preview {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+}
+
+.cdx-linkcard__image {
+    width: 120px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 0.25rem;
+    background: var(--surface);
+}
+
+.cdx-linkcard__content {
+    flex: 1;
+}
+
+.cdx-linkcard__title {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    color: var(--text);
+}
+
+.cdx-linkcard__description {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.cdx-linkcard__domain {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.5rem;
+}
+
+/* === Columnsブロック === */
+.cdx-columns {
+    display: flex;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.cdx-columns__col {
+    flex: 1;
+    min-height: 100px;
+    padding: 1rem;
+    border: 1px dashed var(--border);
+    border-radius: 0.25rem;
+}
+
+.cdx-columns__col:focus {
+    border-color: var(--primary);
+    outline: none;
+}
+
+/* === Checklistスタイル === */
+.cdx-checklist__item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+}
+
+.cdx-checklist__item-checkbox {
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-top: 0.125rem;
+}
+
+/* === コードブロック === */
+.ce-code__textarea {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    background: #1e293b;
+    color: #e2e8f0;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    min-height: 100px;
+}
+
+/* === 引用 === */
+.cdx-quote__text {
+    font-style: italic;
+    border-left: 4px solid var(--primary);
+    padding-left: 1rem;
+    min-height: 2em;
+}
+
+.cdx-quote__caption {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-top: 0.5rem;
+}
+
+/* === テーブル === */
+.tc-table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.tc-table td {
+    border: 1px solid var(--border);
+    padding: 0.5rem;
+    min-width: 100px;
+}
+
+/* === インラインツール === */
+.cdx-marker {
+    background: #fef08a;
+    padding: 0.1em 0.2em;
+}
+
+.inline-code {
+    background: var(--surface);
+    padding: 0.1em 0.4em;
+    border-radius: 0.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+}
+
+.cdx-underline {
+    text-decoration: underline;
+}
+
+/* === Mapブロック === */
+.cdx-map {
+    margin: 1rem 0;
+}
+
+.cdx-map__input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-family: var(--font-mono);
+    resize: vertical;
+}
+
+.cdx-map__preview {
+    margin-top: 0.5rem;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.cdx-map__caption {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+}
+
+/* === Videoブロック === */
+.cdx-video {
+    margin: 1rem 0;
+}
+
+.cdx-video__input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.cdx-video__preview {
+    margin-top: 0.5rem;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background: #000;
+}
+
+.cdx-video__preview iframe,
+.cdx-video__preview video {
+    display: block;
+}
+
+.cdx-video__caption {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+}
+
+/* === Alignment Tune === */
+.cdx-alignment-tune {
+    display: flex;
+    gap: 4px;
+    padding: 6px;
+}
+.cdx-alignment-tune__button {
+    width: 32px;
+    height: 32px;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.cdx-alignment-tune__button:hover {
+    background: #f3f4f6;
+}
+.cdx-alignment-tune__button--active {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+}
+[data-alignment="left"] .ce-block__content { text-align: left; }
+[data-alignment="center"] .ce-block__content { text-align: center; }
+[data-alignment="right"] .ce-block__content { text-align: right; }
+
+/* === Color Tune === */
+.cdx-color-tune {
+    padding: 8px;
+}
+.cdx-color-tune__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.cdx-color-tune__row:last-child {
+    margin-bottom: 0;
+}
+.cdx-color-tune__label {
+    font-size: 12px;
+    color: #6b7280;
+    width: 48px;
+}
+.cdx-color-tune__input {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.cdx-color-tune__reset {
+    width: 24px;
+    height: 24px;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    font-size: 14px;
+    color: #9ca3af;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.cdx-color-tune__reset:hover {
+    background: #fee2e2;
+    color: #ef4444;
+}
+
+/* === Spacerブロック === */
+.cdx-spacer {
+    margin: 0.5rem 0;
+}
+
+.cdx-spacer__preview {
+    background: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 5px,
+        var(--surface) 5px,
+        var(--surface) 10px
+    );
+    border: 1px dashed var(--border);
+    border-radius: 0.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.cdx-spacer__settings {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-top: 0.25rem;
+}
+
+.cdx-spacer__input {
+    width: 80px;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+}
+
+/* === Groupブロック === */
+.cdx-group {
+    margin: 1rem 0;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.cdx-group__settings {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+}
+
+.cdx-group__content {
+    padding: 1rem;
+    min-height: 100px;
+    outline: none;
+}
+
+.cdx-group__input {
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+}
+
+/* === Coverブロック === */
+.cdx-cover {
+    margin: 1rem 0;
+    position: relative;
+}
+
+.cdx-cover__preview {
+    position: relative;
+    min-height: 300px;
+    background-size: cover;
+    background-position: center;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cdx-cover__overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 0.5rem;
+}
+
+.cdx-cover__content {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    padding: 2rem;
+    max-width: 80%;
+}
+
+.cdx-cover__title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: white;
+    outline: none;
+    min-height: 1em;
+}
+
+.cdx-cover__title:empty:before {
+    content: attr(data-placeholder);
+    color: rgba(255,255,255,0.5);
+}
+
+.cdx-cover__subtitle {
+    font-size: 1.25rem;
+    color: rgba(255,255,255,0.9);
+    outline: none;
+    margin-top: 0.5rem;
+}
+
+.cdx-cover__subtitle:empty:before {
+    content: attr(data-placeholder);
+    color: rgba(255,255,255,0.5);
+}
+
+.cdx-cover__settings {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+}
+
+.cdx-cover__input {
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+}
+
+.cdx-cover__upload-btn {
+    padding: 0.5rem 1rem;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+/* === Galleryブロック === */
+.cdx-gallery {
+    margin: 1rem 0;
+}
+
+.cdx-gallery__grid {
+    display: grid;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.cdx-gallery__grid--2 { grid-template-columns: repeat(2, 1fr); }
+.cdx-gallery__grid--3 { grid-template-columns: repeat(3, 1fr); }
+.cdx-gallery__grid--4 { grid-template-columns: repeat(4, 1fr); }
+
+.cdx-gallery__item {
+    position: relative;
+    aspect-ratio: 1;
+    background: var(--surface);
+    border-radius: 0.25rem;
+    overflow: hidden;
+}
+
+.cdx-gallery__item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.cdx-gallery__item-remove {
+    position: absolute;
+    top: 0.25rem;
+    right: 0.25rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    background: rgba(0,0,0,0.5);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cdx-gallery__add {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface);
+    border: 2px dashed var(--border);
+    border-radius: 0.25rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 2rem;
+}
+
+.cdx-gallery__add:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.cdx-gallery__settings {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.cdx-gallery__caption {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+}
+
+/* === Editor Mode Toggle (103) === */
+.editor-mode-toggle {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    background: #f8fafc;
+}
+.editor-mode-toggle button {
+    padding: 0.375rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    background: white;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.editor-mode-toggle button:hover {
+    background: #f1f5f9;
+}
+.editor-mode-toggle button.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+.editor-json-view {
+    display: none;
+    width: 100%;
+    min-height: 400px;
+    padding: 1rem;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    border: none;
+    resize: vertical;
+    background: #1e293b;
+    color: #e2e8f0;
+}
+.editor-json-view:focus {
+    outline: none;
+}
+.editor-json-error {
+    color: #ef4444;
+    font-size: 0.75rem;
+    padding: 0.5rem;
+    background: #fef2f2;
+    border-top: 1px solid #fecaca;
+    display: none;
+}
+
+/* === カスタムコンテキストメニュー === */
+.editor-context-menu {
+    position: fixed;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    padding: 4px;
+    z-index: 10001;
+    min-width: 160px;
+    display: none;
+}
+.editor-context-menu.visible {
+    display: block;
+}
+.editor-context-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #374151;
+}
+.editor-context-menu-item:hover {
+    background: #f3f4f6;
+}
+.editor-context-menu-item.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.editor-context-menu-item svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+}
+.editor-context-menu-divider {
+    height: 1px;
+    background: #e5e7eb;
+    margin: 4px 0;
+}
+</style>
+
+<!-- Editor.js Core & Plugins -->
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/editorjs@2.28.2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/header@2.8.1"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/list@1.9.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/checklist@1.6.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/image@2.9.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/quote@2.6.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/code@2.9.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/delimiter@1.4.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/table@2.3.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/embed@2.7.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/raw@2.5.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/marker@1.4.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/inline-code@1.5.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/underline@1.1.0"></script>
+
+<script>
+/* === カスタムインラインツール === */
+
+// Strikethrough (取り消し線)
+class StrikethroughInlineTool {
+    static get isInline() { return true; }
+    static get title() { return '取り消し線'; }
+
+    get state() { return this._state; }
+    set state(state) { this._state = state; }
+
+    constructor({api}) {
+        this.api = api;
+        this._state = false;
+        this.tag = 'S';
+    }
+
+    render() {
+        this.button = document.createElement('button');
+        this.button.type = 'button';
+        this.button.classList.add('ce-inline-tool');
+        this.button.innerHTML = '<s>S</s>';
+        return this.button;
+    }
+
+    surround(range) {
+        if (this._state) {
+            this.unwrap(range);
+            return;
+        }
+        this.wrap(range);
+    }
+
+    wrap(range) {
+        const s = document.createElement(this.tag);
+        s.appendChild(range.extractContents());
+        range.insertNode(s);
+        this.api.selection.expandToTag(s);
+    }
+
+    unwrap(range) {
+        const s = this.api.selection.findParentTag(this.tag);
+        const text = range.extractContents();
+        s.remove();
+        range.insertNode(text);
+    }
+
+    checkState() {
+        const s = this.api.selection.findParentTag(this.tag);
+        this._state = !!s;
+        this.button.classList.toggle('ce-inline-tool--active', this._state);
+        return this._state;
+    }
+}
+
+// TextColor (文字色)
+class TextColorInlineTool {
+    static get isInline() { return true; }
+    static get title() { return '文字色'; }
+
+    get state() { return this._state; }
+    set state(state) { this._state = state; }
+
+    constructor({api}) {
+        this.api = api;
+        this._state = false;
+    }
+
+    render() {
+        this.button = document.createElement('button');
+        this.button.type = 'button';
+        this.button.classList.add('ce-inline-tool');
+        this.button.innerHTML = '<span style="color:#e53e3e;font-weight:bold">A</span>';
+        this.button.title = '文字色';
+        return this.button;
+    }
+
+    renderActions() {
+        this.colorPicker = document.createElement('input');
+        this.colorPicker.type = 'color';
+        this.colorPicker.value = '#e53e3e';
+        this.colorPicker.classList.add('ce-inline-tool-input');
+        this.colorPicker.style.cssText = 'width:32px;height:32px;padding:0;border:none;cursor:pointer;';
+        this.colorPicker.addEventListener('change', () => {
+            this.applyColor(this.colorPicker.value);
+        });
+        return this.colorPicker;
+    }
+
+    applyColor(color) {
+        const selection = window.getSelection();
+        if (!selection.rangeCount) return;
+        const range = selection.getRangeAt(0);
+        if (range.collapsed) return;
+
+        const span = document.createElement('span');
+        span.style.color = color;
+        span.appendChild(range.extractContents());
+        range.insertNode(span);
+        this.api.selection.expandToTag(span);
+    }
+
+    surround(range) {
+        // Color picker handles this via change event
+    }
+
+    checkState() {
+        const span = this.api.selection.findParentTag('SPAN');
+        this._state = !!(span && span.style.color);
+        this.button.classList.toggle('ce-inline-tool--active', this._state);
+        return this._state;
+    }
+}
+
+// HighlightColor (ハイライト色)
+class HighlightInlineTool {
+    static get isInline() { return true; }
+    static get title() { return 'ハイライト'; }
+
+    get state() { return this._state; }
+    set state(state) { this._state = state; }
+
+    constructor({api}) {
+        this.api = api;
+        this._state = false;
+    }
+
+    render() {
+        this.button = document.createElement('button');
+        this.button.type = 'button';
+        this.button.classList.add('ce-inline-tool');
+        this.button.innerHTML = '<span style="background:#fef08a;padding:0 2px">H</span>';
+        this.button.title = 'ハイライト';
+        return this.button;
+    }
+
+    renderActions() {
+        this.colorPicker = document.createElement('input');
+        this.colorPicker.type = 'color';
+        this.colorPicker.value = '#fef08a';
+        this.colorPicker.classList.add('ce-inline-tool-input');
+        this.colorPicker.style.cssText = 'width:32px;height:32px;padding:0;border:none;cursor:pointer;';
+        this.colorPicker.addEventListener('change', () => {
+            this.applyHighlight(this.colorPicker.value);
+        });
+        return this.colorPicker;
+    }
+
+    applyHighlight(color) {
+        const selection = window.getSelection();
+        if (!selection.rangeCount) return;
+        const range = selection.getRangeAt(0);
+        if (range.collapsed) return;
+
+        const mark = document.createElement('mark');
+        mark.style.backgroundColor = color;
+        mark.appendChild(range.extractContents());
+        range.insertNode(mark);
+        this.api.selection.expandToTag(mark);
+    }
+
+    surround(range) {
+        // Color picker handles this via change event
+    }
+
+    checkState() {
+        const mark = this.api.selection.findParentTag('MARK');
+        this._state = !!(mark && mark.style.backgroundColor);
+        this.button.classList.toggle('ce-inline-tool--active', this._state);
+        return this._state;
+    }
+}
+
+// HeadingLevel (見出しレベル変更) - A4-1
+class HeadingLevelInlineTool {
+    static get isInline() { return true; }
+    static get title() { return '見出しレベル'; }
+
+    constructor({api}) {
+        this.api = api;
+        this._state = false;
+        this.currentLevel = 2;
+    }
+
+    render() {
+        this.wrapper = document.createElement('div');
+        this.wrapper.classList.add('ce-inline-tool', 'heading-level-tool');
+        this.wrapper.style.cssText = 'position:relative;';
+
+        this.button = document.createElement('button');
+        this.button.type = 'button';
+        this.button.innerHTML = '<span class="heading-level-display">H2</span><span style="font-size:10px;margin-left:2px;">▼</span>';
+        this.button.style.cssText = 'display:flex;align-items:center;padding:4px 8px;border:none;background:none;cursor:pointer;font-weight:bold;';
+        this.wrapper.appendChild(this.button);
+
+        this.dropdown = document.createElement('div');
+        this.dropdown.className = 'heading-level-dropdown';
+        this.dropdown.style.cssText = 'display:none;position:absolute;top:100%;left:0;background:white;border:1px solid #ddd;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:1000;';
+
+        for (let i = 1; i <= 6; i++) {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.textContent = 'H' + i;
+            item.dataset.level = i;
+            item.style.cssText = 'display:block;width:100%;padding:8px 16px;border:none;background:none;cursor:pointer;text-align:left;font-size:' + (20 - i * 2) + 'px;font-weight:bold;';
+            item.addEventListener('mouseenter', () => item.style.background = '#f0f0f0');
+            item.addEventListener('mouseleave', () => item.style.background = 'none');
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.setLevel(parseInt(item.dataset.level));
+                this.dropdown.style.display = 'none';
+            });
+            this.dropdown.appendChild(item);
+        }
+        this.wrapper.appendChild(this.dropdown);
+
+        this.button.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.dropdown.style.display = this.dropdown.style.display === 'none' ? 'block' : 'none';
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!this.wrapper.contains(e.target)) {
+                this.dropdown.style.display = 'none';
+            }
+        });
+
+        return this.wrapper;
+    }
+
+    setLevel(level) {
+        const blockIndex = this.api.blocks.getCurrentBlockIndex();
+        const block = this.api.blocks.getBlockByIndex(blockIndex);
+        if (block && block.name === 'header') {
+            block.call('setLevel', level);
+            this.currentLevel = level;
+            this.button.querySelector('.heading-level-display').textContent = 'H' + level;
+        }
+    }
+
+    surround(range) {
+        // Toggle dropdown instead
+    }
+
+    checkState() {
+        const blockIndex = this.api.blocks.getCurrentBlockIndex();
+        const block = this.api.blocks.getBlockByIndex(blockIndex);
+        if (block && block.name === 'header') {
+            this._state = true;
+            this.wrapper.style.display = '';
+            // Try to get current level
+            const headerEl = document.querySelector('.ce-block--focused .ce-header');
+            if (headerEl) {
+                const tag = headerEl.tagName;
+                const level = parseInt(tag.replace('H', ''));
+                if (level >= 1 && level <= 6) {
+                    this.currentLevel = level;
+                    this.button.querySelector('.heading-level-display').textContent = 'H' + level;
+                }
+            }
+        } else {
+            this._state = false;
+            this.wrapper.style.display = 'none';
+        }
+        return this._state;
+    }
+}
+</script>
+
+<script>
+/* === カスタムブロック: Alert === */
+class AlertBlock {
+    static get toolbox() {
+        return {
+            title: 'アラート',
+            icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+        };
+    }
+
+    constructor({data, api}) {
+        this.api = api;
+        this.data = {
+            type: data.type || 'info',
+            message: data.message || ''
+        };
+    }
+
+    render() {
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('cdx-alert', `cdx-alert--${this.data.type}`);
+
+        const typeSelector = document.createElement('div');
+        typeSelector.classList.add('cdx-alert__type-selector');
+
+        ['info', 'warning', 'success', 'error'].forEach(type => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = {info: '情報', warning: '注意', success: '成功', error: 'エラー'}[type];
+            btn.classList.add('cdx-alert__type-btn');
+            if (type === this.data.type) btn.classList.add('active');
+            btn.addEventListener('click', () => {
+                this.data.type = type;
+                wrapper.className = `cdx-alert cdx-alert--${type}`;
+                typeSelector.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+            typeSelector.appendChild(btn);
+        });
+
+        const message = document.createElement('div');
+        message.classList.add('cdx-alert__message');
+        message.contentEditable = true;
+        message.innerHTML = this.data.message;
+        message.dataset.placeholder = 'アラートメッセージを入力...';
+
+        wrapper.appendChild(typeSelector);
+        wrapper.appendChild(message);
+        this.messageEl = message;
+
+        return wrapper;
+    }
+
+    save() {
+        return {
+            type: this.data.type,
+            message: this.messageEl.innerHTML
+        };
+    }
+
+    static get sanitize() {
+        return { message: { br: true, b: true, i: true, a: true } };
+    }
+}
+
+/* === カスタムブロック: Button === */
+class ButtonBlock {
+    static get toolbox() {
+        return {
+            title: 'ボタン',
+            icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="8" rx="2"/></svg>'
+        };
+    }
+
+    constructor({data}) {
+        this.data = {
+            text: data.text || 'ボタン',
+            url: data.url || '#',
+            style: data.style || 'primary'
+        };
+    }
+
+    render() {
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('cdx-button');
+
+        const link = document.createElement('span');
+        link.classList.add('cdx-button__link', `cdx-button__link--${this.data.style}`);
+        link.contentEditable = true;
+        link.textContent = this.data.text;
+        this.linkEl = link;
+
+        const settings = document.createElement('div');
+        settings.classList.add('cdx-button__settings');
+
+        const urlInput = document.createElement('input');
+        urlInput.type = 'url';
+        urlInput.placeholder = 'リンクURL';
+        urlInput.value = this.data.url;
+        urlInput.classList.add('cdx-button__input');
+        this.urlInput = urlInput;
+
+        const styleSelect = document.createElement('select');
+        styleSelect.classList.add('cdx-button__input');
+        [['primary', 'プライマリ'], ['secondary', 'セカンダリ'], ['outline', 'アウトライン']].forEach(([val, label]) => {
+            const opt = document.createElement('option');
+            opt.value = val;
+            opt.textContent = label;
+            if (val === this.data.style) opt.selected = true;
+            styleSelect.appendChild(opt);
+        });
+        styleSelect.addEventListener('change', () => {
+            link.className = `cdx-button__link cdx-button__link--${styleSelect.value}`;
+            this.data.style = styleSelect.value;
+        });
+        this.styleSelect = styleSelect;
+
+        settings.appendChild(urlInput);
+        settings.appendChild(styleSelect);
+        wrapper.appendChild(link);
+        wrapper.appendChild(settings);
+
+        return wrapper;
+    }
+
+    save() {
+        return {
+            text: this.linkEl.textContent,
+            url: this.urlInput.value,
+            style: this.styleSelect.value
+        };
+    }
+}
+
+/* === カスタムブロック: LinkCard === */
+class LinkCardBlock {
+    static get toolbox() {
+        return {
+            title: 'リンクカード',
+            icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>'
+        };
+    }
+
+    constructor({data}) {
+        this.data = {
+            url: data.url || '',
+            title: data.title || '',
+            description: data.description || '',
+            image: data.image || ''
+        };
+    }
+
+    render() {
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('cdx-linkcard');
+
+        const input = document.createElement('input');
+        input.type = 'url';
+        input.placeholder = 'URLを入力してEnter...';
+        input.value = this.data.url;
+        input.classList.add('cdx-linkcard__input');
+        this.input = input;
+
+        const preview = document.createElement('div');
+        preview.classList.add('cdx-linkcard__preview');
+        preview.style.display = this.data.title ? 'flex' : 'none';
+        this.preview = preview;
+
+        if (this.data.title) {
+            this._renderPreview();
+        }
+
+        input.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                await this._fetchOGP(input.value);
+            }
+        });
+
+        wrapper.appendChild(input);
+        wrapper.appendChild(preview);
+
+        return wrapper;
+    }
+
+    async _fetchOGP(url) {
+        // 簡易的なプレビュー（実際はサーバーサイドでOGP取得が必要）
+        try {
+            const domain = new URL(url).hostname;
+            this.data.url = url;
+            this.data.title = domain;
+            this.data.description = url;
+            this._renderPreview();
+        } catch (e) {
+            console.error('Invalid URL');
+        }
+    }
+
+    _renderPreview() {
+        this.preview.innerHTML = `
+            <div class="cdx-linkcard__content">
+                <div class="cdx-linkcard__title" contenteditable="true">${this.data.title}</div>
+                <div class="cdx-linkcard__description" contenteditable="true">${this.data.description}</div>
+                <div class="cdx-linkcard__domain">${this.data.url}</div>
+            </div>
+        `;
+        this.preview.style.display = 'flex';
+
+        this.preview.querySelector('.cdx-linkcard__title').addEventListener('input', (e) => {
+            this.data.title = e.target.textContent;
+        });
+        this.preview.querySelector('.cdx-linkcard__description').addEventListener('input', (e) => {
+            this.data.description = e.target.textContent;
+        });
+    }
+
+    save() {
+        return this.data;
+    }
+}
+
+/* === カスタムブロック: Map (Google Maps) === */
+class MapBlock {
+    static get toolbox() {
+        return {
+            title: '地図',
+            icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'
+        };
+    }
+
+    constructor({data}) {
+        this.data = {
+            embedCode: data.embedCode || '',
+            caption: data.caption || ''
+        };
+    }
+
+    render() {
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('cdx-map');
+
+        const input = document.createElement('textarea');
+        input.classList.add('cdx-map__input');
+        input.placeholder = 'Google Mapsの埋め込みコード（<iframe>タグ）を貼り付け...';
+        input.value = this.data.embedCode;
+        input.rows = 3;
+        this.input = input;
+
+        const preview = document.createElement('div');
+        preview.classList.add('cdx-map__preview');
+        this.preview = preview;
+
+        const caption = document.createElement('input');
+        caption.type = 'text';
+        caption.classList.add('cdx-map__caption');
+        caption.placeholder = 'キャプション（任意）';
+        caption.value = this.data.caption;
+        this.captionInput = caption;
+
+        if (this.data.embedCode) {
+            this._renderPreview();
+        }
+
+        input.addEventListener('input', () => {
+            this.data.embedCode = input.value;
+            this._renderPreview();
+        });
+
+        wrapper.appendChild(input);
+        wrapper.appendChild(preview);
+        wrapper.appendChild(caption);
+
+        return wrapper;
+    }
+
+    _renderPreview() {
+        // iframeタグを抽出して表示
+        const iframeMatch = this.data.embedCode.match(/<iframe[^>]*src=["']([^"']+)["'][^>]*>/i);
+        if (iframeMatch) {
+            this.preview.innerHTML = `<iframe src="${iframeMatch[1]}" width="100%" height="300" style="border:0" allowfullscreen loading="lazy"></iframe>`;
+            this.preview.style.display = 'block';
+        } else {
+            this.preview.style.display = 'none';
+        }
+    }
+
+    save() {
+        // iframeのsrc属性を抽出して保存
+        const iframeMatch = this.data.embedCode.match(/<iframe[^>]*src=["']([^"']+)["'][^>]*>/i);
+        return {
+            src: iframeMatch ? iframeMatch[1] : '',
+            caption: this.captionInput.value
+        };
+    }
+}
+
+/* === カスタムブロック: Video (直接アップロード/URL) === */
+class VideoBlock {
+    static get toolbox() {
+        return {
+            title: '動画',
+            icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>'
+        };
+    }
+
+    constructor({data}) {
+        this.data = {
+            url: data.url || '',
+            caption: data.caption || ''
+        };
+    }
+
+    render() {
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('cdx-video');
+
+        const input = document.createElement('input');
+        input.type = 'url';
+        input.classList.add('cdx-video__input');
+        input.placeholder = '動画URL（YouTube, Vimeo, MP4など）';
+        input.value = this.data.url;
+        this.input = input;
+
+        const preview = document.createElement('div');
+        preview.classList.add('cdx-video__preview');
+        this.preview = preview;
+
+        const caption = document.createElement('input');
+        caption.type = 'text';
+        caption.classList.add('cdx-video__caption');
+        caption.placeholder = 'キャプション（任意）';
+        caption.value = this.data.caption;
+        this.captionInput = caption;
+
+        if (this.data.url) {
+            this._renderPreview();
+        }
+
+        input.addEventListener('change', () => {
+            this.data.url = input.value;
+            this._renderPreview();
+        });
+
+        wrapper.appendChild(input);
+        wrapper.appendChild(preview);
+        wrapper.appendChild(caption);
+
+        return wrapper;
+    }
+
+    _renderPreview() {
+        const url = this.data.url;
+        let embedHtml = '';
+
+        // YouTube
+        const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/);
+        if (ytMatch) {
+            embedHtml = `<iframe src="https://www.youtube.com/embed/${ytMatch[1]}" width="100%" height="315" frameborder="0" allowfullscreen></iframe>`;
+        }
+
+        // Vimeo
+        const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+        if (vimeoMatch) {
+            embedHtml = `<iframe src="https://player.vimeo.com/video/${vimeoMatch[1]}" width="100%" height="315" frameborder="0" allowfullscreen></iframe>`;
+        }
+
+        // Direct video URL (mp4, webm, ogg)
+        if (url.match(/\.(mp4|webm|ogg)(\?.*)?$/i)) {
+            embedHtml = `<video src="${url}" controls width="100%" style="max-height: 400px;"></video>`;
+        }
+
+        if (embedHtml) {
+            this.preview.innerHTML = embedHtml;
+            this.preview.style.display = 'block';
+        } else {
+            this.preview.innerHTML = '<p style="color: var(--text-muted); padding: 1rem;">プレビュー不可（保存後に表示されます）</p>';
+            this.preview.style.display = 'block';
+        }
+    }
+
+    save() {
+        return {
+            url: this.input.value,
+            caption: this.captionInput.value
+        };
+    }
+}
+
+/* === カスタムブロック: Columns === */
+class ColumnsBlock {
+    static get toolbox() {
+        return {
+            title: 'カラム',
+            icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="18"/><rect x="14" y="3" width="7" height="18"/></svg>'
+        };
+    }
+
+    constructor({data}) {
+        this.data = {
+            cols: data.cols || 2,
+            content: data.content || ['', '']
+        };
+    }
+
+    render() {
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('cdx-columns');
+        this.cols = [];
+
+        for (let i = 0; i < this.data.cols; i++) {
+            const col = document.createElement('div');
+            col.classList.add('cdx-columns__col');
+            col.contentEditable = true;
+            col.innerHTML = this.data.content[i] || '';
+            col.dataset.placeholder = `カラム ${i + 1}`;
+            this.cols.push(col);
+            wrapper.appendChild(col);
+        }
+
+        return wrapper;
+    }
+
+    save() {
+        return {
+            cols: this.data.cols,
+            content: this.cols.map(col => col.innerHTML)
+        };
+    }
+
+    static get sanitize() {
+        return { content: { br: true, b: true, i: true, a: true } };
+    }
+}
+
+/* === BlockTune: Alignment === */
+class AlignmentBlockTune {
+    static get isTune() { return true; }
+
+    constructor({api, data, config, block}) {
+        this.api = api;
+        this.block = block;
+        this.data = data || { alignment: 'left' };
+        this.wrapper = null;
+    }
+
+    render() {
+        this.wrapper = document.createElement('div');
+        this.wrapper.classList.add('cdx-alignment-tune');
+
+        const alignments = [
+            { value: 'left', icon: '◀', label: '左揃え' },
+            { value: 'center', icon: '■', label: '中央揃え' },
+            { value: 'right', icon: '▶', label: '右揃え' }
+        ];
+
+        alignments.forEach(align => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.classList.add('cdx-alignment-tune__button');
+            if (this.data.alignment === align.value) {
+                btn.classList.add('cdx-alignment-tune__button--active');
+            }
+            btn.textContent = align.icon;
+            btn.title = align.label;
+            btn.addEventListener('click', () => {
+                this.data.alignment = align.value;
+                this._updateButtons();
+                this._applyAlignment();
+            });
+            this.wrapper.appendChild(btn);
+        });
+
+        // Apply initial alignment
+        setTimeout(() => this._applyAlignment(), 0);
+
+        return this.wrapper;
+    }
+
+    _updateButtons() {
+        const alignments = ['left', 'center', 'right'];
+        this.wrapper.querySelectorAll('.cdx-alignment-tune__button').forEach((btn, i) => {
+            btn.classList.toggle('cdx-alignment-tune__button--active',
+                this.data.alignment === alignments[i]);
+        });
+    }
+
+    _applyAlignment() {
+        if (this.block && this.block.holder) {
+            this.block.holder.dataset.alignment = this.data.alignment;
+        }
+    }
+
+    save() {
+        return this.data;
+    }
+}
+
+/* === BlockTune: Color === */
+class ColorBlockTune {
+    static get isTune() { return true; }
+
+    constructor({api, data, config, block}) {
+        this.api = api;
+        this.block = block;
+        this.data = data || { textColor: '', backgroundColor: '' };
+        this.wrapper = null;
+    }
+
+    render() {
+        this.wrapper = document.createElement('div');
+        this.wrapper.classList.add('cdx-color-tune');
+
+        // Text color row
+        const textRow = document.createElement('div');
+        textRow.classList.add('cdx-color-tune__row');
+
+        const textLabel = document.createElement('label');
+        textLabel.classList.add('cdx-color-tune__label');
+        textLabel.textContent = '文字色';
+
+        const textInput = document.createElement('input');
+        textInput.type = 'color';
+        textInput.value = this.data.textColor || '#000000';
+        textInput.classList.add('cdx-color-tune__input');
+        textInput.addEventListener('change', () => {
+            this.data.textColor = textInput.value;
+            this._applyColors();
+        });
+        this.textInput = textInput;
+
+        const textReset = document.createElement('button');
+        textReset.type = 'button';
+        textReset.textContent = '×';
+        textReset.classList.add('cdx-color-tune__reset');
+        textReset.addEventListener('click', () => {
+            this.data.textColor = '';
+            textInput.value = '#000000';
+            this._applyColors();
+        });
+
+        textRow.appendChild(textLabel);
+        textRow.appendChild(textInput);
+        textRow.appendChild(textReset);
+
+        // Background color row
+        const bgRow = document.createElement('div');
+        bgRow.classList.add('cdx-color-tune__row');
+
+        const bgLabel = document.createElement('label');
+        bgLabel.classList.add('cdx-color-tune__label');
+        bgLabel.textContent = '背景色';
+
+        const bgInput = document.createElement('input');
+        bgInput.type = 'color';
+        bgInput.value = this.data.backgroundColor || '#ffffff';
+        bgInput.classList.add('cdx-color-tune__input');
+        bgInput.addEventListener('change', () => {
+            this.data.backgroundColor = bgInput.value;
+            this._applyColors();
+        });
+        this.bgInput = bgInput;
+
+        const bgReset = document.createElement('button');
+        bgReset.type = 'button';
+        bgReset.textContent = '×';
+        bgReset.classList.add('cdx-color-tune__reset');
+        bgReset.addEventListener('click', () => {
+            this.data.backgroundColor = '';
+            bgInput.value = '#ffffff';
+            this._applyColors();
+        });
+
+        bgRow.appendChild(bgLabel);
+        bgRow.appendChild(bgInput);
+        bgRow.appendChild(bgReset);
+
+        this.wrapper.appendChild(textRow);
+        this.wrapper.appendChild(bgRow);
+
+        // Apply initial colors
+        setTimeout(() => this._applyColors(), 0);
+
+        return this.wrapper;
+    }
+
+    _applyColors() {
+        if (this.block && this.block.holder) {
+            const content = this.block.holder.querySelector('.ce-block__content');
+            if (content) {
+                content.style.color = this.data.textColor || '';
+                content.style.backgroundColor = this.data.backgroundColor || '';
+                content.style.padding = this.data.backgroundColor ? '1rem' : '';
+                content.style.borderRadius = this.data.backgroundColor ? '0.5rem' : '';
+            }
+        }
+    }
+
+    save() {
+        return {
+            textColor: this.data.textColor || '',
+            backgroundColor: this.data.backgroundColor || ''
+        };
+    }
+}
+
+/* === カスタムブロック: Spacer === */
+class SpacerBlock {
+    static get toolbox() {
+        return {
+            title: 'スペーサー',
+            icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="2" x2="12" y2="22"/><polyline points="6 8 12 2 18 8"/><polyline points="6 16 12 22 18 16"/></svg>'
+        };
+    }
+
+    constructor({data}) {
+        this.data = {
+            height: data.height || 50
+        };
+    }
+
+    render() {
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('cdx-spacer');
+
+        const preview = document.createElement('div');
+        preview.classList.add('cdx-spacer__preview');
+        preview.style.height = this.data.height + 'px';
+        preview.textContent = this.data.height + 'px';
+        this.preview = preview;
+
+        const settings = document.createElement('div');
+        settings.classList.add('cdx-spacer__settings');
+
+        const label = document.createElement('span');
+        label.textContent = '高さ:';
+        label.style.fontSize = '0.75rem';
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.classList.add('cdx-spacer__input');
+        input.value = this.data.height;
+        input.min = '10';
+        input.max = '500';
+        input.addEventListener('input', () => {
+            const val = parseInt(input.value) || 50;
+            this.data.height = Math.max(10, Math.min(500, val));
+            preview.style.height = this.data.height + 'px';
+            preview.textContent = this.data.height + 'px';
+        });
+        this.input = input;
+
+        const unit = document.createElement('span');
+        unit.textContent = 'px';
+        unit.style.fontSize = '0.75rem';
+
+        settings.appendChild(label);
+        settings.appendChild(input);
+        settings.appendChild(unit);
+
+        wrapper.appendChild(preview);
+        wrapper.appendChild(settings);
+
+        return wrapper;
+    }
+
+    save() {
+        return {
+            height: parseInt(this.input.value) || 50
+        };
+    }
+}
+
+/* === カスタムブロック: Group === */
+class GroupBlock {
+    static get toolbox() {
+        return {
+            title: 'グループ',
+            icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>'
+        };
+    }
+
+    constructor({data}) {
+        this.data = {
+            content: data.content || '',
+            backgroundColor: data.backgroundColor || '#f8fafc',
+            padding: data.padding || 16
+        };
+    }
+
+    render() {
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('cdx-group');
+
+        const settings = document.createElement('div');
+        settings.classList.add('cdx-group__settings');
+
+        const colorLabel = document.createElement('span');
+        colorLabel.textContent = '背景:';
+        colorLabel.style.fontSize = '0.75rem';
+
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.classList.add('cdx-group__input');
+        colorInput.value = this.data.backgroundColor;
+        this.colorInput = colorInput;
+
+        const paddingLabel = document.createElement('span');
+        paddingLabel.textContent = '余白:';
+        paddingLabel.style.fontSize = '0.75rem';
+
+        const paddingInput = document.createElement('input');
+        paddingInput.type = 'number';
+        paddingInput.classList.add('cdx-group__input');
+        paddingInput.value = this.data.padding;
+        paddingInput.style.width = '60px';
+        paddingInput.min = '0';
+        paddingInput.max = '100';
+        this.paddingInput = paddingInput;
+
+        const content = document.createElement('div');
+        content.classList.add('cdx-group__content');
+        content.contentEditable = true;
+        content.innerHTML = this.data.content;
+        content.style.background = this.data.backgroundColor;
+        content.style.padding = this.data.padding + 'px';
+        content.dataset.placeholder = 'グループ内容を入力...';
+        this.contentEl = content;
+
+        colorInput.addEventListener('change', () => {
+            this.data.backgroundColor = colorInput.value;
+            content.style.background = colorInput.value;
+        });
+
+        paddingInput.addEventListener('change', () => {
+            this.data.padding = parseInt(paddingInput.value) || 16;
+            content.style.padding = this.data.padding + 'px';
+        });
+
+        settings.appendChild(colorLabel);
+        settings.appendChild(colorInput);
+        settings.appendChild(paddingLabel);
+        settings.appendChild(paddingInput);
+
+        wrapper.appendChild(settings);
+        wrapper.appendChild(content);
+
+        return wrapper;
+    }
+
+    save() {
+        return {
+            content: this.contentEl.innerHTML,
+            backgroundColor: this.colorInput.value,
+            padding: parseInt(this.paddingInput.value) || 16
+        };
+    }
+
+    static get sanitize() {
+        return { content: { br: true, b: true, i: true, a: true, p: true } };
+    }
+}
+
+/* === カスタムブロック: Cover === */
+class CoverBlock {
+    static get toolbox() {
+        return {
+            title: 'カバー',
+            icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>'
+        };
+    }
+
+    constructor({data}) {
+        this.data = {
+            imageUrl: data.imageUrl || '',
+            title: data.title || '',
+            subtitle: data.subtitle || '',
+            overlayColor: data.overlayColor || '#000000',
+            overlayOpacity: data.overlayOpacity || 0.5,
+            height: data.height || 400
+        };
+    }
+
+    render() {
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('cdx-cover');
+
+        const preview = document.createElement('div');
+        preview.classList.add('cdx-cover__preview');
+        preview.style.minHeight = this.data.height + 'px';
+        if (this.data.imageUrl) {
+            preview.style.backgroundImage = `url(${this.data.imageUrl})`;
+        } else {
+            preview.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+        }
+        this.preview = preview;
+
+        const overlay = document.createElement('div');
+        overlay.classList.add('cdx-cover__overlay');
+        this._updateOverlay(overlay);
+        this.overlay = overlay;
+
+        const content = document.createElement('div');
+        content.classList.add('cdx-cover__content');
+
+        const title = document.createElement('div');
+        title.classList.add('cdx-cover__title');
+        title.contentEditable = true;
+        title.innerHTML = this.data.title || '';
+        title.dataset.placeholder = 'タイトルを入力...';
+        this.titleEl = title;
+
+        const subtitle = document.createElement('div');
+        subtitle.classList.add('cdx-cover__subtitle');
+        subtitle.contentEditable = true;
+        subtitle.innerHTML = this.data.subtitle || '';
+        subtitle.dataset.placeholder = 'サブタイトル（任意）';
+        this.subtitleEl = subtitle;
+
+        content.appendChild(title);
+        content.appendChild(subtitle);
+        preview.appendChild(overlay);
+        preview.appendChild(content);
+
+        const settings = document.createElement('div');
+        settings.classList.add('cdx-cover__settings');
+
+        const uploadBtn = document.createElement('button');
+        uploadBtn.type = 'button';
+        uploadBtn.classList.add('cdx-cover__upload-btn');
+        uploadBtn.textContent = '画像を選択';
+        uploadBtn.addEventListener('click', () => this._uploadImage());
+
+        const heightInput = document.createElement('input');
+        heightInput.type = 'number';
+        heightInput.classList.add('cdx-cover__input');
+        heightInput.placeholder = '高さ(px)';
+        heightInput.value = this.data.height;
+        heightInput.style.width = '80px';
+        heightInput.addEventListener('change', () => {
+            this.data.height = parseInt(heightInput.value) || 400;
+            preview.style.minHeight = this.data.height + 'px';
+        });
+        this.heightInput = heightInput;
+
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.classList.add('cdx-cover__input');
+        colorInput.value = this.data.overlayColor;
+        colorInput.addEventListener('change', () => {
+            this.data.overlayColor = colorInput.value;
+            this._updateOverlay(overlay);
+        });
+        this.colorInput = colorInput;
+
+        const opacityInput = document.createElement('input');
+        opacityInput.type = 'range';
+        opacityInput.min = '0';
+        opacityInput.max = '1';
+        opacityInput.step = '0.1';
+        opacityInput.value = this.data.overlayOpacity;
+        opacityInput.style.width = '80px';
+        opacityInput.addEventListener('input', () => {
+            this.data.overlayOpacity = parseFloat(opacityInput.value);
+            this._updateOverlay(overlay);
+        });
+        this.opacityInput = opacityInput;
+
+        settings.appendChild(uploadBtn);
+        settings.appendChild(heightInput);
+        settings.appendChild(colorInput);
+        settings.appendChild(opacityInput);
+
+        wrapper.appendChild(preview);
+        wrapper.appendChild(settings);
+
+        return wrapper;
+    }
+
+    _updateOverlay(overlay) {
+        const hex = this.data.overlayColor;
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        overlay.style.background = `rgba(${r}, ${g}, ${b}, ${this.data.overlayOpacity})`;
+    }
+
+    async _uploadImage() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+
+        input.addEventListener('change', async () => {
+            const file = input.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/media', {
+                    method: 'POST',
+                    body: formData
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    this.data.imageUrl = data.url;
+                    this.preview.style.backgroundImage = `url(${data.url})`;
+                }
+            } catch (e) {
+                console.error('Upload failed:', e);
+            }
+        });
+
+        input.click();
+    }
+
+    save() {
+        return {
+            imageUrl: this.data.imageUrl,
+            title: this.titleEl.innerHTML,
+            subtitle: this.subtitleEl.innerHTML,
+            overlayColor: this.data.overlayColor,
+            overlayOpacity: this.data.overlayOpacity,
+            height: parseInt(this.heightInput.value) || 400
+        };
+    }
+
+    static get sanitize() {
+        return {
+            title: { br: true, b: true, i: true },
+            subtitle: { br: true, b: true, i: true }
+        };
+    }
+}
+
+/* === カスタムブロック: Gallery === */
+class GalleryBlock {
+    static get toolbox() {
+        return {
+            title: 'ギャラリー',
+            icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>'
+        };
+    }
+
+    constructor({data, api}) {
+        this.api = api;
+        this.data = {
+            images: data.images || [],
+            columns: data.columns || 3,
+            caption: data.caption || ''
+        };
+    }
+
+    render() {
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('cdx-gallery');
+
+        const settings = document.createElement('div');
+        settings.classList.add('cdx-gallery__settings');
+
+        const colLabel = document.createElement('span');
+        colLabel.textContent = 'カラム数:';
+        colLabel.style.fontSize = '0.875rem';
+
+        const colSelect = document.createElement('select');
+        colSelect.classList.add('cdx-button__input');
+        [2, 3, 4].forEach(n => {
+            const opt = document.createElement('option');
+            opt.value = n;
+            opt.textContent = n + '列';
+            if (n === this.data.columns) opt.selected = true;
+            colSelect.appendChild(opt);
+        });
+        this.colSelect = colSelect;
+
+        settings.appendChild(colLabel);
+        settings.appendChild(colSelect);
+
+        const grid = document.createElement('div');
+        grid.classList.add('cdx-gallery__grid', `cdx-gallery__grid--${this.data.columns}`);
+        this.grid = grid;
+
+        colSelect.addEventListener('change', () => {
+            this.data.columns = parseInt(colSelect.value);
+            grid.className = `cdx-gallery__grid cdx-gallery__grid--${this.data.columns}`;
+        });
+
+        this._renderGrid();
+
+        const caption = document.createElement('input');
+        caption.type = 'text';
+        caption.classList.add('cdx-gallery__caption');
+        caption.placeholder = 'キャプション（任意）';
+        caption.value = this.data.caption;
+        this.captionInput = caption;
+
+        wrapper.appendChild(settings);
+        wrapper.appendChild(grid);
+        wrapper.appendChild(caption);
+
+        return wrapper;
+    }
+
+    _renderGrid() {
+        this.grid.innerHTML = '';
+
+        this.data.images.forEach((img, index) => {
+            const item = document.createElement('div');
+            item.classList.add('cdx-gallery__item');
+            item.innerHTML = `<img src="${img.url}" alt="">`;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.classList.add('cdx-gallery__item-remove');
+            removeBtn.innerHTML = '&times;';
+            removeBtn.addEventListener('click', () => {
+                this.data.images.splice(index, 1);
+                this._renderGrid();
+            });
+
+            item.appendChild(removeBtn);
+            this.grid.appendChild(item);
+        });
+
+        const addBtn = document.createElement('div');
+        addBtn.classList.add('cdx-gallery__add');
+        addBtn.innerHTML = '+';
+        addBtn.addEventListener('click', () => this._addImage());
+        this.grid.appendChild(addBtn);
+    }
+
+    async _addImage() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.multiple = true;
+
+        input.addEventListener('change', async () => {
+            for (const file of input.files) {
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                    const response = await fetch('/api/media', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.data.images.push({ url: data.url });
+                        this._renderGrid();
+                    }
+                } catch (e) {
+                    console.error('Upload failed:', e);
+                }
+            }
+        });
+
+        input.click();
+    }
+
+    save() {
+        return {
+            images: this.data.images,
+            columns: parseInt(this.colSelect.value),
+            caption: this.captionInput.value
+        };
+    }
+}
+
+/* === エディタ初期化 === */
+// グローバルにEditor.jsインスタンスを保持（フォーム送信時にアクセス用）
+window.editors = window.editors || {};
+
+document.addEventListener('DOMContentLoaded', function() {
+    // カスタムコンテキストメニューを作成
+    let contextMenu = document.getElementById('editor-context-menu');
+    if (!contextMenu) {
+        contextMenu = document.createElement('div');
+        contextMenu.id = 'editor-context-menu';
+        contextMenu.className = 'editor-context-menu';
+        contextMenu.innerHTML = `
+            <div class="editor-context-menu-item" data-action="cut">
+                <svg viewBox="0 0 24 24" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+                切り取り
+            </div>
+            <div class="editor-context-menu-item" data-action="copy">
+                <svg viewBox="0 0 24 24" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                コピー
+            </div>
+            <div class="editor-context-menu-item" data-action="paste">
+                <svg viewBox="0 0 24 24" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+                貼り付け
+            </div>
+            <div class="editor-context-menu-divider"></div>
+            <div class="editor-context-menu-item" data-action="selectAll">
+                <svg viewBox="0 0 24 24" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/></svg>
+                すべて選択
+            </div>
+        `;
+        document.body.appendChild(contextMenu);
+
+        // メニュー項目クリック処理
+        contextMenu.addEventListener('click', function(e) {
+            const item = e.target.closest('.editor-context-menu-item');
+            if (!item || item.classList.contains('disabled')) return;
+
+            const action = item.dataset.action;
+            contextMenu.classList.remove('visible');
+
+            if (action === 'cut') {
+                document.execCommand('cut');
+            } else if (action === 'copy') {
+                document.execCommand('copy');
+            } else if (action === 'paste') {
+                navigator.clipboard.readText().then(text => {
+                    document.execCommand('insertText', false, text);
+                }).catch(() => {
+                    // フォールバック
+                    document.execCommand('paste');
+                });
+            } else if (action === 'selectAll') {
+                document.execCommand('selectAll');
+            }
+        });
+
+        // メニュー外クリックで閉じる
+        document.addEventListener('click', function(e) {
+            if (!contextMenu.contains(e.target)) {
+                contextMenu.classList.remove('visible');
+            }
+        });
+
+        // Escキーで閉じる
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                contextMenu.classList.remove('visible');
+            }
+        });
+    }
+
+    document.querySelectorAll('[data-editor]').forEach(function(container) {
+        const inputId = container.dataset.editor;
+        const input = document.getElementById(inputId);
+        let initialData = null;
+
+        if (input && input.value) {
+            try {
+                const parsed = JSON.parse(input.value);
+                // Editor.jsはblocksキーを持つオブジェクトを期待
+                if (parsed && typeof parsed === 'object') {
+                    if (Array.isArray(parsed.blocks)) {
+                        initialData = parsed;
+                    } else {
+                        // blocksがない場合はデフォルト構造を使用
+                        initialData = { blocks: [] };
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to parse editor data:', e);
+                initialData = { blocks: [] };
+            }
+        }
+
+        // Mode Toggle UI (103)
+        const wrapper = document.createElement('div');
+        wrapper.className = 'editor-wrapper';
+        container.parentNode.insertBefore(wrapper, container);
+
+        const toggleBar = document.createElement('div');
+        toggleBar.className = 'editor-mode-toggle';
+        toggleBar.innerHTML = `
+            <button type="button" class="btn-visual active" data-mode="visual">Visual</button>
+            <button type="button" class="btn-json" data-mode="json">JSON</button>
+        `;
+        wrapper.appendChild(toggleBar);
+        wrapper.appendChild(container);
+
+        const jsonView = document.createElement('textarea');
+        jsonView.className = 'editor-json-view';
+        jsonView.placeholder = 'JSON data...';
+        wrapper.appendChild(jsonView);
+
+        const jsonError = document.createElement('div');
+        jsonError.className = 'editor-json-error';
+        wrapper.appendChild(jsonError);
+
+        let currentMode = 'visual';
+        let editorInstance = null;
+
+        const editor = new EditorJS({
+            holder: container.id,
+            placeholder: 'ここをクリックして入力を開始...',
+            data: initialData,
+
+            tools: {
+                // Tier 1: 基本ブロック
+                header: {
+                    class: Header,
+                    inlineToolbar: true,
+                    config: {
+                        placeholder: '見出しを入力...',
+                        levels: [1, 2, 3, 4, 5, 6],
+                        defaultLevel: 2
+                    }
+                },
+                list: {
+                    class: List,
+                    inlineToolbar: true,
+                    config: {
+                        defaultStyle: 'unordered'
+                    }
+                },
+                checklist: {
+                    class: Checklist,
+                    inlineToolbar: true
+                },
+
+                // Tier 2: メディアブロック
+                image: {
+                    class: ImageTool,
+                    config: {
+                        uploader: {
+                            uploadByFile: async (file) => {
+                                const formData = new FormData();
+                                formData.append('file', file);
+                                const response = await fetch('/api/media', {
+                                    method: 'POST',
+                                    body: formData
+                                });
+                                if (!response.ok) throw new Error('Upload failed');
+                                const data = await response.json();
+                                return { success: 1, file: { url: data.url } };
+                            }
+                        },
+                        captionPlaceholder: 'キャプションを入力...'
+                    }
+                },
+                embed: {
+                    class: Embed,
+                    config: {
+                        services: {
+                            youtube: true,
+                            vimeo: true,
+                            twitter: true,
+                            instagram: true,
+                            codepen: true,
+                            twitch: true,
+                            gfycat: true,
+                            imgur: true,
+                            // Google Maps カスタムサービス
+                            googleMaps: {
+                                regex: /https?:\/\/(?:www\.)?google\.[a-z.]+\/maps\/(?:place\/[^\/]+\/)?@?([0-9.-]+),([0-9.-]+)(?:,([0-9.]+)z)?|https?:\/\/maps\.google\.[a-z.]+\/\?(?:.*&)?ll=([0-9.-]+),([0-9.-]+)|https?:\/\/goo\.gl\/maps\/[a-zA-Z0-9]+|https?:\/\/www\.google\.[a-z.]+\/maps\/embed\?pb=.+/,
+                                embedUrl: '<iframe src="<%= remote_id %>" width="100%" height="400" style="border:0" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>',
+                                html: '<iframe src="<%= remote_id %>" width="100%" height="400" style="border:0" allowfullscreen="" loading="lazy"></iframe>',
+                                height: 400,
+                                width: '100%',
+                                id: (groups) => {
+                                    // Google Maps埋め込みURLをそのまま使用
+                                    return groups[0];
+                                }
+                            },
+                            // Spotify
+                            spotify: {
+                                regex: /https?:\/\/open\.spotify\.com\/(track|album|playlist|episode|show)\/([a-zA-Z0-9]+)/,
+                                embedUrl: 'https://open.spotify.com/embed/<%= remote_id %>',
+                                html: '<iframe src="<%= remote_id %>" width="100%" height="352" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>',
+                                height: 352,
+                                width: '100%',
+                                id: (groups) => groups[1] + '/' + groups[2]
+                            },
+                            // SoundCloud
+                            soundcloud: {
+                                regex: /https?:\/\/soundcloud\.com\/([a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+)/,
+                                embedUrl: 'https://w.soundcloud.com/player/?url=https://soundcloud.com/<%= remote_id %>&color=%23ff5500&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true',
+                                html: '<iframe width="100%" height="166" scrolling="no" frameborder="no" allow="autoplay" src="<%= remote_id %>"></iframe>',
+                                height: 166,
+                                width: '100%',
+                                id: (groups) => groups[1]
+                            }
+                        }
+                    }
+                },
+
+                // Tier 3: 書式ブロック
+                quote: {
+                    class: Quote,
+                    inlineToolbar: true,
+                    config: {
+                        quotePlaceholder: '引用を入力...',
+                        captionPlaceholder: '引用元'
+                    }
+                },
+                code: {
+                    class: CodeTool,
+                    config: {
+                        placeholder: 'コードを入力...'
+                    }
+                },
+                delimiter: Delimiter,
+                table: {
+                    class: Table,
+                    inlineToolbar: true,
+                    config: {
+                        rows: 2,
+                        cols: 3
+                    }
+                },
+                raw: {
+                    class: RawTool,
+                    config: {
+                        placeholder: 'HTMLを入力...'
+                    }
+                },
+
+                // Tier 4: カスタムブロック
+                alert: AlertBlock,
+                button: ButtonBlock,
+                map: MapBlock,
+                video: VideoBlock,
+                linkCard: LinkCardBlock,
+                columns: ColumnsBlock,
+                spacer: SpacerBlock,
+                group: GroupBlock,
+                cover: CoverBlock,
+                gallery: GalleryBlock,
+
+                // BlockTunes
+                alignmentTune: {
+                    class: AlignmentBlockTune
+                },
+                colorTune: {
+                    class: ColorBlockTune
+                },
+
+                // インラインツール（tools内に定義必須）
+                marker: {
+                    class: Marker
+                },
+                inlineCode: {
+                    class: InlineCode
+                },
+                underline: {
+                    class: Underline
+                },
+                strikethrough: {
+                    class: StrikethroughInlineTool
+                },
+                textColor: {
+                    class: TextColorInlineTool
+                },
+                highlightColor: {
+                    class: HighlightInlineTool
+                },
+                headingLevel: {
+                    class: HeadingLevelInlineTool
+                }
+            },
+
+            // グローバルtunes（全ブロックに適用）
+            tunes: ['alignmentTune', 'colorTune'],
+
+            // インラインツール
+            inlineToolbar: ['headingLevel', 'bold', 'italic', 'link', 'strikethrough', 'textColor', 'highlightColor', 'marker', 'inlineCode', 'underline'],
+
+            onChange: async function() {
+                try {
+                    const data = await editor.save();
+                    // blocksキーがある正常なデータのみ保存
+                    if (input && data && Array.isArray(data.blocks)) {
+                        input.value = JSON.stringify(data);
+                        // Trigger preview update (105 S3)
+                        if (window.epUpdatePreview) {
+                            window.epUpdatePreview(inputId, data);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to save:', e);
+                }
+            },
+
+            onReady: function() {
+                console.log('Editor.js is ready with 20 blocks!');
+
+                // ポップオーバーをbody直下に移動（overflow:hiddenの親要素を回避）
+                const observer = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(mutation) {
+                        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                            const popover = mutation.target;
+                            if (popover.classList.contains('ce-popover--opened')) {
+                                // ポップオーバーが開いた
+                                if (popover.parentElement !== document.body) {
+                                    popover._originalParent = popover.parentElement;
+                                    popover._originalNextSibling = popover.nextSibling;
+
+                                    // エディタの現在フォーカスブロックの位置を取得
+                                    const focusedBlock = container.querySelector('.ce-block--focused');
+                                    let top = 100, left = 300;  // デフォルト
+
+                                    if (focusedBlock) {
+                                        const blockRect = focusedBlock.getBoundingClientRect();
+                                        top = blockRect.top + window.scrollY;
+                                        left = blockRect.left;
+                                    } else {
+                                        // フォーカスブロックがない場合はエディタの位置
+                                        const editorRect = container.getBoundingClientRect();
+                                        top = editorRect.top + window.scrollY + 50;
+                                        left = editorRect.left + 30;
+                                    }
+
+                                    document.body.appendChild(popover);
+                                    popover.style.top = top + 'px';
+                                    popover.style.left = left + 'px';
+                                }
+                            } else if (popover._originalParent) {
+                                // ポップオーバーが閉じた - 元の位置に戻す
+                                if (popover._originalNextSibling) {
+                                    popover._originalParent.insertBefore(popover, popover._originalNextSibling);
+                                } else {
+                                    popover._originalParent.appendChild(popover);
+                                }
+                                popover.style.top = '';
+                                popover.style.left = '';
+                                popover._originalParent = null;
+                                popover._originalNextSibling = null;
+                            }
+                        }
+                    });
+                });
+
+                // ポップオーバー要素を監視
+                setTimeout(function() {
+                    const popovers = container.parentElement.querySelectorAll('.ce-popover');
+                    popovers.forEach(function(popover) {
+                        observer.observe(popover, { attributes: true });
+                    });
+                }, 500);
+
+                // A4-2: スラッシュコマンド実装
+                container.addEventListener('keydown', function(e) {
+                    if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                        const selection = window.getSelection();
+                        if (selection.rangeCount > 0) {
+                            const range = selection.getRangeAt(0);
+                            const textBefore = range.startContainer.textContent?.slice(0, range.startOffset) || '';
+                            // 行頭または空白直後の「/」でツールボックスを開く
+                            if (textBefore === '' || textBefore.endsWith(' ') || textBefore.endsWith('\n')) {
+                                e.preventDefault();
+                                // ツールボックスを開く
+                                const plusBtn = container.parentElement.querySelector('.ce-toolbar__plus');
+                                if (plusBtn) {
+                                    plusBtn.click();
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // A4-3: 右クリックでカスタムコンテキストメニュー表示
+                container.addEventListener('contextmenu', function(e) {
+                    e.preventDefault(); // 常にブラウザのデフォルトメニューを抑制
+
+                    const contextMenu = document.getElementById('editor-context-menu');
+                    if (!contextMenu) return;
+
+                    const selection = window.getSelection();
+                    const hasSelection = selection && selection.toString().trim().length > 0;
+
+                    // メニュー項目の有効/無効を設定
+                    const cutItem = contextMenu.querySelector('[data-action="cut"]');
+                    const copyItem = contextMenu.querySelector('[data-action="copy"]');
+                    if (cutItem) cutItem.classList.toggle('disabled', !hasSelection);
+                    if (copyItem) copyItem.classList.toggle('disabled', !hasSelection);
+
+                    // テキスト選択時はEditor.jsのインラインツールバーも表示
+                    if (hasSelection) {
+                        document.dispatchEvent(new Event('selectionchange'));
+                    }
+
+                    // メニュー位置を設定（画面端の場合は調整）
+                    let x = e.clientX;
+                    let y = e.clientY;
+                    const menuRect = { width: 180, height: 180 }; // 概算サイズ
+                    if (x + menuRect.width > window.innerWidth) {
+                        x = window.innerWidth - menuRect.width - 10;
+                    }
+                    if (y + menuRect.height > window.innerHeight) {
+                        y = window.innerHeight - menuRect.height - 10;
+                    }
+
+                    contextMenu.style.left = x + 'px';
+                    contextMenu.style.top = y + 'px';
+                    contextMenu.classList.add('visible');
+                });
+            },
+
+            i18n: {
+                messages: {
+                    ui: {
+                        "blockTunes": {
+                            "toggler": {
+                                "Click to tune": "クリックして設定"
+                            }
+                        },
+                        "toolbar": {
+                            "toolbox": {
+                                "Add": "追加"
+                            }
+                        }
+                    },
+                    toolNames: {
+                        "Text": "テキスト",
+                        "Heading": "見出し",
+                        "List": "リスト",
+                        "Checklist": "チェックリスト",
+                        "Quote": "引用",
+                        "Code": "コード",
+                        "Delimiter": "区切り線",
+                        "Raw HTML": "HTML",
+                        "Table": "テーブル",
+                        "Image": "画像",
+                        "Embed": "埋め込み",
+                        "Bold": "太字",
+                        "Italic": "斜体",
+                        "Link": "リンク",
+                        "Marker": "マーカー",
+                        "InlineCode": "インラインコード",
+                        "Map": "地図",
+                        "Video": "動画",
+                        "Alert": "アラート",
+                        "Button": "ボタン",
+                        "LinkCard": "リンクカード",
+                        "Columns": "カラム",
+                        "Spacer": "スペーサー",
+                        "Group": "グループ",
+                        "Cover": "カバー",
+                        "Gallery": "ギャラリー"
+                    },
+                    blockTunes: {
+                        "delete": {
+                            "Delete": "削除"
+                        },
+                        "moveUp": {
+                            "Move up": "上へ移動"
+                        },
+                        "moveDown": {
+                            "Move down": "下へ移動"
+                        }
+                    }
+                }
+            }
+        });
+
+        // Store editor instance
+        editorInstance = editor;
+
+        // グローバルに登録（フォーム送信時にsave()呼び出し用）
+        window.editors[inputId] = editor;
+
+        // Mode Toggle Logic (103)
+        toggleBar.addEventListener('click', async function(e) {
+            const btn = e.target.closest('button[data-mode]');
+            if (!btn || btn.dataset.mode === currentMode) return;
+
+            const newMode = btn.dataset.mode;
+
+            if (newMode === 'json') {
+                // Visual → JSON
+                try {
+                    const data = await editorInstance.save();
+                    jsonView.value = JSON.stringify(data, null, 2);
+                    container.style.display = 'none';
+                    jsonView.style.display = 'block';
+                    jsonError.style.display = 'none';
+                } catch (err) {
+                    console.error('Failed to save editor data:', err);
+                    return;
+                }
+            } else {
+                // JSON → Visual
+                try {
+                    const data = JSON.parse(jsonView.value);
+                    await editorInstance.render(data);
+                    container.style.display = 'block';
+                    jsonView.style.display = 'none';
+                    jsonError.style.display = 'none';
+                    // Update hidden input
+                    if (input) {
+                        input.value = jsonView.value;
+                    }
+                } catch (err) {
+                    jsonError.textContent = 'JSON parse error: ' + err.message;
+                    jsonError.style.display = 'block';
+                    return;
+                }
+            }
+
+            currentMode = newMode;
+            toggleBar.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+
+        // Sync JSON view on change when in JSON mode
+        jsonView.addEventListener('input', function() {
+            if (input) {
+                try {
+                    JSON.parse(jsonView.value);
+                    input.value = jsonView.value;
+                    jsonError.style.display = 'none';
+                } catch (err) {
+                    jsonError.textContent = 'JSON parse error: ' + err.message;
+                    jsonError.style.display = 'block';
+                }
+            }
+        });
+    });
+});
+
+// === Editor Preview (105 S3) ===
+(function() {
+    // Debounce utility
+    function debounce(fn, delay) {
+        let timer = null;
+        return function(...args) {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, args), delay);
+        };
+    }
+
+    // Preview update function
+    async function updatePreview(fieldName, content) {
+        const iframe = document.getElementById('ep-iframe-' + fieldName);
+        if (!iframe) return;
+
+        // Check if in JSON mode (preview disabled)
+        const wrapper = document.querySelector('.ep-wrapper[data-field="' + fieldName + '"]');
+        if (!wrapper || wrapper.dataset.layout === 'editor-only') return;
+
+        try {
+            const response = await fetch('/admin/api/preview/render', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ content: content })
+            });
+
+            if (!response.ok) {
+                throw new Error('Preview failed: ' + response.status);
+            }
+
+            const data = await response.json();
+            const html = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <link rel="stylesheet" href="/css/theme.css">
+                    <style>
+                        body { padding: 1rem; font-family: system-ui, sans-serif; }
+                        img { max-width: 100%; height: auto; }
+                    </style>
+                </head>
+                <body>${data.html}</body>
+                </html>
+            `;
+            iframe.srcdoc = html;
+        } catch (err) {
+            console.error('Preview error:', err);
+            iframe.srcdoc = '<html><body style="padding:1rem;color:#ef4444;">Preview error: ' + err.message + '</body></html>';
+        }
+    }
+
+    // Debounced preview update (300ms)
+    const debouncedPreview = debounce(updatePreview, 300);
+
+    // Initialize preview controls
+    document.addEventListener('DOMContentLoaded', function() {
+        // Layout toggle
+        document.querySelectorAll('.ep-layout-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const layout = this.dataset.layout;
+                const controls = this.closest('.ep-controls');
+                const wrapper = controls.nextElementSibling;
+                const fieldName = wrapper.dataset.field;
+
+                // Update active state
+                controls.querySelectorAll('.ep-layout-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+
+                // Update layout
+                wrapper.dataset.layout = layout;
+
+                // Save preference
+                localStorage.setItem('ep-layout-' + fieldName, layout);
+
+                // Trigger preview if needed
+                if (layout !== 'editor-only') {
+                    const input = document.getElementById(fieldName);
+                    if (input && input.value) {
+                        try {
+                            const content = JSON.parse(input.value);
+                            updatePreview(fieldName, content);
+                        } catch (e) {}
+                    }
+                }
+            });
+        });
+
+        // Device toggle
+        document.querySelectorAll('.ep-device-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const device = this.dataset.device;
+                const controls = this.closest('.ep-controls');
+                const wrapper = controls.nextElementSibling;
+                const fieldName = wrapper.dataset.field;
+                const iframe = document.getElementById('ep-iframe-' + fieldName);
+
+                // Update active state
+                controls.querySelectorAll('.ep-device-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+
+                // Update iframe
+                if (iframe) {
+                    iframe.dataset.device = device;
+                }
+
+                // Save preference
+                localStorage.setItem('ep-device-' + fieldName, device);
+            });
+        });
+
+        // Restore preferences
+        document.querySelectorAll('.ep-wrapper').forEach(function(wrapper) {
+            const fieldName = wrapper.dataset.field;
+            const savedLayout = localStorage.getItem('ep-layout-' + fieldName);
+            const savedDevice = localStorage.getItem('ep-device-' + fieldName);
+
+            if (savedLayout) {
+                wrapper.dataset.layout = savedLayout;
+                const controls = wrapper.previousElementSibling;
+                if (controls) {
+                    controls.querySelectorAll('.ep-layout-btn').forEach(b => {
+                        b.classList.toggle('active', b.dataset.layout === savedLayout);
+                    });
+                }
+            }
+
+            if (savedDevice) {
+                const iframe = document.getElementById('ep-iframe-' + fieldName);
+                if (iframe) {
+                    iframe.dataset.device = savedDevice;
+                }
+                const controls = wrapper.previousElementSibling;
+                if (controls) {
+                    controls.querySelectorAll('.ep-device-btn').forEach(b => {
+                        b.classList.toggle('active', b.dataset.device === savedDevice);
+                    });
+                }
+            }
+        });
+    });
+
+    // Export for Editor.js onChange
+    window.epUpdatePreview = debouncedPreview;
+})();
+</script>
