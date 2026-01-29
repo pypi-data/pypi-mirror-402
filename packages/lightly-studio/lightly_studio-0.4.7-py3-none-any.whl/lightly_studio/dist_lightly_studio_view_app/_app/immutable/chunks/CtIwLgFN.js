@@ -1,0 +1,1 @@
+const t={object_detection:"Object Detection",instance_segmentation:"Instance Segmentation",semantic_segmentation:"Semantic Segmentation",classification:"Classification"},e="lightlyEnterprise";export{t as A,e as a};

@@ -1,0 +1,4 @@
+const s="en-US",f=r=>new Intl.NumberFormat(s,{}).format(r).toString(),m=(r,t=3,n=0)=>new Intl.NumberFormat(s,{maximumFractionDigits:t,minimumFractionDigits:n}).format(r).toString(),i=r=>{if(r==null)return"null";if(typeof r=="string")return r;if(typeof r=="number")return Number.isInteger(r)?f(r):m(r);if(typeof r=="boolean")return r?"true":"false";if(Array.isArray(r))return r.length===0?"[]":r.length<=3&&r.every(t=>typeof t!="object"||t===null)?`[${r.map(t=>i(t)).join(", ")}]`:`[${r.map(n=>i(n)).join(", ")}]`;if(typeof r=="object"&&r!==null&&!Array.isArray(r)){const t=r,n=Object.keys(t);return n.length===0?"{}":n.length<=3&&n.every(e=>{const o=t[e];return typeof o!="object"||o===null||Array.isArray(o)})?`{${n.map(o=>`${o}: ${i(t[o])}`).join(", ")}}`:`{
+${n.map(e=>{const o=i(t[e]);return`${e}: ${o}`}).join(`
+`)}
+}`}return String(r)};export{i as a,m as b,f};

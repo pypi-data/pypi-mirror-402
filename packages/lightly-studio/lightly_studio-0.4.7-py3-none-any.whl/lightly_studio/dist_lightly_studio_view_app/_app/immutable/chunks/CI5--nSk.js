@@ -1,0 +1,1 @@
+const n={CLASSIFICATION:"classification",SEMANTIC_SEGMENTATION:"semantic_segmentation",INSTANCE_SEGMENTATION:"instance_segmentation",OBJECT_DETECTION:"object_detection"},t={VIDEO:"video",VIDEO_FRAME:"video_frame",IMAGE:"image",ANNOTATION:"annotation",CAPTION:"caption",GROUP:"group"};export{n as A,t as S};
