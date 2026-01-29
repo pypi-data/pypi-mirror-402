@@ -1,0 +1,3 @@
+from PySide6.QtWidgets import QPushButton
+class DelegateButton:
+    def __init__(self, parent): ...
