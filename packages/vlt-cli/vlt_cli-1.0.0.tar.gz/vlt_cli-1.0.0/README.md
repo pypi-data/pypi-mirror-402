@@ -1,0 +1,540 @@
+# 🔐 SecureEnv-Pro
+
+**Enterprise-Grade Environment Variable Security Tool**
+
+<p align="center">
+  <strong>Military-grade AES-256 encryption • Zero-persistence decryption • Language-agnostic</strong>
+</p>
+
+---
+
+## 🎯 Overview
+
+SecureEnv-Pro is a professional security tool designed to protect your sensitive environment variables from unauthorized access. Whether you're working solo or in a team, SecureEnv-Pro ensures your secrets remain encrypted and are only decrypted in-memory when needed.
+
+### ✨ Key Features
+
+- **🔒 Military-Grade Encryption**: AES-256 encryption with PBKDF2 key derivation (100,000 iterations)
+- **🔑 Master Password Protection**: Secrets are encrypted with your master password - no password, no access
+- **💾 Zero-Persistence**: Decryption happens in-memory only - no plain-text files on disk
+- **🌐 Language-Agnostic**: Works with any programming language (Node.js, Python, Java, Go, etc.)
+- **👥 Team Collaboration**: Role-based access control for team environments
+- **📊 Audit Logging**: Track all vault operations for compliance
+- **🎯 Multiple Vaults**: Manage different environments (dev, staging, production)
+- **🚀 Easy Integration**: Simple CLI commands for daily workflows
+
+---
+
+## 📦 Installation
+
+### Quick Install (Recommended)
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/SecureEnv-Pro.git
+cd SecureEnv-Pro
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Install as a system command (optional)
+pip install -e .
+```
+
+### System Requirements
+
+- Python 3.8 or higher
+- Windows, macOS, or Linux
+
+---
+
+## 🚀 Quick Start
+
+### 1. Lock (Encrypt) Your Environment File
+
+```bash
+# Encrypt your .env file
+python main.py lock .env --name production --description "Production secrets"
+
+# You'll be prompted for a master password
+# The encrypted vault will be saved as .env.vlt
+```
+
+### 2. Run Commands with Encrypted Variables (Recommended)
+
+```bash
+# Run your Node.js app with encrypted variables
+python main.py run --name production -- node app.js
+
+# Run Python application
+python main.py run --name production -- python manage.py runserver
+
+# Run any command
+python main.py run --name staging -- npm start
+```
+
+**🔥 This is the most secure method** - variables are loaded directly into memory, never touching the disk!
+
+### 3. Unlock (Decrypt) if Needed
+
+```bash
+# Decrypt vault to .env file (use with caution)
+python main.py unlock --name production --output .env
+
+# Remember to delete the decrypted file after use!
+```
+
+---
+
+## 📚 Complete Usage Guide
+
+### Command Reference
+
+#### `lock` - Encrypt Environment File
+
+Encrypts a plain-text environment file into a secure vault.
+
+```bash
+python main.py lock <env-file> --name <vault-name> [OPTIONS]
+
+Options:
+  --name, -n          Vault name identifier (required)
+  --description, -d   Vault description
+  --output, -o        Output vault file path (default: .env.vlt)
+
+Examples:
+  python main.py lock .env --name production --description "Production API keys"
+  python main.py lock .env.local --name dev --output ./vault/dev.vlt
+```
+
+**Security Tips:**
+- Use a strong master password (mix of uppercase, lowercase, digits, symbols)
+- Delete the original `.env` file after encryption
+- Store the `.vlt` file in version control (it's encrypted!)
+
+---
+
+#### `unlock` - Decrypt Vault
+
+Decrypts a vault to a plain-text file.
+
+```bash
+python main.py unlock --name <vault-name> [OPTIONS]
+
+Options:
+  --name, -n     Vault name to unlock (required)
+  --output, -o   Output file path (default: .env)
+
+Examples:
+  python main.py unlock --name production
+  python main.py unlock --name staging --output .env.staging
+
+⚠️ WARNING: Decrypted files are security risks! Use 'run' command instead when possible.
+```
+
+---
+
+#### `run` - Execute with Encrypted Variables (🌟 Most Secure)
+
+Runs a command with environment variables loaded from an encrypted vault **directly into memory**.
+
+```bash
+python main.py run --name <vault-name> -- <command>
+
+Options:
+  --name, -n     Vault name to use (required)
+
+Examples:
+  # Node.js applications
+  python main.py run --name production -- node server.js
+  python main.py run --name dev -- npm run dev
+  
+  # Python applications
+  python main.py run --name production -- python app.py
+  python main.py run --name dev -- flask run
+  
+  # Docker containers
+  python main.py run --name production -- docker-compose up
+  
+  # Any command
+  python main.py run --name staging -- ./start-app.sh
+```
+
+**How it works:**
+1. Prompts for your master password
+2. Decrypts vault **in memory only**
+3. Injects variables into the command's environment
+4. Executes your command
+5. Variables are cleared after execution
+
+**🔒 Zero disk I/O** - plain-text secrets never touch your hard drive!
+
+---
+
+#### `list` - View All Vaults
+
+Lists all registered vaults with their metadata.
+
+```bash
+python main.py list
+
+Example output:
+┌──────────────┬─────────────────┬────────────┬─────────────┬─────────────┐
+│ Name         │ Description     │ Created    │ Last Access │ File Exists │
+├──────────────┼─────────────────┼────────────┼─────────────┼─────────────┤
+│ production   │ Prod API keys   │ 2026-01-15 │ 2026-01-17  │ ✓           │
+│ staging      │ Staging env     │ 2026-01-10 │ Never       │ ✓           │
+│ development  │ Local dev       │ 2026-01-05 │ 2026-01-16  │ ✓           │
+└──────────────┴─────────────────┴────────────┴─────────────┴─────────────┘
+```
+
+---
+
+#### `delete` - Remove Vault
+
+Deletes a vault registration (optionally removes the file too).
+
+```bash
+python main.py delete --name <vault-name> [OPTIONS]
+
+Options:
+  --name, -n        Vault name to delete (required)
+  --remove-file     Also delete the .vlt file
+
+Examples:
+  python main.py delete --name old-project
+  python main.py delete --name temp --remove-file
+```
+
+---
+
+#### `audit` - View Audit Logs
+
+Displays audit logs for compliance and security monitoring.
+
+```bash
+python main.py audit [OPTIONS]
+
+Options:
+  --limit, -l    Number of entries to show (default: 20)
+
+Example:
+  python main.py audit --limit 50
+```
+
+---
+
+#### `add-member` - Add Team Member
+
+Adds a team member to a vault with role-based access.
+
+```bash
+python main.py add-member --name <vault> --email <email> --role <role>
+
+Roles:
+  admin      - Full access including team management
+  developer  - Can read and deploy (default)
+  viewer     - Read-only access
+
+Examples:
+  python main.py add-member --name production --email dev@company.com --role developer
+  python main.py add-member --name staging --email manager@company.com --role admin
+```
+
+---
+
+#### `team` - List Team Members
+
+Shows all team members for a vault.
+
+```bash
+python main.py team --name <vault-name>
+
+Example output:
+Team members for 'production':
+┌─────────────────────┬───────────┬────────────┐
+│ Email               │ Role      │ Added      │
+├─────────────────────┼───────────┼────────────┤
+│ admin@company.com   │ admin     │ 2026-01-10 │
+│ dev1@company.com    │ developer │ 2026-01-12 │
+│ dev2@company.com    │ developer │ 2026-01-15 │
+└─────────────────────┴───────────┴────────────┘
+```
+
+---
+
+## 🏢 Real-World Team Workflow
+
+### Scenario: E-commerce Platform with Multiple Environments
+
+**Team Structure:**
+- 1 DevOps Lead (Admin)
+- 3 Backend Developers
+- 2 Frontend Developers
+- 1 QA Engineer
+
+**Environment Setup:**
+
+```bash
+# DevOps Lead creates encrypted vaults
+python main.py lock .env.production --name production --description "Production DB and APIs"
+python main.py lock .env.staging --name staging --description "Staging environment"
+python main.py lock .env.dev --name development --description "Local development"
+
+# Add team members with appropriate roles
+python main.py add-member --name production --email devops@company.com --role admin
+python main.py add-member --name production --email backend1@company.com --role developer
+python main.py add-member --name production --email backend2@company.com --role developer
+python main.py add-member --name production --email qa@company.com --role viewer
+
+# Developers can now run applications securely
+python main.py run --name development -- npm run dev
+python main.py run --name staging -- python manage.py test
+python main.py run --name production -- node server.js
+```
+
+**Daily Developer Workflow:**
+
+```bash
+# Morning: Start development server
+python main.py run --name development -- npm run dev
+
+# Testing: Run against staging
+python main.py run --name staging -- pytest
+
+# Deployment: Deploy to production
+python main.py run --name production -- ./deploy.sh
+
+# Audit: Check recent access
+python main.py audit --limit 30
+```
+
+**Benefits:**
+- ✅ No `.env` files in Slack or email
+- ✅ No accidental commits of secrets
+- ✅ Centralized access control
+- ✅ Complete audit trail
+- ✅ Easy onboarding/offboarding
+
+---
+
+## 🔒 Security Best Practices
+
+### 1. **Strong Master Passwords**
+```
+❌ Weak:   "password123"
+❌ Weak:   "mycompany"
+✅ Strong: "C0mp@ny!Pr0d#2026"
+✅ Strong: "Tr0pic@l$Sunse7*Mango"
+```
+
+### 2. **Password Management**
+- Use a password manager (1Password, LastPass, Bitwarden)
+- Never share passwords via Slack/Email
+- Rotate passwords every 90 days for production vaults
+
+### 3. **Vault Organization**
+```
+vault/
+├── production.vlt    # Production secrets - highest security
+├── staging.vlt       # Staging environment
+├── development.vlt   # Local development
+└── testing.vlt       # CI/CD testing
+```
+
+### 4. **Git Configuration**
+```bash
+# .gitignore
+.env
+.env.*
+!vault/*.vlt          # Commit encrypted vaults (they're safe!)
+
+# Commit encrypted vaults to version control
+git add vault/*.vlt
+git commit -m "chore: update production vault"
+```
+
+### 5. **CI/CD Integration**
+
+**GitHub Actions Example:**
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Install SecureEnv-Pro
+        run: |
+          pip install -r SecureEnv-Pro/requirements.txt
+          
+      - name: Deploy with encrypted secrets
+        env:
+          MASTER_PASSWORD: ${{ secrets.MASTER_PASSWORD }}
+        run: |
+          echo "$MASTER_PASSWORD" | python SecureEnv-Pro/main.py run --name production -- ./deploy.sh
+```
+
+**GitLab CI Example:**
+```yaml
+# .gitlab-ci.yml
+deploy:
+  stage: deploy
+  script:
+    - pip install -r SecureEnv-Pro/requirements.txt
+    - echo "$MASTER_PASSWORD" | python SecureEnv-Pro/main.py run --name production -- ./deploy.sh
+  only:
+    - main
+```
+
+---
+
+## 🧪 Testing
+
+### Run All Tests
+
+```bash
+# Install test dependencies
+pip install pytest pytest-cov
+
+# Run tests with coverage
+pytest tests/ -v --cov=core --cov-report=html
+
+# View coverage report
+# Open htmlcov/index.html in your browser
+```
+
+### Test Coverage
+
+The test suite includes:
+- ✅ Encryption/decryption correctness
+- ✅ Password strength validation
+- ✅ Wrong password rejection
+- ✅ File operations
+- ✅ Vault registration
+- ✅ Team management
+- ✅ Audit logging
+- ✅ End-to-end workflows
+
+**Current Coverage: ~95%**
+
+---
+
+## 🐛 Troubleshooting
+
+### "Module not found" errors
+```bash
+# Reinstall dependencies
+pip install -r requirements.txt --force-reinstall
+```
+
+### "Invalid password" when decrypting
+- Ensure you're using the exact password from encryption
+- Passwords are case-sensitive
+- Check for extra spaces
+
+### "Vault not found"
+```bash
+# List all vaults
+python main.py list
+
+# Re-register vault if needed
+python main.py list  # Find the .vlt file path
+# Then manually add to vault/config.yml
+```
+
+### Permission errors
+```bash
+# Windows: Run as Administrator
+# Linux/Mac: Check file permissions
+chmod 600 vault/*.vlt
+```
+
+---
+
+## 🔄 Migration from Other Tools
+
+### From dotenv (Node.js)
+```bash
+# Before: .env file in project root
+# After:
+python main.py lock .env --name myproject
+python main.py run --name myproject -- node app.js
+
+# Update package.json
+"scripts": {
+  "start": "python SecureEnv-Pro/main.py run --name production -- node server.js",
+  "dev": "python SecureEnv-Pro/main.py run --name development -- nodemon app.js"
+}
+```
+
+### From python-decouple (Python)
+```bash
+# Before: .env file or environment variables
+# After:
+python main.py lock .env --name myproject
+python main.py run --name myproject -- python app.py
+
+# Update scripts
+python main.py run --name production -- gunicorn app:app
+```
+
+---
+
+## 📊 Comparison with Alternatives
+
+| Feature | SecureEnv-Pro | dotenv | direnv | Vault (HashiCorp) |
+|---------|---------------|--------|--------|-------------------|
+| Encryption | ✅ AES-256 | ❌ None | ❌ None | ✅ Yes |
+| Master Password | ✅ Yes | ❌ No | ❌ No | ✅ Yes |
+| Zero-Persistence | ✅ Yes | ❌ No | ❌ No | ⚠️ Partial |
+| Language-Agnostic | ✅ Yes | ⚠️ Limited | ✅ Yes | ✅ Yes |
+| Team Management | ✅ Yes | ❌ No | ❌ No | ✅ Yes |
+| Audit Logging | ✅ Yes | ❌ No | ❌ No | ✅ Yes |
+| Easy Setup | ✅ Simple | ✅ Simple | ⚠️ Moderate | ❌ Complex |
+| Cost | ✅ Free | ✅ Free | ✅ Free | 💰 Paid (Cloud) |
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our contributing guidelines:
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file for details
+
+---
+
+## 🆘 Support
+
+- **Issues**: [GitHub Issues](https://github.com/yourusername/SecureEnv-Pro/issues)
+- **Email**: support@secureenv-pro.com
+- **Documentation**: [Full Docs](https://secureenv-pro.readthedocs.io)
+
+---
+
+## 🌟 Star This Project
+
+If SecureEnv-Pro helps secure your applications, please star this repository to show your support!
+
+---
+
+**Built with ❤️ by developers, for developers**
+
+*Keep your secrets secret. Stay secure with SecureEnv-Pro.*
