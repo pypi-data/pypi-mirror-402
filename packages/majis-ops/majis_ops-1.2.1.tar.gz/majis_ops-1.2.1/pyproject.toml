@@ -1,0 +1,172 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "majis-ops"
+dynamic = ["version"]
+description = 'Juice/MAJIS operations toolbox'
+readme = "README.md"
+requires-python = ">=3.10"
+license = "BSD-3-Clause"
+keywords = [
+  "esa",
+  "juice",
+  "majis",
+  "ias",
+]
+authors = [
+  { name = "Benoît Seignovert", email = "benoit.seignovert@univ-nantes.fr" },
+  { name = "Nicolas Manaud", email = "nicolas@spacefrog.design"},
+  { name = "Axelle Gottafray" },
+]
+maintainers = [
+  { name = "Benoît Seignovert", email = "benoit.seignovert@univ-nantes.fr" },
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+  "packaging>=24",
+  "numpy>=1.26",
+  "jsonschema>=4.25",
+  "planetary-coverage>=1.1",
+  "openpyxl>=3.1.3",
+]
+
+[project.urls]
+Source = "https://git.ias.u-psud.fr/majis_sgs/operations/majis-ops-toolbox"
+Issues = "https://git.ias.u-psud.fr/majis_sgs/operations/majis-ops-toolbox/-/issues"
+Documentation = "https://majis-ops.readthedocs.io/en/latest/"
+
+[tool.hatch.version]
+path = "src/majis/__version__.py"
+
+[project.scripts]
+majis-itl = "majis.itl.cli:cli"
+
+[tool.hatch.envs.default]
+path = '.venv/default'
+
+[tool.hatch.envs.linter]
+path = '.venv/linter'
+extra-dependencies = [
+  "ruff>=0.4",
+  "pre-commit>=3.6",
+]
+
+[tool.hatch.envs.linter.scripts]
+check = "ruff check --diff"
+format = "ruff format --diff"
+
+[tool.hatch.envs.tests]
+path = '.venv/tests'
+extra-dependencies = [
+  "pytest>=8.0",
+  "pytest-cov>=4.1",
+]
+
+[tool.hatch.envs.tests.scripts]
+tests = "pytest {args:tests} --cov=src/majis --cov-report term-missing"
+
+[tool.hatch.envs.docs]
+path = '.venv/docs'
+extra-dependencies = [
+  "jupyter-book>=0.15,<2",
+]
+
+[tool.hatch.envs.docs.scripts]
+build = "jupyter-book build docs/"
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "/.gitignore",
+  "/.pre-commit-config.yaml",
+  "/tests/",
+
+]
+[tool.hatch.build.targets.wheel]
+packages = ["src/majis"]
+
+# Pytest config
+[tool.pytest.ini_options]
+minversion = '6.0'
+addopts = '-vv --color=yes'
+testpaths = ['tests']
+
+[tool.coverage.report]
+fail_under = 100
+exclude_lines = [
+    'def __repr__',
+    'pragma: no cover',
+    'raise NotImplementedError',
+]
+
+# Ruff config
+[tool.ruff]
+line-length = 90
+
+[tool.ruff.lint]
+select = [
+    "F",    # Pyflakes
+    "E",    # pycodestyle
+    "W",    # pycodestyle
+    "PL",   # Pylint
+    "I",    # isort
+    "N",    # pep8-naming
+    "C90",  # mccabe
+    "UP",   # pyupgrade
+    "S",    # flake8-bandit
+    "A",    # flake8-builtins
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "COM",  # flake8-commas
+    "C4",   # flake8-comprehensions
+    "T20",  # flake8-print
+    "Q",    # flake8-quotes
+    "RSE",  # flake8-raise
+    "RET",  # flake8-return
+    "T",    # flake8-print
+]
+ignore = [
+    "COM812",  # disable ruff format warning
+    "E501",    # disable ruff line-too-long error
+    "S603",    # disable subprocess-without-shell-equals-true (see PyCQA/bandit#333)
+]
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ruff.lint.flake8-quotes]
+inline-quotes = "single"
+docstring-quotes = "double"
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = [
+    "S101",     # assert
+    "PLR2004",  # magic-value-comparison
+]
+
+[tool.ruff.lint.isort]
+section-order = [
+  "future",
+  "standard-library",
+  "third-party",
+  "sciences",
+  "first-party",
+  "local-folder",
+  "testing",
+]
+known-first-party = ["majis"]
+
+
+[tool.ruff.lint.isort.sections]
+sciences = ["planetary_coverage"]
+testing = ["pytest"]

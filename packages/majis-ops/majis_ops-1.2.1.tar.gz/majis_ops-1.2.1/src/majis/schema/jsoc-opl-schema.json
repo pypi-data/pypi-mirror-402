@@ -1,0 +1,345 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://juicesoc.esac.esa.int/data/schemas/jsoc-opl-schema.json",
+  "title": "JUICE Science Operations Observation Plan Input File Schema v04-draft",
+  "type": "object",
+  "$defs": {
+    "dateTimeString": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$",
+      "description": "UTC format YYYY-MM-DDThh:mm:ss[.mmm]Z"
+    },
+    "relativeTime": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Event name for relative time"
+        },
+        "counter": {
+          "type": "integer",
+          "description": "Counter associated with the event"
+        },
+        "delta_time": {
+          "type": "string",
+          "pattern": "^[+-]?\\d{1,3}\\.\\d{1,2}:\\d{2}:\\d{2}(\\.\\d{1,3})?$",
+          "description": "Relative time format [[ddd.]hh:]mm:ss[.SSS]"
+        },
+        "required": [
+          "name",
+          "counter",
+          "delta_time"
+        ]
+      },
+      "additionalProperties": false
+    },
+    "absoluteOrRelativeTime": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/dateTimeString"
+        },
+        {
+          "$ref": "#/$defs/relativeTime"
+        }
+      ]
+    },
+    "target": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Target of the activity as a LID of a PDS4 Target, i.e.: satellite.earth.moon"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Array of targets of the activity as a LID of a PDS4 Target, i.e.: satellite.earth.moon"
+        }
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "properties": {
+        "json_schema_version": {
+          "type": "string",
+          "description": "OPL JSON Schema used"
+        },
+        "evt_fct": {
+          "type": "string",
+          "description": "Flight Control Team User Event file (UEVT) in use"
+        },
+        "evt_fdy": {
+          "type": "string",
+          "description": "Flight Dynamics STP/MTP Event file (EVTC, EVTM) in use"
+        },
+        "evt_soc": {
+          "type": "string",
+          "description": "Science Operations Center Event file (EVT_SOC) in use"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Configuration object containing schema information and applicable event files."
+    },
+    "instrument_area_header": {
+	"type": "object",
+	"additionalProperties": true,
+	"description": "Instrument area for free usage by the originator"
+    },
+    "instrument_area": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Instrument area for free usage by the originator"
+    },
+    "modification_history": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Instrument area for free usage by the originator"
+    },
+    "validityRange": {
+      "type": "object",
+      "properties": {
+        "start_time": {
+          "$ref": "#/$defs/dateTimeString",
+          "description": "Start time in UTC format YYYY-MM-DDThh:mm:ss[.mmm]Z"
+        },
+        "end_time": {
+          "$ref": "#/$defs/dateTimeString",
+          "description": "End time in UTC format YYYY-MM-DDThh:mm:ss[.mmm]Z"
+        }
+      },
+      "required": [
+        "start_time",
+        "end_time"
+      ],
+      "additionalProperties": false
+    },
+    "scenario": {
+      "type": "string",
+      "description": "Scenario name for which this planning file was created"
+      },
+    "timelineItem": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the action or observation, must correspond to an observation definition or a modelled action"
+        },
+        "unique_id": {
+          "type": "string",
+          "description": "Unique ID of the action or observation, must correspond to an observation definition or a modelled action"
+        },
+        "instrument": {
+          "type": "string",
+          "description": "Instrument/Unit responsible for the activity"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "OBSERVATION"
+          ],
+          "description": "Indicates that the activity is an observation"
+        },
+          "observation_type": {
+            "type": "string",
+            "enum": [
+              "RIDER",
+              "PRIME"
+            ],
+            "description": "Indicates the observation type if it is PRIME or RIDER"
+          },
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "start_time": {
+          "$ref": "#/$defs/absoluteOrRelativeTime",
+          "description": "Start time of the activity, either absolute or relative"
+        },
+        "end_time": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/dateTimeString",
+              "description": "End time in UTC format (absolute time) YYYY-MM-DDThh:mm:ss[.mmm]Z"
+            },
+            {
+              "$ref": "#/$defs/relativeTime",
+              "description": "End time of the activity, either absolute or relative"
+            }
+          ]
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Observation parameters as an array of parameter name and value pairs",
+          "additionalProperties": true
+        },
+         "power_profile": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "unit": { "type": "string" },
+              "values": {
+                "type": "object",
+                "description": "Key-value pairs, no enforced format on keys",
+                "additionalProperties": {
+                  "type": "number"
+                }
+              }
+            },
+            "required": ["unit", "values"],
+            "description": "Optional power usage profile keyed by HH:MM:SS"
+          },
+          "data_rate_profile": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "unit": { "type": "string" },
+              "values": {
+                "type": "object",
+                "description": "Key-value pairs, no enforced format on keys",
+                "additionalProperties": {
+                  "type": "number"
+                }
+              }
+            },
+            "required": ["unit", "values"],
+            "description": "Optional data-rate profile keyed by HH:MM:SS"
+          },
+          "data_volume_profile": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "unit": { "type": "string" },
+              "values": {
+                "type": "object",
+                "description": "Key-value pairs, no enforced format on keys",
+                "additionalProperties": {
+                  "type": "number"
+                }
+              }
+            },
+            "required": ["unit", "values"],
+            "description": "Optional Data Volume profile keyed by HH:MM:SS"
+          },
+        "pointing": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Pointing type as defined by the JUICE SOC Pointing Type table, can be null"
+        },
+        "pointing_description": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Description of the pointing if needs to be expanded from the inherent pointing type description, can be null"
+        },
+        "pointing_designer": {
+          "type": "boolean",
+          "description": "Attribute that describes whether if the instrument team requests to design the pointing for the prime observation"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Observation or action textual description, can be null"
+        },
+        "scheduling_rules": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Rules for scheduling the activity, can be null"
+        },
+        "comment": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Free text comments related to the activity, can be null"
+        },
+        "instrument_area": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Instrument area for free usage by the originator"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type", "instrument", "name", "start_time", "end_time"
+      ]
+    }
+  },
+  "properties": {
+    "header": {
+      "type": "object",
+      "properties": {
+        "filename": {
+          "type": "string",
+          "pattern": "^OPL_.*\\.json$"
+        },
+        "creation_date": {
+          "$ref": "#/$defs/dateTimeString",
+          "description": "Creation date of the file in UTC format YYYY-MM-DDThh:mm:ss[.mmm]Z"
+        },
+        "author": {
+          "description": "Author(s) of the file",
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "Single author"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "description": "Multiple authors"
+            }
+          ]
+        },
+        "origin": {
+          "type": "string",
+          "description": "Origin of the file"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version of the file"
+        },
+        "configuration": {
+          "$ref": "#/$defs/configuration",
+          "description": "Configuration object containing schema, session file, and version details"
+        },
+        "validity_range": {
+          "$ref": "#/$defs/validityRange"
+          },
+        "scenario": {
+          "$ref": "#/$defs/scenario"
+          },
+        "instrument_area_header": {
+          "$ref": "#/$defs/instrument_area_header",
+          "description": "Instrument area for free usage by the originator"
+        }
+      },
+      "required": [
+        "filename",
+        "creation_date",
+        "author"
+      ],
+      "additionalProperties": false
+    },
+    "timeline": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/timelineItem"
+      }
+    }
+  },
+  "required": [
+    "timeline"
+  ],
+  "additionalProperties": false
+}

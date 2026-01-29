@@ -1,0 +1,211 @@
+image: python:3.10
+
+stages:
+  - linter
+  - tests
+  - deploy
+
+# Rules aliases
+.rules_py_changes: &rules_py_changes
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH'
+    - if: '$CI_MERGE_REQUEST_ID'
+      changes:
+        - src/**/*.py
+        - tests/**/*.py
+        - .gitlab-ci.yml
+
+.rules_py_changes_no_mr_draft: &rules_py_changes_no_mr_draft
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH'
+    - if: '$CI_MERGE_REQUEST_ID && $CI_MERGE_REQUEST_TITLE !~ /^Draft:/'
+      changes:
+        - src/**/*.py
+        - tests/**/*.py
+        - .gitlab-ci.yml
+
+.rules_docs_changes: &rules_docs_changes
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH'
+    - if: '$CI_MERGE_REQUEST_ID'
+      changes:
+        - docs/**/*
+        - .gitlab-ci.yml
+
+.rules_version_changes: &rules_version_changes
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH'
+      changes:
+        - src/majis/__version__.py
+
+# Cache configuration
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  key: "${CI_JOB_NAME}"
+  paths:
+    - .cache/pip
+    - .venv
+
+# Install Hatch by default
+default:
+  before_script:
+    - python -m pip install "hatch>=1.12"
+
+# Linter
+Ruff:
+  stage: linter
+  <<: *rules_py_changes
+  script:
+    - hatch -e linter run check
+    - hatch -e linter run format
+
+# Tests
+.pytest: &pytest
+  stage: tests
+  script:
+    - hatch -e tests run tests
+      --cov-report xml:coverage.xml
+      --junitxml=report.xml
+  coverage: '/^TOTAL\s+\d+\s+\d+\s+(\d+\%)$/'
+
+Pytest 3.10:
+  <<: *rules_py_changes
+  <<: *pytest
+  after_script:
+      - echo "VERSION=$(hatch version)" > version.env
+  artifacts:
+    paths:
+      - coverage.xml
+    expire_in: 1 week
+    reports:
+      dotenv: version.env  # Export project version for Sonar
+      junit: report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+Pytest 3.11:
+  image: python:3.11
+  <<: *rules_py_changes_no_mr_draft
+  <<: *pytest
+
+Pytest 3.12:
+  image: python:3.12
+  <<: *rules_py_changes_no_mr_draft
+  <<: *pytest
+
+# Quality checks (requires Pytest 3.10 to get the coverage report and project version)
+SonarQube:
+  stage: tests
+  <<: *rules_py_changes_no_mr_draft
+  needs:
+    - job: 'Pytest 3.10'
+      artifacts: true
+  image:
+    name: sonarsource/sonar-scanner-cli:latest
+    entrypoint: [""]
+  variables:
+    SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"
+    GIT_DEPTH: "0"
+  cache:
+    policy: pull
+    key: "${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - sonar-scanner/
+  before_script: []
+  script:
+    - sonar-scanner
+  environment:
+    name: SonarQube
+    url: $SONAR_HOST_URL/dashboard?id=$SONAR_PROJECT_KEY
+
+# Build docs
+Docs:
+  stage: tests
+  <<: *rules_docs_changes
+  script:
+    - hatch -e docs run build
+
+# Deployment
+ReadTheDocs:
+  stage: deploy
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^(v|V)?(\d+)(\.\d+)+?$/ && $RTD_URL && $RTD_TOKEN'
+    - if: '$CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $RTD_URL && $RTD_TOKEN'
+  cache: {}
+  before_script: []
+  script:
+    - curl -X POST -d "branches=$CI_COMMIT_REF_NAME" -d "token=$RTD_TOKEN" $RTD_URL
+  environment:
+    name: ReadTheDocs
+    url: https://majis-ops.readthedocs.io/en/$CI_COMMIT_REF_NAME
+
+PyPI:
+  stage: deploy
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^(v|V)?(\d+)(\.\d+)+?$/ && $PYPI_TOKEN'
+  variables:
+    HATCH_INDEX_USER: __token__
+    HATCH_INDEX_AUTH: $PYPI_TOKEN
+  script:
+    - hatch build
+    - hatch publish
+  environment:
+    name: PyPI
+    url: https://pypi.org/project/majis-ops/
+
+SWH:
+  stage: deploy
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^(v|V)?(\d+)(\.\d+)+?$/'
+  cache: {}
+  before_script: []
+  script:
+    - curl -X POST https://archive.softwareheritage.org/api/1/origin/save/git/url/${CI_PROJECT_URL}/
+  environment:
+    name: Software Heritage
+    url: https://archive.softwareheritage.org/browse/origin/?origin_url=${CI_PROJECT_URL}
+
+# Release
+Prepare release:
+  stage: deploy
+  <<: *rules_version_changes
+  script:
+    - echo "VERSION=$(hatch version)" > variables.env
+    - echo "DATE=$(date +'%Y/%m/%d')" >> variables.env
+    - awk "/releases/{found=1;next}found" CHANGELOG.md | awk "/\[Release/{exit}1" > Release_description.md
+  artifacts:
+    paths:
+      - Release_description.md
+    reports:
+      dotenv: variables.env
+
+Publish release:
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  stage: deploy
+  <<: *rules_version_changes
+  needs:
+    - job: 'Prepare release'
+      artifacts: true
+  cache: {}
+  before_script: []
+  script:
+    - echo "Version ${VERSION} - ${DATE}"
+    - cat ./Release_description.md
+  release:
+      name: 'Version ${VERSION} - ${DATE}'
+      description: ./Release_description.md
+      tag_name: ${VERSION}
+      tag_message: 'Version ${VERSION} - ${DATE}'
+      ref: '$CI_COMMIT_SHA'
+      assets:
+        links:
+          - name: 'PyPI'
+            url: 'https://pypi.org/project/majis-ops/${VERSION}/'
+            link_type: package
+          - name: 'Documentation'
+            url: 'https://majis-ops.readthedocs.io/en/${VERSION}'
+          - name: 'Software Heritage'
+            url: 'https://archive.softwareheritage.org/browse/origin/directory/?origin_url=${CI_PROJECT_URL}&release=${VERSION}'
