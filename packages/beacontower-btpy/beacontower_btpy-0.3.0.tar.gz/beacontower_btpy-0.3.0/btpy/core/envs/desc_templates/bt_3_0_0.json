@@ -1,0 +1,252 @@
+{
+  "tenant": {
+    "id": "$DISABLED{tenant_id}",
+    "clientId": "$DISABLED{tenant_client_id}",
+    "signInFlow": "b2c_1_ropc"
+  },
+  "version": "3.0.0",
+  "defaultUser": {
+    "email": "${default_user_email}",
+    "password": "${default_user_password}"
+  },
+  "services": [
+    {
+      "name": "alarm",
+      "resources": [
+        {
+          "name": "api",
+          "cloudResource": {
+            "type": "AzureAppService",
+            "name": "app-bt-alarm-${env_tag}",
+            "group": "rg-bt-${stamp_tag}",
+            "subscriptionId": "${sub_id}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "asset",
+      "resources": [
+        {
+          "name": "api",
+          "cloudResource": {
+            "type": "AzureAppService",
+            "name": "app-bt-device-${env_tag}",
+            "group": "rg-bt-${stamp_tag}",
+            "subscriptionId": "${sub_id}"
+          },
+          "settings": {
+            "resource": {
+              "type": "native"
+            },
+            "logLevelSetting": "Logging:LogLevel:Default"
+          }
+        },
+        {
+          "name": "engine",
+          "cloudResource": {
+            "type": "AzureVm",
+            "name": "vm-bt-asset-processor-${env_tag}",
+            "group": "rg-bt-${stamp_tag}",
+            "subscriptionId": "${sub_id}",
+            "subDesc": {
+              "type": "DockerCompose",
+              "path": "/etc/beacontower/",
+              "configFiles": [
+                "appsettings.Silo1.json",
+                "appsettings.Silo2.json"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "gateway-core",
+      "resources": [
+        {
+          "name": "api",
+          "cloudResource": {
+            "type": "AzureAppService",
+            "name": "app-bt-gateway-core-api-${env_tag}",
+            "group": "rg-bt-${stamp_tag}",
+            "subscriptionId": "${sub_id}"
+          },
+          "apiUrlAddition": "v1"
+        }
+      ]
+    },
+    {
+      "name": "ingress",
+      "resources": [
+        {
+          "name": "processor",
+          "cloudResource": {
+            "type": "AzureFunction",
+            "name": "func-bt-telemetry-processor-${env_tag}",
+            "group": "rg-bt-${stamp_tag}",
+            "subscriptionId": "${sub_id}"
+          },
+          "settings": {
+            "resource": {
+              "type": "native"
+            },
+            "logging": {
+              "levelSettings": [
+                "Logging:LogLevel:Default",
+                "Logging:ApplicationInsights:LogLevel:Default"
+              ]
+            }
+          },
+          "tags": {
+            "eventHubUrl": "${ingress_eh_url}",
+            "eventHubPolicy": "${ingress_eventhub_policy_name}",
+            "eventHubPolicyKey": "${ingress_eventhub_policy_key}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "model",
+      "resources": [
+        {
+          "name": "service",
+          "cloudResource": {
+            "type": "AzureAppService",
+            "name": "app-bt-model-${env_tag}",
+            "group": "rg-bt-${stamp_tag}",
+            "subscriptionId": "${sub_id}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "provider-iothub",
+      "resources": [
+        {
+          "name": "api",
+          "cloudResource": {
+            "type": "AzureAppService",
+            "name": "app-bt-provider-iothub-${env_tag}",
+            "group": "rg-bt-${stamp_tag}",
+            "subscriptionId": "${sub_id}"
+          },
+          "tags": {
+            "iothubName": "${iothub_name}"
+          }
+        },
+        {
+          "name": "publisher",
+          "cloudResource": {
+            "type": "AzureFunction",
+            "name": "func-bt-provider-${env_tag}",
+            "group": "rg-bt-${stamp_tag}",
+            "subscriptionId": "${sub_id}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "provider",
+      "resources": [
+        {
+          "name": "service",
+          "cloudResource": {
+            "type": "AzureAppService",
+            "name": "app-bt-provider-${env_tag}1",
+            "group": "rg-bt-${stamp_tag}",
+            "subscriptionId": "${sub_id}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "push",
+      "resources": [
+        {
+          "name": "api",
+          "cloudResource": {
+            "type": "AzureFunction",
+            "name": "func-bt-push-negotiate-${env_tag}",
+            "group": "rg-bt-${stamp_tag}",
+            "subscriptionId": "${sub_id}"
+          }
+        },
+        {
+          "name": "processor",
+          "cloudResource": {
+            "type": "AzureFunction",
+            "name": "func-bt-push-processor-${env_tag}",
+            "group": "rg-bt-${stamp_tag}",
+            "subscriptionId": "${sub_id}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rules",
+      "resources": [
+        {
+          "name": "api",
+          "cloudResource": {
+            "type": "AzureAppService",
+            "name": "app-bt-rules-${env_tag}",
+            "group": "rg-bt-${stamp_tag}",
+            "subscriptionId": "${sub_id}"
+          }
+        },
+        {
+          "name": "processor",
+          "cloudResource": {
+            "type": "AzureFunction",
+            "name": "func-bt-rules-processor-${env_tag}",
+            "group": "rg-bt-${stamp_tag}",
+            "subscriptionId": "${sub_id}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "telemetry",
+      "resources": [
+        {
+          "name": "api",
+          "cloudResource": {
+            "type": "AzureAppService",
+            "name": "app-bt-telemetry-${env_tag}",
+            "group": "rg-bt-${stamp_tag}",
+            "subscriptionId": "${sub_id}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "user",
+      "resources": [
+        {
+          "name": "api",
+          "cloudResource": {
+            "type": "AzureAppService",
+            "name": "app-bt-user-${env_tag}",
+            "group": "rg-bt-${stamp_tag}",
+            "subscriptionId": "${sub_id}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "web",
+      "resources": [
+        {
+          "name": "server",
+          "cloudResource": {
+            "type": "AzureStorageWeb",
+            "name": "${frontend_storage_name}",
+            "group": "rg-bt-${suffix}",
+            "subscriptionId": "${sub_id}"
+          }
+        }
+      ]
+    }
+  ]
+}
