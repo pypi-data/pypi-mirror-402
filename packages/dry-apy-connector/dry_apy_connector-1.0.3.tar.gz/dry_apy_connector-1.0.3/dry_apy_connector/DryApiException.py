@@ -1,0 +1,2 @@
+class DryApiException(Exception):
+    pass
