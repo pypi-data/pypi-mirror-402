@@ -1,0 +1,226 @@
+"""Documentation generator for AP systems"""
+
+import inspect
+import json
+from datetime import datetime
+from cpx_io.cpx_system.cpx_ap.ap_product_categories import ProductCategory
+from cpx_io.cpx_system.cpx_ap.ap_supported_functions import (
+    SUPPORTED_PRODUCT_FUNCTIONS_DICT,
+)
+
+
+def _generage_channel_data(channels: list, module_is_io_link: bool = False) -> dict:
+    """Makes a dict of relevant information from the channels list"""
+    channel_dict = {}
+    for k, v in channels.items():
+        channel_list = []
+        for i, c in enumerate(v):
+            data_type = c.data_type
+            if module_is_io_link:
+                # change datatype to bytes for io-link modules
+                data_type = "Bytes"
+            elif c.array_size is not None and c.array_size > 1:
+                data_type += f"[{c.array_size}]"
+            # Use Description if available, else fallback to Name
+            description = c.description if c.description else c.name
+            # Replace %d in Name/Description with ChannelId if present
+            if "%d" in description and hasattr(c, "channel_id"):
+                description = description.replace("%d", str(c.channel_id))
+            channel_list.append(
+                {
+                    "Index": i,
+                    "Description": description,
+                    "Datatype": data_type,
+                }
+            )
+        channel_dict[k] = channel_list
+    # only leave the inout channels in the docu for io-link modules
+    if module_is_io_link:
+        return {"Inout Channels": channel_dict["Inout Channels"]}
+    return channel_dict
+
+
+def _generate_module_data(modules: list) -> dict:
+    """Makes a dict of relevant information from the modules list"""
+
+    module_data = []
+    for m in modules:
+        parameter_data = []
+        for p in m.module_dicts.parameters.values():
+            # overwrite R/W of the network parameters 12000 .. 12003 in the docu
+            # as they do not work when changing them with modbus
+            parameter_data.append(
+                {
+                    "Id": p.parameter_id,
+                    "Name": p.name,
+                    "Description": p.description,
+                    "R/W": (
+                        "R/W"
+                        if (p.is_writable and p.parameter_id not in range(12000, 12004))
+                        else "R"
+                    ),
+                    "Type": p.data_type,
+                    "Size": (
+                        p.array_size
+                        if p.array_size and p.data_type != "ENUM_ID"
+                        else ""
+                    ),
+                    "Instances": p.parameter_instances["NumberOfInstances"],
+                }
+            )
+            # if enum data is available, add it to the last entry
+            enum_data = p.enums.enum_values if p.enums else None
+            if enum_data:
+                parameter_data[-1]["Enums"] = enum_data
+
+        module_functions = {}
+        for function_name in SUPPORTED_PRODUCT_FUNCTIONS_DICT:
+            if m.is_function_supported(function_name):
+                func = getattr(m, function_name)
+                module_functions[function_name] = {
+                    "Description": inspect.getdoc(func),
+                    "Signature": str(inspect.signature(func)),
+                }
+
+        is_io_link = (
+            m.apdd_information.product_category == ProductCategory.IO_LINK.value
+        )
+
+        channels = {
+            "Input Channels": m.channels.inputs,
+            "Output Channels": m.channels.outputs,
+            "Inout Channels": m.channels.inouts,
+        }
+        module_channels = _generage_channel_data(channels, is_io_link)
+
+        module_data.append(
+            {
+                "Index": m.position,
+                "Type": m.apdd_information.module_type,
+                "Description": m.apdd_information.description,
+                "Code": m.apdd_information.module_code,
+                "AP Slot": m.position + 1,
+                "FWVersion": m.information.fw_version,
+                "Default Name": m.name,
+                "Module Functions": module_functions,
+                "Parameters": parameter_data,
+                "Channels": module_channels,
+            }
+        )
+
+    return module_data
+
+
+def _write_module_functions(f, m):
+    if m["Module Functions"]:
+        f.write("### Module Functions\n")
+        for name, doc in m["Module Functions"].items():
+            func_header = name + doc["Signature"]
+            docstring = doc["Description"].replace("\n:", "<br>:")
+            if name in ("set_channel", "reset_channel", "toggle_channel"):
+                bool_indices = [
+                    str(idx)
+                    for idx, c in enumerate(m["Channels"]["Output Channels"])
+                    if c["Datatype"] == "BOOL"
+                ]
+                if bool_indices:
+                    docstring += (
+                        "\n<br>Available for BOOL output channels: "
+                        f"{', '.join(bool_indices)}"
+                    )
+                else:
+                    docstring += (
+                        "\n<br>**No BOOL output channels available in this module.**"
+                    )
+            f.write(f"### {func_header} \n{docstring}\n")
+
+
+def _write_module_channels(f, m):
+    for k, v in m["Channels"].items():
+        if len(v) > 0:
+            f.write(f"### {k}\n")
+            header = "| Index | Description | Type |\n| ----- | ----------- | ---- |\n"
+            f.write(header)
+            for c in v:
+                f.write(f"|{c['Index']}|{c['Description']}|{c['Datatype']}|\n")
+
+
+def _write_module_parameters(f, m):
+    if m["Parameters"]:
+        f.write("### Parameter Table\n")
+        f.write(
+            "| Id | Name | Description | R/W | Type | Size | Instances | Enums |\n"
+            "| -- | ---- | ----------- | --- | ---- | ---- | --------- | ----- |\n"
+        )
+        for p in m["Parameters"]:
+            enums_str = "<ul>"
+            if p.get("Enums"):
+                for k, v in p["Enums"].items():
+                    enums_str += f"<li>{v}: {k}</li>"
+            enums_str += "</ul>"
+            description_corrected_newline = p["Description"].replace("\n", "<br>")
+            f.write(
+                f"|{p['Id']}|{p['Name']}|{description_corrected_newline}|{p['R/W']}|"
+                f"{p['Type']}|{p['Size']}|{p['Instances']}|{enums_str}|\n"
+            )
+
+
+def _write_module_markdown(f, m):
+    f.write(f"\n## Index {m['Index']}: {m['Type']}\n")
+    if len(m["Description"]) > 1:
+        f.write(f"{m['Description']}\n")
+    f.write(f"* Type: {m['Type']}\n")
+    f.write(f"* Modul Code: {m['Code']}\n")
+    f.write(f"* AP Slot: {m['AP Slot']}\n")
+    f.write(f"* FWVersion: {m['FWVersion']}\n")
+    f.write(f"* Default Name: {m['Default Name']}\n")
+    _write_module_functions(f, m)
+    _write_module_channels(f, m)
+    _write_module_parameters(f, m)
+
+
+def generate_system_information_file(ap_system) -> None:
+    """Saves a readable document that includes the system information in the apdd path"""
+
+    system_data = {
+        "Information": "AP System description",
+        "IP-Address": ap_system.ip_address,
+        "Number of modules": len(ap_system.modules),
+        "Creation Date": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+        "Docu Path": ap_system.docu_path,
+        "APDD Path": ap_system.apdd_path,
+        "Modules": _generate_module_data(ap_system.modules),
+    }
+
+    # json
+    with open(
+        ap_system.docu_path
+        + f"/system_information_{ap_system.ip_address.replace('.','-')}.json",
+        "w",
+        encoding="utf-8",
+    ) as f:
+        f.write(json.dumps(system_data, indent=4))
+
+    # markup
+    with open(
+        ap_system.docu_path
+        + f"/system_information_{ap_system.ip_address.replace('.','-')}.md",
+        "w",
+        encoding="utf-8",
+    ) as f:
+        f.write(f"# {system_data['Information']}\n")
+        f.write(
+            "Documentation of your AP system that is autogenerated by reading "
+            "in all the information from all connected modules. This file will be "
+            "updated everytime you make an instance of the CpxAp Object and is "
+            "saved in the festo-cpx-io folder in your user directory depending on "
+            f"your operating system *{ap_system.docu_path}*\n"
+        )
+        f.write(f"* IP-Address: {system_data['IP-Address']}\n")
+        f.write(f"* Number of modules: {system_data['Number of modules']}\n")
+        f.write(f"* Date of creation: {system_data['Creation Date']}\n")
+        f.write(f"* Docu Path: {system_data['Docu Path']}\n")
+        f.write(f"* APDD Path: {system_data['APDD Path']}\n")
+        f.write("\n# Modules\n")
+        for m in system_data["Modules"]:
+            _write_module_markdown(f, m)
