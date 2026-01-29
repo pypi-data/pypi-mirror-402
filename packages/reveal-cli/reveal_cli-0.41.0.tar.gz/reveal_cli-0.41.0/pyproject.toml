@@ -1,0 +1,126 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reveal-cli"
+version = "0.41.0"
+description = "Progressive code exploration with semantic queries and structural diffs - understand code by navigating structure, not reading text"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Progressive Reveal Contributors", email = "scottsen@users.noreply.github.com"}
+]
+keywords = ["cli", "code-analysis", "ast", "semantic-diff", "progressive-disclosure", "code-exploration", "python", "tree-sitter"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing :: Markup",
+]
+dependencies = [
+    "pyyaml>=6.0",
+    "jsonschema>=4.0",  # Config schema validation
+    "tomli>=2.0.0;python_version<'3.11'",  # TOML support for Python <3.11
+    "rich>=13.0.0",  # For beautiful terminal output
+    "tree-sitter>=0.25.2",  # Semantic parsing for all languages
+    "tree-sitter-language-pack>=0.13.0",  # Language grammar support (165+ languages including mobile)
+    "beautifulsoup4>=4.12.0",  # HTML parsing for HTML analyzer (uses stdlib html.parser)
+    "mccabe>=0.7.0",  # McCabe cyclomatic complexity (aligns C901 with Ruff)
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+    "numpy>=1.20.0",  # Required for duplicate detection tests
+    "pymysql>=1.0.0",  # Required for MySQL adapter tests
+]
+# DEPRECATED in v0.8.0: tree-sitter is now included by default
+# Kept for backward compatibility (install commands with [treesitter] still work)
+treesitter = []
+# HTML analyzer performance optimization (optional, provides faster parsing)
+# Falls back to stdlib html.parser if not installed
+html = [
+    "lxml>=4.9.0",  # Fast C-based XML/HTML parser (requires system libs: libxml2-dev, libxslt1-dev)
+]
+# Database adapter support (mysql://, postgres://, etc.)
+database = [
+    "pymysql>=1.0.0",
+]
+# Git repository inspection (git:// adapter)
+git = [
+    "pygit2>=1.14.0",  # Stable libgit2 bindings with Python 3.10-3.12 support
+]
+
+[project.urls]
+Homepage = "https://github.com/Semantic-Infrastructure-Lab/reveal"
+Repository = "https://github.com/Semantic-Infrastructure-Lab/reveal"
+Documentation = "https://github.com/Semantic-Infrastructure-Lab/reveal/tree/main/docs"
+"Bug Tracker" = "https://github.com/Semantic-Infrastructure-Lab/reveal/issues"
+Discussions = "https://github.com/Semantic-Infrastructure-Lab/reveal/discussions"
+Changelog = "https://github.com/Semantic-Infrastructure-Lab/reveal/releases"
+
+[project.scripts]
+reveal = "reveal.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["reveal*", "plugins"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+plugins = ["*.yaml", "*.yml"]
+reveal = ["../plugins/*.yaml", "docs/*.md"]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+# Disable plugins that reveal doesn't use (prevents auto-load failures)
+addopts = "-v --cov=reveal --cov-report=term-missing -p no:postgresql -p no:redis"
+
+[tool.coverage.run]
+source = ["reveal"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    # Database adapters require external connections for meaningful testing
+    "reveal/adapters/mysql/*",
+    "reveal/adapters/sqlite/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.black]
+line-length = 100
+target-version = ['py310', 'py311', 'py312']
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
