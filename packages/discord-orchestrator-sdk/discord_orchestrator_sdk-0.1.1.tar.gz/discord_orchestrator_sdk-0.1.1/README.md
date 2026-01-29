@@ -1,0 +1,493 @@
+# Discord Bot Orchestrator SDK
+
+A Python SDK for interacting with the Discord Bot Orchestrator API. This SDK provides a clean, modular, and easy-to-use interface for managing Discord bots programmatically.
+
+## Installation
+
+```bash
+pip install discord-orchestrator-sdk
+```
+
+## Quick Start
+
+```python
+from discord_orchestrator import OrchestratorClient
+
+# Initialize the client
+client = OrchestratorClient(
+    base_url="http://localhost:8000",
+    api_key="orc_your_api_key_here"
+)
+
+# Check system health
+health = client.health.check()
+print(f"Status: {health.status}, Running bots: {health.bots_running}")
+
+# List all bots
+bots = client.bots.list()
+for bot in bots:
+    print(f"{bot.name}: {bot.status}")
+
+# Create a new bot
+bot = client.bots.create(
+    name="MyAutomationBot",
+    discord_token="your_discord_token"
+)
+
+# Start the bot
+bot.start()
+
+# Execute a command
+result = bot.execute(
+    "send_message",
+    channel_id="123456789",
+    content="Hello from the SDK!"
+)
+print(f"Result: {result.status}")
+
+# Clean up
+client.close()
+```
+
+## Features
+
+### Bot Management
+
+```python
+# List bots
+bots = client.bots.list()
+
+# Get a specific bot
+bot = client.bots.get(bot_id=1)
+
+# Create a bot
+bot = client.bots.create(
+    name="MyBot",
+    discord_token="...",
+    config={"auto_restart": True}
+)
+
+# Update a bot
+bot = client.bots.update(bot_id=1, name="NewName")
+
+# Delete a bot
+client.bots.delete(bot_id=1)
+
+# Lifecycle management
+bot.start()
+bot.stop()
+bot.restart()
+
+# Get detailed status
+status = bot.status()
+print(f"PID: {status.process_pid}, Connected: {status.is_connected}")
+```
+
+### Idempotent Operations (for Automation)
+
+```python
+# Get or create a bot - safe to call multiple times
+bot = client.bots.get_or_create(
+    name="MyAutomationBot",
+    discord_token="..."  # Only used if creating
+)
+
+# Find bot by name (returns None if not found)
+bot = client.bots.find_by_name("MyBot")
+
+# Check if bot exists
+if client.bots.exists(name="MyBot"):
+    print("Bot exists!")
+
+# Ensure bot is running (idempotent)
+bot.ensure_running()  # Starts if stopped, no-op if running
+```
+
+### Command Execution
+
+```python
+# Synchronous execution
+result = client.commands.execute(
+    bot_id=1,
+    action="send_message",
+    payload={"channel_id": "123", "content": "Hello!"},
+    timeout=30.0
+)
+print(f"Status: {result.status}, Data: {result.data}")
+
+# Asynchronous execution
+async_result = client.commands.execute_async(
+    bot_id=1,
+    action="long_running_task",
+    payload={"param": "value"}
+)
+print(f"Tracking ID: {async_result.correlation_id}")
+
+# Command history
+history = client.commands.history(bot_id=1, limit=10)
+for cmd in history:
+    print(f"{cmd.action}: {cmd.status}")
+
+# Via bot object
+result = bot.execute("send_message", channel_id="123", content="Hello!")
+```
+
+### Metrics
+
+```python
+# Get bot metrics
+metrics = client.metrics.get(bot_id=1, period="24h")
+for point in metrics["metrics"]:
+    print(f"CPU: {point['cpu_percent']}%, Memory: {point['memory_mb']}MB")
+
+# Get latest metrics
+latest = client.metrics.latest(bot_id=1)
+
+# Uptime statistics
+uptime = client.metrics.uptime(bot_id=1, period="7d")
+print(f"Uptime: {uptime['stats']['uptime_percent']}%")
+
+# System-wide summary
+summary = client.metrics.summary()
+print(f"Total bots: {summary['totals']['total_bots']}")
+```
+
+### Slash Commands
+
+```python
+# Create a slash command (idempotent)
+cmd = client.slash_commands.get_or_create(
+    bot_id=bot.id,
+    name="ask",
+    description="Ask a question",
+    options=[
+        {"name": "question", "description": "Your question", "type": 3, "required": True}
+    ]
+)
+
+# Sync commands to Discord (registers them)
+result = client.slash_commands.sync(bot_id=bot.id)
+print(f"Synced {result.synced_count} commands")
+
+# List all slash commands
+commands = client.slash_commands.list(bot_id=bot.id)
+
+# Update a command
+client.slash_commands.update(
+    bot_id=bot.id,
+    command_id=cmd.id,
+    description="Ask me anything!"
+)
+
+# Delete a command
+client.slash_commands.delete(bot_id=bot.id, command_id=cmd.id)
+```
+
+### Real-Time Events
+
+```python
+from discord_orchestrator import OrchestratorClient
+from discord_orchestrator.realtime import RealtimeClient
+
+client = OrchestratorClient(
+    base_url="http://localhost:8000",
+    api_key="orc_your_api_key"
+)
+
+# Get your bot
+bot = client.bots.get_or_create(name="MyBot")
+bot.ensure_running()
+
+# Connect to real-time events
+realtime = RealtimeClient(client.config)
+realtime.connect()
+realtime.subscribe(bot.id)
+
+# Handle slash command events
+@realtime.on_slash_command
+def handle_command(event):
+    print(f"Command: {event.command_name}")
+    print(f"User: {event.user.username}")
+    print(f"Options: {event.options}")
+
+    # Respond to the command
+    bot.respond_to_command(
+        interaction_id=event.interaction_id,
+        content="Hello from the SDK!"
+    )
+
+# Handle all events
+@realtime.on_event
+def handle_event(event):
+    print(f"Event type: {event.event_type}")
+
+# Wait for events (blocks)
+realtime.wait()
+
+# Or disconnect when done
+realtime.disconnect()
+```
+
+### Webhooks
+
+```python
+# List webhooks
+webhooks = client.webhooks.list()
+
+# Create a webhook
+webhook = client.webhooks.create(
+    name="Status Notifications",
+    url="https://example.com/webhook",
+    events=["bot.started", "bot.stopped", "bot.error"]
+)
+print(f"Secret: {webhook.secret}")  # Save this!
+
+# Update a webhook
+webhook.update(is_active=False)
+
+# Test a webhook
+result = webhook.test()
+print(f"Success: {result['success']}")
+
+# Get delivery history
+deliveries = webhook.deliveries(limit=20)
+for d in deliveries:
+    print(f"{d.event_type}: {d.success}")
+
+# Available event types
+events = client.webhooks.events()
+for e in events:
+    print(f"{e.type}: {e.description}")
+```
+
+### Health Checks
+
+```python
+# Full health check
+health = client.health.check()
+print(f"Status: {health.status}")
+print(f"Database: {health.database}")
+print(f"Bots: {health.bots_running}/{health.bots_total}")
+
+if health.is_healthy:
+    print("All systems operational")
+
+# Readiness check (for load balancers)
+if client.health.ready():
+    print("Ready to accept requests")
+
+# Liveness check (for container orchestrators)
+if client.health.live():
+    print("Service is alive")
+```
+
+## Error Handling
+
+```python
+from discord_orchestrator import (
+    OrchestratorError,
+    AuthenticationError,
+    NotFoundError,
+    ValidationError,
+    TimeoutError,
+)
+
+try:
+    bot = client.bots.get(999)
+except NotFoundError:
+    print("Bot not found")
+except AuthenticationError:
+    print("Invalid API key")
+except ValidationError as e:
+    print(f"Validation error: {e.details}")
+except TimeoutError:
+    print("Request timed out")
+except OrchestratorError as e:
+    print(f"Error: {e.message}, Code: {e.code}")
+```
+
+## Context Manager
+
+```python
+# Automatically close the client
+with OrchestratorClient(
+    base_url="http://localhost:8000",
+    api_key="..."
+) as client:
+    bots = client.bots.list()
+    # Client is automatically closed when exiting the block
+```
+
+## Configuration
+
+```python
+from discord_orchestrator import OrchestratorClient, OrchestratorConfig
+
+# Full configuration
+client = OrchestratorClient(
+    base_url="http://localhost:8000",
+    api_key="orc_your_api_key",
+    timeout=30.0,           # Request timeout in seconds
+    verify_ssl=True,        # Verify SSL certificates
+    max_retries=3,          # Max retry attempts
+    retry_delay=1.0,        # Base delay between retries
+    user_context="user-123", # Optional: Multi-tenant user isolation
+)
+
+# Or use config object
+config = OrchestratorConfig(
+    base_url="http://localhost:8000",
+    api_key="orc_your_api_key"
+)
+```
+
+## Automation Integration Example
+
+```python
+from discord_orchestrator import OrchestratorClient
+
+def send_discord_message(channel_id: str, content: str, user_id: str) -> dict:
+    """Send a Discord message with multi-tenant isolation.
+
+    Args:
+        channel_id: Discord channel ID
+        content: Message content
+        user_id: User ID for multi-tenant isolation
+    """
+    with OrchestratorClient(
+        base_url="http://localhost:8000",
+        api_key="orc_your_api_key",
+        user_context=user_id  # Each user's bots are isolated
+    ) as client:
+        # Get or create the bot (idempotent)
+        # Bot names are unique per user, not globally
+        bot = client.bots.get_or_create(
+            name="MyBot",
+            discord_token="your_bot_token"
+        )
+
+        # Ensure it's running
+        bot.ensure_running()
+
+        # Send the message
+        result = bot.execute(
+            "send_message",
+            channel_id=channel_id,
+            content=content
+        )
+
+        return {
+            "success": result.status == "success",
+            "data": result.data
+        }
+```
+
+## API Reference
+
+### OrchestratorClient
+
+The main entry point for the SDK.
+
+- `bots`: Bot management operations
+- `commands`: Command execution operations
+- `interactions`: Interaction response operations
+- `metrics`: Metrics query operations
+- `slash_commands`: Slash command CRUD operations
+- `webhooks`: Webhook management operations
+- `health`: Health check operations
+
+### BotsResource
+
+- `list()` - List all bots
+- `get(bot_id)` - Get bot by ID
+- `create(name, discord_token, config)` - Create a bot
+- `update(bot_id, ...)` - Update a bot
+- `delete(bot_id)` - Delete a bot
+- `start(bot_id)` - Start a bot
+- `stop(bot_id)` - Stop a bot
+- `restart(bot_id)` - Restart a bot
+- `status(bot_id)` - Get detailed status
+- `find_by_name(name)` - Find bot by name
+- `get_by_name(name)` - Get bot by name (raises if not found)
+- `exists(name=None, bot_id=None)` - Check if bot exists
+- `get_or_create(name, discord_token, config)` - Idempotent get/create
+
+### BotInstance
+
+- All `Bot` model attributes (id, name, status, owner_id, etc.)
+- `start()`, `stop()`, `restart()` - Lifecycle management
+- `status()` - Get detailed status
+- `execute(action, **payload)` - Execute command
+- `execute_async(action, **payload)` - Execute async command
+- `metrics(period)` - Get metrics
+- `uptime(period)` - Get uptime stats
+- `refresh()` - Refresh data from server
+- `ensure_running(timeout)` - Ensure bot is running
+- `update(...)` - Update bot
+- `delete()` - Delete bot
+- `respond_to_command(interaction_id, content, embeds, ephemeral)` - Respond to slash command
+
+### CommandsResource
+
+- `execute(bot_id, action, payload, timeout)` - Sync execution
+- `execute_async(bot_id, action, payload)` - Async execution
+- `history(bot_id, action, status, limit, offset)` - Query history
+- `history_for_bot(bot_id, limit, offset)` - Bot-specific history
+- `get_history_detail(history_id)` - Get execution details
+
+### MetricsResource
+
+- `get(bot_id, period, resolution)` - Get historical metrics
+- `latest(bot_id)` - Get latest metrics
+- `uptime(bot_id, period)` - Get uptime statistics
+- `summary()` - Get system-wide summary
+
+### WebhooksResource
+
+- `list()` - List all webhooks
+- `get(webhook_id)` - Get webhook by ID
+- `create(name, url, events, headers)` - Create webhook
+- `update(webhook_id, ...)` - Update webhook
+- `delete(webhook_id)` - Delete webhook
+- `test(webhook_id)` - Send test event
+- `regenerate_secret(webhook_id)` - Regenerate signing secret
+- `deliveries(webhook_id, limit, offset)` - Get delivery history
+- `events()` - List available event types
+
+### HealthResource
+
+- `check()` - Full health check
+- `ready()` - Readiness check
+- `live()` - Liveness check
+
+### SlashCommandsResource
+
+- `list(bot_id)` - List all slash commands for a bot
+- `create(bot_id, name, description, options)` - Create a slash command
+- `get(bot_id, command_id)` - Get a specific command
+- `update(bot_id, command_id, ...)` - Update a command
+- `delete(bot_id, command_id)` - Delete a command
+- `sync(bot_id)` - Sync commands to Discord
+- `find_by_name(bot_id, name)` - Find command by name
+- `get_or_create(bot_id, name, description, options)` - Idempotent get/create
+- `ensure(bot_id, name, description, options)` - Create or update to match definition
+
+### InteractionsResource
+
+- `respond(bot_id, interaction_id, content, embeds, ephemeral)` - Respond to a slash command
+
+### RealtimeClient
+
+- `connect()` - Connect to orchestrator WebSocket
+- `disconnect()` - Disconnect from WebSocket
+- `subscribe(bot_id)` - Subscribe to events for a bot
+- `unsubscribe(bot_id)` - Unsubscribe from bot events
+- `on_slash_command(handler)` - Register slash command handler (decorator)
+- `on_event(handler)` - Register generic event handler (decorator)
+- `on_error(handler)` - Register error handler (decorator)
+- `wait(timeout)` - Wait for events (blocking)
+- `is_connected` - Check connection status
+
+## License
+
+MIT License
