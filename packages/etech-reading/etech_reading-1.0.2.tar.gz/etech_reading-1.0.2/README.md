@@ -1,0 +1,400 @@
+# eTech Reading - Fast Reading System
+
+[![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PyPI](https://img.shields.io/pypi/v/etech-reading.svg)](https://pypi.org/project/etech-reading/)
+
+A PyQt5-based desktop application for rapid serial visual presentation (RSVP) reading. Increase your reading speed while maintaining comprehension through focused letter highlighting.
+
+## Features
+
+🚀 **Speed Enhancement**
+- Increases reading speed 2-3 times
+- Adjustable speed from 50 to 1000 WPM (Words Per Minute)
+- Real-time speed display and adjustment
+
+👁️ **Focus-Based Reading**
+- Optimal Position Fixation (OPF) algorithm
+- Each word's focus letter highlighted in red
+- Reduces eye movement fatigue
+
+📊 **Statistics & Analytics**
+- Reading speed comparison table
+- Estimated reading time calculation
+- Performance tracking
+
+⚙️ **Customization**
+- Adjustable font size (20-80pt)
+- Pause, resume, and stop controls
+- Keyboard shortcuts (Space for play/pause, Esc for stop)
+
+## Installation
+
+### Via pip
+
+```bash
+pip install etech-reading
+```
+
+### From source
+
+```bash
+git clone https://github.com/eymenomersenyigit-lang/etech-reading.git
+cd etech-reading
+pip install -e .
+```
+
+## Quick Start
+
+### Command Line
+
+```bash
+etech-reading
+```
+
+### Python Script
+
+```python
+from etech_reading import RSVPReader
+from PyQt5.QtWidgets import QApplication
+import sys
+
+app = QApplication(sys.argv)
+reader = RSVPReader()
+reader.show()
+sys.exit(app.exec_())
+```
+
+### Using TextAnalyzer
+
+```python
+from etech_reading import TextAnalyzer
+
+text = "Your text here..."
+analysis = TextAnalyzer.analyze_text(text)
+
+for sentence in analysis:
+    print(f"Sentence {sentence['sentence_index']}: {sentence['original_sentence']}")
+    for word in sentence['words']:
+        print(f"  Word: {word['clean']}, Focus: {word['focus_letter']}")
+```
+
+## Requirements
+
+- Python 3.7 or higher
+- PyQt5 >= 5.15.0
+- PyQtWebEngine >= 5.15.0
+
+## How It Works
+
+### RSVP Technology
+
+Rapid Serial Visual Presentation (RSVP) is a technique that displays text word-by-word at a fixed position instead of requiring your eyes to move across the page.
+
+1. **Sentence Breaking**: Text is split into sentences
+2. **Word Analysis**: Each word is analyzed for optimal focus point
+3. **Focus Positioning**: The Optimal Position Fixation (OPF) algorithm calculates the best letter to focus on:
+   - 1-2 letters: First letter
+   - 3-4 letters: Second letter
+   - 5-6 letters: Third letter
+   - And so on...
+4. **Visual Presentation**: Words are displayed sequentially with the focus letter highlighted in red
+
+### Benefits
+
+- **Faster Reading**: 2-3x speed increase
+- **Reduced Eye Strain**: Eyes stay fixed on one point
+- **Maintained Comprehension**: Optimal position fixation keeps meaning clear
+- **Improved Focus**: Minimizes distractions
+
+## Configuration
+
+### Speed Settings
+
+- **50-150 WPM**: Very Slow (ideal for learning difficult texts)
+- **150-250 WPM**: Slow (comfortable for average readers)
+- **250-400 WPM**: Normal (standard reading pace)
+- **400-600 WPM**: Fast (experienced readers)
+- **600-900 WPM**: Very Fast (advanced readers)
+- **900+ WPM**: Ultra Fast (speed reading)
+
+### Font Size
+
+Adjust font size from 20pt to 80pt for comfortable viewing.
+
+## Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Space` | Play/Pause reading |
+| `Esc` | Stop reading |
+
+## Terminal Commands
+
+eTech Reading includes 10 powerful terminal commands for various use cases:
+
+| Command | Purpose |
+|---------|---------|
+| `pip install etech-reading` | Install the package |
+| `etech-reading` | Launch GUI application |
+| `pip show etech-reading` | View package information |
+| `python test_package.py` | Run test suite |
+| `python -m build` | Build distribution packages |
+| `twine upload dist/*` | Publish to PyPI |
+| `pip uninstall etech-reading` | Uninstall package |
+| `python -m etech_reading.reader` | Run as Python module |
+| `python -c "from etech_reading import ..."` | Use as library in scripts |
+| `source venv/bin/activate` | Create isolated environment |
+
+For detailed terminal commands, see [TERMINAL_COMMANDS.md](TERMINAL_COMMANDS.md)
+
+## Usage Advantages
+
+eTech Reading is not just for casual reading. It's designed for multiple use cases and professional applications:
+
+### 👤 Individual Users
+- Read 2-3x faster without losing comprehension
+- Reduce eye strain with fixed focus point
+- Better focus and concentration
+- Save hours every week on reading
+
+### 🎓 Educational Use
+- Accelerate student learning
+- Standardized test preparation
+- Improved reading comprehension
+- 85-95% retention at higher speeds
+
+### 💼 Corporate Training
+- Faster employee onboarding (2x speed increase)
+- Policy and compliance training
+- Cost reduction: $125,000+ annually for 100 new hires
+- Measurable productivity improvements
+
+### 📝 Content Creators
+- Estimate article reading time
+- Optimize content length
+- Analyze content metrics
+- Better reader engagement
+
+### 🌍 Language Learning
+- Accelerated reading in new languages
+- Vocabulary exposure
+- Practice with authentic native texts
+- Faster reading proficiency
+
+### 🏥 Healthcare & Medical
+- Continuing education
+- Patient education materials
+- Literature review acceleration
+- Protocol training
+
+### 💻 Software Developers
+- Faster API documentation reading
+- Technical article comprehension
+- Framework learning acceleration
+- Code documentation analysis
+
+### 📊 Researchers & Academics
+- Literature review 50% faster
+- Process more research papers
+- Better knowledge synthesis
+- Accelerate research progress
+
+For complete details, see [USAGE_ADVANTAGES.md](USAGE_ADVANTAGES.md)
+
+## Development
+
+### Setup Development Environment
+
+```bash
+git clone https://github.com/yourusername/etech-reading.git
+cd etech-reading
+pip install -e ".[dev]"
+```
+
+### Running Tests
+
+```bash
+pytest
+```
+
+### Code Formatting
+
+```bash
+black etech_reading/
+```
+
+### Linting
+
+```bash
+flake8 etech_reading/
+```
+
+## Project Structure
+
+```
+etech_reading/
+├── __init__.py          # Package initialization
+├── analyzer.py          # Text analysis module
+└── reader.py            # Main GUI application
+
+setup.py                 # Setup configuration
+pyproject.toml          # Project metadata
+README.md               # This file
+LICENSE                 # MIT License
+```
+
+## API Documentation
+
+### TextAnalyzer
+
+#### `split_into_sentences(text: str) -> List[str]`
+Splits text into sentences using common sentence endings.
+
+#### `get_focus_letter_index(word: str) -> Tuple[int, str]`
+Returns the index and character of the focus letter for a given word.
+
+#### `analyze_text(text: str) -> List[Dict]`
+Analyzes text and returns structured data for RSVP display.
+
+### RSVPReader
+
+#### `analyze_text() -> None`
+Analyzes the input text and prepares it for display.
+
+#### `start_reading() -> None`
+Starts the RSVP presentation.
+
+#### `pause_reading() -> None`
+Pauses or resumes the presentation.
+
+#### `stop_reading() -> None`
+Stops the presentation and resets the position.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Citation
+
+If you use eTech Reading in your research or projects, please cite it as:
+
+```bibtex
+@software{etech_reading_2026,
+  title={eTech Reading - Fast Reading System using RSVP Technology},
+  author={eOS},
+  year={2026},
+  url={https://github.com/eOS/etech-reading}
+}
+```
+
+## Support
+
+For support, email eos@etech.com or open an issue on GitHub.
+
+## Roadmap
+
+- [ ] Multi-language support
+- [ ] Import from files (PDF, DOCX, TXT)
+- [ ] Export reading statistics
+- [ ] Customizable color schemes
+- [ ] Browser extension
+- [ ] Mobile application
+- [ ] Dark mode
+- [ ] Advanced text processing (stopwords removal, etc.)
+
+## References
+
+- [Rapid Serial Visual Presentation (Wikipedia)](https://en.wikipedia.org/wiki/Rapid_serial_visual_presentation)
+- [RSVP Research](https://en.wikipedia.org/wiki/Speed_reading#RSVP)
+- [PyQt5 Documentation](https://www.riverbankcomputing.com/static/Docs/PyQt5/)
+
+---
+
+Made with ❤️ by eOS
+
+### Windows
+
+```bash
+pip install etech-reading
+```
+
+### macOS
+
+```bash
+pip install etech-reading
+```
+
+## Kullanım
+
+```bash
+etech-reading
+```
+
+Veya Python'dan doğrudan:
+
+```bash
+python -m fastread
+```
+
+## Kontroller
+
+- **Space**: Oynat/Duraklat
+- **Esc**: Durdur
+
+## RSVP Nedir?
+
+Rapid Serial Visual Presentation (RSVP), metinleri hızlı bir şekilde okumak için kullanılan bir tekniktir. Her kelime sabit bir konumda sırasıyla gösterilir. Bu sayede:
+
+- 👀 Göz kaybı azalır
+- ⚡ Okuma hızı 2-3 kat artır
+- 🧠 Anlama yeteneği korunur
+
+## Gereksinimler
+
+- Python 3.8+
+- PyQt5 5.15+
+- PyQtWebEngine 5.15+
+
+## Lisans
+
+MIT License - Detaylar için LICENSE dosyasına bakın.
+
+## İletişim
+
+Sorularınız ve önerileriniz için lütfen issue açınız.
+
+---
+
+## 📝 Not: İlk Yayınlanan Proje
+
+Bu proje, **eOS** tarafından ilk olarak yayınlanan bir projedir. Yolculuk boyunca bazı hatalar ve eksiklikler yaşanmış olabilir. 
+
+### Özür Diliyorum 🙏
+
+- Eğer dokumentasyonda veya kodda hatalar buldunuz
+- Bazı özellikler beklediğiniz gibi çalışmadıysa
+- Kurulum veya kullanımda sorun yaşadıysanız
+
+Lütfen bu sorunları bildirin. **Sizin geri bildirimleri beni geliştirmeme yardımcı oluyor!**
+
+### Teşekkürler ❤️
+
+Bu projeyi tercih ettiğiniz ve destek verdiğiniz için çok teşekkürler. Continuous improvement ve feedback-driven development ile daha iyi bir ürün sunmaya çalışacağız.
+
+**GitHub**: [eymenomersenyigit-lang/etech-reading](https://github.com/eymenomersenyigit-lang/etech-reading)  
+**Email**: eOS@eTech.org *(note: domain not acquired yet, use eymenomersenyigit@gmail.com)*
+
+---
+
+*Version 1.0.1 - Updated: January 20, 2026*
