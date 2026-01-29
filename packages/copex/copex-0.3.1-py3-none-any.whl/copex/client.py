@@ -1,0 +1,428 @@
+"""Core Copex client with retry logic and stuck detection."""
+
+from __future__ import annotations
+
+import asyncio
+import random
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
+from typing import Any
+
+from copilot import CopilotClient
+
+from copex.config import CopexConfig
+from copex.models import EventType, Model, ReasoningEffort
+
+
+@dataclass
+class Response:
+    """Response from a Copilot prompt."""
+
+    content: str
+    reasoning: str | None = None
+    raw_events: list[dict[str, Any]] = field(default_factory=list)
+    retries: int = 0
+    auto_continues: int = 0
+
+
+@dataclass
+class StreamChunk:
+    """A streaming chunk from Copilot."""
+
+    type: str  # "message", "reasoning", "tool_call", "tool_result", "system"
+    delta: str = ""
+    is_final: bool = False
+    content: str | None = None  # Full content when is_final=True
+    # Tool call info
+    tool_name: str | None = None
+    tool_args: dict[str, Any] | None = None
+    tool_result: str | None = None
+    tool_success: bool | None = None
+    tool_duration: float | None = None
+
+
+class Copex:
+    """Copilot Extended - Resilient wrapper with automatic retry and stuck detection."""
+
+    def __init__(self, config: CopexConfig | None = None):
+        self.config = config or CopexConfig()
+        self._client: CopilotClient | None = None
+        self._session: Any = None
+        self._started = False
+
+    async def start(self) -> None:
+        """Start the Copilot client."""
+        if self._started:
+            return
+        self._client = CopilotClient(self.config.to_client_options())
+        await self._client.start()
+        self._started = True
+
+    async def stop(self) -> None:
+        """Stop the Copilot client."""
+        if self._session:
+            try:
+                await self._session.destroy()
+            except Exception:
+                pass
+            self._session = None
+        if self._client:
+            await self._client.stop()
+            self._client = None
+        self._started = False
+
+    async def __aenter__(self) -> "Copex":
+        await self.start()
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        await self.stop()
+
+    def _should_retry(self, error: str | Exception) -> bool:
+        """Check if error should trigger a retry."""
+        if self.config.retry.retry_on_any_error:
+            return True
+        error_str = str(error).lower()
+        return any(
+            pattern.lower() in error_str for pattern in self.config.retry.retry_on_errors
+        )
+
+    def _calculate_delay(self, attempt: int) -> float:
+        """Calculate delay with exponential backoff and jitter."""
+        delay = self.config.retry.base_delay * (self.config.retry.exponential_base ** attempt)
+        delay = min(delay, self.config.retry.max_delay)
+        # Add jitter (±25%)
+        jitter = delay * 0.25 * (2 * random.random() - 1)
+        return delay + jitter
+
+    async def _ensure_session(self) -> Any:
+        """Ensure a session exists, creating one if needed."""
+        if not self._started:
+            await self.start()
+        if self._session is None:
+            self._session = await self._client.create_session(self.config.to_session_options())
+        return self._session
+
+    async def send(
+        self,
+        prompt: str,
+        *,
+        tools: list[Any] | None = None,
+        on_chunk: Callable[[StreamChunk], None] | None = None,
+    ) -> Response:
+        """
+        Send a prompt with automatic retry on errors.
+
+        Args:
+            prompt: The prompt to send
+            tools: Optional list of tools to make available
+            on_chunk: Optional callback for streaming chunks
+
+        Returns:
+            Response object with content and metadata
+        """
+        session = await self._ensure_session()
+        retries = 0
+        auto_continues = 0
+        last_error: Exception | None = None
+
+        while retries <= self.config.retry.max_retries:
+            try:
+                result = await self._send_once(session, prompt, tools, on_chunk)
+                result.retries = retries
+                result.auto_continues = auto_continues
+                return result
+
+            except Exception as e:
+                last_error = e
+                error_str = str(e)
+
+                if self._should_retry(e):
+                    retries += 1
+                    if retries <= self.config.retry.max_retries:
+                        delay = self._calculate_delay(retries - 1)
+                        if on_chunk:
+                            on_chunk(StreamChunk(
+                                type="system",
+                                delta=f"\n[Retry {retries}/{self.config.retry.max_retries} after error: {error_str[:50]}...]\n",
+                            ))
+                        await asyncio.sleep(delay)
+
+                        # Try auto-continue if enabled
+                        if self.config.auto_continue:
+                            auto_continues += 1
+                            prompt = self.config.continue_prompt
+                        continue
+                raise
+
+        raise last_error or RuntimeError("Max retries exceeded")
+
+    async def _send_once(
+        self,
+        session: Any,
+        prompt: str,
+        tools: list[Any] | None,
+        on_chunk: Callable[[StreamChunk], None] | None,
+    ) -> Response:
+        """Send a single prompt and collect the response."""
+        done = asyncio.Event()
+        error_holder: list[Exception] = []
+        content_parts: list[str] = []
+        reasoning_parts: list[str] = []
+        final_content: str | None = None
+        final_reasoning: str | None = None
+        raw_events: list[dict[str, Any]] = []
+        last_activity = asyncio.get_event_loop().time()
+        received_content = False
+
+        def on_event(event: Any) -> None:
+            nonlocal last_activity, final_content, final_reasoning, received_content
+            last_activity = asyncio.get_event_loop().time()
+            try:
+                event_type = event.type.value if hasattr(event.type, "value") else str(event.type)
+                raw_events.append({"type": event_type, "data": getattr(event, "data", None)})
+
+                if event_type == EventType.ASSISTANT_MESSAGE_DELTA.value:
+                    delta = getattr(event.data, "delta_content", "") or ""
+                    if not delta:
+                        delta = getattr(event.data, "transformed_content", "") or ""
+                    if delta:
+                        received_content = True
+                    content_parts.append(delta)
+                    if on_chunk:
+                        on_chunk(StreamChunk(type="message", delta=delta))
+
+                elif event_type == EventType.ASSISTANT_REASONING_DELTA.value:
+                    delta = getattr(event.data, "delta_content", "") or ""
+                    reasoning_parts.append(delta)
+                    if on_chunk:
+                        on_chunk(StreamChunk(type="reasoning", delta=delta))
+
+                elif event_type == EventType.ASSISTANT_MESSAGE.value:
+                    content = getattr(event.data, "content", "") or ""
+                    if not content:
+                        content = getattr(event.data, "transformed_content", "") or ""
+                    final_content = content
+                    if content:
+                        received_content = True
+                    if on_chunk:
+                        on_chunk(StreamChunk(
+                            type="message",
+                            delta="",
+                            is_final=True,
+                            content=final_content,
+                        ))
+
+                elif event_type == EventType.ASSISTANT_REASONING.value:
+                    final_reasoning = getattr(event.data, "content", "") or ""
+                    if on_chunk:
+                        on_chunk(StreamChunk(
+                            type="reasoning",
+                            delta="",
+                            is_final=True,
+                            content=final_reasoning,
+                        ))
+
+                elif event_type == EventType.TOOL_EXECUTION_START.value:
+                    tool_name = getattr(event.data, "tool_name", None) or getattr(event.data, "name", None)
+                    tool_args = getattr(event.data, "arguments", None)
+                    if on_chunk:
+                        on_chunk(StreamChunk(
+                            type="tool_call",
+                            tool_name=str(tool_name) if tool_name else "unknown",
+                            tool_args=tool_args if isinstance(tool_args, dict) else {},
+                        ))
+
+                elif event_type == EventType.TOOL_EXECUTION_PARTIAL_RESULT.value:
+                    tool_name = getattr(event.data, "tool_name", None) or getattr(event.data, "name", None)
+                    partial = getattr(event.data, "partial_output", None)
+                    if on_chunk and partial:
+                        on_chunk(StreamChunk(
+                            type="tool_result",
+                            tool_name=str(tool_name) if tool_name else "unknown",
+                            tool_result=str(partial),
+                        ))
+
+                elif event_type == EventType.TOOL_EXECUTION_COMPLETE.value:
+                    tool_name = getattr(event.data, "tool_name", None) or getattr(event.data, "name", None)
+                    result_obj = getattr(event.data, "result", None)
+                    result_text = ""
+                    if result_obj is not None:
+                        result_text = getattr(result_obj, "content", "") or str(result_obj)
+                    success = getattr(event.data, "success", None)
+                    duration = getattr(event.data, "duration", None)
+                    if on_chunk:
+                        on_chunk(StreamChunk(
+                            type="tool_result",
+                            tool_name=str(tool_name) if tool_name else "unknown",
+                            tool_result=result_text,
+                            tool_success=success,
+                            tool_duration=duration,
+                        ))
+
+                elif event_type == EventType.ERROR.value:
+                    error_msg = str(getattr(event.data, "message", event.data))
+                    error_holder.append(RuntimeError(error_msg))
+                    done.set()
+
+                elif event_type == EventType.SESSION_ERROR.value:
+                    error_msg = str(getattr(event.data, "message", event.data))
+                    error_holder.append(RuntimeError(error_msg))
+                    done.set()
+
+                elif event_type == EventType.TOOL_CALL.value:
+                    # Extract tool call info
+                    data = event.data
+                    tool_name = getattr(data, "name", None) or getattr(data, "tool", None) or "unknown"
+                    tool_args = getattr(data, "arguments", None) or getattr(data, "args", {})
+                    if isinstance(tool_args, str):
+                        import json
+                        try:
+                            tool_args = json.loads(tool_args)
+                        except Exception:
+                            tool_args = {"raw": tool_args}
+                    if on_chunk:
+                        on_chunk(StreamChunk(
+                            type="tool_call",
+                            tool_name=str(tool_name),
+                            tool_args=tool_args if isinstance(tool_args, dict) else {},
+                        ))
+
+                elif event_type == EventType.ASSISTANT_TURN_END.value:
+                    done.set()
+
+                elif event_type == EventType.SESSION_IDLE.value:
+                    done.set()
+
+            except Exception as e:
+                error_holder.append(e)
+                done.set()
+
+        unsubscribe = session.on(on_event)
+
+        try:
+            await session.send({"prompt": prompt})
+            # Activity-based timeout: only timeout if no events received for timeout period
+            while not done.is_set():
+                try:
+                    await asyncio.wait_for(done.wait(), timeout=self.config.timeout)
+                except asyncio.TimeoutError:
+                    # Check if we've had activity within the timeout window
+                    idle_time = asyncio.get_event_loop().time() - last_activity
+                    if idle_time >= self.config.timeout:
+                        raise TimeoutError(
+                            f"Response timed out after {idle_time:.1f}s of inactivity"
+                        )
+                    # Had recent activity, keep waiting
+        finally:
+            # Remove event handler to avoid duplicates
+            try:
+                unsubscribe()
+            except Exception:
+                pass
+
+        # If we never got explicit content events and NOT streaming, try to extract from history
+        # When streaming (on_chunk provided), we trust the streamed chunks and don't use history
+        # fallback which could return stale content from previous turns
+        if not received_content and on_chunk is None:
+            try:
+                messages = await session.get_messages()
+                for message in reversed(messages):
+                    message_type = getattr(message, "type", None)
+                    message_value = (
+                        message_type.value if hasattr(message_type, "value") else str(message_type)
+                    )
+                    if message_value == EventType.ASSISTANT_MESSAGE.value:
+                        final_content = getattr(message.data, "content", "") or final_content
+                        if final_content:
+                            break
+            except Exception:
+                pass
+
+        if error_holder:
+            raise error_holder[0]
+
+        return Response(
+            content=final_content or "".join(content_parts),
+            reasoning=final_reasoning or ("".join(reasoning_parts) if reasoning_parts else None),
+            raw_events=raw_events,
+        )
+
+    async def stream(
+        self,
+        prompt: str,
+        *,
+        tools: list[Any] | None = None,
+    ) -> AsyncIterator[StreamChunk]:
+        """
+        Stream a response with automatic retry.
+
+        Yields StreamChunk objects as they arrive.
+        """
+        queue: asyncio.Queue[StreamChunk | None | Exception] = asyncio.Queue()
+
+        def on_chunk(chunk: StreamChunk) -> None:
+            queue.put_nowait(chunk)
+
+        async def sender() -> None:
+            try:
+                await self.send(prompt, tools=tools, on_chunk=on_chunk)
+                queue.put_nowait(None)  # Signal completion
+            except Exception as e:
+                queue.put_nowait(e)
+
+        task = asyncio.create_task(sender())
+
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                if isinstance(item, Exception):
+                    raise item
+                yield item
+        finally:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    async def chat(self, prompt: str) -> str:
+        """Simple interface - send prompt, get response content."""
+        response = await self.send(prompt)
+        return response.content
+
+    def new_session(self) -> None:
+        """Start a fresh session (clears conversation history)."""
+        if self._session:
+            asyncio.create_task(self._session.destroy())
+            self._session = None
+
+
+@asynccontextmanager
+async def copex(
+    model: Model | str = Model.GPT_5_2_CODEX,
+    reasoning: ReasoningEffort | str = ReasoningEffort.XHIGH,
+    **kwargs: Any,
+) -> AsyncIterator[Copex]:
+    """
+    Context manager for quick Copex access.
+
+    Example:
+        async with copex() as c:
+            response = await c.chat("Hello!")
+            print(response)
+    """
+    config = CopexConfig(
+        model=Model(model) if isinstance(model, str) else model,
+        reasoning_effort=ReasoningEffort(reasoning) if isinstance(reasoning, str) else reasoning,
+        **kwargs,
+    )
+    client = Copex(config)
+    try:
+        await client.start()
+        yield client
+    finally:
+        await client.stop()
