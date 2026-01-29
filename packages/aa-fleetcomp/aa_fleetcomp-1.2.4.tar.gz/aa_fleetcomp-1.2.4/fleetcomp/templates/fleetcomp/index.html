@@ -1,0 +1,58 @@
+{% extends 'fleetcomp/base.html' %}
+{% load i18n %}
+{% load humanize %}
+{% block content %}
+    <table class="table table-sm table-striped table-hover" id="fleetTable">
+        <thead>
+            <tr>
+                <th style="white-space: nowrap; width: 1%;"></th>
+                <th>{% translate "Fleet commander" %}</th>
+                <th>{% translate "Member count" %}</th>
+                <th>{% translate "Timestamp" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for snapshot in snapshots %}
+                <tr>
+                    <th>
+                        <a class="btn btn-info"
+                           href="{% url 'fleetcomp:view_snapshot' snapshot.id %}">
+                            <i class="fa-regular fa-eye"></i>
+                        </a>
+                    </th>
+                    <th>{{ snapshot.commander }}</th>
+                    <th>{{ snapshot.count_members }}</th>
+                    <th>{{ snapshot.timestamp_str }}</th>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}
+{% block extra_javascript %}
+    {% include "bundles/datatables-js-bs5.html" %}
+    {% include 'bundles/datatables-css-bs5.html' %}
+    {% include "bundles/filterdropdown-js.html" %}
+    <script>
+        $(document).ready(() => {
+            $('#fleetTable').dataTable({
+                sDom: 'lrtip', // Hides the search bar but still allows searches to be performed
+                // Check https://datatables.net/reference/option/dom for ref
+                order: [ [3, "desc"] ],
+                filterDropDown: {
+                    columns: [
+                        {
+                            idx: 1,
+                            title: "{% translate "Fleet commander" %}",
+                            maxWidth: "15em",
+                        },
+                    ],
+                    bootstrap: true,
+                    bootstrap_version: 5,
+                }
+            })
+        })
+    </script>
+{% endblock %}
+{% block header_nav_user_character_control %}
+    {% include "fleetcomp/overrides/top-menu-rh-fleetcomp.html" %}
+{% endblock %}
