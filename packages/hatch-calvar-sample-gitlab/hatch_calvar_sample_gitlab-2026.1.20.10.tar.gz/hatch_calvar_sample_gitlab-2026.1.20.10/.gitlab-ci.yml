@@ -1,0 +1,489 @@
+stages:
+  - validate      # Quick validation checks (pre-commit, linting)
+  - test          # Unit and integration tests
+  - security      # Security scanning (SAST, dependency scanning, secret detection)
+  - quality       # Code quality analysis
+  - build         # Build verification
+  - compliance    # Compliance checks
+  - release       # Tagging and publishing (main branch only)
+
+variables:
+  PYTHON_VERSION: "3.11"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+# Cache pip dependencies
+cache:
+  key:
+    files:
+      - pyproject.toml
+      - requirements*.txt
+  paths:
+    - .cache/pip
+    - .venv/
+    - .ruff_cache/
+    - .mypy_cache/
+  policy: pull-push
+
+# ============================================================================
+# Validate Stage - Quick validation checks
+# ============================================================================
+
+pre-commit:
+  stage: validate
+  image: python:3.11
+  script:
+    - python --version
+    - python -m pip install --upgrade pip
+    - pip install pre-commit
+    - pre-commit run --all-files
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: false
+
+lint:
+  stage: validate
+  image: python:3.11
+  script:
+    - python --version
+    - python -m pip install --upgrade pip
+    - pip install black isort ruff mypy
+    - |
+      echo "=== Black Formatting Check ==="
+      black --check --diff src/ tests/ || exit 1
+    - |
+      echo "=== isort Import Sorting ==="
+      isort --check-only --diff src/ tests/ || exit 1
+    - |
+      echo "=== Ruff Linting ==="
+      ruff check src/ tests/ || exit 1
+    - |
+      echo "=== MyPy Type Checking ==="
+      mypy src/ --ignore-missing-imports || exit 1
+  artifacts:
+    paths:
+      - .ruff_cache/
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: false
+
+# ============================================================================
+# Test Stage
+# ============================================================================
+
+.test_template: &test_template
+  image: python:${PYTHON_VERSION}
+  before_script:
+    - python --version
+    - python -m pip install --upgrade pip
+    - |
+      if [ ! -f src/hatch_calvar_sample/VERSION ]; then
+        VERSION=$(python scripts/calc_version.py --validate --pep440 || echo "0.0.0")
+        DEV_VERSION="${VERSION}.dev$(date +%s)"
+        echo "__version__ = \"${DEV_VERSION}\"" > src/hatch_calvar_sample/VERSION
+        echo "Generated VERSION file: ${DEV_VERSION}"
+      fi
+
+test:
+  <<: *test_template
+  parallel:
+    matrix:
+      - PYTHON_VERSION: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+  script:
+    - pip install -e .
+    - pip install pytest pytest-cov
+    - |
+      pytest tests/ \
+        --cov=src/hatch_calvar_sample \
+        --cov=scripts \
+        --cov-report=xml \
+        --cov-report=html \
+        --cov-report=term-missing \
+        --junit-xml=junit.xml \
+        -v
+    - |
+      # Enforce coverage on MRs
+      if [ "$CI_PIPELINE_SOURCE" == "merge_request_event" ]; then
+        coverage report --fail-under=70 || exit 1
+      else
+        coverage report --fail-under=70 || echo "Coverage below 70% - warning only"
+      fi
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+  artifacts:
+    when: always
+    reports:
+      junit: junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    paths:
+      - htmlcov/
+      - coverage.xml
+      - junit.xml
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: false
+
+# ============================================================================
+# Security Stage
+# ============================================================================
+
+sast-bandit:
+  stage: security
+  image: python:3.11
+  script:
+    - python --version
+    - python -m pip install --upgrade pip
+    - pip install bandit[sarif]
+    - |
+      echo "=== SAST: Bandit Security Scan ==="
+      bandit -r src/ -f json -o bandit-report.json || true
+      bandit -r src/ -ll || exit 1
+  artifacts:
+    reports:
+      sast: bandit-report.json
+    paths:
+      - bandit-report.json
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: false
+
+dependency-scanning:
+  stage: security
+  image: python:3.11
+  script:
+    - python --version
+    - python -m pip install --upgrade pip
+    - |
+      if [ ! -f src/hatch_calvar_sample/VERSION ]; then
+        VERSION=$(python scripts/calc_version.py --validate --pep440 || echo "0.0.0")
+        DEV_VERSION="${VERSION}.dev$(date +%s)"
+        echo "__version__ = \"${DEV_VERSION}\"" > src/hatch_calvar_sample/VERSION
+        echo "Generated VERSION file: ${DEV_VERSION}"
+      fi
+    - pip install safety pip-audit
+    - pip install -e .
+    - pip freeze > requirements-freeze.txt
+    - |
+      echo "=== Safety Check ==="
+      safety check --file requirements-freeze.txt --json --output safety-report.json || true
+      safety check --file requirements-freeze.txt || exit 1
+    - |
+      echo "=== pip-audit ==="
+      pip-audit --desc --format json --output pip-audit-report.json || true
+      pip-audit --desc || exit 1
+  artifacts:
+    reports:
+      dependency_scanning: safety-report.json
+    paths:
+      - safety-report.json
+      - pip-audit-report.json
+      - requirements-freeze.txt
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: false
+
+secret-detection:
+  stage: security
+  image:
+    name: zricethezav/gitleaks:latest
+    entrypoint: [""]
+  script:
+    - echo "=== Secret Detection Gitleaks ==="
+    - gitleaks detect --source "$CI_PROJECT_DIR" --verbose --redact --report-path gitleaks-report.json --report-format json
+  artifacts:
+    reports:
+      secret_detection: gitleaks-report.json
+    paths:
+      - gitleaks-report.json
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: false
+
+# ============================================================================
+# Quality Stage
+# ============================================================================
+
+code-quality:
+  stage: quality
+  image: python:3.11
+  script:
+    - python --version
+    - python -m pip install --upgrade pip
+    - pip install radon xenon
+    - |
+      echo "=== Code Complexity Analysis (Radon) ==="
+      radon cc src/ -a -j -o code-complexity.json || true
+      radon cc src/ -a -s
+    - |
+      echo "=== Maintainability Index (Radon) ==="
+      radon mi src/ -j -o maintainability-index.json || true
+      radon mi src/ -s
+    - |
+      echo "=== Complexity Thresholds Check (Xenon) ==="
+      xenon src/ --max-absolute C --max-modules B --max-average A || exit 1
+  artifacts:
+    reports:
+      codequality: code-complexity.json
+    paths:
+      - code-complexity.json
+      - maintainability-index.json
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: false
+
+# ============================================================================
+# Build Stage
+# ============================================================================
+
+build-verify:
+  stage: build
+  image: python:${PYTHON_VERSION}
+  parallel:
+    matrix:
+      - PYTHON_VERSION: ["3.9", "3.11"]
+  script:
+    - python --version
+    - python -m pip install --upgrade pip
+    - |
+      VERSION=$(python scripts/calc_version.py --validate --pep440 || echo "0.0.0")
+      DEV_VERSION="${VERSION}.dev$(date +%s)"
+      echo "__version__ = \"${DEV_VERSION}\"" > src/hatch_calvar_sample/VERSION
+      echo "Generated VERSION: ${DEV_VERSION}"
+    - pip install hatch hatchling build twine
+    - hatch build
+    - echo "Built packages:"
+    - ls -la dist/
+    - twine check dist/*
+    - |
+      # Test wheel installation
+      python -m venv test-env
+      source test-env/bin/activate
+      pip install --upgrade pip
+      pip install dist/*.whl
+      python -c "import hatch_calvar_sample; print(f'Version: {hatch_calvar_sample.__version__}')"
+      calver-check --help
+      calver-check info || echo "Info command executed"
+      deactivate
+    - |
+      # Test sdist installation
+      python -m venv test-env-sdist
+      source test-env-sdist/bin/activate
+      pip install --upgrade pip
+      pip install dist/*.tar.gz
+      python -c "import hatch_calvar_sample; print(f'Version: {hatch_calvar_sample.__version__}')"
+      deactivate
+    - |
+      # Verify package metadata
+      echo "=== Package Metadata Verification ==="
+      pip install pkginfo
+      python -c "
+      from pkginfo import Wheel
+      import glob
+      wheel_files = glob.glob('dist/*.whl')
+      if wheel_files:
+          w = Wheel(wheel_files[0])
+          print(f'Name: {w.name}')
+          print(f'Version: {w.version}')
+          print(f'Summary: {w.summary}')
+          print(f'Author: {w.author}')
+          print(f'License: {w.license}')
+          print(f'Requires-Python: {w.requires_python}')
+          print(f'Classifiers: {w.classifiers[:3]}...')
+      "
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: false
+
+# ============================================================================
+# Compliance Stage
+# ============================================================================
+
+license-check:
+  stage: compliance
+  image: python:3.11
+  script:
+    - python --version
+    - python -m pip install --upgrade pip
+    - |
+      if [ ! -f src/hatch_calvar_sample/VERSION ]; then
+        VERSION=$(python scripts/calc_version.py --validate --pep440 || echo "0.0.0")
+        DEV_VERSION="${VERSION}.dev$(date +%s)"
+        echo "__version__ = \"${DEV_VERSION}\"" > src/hatch_calvar_sample/VERSION
+        echo "Generated VERSION file: ${DEV_VERSION}"
+      fi
+    - pip install pip-licenses licensecheck
+    - pip install -e .
+    - |
+      echo "=== License Report ==="
+      pip-licenses --format=markdown --output-file=license-report.md || true
+      pip-licenses --format=json --output-file=license-report.json || true
+      echo ""
+      cat license-report.md || true
+    - |
+      echo "Checking for prohibited licenses..."
+      ALLOWED_LICENSES="MIT|BSD|Apache|ISC|PSF|Python|WTFPL|Unlicense|Public Domain|MPL|LGPL"
+      pip-licenses --format=csv | tail -n +2 | while IFS=',' read -r name version license; do
+        license=$(echo "$license" | tr -d '"')
+        if ! echo "$license" | grep -qiE "$ALLOWED_LICENSES"; then
+          if echo "$license" | grep -qiE "^GPL|GNU General Public"; then
+            echo "::warning::Package $name ($version) has license: $license - Review required"
+          fi
+        fi
+      done
+      echo "License check completed"
+    - licensecheck --zero || echo "License check completed with findings"
+  artifacts:
+    paths:
+      - license-report.md
+      - license-report.json
+    expire_in: 30 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: true
+
+# ============================================================================
+# Release Stage - Auto-Tag Job (runs on merge to main/master)
+# ============================================================================
+
+auto-tag:
+  stage: release
+  image: python:3.11
+  script:
+    - python --version
+    - python -m pip install --upgrade pip
+    - git fetch --tags --force
+    - |
+      VERSION=$(python scripts/calc_version.py --validate --pep440)
+      echo "Calculated version: $VERSION"
+      if ! [[ "$VERSION" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[0-9]+$ ]]; then
+        echo "Error: Invalid CalVer format: $VERSION"
+        exit 1
+      fi
+    - |
+      TAG_NAME="v${VERSION}"
+      if git rev-parse -q --verify "refs/tags/${TAG_NAME}" >/dev/null; then
+        echo "Tag ${TAG_NAME} already exists, skipping tag creation"
+        exit 0
+      fi
+      echo "Tag ${TAG_NAME} does not exist, will create it"
+    - |
+      TAG_NAME="v${VERSION}"
+      # Construct tag message with MR info if available
+      TAG_MESSAGE="Release ${VERSION}"
+      if [ -n "$CI_MERGE_REQUEST_IID" ]; then
+        TAG_MESSAGE="Release ${VERSION} (merged from MR !${CI_MERGE_REQUEST_IID})"
+      else
+        TAG_MESSAGE="Release ${VERSION} (auto-created from merge to ${CI_COMMIT_REF_NAME})"
+      fi
+
+      # Use GitLab API to create tag (requires GITLAB_TOKEN variable)
+      if [ -z "$GITLAB_TOKEN" ]; then
+        echo "Warning: GITLAB_TOKEN not set. Using git push with CI_JOB_TOKEN (may fail without proper permissions)."
+        git config user.name "GitLab CI"
+        git config user.email "gitlab-ci@gitlab.com"
+        git tag -a "${TAG_NAME}" -m "${TAG_MESSAGE}"
+        git push "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "${TAG_NAME}" || {
+          echo "Error: Failed to push tag. Please configure GITLAB_TOKEN CI/CD variable with api scope."
+          echo "Or grant write_repository permission to CI_JOB_TOKEN in project settings."
+          exit 1
+        }
+      else
+        # Use GitLab API to create tag
+        echo "Creating tag ${TAG_NAME} via GitLab API..."
+        curl --request POST \
+          --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+          --header "Content-Type: application/json" \
+          --data "{\"tag_name\": \"${TAG_NAME}\", \"ref\": \"${CI_COMMIT_SHA}\", \"message\": \"${TAG_MESSAGE}\"}" \
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/repository/tags"
+        echo "Created tag: ${TAG_NAME}"
+      fi
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_COMMIT_BRANCH == "master" && $CI_PIPELINE_SOURCE == "push"
+  allow_failure: false
+
+# ============================================================================
+# Release Stage - Release Job (runs on tag push)
+# ============================================================================
+
+release:
+  stage: release
+  image: python:3.11
+  script:
+    - python --version
+    - |
+      # Extract version from tag (strip 'v' prefix)
+      if [[ "$CI_COMMIT_TAG" =~ ^v(.*)$ ]]; then
+        VERSION="${BASH_REMATCH[1]}"
+      else
+        VERSION="$CI_COMMIT_TAG"
+      fi
+      echo "Extracted version: $VERSION"
+      # Validate CalVer format: YYYY.MM.DD.MICRO
+      if ! [[ "$VERSION" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[0-9]+$ ]]; then
+        echo "Error: Invalid CalVer format: $VERSION"
+        echo "Expected format: YYYY.MM.DD.MICRO (e.g., 2024.01.18.1)"
+        exit 1
+      fi
+      echo "Validated version: $VERSION"
+    - |
+      echo "__version__ = \"${VERSION}\"" > src/hatch_calvar_sample/VERSION
+      cat src/hatch_calvar_sample/VERSION
+    - python -m pip install --upgrade pip
+    - pip install hatch hatchling build twine
+    - hatch build
+    - twine check dist/*
+    - |
+      # Publish to PyPI
+      # Note: Configure PYPI_API_TOKEN in GitLab CI/CD variables for PyPI publishing
+      # Create a PyPI API token at: https://pypi.org/manage/account/token/
+      echo "Debug: Checking for PYPI_API_TOKEN..."
+      echo "CI_COMMIT_TAG: ${CI_COMMIT_TAG}"
+      echo "CI_COMMIT_REF_NAME: ${CI_COMMIT_REF_NAME}"
+      echo "PYPI_API_TOKEN is set: $([ -n "$PYPI_API_TOKEN" ] && echo 'YES' || echo 'NO')"
+      echo "PYPI_API_TOKEN length: ${#PYPI_API_TOKEN}"
+      if [ -z "$PYPI_API_TOKEN" ]; then
+        echo ""
+        echo "ERROR: PYPI_API_TOKEN not set. Cannot publish to PyPI."
+        echo ""
+        echo "Common issues:"
+        echo "1. Variable is marked as 'Protected' but tag is not protected"
+        echo "   Solution: Either uncheck 'Protected' flag OR protect the tag in Settings → Repository → Protected Tags"
+        echo "2. Variable has environment scope that doesn't match"
+        echo "   Solution: Leave 'Environment scope' blank (all environments) or set it to 'pypi'"
+        echo "3. Variable name mismatch (case-sensitive)"
+        echo "   Solution: Ensure variable key is exactly 'PYPI_API_TOKEN'"
+        echo ""
+        echo "To enable PyPI publishing:"
+        echo "1. Create a PyPI API token at https://pypi.org/manage/account/token/"
+        echo "2. Add it as a CI/CD variable named 'PYPI_API_TOKEN' in GitLab project settings"
+        echo "   Settings → CI/CD → Variables → Add variable"
+        echo "   - Key: PYPI_API_TOKEN (exact match, case-sensitive)"
+        echo "   - Value: [your PyPI API token]"
+        echo "   - Type: Variable"
+        echo "   - Environment scope: (leave blank for all environments)"
+        echo "   - Flags:"
+        echo "     - Masked: Yes (recommended)"
+        echo "     - Protected: No (unless tag is protected)"
+        echo "     - Expand variable reference: No"
+        exit 1
+      fi
+      echo "Publishing to PyPI..."
+      twine upload --username __token__ --password "$PYPI_API_TOKEN" dist/*
+      echo "✓ Successfully published to PyPI: https://pypi.org/project/hatch-calvar-sample-gitlab/"
+  environment:
+    name: pypi
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v.*$/
+  when: on_success
+  allow_failure: false
