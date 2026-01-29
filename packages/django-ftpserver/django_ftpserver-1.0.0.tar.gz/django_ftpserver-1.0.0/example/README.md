@@ -1,0 +1,78 @@
+# django-ftpserver Example Project
+
+A ready-to-run example Django project demonstrating django-ftpserver.
+
+## Features
+
+- Demo user (`demo` / `demo`) created on first run
+- FTP server for file upload/download
+- Web interface to browse uploaded files (login required)
+
+## Setup
+
+### For Users
+
+```bash
+cd example
+python3 -m venv venv
+venv/bin/pip install -r requirements.txt
+```
+
+### For Developers
+
+If you cloned the repository and want to test local changes:
+
+```bash
+cd example
+python3 -m venv venv
+venv/bin/pip install -e ..
+```
+
+## Usage
+
+### 1. Run migrations
+
+```bash
+venv/bin/python manage.py migrate
+```
+
+### 2. Start FTP server
+
+```bash
+venv/bin/python manage.py ftpserver 127.0.0.1:10021
+```
+
+On first run, demo user credentials will be displayed:
+
+```
+==================================================
+Demo user created!
+  Username: demo
+  Password: demo
+==================================================
+```
+
+### 3. Connect via FTP
+
+```bash
+ftp 127.0.0.1 10021
+```
+
+Use the credentials shown above to login.
+
+### 4. Browse files via Web
+
+Start the development server in another terminal:
+
+```bash
+venv/bin/python manage.py runserver
+```
+
+Open http://127.0.0.1:8000/ and login with the demo credentials.
+
+You can also access Django admin at http://127.0.0.1:8000/admin/
+
+## Directory Structure
+
+- `data/` - FTP home directory (files uploaded via FTP appear here)
+- `db.sqlite3` - SQLite database (created after migrate)
