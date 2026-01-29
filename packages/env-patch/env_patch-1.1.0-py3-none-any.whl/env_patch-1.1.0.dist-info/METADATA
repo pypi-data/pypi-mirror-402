@@ -1,0 +1,391 @@
+Metadata-Version: 2.4
+Name: env-patch
+Version: 1.1.0
+Summary: Environment file generator with template + override support. Born from MochatAI team's production experience.
+Project-URL: Homepage, https://github.com/upbrosai/env-patch
+Project-URL: Repository, https://github.com/upbrosai/env-patch
+Project-URL: Issues, https://github.com/upbrosai/env-patch/issues
+Project-URL: Changelog, https://github.com/upbrosai/env-patch/blob/main/CHANGELOG.md
+Author-email: MochatAI Team <dev@mochatai.com>
+License: MIT
+License-File: LICENSE
+Keywords: cli,configuration,devops,dotenv,env,environment
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Software Development :: Build Tools
+Classifier: Topic :: System :: Systems Administration
+Classifier: Topic :: Utilities
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+
+# env-patch
+
+[![PyPI version](https://badge.fury.io/py/env-patch.svg)](https://badge.fury.io/py/env-patch)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+**Environment file generator with template + override support.**
+
+Born from [MochatAI](https://mochatai.com) team's production experience building cross-border e-commerce and Amazonn Ads Agent.
+
+[English](#why-env-patch) | [中文](#中文文档)
+
+## Why env-patch?
+
+Most dotenv libraries load `.env` files at **runtime**. But generating `.env` files can be frustrating:
+
+- **Building Docker images** that need baked-in environment configs, but your project only has `.env.example`, not `.env`?
+- **Already have `.env.example` and `.env.{env}`, but that's not enough?** Those files are committed to git, but you need to **temporarily change configs for debugging without committing**
+- **Parallel development with worktrees?** Each worktree needs its own independent configuration
+
+**env-patch** generates a single `.env` file at **build time** by merging `.env.example` (template), `.env.development` (environment config), and `.env.development.local` (local overrides).
+
+## Installation
+
+**Global CLI (recommended for most users):**
+
+```bash
+# Using pipx
+pipx install env-patch
+
+# Using uv tool (if you use uv)
+uv tool install env-patch
+```
+
+**As a project dependency:**
+
+```bash
+# Using pip
+pip install env-patch
+
+# Using uv
+uv add env-patch
+```
+
+## Quick Start
+
+```bash
+# 1. Create your template
+cat > .env.example << 'EOF'
+DATABASE_URL=postgres://localhost/myapp
+REDIS_URL=redis://localhost:6379
+DEBUG=false
+EOF
+
+# 2. Create environment-specific config
+cat > .env.development << 'EOF'
+DEBUG=true
+EOF
+
+# 3. Generate .env
+env-patch -e development
+
+# Result: .env contains DATABASE_URL, REDIS_URL from template + DEBUG=true from override
+```
+
+## File Hierarchy
+
+```
+.env.example              # Template (git tracked)
+.env.development          # Development config (git tracked)
+.env.development.local    # Local overrides (git ignored)
+.env                      # Output (git ignored)
+```
+
+**Priority (highest to lowest):**
+1. `.env.{env}.local` - Personal machine-specific overrides
+2. `.env.{env}` - Environment-specific config
+3. `.env.example` - Default template values
+
+## Usage
+
+### Basic Usage
+
+```bash
+# Auto-detect env file (when only one exists)
+env-patch
+
+# Specify environment
+env-patch -e development
+env-patch -e production
+env-patch -e staging
+```
+
+### Aliases
+
+Built-in aliases for common environments:
+
+```bash
+env-patch -e dev    # Same as: env-patch -e development
+env-patch -e prod   # Same as: env-patch -e production
+env-patch -e stage  # Same as: env-patch -e staging
+```
+
+### Custom Environments
+
+```bash
+# Use any environment name
+env-patch -e uai-prod       # Uses .env.uai-prod
+env-patch -e feature-auth   # Uses .env.feature-auth
+```
+
+### Options
+
+```bash
+env-patch -e <env>           # Environment name
+env-patch -t <file>          # Template file (default: .env.example)
+env-patch -o <file>          # Output file (default: .env)
+env-patch -s                 # Strict mode: error on unknown keys
+env-patch -h                 # Show help
+env-patch -v                 # Show version
+```
+
+## Local Overrides
+
+Create `.env.{env}.local` for machine-specific settings that shouldn't be committed:
+
+```bash
+# .env.development.local (git ignored)
+DATABASE_URL=postgres://localhost:5433/myapp_local
+API_KEY=my-personal-api-key
+```
+
+These values override both the template and the environment config.
+
+## Recommended .gitignore
+
+```gitignore
+# Output file
+.env
+
+# Local overrides
+.env.local
+.env.*.local
+
+# Keep these tracked
+!.env.example
+```
+
+## CI/CD Integration
+
+```yaml
+# GitHub Actions example
+steps:
+  - name: Generate .env for production
+    run: |
+      pip install env-patch
+      env-patch -e production
+```
+
+```dockerfile
+# Dockerfile example
+FROM python:3.12
+RUN pip install env-patch
+COPY .env.example .env.production ./
+RUN env-patch -e production
+```
+
+## Why Not Just Use dotenv-flow?
+
+| Feature | env-patch | dotenv-flow |
+|---------|-----------|-------------|
+| When it runs | Build time | Runtime |
+| Output | Single `.env` file | In-memory only |
+| Docker builds | Easy | Requires workaround |
+| Debug visibility | Check `.env` directly | Add logging |
+| Language | Python CLI | Node.js library |
+
+**Use env-patch when you need a generated file. Use dotenv-flow when you want runtime loading.**
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+# 中文文档
+
+**env-patch： `.env` 文件生成器，支持模板 + 覆盖机制。**
+
+源自 [MochatAI](https://mochatai.com) 团队在跨境电商AI(特别是亚马逊AI广告经理)开发中的实战经验。
+
+## 为什么需要 env-patch？
+
+大多数编程语言的 dotenv 库在 **运行时** 会加载 `.env` 文件。但 .env 文件的生成就搞得人很烦，比如：
+
+- **在构建 Docker 镜像** 时需要内置环境配置，但项目里只有 `.env.example`，没有 `.env` 文件？
+- **有了 `.env.example` 和 `.env.{env}`(比如`.env.development`)，结果还不够**，因为团那些文件也都是提交到 git 仓库的，所以一旦频繁修改就以为需要提交git或反复注意有没有不小心提交到git，但我们**在调试时希望临时改变一下配置**，但不希望提交到 git仓库
+- **在 worktree 并行开发时，希望每个 worktree 都有自己独立的配置**
+
+**env-patch** 在 **构建时** 就可以将 `.env.example`、`.env.development`（环境配置）、`.env.development.local`（环境配置的本地覆盖）合并生成单一 `.env` 文件。
+
+## 安装
+
+**全局 CLI（推荐大多数用户使用）：**
+
+```bash
+# 使用 pipx
+pipx install env-patch
+
+# 使用 uv tool（如果你使用 uv）
+uv tool install env-patch
+```
+
+**作为项目依赖：**
+
+```bash
+# 使用 pip
+pip install env-patch
+
+# 使用 uv
+uv add env-patch
+```
+
+## 快速开始
+
+```bash
+# 1. 创建模板
+cat > .env.example << 'EOF'
+DATABASE_URL=postgres://localhost/myapp
+REDIS_URL=redis://localhost:6379
+DEBUG=false
+EOF
+
+# 2. 创建环境配置
+cat > .env.development << 'EOF'
+DEBUG=true
+EOF
+
+# 3. 生成 .env
+env-patch -e development
+
+# 结果：.env 包含模板的 DATABASE_URL、REDIS_URL + 覆盖的 DEBUG=true
+```
+
+## 文件层级
+
+```
+.env.example              # 模板（git 追踪）
+.env.development          # 开发环境配置（git 追踪）
+.env.development.local    # 本地覆盖（git 忽略）
+.env                      # 输出文件（git 忽略）
+```
+
+**优先级（从高到低）：**
+1. `.env.{env}.local` - 个人机器特定的覆盖
+2. `.env.{env}` - 环境配置
+3. `.env.example` - 模板默认值
+
+## 使用方法
+
+### 基本用法
+
+```bash
+# 自动检测环境文件（当只有一个时）
+env-patch
+
+# 指定环境
+env-patch -e development
+env-patch -e production
+env-patch -e staging
+```
+
+### 别名
+
+内置常用环境别名：
+
+```bash
+env-patch -e dev    # 等同于: env-patch -e development
+env-patch -e prod   # 等同于: env-patch -e production
+env-patch -e stage  # 等同于: env-patch -e staging
+```
+
+### 自定义环境
+
+```bash
+# 使用任意环境名
+env-patch -e uai-prod       # 使用 .env.uai-prod
+env-patch -e feature-auth   # 使用 .env.feature-auth
+```
+
+### 选项
+
+```bash
+env-patch -e <env>           # 环境名称
+env-patch -t <file>          # 模板文件（默认: .env.example）
+env-patch -o <file>          # 输出文件（默认: .env）
+env-patch -s                 # 严格模式：未知键报错
+env-patch -h                 # 显示帮助
+env-patch -v                 # 显示版本
+```
+
+## 本地覆盖
+
+创建 `.env.{env}.local` 存放不应提交的机器特定配置：
+
+```bash
+# .env.development.local（git 忽略）
+DATABASE_URL=postgres://localhost:5433/myapp_local
+API_KEY=my-personal-api-key
+```
+
+这些值会覆盖模板和环境配置。
+
+## 推荐的 .gitignore
+
+```gitignore
+# 输出文件
+.env
+
+# 本地覆盖
+.env.local
+.env.*.local
+
+# 保留这些追踪
+!.env.example
+```
+
+## CI/CD 集成
+
+```yaml
+# GitHub Actions 示例
+steps:
+  - name: 生成生产环境 .env
+    run: |
+      pip install env-patch
+      env-patch -e production
+```
+
+```dockerfile
+# Dockerfile 示例
+FROM python:3.12
+RUN pip install env-patch
+COPY .env.example .env.production ./
+RUN env-patch -e production
+```
+
+## 贡献
+
+欢迎贡献！提交 Pull Request 为开源做贡献。
+
+## 许可证
+
+MIT License - 详见 [LICENSE](LICENSE)
+
+---
+
+Made with love by [MochatAI Team](https://mochatai.com)
