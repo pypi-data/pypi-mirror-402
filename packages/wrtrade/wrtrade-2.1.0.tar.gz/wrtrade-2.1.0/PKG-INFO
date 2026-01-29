@@ -1,0 +1,301 @@
+Metadata-Version: 2.4
+Name: wrtrade
+Version: 2.1.0
+Summary: Ultra-fast backtesting and trading framework. Built with Polars for speed, designed for simplicity.
+Home-page: https://github.com/wayy-research/wrtrade
+Author: Wayy Research
+Author-email: contact@wayy.research
+Project-URL: Bug Reports, https://github.com/wayy-research/wrtrade/issues
+Project-URL: Documentation, https://wrtrade.readthedocs.io/
+Project-URL: Source, https://github.com/wayy-research/wrtrade
+Keywords: trading,portfolio,quantitative,finance,algorithmic,kelly,optimization,backtesting,deployment,brokers
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Financial and Insurance Industry
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Topic :: Office/Business :: Financial :: Investment
+Classifier: Topic :: Scientific/Engineering :: Mathematics
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: polars>=0.18.0
+Requires-Dist: numpy>=1.21.0
+Requires-Dist: scipy>=1.7.0
+Requires-Dist: click>=8.0.0
+Requires-Dist: pyyaml>=6.0.0
+Requires-Dist: psutil>=5.8.0
+Requires-Dist: aiohttp>=3.8.0
+Requires-Dist: requests>=2.28.0
+Requires-Dist: pandas>=1.3.0
+Requires-Dist: wrchart>=0.1.1
+Provides-Extra: alpaca
+Requires-Dist: alpaca-trade-api>=3.0.0; extra == "alpaca"
+Provides-Extra: robinhood
+Requires-Dist: robin-stocks>=2.0.0; extra == "robinhood"
+Provides-Extra: all
+Requires-Dist: alpaca-trade-api>=3.0.0; extra == "all"
+Requires-Dist: robin-stocks>=2.0.0; extra == "all"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.20.0; extra == "dev"
+Requires-Dist: black>=22.0.0; extra == "dev"
+Requires-Dist: flake8>=4.0.0; extra == "dev"
+Requires-Dist: mypy>=0.950; extra == "dev"
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: keywords
+Dynamic: license-file
+Dynamic: project-url
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# wrtrade
+
+Ultra-fast backtesting and trading framework. Built with Polars for speed, designed for simplicity.
+
+## Install
+
+```bash
+pip install wrtrade
+```
+
+## Quick Start
+
+```python
+import wrtrade as wrt
+import polars as pl
+
+# Define your signal
+def trend(prices):
+    fast = prices.rolling_mean(10)
+    slow = prices.rolling_mean(30)
+    return (fast > slow).cast(int) - (fast < slow).cast(int)
+
+# One-line backtest
+result = wrt.backtest(trend, prices)
+print(f"Sortino: {result.sortino:.2f}")
+```
+
+That's it. No builders, no managers, no factories.
+
+## The API
+
+### Portfolio
+
+`Portfolio` is the core data type. It holds trading signals.
+
+```python
+# Single signal
+portfolio = wrt.Portfolio(trend)
+
+# Multiple signals with weights
+portfolio = wrt.Portfolio([
+    (trend, 0.6),
+    (momentum, 0.4),
+])
+
+# Named signals
+portfolio = wrt.Portfolio({
+    'trend': (trend, 0.6),
+    'momentum': (momentum, 0.4),
+})
+```
+
+### Backtest
+
+```python
+# From a signal function
+result = wrt.backtest(trend, prices)
+
+# From a portfolio
+result = portfolio.backtest(prices)
+
+# Access metrics
+result.sortino        # Sortino ratio
+result.sharpe         # Sharpe ratio
+result.max_drawdown   # Maximum drawdown
+result.total_return   # Total return
+result.volatility     # Annualized volatility
+result.returns        # Returns series
+
+# Print formatted report
+result.tear_sheet()
+```
+
+### Validate
+
+Statistical validation using permutation testing:
+
+```python
+# One-line validation
+p_value = wrt.validate(trend, prices)
+
+if p_value < 0.05:
+    print("Strategy is statistically significant!")
+
+# With more control
+p_value = portfolio.validate(prices, n_permutations=1000, parallel=True)
+```
+
+### Optimize
+
+Kelly criterion optimization for position sizing:
+
+```python
+# Optimize weights
+portfolio.optimize(prices)
+
+# With parameters
+portfolio.optimize(prices, method='kelly', max_leverage=1.0)
+```
+
+## Complete Example
+
+```python
+import wrtrade as wrt
+import polars as pl
+import numpy as np
+
+# 1. Define signals
+def trend(prices):
+    fast = prices.rolling_mean(10)
+    slow = prices.rolling_mean(30)
+    return (fast > slow).cast(int) - (fast < slow).cast(int)
+
+def momentum(prices):
+    returns = prices.pct_change(20).fill_null(0)
+    return (returns > 0.05).cast(int) - (returns < -0.05).cast(int)
+
+# 2. Create portfolio
+portfolio = wrt.Portfolio([
+    (trend, 0.6),
+    (momentum, 0.4),
+])
+
+# 3. Backtest
+result = portfolio.backtest(prices)
+print(f"Sortino: {result.sortino:.2f}")
+print(f"Return: {result.total_return:.2%}")
+
+# 4. Validate
+p_value = portfolio.validate(prices)
+if p_value < 0.05:
+    print("Strategy is significant!")
+
+# 5. Optimize
+portfolio.optimize(prices)
+print(f"Optimized weights: {portfolio.weights}")
+
+# 6. View report
+result.tear_sheet()
+```
+
+## Deployment
+
+Create a strategy file with a `build_portfolio()` function:
+
+```python
+# my_strategy.py
+import wrtrade as wrt
+
+def trend(prices):
+    fast = prices.rolling_mean(10)
+    slow = prices.rolling_mean(30)
+    return (fast > slow).cast(int) - (fast < slow).cast(int)
+
+def build_portfolio():
+    return wrt.Portfolio(trend, name="Trend_Strategy")
+```
+
+Deploy:
+
+```bash
+wrtrade strategy deploy my_strategy.py \
+    --name my_strategy \
+    --broker alpaca \
+    --symbols AAPL,TSLA
+
+wrtrade strategy start my_strategy
+```
+
+## Signal Functions
+
+Signal functions take a price series and return signals:
+
+```python
+def my_signal(prices: pl.Series) -> pl.Series:
+    """
+    Args:
+        prices: Polars Series of prices
+
+    Returns:
+        Polars Series with values:
+        -1 = short
+         0 = flat
+         1 = long
+    """
+    # Your logic here
+    return signals
+```
+
+## Advanced Usage
+
+All advanced features remain accessible:
+
+```python
+# Permutation testing with full control
+from wrtrade import PermutationTester, PermutationConfig
+
+config = PermutationConfig(
+    n_permutations=5000,
+    parallel=True,
+    preserve_gaps=True,
+)
+tester = PermutationTester(config)
+results = tester.run_walkforward_test(prices, strategy_func, train_window=252)
+
+# Kelly optimization with parameters
+from wrtrade import KellyOptimizer, KellyConfig
+
+config = KellyConfig(
+    lookback_window=252,
+    max_leverage=1.0,
+    min_weight=0.0,
+    max_weight=1.0,
+)
+optimizer = KellyOptimizer(config)
+```
+
+## CLI Reference
+
+```bash
+wrtrade strategy deploy <file>  # Deploy strategy
+wrtrade strategy start <name>   # Start trading
+wrtrade strategy stop <name>    # Stop trading
+wrtrade strategy status         # Check status
+wrtrade strategy logs <name>    # View logs
+```
+
+## Why wrtrade?
+
+- **Fast**: Built on Polars, 10-50x faster than pandas
+- **Simple**: `Portfolio` is a data type, not a framework
+- **Validated**: Built-in permutation testing catches overfitting
+- **Production-ready**: CLI deployment with monitoring
+
+## License
+
+MIT
