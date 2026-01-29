@@ -1,0 +1,208 @@
+# TOPSIS — Khushi (102303610)
+
+**Topsis-Khushi-102303610** is a Python library for solving **Multiple Criteria Decision Making (MCDM)** problems using the **Technique for Order of Preference by Similarity to Ideal Solution (TOPSIS)**.
+
+---
+
+## What is TOPSIS?
+
+**TOPSIS** is a decision-making method used when you need to choose the best option from several alternatives based on multiple criteria.
+
+### Core Concept
+
+The best alternative should have:
+- The **shortest distance** from the **Positive Ideal Solution** (best possible values)
+- The **longest distance** from the **Negative Ideal Solution** (worst possible values)
+
+### Simple Example
+
+Imagine choosing a mutual fund based on:
+- **P1** (higher is better) ✓
+- **P2** (higher is better) ✓
+- **P3** (lower is better) ✗
+- **P4** (higher is better) ✓
+
+TOPSIS calculates a score for each fund and ranks them to help you pick the best one!
+
+---
+
+## Features
+
+- ✅ Simple command-line interface
+- ✅ Handles any number of alternatives and criteria
+- ✅ Automatic normalization of data
+- ✅ Supports both beneficial (+) and non-beneficial (-) criteria
+- ✅ Generates ranked output with TOPSIS scores
+- ✅ Easy to install and use
+
+---
+
+## Installation
+
+Install the package using `pip`:
+
+```bash
+pip install Topsis-Khushi-102303610
+```
+
+---
+
+## Usage
+
+Run TOPSIS from the command line:
+
+```bash
+topsis <InputFile.csv> <Weights> <Impacts> <OutputFile.csv>
+```
+
+### Method 1: With Quotes (Recommended)
+
+```bash
+topsis data.csv "1,1,1,1" "+,+,-,+" result.csv
+```
+
+### Method 2: Without Quotes
+
+```bash
+topsis data.csv 1,1,1,1 +,+,-,+ result.csv
+```
+
+**Important:**  
+Method 2 does not allow spaces. Always use quotes if there are spaces in your input.
+
+### Get Help
+
+```bash
+topsis -h
+```
+
+---
+
+## Input File Format
+
+The input must be a **CSV file** with the following structure:
+
+### Requirements
+
+- **First column**: Names or IDs of alternatives (text)
+- **Remaining columns**: Numerical criteria values only
+- **First row**: Column headers
+
+### Example: `data.csv`
+
+```csv
+Fund Name,P1,P2,P3,P4
+M1,0.67,0.45,6.5,42.6
+M2,0.6,0.36,3.6,53.3
+M3,0.82,0.67,3.8,63.1
+M4,0.6,0.36,3.5,69.2
+```
+
+**Where:**
+- `Fund Name` = Name of the mutual fund
+- `P1, P2, P3, P4` = Different performance criteria to evaluate
+
+---
+
+## Example
+
+### Input File: `data.csv`
+
+```csv
+Fund Name,P1,P2,P3,P4
+M1,0.67,0.45,6.5,42.6
+M2,0.6,0.36,3.6,53.3
+M3,0.82,0.67,3.8,63.1
+M4,0.6,0.36,3.5,69.2
+```
+
+### Command
+
+```bash
+topsis data.csv "0.25,0.25,0.25,0.25" "+,+,-,+" output.csv
+```
+
+### Parameters Explained
+
+| Parameter | Value | Meaning |
+|-----------|-------|---------|
+| **Weights** | `0.25,0.25,0.25,0.25` | All criteria have equal importance (25% each) |
+| **Impacts** | `+,+,-,+` | P1 ✓, P2 ✓, P3 ✗, P4 ✓ |
+
+**Impacts:**
+- `+` means **higher is better** (beneficial)
+- `-` means **lower is better** (non-beneficial)
+
+### Output: `output.csv`
+
+```csv
+Fund Name,P1,P2,P3,P4,Topsis Score,Rank
+M1,0.67,0.45,6.5,42.6,0.448532,3
+M2,0.6,0.36,3.6,53.3,0.532891,2
+M3,0.82,0.67,3.8,63.1,0.691876,1
+M4,0.6,0.36,3.5,69.2,0.589247,2
+```
+
+**Result:** Fund **M3** is ranked **1st** (best choice) with the highest TOPSIS Score.
+
+---
+
+## Input Validation Rules
+
+The package validates your input to ensure correctness:
+
+| Rule | Description |
+|------|-------------|
+| ✓ File format | Must be a `.csv` file |
+| ✓ Minimum alternatives | At least 2 rows of data |
+| ✓ Minimum criteria | At least 2 criteria columns |
+| ✓ Numeric values | All criteria values must be numbers |
+| ✓ Matching counts | Number of weights = Number of impacts = Number of criteria |
+| ✓ Valid impacts | Only `+` or `-` allowed |
+| ✓ Positive weights | All weights must be > 0 |
+
+---
+
+## How TOPSIS Works (Algorithm)
+
+1. **Normalize** the decision matrix
+2. Calculate the **weighted normalized** matrix
+3. Determine the **Ideal Best** (positive ideal solution)
+4. Determine the **Ideal Worst** (negative ideal solution)
+5. Calculate **Euclidean distances** from ideal best and worst
+6. Compute **TOPSIS performance score** for each alternative
+7. **Rank** alternatives (1 = best)
+
+---
+
+## Error Handling
+
+Common errors and solutions:
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| File not found | Wrong file path | Check the file name and path |
+| Wrong number of parameters | Mismatch in counts | Ensure weights, impacts, and criteria match |
+| Non-numeric values | Text in criteria columns | All criteria must be numbers (except first column) |
+| Invalid impact | Wrong symbol used | Use only `+` or `-` |
+| Invalid weights | Zero or negative weight | All weights must be positive numbers |
+
+---
+
+## Package Information
+
+**Author:** Khushi  
+**Roll Number:** 102303610  
+**Institution:** Thapar Institute of Engineering and Technology  
+**Version:** 1.0.0  
+**License:** MIT
+
+---
+
+## Keywords
+
+TOPSIS, MCDM, Multi-Criteria Decision Making, Decision Analysis, Optimization, Python, Data Science, Operations Research
+
+---
+
+**For any issues or questions, please refer to the package documentation or contact the author.**
