@@ -1,0 +1,74 @@
+<!--
+  This is a copy from django/contrib/gis/templates/gis/openlayers.html 
+  The call to OlMapWidget() is not in a block so the base html template cannot be extended
+-->
+{% load i18n l10n %}
+
+<div id="{{ id }}_div_map" class="dj_map_wrapper">
+    <div id="{{ id }}_map" class="dj_map"></div>
+    {% if not disabled %}<span class="clear_features"><a href="">{% translate "Delete all Features" %}</a></span>{% endif %}
+    {% if display_raw %}<p>{% translate "Debugging window (serialized value)" %}</p>{% endif %}
+    <textarea id="{{ id }}" class="vSerializedField required" cols="150" rows="10" name="{{ name }}"
+              {% if not display_raw %} hidden{% endif %}>{{ serialized }}</textarea>
+    <script>
+      {% block options %}var options = {
+        geom_name: '{{ geom_type }}',
+        id: '{{ id }}',
+        map_id: '{{ id }}_map',
+        map_srid: {{ map_srid|unlocalize }},
+        name: '{{ name }}',
+        extent: {{ extent|safe }},
+        default_center: {{ default_map_center|safe }},
+        resolutions: {{ resolutions|safe }},
+        default_resolution: {{ default_resolution|unlocalize }}
+      };
+      const vectorLayerStyle = {
+        "fill-color": "{{ fill_color }}",
+        "stroke-color": "{{ stroke_color }}",
+        "stroke-width": {{ stroke_width }},
+        "circle-radius": {{ circle_radius }},
+        "circle-fill-color": "{{ circle_fill_color }}"
+      };
+      {% endblock %}
+
+{% block base_layer %}
+
+const matrixIds = [];
+for (let i = 0; i < options.resolutions.length; i += 1) {
+  matrixIds.push(i);
+}
+
+const tileGrid = new ol.tilegrid.WMTS({
+  origin: [options.extent[0], options.extent[3]],
+  resolutions: options.resolutions,
+  matrixIds
+});
+
+const WMTSOptions = {
+  layer: '{{ wmts_layer_name }}',
+  style: '{{ wmts_style }}',
+  matrixSet: '{{ wmts_matrix_set }}',
+  crossOrigin: 'anonymous',
+  attributions: '{{ wmts_attributions|safe }}',
+  url: '{{ wmts_url_template }}',
+  tileGrid: tileGrid,
+  requestEncoding: '{{ wmts_request_encoding }}',
+  format: '{{ wmts_format }}'
+}
+
+options.base_layer = new ol.layer.Tile({
+  source: new ol.source.WMTS(WMTSOptions),
+});
+
+options.search_url = '{{ search_url|safe }}';
+{% endblock %}
+
+var {{ module }} = new WMTSWidget(options);
+</script>
+{% if search_url %}
+<div class="ext-ol-search-widget">
+  <input type="text" class="vTextField ext-ol-search" name="search">
+  <div class="ext-ol-autocomplete-results ext-ol-hidden"></div>
+</div>
+{% endif %}
+</div>
