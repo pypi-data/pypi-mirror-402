@@ -1,0 +1,390 @@
+# marc-lint
+
+[![CI](https://github.com/coliin8/marclint/actions/workflows/ci.yml/badge.svg)](https://github.com/coliin8/marclint/actions/workflows/ci.yml)
+[![PyPI version](https://badge.fury.io/py/marc-lint)](https://badge.fury.io/py/marc-lint)
+[![Python versions](https://img.shields.io/pypi/pyversions/marc-lint.svg)](https://pypi.org/project/marc-lint/)
+[![codecov](https://codecov.io/gh/coliin8/marclint/branch/main/graph/badge.svg)](https://codecov.io/gh/coliin8/marclint)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+Python port of the Perl [MARC::Lint](https://metacpan.org/dist/MARC-Lint) module for validating MARC21 bibliographic records.
+
+Now added new functionality including added leader and control validation and improved article validation based on language.
+
+## Features
+
+- ✅ Comprehensive MARC21 validation
+- ✅ Leader and control field (008) validation
+- ✅ ISBN/ISSN validation using industry-standard algorithms
+- ✅ Language and geographic code validation
+- ✅ Article/non-filing indicator validation
+- ✅ Batch processing with per-record identification
+- ✅ Command-line tool with JSON output support
+- ✅ Python 3.10+ support
+- ✅ Type hints and comprehensive test coverage
+
+## Installation
+
+```bash
+pip install marc-lint
+```
+
+Or with uv:
+```bash
+uv pip install marc-lint
+```
+
+## Quick Start
+
+### Command Line Interface
+
+Lint a MARC file and display warnings:
+
+```bash
+marc-lint records.mrc
+```
+
+Example output:
+```
+--- Record ocm12345678 ---
+  020: Subfield a has bad checksum, 123456789X.
+  245: Must end with . (period).
+
+--- Record ocm87654321 ---
+  022: Subfield a has bad checksum, 1234-5678.
+
+============================================================
+Processed 2 record(s)
+Found 3 warning(s) in 2 record(s)
+```
+
+#### CLI Options
+
+```bash
+# Output as JSON (useful for automation)
+marc-lint records.mrc --format json
+
+# Quiet mode (warnings only, no summary)
+marc-lint records.mrc --quiet
+
+# Use record index as ID when 001 field is missing
+marc-lint records.mrc --use-index
+
+# Combine options
+marc-lint records.mrc -f json -q
+```
+
+#### JSON Output Format
+
+```bash
+marc-lint records.mrc --format json
+```
+
+```json
+[
+  {
+    "record_id": "ocm12345678",
+    "is_valid": false,
+    "warnings": [
+      {
+        "field": "020",
+        "message": "has bad checksum, 123456789X.",
+        "subfield": "a",
+        "position": null,
+        "record_id": "ocm12345678"
+      }
+    ]
+  },
+  {
+    "record_id": "ocm87654321",
+    "is_valid": true,
+    "warnings": []
+  }
+]
+```
+
+#### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | No warnings found |
+| 1 | Warnings found |
+| 2 | Error reading file |
+
+Use in CI/CD pipelines:
+```bash
+marc-lint catalog.mrc && echo "All records valid!"
+```
+
+### Python Library - Single Record
+
+```python
+from marc_lint import MarcLint
+from pymarc import MARCReader
+
+# Create a linter instance
+linter = MarcLint()
+
+# Process MARC records one at a time
+with open('records.mrc', 'rb') as fh:
+    reader = MARCReader(fh)
+    for record in reader:
+        warnings = linter.check_record(record)
+        
+        if warnings:
+            print(f"Record has {len(warnings)} warnings:")
+            for warning in warnings:
+                print(f"  - {warning}")
+```
+
+### Python Library - Batch Processing
+
+For processing multiple records with per-record identification:
+
+```python
+from marc_lint import MarcLint
+from pymarc import MARCReader
+
+linter = MarcLint()
+
+with open('records.mrc', 'rb') as fh:
+    reader = MARCReader(fh)
+    records = list(reader)
+
+# Process all records at once
+results = linter.check_records(records, use_index_as_id=True)
+
+for result in results:
+    if not result.is_valid:
+        print(f"Record {result.record_id}:")
+        for warning in result.warnings:
+            print(f"  - {warning}")
+
+# Summary statistics
+total_warnings = sum(len(r.warnings) for r in results)
+invalid_records = sum(1 for r in results if not r.is_valid)
+print(f"Found {total_warnings} warnings in {invalid_records} of {len(results)} records")
+```
+
+### Python Library - Structured Warnings
+
+For automation and API integration, use structured warnings:
+
+```python
+from marc_lint import MarcLint
+from pymarc import MARCReader
+
+linter = MarcLint()
+
+with open('records.mrc', 'rb') as fh:
+    reader = MARCReader(fh)
+    for record in reader:
+        linter.check_record(record)
+        
+        # Get structured warning objects
+        for warning in linter.warnings_structured():
+            print(f"Record: {warning.record_id}")
+            print(f"Field: {warning.field}")
+            print(f"Message: {warning.message}")
+            if warning.subfield:
+                print(f"Subfield: {warning.subfield}")
+            if warning.position is not None:
+                print(f"Position: {warning.position + 1}")
+```
+
+### Python Library - JSON Output
+
+Export warnings as JSON for APIs:
+
+```python
+import json
+from marc_lint import MarcLint
+from pymarc import MARCReader
+
+linter = MarcLint()
+
+with open('records.mrc', 'rb') as fh:
+    reader = MARCReader(fh)
+    records = list(reader)
+
+results = linter.check_records(records)
+
+# Convert to JSON
+output = [
+    {
+        "record_id": r.record_id,
+        "is_valid": r.is_valid,
+        "warnings": [w.to_dict() for w in r.warnings]
+    }
+    for r in results
+]
+print(json.dumps(output, indent=2))
+```
+
+Example JSON output:
+```json
+[
+  {
+    "field": "020",
+    "message": "has bad checksum, 123456789X.",
+    "subfield": "a",
+    "position": null,
+    "record_id": "ocm12345678"
+  }
+]
+```
+
+### Python Library - Filtering Warnings
+
+```python
+# Filter warnings by field
+isbn_warnings = [
+    w for w in linter.warnings_structured() 
+    if w.field == "020"
+]
+
+# Filter by subfield
+subfield_a_warnings = [
+    w for w in linter.warnings_structured() 
+    if w.subfield == "a"
+]
+
+# Filter by record
+results = linter.check_records(records)
+for result in results:
+    leader_warnings = [w for w in result.warnings if w.field == "LDR"]
+```
+
+See [STRUCTURED_WARNINGS.md](STRUCTURED_WARNINGS.md) for detailed documentation on structured warnings.
+
+## Validation Rules
+
+### Leader Validation
+
+Validates leader positions:
+- Position 05: Record status
+- Position 06: Type of record
+- Position 07: Bibliographic level
+- Position 08: Type of control
+- Position 09: Character coding scheme
+- Position 17: Encoding level
+- Position 18: Descriptive cataloging form
+- Position 19: Multipart resource record level
+
+### Control Field 008 Validation
+
+Validates:
+- Field length (40 characters)
+- Type of date (position 06)
+- Date 1 and Date 2 (positions 07-14)
+- Country code (positions 15-17)
+- Language code (positions 35-37)
+- Modified record indicator (position 38)
+- Cataloging source (position 39)
+
+### Supported Fields
+
+- **020**: ISBN validation with checksum verification
+- **022**: ISSN validation with checksum verification
+- **041**: Language codes (ISO 639-2)
+- **043**: Geographic area codes (MARC Geographic Areas)
+- **130, 240, 630, 730, 830**: Non-filing indicator validation
+- **245**: Comprehensive title validation (punctuation, indicators, subfield order)
+- **880**: Alternate graphic representation validation
+- Plus general field/subfield/indicator validation for all tags
+
+## Architecture
+
+### Files
+
+- `marc_lint.linter.py` – main `MarcLint` class, equivalent and extension to `MARC::Lint`.
+- `marc_lint.code_data.py` – translation of the code tables from
+  `MARC::Lint::CodeData` (language, geographic area, country codes).
+- `marc_lint.field_rules.py` – equivalent to `__DATA__` and `_read_rules` in `MARC::Lint`.
+- `marc_lint.warning.py` – `MarcWarning` class for structured warnings.
+- `marc_lint.cli.py` – command-line interface.
+
+Key behavior mirrored from the Perl module:
+
+- Per-record checks in `MarcLint.check_record`: leader validation, 1XX-count, required 245,
+  field repeatability, indicator validity, subfield legality and
+  repeatability, and control-field rules.
+- Tag-specific methods `check_020`, `check_022`, `check_041`, `check_043`, `check_245`,
+  plus `_check_article` for handling non-filing indicators.
+- Rules for tags are built in `_read_rules` from `RULES_DATA`, which is a
+  equivalent to `__DATA__` table in `Lint.pm`.
+
+## Development
+
+### Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/coliin8/marclint.git
+cd marclint
+
+# Install dependencies (including dev dependencies)
+uv sync --all-groups
+
+# Activate the virtual environment (optional, uv run handles this automatically)
+source .venv/bin/activate
+```
+
+### Common Development Tasks
+
+```bash
+# Run tests
+uv run pytest
+
+# Run tests with coverage
+uv run pytest --cov=src/marc_lint --cov-report=term-missing
+
+# Run tests across all Python versions (3.10-3.14)
+uv run tox
+
+# Run linting
+uv run tox -e lint
+
+# Auto-format code
+uv run tox -e format
+
+# Run specific test file
+uv run pytest tests/test_warning.py -v
+
+# Run specific test
+uv run pytest tests/test_warning.py::test_warning_basic_creation -v
+
+# Run bump version of project
+uv run bump-my-version bump patch
+```
+
+### Code Quality
+
+This project uses:
+- **pytest** for testing
+- **pytest-cov** for coverage reporting
+- **ruff** for linting and formatting (via tox)
+- **tox** for testing across multiple Python versions
+
+### Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+This is a Python port of the original Perl [MARC::Lint](https://metacpan.org/dist/MARC-Lint) module.
+
+## Acknowledgments
+
+- **Bryan Baldus, Ed Summers, and Dan Lester** for the original Perl MARC::Lint module (2001-2011)
+- Library of Congress for MARC21 standards and documentation
+
+## Links
+
+- [PyPI](https://pypi.org/project/marc-lint/)
+- [GitHub](https://github.com/coliin8/marclint)
+- [Issue Tracker](https://github.com/coliin8/marclint/issues)
+- [Changelog](CHANGELOG.md)
+- [Structured Warnings Documentation](STRUCTURED_WARNINGS.md)
+
