@@ -1,0 +1,1501 @@
+# turbo_main.py
+import math
+import colorsys
+import os
+import sys
+import time
+import csv
+import datetime as _dt
+from typing import Optional, Literal, cast
+from pathlib import Path
+from PySide6.QtCore import QSize, QTimer, Qt, QStandardPaths
+from PySide6.QtGui import QIcon, QImage, QPixmap, QFontDatabase, qRgb, QKeySequence, QShortcut
+from PySide6.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QLabel,
+    QPushButton,
+    QFileDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QComboBox,
+    QStatusBar,
+    QCheckBox,
+    QStyle,
+    QLineEdit,
+)
+import numpy as np
+
+from palinstrophy import turbo_simulator as dns_all
+from palinstrophy.turbo_wrapper import DnsSimulator
+
+FUSION = "Fusion"
+
+# Simple helper: build a 256x3 uint8 LUT from color stops in 0..1
+# stops: list of (pos, (r,g,b)) with pos in [0,1], r,g,b in [0,255]
+def _make_lut_from_stops(stops, size: int = 256) -> np.ndarray:
+    stops = sorted(stops, key=lambda s: s[0])
+    lut = np.zeros((size, 3), dtype=np.uint8)
+
+    positions = [int(round(p * (size - 1))) for p, _ in stops]
+    colors = [np.array(c, dtype=np.float32) for _, c in stops]
+
+    for i in range(len(stops) - 1):
+        x0 = positions[i]
+        x1 = positions[i + 1]
+        c0 = colors[i]
+        c1 = colors[i + 1]
+
+        if x1 <= x0:
+            lut[x0] = c0.astype(np.uint8)
+            continue
+
+        length = x1 - x0
+        for j in range(length):
+            t = j / float(length)
+            c = (1.0 - t) * c0 + t * c1
+            lut[x0 + j] = c.astype(np.uint8)
+
+    # last entry
+    lut[positions[-1]] = colors[-1].astype(np.uint8)
+    return lut
+
+
+def _make_gray_lut() -> np.ndarray:
+    lut = np.zeros((256, 3), dtype=np.uint8)
+    for i in range(256):
+        lut[i] = (i, i, i)
+    return lut
+
+
+def _make_fire_lut() -> np.ndarray:
+    """Approximate 'fire' palette via HSL ramp: red → yellow, brightening."""
+    lut = np.zeros((256, 3), dtype=np.uint8)
+    for x in range(256):
+        # Hue 0..85 degrees
+        h_deg = 85.0 * (x / 255.0)
+        h = h_deg / 360.0
+        s = 1.0
+        # Lightness: 0..1 up to mid, then flat
+        l = min(1.0, x / 128.0)
+        r, g, b = colorsys.hls_to_rgb(h, l, s)
+        lut[x] = (int(r * 255), int(g * 255), int(b * 255))
+    return lut
+
+
+def _make_doom_fire_lut() -> np.ndarray:
+    """Classic Doom fire palette approximated as 256 RGB colors."""
+    key_colors = np.array([
+        [0, 0, 0],
+        [7, 7, 7],
+        [31, 7, 7],
+        [47, 15, 7],
+        [71, 15, 7],
+        [87, 23, 7],
+        [103, 31, 7],
+        [119, 31, 7],
+        [143, 39, 7],
+        [159, 47, 7],
+        [175, 63, 7],
+        [191, 71, 7],
+        [199, 71, 7],
+        [223, 79, 7],
+        [223, 87, 7],
+        [223, 87, 7],
+        [215, 95, 7],
+        [215, 95, 7],
+        [215, 103, 15],
+        [207, 111, 15],
+        [207, 119, 15],
+        [207, 127, 15],
+        [207, 135, 23],
+        [199, 135, 23],
+        [199, 143, 23],
+        [199, 151, 31],
+        [191, 159, 31],
+        [191, 159, 31],
+        [191, 167, 39],
+        [191, 167, 39],
+        [191, 175, 47],
+        [183, 175, 47],
+        [183, 183, 47],
+        [183, 183, 55],
+        [207, 207, 111],
+        [223, 223, 159],
+        [239, 239, 199],
+        [255, 255, 255],
+    ], dtype=np.uint8)
+
+    stops = []
+    n_keys = key_colors.shape[0]
+    for i in range(n_keys):
+        pos = i / (n_keys - 1)
+        stops.append((pos, key_colors[i].tolist()))
+    return _make_lut_from_stops(stops)
+
+
+def _make_viridis_lut() -> np.ndarray:
+    # Approximate viridis with a few key colors from the official palette
+    stops = [
+        (0.0, (68, 1, 84)),
+        (0.25, (59, 82, 139)),
+        (0.50, (33, 145, 140)),
+        (0.75, (94, 201, 98)),
+        (1.0, (253, 231, 37)),
+    ]
+    return _make_lut_from_stops(stops)
+
+
+def _make_inferno_lut() -> np.ndarray:
+    stops = [
+        (0.0, (0, 0, 4)),
+        (0.25, (87, 15, 109)),
+        (0.50, (187, 55, 84)),
+        (0.75, (249, 142, 8)),
+        (1.0, (252, 255, 164)),
+    ]
+    return _make_lut_from_stops(stops)
+
+
+def _make_ocean_lut() -> np.ndarray:
+    # Ocean: deep-blue → blue → cyan → turquoise → pale-aqua
+    stops = [
+        (0.0, (0, 5, 30)),  # deep navy
+        (0.25, (0, 60, 125)),  # rich ocean blue
+        (0.50, (0, 140, 190)),  # cyan-blue mix
+        (0.75, (0, 200, 175)),  # turquoise
+        (1.0, (180, 245, 240)),  # pale aqua
+    ]
+    return _make_lut_from_stops(stops)
+
+
+def _make_cividis_lut() -> np.ndarray:
+    stops = [
+        (0.00, (0, 34, 77)),
+        (0.25, (0, 68, 117)),
+        (0.50, (60, 111, 130)),
+        (0.75, (147, 147, 95)),
+        (1.00, (250, 231, 33)),
+    ]
+    return _make_lut_from_stops(stops)
+
+
+def _make_jet_lut() -> np.ndarray:
+    stops = [
+        (0.00, (0, 0, 131)),  # dark blue
+        (0.35, (0, 255, 255)),  # cyan
+        (0.66, (255, 255, 0)),  # yellow
+        (1.00, (128, 0, 0)),  # dark red
+    ]
+    return _make_lut_from_stops(stops)
+
+
+def _make_coolwarm_lut() -> np.ndarray:
+    stops = [
+        (0.00, (59, 76, 192)),  # deep blue
+        (0.25, (127, 150, 203)),
+        (0.50, (217, 217, 217)),  # near white (center)
+        (0.75, (203, 132, 123)),
+        (1.00, (180, 4, 38)),  # deep red
+    ]
+    return _make_lut_from_stops(stops)
+
+
+def _make_rdbu_lut() -> np.ndarray:
+    stops = [
+        (0.00, (103, 0, 31)),  # dark red
+        (0.25, (178, 24, 43)),
+        (0.50, (247, 247, 247)),  # white center
+        (0.75, (33, 102, 172)),
+        (1.00, (5, 48, 97)),  # dark blue
+    ]
+    return _make_lut_from_stops(stops)
+
+
+def _make_plasma_lut() -> np.ndarray:
+    stops = [
+        (0.0, (13, 8, 135)),
+        (0.25, (126, 3, 167)),
+        (0.50, (203, 71, 119)),
+        (0.75, (248, 149, 64)),
+        (1.0, (240, 249, 33)),
+    ]
+    return _make_lut_from_stops(stops)
+
+
+def _make_magma_lut() -> np.ndarray:
+    stops = [
+        (0.0, (0, 0, 4)),
+        (0.25, (73, 18, 99)),
+        (0.50, (150, 50, 98)),
+        (0.75, (226, 102, 73)),
+        (1.0, (252, 253, 191)),
+    ]
+    return _make_lut_from_stops(stops)
+
+
+def _make_turbo_lut() -> np.ndarray:
+    # Approximate Google's Turbo colormap with a few key stops.
+    stops = [
+        (0.0, (48, 18, 59)),
+        (0.25, (31, 120, 180)),
+        (0.50, (78, 181, 75)),
+        (0.75, (241, 208, 29)),
+        (1.0, (133, 32, 26)),
+    ]
+    return _make_lut_from_stops(stops)
+
+
+GRAY_LUT = _make_gray_lut()
+INFERNO_LUT = _make_inferno_lut()
+OCEAN_LUT = _make_ocean_lut()
+VIRIDIS_LUT = _make_viridis_lut()
+PLASMA_LUT = _make_plasma_lut()
+MAGMA_LUT = _make_magma_lut()
+TURBO_LUT = _make_turbo_lut()
+FIRE_LUT = _make_fire_lut()
+DOOM_FIRE_LUT = _make_doom_fire_lut()
+CIVIDIS_LUT = _make_cividis_lut()
+JET_LUT = _make_jet_lut()
+COOLWARM_LUT = _make_coolwarm_lut()
+RDBU_LUT = _make_rdbu_lut()
+
+COLOR_MAPS = {
+    "Gray": GRAY_LUT,
+    "Inferno": INFERNO_LUT,
+    "Ocean": OCEAN_LUT,
+    "Viridis": VIRIDIS_LUT,
+    "Plasma": PLASMA_LUT,
+    "Magma": MAGMA_LUT,
+    "Turbo": TURBO_LUT,
+    "Fire": FIRE_LUT,
+    "Doom": DOOM_FIRE_LUT,
+    "Cividis": CIVIDIS_LUT,
+    "Jet": JET_LUT,
+    "Coolwarm": COOLWARM_LUT,
+    "RdBu": RDBU_LUT,
+}
+
+DEFAULT_CMAP_NAME = "Inferno"
+# ----------------------------------------------------------------------
+# Display normalization, reduces flicker when the underlying dynamic range
+# changes quickly.
+# ----------------------------------------------------------------------
+DISPLAY_NORM_K_STD = 2.5          # map [mu - k*sigma, mu + k*sigma] -> [0,255]
+
+# ----------------------------------------------------------------------
+# Option A: Qt Indexed8 + palette tables (avoid expanding to RGB in NumPy)
+# ----------------------------------------------------------------------
+QT_COLOR_TABLES = {
+    name: [qRgb(int(rgb[0]), int(rgb[1]), int(rgb[2])) for rgb in lut]
+    for name, lut in COLOR_MAPS.items()
+}
+QT_GRAY_TABLE = [qRgb(i, i, i) for i in range(256)]
+
+
+def _setup_shortcuts(self):
+    def sc(key, fn):
+        s = QShortcut(QKeySequence(key), self)
+        s.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        s.activated.connect(fn)  # type: ignore[attr-defined]
+        return s
+
+    self._sc_v = sc("V", lambda: self.variable_combo.setCurrentIndex(
+        (self.variable_combo.currentIndex() + 1) % self.variable_combo.count()
+    ))
+    self._sc_c = sc("C", lambda: self.cmap_combo.setCurrentIndex(
+        (self.cmap_combo.currentIndex() + 1) % self.cmap_combo.count()
+    ))
+    self._sc_n = sc("N", lambda: self.n_combo.setCurrentIndex(
+        (self.n_combo.currentIndex() + 1) % self.n_combo.count()
+    ))
+    self._sc_k = sc("K", lambda: self.k0_combo.setCurrentIndex(
+        (self.k0_combo.currentIndex() + 1) % self.k0_combo.count()
+    ))
+    self._sc_l = sc("L", lambda: self.cfl_combo.setCurrentIndex(
+        (self.cfl_combo.currentIndex() + 1) % self.cfl_combo.count()
+    ))
+    self._sc_s = sc("S", lambda: self.steps_combo.setCurrentIndex(
+        (self.steps_combo.currentIndex() + 1) % self.steps_combo.count()
+    ))
+    self._sc_u = sc("U", lambda: self.update_combo.setCurrentIndex(
+        (self.update_combo.currentIndex() + 1) % self.update_combo.count()
+    ))
+
+# Cache for k^2 grids:
+#   key: ("cpu", NZ, NX) or ("cuda", device_id, NZ, NX)
+#   val: K2 array on the corresponding backend (numpy or cupy)
+_K2_CACHE: dict[tuple, object] = {}
+CSV_HEADER = ("N", "K0", "Re", "CFL", "VISC", "STEPS", "PALIN", "SIG", "TIME", "MINUTES", "FPS")
+
+class MainWindow(QMainWindow):
+    def __init__(self, sim: DnsSimulator, steps: str, update: str, iterations: int) -> None:
+        super().__init__()
+
+        self.sim = sim
+        self.update = update
+        self.steps = steps
+        self.iterations = iterations
+        self.current_cmap_name = DEFAULT_CMAP_NAME
+        self._status_update_counter = 0
+        self._update_intervall = update
+
+        self.sig: float = 20.0
+        self.mu: float = 0.0
+
+        self._e_int = 0.0
+        self._e_prev = 0.0
+        self._target = 20.0
+        self._palin_filt = 0.0
+        self._palin_filt_1 = 0.0
+
+        # --- grain metrics (omega) ---
+        self.kmax: Optional[float] = None
+        self.high_k_fraction: Optional[float] = None
+        self.palinstrophy_over_enstrophy_kmax2: Optional[float] = None
+
+        # ---- metrics buffer (for CSV dump) ----
+        self._csv_rows = []
+        self._csv_header = list(CSV_HEADER)
+
+        # --- central image label ---
+        self.image_label = QLabel()
+        self.image_label.setContentsMargins(0, 0, 0, 0)
+        # allow shrinking when grid size becomes smaller
+        self.image_label.setSizePolicy(
+            self.image_label.sizePolicy().horizontalPolicy(),
+            self.image_label.sizePolicy().verticalPolicy()
+        )
+        self.image_label.setMinimumSize(1, 1)
+        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        style = QApplication.style()
+
+        # Start button
+        self.start_button = QPushButton()
+        self.start_button.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+        self.start_button.setToolTip("G: Start simulation")
+        self.start_button.setFixedSize(28, 28)
+        self.start_button.setIconSize(QSize(14, 14))
+
+        # Stop button
+        self.stop_button = QPushButton()
+        self.stop_button.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_MediaStop))
+        self.stop_button.setToolTip("H: Stop simulation")
+        self.stop_button.setFixedSize(28, 28)
+        self.stop_button.setIconSize(QSize(14, 14))
+
+        # Reset button
+        self.reset_button = QPushButton()
+        self.reset_button.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
+        self.reset_button.setToolTip("Y: Reset simulation")
+        self.reset_button.setFixedSize(28, 28)
+        self.reset_button.setIconSize(QSize(14, 14))
+
+        # Save button
+        self.save_button = QPushButton()
+        self.save_button.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton))
+        self.save_button.setToolTip("Save current frame")
+        self.save_button.setFixedSize(28, 28)
+        self.save_button.setIconSize(QSize(14, 14))
+
+        # Folder button
+        self.folder_button = QPushButton()
+        self.folder_button.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_DirIcon))
+        self.folder_button.setToolTip("Save files")
+        self.folder_button.setFixedSize(28, 28)
+        self.folder_button.setIconSize(QSize(14, 14))
+
+        # Variable selector
+        self.variable_combo = QComboBox()
+        self.variable_combo.setToolTip("V: Variable")
+        self.variable_combo.addItems(["U", "V", "K", "Ω", "φ"])
+
+        # Grid-size selector (N)
+        self.n_combo = QComboBox()
+        self.n_combo.setToolTip("N: Grid Size (N)")
+        self.n_combo.addItems(
+            ["128", "192", "256", "384", "512", "768", "1024", "1536", "2048", "3072", "4096", "6144", "7776",
+             "8192", "9216", "12960", "16384", "18432", "20480", "24576", "32768", "34560"]
+        )
+        self.n_combo.setCurrentText(str(self.sim.N))
+
+        # Reynolds display (Re) — now computed by adapt_visc()
+        self.re_edit = QLineEdit()
+        self.re_edit.setToolTip("Reynolds Number (Re)")
+        self.re_edit.setReadOnly(True)
+        self.re_edit.setFixedWidth(120)
+        self.re_edit.setText(str(self.sim.re))
+
+        # K0 selector
+        self.k0_combo = QComboBox()
+        self.k0_combo.setToolTip("K: Initial energy peak wavenumber (K0)")
+        self.k0_combo.addItems(["1", "2", "5", "10", "15", "20", "25", "35", "50", "90"])
+        self.k0_combo.setCurrentText(str(int(self.sim.k0)))
+
+        # Colormap selector
+        self.cmap_combo = QComboBox()
+        self.cmap_combo.setToolTip("C: Colormaps")
+        self.cmap_combo.addItems(list(COLOR_MAPS.keys()))
+        idx = self.cmap_combo.findText(DEFAULT_CMAP_NAME)
+        if idx >= 0:
+            self.cmap_combo.setCurrentIndex(idx)
+
+        # CFL selector
+        self.cfl_combo = QComboBox()
+        self.cfl_combo.setToolTip("L: Controlling Δt (CFL)")
+        self.cfl_combo.addItems(["0.05", "0.1", "0.15", "0.2", "0.25", "0.3", "0.4", "0.5", "0.75", "0.85", "0.95"])
+        self.cfl_combo.setCurrentText(str(self.sim.cfl))
+
+        # Steps selector
+        self.steps_combo = QComboBox()
+        self.steps_combo.setToolTip("S: Max steps before reset/stop")
+        self.steps_combo.addItems(["10", "100", "1000", "2000", "5000", "10000", "25000", "50000", "1E5", "2E5", "3E5", "1E6", "1E7"])
+        self.steps_combo.setCurrentText(steps)
+
+        # Update selector
+        self.update_combo = QComboBox()
+        self.update_combo.setToolTip("U: Update intervall")
+        self.update_combo.addItems(["1", "2", "5", "10", "20", "50", "100", "1E3"])
+        self.update_combo.setCurrentText(update)
+
+        self.auto_reset_checkbox = QCheckBox()
+        self.auto_reset_checkbox.setToolTip("If checked, simulation auto-resets")
+        self.auto_reset_checkbox.setChecked(False)
+
+        if sys.platform == "darwin":
+            from PySide6.QtWidgets import QStyleFactory
+            self.variable_combo.setStyle(QStyleFactory.create(FUSION))
+            self.cmap_combo.setStyle(QStyleFactory.create(FUSION))
+            self.n_combo.setStyle(QStyleFactory.create(FUSION))
+            self.k0_combo.setStyle(QStyleFactory.create(FUSION))
+            self.cfl_combo.setStyle(QStyleFactory.create(FUSION))
+            self.steps_combo.setStyle(QStyleFactory.create(FUSION))
+            self.update_combo.setStyle(QStyleFactory.create(FUSION))
+
+
+        self._build_layout()
+
+        # --- status bar ---
+        self.status = QStatusBar()
+        self.setStatusBar(self.status)
+        mono = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        self.status.setFont(mono)
+        self.re_edit.setFont(mono)
+
+
+        # Timer-based simulation (no QThread)
+        self.timer = QTimer(self)
+        self.timer.setInterval(0)  # as fast as Qt allows
+        self.timer.timeout.connect(self._on_timer)  # type: ignore[attr-defined]
+
+        # signal connections
+        self.start_button.clicked.connect(self.on_start_clicked)  # type: ignore[attr-defined]
+        self.stop_button.clicked.connect(self.on_stop_clicked)  # type: ignore[attr-defined]
+        self.reset_button.clicked.connect(self.on_reset_clicked)  # type: ignore[attr-defined]
+        self.save_button.clicked.connect(self.on_save_clicked)  # type: ignore[attr-defined]
+        self.folder_button.clicked.connect(self.on_folder_clicked)  # type: ignore[attr-defined]
+        self.variable_combo.currentIndexChanged.connect(self.on_variable_changed)  # type: ignore[attr-defined]
+        self.cmap_combo.currentTextChanged.connect(self.on_cmap_changed)  # type: ignore[attr-defined]
+        self.n_combo.currentTextChanged.connect(self.on_n_changed)  # type: ignore[attr-defined]
+        self.k0_combo.currentTextChanged.connect(self.on_k0_changed)  # type: ignore[attr-defined]
+        self.cfl_combo.currentTextChanged.connect(self.on_cfl_changed)  # type: ignore[attr-defined]
+        self.steps_combo.currentTextChanged.connect(self.on_steps_changed)  # type: ignore[attr-defined]
+        self.update_combo.currentTextChanged.connect(self.on_update_changed)  # type: ignore[attr-defined]
+
+        # Ensure single-key shortcuts work regardless of which widget has focus (Win11 combos eat 'C')
+        _setup_shortcuts(self)
+
+        # window setup
+        import importlib.util
+
+        self.title_backend = "(SciPy)"
+        if importlib.util.find_spec("cupy") is not None:
+            import cupy as cp
+            try:
+                props = cp.cuda.runtime.getDeviceProperties(0)
+                gpu_name = props["name"].decode(errors="replace")
+                self.title_backend = f"(CuPy) {gpu_name}"
+            except (RuntimeError, OSError, ValueError, IndexError):
+                pass
+
+        self.setWindowTitle(f"2D Turbulence {self.title_backend} © Mannetroll")
+        disp_w, disp_h = self._display_size_px()
+        self.resize(disp_w + 40, disp_h + 120)
+
+        # Keep-alive buffers for QImage wrappers
+        self._last_pixels_rgb: Optional[np.ndarray] = None  # retained for compatibility
+        self._last_pixels_u8: Optional[np.ndarray] = None
+
+        # --- FPS from simulation start ---
+        self._sim_start_time = time.time()
+        self._sim_start_iter = self.sim.get_iteration()
+
+        # initial draw (omega mode)
+        self.sim.set_variable(self.sim.VAR_OMEGA)
+        self.variable_combo.setCurrentIndex(3)
+
+        self._update_image(self.sim.get_frame_pixels())
+        self._update_status(self.sim.get_time(), self.sim.get_iteration(), None)
+
+        # set combobox data
+        self.on_steps_changed(self.steps_combo.currentText())
+        self.on_update_changed(self.update_combo.currentText())
+        self.on_start_clicked()  # auto-start simulation immediately
+
+    # ------------------------------------------------------------------
+    def _build_layout(self):
+        """Rebuild the control layout based on the current N."""
+        old = self.centralWidget()
+        if old is not None:
+            old.setParent(None)
+
+        central = QWidget()
+        main = QVBoxLayout(central)
+        main.setSpacing(3)
+        main.addWidget(self.image_label)
+
+        # First row
+        row1 = QHBoxLayout()
+        row1.setContentsMargins(10, 0, 0, 0)
+        row1.setAlignment(Qt.AlignmentFlag.AlignLeft)  # pack to left
+        row1.addWidget(self.start_button)
+        row1.addWidget(self.stop_button)
+        row1.addWidget(self.reset_button)
+        row1.addWidget(self.save_button)
+        row1.addWidget(self.folder_button)
+        row1.addSpacing(10)
+        row1.addWidget(self.n_combo)
+        row1.addWidget(self.variable_combo)
+        row1.addWidget(self.cmap_combo)
+        row1.addWidget(self.re_edit)
+        row1.addWidget(self.k0_combo)
+        row1.addWidget(self.cfl_combo)
+        row1.addWidget(self.update_combo)
+        row1.addWidget(self.steps_combo)
+        row1.addSpacing(5)
+        row1.addWidget(self.auto_reset_checkbox)
+        row1.addStretch(1)
+        main.addLayout(row1)
+
+        self.setCentralWidget(central)
+
+    def _display_scale(self) -> float:
+        """
+        Must match _upscale_downscale_u8() scale logic.
+
+        Convention (based on your existing mapping code):
+          - scale < 1.0 => upscale by (1/scale) (integer)
+          - scale > 1.0 => downscale by scale (integer)
+
+        Goal: displayed_size ~= N / down <= max_h (for big N)
+              displayed_size ~= N * up <= max_h (for small N)
+        """
+        N = int(self.sim.N)
+
+        # MacBook Pro window height you mentioned:
+        screen_h = 1024
+
+        # Leave room for top buttons, status bar, margins, etc.
+        # Tune this at once if you want it a bit larger/smaller on screen.
+        ui_margin = 320
+        max_h = max(128, screen_h - ui_margin)
+
+        if N >= max_h:
+            down = int(math.ceil(N / max_h))  # integer downscale so N/down <= max_h
+            return float(down)
+
+        up = int(math.floor(max_h / N))  # integer upscale so N*up <= max_h
+        if up < 1:
+            up = 1
+        return 1.0 / float(up)
+
+    def _display_size_px(self) -> tuple[int, int]:
+        scale = self._display_scale()
+        w0 = int(self.sim.px)
+        h0 = int(self.sim.py)
+
+        if scale == 1.0:
+            return w0, h0
+
+        if scale < 1.0:
+            up = int(round(1.0 / scale))
+            return w0 * up, h0 * up
+
+        s = int(scale)
+        return max(1, w0 // s), max(1, h0 // s)
+
+    def _upscale_downscale_u8(self, pix: np.ndarray) -> np.ndarray:
+        """
+        Downscale (or upscale for small N) a 2D uint8 image for display only.
+        Uses striding (nearest) / repeats to be very fast and avoid float work.
+        """
+        scale = self._display_scale()
+
+        if scale == 1.0:
+            return np.ascontiguousarray(pix)
+
+        if scale < 1.0:
+            up = int(round(1.0 / scale))  # 0.5 -> 2, 0.25 -> 4
+            return np.ascontiguousarray(np.repeat(np.repeat(pix, up, axis=0), up, axis=1))
+
+        s = int(scale)  # 2,4,6,...
+        return np.ascontiguousarray(pix[::s, ::s])
+
+    def _get_full_field(self, variable: str) -> np.ndarray:
+        """
+        Return a 2D float32 array (NZ_full × NX_full) for variable:
+            'u', 'v', 'kinetic', 'omega'
+        """
+        S = self.sim.state
+
+        # --------------------------
+        # Direct velocity components
+        # --------------------------
+        if variable == "u":
+            field = S.ur_full[0]
+            return (field.get() if S.backend == "gpu" else field).astype(np.float32)
+
+        if variable == "v":
+            field = S.ur_full[1]
+            return (field.get() if S.backend == "gpu" else field).astype(np.float32)
+
+        # --------------------------
+        # Kinetic energy |u|
+        # --------------------------
+        if variable == "kinetic":
+            dns_all.dns_kinetic(S)  # fills ur_full[2,:,:]
+            field = S.ur_full[2]
+            return (field.get() if S.backend == "gpu" else field).astype(np.float32)
+
+        # --------------------------
+        # Physical vorticity ω
+        # --------------------------
+        if variable == "omega":
+            dns_all.dns_om2_phys(S)  # fills ur_full[2,:,:]
+            field = S.ur_full[2]
+            return (field.get() if S.backend == "gpu" else field).astype(np.float32)
+
+        # --------------------------
+        # Unknown variable
+        # --------------------------
+        raise ValueError(f"Unknown variable: {variable}")
+
+    def _update_run_buttons(self) -> None:
+        """Enable/disable Start/Stop depending on the timer state."""
+        running = self.timer.isActive()
+        self.start_button.setEnabled(not running)
+        self.stop_button.setEnabled(running)
+
+    def on_start_clicked(self) -> None:
+        # reset FPS baseline to "new simulation start"
+        self._sim_start_time = time.time()
+        self._sim_start_iter = self.sim.get_iteration()
+        if not self.timer.isActive():
+            self.timer.start()
+
+        self._update_run_buttons()
+
+    def on_stop_clicked(self) -> None:
+        if self.timer.isActive():
+            self.timer.stop()
+
+        self._update_run_buttons()
+
+    def on_step_clicked(self) -> None:
+        self.sim.step(1)
+        pixels = self.sim.get_frame_pixels()
+        self._update_image(pixels)
+        t = self.sim.get_time()
+        it = self.sim.get_iteration()
+        self._update_status(t, it, None)
+
+    def on_reset_clicked(self) -> None:
+        self.on_stop_clicked()
+        Reynolds = Re_from_N_K0(self.sim.N, self.sim.k0)
+        self._csv_rows.clear()
+        self._csv_header = list(CSV_HEADER)
+        self.sim.state.visc = 1.0 / Reynolds
+        self.sim.re = Reynolds
+        self.sim.state.Re = Reynolds
+        self.sim.reset_field()
+        self._update_image(self.sim.get_frame_pixels())
+        self._update_status(self.sim.get_time(), self.sim.get_iteration(), None)
+        self.on_start_clicked()
+
+    def _save_energy_spectrum_uv(self, u: np.ndarray, v: np.ndarray, out_png: str) -> None:
+        """
+        Save a log-log isotropic kinetic energy spectrum estimate E(k) from u,v.
+
+        This is the textbook definition in Fourier space:
+            E(k) ∝ sum_{|k| in shell} (|û(k)|^2 + |v̂(k)|^2)
+
+        Notes:
+        - This uses a simple shell-sum over radially binned wavenumbers.
+        - X-axis uses normalized radius k / k_Nyquist where k_Nyquist = N/2 (axis Nyquist).
+        - Scaling constants do not matter for the slope; this is for exponent inspection.
+        """
+        import matplotlib.pyplot as plt
+
+        u = np.asarray(u, dtype=np.float64)
+        v = np.asarray(v, dtype=np.float64)
+        if u.ndim != 2 or v.ndim != 2 or u.shape != v.shape:
+            return
+
+        NZ, NX = u.shape
+
+        # Remove mean (DC)
+        u = u - float(u.mean())
+        v = v - float(v.mean())
+
+        # 2D FFT power of velocity components
+        U = np.fft.fft2(u)
+        V = np.fft.fft2(v)
+        P = (U.real * U.real + U.imag * U.imag) + (V.real * V.real + V.imag * V.imag)
+
+        # Frequency grids in "integer mode" units
+        kx = np.fft.fftfreq(NX) * NX
+        kz = np.fft.fftfreq(NZ) * NZ
+        KZ, KX = np.meshgrid(kz, kx, indexing="ij")
+
+        # Normalized radial wavenumber: k / (N/2)
+        N = float(min(NX, NZ))
+        k_nyq = 0.5 * N
+        R = np.sqrt(KX * KX + KZ * KZ) / k_nyq
+
+        # Exclude the DC bin (R==0) from the radial statistics
+        mask = R > 0.0
+        r = R[mask].ravel()
+        p = P[mask].ravel()
+
+        # Radial binning up to r_max = sqrt(2) (corner)
+        r_max = np.sqrt(2.0)
+        nbins = max(32, int(2 * min(NX, NZ)))  # reasonably smooth curve
+        idx = np.floor((r / r_max) * nbins).astype(np.int64)
+        idx = np.clip(idx, 0, nbins - 1)
+
+        # Shell-sum energy spectrum estimate
+        esum = np.bincount(idx, weights=p, minlength=nbins)
+        cnt = np.bincount(idx, minlength=nbins).astype(np.float64)
+        good = (cnt > 0.0) & (esum > 0.0)
+
+        # Bin centers in a normalized radius
+        r_edges = np.linspace(0.0, r_max, nbins + 1)
+        r_centers = 0.5 * (r_edges[:-1] + r_edges[1:])
+
+        # Plot
+        fig = plt.figure(figsize=(12, 8))
+        ax = fig.add_subplot(1, 1, 1)
+        ax.loglog(r_centers[good], esum[good])
+        ax.set_ylim(bottom=1)
+        ax.set_title("Energy spectrum estimate E(k) from u,v (shell sum)")
+        ax.set_xlabel("normalized radius  k / k_Nyquist")
+        ax.set_ylabel("shell-sum energy (unnormalized)")
+
+        # Mark K0 location on normalized axis (uses simulation N, not image N)
+        k0_norm = (2.0 * float(self.sim.k0)) / float(self.sim.N)
+        ax.axvline(k0_norm)
+
+        # Reference decay line with slope -3 (textbook enstrophy cascade: E(k) ~ k^-3)
+        x2 = 0.7
+        if x2 > 0.0 and np.any(good):
+            x_good = r_centers[good]
+            y_good = esum[good]
+
+            # Anchor at the maximum of the energy spectrum (peak) instead of K0
+            i_peak = int(np.argmax(y_good))
+            x1 = float(x_good[i_peak])
+            y1 = float(y_good[i_peak]) if float(y_good[i_peak]) > 0.0 else 1.0
+
+            if x2 != x1:
+                slope = -3.0
+                y2 = y1 * (x2 / x1) ** slope
+                ax.loglog([x1, x2], [y1, y2], "--", linewidth=2)
+                ax.text(x2, y2 * 2, r"$k^{-3}$", fontsize=11, ha="left", va="center", color="black")
+
+        meta = self.get_meta()
+        ax.text(
+            0.02, 0.02, meta,
+            transform=ax.transAxes,
+            ha="left", va="bottom",
+            fontsize=10,
+            linespacing=1.5,
+            color="black",
+        )
+
+        fig.tight_layout()
+        fig.savefig(out_png)
+        plt.close(fig)
+
+    def get_meta(self) -> str:
+        # Metadata annotation (keep it short + useful)
+        elapsed = time.time() - self._sim_start_time
+        steps = self.sim.get_iteration() - self._sim_start_iter
+        minutes = elapsed / 60.0
+        FPS = steps / elapsed if elapsed > 0 else 0.0
+        meta = (
+            f"{_dt.datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+            f"N={self.sim.N}\n"
+            f"K0={self.sim.k0:g}\n"
+            f"Re={self.sim.re:,.0f}\n"
+            f"CFL={self.sim.cfl:.2f}\n"
+            f"visc={float(self.sim.state.visc):.3g}\n"
+            f"T={float(self.sim.get_time()):.6g}\n"
+            f"IT={int(self.sim.get_iteration())}\n"
+            f"Update={int(self._update_intervall)}\n"
+            f"σ={int(self.sig)}\n"
+            f"10K*pal/Zkmax²={(10000 * self.palinstrophy_over_enstrophy_kmax2):.1f}\n"
+            f"minutes={minutes:.2f}\n"
+            f"FPS={FPS:.1f}\n"
+            f"{self.title_backend}"
+        )
+        return meta
+
+    @staticmethod
+    def sci_no_plus(x, decimals=0):
+        x = float(x)
+        s = f"{x:.{decimals}E}"
+        return s.replace("E+", "E").replace("e+", "e")
+
+    def on_folder_clicked(self) -> None:
+        # --- Build the default folder name ---
+        N = self.sim.N
+        Re = self.sim.re
+        K0 = int(self.sim.k0)
+        CFL = self.sim.cfl
+        STEPS = self.sim.get_iteration()
+        suffix = f"{N}_{K0}_{self.sci_no_plus(Re)}_{CFL}_{STEPS}"
+        folder = f"palinstrophy_{suffix}"
+
+        # Default root = Desktop
+        desktop = QStandardPaths.writableLocation(
+            QStandardPaths.StandardLocation.DesktopLocation
+        )
+
+        # --- Create non-native dialog (macOS compatible) ---
+        dlg = QFileDialog(self)
+        dlg.setWindowTitle(f"Case: {folder}")
+        dlg.setFileMode(QFileDialog.FileMode.Directory)
+        dlg.setOption(QFileDialog.Option.ShowDirsOnly, True)
+        dlg.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+        dlg.setDirectory(desktop)
+
+        # Prefill the directory edit field
+        for lineedit in dlg.findChildren(QLineEdit):
+            lineedit.setText(".")  # type: ignore[attr-defined]
+
+        # Execute dialog
+        if dlg.exec():
+            base_dir = dlg.selectedFiles()[0]
+        else:
+            return
+
+        self.dump_to_folder(base_dir, folder, suffix)
+
+    def dump_to_folder(self, base_dir: str, folder: str, suffix: str):
+        # Build final path
+        folder_path = os.path.join(base_dir, folder)
+        os.makedirs(folder_path, exist_ok=True)
+
+        print(f"[SAVE] Dumping fields to folder: {folder_path}")
+        u = self._get_full_field("u")
+        v = self._get_full_field("v")
+        self._dump_pgm_full(u, os.path.join(folder_path, "u_velocity.pgm"))
+        self._dump_pgm_full(v, os.path.join(folder_path, "v_velocity.pgm"))
+        self._dump_pgm_full(self._get_full_field("kinetic"), os.path.join(folder_path, "kinetic.pgm"))
+        self._dump_pgm_full(self._get_full_field("omega"), os.path.join(folder_path, "omega.pgm"))
+        # Textbook enstrophy cascade check: E(k) from u,v in Fourier space (expect ~k^-3 range)
+        self._save_energy_spectrum_uv(u, v, os.path.join(folder_path, f"energy_spectrum_{suffix}.png"))
+        N, K0, Re, CFL, VISC, STEPS, PALIN, SIG, TIME, MINUTES, FPS = self.get_csv_tuple()
+        print(", ".join(CSV_HEADER))
+        print(f"{N}, {K0}, {Re:.4e}, {CFL}, {VISC:.4e}, {STEPS}, {PALIN}, {SIG}, {TIME:.2e}, {MINUTES:.2f}, {FPS:.1f}")
+        self.write_plot_csv(folder_path)
+        print("[SAVE] Completed.")
+
+    def write_plot_csv(self, folder_path: str):
+        # ---- write metrics CSV ----
+        csv_path = os.path.join(folder_path, f"metrics.csv")
+        with open(csv_path, "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(self._csv_header)
+            w.writerows(self._csv_rows)
+
+        if len(self._csv_rows) >= 2:
+            import matplotlib.pyplot as plt
+            from matplotlib.artist import Artist
+            # unpack rows: (N, K0, Re, CFL, VISC, STEPS, PALIN, SIG, TIME, MINUTES, FPS)
+            time = np.array([r[8] for r in self._csv_rows], dtype=np.float64)
+            re_vals = np.array([r[2] for r in self._csv_rows], dtype=np.float64)
+            palin_vals = np.array([r[6] for r in self._csv_rows], dtype=np.float64)
+
+            fig = plt.figure(figsize=(12, 8))
+            ax = fig.add_subplot(1, 1, 1)
+            ax.set_title("Metrics vs time")
+
+            # Left axis
+            l1, = ax.plot(time, re_vals, color='black', label='Reynolds')
+            ax.set_xlabel("time")
+            ax.set_ylabel("Re")
+
+            # Right axis
+            ax2 = ax.twinx()
+            l2, = ax2.plot(time, palin_vals, linestyle='--', label='PALIN')
+            l3 = ax2.axhline(self._target, linewidth=0.5, label=f"target={self._target}")
+            ax2.set_ylabel("PALIN (10K*pal/Zkmax²)")
+
+            # One legend
+            handles: list[Artist] = [l1, l2, l3]
+            labels: list[str] = ["Reynolds", "PALIN", f"target={self._target}"]
+            ax.legend(handles, labels, loc="upper right", framealpha=1)
+
+            meta = self.get_meta()
+            fig.text(
+                0.10, 0.10, meta,
+                transform=fig.transFigure,
+                ha="left", va="bottom",
+                fontsize=10,
+                linespacing=1.5,
+                color="black",  # text 100%
+                bbox=dict(
+                    boxstyle="round,pad=0.3",
+                    facecolor=(1, 1, 1, 0.9),  # 10% see-through
+                    edgecolor="none",
+                ),
+            )
+
+            fig.tight_layout()
+            plot_path = os.path.join(folder_path, f"timeseries_Re_PALIN.png")
+            fig.savefig(plot_path)
+            plt.close(fig)
+
+    def on_save_clicked(self) -> None:
+        # determine variable name for filename
+        var_name = self.variable_combo.currentText()
+        cmap_name = self.cmap_combo.currentText()
+        default_name = f"palinstrophy_{var_name}_{cmap_name}.png"
+
+        # Default root = Desktop
+        desktop = QStandardPaths.writableLocation(
+            QStandardPaths.StandardLocation.DesktopLocation
+        )
+        initial_path = desktop + "/" + default_name
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save frame",
+            initial_path,
+            "PNG images (*.png);;All files (*)",
+        )
+
+        if path:
+            pm = self.image_label.pixmap()
+            if pm:
+                pm.save(path, "PNG")
+
+    def on_variable_changed(self, index: int) -> None:
+        mapping = {
+            0: self.sim.VAR_U,
+            1: self.sim.VAR_V,
+            2: self.sim.VAR_ENERGY,
+            3: self.sim.VAR_OMEGA,
+            4: self.sim.VAR_STREAM,
+        }
+        self.sim.set_variable(mapping.get(index, self.sim.VAR_U))
+        self._update_image(self.sim.get_frame_pixels())
+
+    def on_cmap_changed(self, name: str) -> None:
+        if name in COLOR_MAPS:
+            self.current_cmap_name = name
+            self._update_image(self.sim.get_frame_pixels())
+
+    def on_n_changed(self, value: str) -> None:
+        N = int(value)
+        K0 = float(self.sim.state.K0)
+        # Estimate Re
+        Reynolds = Re_from_N_K0(N,K0)
+        self.sim.re = Reynolds
+        self.sim.state.Re = Reynolds
+        self.sim.set_N(N)
+        self._csv_rows.clear()
+        self._csv_header = list(CSV_HEADER)
+
+        # 1) Update the image first
+        self._update_image(self.sim.get_frame_pixels())
+
+        # 2) Compute new geometry
+        new_w = self.image_label.pixmap().width() + 40
+        new_h = self.image_label.pixmap().height() + 120
+        #print("Resize to:", new_w, new_h)
+
+        # 3) Allow the window to shrink (RESET constraints)
+        self.setMinimumSize(0, 0)
+        self.setMaximumSize(16777215, 16777215)
+
+        # 4) Now resize → Qt WILL shrink
+        self.resize(new_w, new_h)
+
+        # 5) Recenter
+        screen = QApplication.primaryScreen().availableGeometry()
+        g = self.geometry()
+        g.moveCenter(screen.center())
+        self.setGeometry(g)
+        self._build_layout()
+        self._sim_start_time = time.time()
+        self._sim_start_iter = self.sim.get_iteration()
+
+    def on_k0_changed(self, value: str) -> None:
+        self.sim.k0 = float(value)
+        self.sim.reset_field()
+        self._sim_start_time = time.time()
+        self._sim_start_iter = self.sim.get_iteration()
+        self._update_image(self.sim.get_frame_pixels())
+
+    def on_cfl_changed(self, value: str) -> None:
+        self.sim.cfl = float(value)
+        self.sim.state.cflnum = self.sim.cfl
+        self.on_step_clicked()
+
+
+    def on_steps_changed(self, value: str) -> None:
+        self.sim.max_steps = int(float(value))
+
+    def on_update_changed(self, value: str) -> None:
+        self._update_intervall = int(float(value))
+
+    # ------------------------------------------------------------------
+    def _on_timer(self) -> None:
+        # one DNS step per timer tick
+        self.sim.step(int(self._update_intervall))
+
+        # Count frames since the last GUI update
+        self._status_update_counter += 1
+
+        if self._status_update_counter >= int(self._update_intervall):
+            pixels = self.sim.get_frame_pixels()
+            self._update_image(pixels)
+
+            # ---- FPS from simulation start ----
+            now = time.time()
+            elapsed = now - self._sim_start_time
+            steps = self.sim.get_iteration() - self._sim_start_iter
+
+            fps = None
+            if elapsed > 0 and steps > 0:
+                fps = steps / elapsed
+
+            self._update_status(
+                self.sim.get_time(),
+                self.sim.get_iteration(),
+                fps,
+            )
+
+            self._status_update_counter = 0
+
+        # Optional auto-reset using STEPS combo
+        if self.sim.get_iteration() >= self.sim.max_steps:
+            if self.auto_reset_checkbox.isChecked():
+                self.sim.reset_field()
+                self._sim_start_time = time.time()
+                self._sim_start_iter = self.sim.get_iteration()
+            else:
+                self.timer.stop()
+                print(" Max steps reached, simulation stopped (Auto-Reset OFF)")
+
+        if self.sim.get_iteration() >= self.iterations:
+            self.quit_sim()
+
+    def quit_sim(self):
+        print(f" Max iteration reached: {self.iterations}, exiting...")
+        N, K0, Re, CFL, VISC, STEPS, PALIN, SIG, TIME, MINUTES, FPS = self.get_csv_tuple()
+        print("N, K0, Re, CFL, VISC, STEPS, PALIN, SIG, TIME, MINUTES, FPS")
+        print(f"{N}, {K0}, {Re:.4e}, {CFL}, {VISC:.4e}, {STEPS}, {PALIN}, {SIG}, {TIME:.2e}, {MINUTES:.2f}, {FPS:.1f}")
+        suffix = f"{N}_{K0}_{self.sci_no_plus(Re)}_{CFL}_{STEPS}"
+        folder = f"simulations/palinstrophy_{suffix}"
+        desktop = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DesktopLocation)
+        self.dump_to_folder(desktop, folder, suffix)
+        QApplication.quit()
+
+    def get_csv_tuple(self) -> tuple[int, int, float, float, float, int, int, int, float, float, float]:
+        N = self.sim.N
+        Re = self.sim.state.Re
+        K0 = int(self.sim.k0)
+        CFL = self.sim.cfl
+        STEPS = self.sim.get_iteration()
+        VISC = self.sim.state.visc
+        PALIN = int(10000 * self.palinstrophy_over_enstrophy_kmax2)
+        SIG = int(self.sig)
+        TIME = self.sim.state.t
+        # ---- FPS from simulation start ----
+        elapsed = time.time() - self._sim_start_time
+        steps = self.sim.get_iteration() - self._sim_start_iter
+        MINUTES = elapsed / 60.0
+        FPS = steps / elapsed if elapsed > 0 else float("inf")
+        return N, K0, Re, CFL, VISC, STEPS, PALIN, SIG, TIME, MINUTES, FPS
+
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _dump_pgm_full(arr: np.ndarray, filename: str):
+        """
+        Write a single component field as PGM
+        """
+        h, w = arr.shape
+        minv = float(arr.min())
+        maxv = float(arr.max())
+
+        rng = maxv - minv
+
+        with open(filename, "wb") as f:
+            f.write(f"P5\n{w} {h}\n255\n".encode())
+
+            if rng <= 1e-12:  # constant field
+                f.write(bytes([128]) * (w * h))
+                return
+
+            # scale to 1..255
+            norm = (arr - minv) / rng
+            pix = (1.0 + norm * 254.0).round().clip(1, 255).astype(np.uint8)
+            f.write(pix.tobytes())
+
+
+
+    @staticmethod
+    def _scalar_item(x) -> float:
+        return float(x.item()) if hasattr(x, "item") else float(x)
+
+    def pal_over_ens_kmax2(self) -> float:
+        """
+        Fast path for the palinstrophy/enstrophy metric using the *spectral* vorticity band.
+
+        Uses S.om2 (rFFT in x, full FFT in z) and S.step3_K2 (k^2 on the same grid),
+        so we avoid ω→physical and a full FFT per rendered frame.
+
+        The rFFT half-spectrum is expanded via weights:
+          • kx=0 and kx=NX/2 columns counted once
+          • all interior kx columns counted twice (conjugate symmetry)
+        """
+        S = self.sim.state
+
+        band = S.om2
+        P = band.real * band.real + band.imag * band.imag  # |W|^2 on the (NZ, NX_half) rFFT grid
+        K2 = S.step3_K2  # k^2 on the same grid
+
+        NX_half = int(P.shape[1])
+
+        if NX_half == 1:
+            total = self._scalar_item(P.sum() - P[0, 0])
+            if total <= 0.0:
+                return 0.0
+
+            kmax2 = self._scalar_item(K2.max())
+            if kmax2 <= 0.0:
+                return 0.0
+
+            palinstrophy = self._scalar_item((K2 * P).sum())
+            return palinstrophy / (total * kmax2)
+
+        # Full-spectrum weighted sums from the rFFT half-spectrum
+        edge = P[:, 0].sum() + P[:, -1].sum()
+        mid = P[:, 1:-1].sum() if NX_half > 2 else 0.0
+        total_full = edge + 2.0 * mid
+
+        # Exclude k=0 mode (mean ω)
+        total = self._scalar_item(total_full - P[0, 0])
+        if total <= 0.0:
+            return 0.0
+
+        kmax2 = self._scalar_item(K2.max())
+        if kmax2 <= 0.0:
+            return 0.0
+
+        edge_p = (K2[:, 0] * P[:, 0]).sum() + (K2[:, -1] * P[:, -1]).sum()
+        mid_p = (K2[:, 1:-1] * P[:, 1:-1]).sum() if NX_half > 2 else 0.0
+        pal_full = edge_p + 2.0 * mid_p
+
+        palinstrophy = self._scalar_item(pal_full)
+        return palinstrophy / (total * kmax2)
+
+    def _update_image(self, pixels: np.ndarray) -> None:
+        pixels = np.asarray(pixels, dtype=np.uint8)
+        if pixels.ndim != 2:
+            return
+
+        # Reduce display flicker by using a stable (EMA) mean/std
+        # normalization instead of frame-wise min/max stretching.
+        pix_f = pixels.astype(np.float32, copy=False)
+        self.mu = float(pix_f.mean())
+        self.sig = float(pix_f.std())
+        if self.sig < 1.0:
+            self.on_stop_clicked()
+            return
+
+        # --- grain metrics for stability (from ω field, full grid) ---
+        self.palinstrophy_over_enstrophy_kmax2 = self.pal_over_ens_kmax2()
+
+        # Auto-adapt viscosity (and thus effective Re) every rendered update
+        self.adapt_visc()
+        # show the computed Re (from adapt_visc) in the Re text field
+        self.re_edit.setText(f" Re: {float(self.sim.re):.3e}")
+
+        # store in memory and write to a CSV file in dump_to_folder() method
+        # store in memory (later written to CSV by dump_to_folder)
+        row = self.get_csv_tuple()
+        self._csv_rows.append(row)
+
+        k = float(DISPLAY_NORM_K_STD)
+        lo = self.mu - k * self.sig
+        hi = self.mu + k * self.sig
+        inv = 255.0 / (hi - lo) if (hi - lo) != 0.0 else 0.0
+        pixels = ((pix_f - lo) * inv).round().clip(0.0, 255.0).astype(np.uint8)
+        pixels = self._upscale_downscale_u8(pixels)
+        h, w = pixels.shape
+        qimg = QImage(
+            pixels.data,
+            w,
+            h,
+            w,
+            QImage.Format.Format_Indexed8,
+        )
+        table = QT_COLOR_TABLES.get(self.current_cmap_name, QT_GRAY_TABLE)
+        qimg.setColorTable(table)
+        pix = QPixmap.fromImage(qimg, Qt.ImageConversionFlag.NoFormatConversion)
+        self.image_label.setPixmap(pix)
+
+    def _update_status(self, t: float, it: int, fps: Optional[float]) -> None:
+        fps_str = f"{fps:5.2f}" if fps is not None else " N/A"
+        sig_str = f"{int(self.sig)}" if self.sig is not None else " N/A"
+
+        # DPP = Display Pixel Percentage
+        # dpp = int(100 / self._display_scale())
+
+        elapsed_min = (time.time() - self._sim_start_time) / 60.0
+        visc = float(self.sim.state.visc)
+        dt = float(self.sim.state.dt)
+
+        # Grain metrics row
+        if self.palinstrophy_over_enstrophy_kmax2 is None:
+            pr_str = "N/A"
+        else:
+            pr_str = f"{(10000*self.palinstrophy_over_enstrophy_kmax2):.1f}"
+
+        txt = (
+            f"  FPS: {fps_str} | pal/Zkmax²: {pr_str} | σ: {sig_str} | Iter: {it:5d} | T: {t:6.3f} | dt: {dt:.6f} "
+            f"| {elapsed_min:4.1f} min | Visc: {visc:8.3g} | {_dt.datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        )
+        self.status.showMessage(txt)
+
+    def _palin_filter_2nd(self, p_raw: float) -> float:
+        # Low-pass filter on PALIN (2nd order: two cascaded 1st order EMAs)
+        palin_tau = 5.0  # in "calls"
+        alpha = 1.0 / (palin_tau + 1.0)
+
+        if self._palin_filt == 0.0:
+            self._palin_filt_1 = float(p_raw)
+            self._palin_filt = float(p_raw)
+        else:
+            self._palin_filt_1 = float(self._palin_filt_1) + alpha * (float(p_raw) - float(self._palin_filt_1))
+            self._palin_filt = float(self._palin_filt) + alpha * (float(self._palin_filt_1) - float(self._palin_filt))
+
+        return float(self._palin_filt)
+
+    def adapt_visc(self):
+        # Match original behavior:
+        deadband = 0.001  # relative band: ±0.1%
+        max_frac = 0.01  # max fractional change per update: 1%
+
+        # "PID" knobs (start like the original)
+        Kp = 0.25
+        Ki = 0.0
+        Kd = 25.0
+
+        p_raw = 10000 * self.palinstrophy_over_enstrophy_kmax2
+        if p_raw is None:
+            return
+
+        p = self._palin_filter_2nd(float(p_raw))
+        # relative error
+        e = (p - self._target) / self._target
+
+        # deadband (same as your hi/lo)
+        if abs(e) < deadband:
+            return
+
+        # integral/derivative
+        if Ki != 0.0:
+            self._e_int += e
+        de = e - self._e_prev
+        self._e_prev = e
+
+        # controller output in "log space" (multiplicative update)
+        u = Kp * e + Ki * self._e_int + Kd * de
+
+        # Clamp to fixed step size (this is what makes it behave like your original)
+        # Use log clamp so it's truly symmetric multiplicatively.
+        u = max(-max_frac, min(max_frac, u))
+
+        nu = float(self.sim.state.visc)
+        nu_new = nu * math.exp(u)  # ~ nu*(1±epsilon) for small u
+
+        # Enforce your Re cap by clamping Re directly
+        Re0 = Re_from_N_K0(self.sim.N, self.sim.k0)
+        Re_eff = max(Re0 / 10.0, min(10.0 * Re0, float(1.0 / nu_new)))
+        self.sim.re = self.sim.state.Re = Re_eff
+        self.sim.state.visc = 1.0 / Re_eff
+
+    def adapt_visc_old(self):
+        epsilon = 0.001
+        hi = self._target * (1.0 + epsilon)
+        lo = self._target * (1.0 - epsilon)
+
+        p = 10000 * self.palinstrophy_over_enstrophy_kmax2
+        if p is None:
+            return
+
+        nu = float(self.sim.state.visc)
+        if p > hi:
+            nu *= 1.0 + epsilon
+        elif p < lo:
+            nu *= 1.0 - epsilon
+
+        self.sim.state.visc = float(nu)
+
+        Re_eff = 1.0 / float(nu)
+        ReMax = 10 * Re_from_N_K0(self.sim.N, self.sim.k0)
+        if Re_eff > ReMax:
+            Re_eff = ReMax
+
+        self.sim.re = float(Re_eff)
+        self.sim.state.Re = float(self.sim.re)
+        self.sim.state.visc = 1.0 / float(Re_eff)
+
+    # ------------------------------------------------------------------
+    def keyPressEvent(self, event) -> None:
+        key = event.key()
+
+        # rotate variable (V)
+        if key == Qt.Key.Key_V:
+            idx = self.variable_combo.currentIndex()
+            count = self.variable_combo.count()
+            self.variable_combo.setCurrentIndex((idx + 1) % count)
+            return
+
+        # rotate colormap (C)
+        if key == Qt.Key.Key_C:
+            idx = self.cmap_combo.currentIndex()
+            count = self.cmap_combo.count()
+            self.cmap_combo.setCurrentIndex((idx + 1) % count)
+            return
+
+        # rotate n_combo (N)
+        if key == Qt.Key.Key_N:
+            idx = self.n_combo.currentIndex()
+            count = self.n_combo.count()
+            self.n_combo.setCurrentIndex((idx + 1) % count)
+            return
+
+        # rotate K0 (K)
+        if key == Qt.Key.Key_K:
+            idx = self.k0_combo.currentIndex()
+            count = self.k0_combo.count()
+            self.k0_combo.setCurrentIndex((idx + 1) % count)
+            return
+
+        # rotate CFL (L)
+        if key == Qt.Key.Key_L:
+            idx = self.cfl_combo.currentIndex()
+            count = self.cfl_combo.count()
+            self.cfl_combo.setCurrentIndex((idx + 1) % count)
+            return
+
+        # rotate steps (S)
+        if key == Qt.Key.Key_S:
+            idx = self.steps_combo.currentIndex()
+            count = self.steps_combo.count()
+            self.steps_combo.setCurrentIndex((idx + 1) % count)
+            return
+
+        # update intervall (U)
+        if key == Qt.Key.Key_U:
+            idx = self.update_combo.currentIndex()
+            count = self.update_combo.count()
+            self.update_combo.setCurrentIndex((idx + 1) % count)
+            return
+
+        # Reset Yank (Y)
+        if key == Qt.Key.Key_Y:
+            self.on_reset_clicked()
+            return
+
+        # Stop/Halt (H)
+        if key == Qt.Key.Key_H:
+            self.on_stop_clicked()
+            return
+
+        # Start/Go (G)
+        if key == Qt.Key.Key_G:
+            self.on_start_clicked()
+            return
+
+        super().keyPressEvent(event)
+
+
+#
+# Kolmogorov
+# \mathrm{Re} \propto \left(\frac{k_{\max}}{k_0}\right)^{4/3}
+# \;\;\Rightarrow\;\;
+# \log(\mathrm{Re}) \approx \frac{4}{3}\log(N) - \frac{4}{3}\log(k_0) + \text{const}
+#
+def Re_from_N_K0(N, K0):
+    a = 1.066240
+    b = -0.083911
+    c = 1.286396
+    log10Re = a * np.log10(N) + b * np.log10(K0) + c
+    return 10.0 ** log10Re
+
+# ----------------------------------------------------------------------
+Backend = Literal["cpu", "gpu", "auto"]
+def main() -> None:
+    args = sys.argv[1:]
+
+    # Decide backend early so we can choose a sensible default N
+    backend_str = args[5].lower() if len(args) > 5 else "auto"
+    if backend_str not in ("cpu", "gpu", "auto"):
+        backend_str = "auto"
+    backend: Backend = cast(Backend, backend_str)
+
+    # Default N depends on effective backend:
+    if backend == "cpu":
+        default_N = 512
+    elif backend == "gpu":
+        default_N = 2048
+    else:
+        import importlib.util
+        default_N = 2048 if importlib.util.find_spec("cupy") is not None else 512
+
+    N = int(args[0]) if len(args) > 0 else default_N
+    K0 = float(args[1]) if len(args) > 1 else 15
+    Re = float(args[2]) if len(args) > 2 else Re_from_N_K0(N, K0)
+    STEPS = args[3] if len(args) > 3 else "50000"
+    CFL = float(args[4]) if len(args) > 4 else 0.3
+
+    UPDATE = args[6] if len(args) > 6 else "20"
+    ITERATIONS = int(args[7]) if len(args) > 7 else 10**9
+
+    app = QApplication(sys.argv)
+    icon_file = "palinstrophy.icns" if sys.platform == "darwin" else "palinstrophy.ico"
+    icon_path = Path(__file__).with_name(icon_file)
+    icon = QIcon(str(icon_path))
+    app.setWindowIcon(icon)
+
+    sim = DnsSimulator(n=N, re=Re, k0=K0, cfl=CFL, backend=backend)
+    sim.step(1)
+    window = MainWindow(sim, STEPS, UPDATE, ITERATIONS)
+    screen = app.primaryScreen().availableGeometry()
+    g = window.geometry()
+    g.moveCenter(screen.center())
+    window.setGeometry(g)
+    window.show()
+    sys.exit(app.exec())
+
+if __name__ == "__main__":
+    main()
