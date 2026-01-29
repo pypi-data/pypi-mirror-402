@@ -1,0 +1,98 @@
+name: Reusable workflow example
+
+on:
+  workflow_call:
+
+jobs:
+  sdist:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14.2"
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+      - name: Upload sdist
+        uses: actions/upload-artifact@v6
+        with:
+          name: wheels-sdist
+          path: dist
+
+  wheel:
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - runner: macos-15
+            target: aarch64
+            py: arm64
+            manylinux: auto
+
+          - runner: windows-latest
+            target: x64
+            py: x64
+            manylinux: auto
+
+          - runner: ubuntu-24.04
+            target: x86_64
+            manylinux: auto
+          - runner: ubuntu-24.04-arm
+            target: aarch64
+            manylinux: auto
+          - runner: ubuntu-24.04
+            target: armv7
+            manylinux: auto
+          - runner: ubuntu-24.04
+            target: s390x
+            manylinux: auto
+          - runner: ubuntu-24.04
+            target: ppc64le
+            manylinux: auto
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+            manylinux: musllinux_1_2
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            manylinux: musllinux_1_2
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        if: ${{ runner.os != 'Linux' }}
+
+      - uses: actions/setup-python@v6
+        if: ${{ runner.os != 'Linux' }}
+        with:
+          python-version: "3.14.2"
+          architecture: ${{ matrix.platform.py }}
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.platform.target }}
+          args: --release --out dist
+          sccache: "true"
+          manylinux: ${{ matrix.platform.manylinux }}
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v6
+        with:
+          name: wheels-${{ runner.os }}-${{ matrix.platform.target }}
+          path: dist
+
+  merge-wheel-artifact:
+    runs-on: ubuntu-24.04
+    needs: ["sdist", "wheel"]
+    steps:
+      - name: Merge Artifacts
+        uses: actions/upload-artifact/merge@v6
+        with:
+          name: wheel
+          pattern: wheels-*
