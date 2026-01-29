@@ -1,0 +1,237 @@
+"""
+Unified input widget handling both free-form input and questions.
+"""
+
+import asyncio
+from collections.abc import Iterable
+from enum import Enum
+
+from textual.containers import Container
+from textual.events import Key
+from textual.message import Message
+from textual.widgets import OptionList, TextArea
+
+from solveig.interface.themes import Palette
+
+
+class InputMode(Enum):
+    """Input widget modes."""
+
+    FREE_FORM = "free_form"
+    QUESTION = "question"
+    MULTIPLE_CHOICE = "multiple_choice"
+
+
+class GrowingInput(TextArea):
+    """A TextArea that grows with content and submits on Enter."""
+
+    class Submitted(Message):
+        """Posted when the user presses Enter."""
+
+        def __init__(self, value: str) -> None:
+            self.value = value
+            super().__init__()
+
+    async def _on_key(self, event: Key) -> None:
+        """
+        Override the private _on_key method to intercept Enter key presses
+        and handle Ctrl+C for clearing input.
+        """
+        if event.key == "enter":
+            event.prevent_default()
+            self.post_message(self.Submitted(self.text))
+        elif event.key == "ctrl+c":
+            if self.text:
+                # If there is text, clear it and stop the event
+                event.stop()
+                self.text = ""
+            # If there is no text, let the event bubble up to the app to exit
+        else:
+            # Let the parent class handle other keys
+            await super()._on_key(event)
+
+
+class InputBar(Container):
+    """
+    Container that manages different input modes: free-form, questions, and multiple choice.
+    """
+
+    def __init__(
+        self,
+        *,
+        placeholder: str = "",
+        theme: Palette,
+        free_form_callback=None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+
+        # Theme and styling
+        self._theme = theme
+
+        # Mode management
+        self._mode = InputMode.FREE_FORM
+        self._question_future: asyncio.Future | None = None
+        self._choice_future: asyncio.Future | None = None
+
+        # Callbacks
+        self._free_form_callback = free_form_callback
+
+        # Child widgets
+        self._text_input = GrowingInput(id="text_input")
+        self._text_input.placeholder = placeholder
+        self._text_input.show_line_numbers = False
+        self._select_widget: OptionList | None = None
+
+        # Saved state for question mode
+        self._saved_text: str = ""
+        self._initial_placeholder: str = placeholder
+
+    def compose(self):
+        """Create the layout with input widgets."""
+        # yield Horizontal(classes="separator")
+        yield self._text_input
+
+    def on_mount(self):
+        """Initialize styling when mounted."""
+        self._apply_free_form_style()
+        self._text_input.focus()
+
+    async def on_growing_input_submitted(self, event: GrowingInput.Submitted) -> None:
+        """Handle the custom Submitted message from the GrowingInput widget."""
+        user_input = event.value.strip()
+        if not user_input:
+            return
+
+        self._text_input.text = ""
+
+        if self._mode == InputMode.QUESTION and self._question_future:
+            if not self._question_future.done():
+                self._question_future.set_result(user_input)
+        elif self._mode == InputMode.FREE_FORM and self._free_form_callback:
+            if asyncio.iscoroutinefunction(self._free_form_callback):
+                asyncio.create_task(self._free_form_callback(user_input))
+            else:
+                self._free_form_callback(user_input)
+
+        self._text_input.focus()
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        """Handle option list selection for multiple choice."""
+        if self._mode == InputMode.MULTIPLE_CHOICE and self._choice_future:
+            if not self._choice_future.done():
+                # Get the index from the event
+                selected_index = event.option_index
+                self._choice_future.set_result(selected_index)
+
+    def _apply_free_form_style(self):
+        """Apply free-form input styling."""
+        self._text_input.styles.border = ("solid", self._theme.input)
+
+    def _apply_question_style(self):
+        """Apply question input styling."""
+        self._text_input.styles.border = ("solid", self._theme.warning)
+
+    async def ask_question(self, question: str) -> str:
+        """Switch to question mode and wait for response."""
+        self._saved_text = self._text_input.text
+
+        self._mode = InputMode.QUESTION
+        self._question_future = asyncio.Future()
+
+        self._text_input.text = ""
+        self._text_input.placeholder = question
+        self._apply_question_style()
+        self._text_input.focus()
+
+        try:
+            response = await self._question_future
+            return response
+        finally:
+            self._mode = InputMode.FREE_FORM
+            self._question_future = None
+            self._text_input.placeholder = self._initial_placeholder
+            self._text_input.text = self._saved_text
+            self._apply_free_form_style()
+            self._text_input.focus()
+
+    async def ask_choice(self, question: str, choices: Iterable[str]) -> int:
+        """Show multiple choice selection and wait for response."""
+        choices_list = list(choices)
+
+        self._mode = InputMode.MULTIPLE_CHOICE
+        self._choice_future = asyncio.Future()
+
+        # Hide text input and show question prompt
+        self._text_input.styles.display = "none"
+
+        # Create option list widget with choices and mount in place of input
+        options = [f"{i + 1}. {choice}" for i, choice in enumerate(choices_list)]
+        self._select_widget = OptionList(*options, id="choice_select")
+        if self._select_widget:
+            self._select_widget.border_title = question
+
+            # Mount inside this container
+            await self.mount(self._select_widget)
+            self._select_widget.focus()
+
+            # Scroll conversation area to keep context visible after layout
+            conversation = self.app.query_one("#conversation")
+            self.call_after_refresh(conversation.scroll_end)
+
+        try:
+            selected_index = await self._choice_future
+            return selected_index
+        finally:
+            # Clean up and restore text input
+            self._mode = InputMode.FREE_FORM
+            self._choice_future = None
+            if self._select_widget:
+                await self._select_widget.remove()
+                self._select_widget = None
+            self._text_input.styles.display = "block"
+            self._text_input.focus()
+
+    @classmethod
+    def get_css(cls, theme: Palette) -> str:
+        """Generate CSS for this widget container."""
+
+        # Divider bar above the input bar
+        # InputBar > .separator {{
+        #     height: 1;
+        #     border-top: solid {theme.box};
+        # }}
+
+        return f"""
+        InputBar {{
+            height: auto;
+            margin: 1 0 0 0;
+        }}
+
+        InputBar > GrowingInput {{
+            height: auto;
+            min-height: 3;
+            color: {theme.text};
+            background: {theme.background};
+            border: solid {theme.input};
+            margin: 0;
+        }}
+
+        InputBar > OptionList {{
+            height: auto;
+            color: {theme.text};
+            background: {theme.background};
+            border: solid {theme.box};
+            margin: 0;
+        }}
+
+        InputBar > OptionList > *.option-list--option-highlighted {{
+            background: {theme.input};
+        }}
+
+        InputBar > Static {{
+            height: 1;
+            color: {theme.input};
+            margin: 0;
+        }}
+        """
