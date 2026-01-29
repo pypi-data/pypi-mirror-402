@@ -1,0 +1,107 @@
+REPOSITORY: eb-contracts
+
+ROLE
+This repository defines the canonical data, forecast, cost, and readiness
+contracts for the Electric Barometer ecosystem.
+
+It is the single source of truth for schema shape, column conventions,
+semantic invariants, and validation behavior for EB artifacts.
+
+This repository defines WHAT artifacts must look like and WHAT they mean.
+It does not define HOW they are evaluated, optimized, governed, or adjusted.
+
+---
+
+PRIMARY RESPONSIBILITIES
+
+- Define versioned contract artifacts (V1, V2, …) for:
+  - demand panels
+  - forecast panels (point and quantile)
+  - cost asymmetry specifications
+  - evaluation / readiness result artifacts
+- Enforce schema correctness, key uniqueness, and semantic invariants
+- Provide deterministic runtime validation with explicit modes:
+  - strict / warn / off
+- Provide migration helpers to convert external data into EB contracts
+- Preserve backward compatibility once a contract version is published
+
+---
+
+NON-RESPONSIBILITIES (STRICT)
+
+This repository MUST NOT:
+
+- Compute metrics or evaluation scores
+- Perform optimization or parameter tuning
+- Apply governance or policy decisions
+- Apply adjustments or fallback logic
+- Encode business rules beyond schema semantics
+- Depend on eb-metrics, eb-evaluation, or eb-optimization
+
+---
+
+CORE SEMANTIC INVARIANTS
+
+- Contracts define structure and meaning, not behavior.
+- Structural zeros are explicit:
+  - if is_structural_zero == True:
+    - demand value MUST be NA
+    - interval MUST be non-observable
+- Observability flags are tri-state (True / False / NA) and must not be
+  collapsed into binary logic.
+- Forecast artifacts must be uniquely keyed by their declared grain.
+- Quantile forecasts require q ∈ (0, 1).
+- Cost asymmetry ratios must be strictly positive.
+- Readiness / FPC result artifacts represent outcomes, not decisions.
+
+---
+
+VALIDATION PHILOSOPHY
+
+- Validation is deterministic and declarative.
+- Violations are accumulated and then:
+  - raised (strict mode),
+  - warned (warn mode),
+  - or ignored (off mode),
+  according to the active runtime validation context.
+- Validation behavior is a caller-controlled execution concern,
+  not an embedded policy.
+
+---
+
+SYSTEM RELATIONSHIP
+
+- This repository defers to `eb-integration/llm.system.txt` for:
+  - system-wide pipeline ordering
+  - governance rules
+  - adjustment semantics
+- Contracts do not encode pipeline logic.
+- If a downstream repo requires behavior not supported by contracts,
+  the contract must be extended explicitly and versioned.
+
+---
+
+ALLOWED CHANGES
+
+- Adding new contract versions (e.g., V2 artifacts)
+- Extending existing contracts with optional fields
+- Adding new validation checks that preserve backward compatibility
+- Adding migration helpers from external schemas
+
+---
+
+DISALLOWED CHANGES
+
+- Breaking existing contract versions
+- Embedding evaluation, optimization, or policy logic
+- Introducing implicit defaults that alter semantic meaning
+- Adding cross-repo dependencies
+
+---
+
+INTERPRETATION RULE
+
+If a question arises about meaning or structure of an EB artifact,
+this repository is authoritative.
+If a question arises about behavior, decisions, or adjustment,
+this repository is not the correct place.
