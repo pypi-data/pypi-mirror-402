@@ -1,0 +1,129 @@
+[project]
+name = "pyligent"
+version = "0.2.2"
+description = "Diligent framework for python"
+readme = { file = "publish/README_PYPI.md", content-type = "text/markdown" }
+requires-python = ">=3.13"
+authors = [
+  { name = "Dmitry Beresnev", email = "d.beresnev.work@gmail.com" },
+  { name = "Petr Anokhin", email = "anokhin@airi.net" },
+  { name = "Vladimir Makharev" },
+  { name = "Roman Khalikov" },
+]
+keywords = ["reasoning", "llm", "transformers", "ml"]
+# Strongly recommended for PyPI presentation & search:
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+  "bitsandbytes>=0.48.1",
+  "datasets>=4.0.0",
+  "ipykernel>=6.30.1",
+  "ipywidgets>=8.1.7",
+  "loguru>=0.7.3",
+  "numpy>=2.3.2",
+  "peft>=0.17.1",
+  "python-dotenv>=1.1.1",
+  "tqdm>=4.67.1",
+  "transformers[torch]>=4.56.0",
+  "trl>=0.22.2",
+  "tensorboard>=2.20.0",
+  "networkx[default]>=3.5",
+  "nvidia-ml-py>=13.580.82",
+  "orjson>=3.11.5",
+  "guidance>=0.3.0",
+  "accelerate>=1.12.0",
+  "gpustat>=1.1.1",
+  "pyarrow>=22.0.0",
+]
+
+[project.optional-dependencies]
+# Kept exactly as you want: users will do `pip install pyligent[cpu]` or `pip install pyligent[cu128]`.
+cpu = [
+  "torch>=2.8.0",
+]
+cu128 = [
+  "torch>=2.8.0",
+]
+
+# [project.urls]
+# Homepage = "https://github.com/crogs-foundation/diligent-learner"
+# Repository = "https://github.com/crogs-foundation/diligent-learner"
+# "Bug Tracker" = "https://github.com/crogs-foundation/diligent-learner/issues"
+
+[dependency-groups]
+dev = [
+  "ipykernel>=7.1.0",
+  "pre-commit>=4.3.0",
+  "ruff>=0.12.11",
+  "ty>=0.0.5",
+]
+
+[tool.uv]
+# Prevent installing both extras together (your current behavior, preserved).
+conflicts = [
+  [
+    { extra = "cpu" },
+    { extra = "cu128" },
+  ],
+]
+
+[tool.uv.sources]
+# Route torch to the right index depending on extra.
+torch = [
+  { index = "pytorch-cpu", extra = "cpu" },
+  { index = "pytorch-cu128", extra = "cu128" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+# Optional but recommended: add TestPyPI publishing target.
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
+explicit = true
+
+# --- Build system: uv_build ---
+[build-system]
+requires = ["uv_build>=0.9.25,<0.10"]
+build-backend = "uv_build"
+
+# uv_build expects `src/<module>/__init__.py` by default.
+# If your actual import package name differs from project name, set module-name explicitly.
+[tool.uv.build-backend]
+module-name = "pyligent"
+module-root = "src"
+
+[tool.ruff]
+extend-include = ["*.ipynb"]
+fix = true
+unsafe-fixes = true
+line-length = 90
+
+[tool.ruff.lint]
+extend-select = ["I"]
+ignore = ["E402"]
+
+[tool.pylint.messages_control]
+disable = [
+  "missing-class-docstring",
+  "missing-function-docstring",
+  "missing-module-docstring",
+  "broad-exception-caught",
+  "invalid-name",
+]
