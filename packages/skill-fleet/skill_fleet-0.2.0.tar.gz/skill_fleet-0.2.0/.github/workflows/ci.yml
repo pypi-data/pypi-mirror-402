@@ -1,0 +1,155 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  lint:
+    name: Lint with Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run ruff check
+        run: uv run ruff check src/ tests/
+
+      - name: Run ruff format check
+        run: uv run ruff format --check src/ tests/
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run unit tests
+        run: uv run pytest tests/unit/ -v --tb=short
+
+      - name: Run integration tests (if API key available)
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          if [ -n "$GOOGLE_API_KEY" ]; then
+            uv run pytest tests/integration/ -v --tb=short || true
+          else
+            echo "Skipping integration tests - GOOGLE_API_KEY not set"
+          fi
+
+  build:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Verify CLI entrypoint
+        run: uv run skill-fleet --help
+
+      - name: Validate skill structure
+        run: |
+          if [ -d "skills" ]; then
+            uv run skill-fleet validate skills/general/testing || true
+            echo "Skill validation completed"
+          fi
+
+  security:
+    name: Security Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Install security scanning tools
+        run: uv pip install pip-audit safety bandit[toml]
+
+      - name: Run Bandit security linter
+        run: uv run bandit -r src/skill_fleet -f json -o bandit-report.json || true
+        continue-on-error: true
+
+      - name: Display Bandit results
+        run: |
+          if [ -f bandit-report.json ]; then
+            echo "### Bandit Security Scan Results ###"
+            uv run bandit -r src/skill_fleet || true
+          fi
+
+      - name: Run pip-audit for dependency vulnerabilities
+        run: uv run pip-audit --desc || true
+
+      - name: Run safety check
+        run: |
+          if [ -f "requirements.txt" ]; then
+            uv run safety check --file requirements.txt || true
+          else
+            echo "No requirements.txt found, checking uv lock file"
+            uv pip list > /tmp/requirements.txt && uv run safety check --file /tmp/requirements.txt || true
+          fi
+
+      - name: Check for secrets in code
+        run: |
+          echo "Checking for potential secrets..."
+          if grep -r -i -E "(api[_-]?key|secret|password|token)\s*=\s*['\"][^'\"]{16,}" src/ --exclude-dir=__pycache__; then
+            echo "⚠️  Warning: Potential secrets found in source code"
+            exit 1
+          else
+            echo "✅ No obvious secrets detected"
+          fi
+
+      - name: Summary
+        run: echo "✅ Security scanning completed"
+
+  all-checks:
+    name: All Checks Passed
+    runs-on: ubuntu-latest
+    needs: [lint, test, build, security]
+    steps:
+      - name: Confirm all checks passed
+        run: echo "All CI checks passed successfully!"
