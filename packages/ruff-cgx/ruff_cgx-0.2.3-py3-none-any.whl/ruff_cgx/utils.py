@@ -1,0 +1,398 @@
+"""Shared utilities for ruff-cgx linting and formatting."""
+
+import ast
+import os
+import re
+import subprocess
+import textwrap
+from dataclasses import dataclass
+from typing import List
+
+from collagraph.sfc.compiler import construct_ast
+from collagraph.sfc.parser import CGXParser, Element
+
+# Module-level configuration for ruff command
+_ruff_command: str | None = None
+
+# Module-level cache for isort configuration
+_isort_configured_cache: bool | None = None
+
+
+def set_ruff_command(command: str) -> None:
+    """
+    Set the ruff command to use programmatically.
+
+    This is the recommended way for LSP servers and other Python code
+    to configure the ruff executable.
+
+    Args:
+        command: Path or command name for ruff executable (e.g., "/usr/local/bin/ruff")
+
+    Example:
+        >>> import ruff_cgx
+        >>> ruff_cgx.set_ruff_command("/path/to/custom/ruff")
+        >>> ruff_cgx.format_file("file.cgx")
+    """
+    global _ruff_command
+    _ruff_command = command
+
+
+def get_ruff_command() -> str:
+    """
+    Get the ruff command to use.
+
+    Priority order:
+    1. Command set via set_ruff_command() (programmatic)
+    2. RUFF_COMMAND environment variable (for CLI use)
+    3. Default: "ruff"
+
+    Returns:
+        Path or command name for ruff executable
+    """
+    if _ruff_command is not None:
+        return _ruff_command
+    return os.environ.get("RUFF_COMMAND", "ruff")
+
+
+def reset_ruff_command() -> None:
+    """
+    Reset the ruff command to default (uses priority: env var, then "ruff").
+
+    Clears any command set via set_ruff_command().
+    """
+    global _ruff_command
+    _ruff_command = None
+
+
+@dataclass
+class ParsedCGX:
+    """Result of parsing a CGX file."""
+
+    parser: CGXParser
+    script_node: Element | None
+    template_nodes: List[Element]
+
+
+@dataclass
+class ScriptContent:
+    """Result of extracting Python content from a script node."""
+
+    python_code: str  # Pure Python content (without leading newline)
+    start_line: int  # 0-indexed line where Python actually starts
+    end_line: int  # 0-indexed line where </script> tag is
+    starts_on_new_line: bool  # Whether Python was on a new line after <script>
+    closing_tag_inline: bool  # Whether </script> is on same line as last Python code
+
+
+def parse_cgx_file(content: str) -> ParsedCGX:
+    """
+    Parse a CGX file and extract script and template nodes.
+
+    Args:
+        content: The CGX file content as a string
+
+    Returns:
+        ParsedCGX with parser, script_node, and template_nodes
+    """
+    parser = CGXParser()
+    parser.feed(content)
+
+    script_node = parser.root.child_with_tag("script")
+    template_nodes = [
+        node
+        for node in parser.root.children
+        if not hasattr(node, "tag") or node.tag != "script"
+    ]
+
+    return ParsedCGX(
+        parser=parser,
+        script_node=script_node,
+        template_nodes=template_nodes,
+    )
+
+
+def extract_script_content(script_node: Element) -> ScriptContent | None:
+    """
+    Extract pure Python content from a script node.
+
+    This handles cases where Python code is on the same line as the <script> tag
+    by extracting the content from the TextElement child and determining the actual
+    line boundaries.
+
+    Args:
+        script_node: The script node from CGXParser
+
+    Returns:
+        ScriptContent with pure Python code and location info, or None if no content
+    """
+    if not script_node.children:
+        return None
+
+    script_child = script_node.children[0]
+    python_content = script_child.content
+    assert "<script" not in python_content
+
+    # Get the line where the <script> tag starts and where it ends
+    script_tag_line = script_node.location[0] - 1  # Convert to 0-indexed
+    end_line = script_node.end[0] - 1  # End tag line (0-indexed)
+
+    # Determine if Python starts on a new line after <script>
+    starts_on_new_line = python_content.startswith("\n")
+
+    # Determine if closing tag is on the same line as Python code
+    # If column > 0, there's content before the closing tag
+    closing_tag_inline = script_node.end[1] > 0
+
+    # Strip leading newline if present
+    if starts_on_new_line:
+        python_content = python_content[1:]
+        start_line = script_tag_line + 1
+    else:
+        start_line = script_tag_line
+
+    # Strip leading/trailing whitespace from the Python content
+    # (parser may include spaces when tags are inline)
+    python_content = python_content.strip()
+
+    # Ensure content ends with a newline for proper formatting
+    if python_content and not python_content.endswith("\n"):
+        python_content += "\n"
+
+    return ScriptContent(
+        python_code=python_content,
+        start_line=start_line,
+        end_line=end_line,
+        starts_on_new_line=starts_on_new_line,
+        closing_tag_inline=closing_tag_inline,
+    )
+
+
+def create_virtual_render_content(original_content: str, modified_content: str) -> str:
+    """
+    Create virtual content with render method appended for template-aware linting.
+
+    This creates a virtual subclass with the render method compiled from the template,
+    allowing ruff to see which imports and variables are used in the template.
+
+    Args:
+        original_content: The original CGX file content
+        modified_content: content with non-script sections commented out
+
+    Returns:
+        Modified content with virtual render method appended
+    """
+    try:
+        # construct_ast compiles the template into a render() method
+        tree, _ = construct_ast("in-memory", original_content)
+
+        # Find the component class definition (last ClassDef in the AST)
+        component_class_def = None
+        for node in reversed(tree.body):
+            if isinstance(node, ast.ClassDef):
+                component_class_def = node
+                break
+
+        if not component_class_def:
+            # No class found, just return the commented content
+            return modified_content
+
+        component_class_name = component_class_def.name
+
+        # Find the render method
+        render_method = None
+        for node in component_class_def.body:
+            if isinstance(node, ast.FunctionDef) and node.name == "render":
+                render_method = node
+                break
+
+        if not render_method:
+            # No render method, just return the commented content
+            return modified_content
+
+        # Unparse the render method to get the source code
+        render_source = ast.unparse(render_method)
+        render_source = textwrap.indent(render_source, "    ")
+
+        # Append a virtual subclass with the render method
+        # This helps ruff see that template variables are used
+        virtual_class_def = (
+            f"class CGXVirtual{component_class_name}({component_class_name}):\n"
+        )
+        # Add the render method with noqa to ignore issues in generated code
+        virtual_class_content = "".join(
+            [f"{line}  # noqa\n" for line in render_source.splitlines()]
+        )
+
+        return modified_content + virtual_class_def + virtual_class_content
+
+    except Exception:
+        # If anything fails, just return the basic commented content
+        # This ensures linting still works even if AST construction fails
+        return modified_content
+
+
+def is_isort_configured() -> bool:
+    """
+    Check if 'unsorted-imports' is both enabled and marked as should_fix.
+
+    Result is cached for the lifetime of the process to avoid repeated subprocess calls.
+    """
+    global _isort_configured_cache
+
+    # Return cached result if available
+    if _isort_configured_cache is not None:
+        return _isort_configured_cache
+
+    result = False
+    try:
+        # Print ruff settings
+        ruff_output = subprocess.run(
+            ["ruff", "check", "--show-settings"], capture_output=True, text=True
+        ).stdout
+
+        # Get both the enabled + should_fix sections
+        enabled_match = re.search(
+            r"linter\.rules\.enabled = \[(.*?)\]", ruff_output, re.DOTALL
+        )
+
+        should_fix_match = re.search(
+            r"linter\.rules\.should_fix = \[(.*?)\]", ruff_output, re.DOTALL
+        )
+
+        if not enabled_match or not should_fix_match:
+            result = False
+        else:
+            # Check that 'unsorted-imports' rule appears in both sections
+            in_enabled = "unsorted-imports" in enabled_match.group(1)
+            in_should_fix = "unsorted-imports" in should_fix_match.group(1)
+            result = in_enabled and in_should_fix
+
+    except Exception:
+        result = False
+
+    # Cache the result
+    _isort_configured_cache = result
+    return result
+
+
+def run_ruff_format(
+    source: str,
+    *,
+    use_single_quotes: bool = False,
+    check: bool = False,
+    skip_import_sort: bool = False,
+) -> str:
+    """
+    Format Python source code using ruff via stdin.
+
+    Args:
+        source: The Python source code to format
+        use_single_quotes: If True, configure ruff to use single quotes
+        check: If True, only check without modifying
+        skip_import_sort: If True, skip import sorting (useful for template expressions)
+
+    Returns:
+        Formatted Python source code
+    """
+    should_sort_imports = not skip_import_sort and is_isort_configured()
+
+    # Sort imports first if configured
+    if should_sort_imports:
+        import_sort_command = [
+            get_ruff_command(),
+            "check",
+            "--select",
+            "I",
+            "--fix",
+            "--stdin-filename",
+            "source.py",
+        ]
+        result = subprocess.run(
+            import_sort_command,
+            input=source,
+            capture_output=True,
+            text=True,
+        )
+        # Use the fixed output if available, otherwise use original
+        if result.returncode == 0 or result.stdout:
+            source = result.stdout if result.stdout else source
+
+    # Build format command
+    ruff_command = [
+        get_ruff_command(),
+        "format",
+        "--stdin-filename",
+        "source.py",
+    ]
+
+    if check:
+        ruff_command.append("--check")
+
+    # Configure quote style and indent width via inline TOML config
+    if use_single_quotes:
+        ruff_command.extend(
+            [
+                "--config",
+                "format.quote-style = 'single'",
+                "--config",
+                "indent-width = 2",
+            ]
+        )
+
+    # Run ruff format with stdin
+    result = subprocess.run(
+        ruff_command,
+        input=source,
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode == 0 or not check:
+        # Format succeeded or not in check mode
+        return result.stdout if result.stdout else source
+    else:
+        # If check mode and would change, return original
+        return source
+
+
+def run_ruff_check(
+    source: str, fix: bool = False
+) -> tuple[subprocess.CompletedProcess, str | None]:
+    """
+    Run ruff check on Python source code via stdin.
+
+    Args:
+        source: The Python source code to check
+        fix: Whether to apply fixes (default: False)
+
+    Returns:
+        Tuple of (CompletedProcess with the ruff result,
+        fixed content if fix=True else None)
+    """
+    ruff_command = [
+        get_ruff_command(),
+        "check",
+        "--output-format=json",
+        "--no-cache",
+        "--ignore=RUF100",  # Ignore unused noqa (we add these for virtual render)
+        "--stdin-filename",
+        "source.py",
+    ]
+
+    if fix:
+        ruff_command.append("--fix")
+
+    result = subprocess.run(
+        ruff_command,
+        input=source,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    # If fix was requested, the fixed content is in stdout
+    fixed_content = None
+    if fix and result.stdout:
+        fixed_content = result.stdout
+
+    return result, fixed_content
