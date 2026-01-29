@@ -1,0 +1,233 @@
+# MLX-RMVPE
+
+MLX implementation of [RMVPE](https://arxiv.org/abs/2306.15412) (Robust Model for Vocal Pitch Estimation) for Apple Silicon.
+
+This is the **F0 extraction component** for RVC-MLX, a native Apple Silicon implementation of [Retrieval-based Voice Conversion](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI).
+
+## What is RMVPE?
+
+RMVPE extracts **fundamental frequency (F0)** from audio, essential for preserving pitch/melody in voice conversion:
+
+```
+Input Audio (16kHz) → RMVPE → F0 Contour (Hz) → RVC Decoder → Converted Voice
+```
+
+Unlike simpler methods (CREPE, pYIN), RMVPE is specifically designed for **polyphonic music**, making it ideal for singing voice conversion where background music may be present.
+
+## Installation
+
+```bash
+uv pip install mlx-rmvpe
+```
+
+For development:
+
+```bash
+git clone https://github.com/lexandstuff/mlx-rmvpe.git
+cd mlx-rmvpe
+uv pip install -e .
+```
+
+## Quick Start
+
+```python
+import librosa
+from mlx_rmvpe import RMVPE
+
+# Load model (auto-downloads weights from HuggingFace)
+model = RMVPE.from_pretrained()
+
+# Load audio at 16kHz
+audio, sr = librosa.load("singing.wav", sr=16000, mono=True)
+
+# Extract F0
+f0 = model.infer_from_audio(audio)
+
+print(f"Audio: {len(audio)/16000:.2f}s -> F0: {f0.shape[0]} frames at 100fps")
+print(f"Pitch range: {f0[f0 > 0].min():.1f} - {f0[f0 > 0].max():.1f} Hz")
+```
+
+### Manual Weight Loading
+
+If you prefer to manage weights yourself:
+
+```python
+from huggingface_hub import hf_hub_download
+from mlx_rmvpe import RMVPE
+
+# Download weights
+weights_path = hf_hub_download(
+    repo_id="lexandstuff/mlx-rmvpe",
+    filename="rmvpe.safetensors"
+)
+
+# Load model manually
+model = RMVPE()
+model.load_weights(weights_path)
+model.eval()
+```
+
+<details>
+<summary>Converting weights from PyTorch (advanced)</summary>
+
+If you need to convert from PyTorch yourself:
+
+```bash
+# Download original PyTorch weights
+wget -O weights/rmvpe.pt \
+  "https://huggingface.co/lj1995/VoiceConversionWebUI/resolve/main/rmvpe.pt"
+
+# Convert to MLX format
+python scripts/convert_weights.py \
+  --pytorch_ckpt weights/rmvpe.pt \
+  --mlx_ckpt weights/rmvpe.safetensors
+```
+
+See [IMPLEMENTATION_NOTES.md](IMPLEMENTATION_NOTES.md) for details.
+</details>
+
+## API Reference
+
+### RMVPE
+
+```python
+RMVPE(hop_length: int = 160)
+```
+
+**Class Methods:**
+
+| Method | Description |
+|--------|-------------|
+| `from_pretrained(repo_id, filename, weights_path)` | Load pretrained model from HuggingFace |
+| `load_weights(path)` | Load weights from SafeTensors file |
+| `infer_from_audio(audio, sample_rate, threshold)` | Extract F0 from audio |
+| `mel_spectrogram(audio, ...)` | Compute mel spectrogram |
+| `decode(hidden, threshold)` | Decode pitch probabilities to Hz |
+
+**Parameters:**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `hop_length` | 160 | Hop length for mel spectrogram (160 = 100fps at 16kHz) |
+| `threshold` | 0.03 | Voicing threshold (frames below this are marked unvoiced) |
+
+**Input:**
+- Audio waveform at 16kHz, shape `(samples,)` or `(batch, samples)`
+
+**Output:**
+- F0 in Hz, shape `(frames,)` where frames = samples / hop_length
+- Unvoiced frames have F0 = 0
+
+## RVC Integration
+
+In the RVC voice conversion pipeline:
+
+```python
+# 1. Extract content features with ContentVec
+features = contentvec_model(audio)["x"]  # (1, T, 768) at 50fps
+
+# 2. Extract pitch with RMVPE
+f0 = rmvpe_model.infer_from_audio(audio)  # (T*2,) at 100fps
+
+# 3. Interpolate F0 to match ContentVec frame rate
+f0_interp = interpolate_f0(f0, target_len=features.shape[1])
+
+# 4. Generate converted audio with RVC synthesizer
+output = rvc_synthesizer(features, f0_interp, speaker_id)
+```
+
+## Technical Details
+
+### Architecture
+
+RMVPE uses a **Deep U-Net** with **BiGRU** layers:
+
+```
+Mel Spectrogram (128 mels)
+    ↓
+Encoder (5 layers, 16→32→64→128→256 channels)
+    ↓
+Intermediate (4 layers, 256→512 channels)
+    ↓
+Decoder (5 layers with skip connections)
+    ↓
+CNN (16→3 channels)
+    ↓
+BiGRU (384→512)
+    ↓
+Linear (512→360 pitch bins)
+    ↓
+Sigmoid → Pitch Probabilities
+```
+
+### Pitch Decoding
+
+The model outputs 360 pitch bins (covering ~32 Hz to ~1975 Hz). Decoding:
+
+1. Find peak bin via argmax
+2. Local averaging over 9-bin window
+3. Convert cents to Hz: `f0 = 10 * (2 ** (cents / 1200))`
+4. Apply voicing threshold
+
+### Frame Rate
+
+- **Sample rate**: 16,000 Hz
+- **Hop length**: 160 samples
+- **Frame rate**: 100 fps
+
+This is 2x faster than ContentVec (50 fps), providing higher temporal resolution for pitch.
+
+## Validation
+
+This implementation produces numerically similar outputs to the PyTorch reference:
+
+| Metric | Value |
+|--------|-------|
+| Mean F0 difference | 1.29 Hz |
+| Correlation | >0.99 |
+
+See [IMPLEMENTATION_NOTES.md](IMPLEMENTATION_NOTES.md) for validation methodology.
+
+## Development
+
+### Project Structure
+
+```
+mlx-rmvpe/
+├── mlx_rmvpe/
+│   ├── __init__.py
+│   ├── rmvpe.py          # Main RMVPE class with from_pretrained()
+│   └── model.py          # DeepUnet, BiGRU, E2E model architecture
+├── scripts/
+│   └── convert_weights.py # PyTorch → SafeTensors conversion
+├── tests/
+│   └── test_rmvpe.py
+├── IMPLEMENTATION_NOTES.md
+└── README.md
+```
+
+### Running Tests
+
+```bash
+pytest tests/
+```
+
+### Publishing to PyPI
+
+```bash
+# Build
+uv build
+
+# Upload
+uv publish
+```
+
+## License
+
+MIT
+
+## Acknowledgments
+
+- [RMVPE](https://github.com/Dream-High/RMVPE) - Original implementation
+- [RVC](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) - Voice conversion pipeline
+- [MLX](https://github.com/ml-explore/mlx) - Apple's machine learning framework
