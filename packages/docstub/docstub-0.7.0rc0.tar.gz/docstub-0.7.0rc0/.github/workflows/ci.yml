@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Many color libraries just need this to be set to any value, but at least
+  # one distinguishes color depth, where "3" -> "256-bit color".
+  FORCE_COLOR: 3
+  PIP_PROGRESS_BAR: "off"
+
+defaults:
+  run:
+    # Make sure that bash specific stuff works on Windows
+    shell: bash
+
+jobs:
+  lint:
+    name: pre-commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd  # v3.0.1
+        with:
+          extra_args: --hook-stage manual --all-files
+
+  test:
+    name: Test ${{ matrix.runs-on.short }}-py${{ matrix.python-version }}
+    runs-on: ${{ matrix.runs-on.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runs-on:
+          - { short: linux, name: ubuntu-latest }
+          - { short: win, name: windows-latest }
+          - { short: macos, name: macos-latest }
+        python-version: ["3.12", "3.14"]
+        include:
+          - runs-on: { short: linux, name: ubuntu-latest }
+            python-version: "3.13"
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+
+      - name: Install package
+        run: |
+          python -m pip install --group "test" .
+          python -m docstub --version
+          docstub --help
+
+      - name: Run pytest
+        run: >-
+          python -m pytest --showlocals -ra --cov --cov-report=term
+
+      # TODO upload coverage statistics, and fail on decrease?
+
+      - name: Check example_pkg-stubs
+        # Check that stubs for example_pkg are up-to-date by regenerating them
+        # with docstub and looking for differences.
+        run: |
+          rm -rf examples/example_pkg-stubs
+          python -m docstub run -v \
+              --config=examples/docstub.toml \
+              --out-dir=examples/example_pkg-stubs \
+              examples/example_pkg
+          .github/scripts/assert-unchanged.sh examples/
+
+      - name: Check docstub-stubs (single process)
+        # Check that stubs for docstub are up-to-date by regenerating them
+        # with docstub and looking for differences.
+        run: |
+          rm -rf src/docstub-stubs
+          python -m docstub run -v src/docstub -o src/docstub-stubs
+          .github/scripts/assert-unchanged.sh src/docstub-stubs/
+
+      - name: Check docstub-stubs (multiprocess)
+        # Repeat test with multiprocessing enabled
+        run: |
+          rm -rf src/docstub-stubs
+          python -m docstub run -v src/docstub -o src/docstub-stubs --workers 2
+          .github/scripts/assert-unchanged.sh src/docstub-stubs/
+
+      - name: Check with mypy.stubtest
+        run: |
+          python -m mypy.stubtest \
+            --mypy-config-file pyproject.toml \
+            --allowlist stubtest_allow.txt \
+            docstub
+
+      - name: Check tests/ with mypy
+        run: |
+          python -m mypy tests/
+
+      - name: Check tests/ with basedpyright
+        run: |
+          basedpyright tests/
