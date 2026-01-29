@@ -1,0 +1,324 @@
+environment:
+  # General settings
+  name: dev-me # name of the environment; drives the naming of kubernetes cluster and nodes, host containers etc
+  base-dir: ${PWD}/.loko # where kubernetes logs/storage, and various config files are stored
+  expand-env-vars: true # set to false to disable variable expansion; true to enable expansion of:
+                        # - OS variables (${PWD}, ${HOME}, ${USER}) in base-dir and helm values
+                        # - loko variables (${LOCAL_DOMAIN}, ${ENV_NAME}, etc.) in helm values
+                        # Available loko variables for use in helm values:
+                        # - ${ENV_NAME}         - environment name (e.g., "dev-me")
+                        # - ${APPS_SUBDOMAIN}   - subdomain for applications (e.g., "apps")
+                        # - ${LOCAL_DOMAIN}     - local domain (e.g., "dev.me")
+                        # - ${LOCAL_APPS_DOMAIN}- domain for user applications, either SUBDOMAIN.DOMAIN or DOMAIN
+                        #                        depending on subdomain.enabled setting (e.g., "apps.dev.me" or "dev.me")
+                        # - ${LOCAL_IP}         - local IP address (e.g., "192.168.0.10")
+                        # - ${REGISTRY_NAME}    - registry name (e.g., "cr")
+                        # - ${REGISTRY_HOST}    - registry host (e.g., "cr.dev.me")
+
+  # Cluster configuration - provider, kubernetes version, and node topology
+  cluster:
+    # At the moment, KinD on macOS has been tested, with a docker-compatible runtime
+    # Podman has been tried out but it is not a first-class citizen with KinD so it is not supported as of yet
+    # Linux has not been tested yet
+    provider:
+      name: kind # provider for kubernetes clusters, must be kind for now
+      runtime: docker # docker or podman for container runtime
+
+    kubernetes:
+      api-port: 6443 # port for the API server, will be exposed to the host machine as local-ip:api-port
+      image: kindest/node # image for the kind nodes
+      # loko-updater: datasource=docker depName=kindest/node
+      tag: v1.35.0  # tag for the kind image
+
+    nodes:
+      servers: 1 # number of control-plane servers/masters
+      workers: 1 # number of worker nodes
+      scheduling:
+        control-plane:
+          allow-workloads: true # allow user/system workloads on control-plane (only relevant when workers exist)
+          isolate-internal-components: true # force traefik/registry/metrics-server to control-plane only
+        workers:
+          isolate-workloads: true # force user/system workloads to workers only (when workers > 0)
+      labels: # optional: custom labels to apply to nodes
+        control-plane: # labels for ALL control-plane nodes (applied to each)
+          tier: "control"
+          environment: "dev"
+        worker: # labels for ALL worker nodes (applied to each)
+          tier: "compute"
+          environment: "dev"
+        # Alternative: specify labels per individual node (overrides global labels)
+        # individual:
+        #   control-plane-0: # labels for first control-plane node
+        #     tier: "control"
+        #     zone: "us-west-1a"
+        #   control-plane-1: # labels for second control-plane node
+        #     tier: "control"
+        #     zone: "us-west-1b"
+        #   worker-0: # labels for first worker node
+        #     tier: "compute"
+        #     zone: "us-west-1a"
+        #   worker-1: # labels for second worker node
+        #     tier: "compute"
+        #     zone: "us-west-1b"
+
+  # Network configuration - IP, domain, DNS, and load balancer settings
+  network:
+    ip: 192.168.0.10 # local ip, mapping to the host IP to use for DNS resolution and wildcard certificates
+    domain: dev.me # a domain name to use for custom dns resolution and wildcard certificates
+    dns-port: 53 # port for the local DNS resolver (dnsmasq)
+    subdomain:
+      enabled: true # whether to use subdomain for user applications (false = use direct domain)
+      value: apps # subdomain for user applications (e.g., myapp.apps.dev.me)
+    lb-ports: # list of ports to expose on the load balancer side, mapping to the host machine
+      - 80 # http port for traefik ingress controller
+      - 443 # https port for traefik ingress controller
+
+  # Container registry configuration
+  registry:
+    name: cr # name, to be used in the final url for the registry, i.e. <registry.name>.<network.domain>
+    storage:
+      size: 10Gi # size of PVC
+    mirroring:
+      enabled: true # whether to enable registry mirroring for faster image pulls
+      sources:
+        - name: docker_hub # Docker Hub (registry-1.docker.io)
+          enabled: true
+        - name: quay # Quay.io
+          enabled: true
+        - name: ghcr # GitHub Container Registry
+          enabled: true
+        - name: k8s_registry # Kubernetes registries (k8s.gcr.io, registry.k8s.io)
+          enabled: true
+        - name: mcr # Microsoft Container Registry
+          enabled: true
+        # Additional sources (set enabled: true to activate):
+        - name: gitlab_registry # GitLab Registry (gitlab.com)
+          enabled: false
+        - name: acr # Azure Container Registry
+          enabled: false
+
+  # Internal cluster components - infrastructure services managed by loko
+  # NOTE: traefik, zot, and dnsmasq are required and always deployed
+  internal-components:
+    traefik:
+      # loko-updater: datasource=helm depName=traefik repositoryUrl=https://traefik.github.io/charts
+      version: "38.0.2"
+
+    zot:
+      # loko-updater: datasource=helm depName=zot repositoryUrl=http://zotregistry.dev/helm-charts
+      version: "0.1.95"
+
+    dnsmasq:
+      # loko-updater: datasource=docker depName=dockurr/dnsmasq
+      version: "2.91"
+
+    # Optional component - set enabled: true to deploy
+    metrics-server:
+      # loko-updater: datasource=helm depName=metrics-server repositoryUrl=https://kubernetes-sigs.github.io/metrics-server
+      version: "3.13.0"
+      enabled: false # set to true for resource monitoring and HPA support
+
+  # Workload configuration
+  workloads:
+    use-presets: true # whether or not to use the preset values for workloads; leave true unless you have a good reason to override the defaults
+
+    # Centralized helm repository definitions
+    helm-repositories:
+      - name: groundhog2k
+        url: https://groundhog2k.github.io/helm-charts/
+      - name: securecodebox
+        url: https://charts.securecodebox.io/
+
+    # System workloads - pre-configured workloads with presets, ports, and storage management
+    # NOTE: Authentication and persistence are handled automatically for system workloads
+    # - Random passwords are generated for all database workloads
+    # - Persistence is configured based on storage.size settings
+    # - Passwords can be retrieved using: loko secret fetch
+    system:
+      - name: mysql
+        enabled: false # whether or not to install this component and expose the port(s)
+        namespace: common-services
+        ports:
+          - 3306 # port to expose on the host machine
+        storage:
+          size: 10Gi # size of PVC
+        config:
+          repo:
+            ref: groundhog2k # reference to helm-repositories entry
+          chart: groundhog2k/mysql # the chart to use
+          # loko-updater: datasource=helm depName=mysql repositoryUrl=https://groundhog2k.github.io/helm-charts
+          version: 3.0.8
+          # MySQL authentication and persistence handled automatically
+
+      - name: postgres
+        enabled: true # whether or not to install this component and expose the port(s)
+        namespace: common-services
+        ports:
+          - 5432
+        storage:
+          size: 5Gi
+        config:
+          repo:
+            ref: groundhog2k # reference to helm-repositories entry
+          chart: groundhog2k/postgres # the chart to use
+          # loko-updater: datasource=helm depName=postgres repositoryUrl=https://groundhog2k.github.io/helm-charts
+          version: 1.6.1
+          # PostgreSQL authentication and persistence handled automatically
+
+      - name: mongodb
+        enabled: false # whether or not to install this component and expose the port(s)
+        namespace: common-services
+        ports:
+          - 27017 # port to expose on the host machine
+        storage:
+          size: 5Gi # size of PVC
+        config:
+          repo:
+            ref: groundhog2k # reference to helm-repositories entry
+          chart: groundhog2k/mongodb # the chart to use
+          # loko-updater: datasource=helm depName=mongodb repositoryUrl=https://groundhog2k.github.io/helm-charts
+          version: 0.7.7
+          # MongoDB authentication and persistence handled automatically
+
+      - name: rabbitmq
+        enabled: false # whether or not to install this component and expose the port(s)
+        namespace: common-services
+        ports:
+          - 5672 # port to expose on the host machine
+        storage:
+          size: 2Gi # size of PVC
+        config:
+          repo:
+            ref: groundhog2k # reference to helm-repositories entry
+          chart: groundhog2k/rabbitmq # the chart to use
+          # loko-updater: datasource=helm depName=rabbitmq repositoryUrl=https://groundhog2k.github.io/helm-charts
+          version: 2.2.3
+          values:
+            # RabbitMQ authentication handled automatically
+            ingress:
+              enabled: true
+              hostname: rmq.${LOCAL_DOMAIN}
+              annotations:
+                traefik.ingress.kubernetes.io/router.entrypoints: websecure
+                traefik.ingress.kubernetes.io/router.tls: "true"
+              tls:
+                - hosts:
+                    - rmq.${LOCAL_DOMAIN}
+
+      - name: valkey
+        enabled: false # whether or not to install this component and expose the port(s)
+        namespace: common-services
+        ports:
+          - 6379 # port to expose on the host machine
+        storage:
+          size: 1Gi
+        config:
+          repo:
+            ref: groundhog2k # reference to helm-repositories entry
+          chart: groundhog2k/valkey # the chart to use
+          # loko-updater: datasource=helm depName=valkey repositoryUrl=https://groundhog2k.github.io/helm-charts
+          version: 2.2.3
+          # Valkey persistence handled automatically (no authentication)
+
+      - name: garage
+        enabled: false
+        namespace: common-services
+        ports:
+          - 3900
+          - 3902
+        storage:
+          size: 20Gi
+        config:
+          repo:
+            type: git
+            url: https://git.deuxfleurs.fr/Deuxfleurs/garage.git
+          chart: script/helm/garage
+          # loko-updater: datasource=git-tags depName=garage packageName=https://git.deuxfleurs.fr/Deuxfleurs/garage.git
+          version: v2.1.0 # Tag or branch
+          values:
+            dbEngine: lmdb  # Database engine: lmdb (recommended) or sqlite
+            deployment:
+              replicaCount: 1  # Number of Garage instances
+            garage:
+              replicationFactor: 1  # Data replication factor (must be <= replicaCount)
+              s3:
+                api:
+                  rootDomain: ".s3.${LOCAL_DOMAIN}"  # Root domain for S3 API
+                web:
+                  rootDomain: ".garage.${LOCAL_DOMAIN}"  # Root domain for web interface
+            s3:
+              api:
+                port: 3900  # S3 API port
+              web:
+                port: 3902  # Web interface port
+            ingress:
+              s3:
+                api:
+                  enabled: true
+                  className: traefik
+                  annotations:
+                    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+                    traefik.ingress.kubernetes.io/router.tls: "true"
+                  hosts:
+                    - host: "s3.${LOCAL_DOMAIN}"
+                      paths:
+                        - path: /
+                          pathType: Prefix
+                    - host: "*.s3.${LOCAL_DOMAIN}"
+                      paths:
+                        - path: /
+                          pathType: Prefix
+                web:
+                  enabled: true
+                  className: traefik
+                  annotations:
+                    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+                    traefik.ingress.kubernetes.io/router.tls: "true"
+                  hosts:
+                    - host: "garage.${LOCAL_DOMAIN}"
+                      paths:
+                        - path: /
+                          pathType: Prefix
+                    - host: "*.garage.${LOCAL_DOMAIN}"
+                      paths:
+                        - path: /
+                          pathType: Prefix
+
+
+    # User workloads - additional workloads users can add without presets
+    # Users are expected to provide:
+    #  - complete helm values configuration
+    #  - helm repository configuration (required)
+    #  - ports they want to have exposed on the host machine (optional)
+    #
+    # DNS and Ingress Structure:
+    # - System workloads use: workload.network.domain (e.g., mysql.dev.me)
+    # - User workloads use: workload.apps.subdomain.network.domain (e.g., myapp.apps.dev.me)
+    # - Registry uses: registry.network.domain (e.g., cr.dev.me)
+    # This separation provides better security by isolating system workloads from user applications
+
+    user:
+      - name: http-webhook
+        enabled: false
+        namespace: default
+        ports: [] # Optional: open up ports on host machine
+        config:
+          repo: # repo is required
+            ref: securecodebox # reference to helm-repositories entry
+          chart: securecodebox/http-webhook
+          # loko-updater: datasource=helm depName=http-webhook repositoryUrl=https://charts.securecodebox.io
+          version: 5.5.0
+          values:
+            ingress:
+              enabled: true
+              ingressClassName: "traefik"
+              annotations:
+                traefik.ingress.kubernetes.io/router.entrypoints: websecure
+                traefik.ingress.kubernetes.io/router.tls: "true"
+              hosts:
+                - host: echo.${LOCAL_APPS_DOMAIN}
+                  paths:
+                    - /
+              tls:
+                - hosts:
+                    - echo.${LOCAL_APPS_DOMAIN}
