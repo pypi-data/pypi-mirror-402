@@ -1,0 +1,196 @@
+[project]
+name = "httptap"
+version = "0.4.3"
+description = "HTTP request visualizer with detailed timing breakdown (DNS → TCP → TLS → HTTP)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+
+authors = [
+    { name = "Sergei Ozeranskii" },
+]
+maintainers = [
+    { name = "Sergei Ozeranskii" },
+]
+
+keywords = [
+    "http",
+    "https",
+    "performance",
+    "timing",
+    "dns",
+    "tls",
+    "ssl",
+    "networking",
+    "monitoring",
+    "diagnostics",
+    "waterfall",
+    "curl",
+    "httpx",
+]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: System :: Networking :: Monitoring",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Utilities",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3 :: Only",
+    "Environment :: Console",
+    "Operating System :: OS Independent",
+    "Operating System :: POSIX",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "httpx[http2,socks]>=0.28.1",
+    "rich>=14.2.0",
+    "dnspython>=2.8.0",
+]
+
+[project.optional-dependencies]
+completion = [
+    "argcomplete>=3.6.3",
+]
+
+[project.scripts]
+httptap = "httptap.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ozeranskii/httptap"
+Documentation = "https://github.com/ozeranskii/httptap?tab=readme-ov-file"
+Repository = "https://github.com/ozeranskii/httptap.git"
+Issues = "https://github.com/ozeranskii/httptap/issues"
+Changelog = "https://github.com/ozeranskii/httptap/blob/main/CHANGELOG.md"
+
+[build-system]
+requires = ["uv_build>=0.9.5,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+package = true
+
+[tool.uv.build-backend]
+module-root = ""
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.1",
+    "mypy>=1.18.2",
+    "pytest>=8.4.2",
+    "pytest-cov>=7.0.0",
+    "pytest-mock>=3.15.1",
+    "pytest-httpx>=0.35.0",
+    "faker>=37.11.0",
+    "mkdocs-material[imaging]>=9.6.22",
+    "pre-commit>=4.3.0",
+]
+
+typing = [
+    "mypy>=1.18.2",
+    "argcomplete>=3.6.3",
+]
+
+test = [
+    "pytest>=8.4.2",
+    "pytest-cov>=7.0.0",
+    "pytest-mock>=3.15.1",
+    "pytest-httpx>=0.35.0",
+    "faker>=37.11.0"
+]
+
+lint = [
+    "ruff>=0.14.1",
+]
+
+docs = [
+    "mkdocs-material[imaging]>=9.6.22",
+]
+precommit = [
+    "pre-commit>=4.3.0",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "ALL",
+]
+ignore = [
+    "D203",
+    "D213",
+    "COM812",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "SLF001",  # Private member accessed (allowed in tests)
+    "ARG001",  # Unused function argument (mock signatures)
+    "PLC0415",  # Import should be at top-level (allowed in test functions)
+    "PLR2004",  # Magic value used in comparison (allowed in tests)
+    "F841",  # Local variable assigned but never used (test unpacking)
+    "D",  # Missing docstring in public function (skip in tests)
+    "S101",  # Use of `assert` detected (allowed in tests)
+    "ERA001"  # Found commented-out code (allowed in tests)
+]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unreachable = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=httptap",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+    "--cov-branch",
+    "--junitxml=junit.xml",
+    "-o junit_family=legacy"
+]
+
+[tool.coverage.run]
+source = ["httptap"]
+branch = true
+omit = ["tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "def __str__",
+    "def __hash__",
+    "def __eq__",
+    "if __name__ == .__main__.:",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+    "^\\s*pass$",
+    "class .+Protocol",
+]
