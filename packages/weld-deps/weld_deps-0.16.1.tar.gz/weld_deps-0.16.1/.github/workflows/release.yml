@@ -1,0 +1,59 @@
+name: Make a release
+on:
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Overide the automatic version bump (default: automatic)'
+        required: true
+        default: 'minor'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --group dev --all-extras
+      - name: Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION_BUMP: ${{ github.event.inputs.version_bump }}
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          # uv run pytest -vvv
+          git config --global user.name "github-actions"
+          git config --global user.email "action@github.com"
+
+          uv version --bump $VERSION_BUMP
+          uv build
+
+          git add pyproject.toml
+          git add uv.lock
+          git add .coverage
+          git commit -m "$(uv version --short)"
+          git tag -a $(uv version --short) -m "$(uv version --short)"
+          git push origin $(uv version --short)
+          git push origin main
+
+          uv publish --username __token__ --password $PYPI_TOKEN
+
+          
+          
+          
+          
