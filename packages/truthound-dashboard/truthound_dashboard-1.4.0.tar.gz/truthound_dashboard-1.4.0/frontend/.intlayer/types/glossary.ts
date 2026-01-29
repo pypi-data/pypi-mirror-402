@@ -1,0 +1,134 @@
+/* eslint-disable */
+export default {
+  "key": "glossary",
+  "content": {
+    "nodeType": "translation",
+    "translation": {
+      "en": {
+        "title": "Business Glossary",
+        "subtitle": "Manage business terms and definitions",
+        "terms": "Terms",
+        "categories": "Categories",
+        "addTerm": "Add Term",
+        "editTerm": "Edit Term",
+        "deleteTerm": "Delete Term",
+        "addCategory": "Add Category",
+        "termName": "Term Name",
+        "definition": "Definition",
+        "category": "Category",
+        "owner": "Owner",
+        "selectCategory": "Select category",
+        "noCategory": "No category",
+        "relationships": "Relationships",
+        "synonyms": "Synonyms",
+        "relatedTerms": "Related Terms",
+        "addRelationship": "Add Relationship",
+        "selectTerm": "Select term",
+        "history": "History",
+        "noHistory": "No changes recorded",
+        "changedBy": "Changed by",
+        "changedFrom": "From",
+        "changedTo": "To",
+        "status": {
+          "label": "Status",
+          "draft": "Draft",
+          "approved": "Approved",
+          "deprecated": "Deprecated"
+        },
+        "relationshipTypes": {
+          "synonym": "Synonym",
+          "related": "Related",
+          "parent": "Parent",
+          "child": "Child"
+        },
+        "searchTerms": "Search terms...",
+        "filterByCategory": "Filter by category",
+        "filterByStatus": "Filter by status",
+        "allCategories": "All categories",
+        "allStatuses": "All statuses",
+        "noTerms": "No terms found",
+        "noTermsYet": "No terms yet",
+        "noTermsDesc": "Add your first business term to start building your glossary",
+        "addFirstTerm": "Add Your First Term",
+        "confirmDelete": "Are you sure you want to delete this term? This action cannot be undone.",
+        "loadError": "Failed to load terms",
+        "createSuccess": "Term created successfully",
+        "createError": "Failed to create term",
+        "updateSuccess": "Term updated successfully",
+        "updateError": "Failed to update term",
+        "deleteSuccess": "Term deleted successfully",
+        "deleteError": "Failed to delete term",
+        "tabs": {
+          "overview": "Overview",
+          "relationships": "Relationships",
+          "history": "History",
+          "comments": "Comments"
+        }
+      },
+      "ko": {
+        "title": "비즈니스 용어집",
+        "subtitle": "비즈니스 용어와 정의 관리",
+        "terms": "용어",
+        "categories": "카테고리",
+        "addTerm": "용어 추가",
+        "editTerm": "용어 수정",
+        "deleteTerm": "용어 삭제",
+        "addCategory": "카테고리 추가",
+        "termName": "용어명",
+        "definition": "정의",
+        "category": "카테고리",
+        "owner": "담당자",
+        "selectCategory": "카테고리 선택",
+        "noCategory": "카테고리 없음",
+        "relationships": "관계",
+        "synonyms": "동의어",
+        "relatedTerms": "관련 용어",
+        "addRelationship": "관계 추가",
+        "selectTerm": "용어 선택",
+        "history": "변경 이력",
+        "noHistory": "기록된 변경 이력 없음",
+        "changedBy": "변경자",
+        "changedFrom": "이전",
+        "changedTo": "이후",
+        "status": {
+          "label": "상태",
+          "draft": "임시저장",
+          "approved": "승인됨",
+          "deprecated": "폐기됨"
+        },
+        "relationshipTypes": {
+          "synonym": "동의어",
+          "related": "관련",
+          "parent": "상위",
+          "child": "하위"
+        },
+        "searchTerms": "용어 검색...",
+        "filterByCategory": "카테고리 필터",
+        "filterByStatus": "상태 필터",
+        "allCategories": "모든 카테고리",
+        "allStatuses": "모든 상태",
+        "noTerms": "용어가 없습니다",
+        "noTermsYet": "등록된 용어가 없습니다",
+        "noTermsDesc": "첫 번째 비즈니스 용어를 추가하여 용어집을 구축하세요",
+        "addFirstTerm": "첫 번째 용어 추가",
+        "confirmDelete": "이 용어를 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.",
+        "loadError": "용어를 불러오지 못했습니다",
+        "createSuccess": "용어가 생성되었습니다",
+        "createError": "용어 생성에 실패했습니다",
+        "updateSuccess": "용어가 수정되었습니다",
+        "updateError": "용어 수정에 실패했습니다",
+        "deleteSuccess": "용어가 삭제되었습니다",
+        "deleteError": "용어 삭제에 실패했습니다",
+        "tabs": {
+          "overview": "개요",
+          "relationships": "관계",
+          "history": "이력",
+          "comments": "댓글"
+        }
+      }
+    }
+  },
+  "localIds": [
+    "glossary::local::src/content/glossary.content.ts"
+  ]
+} as const;

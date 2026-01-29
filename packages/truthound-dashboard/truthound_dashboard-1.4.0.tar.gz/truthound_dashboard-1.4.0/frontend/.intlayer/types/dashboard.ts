@@ -1,0 +1,66 @@
+/* eslint-disable */
+export default {
+  "key": "dashboard",
+  "content": {
+    "nodeType": "translation",
+    "translation": {
+      "en": {
+        "title": "Data Health Overview",
+        "subtitle": "Data quality overview and monitoring",
+        "totalSources": "Total Sources",
+        "configuredSources": "Configured data sources",
+        "passed": "Passed",
+        "validationPassed": "Validation passed",
+        "failed": "Failed",
+        "validationFailed": "Validation failed",
+        "pending": "Pending",
+        "notValidated": "Not yet validated",
+        "recentSources": "Recent Sources",
+        "recentSourcesDesc": "Your configured data sources",
+        "viewAll": "View All",
+        "noSources": "No data sources configured yet",
+        "addFirstSource": "Add Your First Source",
+        "lastValidated": "Last validated",
+        "loadError": "Failed to load dashboard data",
+        "sources": "Data Sources",
+        "passRate": "Pass Rate",
+        "failedToday": "Failed Today",
+        "scheduled": "Scheduled",
+        "recentFailures": "Recent Failures",
+        "upcomingSchedules": "Upcoming Schedules",
+        "noFailures": "No recent failures",
+        "noSchedules": "No upcoming schedules"
+      },
+      "ko": {
+        "title": "데이터 품질 현황",
+        "subtitle": "데이터 품질 개요 및 모니터링",
+        "totalSources": "전체 소스",
+        "configuredSources": "설정된 데이터 소스",
+        "passed": "통과",
+        "validationPassed": "검증 통과",
+        "failed": "실패",
+        "validationFailed": "검증 실패",
+        "pending": "대기 중",
+        "notValidated": "검증 전",
+        "recentSources": "최근 소스",
+        "recentSourcesDesc": "설정된 데이터 소스 목록",
+        "viewAll": "전체 보기",
+        "noSources": "설정된 데이터 소스가 없습니다",
+        "addFirstSource": "첫 번째 소스 추가하기",
+        "lastValidated": "마지막 검증",
+        "loadError": "대시보드 데이터를 불러오지 못했습니다",
+        "sources": "데이터 소스",
+        "passRate": "통과율",
+        "failedToday": "오늘 실패",
+        "scheduled": "스케줄됨",
+        "recentFailures": "최근 실패",
+        "upcomingSchedules": "예정된 스케줄",
+        "noFailures": "최근 실패가 없습니다",
+        "noSchedules": "예정된 스케줄이 없습니다"
+      }
+    }
+  },
+  "localIds": [
+    "dashboard::local::src/content/dashboard.content.ts"
+  ]
+} as const;
