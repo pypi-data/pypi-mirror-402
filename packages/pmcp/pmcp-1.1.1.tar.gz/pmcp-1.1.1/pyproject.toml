@@ -1,0 +1,95 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pmcp"
+version = "1.1.1"
+description = "PMCP - Progressive MCP: Minimal context bloat with on-demand tool discovery"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "ViperJuice", email = "viperjuice@users.noreply.github.com" }
+]
+keywords = ["mcp", "claude", "progressive", "disclosure", "anthropic", "llm", "ai"]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "mcp>=1.0.0",
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0.0",
+    "aiohttp>=3.9.0",
+]
+
+[project.urls]
+Repository = "https://github.com/ViperJuice/pmcp"
+Homepage = "https://github.com/ViperJuice/pmcp"
+Issues = "https://github.com/ViperJuice/pmcp/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "pytest-cov>=4.0",
+    "pytest-mock>=3.0",
+    "ruff>=0.8.0",
+    "mypy>=1.0",
+    "types-PyYAML>=6.0",
+]
+llm = [
+    "baml-py>=0.215.0",
+]
+all = [
+    "pmcp[dev,llm]",
+]
+
+[project.scripts]
+pmcp = "pmcp.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pmcp"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = [
+    # Suppress coroutine warnings from test mocks
+    "ignore:coroutine .* was never awaited:RuntimeWarning",
+    # Suppress event loop closed warnings from subprocess cleanup
+    "ignore::pytest.PytestUnraisableExceptionWarning:",
+]
+
+[tool.ruff]
+exclude = ["src/pmcp/baml_client"]
+
+[tool.mypy]
+exclude = "baml_client"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pmcp.baml_client.*"
+ignore_errors = true
+
+[tool.coverage.run]
+source = ["src/pmcp"]
+omit = ["src/pmcp/baml_client/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
+fail_under = 60
+show_missing = true
+skip_covered = true
