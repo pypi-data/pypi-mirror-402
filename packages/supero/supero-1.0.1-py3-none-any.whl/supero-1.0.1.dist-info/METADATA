@@ -1,0 +1,1037 @@
+Metadata-Version: 2.4
+Name: supero
+Version: 1.0.1
+Summary: Unified SDK for Supero platform - includes intuitive wrapper (supero) and low-level API client (py_api_lib)
+Author-email: Supero Team <support@supero.io>
+License: MIT
+Project-URL: Homepage, https://github.com/yourusername/supero
+Project-URL: Documentation, https://supero.readthedocs.io
+Project-URL: Repository, https://github.com/yourusername/supero
+Project-URL: Bug Tracker, https://github.com/yourusername/supero/issues
+Project-URL: Changelog, https://github.com/yourusername/supero/blob/main/CHANGELOG.md
+Keywords: api,sdk,orm,crud,supero,api-client
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: requests>=2.28.0
+Requires-Dist: inflection>=0.5.1
+Requires-Dist: gevent>=22.10.0
+Requires-Dist: cryptography>=41.0.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.1.0; extra == "dev"
+Requires-Dist: pytest-mock>=3.11.0; extra == "dev"
+Requires-Dist: coverage>=7.3.0; extra == "dev"
+Requires-Dist: black>=23.7.0; extra == "dev"
+Requires-Dist: flake8>=6.1.0; extra == "dev"
+Requires-Dist: mypy>=1.5.0; extra == "dev"
+Provides-Extra: test
+Requires-Dist: pytest>=7.4.0; extra == "test"
+Requires-Dist: pytest-cov>=4.1.0; extra == "test"
+Requires-Dist: pytest-mock>=3.11.0; extra == "test"
+Requires-Dist: coverage>=7.3.0; extra == "test"
+Provides-Extra: docs
+Requires-Dist: sphinx>=7.2.0; extra == "docs"
+Requires-Dist: sphinx-rtd-theme>=1.3.0; extra == "docs"
+Provides-Extra: all
+Requires-Dist: supero[dev,docs,test]; extra == "all"
+
+# ApiLib Client Documentation
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Installation](#installation)
+3. [Quick Start](#quick-start)
+4. [Configuration](#configuration)
+5. [Basic CRUD Operations](#basic-crud-operations)
+6. [Field-Level Encryption](#field-level-encryption)
+7. [Advanced Features](#advanced-features)
+8. [Error Handling](#error-handling)
+9. [API Reference](#api-reference)
+10. [Examples](#examples)
+
+---
+
+## Overview
+
+`ApiLib` is a Python client library for interacting with the domain-based multi-tenant API server. It provides:
+
+- **Automatic object serialization/deserialization** using pymodel schema classes
+- **Dynamic method generation** for all object types
+- **Optional field-level encryption** for sensitive data
+- **Multi-tenant support** with domain isolation
+- **Extension system** for custom functionality
+- **Factory methods** for easy configuration
+- **Singleton pattern** support for shared instances
+
+### Architecture
+
+```
+┌─────────────────────────────────────┐
+│ Your Application                    │
+│                                     │
+│  from py_api_lib import ApiLib     │
+│  api = ApiLib(...)                 │
+│  backend = api.mcp_backend_read()  │
+└─────────────────────────────────────┘
+                 ↓
+┌─────────────────────────────────────┐
+│ ApiLib (py_api_lib)                 │
+│  - Serialization                    │
+│  - Encryption (optional)            │
+│  - Dynamic methods                  │
+│  - Error handling                   │
+└─────────────────────────────────────┘
+                 ↓ HTTP/REST
+┌─────────────────────────────────────┐
+│ API Server                          │
+│  - Schema validation                │
+│  - Multi-tenant isolation           │
+│  - MongoDB storage                  │
+└─────────────────────────────────────┘
+```
+
+---
+
+## Installation
+
+### Prerequisites
+
+```bash
+# Python 3.8 or higher
+python --version
+
+# Install dependencies
+pip install requests inflection gevent
+```
+
+### Install from Wheel
+
+```bash
+# Install py_api_lib
+pip install py_api_lib-1.0.0-py3-none-any.whl
+
+# Install tenant schema (required)
+pip install py_api_e_commerce-0.1.0-py3-none-any.whl
+```
+
+### Install for Development
+
+```bash
+cd infra/libs/py
+pip install -e .
+```
+
+### Optional: Encryption Support
+
+```bash
+# Required only if using encryption
+pip install cryptography==41.0.0
+```
+
+---
+
+## Quick Start
+
+### Basic Usage (No Encryption)
+
+```python
+from py_api_lib import ApiLib
+from pymodel.objects.mcp_backend import McpBackend
+
+# Create ApiLib instance
+api = ApiLib(
+    api_server_host='localhost',
+    api_server_port='8082'
+)
+
+# Create an object
+backend = McpBackend(
+    name='my-backend',
+    fq_name=['my-domain', 'my-project', 'my-backend'],
+    parent_uuid='parent-uuid-here',
+    api_endpoint='https://api.example.com',
+    description='My backend service'
+)
+
+# Save to server
+uuid = api.mcp_backend_create(backend)
+print(f"Created: {uuid}")
+
+# Read back
+retrieved = api.mcp_backend_read(id=uuid)
+print(f"Retrieved: {retrieved.name}")
+
+# Update
+retrieved.set_description('Updated description')
+api.mcp_backend_update(retrieved)
+
+# List all
+backends = api.mcp_backends_list(detail=True)
+print(f"Total backends: {len(backends)}")
+
+# Delete
+api.mcp_backend_delete(id=uuid)
+```
+
+### With Encryption
+
+```python
+from py_api_lib import ApiLib
+from py_api_lib.encryption import generate_key
+import base64
+
+# Generate encryption key
+key_b64 = generate_key()
+key = base64.b64decode(key_b64)
+
+# Create ApiLib with encryption enabled
+api = ApiLib(
+    api_server_host='localhost',
+    api_server_port='8082',
+    enable_encryption=True,
+    encryption_key=key,
+    domain_name='my-domain'
+)
+
+# Use exactly as before - encryption is transparent!
+backend = McpBackend(
+    name='secure-backend',
+    fq_name=['my-domain', 'my-project', 'secure-backend'],
+    parent_uuid='parent-uuid',
+    api_key='secret-key-12345',  # Will be ENCRYPTED
+    config={'db': 'postgres'}     # Will be ENCRYPTED
+)
+
+uuid = api.mcp_backend_create(backend)
+retrieved = api.mcp_backend_read(id=uuid)  # Automatically DECRYPTED
+```
+
+---
+
+## Configuration
+
+### Configuration Methods
+
+#### 1. Direct Instantiation
+
+```python
+api = ApiLib(
+    api_server_host='localhost',
+    api_server_port='8082',
+    timeout=30,
+    max_retries=3,
+    enable_encryption=False
+)
+```
+
+#### 2. From Configuration File
+
+```yaml
+# config.yaml
+api_lib:
+  api_server_host: localhost
+  api_server_port: 8082
+  timeout: 30
+  max_retries: 3
+
+encryption:
+  enabled: true
+  key: "SGVsbG9Xb3JsZDEyMzQ1Njc4OTBBQkNERUZHSElKS0w="  # base64
+  domain: "my-domain"
+```
+
+```python
+api = ApiLib.from_config('config.yaml')
+```
+
+#### 3. From Environment Variables
+
+```bash
+export API_SERVER_HOST=localhost
+export API_SERVER_PORT=8082
+export ENCRYPTION_ENABLED=true
+export ENCRYPTION_KEY="SGVsbG9Xb3JsZDEyMzQ1Njc4OTBBQkNERUZHSElKS0w="
+export DOMAIN_NAME=my-domain
+```
+
+```python
+api = ApiLib.from_config()  # Loads from environment
+```
+
+#### 4. Singleton Pattern
+
+```python
+from py_api_lib import ApiLibSingleton
+
+# Initialize once (e.g., at application startup)
+ApiLibSingleton.initialize(
+    api_server_host='localhost',
+    api_server_port='8082'
+)
+
+# Use anywhere in your application
+from py_api_lib import get_api_lib
+api = get_api_lib()
+```
+
+### Configuration Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `api_server_host` | str | `'127.0.0.1'` | API server hostname/IP |
+| `api_server_port` | str | `'8082'` | API server port |
+| `timeout` | int | `30` | Request timeout (seconds) |
+| `max_retries` | int | `3` | Maximum retry attempts |
+| `enable_encryption` | bool | `False` | Enable field-level encryption |
+| `encryption_key` | bytes | `None` | 32-byte AES-256 key (required if encryption enabled) |
+| `domain_name` | str | `None` | Domain/tenant name (for logging) |
+| `wait_for_connect` | bool | `False` | Wait for server connection on init |
+| `extensions` | list | `None` | List of extensions to load |
+
+---
+
+## Basic CRUD Operations
+
+ApiLib dynamically creates methods for all object types in your schema.
+
+### Method Naming Convention
+
+For an object type `mcp-backend` (or `mcp_backend`):
+
+- **Create**: `mcp_backend_create(obj)`
+- **Read**: `mcp_backend_read(id=None, fq_name=None)`
+- **Update**: `mcp_backend_update(obj)`
+- **Delete**: `mcp_backend_delete(id=None, fq_name=None)`
+- **List**: `mcp_backends_list(detail=False, parent_id=None, ...)`
+
+### Create
+
+```python
+from pymodel.objects.project import Project
+
+project = Project(
+    name='my-project',
+    fq_name=['my-domain', 'my-project'],
+    parent_uuid='domain-uuid',
+    description='My project'
+)
+
+uuid = api.project_create(project)
+```
+
+**Returns:** UUID string of created object
+
+### Read
+
+```python
+# Read by UUID
+project = api.project_read(id='uuid-here')
+
+# Read by fq_name (list)
+project = api.project_read(fq_name=['my-domain', 'my-project'])
+
+# Read by fq_name (string)
+project = api.project_read(fq_name_str='my-domain:my-project')
+```
+
+**Returns:** Object instance or `None` if not found
+
+### Update
+
+```python
+# Read, modify, update
+project = api.project_read(id='uuid-here')
+project.set_description('Updated description')
+api.project_update(project)
+```
+
+**Returns:** `"Updated successfully"`
+
+### Delete
+
+```python
+# Delete by UUID
+api.project_delete(id='uuid-here')
+
+# Delete by fq_name
+api.project_delete(fq_name=['my-domain', 'my-project'])
+```
+
+**Returns:** None
+
+### List
+
+```python
+# List all (returns raw data)
+projects = api.projects_list()
+
+# List all with detail (returns object instances)
+projects = api.projects_list(detail=True)
+
+# List by parent
+projects = api.projects_list(
+    detail=True,
+    parent_id='domain-uuid'
+)
+
+# List specific objects
+projects = api.projects_list(
+    detail=True,
+    obj_uuids=['uuid1', 'uuid2']
+)
+```
+
+**Returns:** List of objects (detail=True) or raw data dicts (detail=False)
+
+### Bulk List
+
+```python
+# List multiple objects efficiently
+backends = api.list_bulk(
+    'mcp_backend',
+    uuids=['uuid1', 'uuid2', 'uuid3']
+)
+
+# List all with filters
+backends = api.list_bulk(
+    'mcp_backend',
+    filters='status==active'
+)
+```
+
+---
+
+## Field-Level Encryption
+
+### Overview
+
+Field-level encryption protects sensitive data while allowing the server to:
+- Validate object structure
+- Query by metadata (uuid, fq_name, name)
+- Enforce multi-tenant isolation
+- Maintain referential integrity
+
+### What Gets Encrypted?
+
+**Never Encrypted (Required for Server):**
+- `uuid`, `fq_name`, `parent_uuid`
+- `obj_type`, `parent_type`
+- `name` (kept searchable)
+- `topic`
+
+**Always Encrypted (When Enabled):**
+- All other schema-defined fields
+- API keys, passwords, tokens
+- Configuration values
+- Any business-sensitive data
+
+### Enable Encryption
+
+```python
+from py_api_lib.encryption import generate_key
+import base64
+
+# Generate a new key
+key_b64 = generate_key()
+print(f"Store this securely: {key_b64}")
+
+# Use the key
+key = base64.b64decode(key_b64)
+api = ApiLib(
+    enable_encryption=True,
+    encryption_key=key,
+    domain_name='my-domain'
+)
+```
+
+### Key Management
+
+```python
+from py_api_lib.encryption import EncryptionManager
+
+# Generate key
+key = EncryptionManager._generate_key()  # 32 bytes
+
+# Derive key from password
+password = "my-secure-password"
+key, salt = EncryptionManager.derive_key_from_password(password)
+
+# Store salt securely for key recovery
+```
+
+### Multi-Tenant Encryption
+
+```python
+from py_api_lib.encryption import EncryptionConfig
+
+# Load config with multiple domain keys
+config = EncryptionConfig.from_env()
+
+# Create separate ApiLib per domain
+for domain in ['domain1', 'domain2', 'domain3']:
+    key = config.get_key_for_domain(domain)
+    
+    api_instances[domain] = ApiLib(
+        enable_encryption=True,
+        encryption_key=key,
+        domain_name=domain
+    )
+```
+
+### Encryption Error Handling
+
+```python
+from py_api_lib import EncryptionRequiredError
+
+try:
+    # Client without encryption tries to read encrypted object
+    api_plain = ApiLib(enable_encryption=False)
+    obj = api_plain.mcp_backend_read(id='encrypted-object-uuid')
+    
+except EncryptionRequiredError as e:
+    print(f"Error: {e}")
+    # Output: Object contains encrypted data.
+    #         To read this object, create ApiLib with:
+    #           enable_encryption=True
+    #           encryption_key=<your-32-byte-key>
+```
+
+---
+
+## Advanced Features
+
+### Reference Management
+
+```python
+# Add reference
+api.ref_update(
+    obj_type='mcp_backend',
+    obj_uuid='backend-uuid',
+    ref_type='mcp_tool',
+    ref_uuid='tool-uuid',
+    ref_fq_name=['domain', 'project', 'tool'],
+    operation='ADD'
+)
+
+# Delete reference
+api.ref_update(
+    obj_type='mcp_backend',
+    obj_uuid='backend-uuid',
+    ref_type='mcp_tool',
+    ref_uuid='tool-uuid',
+    ref_fq_name=['domain', 'project', 'tool'],
+    operation='DELETE'
+)
+```
+
+### Query Operations
+
+```python
+import json
+
+query_data = {
+    "op": "find-sub-classes",
+    "lon": -122.4194,
+    "lat": 37.7749
+}
+
+results = api.query(json.dumps(query_data))
+```
+
+### FQ Name ↔ UUID Conversion
+
+```python
+# FQ name to UUID
+uuid = api.fq_name_to_uuid('project', ['domain', 'project'])
+
+# UUID to object
+obj_uuid = api.obj_to_id(project_object)
+```
+
+### Object Utilities
+
+```python
+# Convert object to JSON
+json_str = api.obj_to_json(project)
+
+# Convert object to dict
+obj_dict = api.obj_to_dict(project)
+
+# Get object class
+ProjectClass = api.get_obj_class('project')
+
+# Create object instance
+project = api.create_object_instance(
+    'project',
+    name='my-project',
+    parent=domain_object,
+    description='My description'
+)
+```
+
+### Extensions
+
+```python
+# Load extension
+api.load_extension('my_custom_extension')
+
+# List loaded extensions
+extensions = api.get_loaded_extensions()
+
+# Check if extension loaded
+if api.has_extension('my_extension'):
+    # Extension-specific functionality
+    pass
+```
+
+### Context Manager
+
+```python
+with ApiLib(api_server_host='localhost') as api:
+    backend = api.mcp_backend_read(id='uuid')
+    # Automatically closes connection on exit
+```
+
+---
+
+## Error Handling
+
+### Exception Hierarchy
+
+```python
+from py_api_lib.exceptions import (
+    ApiException,              # Base exception
+    NotFoundException,         # 404 errors
+    ConflictException,         # 409 errors
+    ValidationException,       # Validation errors
+    BadRequestException       # 400 errors
+)
+from py_api_lib import EncryptionRequiredError
+
+from pymodel.serialization_errors import (
+    SerializationError,
+    ObjectSerializationError,
+    ObjectDeserializationError
+)
+```
+
+### Error Handling Examples
+
+```python
+from py_api_lib.exceptions import NotFoundException, ValidationException
+from py_api_lib import EncryptionRequiredError
+
+try:
+    backend = api.mcp_backend_read(id='non-existent-uuid')
+    
+except NotFoundException as e:
+    print(f"Object not found: {e}")
+    
+except EncryptionRequiredError as e:
+    print(f"Encryption required: {e}")
+    print("Encrypted fields:", e.args[0])
+    
+except ValidationException as e:
+    print(f"Validation failed: {e}")
+    
+except ApiException as e:
+    print(f"API error: {e}")
+    
+except Exception as e:
+    print(f"Unexpected error: {e}")
+```
+
+---
+
+## API Reference
+
+### ApiLib Class
+
+#### Constructor
+
+```python
+ApiLib(
+    api_server_host='127.0.0.1',
+    api_server_port='8082',
+    timeout=30,
+    max_retries=3,
+    enable_encryption=False,
+    encryption_key=None,
+    domain_name=None,
+    wait_for_connect=False,
+    extensions=None
+)
+```
+
+#### Factory Methods
+
+```python
+# From configuration file
+api = ApiLib.from_config('config.yaml', **overrides)
+
+# Get default instance (singleton)
+api = ApiLib.get_default_instance()
+
+# Reset default instance
+ApiLib.reset_default_instance()
+```
+
+#### Dynamic Methods (Generated for Each Object Type)
+
+For object type `{obj_type}`:
+
+```python
+# Create
+uuid = api.{obj_type}_create(obj)
+
+# Read
+obj = api.{obj_type}_read(id=None, fq_name=None, fq_name_str=None)
+
+# Update
+result = api.{obj_type}_update(obj)
+
+# Delete
+api.{obj_type}_delete(id=None, fq_name=None)
+
+# List
+objects = api.{obj_type}s_list(
+    detail=False,
+    parent_id=None,
+    parent_fq_name=None,
+    obj_uuids=None,
+    filters=None
+)
+
+# Get default ID
+default_id = api.{obj_type}_get_default_id()
+```
+
+#### Utility Methods
+
+```python
+# FQ name conversion
+uuid = api.fq_name_to_uuid(obj_type, fq_name)
+
+# Object conversion
+json_str = api.obj_to_json(obj)
+obj_dict = api.obj_to_dict(obj)
+uuid = api.obj_to_id(obj)
+
+# Reference management
+result = api.ref_update(obj_type, obj_uuid, ref_type, ref_uuid, ref_fq_name, operation)
+
+# Query
+results = api.query(json_data)
+
+# Bulk operations
+objects = api.list_bulk(obj_type, uuids=None, **kwargs)
+
+# Health check
+is_healthy = api.health_check()
+
+# Get object class
+ObjClass = api.get_obj_class(obj_type)
+
+# Create instance
+obj = api.create_object_instance(obj_type, name, parent=None, **kwargs)
+```
+
+### Singleton Manager
+
+```python
+from py_api_lib import ApiLibSingleton, get_api_lib, initialize_api_lib
+
+# Initialize
+ApiLibSingleton.initialize(**config)
+
+# Or use convenience function
+initialize_api_lib(**config)
+
+# Get instance
+api = ApiLibSingleton.get_instance()
+
+# Or use convenience function
+api = get_api_lib()
+
+# Check if initialized
+if ApiLibSingleton.is_initialized():
+    api = ApiLibSingleton.get_instance()
+
+# Health check
+is_healthy = ApiLibSingleton.health_check()
+
+# Reset
+ApiLibSingleton.reset()
+```
+
+---
+
+## Examples
+
+### Example 1: Complete CRUD Workflow
+
+```python
+from py_api_lib import ApiLib
+from pymodel.objects.domain import Domain
+from pymodel.objects.project import Project
+from pymodel.objects.mcp_backend import McpBackend
+
+# Initialize
+api = ApiLib(api_server_host='localhost', api_server_port='8082')
+
+# 1. Create domain
+domain = Domain(
+    name='my-domain',
+    fq_name=['my-domain'],
+    parent_uuid='config-root-uuid'
+)
+domain_uuid = api.domain_create(domain)
+print(f"Created domain: {domain_uuid}")
+
+# 2. Create project
+project = Project(
+    name='my-project',
+    fq_name=['my-domain', 'my-project'],
+    parent_uuid=domain_uuid,
+    description='My project'
+)
+project_uuid = api.project_create(project)
+print(f"Created project: {project_uuid}")
+
+# 3. Create backend
+backend = McpBackend(
+    name='my-backend',
+    fq_name=['my-domain', 'my-project', 'my-backend'],
+    parent_uuid=project_uuid,
+    api_endpoint='https://api.example.com',
+    description='My backend'
+)
+backend_uuid = api.mcp_backend_create(backend)
+print(f"Created backend: {backend_uuid}")
+
+# 4. Read and update
+backend = api.mcp_backend_read(id=backend_uuid)
+backend.set_description('Updated description')
+api.mcp_backend_update(backend)
+print("Backend updated")
+
+# 5. List all backends in project
+backends = api.mcp_backends_list(detail=True, parent_id=project_uuid)
+print(f"Found {len(backends)} backends")
+
+# 6. Clean up
+api.mcp_backend_delete(id=backend_uuid)
+api.project_delete(id=project_uuid)
+api.domain_delete(id=domain_uuid)
+print("Cleanup complete")
+```
+
+### Example 2: Encryption with Multiple Domains
+
+```python
+from py_api_lib import ApiLib
+from py_api_lib.encryption import generate_key
+import base64
+
+# Generate separate keys for each domain
+domain_keys = {
+    'domain1': base64.b64decode(generate_key()),
+    'domain2': base64.b64decode(generate_key()),
+    'domain3': base64.b64decode(generate_key())
+}
+
+# Create ApiLib instances per domain
+api_instances = {}
+for domain, key in domain_keys.items():
+    api_instances[domain] = ApiLib(
+        api_server_host='localhost',
+        api_server_port='8082',
+        enable_encryption=True,
+        encryption_key=key,
+        domain_name=domain
+    )
+
+# Use domain-specific clients
+api_domain1 = api_instances['domain1']
+backend1 = api_domain1.mcp_backend_create(...)  # Encrypted with domain1 key
+
+api_domain2 = api_instances['domain2']
+backend2 = api_domain2.mcp_backend_create(...)  # Encrypted with domain2 key
+
+# Domain isolation: domain1 can't decrypt domain2's data
+```
+
+### Example 3: Error Recovery
+
+```python
+from py_api_lib import ApiLib, EncryptionRequiredError
+from py_api_lib.exceptions import NotFoundException
+
+api_encrypted = ApiLib(
+    enable_encryption=True,
+    encryption_key=my_key
+)
+
+api_plain = ApiLib(enable_encryption=False)
+
+def safe_read(api, obj_type, obj_id):
+    """Read object with fallback to encrypted client."""
+    try:
+        return api.mcp_backend_read(id=obj_id)
+    except EncryptionRequiredError:
+        print("Object is encrypted, retrying with encryption...")
+        return api_encrypted.mcp_backend_read(id=obj_id)
+    except NotFoundException:
+        print("Object not found")
+        return None
+
+# Use it
+backend = safe_read(api_plain, 'mcp_backend', 'uuid-here')
+```
+
+### Example 4: Application Initialization
+
+```python
+# app_init.py
+import os
+import base64
+from py_api_lib import initialize_api_lib
+
+def init_api_client():
+    """Initialize API client at application startup."""
+    
+    # Load configuration from environment
+    config = {
+        'api_server_host': os.getenv('API_SERVER_HOST', 'localhost'),
+        'api_server_port': os.getenv('API_SERVER_PORT', '8082'),
+        'timeout': int(os.getenv('API_TIMEOUT', '30')),
+    }
+    
+    # Add encryption if enabled
+    if os.getenv('ENCRYPTION_ENABLED', '').lower() == 'true':
+        encryption_key = os.getenv('ENCRYPTION_KEY')
+        if not encryption_key:
+            raise ValueError("ENCRYPTION_KEY required when encryption enabled")
+        
+        config['enable_encryption'] = True
+        config['encryption_key'] = base64.b64decode(encryption_key)
+        config['domain_name'] = os.getenv('DOMAIN_NAME', 'default')
+    
+    # Initialize singleton
+    return initialize_api_lib(**config)
+
+# Initialize once at startup
+api = init_api_client()
+```
+
+```python
+# anywhere in application
+from py_api_lib import get_api_lib
+
+def create_backend(name, endpoint):
+    api = get_api_lib()  # Get shared instance
+    backend = McpBackend(...)
+    return api.mcp_backend_create(backend)
+```
+
+---
+
+## Best Practices
+
+### 1. Use Encryption for Sensitive Data
+
+```python
+# DO: Use encryption for production data
+api = ApiLib(
+    enable_encryption=True,
+    encryption_key=securely_loaded_key
+)
+```
+
+### 2. Store Keys Securely
+
+```python
+# DON'T: Hardcode keys
+encryption_key = base64.b64decode("SGVsbG9...")  # BAD!
+
+# DO: Load from secure storage
+from your_vault import get_encryption_key
+encryption_key = get_encryption_key('my-domain')
+```
+
+### 3. Use Singleton for Application-Wide Client
+
+```python
+# DO: Initialize once, use everywhere
+initialize_api_lib(...)
+
+# In different modules
+api = get_api_lib()
+```
+
+### 4. Handle Encryption Errors Gracefully
+
+```python
+# DO: Provide helpful feedback
+try:
+    obj = api.read(id=uuid)
+except EncryptionRequiredError as e:
+    logger.error(f"Cannot read encrypted object: {e}")
+    print("Please enable encryption with the correct key")
+```
+
+### 5. Use Context Managers for Cleanup
+
+```python
+# DO: Ensure cleanup
+with ApiLib(...) as api:
+    backend = api.mcp_backend_create(...)
+# Connection automatically closed
+```
+
+---
+
+## Troubleshooting
+
+### Encryption Errors
+
+```python
+# Error: Domain key must be exactly 32 bytes
+# Solution: Ensure key is 32 bytes for AES-256
+key = base64.b64decode(key_b64)
+assert len(key) == 32
+```
+
+### Connection Errors
+
+```python
+# Error: Connection refused
+# Solution: Check server is running
+api = ApiLib(wait_for_connect=True, timeout=60)
+```
+
+---
+
+## Support
+
+For issues or questions:
+- Check server logs for detailed error messages
+- Review API server documentation
+- Contact support team
+
+## Version History
+
+- **1.0.0**: Initial release with encryption support
+  - Field-level value encryption
+  - Multi-tenant key isolation
+  - Backward compatible with existing code
