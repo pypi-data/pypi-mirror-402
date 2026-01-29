@@ -1,0 +1,160 @@
+Metadata-Version: 2.4
+Name: mnemosynecoretest
+Version: 0.0.2
+Summary: Internal analytics toolkit for data pipelines
+Author-email: rostilin <rostilin@ozon.ru>
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: vertica-python>=1.3
+Requires-Dist: pandas>=2.0
+Requires-Dist: mattermostdriver>=2.0
+Requires-Dist: requests>=2.30
+Requires-Dist: python-dotenv>=1.2.1
+Requires-Dist: typing-extensions>=4.0.0
+Provides-Extra: airflow
+Requires-Dist: apache-airflow<3.1,>=2.6; extra == "airflow"
+Requires-Dist: apache-airflow-providers-postgres>=5.0; extra == "airflow"
+Requires-Dist: apache-airflow-providers-vertica>=2.0; extra == "airflow"
+Requires-Dist: sqlalchemy<2.0; extra == "airflow"
+
+mnemosynecore
+
+Internal analytics toolkit for data pipelines
+Инструментарий для работы с Vertica, Airflow, Vault, Mattermost и pandas DataFrame.
+
+📦 Установка
+Базовая установка
+pip install mnemosynecore
+
+С поддержкой Airflow
+pip install "mnemosynecore[airflow]"
+
+🔐 Работа с секретами (Vault / Env / Tests)
+Поддерживаемые источники
+
+Переменные окружения
+
+Vault
+
+Локальные JSON-файлы (для тестов)
+
+Формат секрета (JSON)
+{
+  "host": "vertica.host",
+  "port": 5433,
+  "login": "user",
+  "password": "password",
+  "schema": "dwh"
+}
+
+Получение секрета
+from mnemosynecore.vault import get_secret
+
+cfg = get_secret("VERTICA_PROD")
+
+Тестовый режим (без Vault)
+from mnemosynecore.vault import get_secret_test
+
+cfg = get_secret_test("VERTICA_TEST", dir_path="./secrets")
+
+🟣 Vertica
+Создание подключения
+from mnemosynecore.vertica import vertica_conn
+
+conn = vertica_conn("VERTICA_PROD")
+
+Выполнение SQL
+from mnemosynecore.vertica import vertica_sql
+
+vertica_sql(
+    conn_id="VERTICA_PROD",
+    sql="DELETE FROM mart.events WHERE dt = CURRENT_DATE"
+)
+
+SELECT → pandas DataFrame
+from mnemosynecore.vertica import vertica_select
+
+df = vertica_select(
+    conn_id="VERTICA_PROD",
+    sql="SELECT * FROM mart.events LIMIT 100"
+)
+
+Upsert DataFrame в Vertica
+from mnemosynecore.vertica import vertica_upsert
+
+vertica_upsert(
+    df=df,
+    table_name="mart.events",
+    unique_keys=["event_id"],
+    conn=conn,
+    date_col="dt",
+    days_back=7
+)
+
+Удаление дублей (dedupe)
+from mnemosynecore.vertica import vertica_dedupe
+
+vertica_dedupe(
+    table_name="mart.events",
+    unique_keys=["event_id"],
+    date_col="updated_at",
+    conn_id="VERTICA_PROD"
+)
+
+SQLAlchemy Engine
+from mnemosynecore.vertica import get_vertica_engine
+
+engine = get_vertica_engine("VERTICA_PROD")
+
+🟦 Airflow
+Загрузка SQL-файлов как VerticaOperator
+
+Структура
+
+sql/
+ ├── users.sql
+ ├── events.sql
+
+from mnemosynecore.airflow import load_sql_tasks_from_dir
+
+tasks = load_sql_tasks_from_dir(
+    dir_sql="/opt/airflow/sql",
+    vertica_conn_id="VERTICA_PROD"
+)
+
+
+📌
+
+Автоматически берёт текущий DAG
+
+Каждый .sql → отдельный VerticaOperator
+
+💬 Mattermost
+Отправка сообщения (Vault)
+from mnemosynecore.mattermost import send_message
+
+send_message(
+    channel_id="channel_id",
+    bot_id="MM_BOT_PROD",
+    text="🚀 Pipeline успешно завершён"
+)
+
+Тестовый режим (локальный JSON)
+from mnemosynecore.mattermost import send_message_test
+
+send_message_test(
+    channel_id="channel_id",
+    bot_id="MM_BOT_TEST",
+    text="Тестовое сообщение",
+    dir_path="./secrets"
+)
+
+🧪 Локальные тесты без Airflow и Vault
+secrets/
+ ├── VERTICA_TEST.json
+ └── MM_BOT_TEST.json
+
+export VERTICA_TEST='{"host": "..."}'
+
+
+или через get_secret_test
