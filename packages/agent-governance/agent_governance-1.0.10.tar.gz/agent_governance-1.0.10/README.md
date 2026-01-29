@@ -1,0 +1,153 @@
+# Bounded Agent Framework
+
+This repository defines a **repo-local, enforceable framework** for using AI sub-agents as bounded workers.
+
+This is **not** an application.
+This is **not** an orchestration service.
+This is **not** an autonomy experiment.
+
+This is infrastructure.
+
+---
+
+## What this system is
+
+- Agents are **roles defined in Markdown**
+- Agents are **instantiated per model call**
+- Nothing is persistent
+- Nothing runs automatically
+- Nothing is trusted without artifacts
+
+The framework exists to:
+
+- force correct task decomposition
+- prevent scope creep
+- require evidence for completion
+- make agent behavior reproducible and auditable
+
+---
+
+## Core invariants
+
+1. **Repo-local**
+   - All agent rules, schemas, and tools live in the repo
+   - No systemwide installs
+   - No hidden dependencies
+
+2. **Separation of concerns**
+   - Agent roles (Markdown) change frequently
+   - Schemas change occasionally
+   - Tooling changes rarely
+
+3. **Artifacts over prose**
+   - Diffs, logs, commands, tests are required
+   - Narrative text is secondary
+
+4. **Orchestrator ≠ implementer**
+   - Orchestrator plans and validates
+   - Workers produce changes
+   - Single-writer rule per scope
+
+5. **No schema, no run**
+   - Tasks and outputs must validate
+   - Invalid packets are rejected
+
+---
+
+## Repository layout (expected)
+
+agents/
+roles/
+contracts/
+checklists/
+tools/
+logs/
+reports/
+adr/
+
+---
+
+## Usage summary
+
+1. Create a task packet (YAML)
+2. Validate it against schema
+3. Run the agent with role + task
+4. Collect output packet + artifacts
+5. Validate output
+6. Gate before merge
+
+Tooling baseline: use `agent-governance>=1.0.10`.
+
+## Repo introspection
+
+`agentctl init` scans the current repo to generate a policy overlay plus an
+evidence-backed report. It never edits repo files unless `--write` is set, and
+it never calls an LLM.
+
+## Bootstrap policy block
+
+Use `agentctl bootstrap` to author or update the AGENTS.md policy block from the
+canonical role registry. It is preview-only unless `--write` is provided.
+
+What it never does:
+
+- no network access
+- no repo mutation (except writing the three outputs when `--write` is set)
+- no heuristic guesses without a cited file + line range
+
+Outputs (when `--write`):
+
+- `.agents/generated/AGENTS.repo.overlay.yaml`
+- `.agents/generated/init_report.md`
+- `.agents/generated/init_facts.json`
+
+At runtime, the orchestrator merges the overlay with the base policy to add
+repo-specific verify commands and risk paths before dispatching work. This lets
+one global role set adapt to local tooling without changing the core policy.
+
+Deterministic + auditable:
+
+- each detected fact includes a source file and line range
+- output ordering is stable for diff-friendly review
+- dry-runs show planned writes without touching disk
+
+## AGENTS.md managed blocks
+
+`agentctl bootstrap --write` manages only the contract block and the `## agent init behavior` section. Everything else in `AGENTS.md` is preserved.
+
+The managed region is delimited by markers:
+
+```md
+<!-- AGENTCTL:BEGIN -->
+...policy YAML...
+<!-- AGENTCTL:END -->
+```
+
+Re-running bootstrap is idempotent: a second run should produce no diff.
+
+## Schema loading
+
+agentctl validate loads JSON Schemas from the installed package (agent_governance.contracts). This keeps validation repo-agnostic.
+
+For development/testing only, you can override schema loading from the repo by setting:
+- AGENT_GOVERNANCE_SCHEMA_OVERRIDE=1
+
+When enabled, schemas are loaded from:
+- agents/contracts/*.schema.json
+
+Do not enable the override in CI.
+
+### Status
+- Governance loop is now closed.
+- Policy is machine-safe, idempotent, and enforceable.
+- Override path is documented and clearly non-production.
+
+## Update checks
+
+The CLI can optionally warn if a newer `agent_governance` version exists.
+Defaults: once per 24h, skipped in CI, and never blocks command execution.
+
+Disable with `--update-check=off` or `AGENT_UPDATE_CHECK=off`. Repos may set
+`update_check: off` in `agents/repo_profile.yaml` to fully disable network use.
+
+This system replaces trust with structure.
