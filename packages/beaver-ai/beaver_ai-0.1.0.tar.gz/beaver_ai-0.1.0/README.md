@@ -1,0 +1,138 @@
+# Beaver AI Python SDK
+
+Python SDK for the Beaver AI Gateway.
+
+## Installation
+
+```bash
+pip install beaver-ai
+```
+
+## Quick Start
+
+```python
+from beaver_ai import Beaver
+
+beaver = Beaver(api_key="your-api-key")
+
+response = beaver.chat.completions.create(
+    model="gemini-2.5-flash",
+    messages=[
+        {"role": "user", "content": "Hello, how are you?"}
+    ]
+)
+
+print(response["choices"][0]["message"]["content"])
+```
+
+## Configuration
+
+### Constructor Options
+
+```python
+beaver = Beaver(
+    api_key="your-api-key",      # Required
+    base_url="http://localhost:8080"  # Optional, defaults to http://localhost:8080
+)
+```
+
+## API Reference
+
+### Chat Completions
+
+Create a chat completion request.
+
+```python
+response = beaver.chat.completions.create(
+    model="gemini-2.5-flash",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "What is the capital of France?"}
+    ],
+    temperature=0.7,           # Optional
+    max_output_tokens=1000,    # Optional
+    top_p=1.0                  # Optional
+)
+```
+
+#### Request Parameters
+
+- `model` (str, required): Model identifier
+- `messages` (list[dict], required): List of message dictionaries with `role` and `content`
+- `temperature` (float, optional): Sampling temperature (0-2)
+- `max_output_tokens` (int, optional): Maximum tokens to generate
+- `top_p` (float, optional): Nucleus sampling parameter
+
+#### Response Format
+
+```python
+{
+    "id": str,
+    "model": str,
+    "choices": [
+        {
+            "index": int,
+            "message": {
+                "role": "assistant",
+                "content": str
+            },
+            "finish_reason": str | None
+        }
+    ],
+    "usage": {  # Optional
+        "prompt_tokens": int,
+        "completion_tokens": int,
+        "total_tokens": int
+    }
+}
+```
+
+## Error Handling
+
+The SDK raises `BeaverError` for non-2xx responses.
+
+```python
+from beaver_ai import Beaver, BeaverError
+
+beaver = Beaver(api_key="your-api-key")
+
+try:
+    response = beaver.chat.completions.create(
+        model="gemini-2.5-flash",
+        messages=[{"role": "user", "content": "Hello"}]
+    )
+except BeaverError as e:
+    print(f"Error {e.status}: {e.message}")
+    print(f"Code: {e.code}")
+```
+
+### Error Properties
+
+- `status` (int): HTTP status code
+- `code` (str | None): Beaver error code
+- `message` (str): Error message
+
+## Custom Base URL
+
+```python
+beaver = Beaver(
+    api_key="your-api-key",
+    base_url="https://api.beaver.example.com"
+)
+```
+
+## Model Support
+
+The SDK accepts model identifiers as strings. Currently supported and documented model: `gemini-2.5-flash`.
+
+## Type Hints
+
+The SDK includes type hints for better IDE support.
+
+```python
+from beaver_ai import ChatCompletionRequest, ChatCompletionResponse
+```
+
+## License
+
+MIT
