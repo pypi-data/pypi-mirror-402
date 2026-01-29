@@ -1,0 +1,200 @@
+# cartagon-monday-client
+
+Cliente **Python** para integraciones con la **API GraphQL de Monday.com**.  
+Proporciona una capa de alto nivel sobre GraphQL con:
+
+- Manejo automático de **reintentos**:
+  - HTTP `5xx`, `403`
+  - `401/404` transitorios
+  - Errores de **complejidad** (`COMPLEXITY_BUDGET_EXHAUSTED`) respetando `retry_in_seconds` cuando está disponible
+- Paginación automática con `items_page` → `next_items_page`
+- Utilidades de alto nivel para crear, actualizar y consultar ítems, subítems, usuarios y notificaciones
+- Validación de tipos antes de llamar a la API
+
+> **Requisitos**: Python **3.10+**
+
+---
+
+```bash
+pip install cartagon-monday-client
+```
+
+Importación:
+
+```python
+from monday_client import MondayClient
+
+token = "TU_API_TOKEN"
+client = MondayClient(api_key=token)
+
+# 1) Probar conexión
+print(client.test_connection())  # True si el token es válido
+
+# 2) Listar tableros
+boards = client.get_boards(limit=5, page=1)
+for b in boards:
+    print(f"{b['id']}: {b['name']}")
+
+# 3) Obtener todos los ítems de un tablero (paginación automática)
+items = client.get_all_items(board_id=123456789, limit=100)
+print("Total ítems:", len(items))
+
+# 4) Obtener ítems incluyendo subítems
+items = client.get_all_items(
+    board_id=123456789,
+    subitems="subitems { id name column_values { value } }"
+)
+
+# 5) Crear un ítem
+item = client.create_item(
+    board_id=123456789,
+    item_name="Tarea de ejemplo",
+    columns=[
+        {"id": "status", "type": "status", "value": "Working on it"},
+        {"id": "date", "type": "date", "value": {"date": "2025-09-25"}}
+    ]
+)
+print("Ítem creado:", item)
+
+# 6) Crear un subítem
+subitem = client.create_subitem(
+    parent_item_id=987654321,
+    subitem_name="Subtarea",
+    columns=[{"id": "text", "type": "text", "value": "Detalle"}]
+)
+
+# 7) Actualizar columnas
+client.update_simple_column_value(
+    item_id=987654321,
+    board_id=123456789,
+    column_id="text_column",
+    value="Texto actualizado"
+)
+
+client.update_multiple_column_values(
+    item_id=987654321,
+    board_id=123456789,
+    columns=[
+        {"id": "status", "type": "status", "value": "Done"},
+        {"id": "priority", "type": "dropdown", "value": ["High"]}
+    ]
+)
+
+# 8) Obtener usuarios
+users = client.get_users(limit=10)
+print("Usuarios:", len(users))
+
+# 9) Enviar una notificación
+client.send_notifications(
+    user_id=12345,
+    target_id=987654321,
+    target_type="Post",
+    text="Revisa este ítem 👀"
+)
+
+# 10) Obtener el tablero padre de un ítem
+board_id = client.get_parent_board(item_id=987654321)
+```
+
+---
+
+## API de `MondayClient`
+
+### `execute_query(query: str, *, return_key: str | None = None, variables: dict | None = None, timeout: float | None = None, log_query_preview: bool = False) -> dict`
+Ejecuta una query/mutación GraphQL y devuelve `data` (o `data[return_key]`).
+
+---
+
+### `test_connection() -> bool`
+Consulta `me` y devuelve True si la API responde con un usuario válido.
+
+---
+
+### `get_boards(limit: int = 10, page: int = 1, fields: list[str] | str | None = None) -> list[dict]`
+Devuelve tableros con paginación simple.  
+- `fields` por defecto: `["id","name","workspace_id","state","board_kind"]`.
+
+---
+
+### `get_all_items(board_id: int, limit: int = 50, *, fields: list[str] | str | None = None, columns_ids: list[str] | None = None, subitems: str | None = None, get_group: bool = False) -> list[dict]`
+Devuelve **todos** los ítems de un tablero, paginando con `cursor`.  
+- Si `fields` es None, usa `id`, `name` y `column_values { ALL_COLUMNS_FRAGMENT }`.  
+- Si `columns_ids` se pasa, aplica filtro `ids:[...]` en `column_values`.
+- Si `subitems`se usa, añada un bloque GraphQL de subitems a la query
+- Si `get_group`= True se devuelve id y titulo del grupo al que pertenece el item
+---
+
+### `create_item(board_id: int, item_name: str, *, group_id: str | None = None, columns: list[dict] | dict | None = None, fail_on_duplicate: bool = True, create_labels_if_missing: bool = True, return_fields: list[str] | str | None = None) -> dict`
+Crea un ítem.  
+- Acepta `columns` en bruto y los normaliza con `create_column_values`.  
+- `return_fields`: por defecto `"id"`.
+
+---
+
+### `create_subitem(parent_item_id: int, subitem_name: str, *, columns: list[dict] | dict | None = None, fail_on_duplicate: bool = True, create_labels_if_missing: bool = True, return_fields: list[str] | str | None = None) -> dict`
+Crea un subítem bajo un ítem padre.  
+- Acepta `columns` en bruto o dict ya renderizado.  
+- `return_fields`: por defecto `"id"`.
+
+---
+
+### `update_simple_column_value(item_id: int, board_id: int, column_id: str, value: str, *, return_fields: list[str] | str | None = None) -> dict`
+Actualiza **una** columna simple.  
+- `value` es obligatorio; usa `""` para limpiar.  
+- Si la columna espera JSON, pásalo serializado como string (ej: `'{"date":"2025-09-25"}'`).
+
+---
+
+### `update_multiple_column_values(item_id: int, board_id: int, columns: list[dict] | dict, *, fail_on_duplicate: bool = True, create_labels_if_missing: bool = True, return_fields: list[str] | str | None = None) -> dict`
+Actualiza **varias columnas** en un único llamado.  
+- Normaliza `columns` con `create_column_values`.  
+- Internamente hace doble `json.dumps` para `column_values`.  
+
+---
+
+### `get_items_by_column_value(board_id: int, column_id: str, value: str, fields: list[str] | None = None, operator: str = "any_of", limit: int = 200) -> list[dict]`
+Filtra ítems por valor en una columna, con `query_params.rules`.  
+- Pagina con `cursor` hasta agotar resultados.  
+- Soporta operadores: `any_of`, `not_any_of`, `is_empty`, `contains_text`, `greater_than`, `between`, etc.
+
+---
+
+### `get_item(item_id: int, subitmes:str | None = None, columns_ids: list[str] | None = None, get_group: bool = False) -> dict`
+Obtiene un ítem por ID.  
+- Limita columnas si pasas `columns_ids`. 
+-Obtiene subitems si se le pasa `subitems` 
+- Si `get_group`= True se devuelve id y titulo del grupo al que pertenece el item
+
+---
+
+### Otras utilidades
+- `board_columns(board_id: int)`: devuelve columnas de un board.  
+- `item_columns(item_id: int)`: columnas de un ítem.  
+- `subitems_columns(board_id: int)`: columnas de subitems de un board.  
+- `delete_item(item_id: int)`: elimina un ítem.  
+- `create_item_update(item_id: str, body: str, mention_user: list[dict] = [])`: crea un update en un ítem.  
+- `create_column_values(columns: list[dict], fail_on_duplicate: bool = True) -> dict`: helper para normalizar `column_values`.
+- `get_users(limit: int = None, page: int | str None, fields: str = None) -> dict`: devuelve usuarios.
+- `get_parent_board(self, item_id: int | str) -> int | str`: Devuelve el id del tablero al que petenece un item
+- `send_notification(self, user_id: int | str, target_id: int | str, target_type: str, text: str ) -> str:`: Envia una notificación al usuario objetivo
+
+---
+
+## Manejo de errores
+
+- **Errores retriables**: HTTP 5xx, 403, 401/404 transitorios, `ComplexityException`.  
+- **Errores no retriables**: otros GraphQL (ej. `InvalidBoardIdException`).  
+- Si se agotan reintentos → `MondayAPIError()`.
+
+---
+
+## Licencia
+
+**MIT** — ver archivo `LICENSE`.
+
+---
+
+## Enlaces
+
+- PyPI: https://pypi.org/project/cartagon-monday-client/
+- Repo: (añade aquí la URL de tu repositorio)
