@@ -1,0 +1,237 @@
+Metadata-Version: 2.4
+Name: bontakte
+Version: 0.1.0
+Summary: Python-библиотека для создания ботов ВКонтакте
+Author-email: Triazov Kirill <info@triazov.ru>
+License-Expression: MIT
+Keywords: vk,vkontakte,bot,api,messaging
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: requests>=2.28.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: black>=22.0.0; extra == "dev"
+Requires-Dist: flake8>=4.0.0; extra == "dev"
+Dynamic: license-file
+
+# 🤖 Bontakte
+
+<div align="center">
+
+**Python-библиотека для создания ботов ВКонтакте**
+
+[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/bontakte)](https://pypi.org/project/bontakte/)
+
+[Документация](#документация) • [Примеры](#примеры-использования) • [Установка](#установка)
+
+</div>
+
+---
+
+Bontakte — это современная Python-библиотека для создания ботов ВКонтакте. Она предлагает интуитивный API, полную поддержку функционала платформы и высокую производительность. Решение идеально для автоматизации коммуникаций и создания сервисных приложений, обеспечивая надежность и простоту интеграции.
+
+## ✨ Особенности
+
+- 🚀 **Простота использования** — интуитивный API с декораторами
+- ⚡ **Высокая производительность** — асинхронная обработка событий
+- 🔧 **Гибкость** — поддержка фильтров и кастомных обработчиков
+- 📦 **Полная поддержка VK API** — все основные методы платформы
+- 🎯 **Типизированные данные** — удобные классы для работы с сообщениями и пользователями
+- 🔄 **Long Poll** — автоматическая обработка обновлений
+
+## 📦 Установка
+
+```bash
+pip install bontakte
+```
+
+Или из исходников:
+
+```bash
+git clone https://github.com/triazov/bontakte.git
+cd bontakte
+pip install -e .
+```
+
+## 🚀 Быстрый старт
+
+```python
+from bontakte import Bot
+
+bot = Bot(access_token="YOUR_ACCESS_TOKEN", group_id=YOUR_GROUP_ID)
+
+@bot.message_handler()
+async def handle_message(event):
+    await bot.send_message(
+        event.message.chat_id,
+        f"Привет, {event.user.full_name}! Вы написали: {event.message.text}"
+    )
+
+bot.run()
+```
+
+## 📚 Примеры использования
+
+### Обработка сообщений с фильтрами
+
+```python
+from bontakte import Bot
+
+bot = Bot(access_token="YOUR_ACCESS_TOKEN", group_id=YOUR_GROUP_ID)
+
+def is_command(event):
+    return event.message.text.startswith("/")
+
+@bot.message_handler(filters=is_command)
+async def handle_command(event):
+    command = event.message.text.split()[0]
+    if command == "/start":
+        await bot.send_message(event.message.chat_id, "Бот запущен!")
+    elif command == "/help":
+        await bot.send_message(event.message.chat_id, "Доступные команды: /start, /help")
+
+bot.run()
+```
+
+### Обработка различных событий
+
+```python
+from bontakte import Bot
+
+bot = Bot(access_token="YOUR_ACCESS_TOKEN", group_id=YOUR_GROUP_ID)
+
+@bot.event_handler("message_new")
+async def on_message(event):
+    print(f"Новое сообщение: {event.data}")
+
+@bot.event_handler("message_edit")
+async def on_message_edit(event):
+    print(f"Сообщение отредактировано: {event.data}")
+
+@bot.event_handler("message_reply")
+async def on_message_reply(event):
+    print(f"Ответ на сообщение: {event.data}")
+
+bot.run()
+```
+
+### Работа с вложениями
+
+```python
+from bontakte import Bot
+
+bot = Bot(access_token="YOUR_ACCESS_TOKEN", group_id=YOUR_GROUP_ID)
+
+@bot.message_handler()
+async def handle_message(event):
+    if event.message.attachments:
+        for attachment in event.message.attachments:
+            if attachment.type == "photo":
+                await bot.send_message(
+                    event.message.chat_id,
+                    f"Получено фото: {attachment.url}"
+                )
+
+bot.run()
+```
+
+### Асинхронная отправка сообщений
+
+```python
+import asyncio
+from bontakte import Bot
+
+bot = Bot(access_token="YOUR_ACCESS_TOKEN", group_id=YOUR_GROUP_ID)
+
+async def send_notifications():
+    peer_ids = [123456789, 987654321]
+    for peer_id in peer_ids:
+        await bot.send_message(peer_id, "Уведомление от бота!")
+        await asyncio.sleep(1)
+
+@bot.message_handler()
+async def handle_message(event):
+    if event.message.text == "/notify":
+        await send_notifications()
+
+bot.run()
+```
+
+## 📖 Документация
+
+### Основные классы
+
+#### `Bot`
+
+Основной класс для работы с ботом.
+
+**Параметры инициализации:**
+- `access_token` (str) — токен доступа VK API
+- `group_id` (int, optional) — ID группы для Long Poll
+- `api_version` (str, default: "5.131") — версия VK API
+
+**Методы:**
+
+| Метод | Описание |
+|-------|----------|
+| `message_handler(filters=None)` | Декоратор для обработки сообщений |
+| `event_handler(event_type)` | Декоратор для обработки событий |
+| `send_message(peer_id, text, **kwargs)` | Отправка сообщения |
+| `get_user(user_id)` | Получение информации о пользователе |
+| `run()` | Запуск бота (блокирующий метод) |
+| `start_polling()` | Запуск бота (асинхронный метод) |
+| `stop()` | Остановка бота |
+
+#### Типы данных
+
+- **`Message`** — объект сообщения с полями: `id`, `text`, `user_id`, `chat_id`, `date`, `attachments`, `reply_to`, `forward_messages`
+- **`User`** — объект пользователя с полями: `id`, `first_name`, `last_name`, `username`, `photo`, `is_bot`, `full_name`
+- **`Chat`** — объект чата с полями: `id`, `type`, `title`, `members_count`
+- **`Attachment`** — объект вложения с полями: `type`, `url`, `title`, `description`, `data`
+- **`Event`** — базовый класс события
+- **`MessageEvent`** — событие сообщения, наследуется от `Event`
+
+## 🔧 Требования
+
+- Python 3.8+
+- requests >= 2.28.0
+
+## 📝 Лицензия
+
+Этот проект распространяется под лицензией MIT. Подробности в файле [LICENSE](LICENSE).
+
+## 👤 Автор
+
+**Triazov Kirill**
+
+- 🌐 Сайт: [triazov.ru](https://triazov.ru)
+- 📧 Email: info@triazov.ru
+
+## 🤝 Вклад в проект
+
+Мы приветствуем вклад в развитие библиотеки! Пожалуйста, ознакомьтесь с [CONTRIBUTING.md](CONTRIBUTING.md) для получения подробной информации.
+
+## 📄 История изменений
+
+Все изменения проекта документированы в [CHANGELOG.md](CHANGELOG.md).
+
+---
+
+<div align="center">
+
+**Сделано с ❤️ для разработчиков ВКонтакте**
+
+[⭐ Поставить звезду](https://github.com/triazov/bontakte) • [🐛 Сообщить об ошибке](https://github.com/triazov/bontakte/issues) • [💡 Предложить идею](https://github.com/triazov/bontakte/issues)
+
+</div>
