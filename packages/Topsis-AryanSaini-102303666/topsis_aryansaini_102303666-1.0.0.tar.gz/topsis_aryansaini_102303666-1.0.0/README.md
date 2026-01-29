@@ -1,0 +1,92 @@
+# Topsis-AryanSaini-102303666
+
+_This package is built as a submission to_ [Assignment 1](https://github.com/psrana/Assignment-Topsis)
+
+_Submitted by:_ **Aryan Saini (102303666)**
+
+*Definition:*
+TOPSIS, acronym for Technique for Order Preference by Similarity to Ideal Solution, is a multi-criteria decision-making (MCDM) method used to rank alternatives by selecting the option that is closest to the ideal solution and farthest from the worst (negative ideal) solution.
+
+<br>
+
+## ✅ **Installation**
+
+Use the package manager pip to install Topsis-AryanSaini-102303666
+```bash
+pip install Topsis-AryanSaini-102303666
+```
+
+## ⚙️ **Usage**
+```bash
+topsis data.csv "1,1,1,1,1" "+,+,+,+,+" result.csv
+```
+where,
+- **data.csv** is your input file  
+- Weights to be assigned to each feature  
+- Impacts to optimize each feature (`'+'`: Maximize, `'-'`: Minimize)  
+- Output file path to save the results  
+
+<br>
+
+## 🪴**Example**
+<table>
+<tr>
+  <th>Input Dataset</th>
+  <th>TOPSIS Output</th>
+</tr>
+
+<tr>
+<td>
+
+📄 **data.csv**
+
+| Fund Name | P1  | P2  | P3 | P4  | P5   |
+|----------|-----|-----|----|-----|------|
+| M1 | 0.75 | 0.56 | 3.9 | 41.1 | 11.58 |
+| M2 | 0.73 | 0.53 | 3.4 | 61.1 | 16.44 |
+| M3 | 0.65 | 0.42 | 5.2 | 64.5 | 17.69 |
+| M4 | 0.77 | 0.59 | 3.8 | 40.6 | 11.44 |
+| M5 | 0.81 | 0.66 | 5.3 | 38.1 | 11.22 |
+| M6 | 0.81 | 0.66 | 5.5 | 57.3 | 16.07 |
+| M7 | 0.87 | 0.76 | 6.7 | 51.5 | 14.96 |
+| M8 | 0.94 | 0.88 | 5.5 | 67.9 | 18.81 |
+
+</td>
+
+weights = [1,1,1,1,1]
+impacts = [+,+,-,+,+]
+
+<td>
+
+📊 **result.csv**
+  
+| Fund Name | P1  | P2  | P3 | P4  | P5   | Topsis Score | Rank |
+|----------|-----|-----|----|-----|------|--------------|------|
+| M1 | 0.75 | 0.56 | 3.9 | 41.1 | 11.58 | 0.4086 | 7 |
+| M2 | 0.73 | 0.53 | 3.4 | 61.1 | 16.44 | 0.5806 | 2 |
+| M3 | 0.65 | 0.42 | 5.2 | 64.5 | 17.69 | 0.4485 | 5 |
+| M4 | 0.77 | 0.59 | 3.8 | 40.6 | 11.44 | 0.4303 | 6 |
+| M5 | 0.81 | 0.66 | 5.3 | 38.1 | 11.22 | 0.3549 | 8 |
+| M6 | 0.81 | 0.66 | 5.5 | 57.3 | 16.07 | 0.5226 | 3 |
+| M7 | 0.87 | 0.76 | 6.7 | 51.5 | 14.96 | 0.4648 | 4 |
+| M8 | 0.94 | 0.88 | 5.5 | 67.9 | 18.81 | 0.7283 | 1 |  
+
+</td>
+</tr>
+</table>
+
+<br>
+
+## 🗒️ **Notes**
+### The package handles the following:
+- Correct number of parameters (inputFileName, Weights, Impacts, resultFileName).
+- Show the appropriate message for wrong inputs.
+- Handling of “File not Found” exception
+- The input file must contain three or more columns.
+- From 2nd to last columns must contain numeric values only (Handling of non-numeric values)
+- The number of weights, number of impacts and number of columns (from 2nd to last columns) must be the same.
+- Impacts must be either +ve or -ve.
+- Impacts and weights must be separated by ‘,’ (comma).
+
+## **License**
+[MIT Licence](LICENSE.txt)
