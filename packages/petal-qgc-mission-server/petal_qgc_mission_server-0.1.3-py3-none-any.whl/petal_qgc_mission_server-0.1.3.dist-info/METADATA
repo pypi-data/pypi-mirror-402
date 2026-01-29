@@ -1,0 +1,46 @@
+Metadata-Version: 2.1
+Name: petal-qgc-mission-server
+Version: 0.1.3
+Summary: QGC Mission Server
+Author-Email: Yaser Othman <yaser.othman@droneleaf.io>
+License: MIT
+Requires-Python: >=3.10
+Requires-Dist: pymavlink>=2.4.37
+Description-Content-Type: text/markdown
+
+# Petal QGC Mission Server
+
+The `petal-qgc-mission-server` is a Petal plugin that acts as a bridge between QGroundControl (QGC) and the Petal ecosystem. It simulates a MAVLink vehicle to receive mission plans, converts them into Petal-compatible mission graphs, and publishes them for execution by the LeafSDK.
+
+## Key Features
+
+*   **MAVLink Adapter**: Acts as a MAVLink server (TCP/UDP) to connect with QGC.
+*   **Mission Translation**: Converts MAVLink waypoints into Petal Mission Plans (JSON graph format).
+*   **Silent Adapter Mode**: Intercepts vehicle commands (Takeoff, Land, RTL) without interfering with the physical vehicle's direct link, while still updating internal state for QGC feedback.
+*   **Rally & Fence Support**: Handles QGC's Rally Point and Geofence protocols by accepting and discarding them (to satisfy protocol requirements) or forwarding them as needed.
+*   **Redis Integration**: Publishes mission plans and commands to Redis for consumption by LeafSDK.
+
+## Architecture
+
+*   **`plugin.py`**: Entry point, manages the `QGCMissionAdapterPetal` plugin lifecycle.
+*   **`mavlink_server.py`**: Handles the MAVLink connection and message routing.
+*   **`mission_handler.py`**: Manages the MAVLink mission protocol (upload/download) and translation.
+*   **`adapter_state.py`**: Tracks the minimal vehicle state required for QGC interaction (position, mode, battery).
+
+## Usage
+
+1.  **Start the Service**: The plugin is started by the Petal App Manager.
+2.  **Connect QGC**: Configure QGC to connect to the server's IP/Port (default TCP 5760 or as configured).
+3.  **Upload Mission**: Create a mission in QGC and upload it. The server will convert and publish it to Redis.
+4.  **Monitor**: QGC will receive status updates (position, current waypoint) from the server.
+
+## Documentation
+
+*   [Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md): Detailed architecture analysis with class diagrams.
+*   [Coordinate Systems & Conversion](docs/COORDINATE_SYSTEMS_AND_CONVERSION.md): GPS to local ENU coordinate conversion logic with diagrams.
+*   [Mission Types Architecture](docs/MISSION_TYPES_ARCHITECTURE.md): Comprehensive mission types, execution flow, and QGC translation.
+*   [Mission Command Flow](docs/MISSION_COMMAND_FLOW.md): How commands are handled including GoTo and continue-from-waypoint.
+*   [Rally & Fence Implementation](docs/RALLY_FENCE_IMPLEMENTATION.md): Details on special mission types handling.
+*   [MAVLink Methods Reference](docs/MAVLINK_METHODS_REFERENCE.md): Justification for MAVLink protocol methods.
+*   [Redis Integration](docs/REDIS_INTEGRATION.md): Redis proxy usage and QGC mission adapter plan.
+*   [Refactoring Walkthrough](docs/REFACTORING_WALKTHROUGH.md): History of simulation removal and adapter transition.
