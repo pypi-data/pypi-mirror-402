@@ -1,0 +1,293 @@
+Metadata-Version: 2.4
+Name: google-flow-downloader
+Version: 1.0.0
+Summary: Batch download images from Google Flow
+Author: Google Flow Tools
+License: MIT
+Project-URL: Homepage, https://github.com/google-flow-tools/downloader
+Keywords: google-flow,image-downloader,ai-tools
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: requests>=2.31.0
+Requires-Dist: rich>=13.0.0
+Requires-Dist: click>=8.1.0
+
+# Google Flow Downloader
+
+🚀 Google Flow 图片批量下载工具 - 自动去重、增量下载、多项目支持
+
+## 简介
+
+这是一个用于批量下载 Google Flow (labs.google/fx/tools/flow) 生成图片的命令行工具。
+
+**核心功能：**
+- ✅ 自动去重 - 下载前检查已有文件，避免重复
+- ✅ 增量下载 - 支持多次运行，只下载新图片
+- ✅ 多项目支持 - 不硬编码项目 ID，支持多个项目
+- ✅ 两种下载方式 - 浏览器脚本（推荐）或 API 直接下载
+- ✅ macOS 优化 - 一键复制脚本到剪贴板
+- ✅ 进度显示 - 实时显示下载进度和状态
+
+## 安装
+
+### 方式 1：从本地安装（推荐）
+
+```bash
+pipx install ~/Code/GenAI/google-flow-downloader
+```
+
+### 方式 2：从 PyPI 安装（即将支持）
+
+```bash
+pipx install google-flow-downloader
+```
+
+## 快速开始
+
+### 方式 1：浏览器脚本（推荐，无需 token）
+
+这是最简单、最可靠的方式：
+
+```bash
+# 步骤 1: 复制脚本到剪贴板 (macOS)
+gflow script -c
+
+# 步骤 2: 打开 Google Flow 项目页面
+# https://labs.google/fx/tools/flow/project/YOUR_PROJECT_ID
+
+# 步骤 3: 按 F12 打开开发者工具 → Console 标签
+
+# 步骤 4: Cmd+V 粘贴脚本，回车运行
+
+# 步骤 5: 等待自动滚动完成（会自动下载 JSON 文件）
+
+# 步骤 6: 下载图片
+gflow from-json ~/Downloads/google_flow_complete_XXX.json
+```
+
+**为什么推荐这种方式？**
+- ✅ 不需要管理 token（token 会过期）
+- ✅ 能获取更多图片（浏览器能滚动加载所有历史数据）
+- ✅ 更稳定（不受 API 限制）
+
+### 方式 2：使用完整 Cookie
+
+适合自动化场景：
+
+```bash
+# 从浏览器 Network 标签复制 curl 命令中的 Cookie
+gflow download \
+  --cookie "_ga=xxx; __Secure-next-auth.session-token=xxx; email=xxx; ..." \
+  --url "https://labs.google/fx/tools/flow/project/YOUR_PROJECT_ID"
+```
+
+### 方式 3：使用 Session Token
+
+```bash
+gflow download \
+  --token "你的__Secure-next-auth.session-token" \
+  --project-id "你的项目ID"
+```
+
+## 命令详解
+
+### `gflow script`
+
+显示浏览器提取脚本
+
+```bash
+# 显示脚本（手动复制）
+gflow script
+
+# 自动复制到剪贴板 (macOS)
+gflow script -c
+```
+
+### `gflow from-json`
+
+从浏览器导出的 JSON 文件下载图片
+
+```bash
+# 使用默认输出目录
+gflow from-json ~/Downloads/google_flow_complete_242.json
+
+# 自定义输出目录
+gflow from-json ~/Downloads/google_flow_complete_242.json -o ~/Pictures/google_flow
+```
+
+### `gflow download`
+
+从 API 直接下载图片
+
+```bash
+# 方式 1: 使用完整 Cookie + URL
+gflow download \
+  --cookie "完整cookie字符串" \
+  --url "项目URL"
+
+# 方式 2: 使用 Token + Project ID
+gflow download \
+  --token "session-token" \
+  --project-id "项目ID"
+
+# 方式 3: 使用环境变量
+export GFLOW_COOKIE="完整cookie"
+export GFLOW_PROJECT_ID="项目ID"
+gflow download
+```
+
+### `gflow status`
+
+查看下载状态
+
+```bash
+gflow status
+
+# 查看指定目录
+gflow status -o ~/Pictures/google_flow
+```
+
+## 配置
+
+### 默认输出目录
+
+```
+~/Code/GenAI/google_flow_images/
+```
+
+### 环境变量
+
+```bash
+# 在 ~/.zshrc 或 ~/.bashrc 中设置
+export GFLOW_COOKIE="完整cookie字符串"
+export GFLOW_SESSION_TOKEN="session token"
+export GFLOW_PROJECT_ID="项目ID"
+```
+
+## 常见问题
+
+### Q: 如何获取 Cookie？
+
+**方法 1: 从 curl 命令（推荐）**
+1. 打开 Google Flow 项目页面
+2. 按 F12 → Network 标签
+3. 刷新页面或滚动
+4. 找到 `searchProjectWorkflows` 请求
+5. 右键 → Copy → Copy as cURL
+6. 从 curl 命令中复制 `-b` 后面的 Cookie 字符串
+
+**方法 2: 从 Application 标签**
+1. F12 → Application → Cookies → https://labs.google
+2. 手动复制所有 Cookie 拼接成字符串
+
+### Q: 如何获取 Project ID？
+
+从项目 URL 中提取：
+```
+https://labs.google/fx/tools/flow/project/YOUR_PROJECT_ID
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                          这就是 Project ID
+```
+
+或使用 `--url` 参数自动提取。
+
+### Q: Token 过期怎么办？
+
+Session token 会定期过期，有两种解决方案：
+
+1. **使用浏览器脚本**（推荐）- 不需要管理 token
+2. **重新获取 token** - 从浏览器复制新的 Cookie
+
+### Q: 支持多个项目吗？
+
+支持！每个项目使用不同的 project ID：
+
+```bash
+# 项目 A
+gflow download --project-id "项目A的ID" --token "xxx" -o ~/flow_project_a
+
+# 项目 B  
+gflow download --project-id "项目B的ID" --token "xxx" -o ~/flow_project_b
+```
+
+### Q: 如何确认下载完整？
+
+```bash
+# 查看状态
+gflow status
+
+# 多次运行，如果显示"所有图片已下载"说明完整
+gflow from-json ~/Downloads/google_flow_complete_XXX.json
+```
+
+### Q: 图片保存在哪里？
+
+默认：`~/Code/GenAI/google_flow_images/`
+
+自定义：使用 `-o` 参数指定
+
+## 工作原理
+
+### 浏览器脚本方式
+
+```
+浏览器运行 JS 脚本
+  ↓
+自动滚动页面
+  ↓
+拦截网络请求，提取图片 URL
+  ↓
+导出 JSON 文件
+  ↓
+Python 批量下载
+```
+
+### API 方式
+
+```
+提供 Cookie/Token + Project ID
+  ↓
+调用 Google Flow API
+  ↓
+获取图片列表（最多 232 张）
+  ↓
+批量下载
+```
+
+## 技术细节
+
+- **去重机制**: 扫描输出目录中的文件名，提取 UUID key，只下载不存在的
+- **文件命名**: `{uuid-key}.jpg`
+- **API 限制**: 单次最多返回 232 张图片
+- **浏览器脚本**: 通过滚动触发懒加载，可获取所有历史图片
+
+## 开发
+
+```bash
+# 克隆项目
+git clone https://github.com/google-flow-tools/downloader.git
+cd downloader
+
+# 安装开发版
+pipx install -e .
+
+# 运行测试
+gflow status
+```
+
+## 许可证
+
+MIT License
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+## 更新日志
+
+### v1.0.0 (2026-01-20)
+
+- 初始版本
+- 支持浏览器脚本和 API 两种下载方式
+- 自动去重和增量下载
+- macOS 剪贴板集成
