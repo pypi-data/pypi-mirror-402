@@ -1,0 +1,99 @@
+Metadata-Version: 2.4
+Name: skillgen
+Version: 0.1.0
+Summary: Generate Agent Skills from llms.txt
+Author: Mihir Srivastava
+License: MIT License
+        
+        Copyright (c) 2026 Mihir Srivastava
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+        
+Keywords: llms.txt,agent,skills,documentation,generator
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: requests>=2.31.0
+Requires-Dist: PyYAML>=6.0
+Requires-Dist: trafilatura>=1.8.0
+Requires-Dist: beautifulsoup4>=4.12.0
+Requires-Dist: transformers>=4.44.0
+Requires-Dist: torch>=2.1.0
+Provides-Extra: extras
+Requires-Dist: markdownify>=0.11.6; extra == "extras"
+Provides-Extra: llm
+Requires-Dist: transformers>=4.44.0; extra == "llm"
+Requires-Dist: torch>=2.1.0; extra == "llm"
+Provides-Extra: test
+Requires-Dist: pytest>=7.4; extra == "test"
+Dynamic: license-file
+
+# SkillGen
+Turn any `llms.txt` into a ready-to-use Agent Skill.
+
+SkillGen reads the curated links in `llms.txt`, optionally snapshots the content into `references/`, and generates a clean `SKILL.md` plus indexes and provenance metadata. It can also install the skill into common tool locations (Codex, Claude Code, OpenCode, Amp, Roo, Cursor).
+
+## Quick start
+```bash
+pip install skillgen
+# or for local development
+pip install -e .
+skillgen https://docs.example.com/llms.txt --out ./skills
+```
+
+## What you get
+- `SKILL.md` with a concise description and trigger keywords
+- `references/INDEX.md` and section indexes
+- `references/catalog.json` and provenance files
+- `manifest.json` for auditability
+
+## LLM keyword generation
+By default SkillGen uses a local Transformers model to generate the description and keywords. If the model is not available, it falls back to deterministic heuristics (unless you pass `--no-llm-fallback`).
+
+Recommended model: `Qwen/Qwen3-0.6B`.
+
+```bash
+skillgen https://docs.example.com/llms.txt --llm-model Qwen/Qwen3-0.6B
+```
+
+## Common flags
+- `--include-optional` include the Optional section
+- `--no-snapshot` generate link-only references
+- `--allow-external` allow external domains
+- `--by-link` one file per link (default is by section)
+- `--keyword-mode heuristic|llm|auto`
+- `--target codex|claude|opencode|amp|roo|cursor`
+- `--scope user|project` (default is user/global where supported)
+
+## Install targets
+- codex: `~/.codex/skills` (user/global) or `./.codex/skills`
+- claude: `~/.claude/skills` (user/global) or `./.claude/skills`
+- opencode: `~/.config/opencode/skill` (user/global) or `./.opencode/skill` (uses `skills/` if present)
+- amp: `~/.config/agents/skills` (user/global) or `./.agents/skills`
+- roo: `~/.roo/skills` (user/global) or `./.roo/skills` (or `skills-<mode>`)
+- cursor: project only `./.cursor/rules` (creates a `.mdc` rule)
+
+## Development
+```bash
+pip install -e .[test]
+pytest
+```
