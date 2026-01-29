@@ -1,0 +1,107 @@
+Metadata-Version: 2.4
+Name: fetchmd
+Version: 0.1.0
+Summary: Python library and CLI to fetch any web page as Markdown
+Project-URL: Homepage, https://github.com/niksite/fetchmd
+Project-URL: Repository, https://github.com/niksite/fetchmd
+Project-URL: Issues, https://github.com/niksite/fetchmd/issues
+Author-email: Nikolay Panov <github@npanov.com>
+License: MIT License
+        
+        Copyright (c) 2026 Nikolay Panov
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+License-File: LICENSE
+Requires-Python: >=3.10
+Requires-Dist: html2text
+Requires-Dist: httpx
+Requires-Dist: lxml
+Requires-Dist: readability-lxml
+Description-Content-Type: text/markdown
+
+# FetchMD
+
+Fetch any web page as clean Markdown.
+
+## Features
+
+- Fetches a URL and returns Markdown (sync, minimal API).
+- Prefers Markdown/plain responses via `Accept`, falls back to HTML conversion.
+- Extracts main content with readability by default.
+- Absolutizes links and images for fetched URLs.
+- Supports piping raw HTML via stdin.
+
+## Install
+
+Requires Python >= 3.10.
+
+```bash
+uv tool install fetchmd
+```
+
+## CLI
+
+```bash
+# Run without installing
+uv run fetchmd https://example.com
+
+# Install once, then:
+fetchmd https://example.com
+
+# Read raw HTML from stdin
+curl https://example.com | fetchmd -
+
+# Skip readability, convert full HTML
+fetchmd --raw https://example.com
+```
+
+## Python API
+
+```python
+from fetchmd import fetchmd
+
+md = fetchmd("https://example.com")
+```
+
+## Behavior
+
+- `text/markdown` and `text/plain` are returned as-is.
+- HTML is cleaned with readability unless `--raw` is used.
+- Relative `href` and `src` are converted to absolute URLs for fetched pages.
+- When reading from stdin (`-`), there is no base URL, so links remain unchanged.
+
+## Testing
+
+Run tests on a single Python version:
+
+```sh
+uv run --python 3.12 --with pytest -- pytest
+```
+
+Run the supported-version matrix:
+
+```sh
+./scripts/test-matrix.sh
+```
+
+Override versions (space-separated):
+
+```sh
+PY_VERSIONS="3.10 3.11 3.12 3.13 3.14" ./scripts/test-matrix.sh
+```
