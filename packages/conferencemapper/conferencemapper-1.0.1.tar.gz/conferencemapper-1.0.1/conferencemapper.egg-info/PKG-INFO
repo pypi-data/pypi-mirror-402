@@ -1,0 +1,61 @@
+Metadata-Version: 2.4
+Name: conferencemapper
+Version: 1.0.1
+Summary: Jigasi ConferenceMapper with Redis, Flask and Gunicorn
+Author-email: Christoph Settgast <csett86_git@quicksands.de>
+License-Expression: Apache-2.0
+Project-URL: Homepage, https://github.com/luki-ev/conferencemapper
+Project-URL: Bug Tracker, https://github.com/luki-ev/conferencemapper/issues
+Classifier: Programming Language :: Python :: 3
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: redis
+Requires-Dist: flask
+Provides-Extra: test
+Requires-Dist: pytest>=7.0.0; extra == "test"
+Requires-Dist: fakeredis>=2.0.0; extra == "test"
+Dynamic: license-file
+
+Simple Jigasi ConferenceMapper with Redis, Flask and Gunicorn
+=============================================================
+
+This implements the /conferenceMapper part of https://github.com/jitsi/jitsi-meet/blob/master/resources/cloud-api.swagger
+
+Prerequisites: Redis, redis-py, flask and a wsgi server like gunicorn
+
+Packages for Ubuntu Server 24.04
+
+    apt install python3-flask gunicorn redis-server, python3-redis
+
+Copy conferencemapper.service and conferencemapper.socket to /etc/systemd/system
+
+Adapt /etc/systemd/system/conferencemapper.service to match WorkingDirectory to conferencemapper module directory.
+
+Add reverse proxy in front of gunicorn (nginx)
+
+    location = /conferenceMapper {
+        proxy_pass http://127.0.0.1:8001/conferenceMapper?$query_string;
+    }
+
+Start it and activate nginx config
+
+    systemctl daemon-reload
+    systemctl enable conferencemapper.socket
+    systemctl start conferencemapper.socket
+    systemctl reload nginx
+
+## Development and Testing
+
+To install the package with test dependencies:
+
+    pip install -e ".[test]"
+
+To run the tests:
+
+    pytest tests/
+
+Or with verbose output:
+
+    pytest tests/ -v
