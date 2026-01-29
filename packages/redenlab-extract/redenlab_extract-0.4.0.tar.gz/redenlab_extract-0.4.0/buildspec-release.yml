@@ -1,0 +1,110 @@
+version: 0.2
+
+# CodeBuild specification for Release pipeline
+# Validates, builds, tests, and publishes package to PyPI
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - echo "Installing build dependencies..."
+      - pip install --upgrade pip setuptools wheel build twine
+      - pip install -e ".[dev]"
+
+  pre_build:
+    commands:
+      - echo "Running full validation suite..."
+
+      - echo "Checking code formatting with black..."
+      - black --check src/ tests/
+
+      - echo "Running linter with ruff..."
+      - ruff check src/ tests/
+
+      - echo "Running type checker with mypy..."
+      - mypy src/
+
+      - echo "Validating version matches git tag..."
+      - |
+        # Extract version from git tag (removes 'refs/tags/v' prefix)
+        if [ -n "$CODEBUILD_RESOLVED_SOURCE_VERSION" ]; then
+          TAG_VERSION=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | sed 's/refs\/tags\/v//')
+        else
+          echo "Warning: CODEBUILD_RESOLVED_SOURCE_VERSION not set, skipping version validation"
+          TAG_VERSION=$(git describe --tags --abbrev=0 | sed 's/v//')
+        fi
+
+        # Extract version from package
+        PACKAGE_VERSION=$(python -c "from src.redenlab_extract import __version__; print(__version__)")
+
+        echo "Git tag version: $TAG_VERSION"
+        echo "Package version: $PACKAGE_VERSION"
+
+        if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+          echo "ERROR: Version mismatch!"
+          echo "Git tag version ($TAG_VERSION) does not match package version ($PACKAGE_VERSION)"
+          echo "Please update __version__ in src/redenlab_extract/__init__.py to match the git tag"
+          exit 1
+        fi
+
+        echo "Version validation passed: $PACKAGE_VERSION"
+
+  build:
+    commands:
+      - echo "Running tests on Python 3.8 (minimum supported version)..."
+      - |
+        docker run --rm \
+          -v $CODEBUILD_SRC_DIR:/workspace \
+          -w /workspace \
+          public.ecr.aws/docker/library/python:3.8-slim bash -c "
+            pip install --upgrade pip setuptools wheel && \
+            pip install -e '.[dev]' && \
+            pytest tests/ --cov=src/redenlab_extract --cov-report=term-missing
+          "
+
+      - echo "Running tests on Python 3.12 (maximum supported version)..."
+      - pytest tests/ --cov=src/redenlab_extract --cov-report=term-missing
+
+      - echo "Building distribution packages..."
+      - python -m build
+
+      - echo "Validating built packages..."
+      - twine check dist/*
+
+      - echo "Listing built artifacts..."
+      - ls -lh dist/
+
+  post_build:
+    commands:
+      - echo "Publishing package to PyPI..."
+      - |
+        # Retrieve PyPI credentials from AWS Secrets Manager
+        SECRET_JSON=$(aws secretsmanager get-secret-value \
+          --secret-id redenlab-extract/pypi \
+          --query SecretString \
+          --output text \
+          --region us-west-2)
+
+        export TWINE_USERNAME=$(echo $SECRET_JSON | python -c "import sys, json; print(json.load(sys.stdin)['username'])")
+        export TWINE_PASSWORD=$(echo $SECRET_JSON | python -c "import sys, json; print(json.load(sys.stdin)['password'])")
+
+        # Upload to PyPI
+        twine upload dist/*
+
+        echo "Package published successfully to PyPI!"
+
+artifacts:
+  files:
+    - 'dist/**/*'
+  name: release-artifacts-$(date +%Y%m%d-%H%M%S)
+
+reports:
+  pytest_coverage:
+    files:
+      - 'coverage.xml'
+    file-format: 'COBERTURAXML'
+
+cache:
+  paths:
+    - '/root/.cache/pip/**/*'

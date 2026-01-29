@@ -1,0 +1,55 @@
+version: 0.2
+
+# CodeBuild specification for Pull Request validation
+# Runs code quality checks and tests on Python 3.8 and 3.12
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - echo "Installing dependencies..."
+      - pip install --upgrade pip setuptools wheel
+      - pip install -e ".[dev]"
+
+  pre_build:
+    commands:
+      - echo "Running code quality checks..."
+
+      - echo "Checking code formatting with black..."
+      - black --check src/ tests/
+
+      - echo "Running linter with ruff..."
+      - ruff check src/ tests/
+
+      - echo "Running type checker with mypy..."
+      - mypy src/
+
+  build:
+    commands:
+      - echo "Running tests on Python 3.10 (minimum supported version)..."
+      - >
+        docker run --rm
+        -v $CODEBUILD_SRC_DIR:/workspace
+        -w /workspace
+        public.ecr.aws/docker/library/python:3.10-slim bash -c
+        "pip install --upgrade pip setuptools wheel &&
+        pip install -e '.[test]' &&
+        pytest tests/ --cov=src/redenlab_extract --cov-report=xml --cov-report=term-missing"
+
+      - echo "Running tests on Python 3.12 (maximum supported version)..."
+      - pytest tests/ --cov=src/redenlab_extract --cov-report=xml --cov-report=term-missing
+
+  post_build:
+    commands:
+      - echo "PR validation completed successfully!"
+
+reports:
+  pytest_coverage:
+    files:
+      - 'coverage.xml'
+    file-format: 'COBERTURAXML'
+
+cache:
+  paths:
+    - '/root/.cache/pip/**/*'
