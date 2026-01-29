@@ -1,0 +1,168 @@
+import json
+import logging
+import uuid
+import requests
+from datetime import datetime
+from typing import Dict, List, Optional
+
+
+class RemoteQueueClient:
+    """Client for interacting with remote PyQueue server"""
+
+    def __init__(self, server_url: str, queue_name: str = "default", api_key: str = None, timeout: int = 30):
+        """
+        Initialize remote queue client
+        
+        Args:
+            server_url: Base URL of the PyQueue server (e.g., 'http://localhost:8000')
+            queue_name: Name of the queue to interact with
+            timeout: Request timeout in seconds
+        """
+        self.server_url = server_url.rstrip('/')
+        self.queue_name = queue_name
+        self.timeout = timeout
+        self.session = requests.Session()
+        self.logger = logging.getLogger(__name__)
+        if api_key:
+            self.session.headers.update({"X-API-Key": api_key})
+
+    def _make_request(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Dict:
+        """Make HTTP request to the server"""
+        url = f"{self.server_url}/api/v1/queues/{self.queue_name}{endpoint}"
+        
+        try:
+            if method.upper() == 'GET':
+                response = self.session.get(url, timeout=self.timeout)
+            elif method.upper() == 'POST':
+                response = self.session.post(url, json=data, timeout=self.timeout)
+            elif method.upper() == 'DELETE':
+                response = self.session.delete(url, timeout=self.timeout)
+            elif method.upper() == 'PUT':
+                response = self.session.put(url, json=data, timeout=self.timeout)
+            else:
+                raise ValueError(f"Unsupported HTTP method: {method}")
+            response.raise_for_status()
+            
+            self.logger.debug(f"🔗 {method} {url} - Status: {response.status_code}")
+            self.logger.debug(f"📥 Response: {response.text}")
+            self.logger.debug(f"📤 Data: {data}")
+
+            return response.json() if response.content else {}
+        except requests.RequestException as e:
+            raise ConnectionError(f"Failed to connect to PyQueue server: {e}")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON response from server: {e}")
+    
+    def add_message(self, message: Dict, item_id: Optional[str] = None) -> str:
+        """Add a message to the remote queue"""
+        if item_id is None:
+            item_id = message.get("id", str(uuid.uuid4()))
+            
+        payload = {
+            "id": item_id,
+            "message_body": message,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+        self.logger.debug(f"📤 Payload being sent: {json.dumps(payload, indent=2, ensure_ascii=False)}")
+        
+        response = self._make_request("POST", "/messages", payload)
+        self.logger.info(f"✅ Message added to remote queue: {item_id}")
+        return response.get("id", item_id)
+    
+    def get_messages(self, max_messages: int = 10) -> List[Dict]:
+        """Get messages from the remote queue"""
+        endpoint = f"/messages?max_messages={max_messages}"
+        response = self._make_request("GET", endpoint)
+        return response.get("messages", [])
+    
+    def get_message(self, item_id):
+        """Returns a specific message by ID if it exists, otherwise None"""
+        endpoint = f"/message/{item_id}"
+        try:
+            response = self._make_request("GET", endpoint)
+            return response
+        except ConnectionError:
+            return None
+
+    def has_message(self, item_id):
+        """Checks if a message exists in the queue"""
+        return self.get_message(item_id) is not None
+    
+    def check_existence(self, item_ids: List[str]) -> List[str]:
+        """
+        Checks a list of IDs and returns the ones that exist.
+        Much faster than calling has_message() in a loop.
+        """
+        endpoint = "/messages/check-existence"
+        payload = {"message_ids": item_ids}
+        try:
+            response = self._make_request("POST", endpoint, payload)
+            return response.get("existing_ids", [])
+        except Exception as e:
+            self.logger.error(f"Failed to check existence for {len(item_ids)} items: {e}")
+            return []
+    
+    def receive_messages(self, max_messages: int = 10, visibility_timeout: int = 30, delete_after_receive: bool = False, only_new: bool = False) -> List[Dict]:
+        """
+        Receive messages from the queue (like SQS ReceiveMessage)
+        Messages become invisible for the specified timeout period unless deleted immediately.
+        Optionally filter only messages not delivered before.
+        """
+        query_parts = [
+            f"max_messages={max_messages}",
+            f"visibility_timeout={visibility_timeout}"
+        ]
+        if delete_after_receive:
+            query_parts.append("delete_after_receive=true")
+        if only_new:
+            query_parts.append("only_new=true")
+
+        endpoint = f"/messages/receive?{'&'.join(query_parts)}"
+        self.logger.debug(f"📡 Receive endpoint: {endpoint}")
+        response = self._make_request("POST", endpoint)
+        return response.get("messages", [])
+    
+    def delete_message(self, receipt_handle: str) -> bool:
+        """Delete a message using its receipt handle"""
+        endpoint = f"/messages/{receipt_handle}"
+        self._make_request("DELETE", endpoint)
+        self.logger.info(f"🗑 Message deleted from remote queue: {receipt_handle}")
+        return True
+    
+    def remove_message(self, item_id: str) -> bool:
+        """Remove a message by its ID (for compatibility with local queue)"""
+        endpoint = f"/messages/by-id/{item_id}"
+        self._make_request("DELETE", endpoint)
+        self.logger.info(f"🗑 Message removed from remote queue: {item_id}")
+        return True
+    
+    def update_message(self, item_id: str, new_message: Dict) -> bool:
+        """Update a message in the remote queue"""
+        payload = {
+            "message_body": new_message,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        endpoint = f"/messages/by-id/{item_id}"
+        self._make_request("PUT", endpoint, payload)
+        self.logger.info(f"🔄 Message updated in remote queue: {item_id}")
+        return True
+    
+    def clear_queue(self) -> bool:
+        """Clear all messages from the remote queue"""
+        self._make_request("DELETE", "/messages")
+        self.logger.info("🚀 Remote queue cleared!")
+        return True
+    
+    def get_queue_info(self) -> Dict:
+        """Get information about the queue"""
+        response = self._make_request("GET", "/info")
+        return response
+    
+    def health_check(self) -> bool:
+        """Check if the remote server is healthy"""
+        try:
+            response = self._make_request("GET", "/health")
+            return response.get("status") == "healthy"
+        except:
+            return False
