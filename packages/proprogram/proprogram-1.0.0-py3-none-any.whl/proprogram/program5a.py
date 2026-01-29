@@ -1,0 +1,19 @@
+program5a = """\
+import numpy as np
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Input
+
+inputs=np.array([[0,0],[0,1],[1,0],[1,1]])
+# XOR Gate
+outputs = np.array([[0], [1], [1], [0]])
+
+model=Sequential([Input(shape=(2,)),Dense(4,activation='relu'),Dense(1,activation='sigmoid')])
+model.compile(optimizer='adam',loss='binary_crossentropy',metrics=['accuracy'])
+model.fit(inputs,outputs,epochs=3000,verbose=0)
+
+predictions=model.predict(inputs)
+print("\\nPredictions:")
+for i,p in enumerate(predictions):
+    scalar=p[0]
+    print(f'{inputs[i]} => {round(scalar)} (raw: {scalar:.4f})')
+"""
