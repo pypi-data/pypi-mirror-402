@@ -1,0 +1,177 @@
+Metadata-Version: 2.4
+Name: spgrep
+Version: 0.5.0
+Summary: On-the-fly generator of space-group irreducible representations
+Author-email: Kohei Shinohara <kshinohara0508@gmail.com>
+License: BSD
+Project-URL: homepage, https://github.com/spglib/spgrep
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Classifier: Topic :: Scientific/Engineering :: Mathematics
+Classifier: Topic :: Scientific/Engineering :: Physics
+Requires-Python: >=3.10.0
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: hsnf>=0.3.16
+Requires-Dist: numpy>=1.20.1
+Requires-Dist: spglib>=2.7
+Requires-Dist: typing-extensions
+Provides-Extra: dev
+Requires-Dist: ipykernel; extra == "dev"
+Requires-Dist: ipython; extra == "dev"
+Requires-Dist: matplotlib; extra == "dev"
+Requires-Dist: nbqa; extra == "dev"
+Requires-Dist: notebook; extra == "dev"
+Requires-Dist: phonopy; extra == "dev"
+Requires-Dist: prek; extra == "dev"
+Requires-Dist: seaborn; extra == "dev"
+Requires-Dist: snakeviz; extra == "dev"
+Provides-Extra: docs
+Requires-Dist: docutils; extra == "docs"
+Requires-Dist: linkify-it-py; extra == "docs"
+Requires-Dist: myst-parser; extra == "docs"
+Requires-Dist: nbsphinx; extra == "docs"
+Requires-Dist: spgrep[dev]; extra == "docs"
+Requires-Dist: sphinx; extra == "docs"
+Requires-Dist: sphinx-autobuild; extra == "docs"
+Requires-Dist: sphinx-book-theme>=0.8; extra == "docs"
+Requires-Dist: sphinxcontrib-bibtex>=2.6.2; extra == "docs"
+Provides-Extra: testing
+Requires-Dist: pytest; extra == "testing"
+Requires-Dist: pytest-cov; extra == "testing"
+Dynamic: license-file
+
+# Spgrep
+
+[![testing](https://github.com/spglib/spgrep/actions/workflows/testing.yml/badge.svg)](https://github.com/spglib/spgrep/actions/workflows/testing.yml)
+[![codecov](https://codecov.io/gh/spglib/spgrep/graph/badge.svg?token=DQGVFCTB1P)](https://codecov.io/gh/spglib/spgrep)
+[![License](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/spgrep)](https://img.shields.io/pypi/pyversions/spgrep)
+[![PyPI version](https://badge.fury.io/py/spgrep.svg)](https://badge.fury.io/py/spgrep)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/spgrep)](https://img.shields.io/pypi/dm/spgrep)
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.05269/status.svg)](https://doi.org/10.21105/joss.05269)
+
+**Spgrep** is a Python package of on-the-fly generator of space-group irreducible representations.
+
+- GitHub: <https://github.com/spglib/spgrep>
+- Document: <https://spglib.github.io/spgrep>
+- PyPI: <https://pypi.org/project/spgrep>
+
+## Features
+
+- Enumerate the following irreducible representations (irreps) of space groups from [spglib](https://spglib.github.io/spglib/)'s cell and kpoints:
+  - Linear irreps
+  - Physically irreps (irreps over real numbers)
+  - Projective irreps for spnior
+  - Projective irreducible co-representations for spinor
+- Enumerate irreps of crystallographic point groups as well
+- Find symmetry-adapted basis forming given irreps
+- Minimal dependencies (numpy and [spglib](https://spglib.github.io/spglib/))
+
+## Usage
+
+```python
+from spgrep import get_spacegroup_irreps
+from spgrep.representation import get_character
+
+# Rutile structure (https://materialsproject.org/materials/mp-2657/)
+# P4_2/mnm (No. 136)
+a = 4.603
+c = 2.969
+x_4f = 0.3046
+lattice = [
+    [a, 0, 0],
+    [0, a, 0],
+    [0, 0, c],
+]
+positions = [
+    [0, 0, 0],  # Ti(2a)
+    [0.5, 0.5, 0.5],  # Ti(2a)
+    [x_4f, x_4f, 0],  # O(4f)
+    [-x_4f, -x_4f, 0],  # O(4f)
+    [-x_4f + 0.5, x_4f + 0.5, 0.5],  # O(4f)
+    [x_4f + 0.5, -x_4f + 0.5, 0.5],  # O(4f)
+]
+numbers = [0, 0, 1, 1, 1, 1]
+
+kpoint = [0.5, 0, 0]  # X point
+irreps, rotations, translations, mapping_little_group = get_spacegroup_irreps(
+    lattice, positions, numbers, kpoint
+)
+
+# Symmetry operations by spglib
+assert len(rotations) == 16
+assert len(translations) == 16
+
+# At X point, the little co-group is isomorphic to mmm (order=8)
+assert len(mapping_little_group) == 8
+print(mapping_little_group)  # [ 0,  1,  4,  5,  8,  9, 12, 13]
+
+# Two two-dimensional irreps
+for irrep in irreps:
+    print(get_character(irrep))
+# [2.+0.j 0.+0.j 0.+0.j 2.+0.j 0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+# [2.+0.j 0.+0.j 0.+0.j -2.+0.j 0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+```
+
+See [example pages](docs/examples/examples.md) for more detailed use cases and [API summary](docs/api/api_core.md) for summary of functionalities.
+
+## Installation
+
+Spgrep works with Python3.10+ and can be installed via PyPI:
+
+```shell
+pip install spgrep
+```
+
+or in local:
+
+```shell
+git clone git@github.com:spglib/spgrep.git
+cd spgrep
+pip install -e .
+```
+
+## Change log
+
+See the [change log](docs/changelog.md) for recent changes.
+
+## How to cite spgrep
+
+If you use spgrep in your research, please consider citing the following work:
+
+- [Kohei Shinohara, Atsushi Togo, Isao Tanaka, spgrep: On-the-fly generator of space-group irreducible representations, J. Open Source Softw. 8, 85, 5269 (2023)](https://doi.org/10.21105/joss.05269)
+
+```
+@article{spgrep,
+    doi = {10.21105/joss.05269},
+    url = {https://doi.org/10.21105/joss.05269},
+    year = {2023},
+    publisher = {The Open Journal},
+    volume = {8},
+    number = {85},
+    pages = {5269},
+    author = {Shinohara, Kohei and Togo, Atsushi and Tanaka, Isao},
+    title = {spgrep: On-the-fly generator of space-group irreducible representations},
+    journal = {J. Open Source Softw.}
+}
+```
+
+## How to contribute
+
+We welcome any contributions to improve functionalities.
+Please open [issues](https://github.com/spglib/spgrep/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc) or create [pull requests](https://github.com/spglib/spgrep/pulls?q=is%3Apr+is%3Aopen+sort%3Aupdated-desc).
+See the [development page](docs/development/development.md) for preparing an environment.
+
+## License
+
+Spgrep is released under a BSD 3-clause license.

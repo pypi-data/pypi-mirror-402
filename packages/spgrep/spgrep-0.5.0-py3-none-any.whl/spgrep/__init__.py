@@ -1,0 +1,36 @@
+"""Import top APIs and version."""
+
+from importlib.metadata import PackageNotFoundError, version
+
+from spgrep.core import (
+    get_crystallographic_pointgroup_irreps_from_symmetry,
+    get_crystallographic_pointgroup_spinor_irreps_from_symmetry,
+    get_spacegroup_irreps,
+    get_spacegroup_irreps_from_primitive_symmetry,
+    get_spacegroup_spinor_irreps,
+    get_spacegroup_spinor_irreps_from_primitive_symmetry,
+)
+
+__all__ = [
+    "get_crystallographic_pointgroup_irreps_from_symmetry",
+    "get_crystallographic_pointgroup_spinor_irreps_from_symmetry",
+    "get_spacegroup_irreps",
+    "get_spacegroup_irreps_from_primitive_symmetry",
+    "get_spacegroup_spinor_irreps",
+    "get_spacegroup_spinor_irreps_from_primitive_symmetry",
+]
+
+# https://github.com/pypa/setuptools_scm/#retrieving-package-version-at-runtime
+try:
+    __version__ = version("spgrep")
+except PackageNotFoundError:
+    # package is not installed
+    pass
+
+# https://spglib.readthedocs.io/en/stable/exceptions/python.html#python-api-exceptions
+try:
+    import spglib.error
+
+    spglib.error.OLD_ERROR_HANDLING = False
+except AttributeError:
+    pass
