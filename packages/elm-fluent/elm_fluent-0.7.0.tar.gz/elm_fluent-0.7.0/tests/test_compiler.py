@@ -1,0 +1,1979 @@
+import unittest
+
+from fluent.syntax import ast
+
+from elm_fluent import error_types, inference
+from elm_fluent.compiler import compile_messages, message_function_name_for_msg_id
+
+from .test_codegen import normalize_elm
+from .test_inference import FakeFtlSource
+from .utils import dedent_ftl
+
+
+def compile_messages_to_elm(
+    source,
+    locale,
+    module_name=None,
+    include_module_line=False,
+    include_imports=False,
+    use_isolating=False,
+    dynamic_html_attributes=True,
+):
+    module, errors, _, _ = compile_messages(
+        dedent_ftl(source),
+        locale,
+        module_name=module_name,
+        use_isolating=use_isolating,
+        dynamic_html_attributes=dynamic_html_attributes,
+    )
+    return (
+        module.as_source_code(include_module_line=include_module_line, include_imports=include_imports),
+        errors,
+    )
+
+
+class TestCompiler(unittest.TestCase):
+    locale = "en-US"
+
+    maxDiff = None
+
+    def assertCodeEqual(self, code1, code2):
+        self.assertEqual(normalize_elm(code2), normalize_elm(code1))
+
+    def test_message_function_name_for_msg_id(self):
+        self.assertEqual(message_function_name_for_msg_id("hello"), "hello")
+        self.assertEqual(message_function_name_for_msg_id("hello-there"), "helloThere")
+        self.assertEqual(message_function_name_for_msg_id("helloThere"), "helloThere")
+        self.assertEqual(message_function_name_for_msg_id("hello.foo"), "hello_foo")
+        self.assertEqual(message_function_name_for_msg_id("hello-html.foo"), "helloHtml_foo")
+
+    def test_single_string_literal(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = Foo ☺
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> a -> String
+            foo locale_ args_ =
+                "Foo ☺"
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_module_line(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = Foo
+        """,
+            self.locale,
+            module_name="Foo.Bar",
+            include_module_line=True,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            module Foo.Bar exposing (foo)
+
+            foo : Locale.Locale -> a -> String
+            foo locale_ args_ =
+                "Foo"
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_string_literal_in_placeable(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { "Foo" }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> a -> String
+            foo locale_ args_ =
+                "Foo"
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_escapes(self):
+        code, errs = compile_messages_to_elm(
+            r"""
+            escapes = {"    "}stuff{"\u0258}\"\\end"}
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            r"""
+            escapes : Locale.Locale -> a -> String
+            escapes locale_ args_ =
+                "    stuffɘ}\"\end"
+            """,
+        )
+
+    def test_number_literal(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { 123 }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> a -> String
+            foo locale_ args_ =
+                NumberFormat.format (NumberFormat.fromLocale locale_) 123
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_inferred_number(self):
+        # From the second instance of $count we know it is numeric,
+        # so it must be treated as numeric in the first
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { $count }, { NUMBER($count) }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> { a | count : Fluent.FluentNumber number } -> String
+            foo locale_ args_ =
+                String.concat [ Fluent.formatNumber locale_ args_.count
+                              , ", "
+                              , Fluent.formatNumber locale_ args_.count
+                              ]
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_inferred_number_from_select(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { $count ->
+               [one]   You have one item
+              *[other] You have { $count } items
+             }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> { a | count : Fluent.FluentNumber number } -> String
+            foo locale_ args_ =
+                case PluralRules.select (PluralRules.fromLocale locale_) (Fluent.numberValue args_.count) of
+                    "one" ->
+                        "You have one item"
+                    _ ->
+                        String.concat [ "You have "
+                                      , Fluent.formatNumber locale_ args_.count
+                                      , " items"
+                                      ]
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_literal_number_in_select(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { 123 ->
+               [one]   You have one item
+              *[other] You have more than one item
+             }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> a -> String
+            foo locale_ args_ =
+                case PluralRules.select (PluralRules.fromLocale locale_) 123 of
+                    "one" ->
+                        "You have one item"
+                    _ ->
+                        "You have more than one item"
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_inferred_number_from_call(self):
+        code, errs = compile_messages_to_elm(
+            """
+           bar = { NUMBER($count) }
+
+           foo = { $count } - { bar }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            bar : Locale.Locale -> { a | count : Fluent.FluentNumber number } -> String
+            bar locale_ args_ =
+                Fluent.formatNumber locale_ args_.count
+
+            foo : Locale.Locale -> { a | count : Fluent.FluentNumber number } -> String
+            foo locale_ args_ =
+                String.concat [ Fluent.formatNumber locale_ args_.count
+                              , " - "
+                              , bar locale_ args_
+                              ]
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_inferred_number_from_call_reversed(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { bar }
+
+            bar = { $count } - { baz }
+
+            baz = { NUMBER($count) }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> { a | count : Fluent.FluentNumber number } -> String
+            foo locale_ args_ =
+                bar locale_ args_
+
+            bar : Locale.Locale -> { a | count : Fluent.FluentNumber number } -> String
+            bar locale_ args_ =
+                String.concat [ Fluent.formatNumber locale_ args_.count
+                              , " - "
+                              , baz locale_ args_
+                              ]
+
+            baz : Locale.Locale -> { a | count : Fluent.FluentNumber number } -> String
+            baz locale_ args_ =
+                Fluent.formatNumber locale_ args_.count
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_message_reference_plus_string_literal(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = Foo
+            bar = X { foo }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> a -> String
+            foo locale_ args_ =
+                "Foo"
+
+            bar : Locale.Locale -> a -> String
+            bar locale_ args_ =
+                String.concat [ "X "
+                              , foo locale_ args_
+                              ]
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_single_message_reference(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = Foo
+            bar = { foo }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> a -> String
+            foo locale_ args_ =
+                "Foo"
+
+            bar : Locale.Locale -> a -> String
+            bar locale_ args_ =
+                foo locale_ args_
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_message_attr_reference(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo =
+               .attr = Foo Attr
+            bar = { foo.attr }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo_attr : Locale.Locale -> a -> String
+            foo_attr locale_ args_ =
+                "Foo Attr"
+
+            bar : Locale.Locale -> a -> String
+            bar locale_ args_ =
+                foo_attr locale_ args_
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_missing_attr_reference(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = Hello
+               .attr = Foo Attr
+            bar = { foo.baz }
+        """,
+            self.locale,
+        )
+        self.assertEqual(errs[0].error_sources[0].message_id, "bar")
+        self.assertEqual(errs[0], error_types.ReferenceError("Unknown message: foo.baz"))
+
+    def test_single_message_reference_reversed_order(self):
+        # We should cope with forward references
+        code, errs = compile_messages_to_elm(
+            """
+            bar = { foo }
+            foo = Foo
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            bar : Locale.Locale -> a -> String
+            bar locale_ args_ =
+                foo locale_ args_
+
+            foo : Locale.Locale -> a -> String
+            foo locale_ args_ =
+                "Foo"
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_single_message_bad_reference(self):
+        code, errs = compile_messages_to_elm(
+            """
+            bar = { foo }
+        """,
+            self.locale,
+        )
+        self.assertIn("COMPILATION_ERROR", code)
+        self.assertEqual(len(errs), 1)
+        self.assertEqual(errs[0].error_sources[0].message_id, "bar")
+        self.assertEqual(errs[0], error_types.ReferenceError("Unknown message: foo"))
+
+    def test_bad_name_keyword(self):
+        code, errs = compile_messages_to_elm(
+            """
+            type = My String
+        """,
+            self.locale,
+        )
+        self.assertIn("COMPILATION_ERROR", code)
+        self.assertEqual(len(errs), 1)
+        self.assertEqual(errs[0].error_sources[0].message_id, "type")
+        self.assertEqual(
+            errs[0],
+            error_types.BadMessageId(
+                "'type' is not allowed as a message ID because it clashes "
+                "with an Elm keyword. Please choose another ID."
+            ),
+        )
+
+    def test_bad_name_default_import(self):
+        code, errs = compile_messages_to_elm(
+            """
+            max = My String
+        """,
+            self.locale,
+        )
+        self.assertIn("COMPILATION_ERROR", code)
+        self.assertEqual(len(errs), 1)
+        self.assertEqual(errs[0].error_sources[0].message_id, "max")
+        self.assertEqual(
+            errs[0],
+            error_types.BadMessageId(
+                "'max' is not allowed as a message ID because it clashes "
+                "with an Elm default import. Please choose another ID."
+            ),
+        )
+
+    def test_bad_name_duplicate(self):
+        code, errs = compile_messages_to_elm(
+            """
+            a-message-id = My Message
+
+            aMessageId = Another Message
+        """,
+            self.locale,
+        )
+        self.assertIn("COMPILATION_ERROR", code)
+        self.assertEqual(len(errs), 1)
+        self.assertEqual(errs[0].error_sources[0].message_id, "aMessageId")
+        self.assertEqual(
+            errs[0],
+            error_types.BadMessageId(
+                "'aMessageId' is not allowed as a message ID because it clashes "
+                "with another message ID - 'a-message-id'. "
+                "Please choose another ID."
+            ),
+        )
+
+    def test_message_mapping_used(self):
+        # Checking that we actually use message_mapping when looking up the name
+        # of the message function to call.
+        code, errs = compile_messages_to_elm(
+            """
+            a-message-id = Foo
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            aMessageId : Locale.Locale -> a -> String
+            aMessageId locale_ args_ =
+                "Foo"
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_external_argument(self):
+        code, errs = compile_messages_to_elm(
+            """
+            with-arg = Some text { $arg }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            withArg : Locale.Locale -> { a | arg : String } -> String
+            withArg locale_ args_ =
+                String.concat [ "Some text "
+                              , args_.arg
+                              ]
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_lone_external_argument(self):
+        code, errs = compile_messages_to_elm(
+            """
+            with-arg = { $arg }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            withArg : Locale.Locale -> { a | arg : String } -> String
+            withArg locale_ args_ =
+                args_.arg
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_function_call(self):
+        code, errs = compile_messages_to_elm(
+            """
+                 foo = { NUMBER(1234) }
+        """,
+            self.locale,
+        )
+        self.assertEqual(errs, [])
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> a -> String
+            foo locale_ args_ =
+                NumberFormat.format (NumberFormat.fromLocale locale_) 1234
+        """,
+        )
+
+    def test_function_call_external_arg(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { NUMBER($arg) }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> { a | arg : Fluent.FluentNumber number } -> String
+            foo locale_ args_ =
+                Fluent.formatNumber locale_ args_.arg
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_NUMBER_useGrouping(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { NUMBER($arg, useGrouping: 0) }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> { a | arg : Fluent.FluentNumber number } -> String
+            foo locale_ args_ =
+                let
+                    initial_opts_ = Fluent.numberFormattingOptions args_.arg
+                    fnum_ = Fluent.reformattedNumber { initial_opts_ | locale = locale_, useGrouping = False } args_.arg
+                in
+                    Fluent.formatNumber locale_ fnum_
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_NUMBER_minimumIntegerDigits(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { NUMBER($arg, minimumIntegerDigits: 2) }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> { a | arg : Fluent.FluentNumber number } -> String
+            foo locale_ args_ =
+                let
+                    initial_opts_ = Fluent.numberFormattingOptions args_.arg
+                    fnum_ = Fluent.reformattedNumber { initial_opts_ | locale = locale_, minimumIntegerDigits = Just 2 } args_.arg
+                in
+                    Fluent.formatNumber locale_ fnum_
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_NUMBER_everything(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo =
+               There are { NUMBER(7890,
+                                  useGrouping: 0,
+                                  minimumIntegerDigits: 2,
+                                  minimumFractionDigits: 3,
+                                  maximumFractionDigits: 4,
+                                  minimumSignificantDigits: 5,
+                                  maximumSignificantDigits: 6 ) } things
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> a -> String
+            foo locale_ args_ =
+                let
+                    defaults_ = NumberFormat.defaults
+                    fnum_ = Fluent.formattedNumber { defaults_ | locale = locale_, maximumFractionDigits = Just 4, maximumSignificantDigits = Just 6, minimumFractionDigits = Just 3, minimumIntegerDigits = Just 2, minimumSignificantDigits = Just 5, useGrouping = False } 7890
+                in
+                    String.concat [ "There are "
+                                  , Fluent.formatNumber locale_ fnum_
+                                  , " things"
+                                  ]
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_inferred_date(self):
+        # From the second instance of $date we know it is a date,
+        # so it must be treated as a date in the first
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { $startdate }, { DATETIME($startdate) }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> { a | startdate : Fluent.FluentDate } -> String
+            foo locale_ args_ =
+                String.concat [ Fluent.formatDate locale_ args_.startdate
+                              , ", "
+                              , Fluent.formatDate locale_ args_.startdate
+                              ]
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_DATETIME_everything(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { DATETIME($startdate,
+                             hour12: 0,
+                             weekday: "short",
+                             era: "long",
+                             year: "numeric",
+                             month: "numeric",
+                             day: "numeric",
+                             hour: "2-digit",
+                             minute: "2-digit",
+                             second: "2-digit",
+                             timeZoneName: "short") }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> { a | startdate : Fluent.FluentDate } -> String
+            foo locale_ args_ =
+                let
+                    initial_opts_ = Fluent.dateFormattingOptions args_.startdate
+                    fdate_ = Fluent.reformattedDate { initial_opts_ | day = DateTimeFormat.NumericNumber, era = DateTimeFormat.LongName, hour = DateTimeFormat.TwoDigitNumber, hour12 = Just False, locale = locale_, minute = DateTimeFormat.TwoDigitNumber, month = DateTimeFormat.NumericMonth, second = DateTimeFormat.TwoDigitNumber, timeZoneName = DateTimeFormat.ShortTimeZone, weekday = DateTimeFormat.ShortName, year = DateTimeFormat.NumericNumber } args_.startdate
+                in
+                    Fluent.formatDate locale_ fdate_
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_missing_function_call(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { MISSING(123) }
+        """,
+            self.locale,
+        )
+        self.assertEqual(errs[0].error_sources[0].message_id, "foo")
+        self.assertEqual(errs[0], error_types.ReferenceError("Unknown function: MISSING"))
+
+    def test_function_call_with_nonexistent_keyword_arg(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { NUMBER(123, foo: 1) }
+        """,
+            self.locale,
+        )
+        assert len(errs) == 1
+        assert errs[0].error_sources[0].message_id == "foo"
+        assert errs[0] == error_types.FunctionParameterError("NUMBER() got an unexpected keyword argument 'foo'")
+
+    def test_function_call_with_badly_typed_keyword_arg(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { NUMBER(123, useGrouping: "hello") }
+        """,
+            self.locale,
+        )
+        assert len(errs) == 1
+        err = errs[0]
+        assert err.error_sources[0].message_id == "foo"
+        assert type(err.error_sources[0].expr) is ast.StringLiteral
+        assert err == error_types.FunctionParameterError(
+            '''Expecting a number (0 or 1) for useGrouping parameter, got "hello"'''
+        )
+
+    def test_function_call_with_badly_typed_integer_keyword_arg(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { NUMBER(123, minimumSignificantDigits: "hello") }
+        """,
+            self.locale,
+        )
+        assert len(errs) == 1
+        err = errs[0]
+        assert err.error_sources[0].message_id == "foo"
+        assert type(err.error_sources[0].expr) is ast.StringLiteral
+        assert err == error_types.FunctionParameterError(
+            '''Expecting a number for minimumSignificantDigits parameter, got "hello"'''
+        )
+
+    def test_function_call_with_bad_enum_keyword_arg(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { NUMBER(123, currencyDisplay: "x") }
+        """,
+            self.locale,
+        )
+        assert len(errs) == 1
+        assert errs[0].error_sources[0].message_id == "foo"
+        assert errs[0] == error_types.FunctionParameterError(
+            '''Expecting one of "code", "name", "symbol" for currencyDisplay parameter, got "x"'''
+        )
+
+    def test_function_call_with_bad_positional_arg(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { NUMBER(123, 456) }
+        """,
+            self.locale,
+        )
+        self.assertEqual(len(errs), 1)
+        self.assertEqual(errs[0].error_sources[0].message_id, "foo")
+        self.assertEqual(
+            errs[0],
+            error_types.FunctionParameterError("NUMBER() takes 1 positional argument(s) but 2 were given"),
+        )
+        self.assertEqual(type(errs[0].error_sources[0].expr), ast.FunctionReference)
+
+    def test_message_arg_type_mismatch(self):
+        # Should return error gracefully
+        src = dedent_ftl(
+            """
+            foo = { NUMBER($arg) } { DATETIME($arg) }
+        """
+        )
+        code, errs = compile_messages_to_elm(src, self.locale)
+        err = errs[0]
+        assert type(err) is error_types.ArgumentConflictError
+        assert err.message_id == "foo"
+        assert err.arg_name == "arg"
+        conflict = err.conflict
+        assert type(conflict) is inference.Conflict
+        types = conflict.types
+        assert len(types) == 2
+
+        assert types[0].evidences[0].position == (1, 9)
+        assert types[0].type == inference.Number
+
+        assert types[1].evidences[0].position == (1, 26)
+        assert types[1].type == inference.DateTime
+        assert len(errs) == 1
+
+    def test_nested_function_type_mismatch(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { NUMBER(DATETIME(NUMBER($arg))) }
+        """,
+            self.locale,
+        )
+        assert errs[0] == error_types.TypeMismatch(
+            "DATETIME() expected date argument, found 'FluentNumber number'",
+        )
+        assert errs[1] == error_types.TypeMismatch(
+            "NUMBER() expected numeric argument, found 'FluentDate'",
+        )
+        assert len(errs) == 2
+
+    def test_message_arg_type_mismatch_across_messsages(self):
+        # Should return error gracefully, including info about where the
+        # different types were inferred from
+        src = dedent_ftl(
+            """
+            foo = { bar } { baz }
+
+            bar = { NUMBER($arg) }
+
+            baz = { DATETIME($arg) }
+        """
+        )
+        code, errs = compile_messages_to_elm(src, self.locale)
+        assert len(errs) == 1
+        err = errs[0]
+        assert type(err) is error_types.ArgumentConflictError
+        assert err.arg_name == "arg"
+        assert err.message_id == "foo"
+        conflict = err.conflict
+        assert len(conflict.types) == 2
+        assert conflict.types[0] == inference.InferredType(
+            type=inference.Number,
+            evidences=[
+                FakeFtlSource("foo", 1, 9),
+                FakeFtlSource("bar", 3, 9),
+            ],
+        )
+        assert conflict.types[1] == inference.InferredType(
+            type=inference.DateTime,
+            evidences=[
+                FakeFtlSource("foo", 1, 17),
+                FakeFtlSource("baz", 5, 9),
+            ],
+        )
+
+    def test_message_arg_type_mismatch_with_string(self):
+        src = dedent_ftl(
+            """
+            foo = { bar } { baz }
+
+            bar = { $arg }
+
+            baz = { NUMBER($arg) }
+        """
+        )
+        code, errs = compile_messages_to_elm(src, self.locale)
+        assert len(errs) == 1
+        err = errs[0]
+        assert type(err) is error_types.ArgumentConflictError
+        assert err.arg_name == "arg"
+        assert err.message_id == "foo"
+        conflict = err.conflict
+        assert len(conflict.types) == 2
+        assert conflict.types[0] == inference.InferredType(
+            type=inference.String,
+            evidences=[
+                FakeFtlSource("foo", 1, 9),
+                FakeFtlSource("bar", 3, 9),
+            ],
+        )
+        assert conflict.types[1] == inference.InferredType(
+            type=inference.Number,
+            evidences=[
+                FakeFtlSource("foo", 1, 17),
+                FakeFtlSource("baz", 5, 9),
+            ],
+        )
+
+    def test_message_arg_type_mismatch_with_args(self):
+        # Should return error gracefully
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { NUMBER($arg, useGrouping:0) } { DATETIME($arg, era:"long") }
+        """,
+            self.locale,
+        )
+        assert len(errs) == 1
+        assert type(errs[0]) is error_types.ArgumentConflictError
+
+    def test_message_with_attrs(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = Foo
+               .attr-1 = Attr 1
+               .attr-2 = Attr 2
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> a -> String
+            foo locale_ args_ =
+                "Foo"
+
+            foo_attr1 : Locale.Locale -> a -> String
+            foo_attr1 locale_ args_ =
+                "Attr 1"
+
+            foo_attr2 : Locale.Locale -> a -> String
+            foo_attr2 locale_ args_ =
+                "Attr 2"
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_term_inline(self):
+        code, errs = compile_messages_to_elm(
+            """
+           -term = Term
+           message = Message { -term }
+        """,
+            self.locale,
+        )
+        self.assertEqual(errs, [])
+        self.assertCodeEqual(
+            code,
+            """
+            message : Locale.Locale -> a -> String
+            message locale_ args_ =
+                "Message Term"
+        """,
+        )
+
+    def test_select_string(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { $stringArg ->
+                [a] A
+               *[b] B
+             }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> { a | stringArg : String } -> String
+            foo locale_ args_ =
+                case args_.stringArg of
+                    "a" ->
+                        "A"
+                    _ ->
+                        "B"
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_select_number(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { $numberArg ->
+                [1] One
+               *[2] { 2 }
+             }
+        """,
+            self.locale,
+        )
+        # We should not get number formatting calls in the select expression or
+        # or the key comparisons, but we should get them for the select value
+        # for { 2 }.
+        # We should also get $numberArg inferred to be numeric
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> { a | numberArg : Fluent.FluentNumber number } -> String
+            foo locale_ args_ =
+                case Fluent.numberValue args_.numberArg of
+                    1 ->
+                        "One"
+                    _ ->
+                        NumberFormat.format (NumberFormat.fromLocale locale_) 2
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_select_number_literal(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { 1 ->
+                [1] One
+               *[2] Two
+             }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> a -> String
+            foo locale_ args_ =
+                "One"
+            """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_select_plural_categories(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { $count ->
+                [one] You have one thing
+               *[other] You have some things
+             }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> { a | count : Fluent.FluentNumber number } -> String
+            foo locale_ args_ =
+                case PluralRules.select (PluralRules.fromLocale locale_) (Fluent.numberValue args_.count) of
+                    "one" ->
+                        "You have one thing"
+                    _ ->
+                        "You have some things"
+        """,
+        )
+
+    def test_select_mixed_numeric(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { $count ->
+                [0] You have nothing
+                [one] You have a thing
+               *[other] You have some things
+             }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> { a | count : Fluent.FluentNumber number } -> String
+            foo locale_ args_ =
+                let
+                    val_ = Fluent.numberValue args_.count
+                    pl_ = PluralRules.select (PluralRules.fromLocale locale_) val_
+                in
+                    if (val_ == 0) then
+                        "You have nothing"
+                    else
+                        if (pl_ == "one") then
+                            "You have a thing"
+                        else
+                            "You have some things"
+        """,
+        )
+
+    def test_select_mismatch(self):
+        src = dedent_ftl(
+            """
+            foo = { 1 ->
+                [x]   X
+                [y]   Y
+               *[z]   Z
+             }
+        """
+        )
+
+        code, errs = compile_messages_to_elm(src, self.locale)
+        assert errs == [
+            error_types.TypeMismatch(
+                """variant key "x" of type 'String' is not compatible with type 'number' of selector""",
+            ),
+            error_types.TypeMismatch(
+                """variant key "y" of type 'String' is not compatible with type 'number' of selector""",
+            ),
+            error_types.TypeMismatch(
+                """variant key "z" of type 'String' is not compatible with type 'number' of selector""",
+            ),
+        ]
+        assert errs[0].error_sources[0].position == (2, 6)
+        assert errs[0].error_sources[1].position == (1, 9)
+        assert errs[1].error_sources[0].position == (3, 6)
+        assert errs[1].error_sources[1].position == (1, 9)
+        assert errs[2].error_sources[0].position == (4, 6)
+        assert errs[2].error_sources[1].position == (1, 9)
+
+    def test_select_mismatch_with_arg(self):
+        src = dedent_ftl(
+            """
+            foo = { NUMBER($count) ->
+                [x]   X
+               *[y]   Y
+             }
+        """
+        )
+
+        code, errs = compile_messages_to_elm(src, self.locale)
+        assert errs == [
+            error_types.TypeMismatch(
+                """variant key "x" of type 'String' is not compatible with type 'FluentNumber number' of selector""",
+            ),
+            error_types.TypeMismatch(
+                """variant key "y" of type 'String' is not compatible with type 'FluentNumber number' of selector""",
+            ),
+        ]
+        assert errs[0].error_sources[0].position == (2, 6)
+        assert errs[0].error_sources[1].position == (1, 9)
+        assert errs[1].error_sources[0].position == (3, 6)
+        assert errs[1].error_sources[1].position == (1, 9)
+
+    def test_select_mixed_numeric_last_not_default(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { $count ->
+                [0]     You have nothing
+               *[other] You have some things
+                [one]   You have a thing
+             }
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> { a | count : Fluent.FluentNumber number } -> String
+            foo locale_ args_ =
+                let
+                    val_ = Fluent.numberValue args_.count
+                    pl_ = PluralRules.select (PluralRules.fromLocale locale_) val_
+                in
+                    if (val_ == 0) then
+                        "You have nothing"
+                    else
+                        if (pl_ == "other") then
+                            "You have some things"
+                        else
+                            if (pl_ == "one") then
+                                "You have a thing"
+                            else
+                                "You have some things"
+        """,
+        )
+
+    def test_combine_strings(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = Start { "Middle" } End
+        """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> a -> String
+            foo locale_ args_ =
+                "Start Middle End"
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_single_string_literal_isolating(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = Foo
+        """,
+            self.locale,
+            use_isolating=True,
+        )
+        # No isolating chars, because we have no placeables.
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> a -> String
+            foo locale_ args_ =
+                "Foo"
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_interpolation_isolating(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = Foo { $arg } Bar
+        """,
+            self.locale,
+            use_isolating=True,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            foo : Locale.Locale -> { a | arg : String } -> String
+            foo locale_ args_ =
+                String.concat [ "Foo \u2068"
+                              , args_.arg
+                              , "\u2069 Bar"
+                              ]
+        """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_cycle_detection(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo = { foo }
+        """,
+            self.locale,
+        )
+        self.assertEqual(errs[0].error_sources[0].message_id, "foo")
+        self.assertEqual(errs[0], error_types.CyclicReferenceError("Cyclic reference in foo"))
+
+    def test_cycle_detection_with_attrs(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo =
+               .attr1 = { bar.attr2 }
+
+            bar =
+               .attr2 = { foo.attr1 }
+        """,
+            self.locale,
+        )
+        self.assertEqual(errs[0].error_sources[0].message_id, "foo.attr1")
+        self.assertEqual(errs[0], error_types.CyclicReferenceError("Cyclic reference in foo.attr1"))
+        self.assertEqual(errs[1].error_sources[0].message_id, "bar.attr2")
+        self.assertEqual(errs[1], error_types.CyclicReferenceError("Cyclic reference in bar.attr2"))
+
+    def test_term_cycle_detection(self):
+        code, errs = compile_messages_to_elm(
+            """
+            -cyclic-term = { -cyclic-term }
+            cyclic-term-message = { -cyclic-term }
+        """,
+            self.locale,
+        )
+        self.assertEqual(errs[0].error_sources[0].message_id, "cyclic-term-message")
+        self.assertEqual(
+            errs[0],
+            error_types.CyclicReferenceError("Cyclic reference in cyclic-term-message"),
+        )
+
+    def test_multiline_text(self):
+        code, errs = compile_messages_to_elm(
+            """
+            test = Some text
+                   that spans multiple lines
+            """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            test : Locale.Locale -> a -> String
+            test locale_ args_ =
+                "Some text\\nthat spans multiple lines"
+            """,
+        )
+
+    def test_imports_eliminated(self):
+        code, errs = compile_messages_to_elm(
+            """
+            test = Some text
+            """,
+            self.locale,
+            include_imports=True,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            import Intl.Locale as Locale
+
+            test : Locale.Locale -> a -> String
+            test locale_ args_ =
+                "Some text"
+            """,
+        )
+
+    def test_parameterized_terms_strings(self):
+        code, errs = compile_messages_to_elm(
+            """
+            -thing = { $article ->
+                  *[definite] the thing
+                   [indefinite] a thing
+                   [none] thing
+            }
+            thing-no-arg = { -thing }
+            thing-no-arg-alt = { -thing() }
+            thing-with-arg = { -thing(article: "indefinite") }
+            thing-fallback = { -thing(article: "somethingelse") }
+            """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            thingNoArg : Locale.Locale -> a -> String
+            thingNoArg locale_ args_ =
+                "the thing"
+
+            thingNoArgAlt : Locale.Locale -> a -> String
+            thingNoArgAlt locale_ args_ =
+                "the thing"
+
+            thingWithArg : Locale.Locale -> a -> String
+            thingWithArg locale_ args_ =
+                "a thing"
+
+            thingFallback : Locale.Locale -> a -> String
+            thingFallback locale_ args_ =
+                "the thing"
+            """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_parameterized_terms_numbers(self):
+        code, errs = compile_messages_to_elm(
+            """
+            -thing = { $count ->
+                  *[1] one thing
+                   [2] two things
+            }
+            thing-no-arg = { -thing }
+            thing-no-arg-alt = { -thing() }
+            thing-one = { -thing(count: 1) }
+            thing-two = { -thing(count: 2) }
+            """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            thingNoArg : Locale.Locale -> a -> String
+            thingNoArg locale_ args_ =
+                "one thing"
+
+            thingNoArgAlt : Locale.Locale -> a -> String
+            thingNoArgAlt locale_ args_ =
+                "one thing"
+
+            thingOne : Locale.Locale -> a -> String
+            thingOne locale_ args_ =
+                "one thing"
+
+            thingTwo : Locale.Locale -> a -> String
+            thingTwo locale_ args_ =
+                "two things"
+            """,
+        )
+
+    def test_parameterized_terms_numbers_with_function(self):
+        code, errs = compile_messages_to_elm(
+            """
+            -thing = { NUMBER($count) ->
+                  *[1] one thing
+                   [2] two things
+            }
+            thing-no-arg = { -thing }
+            thing-no-arg-alt = { -thing() }
+            thing-one = { -thing(count: 1) }
+            thing-two = { -thing(count: 2) }
+            """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            thingNoArg : Locale.Locale -> a -> String
+            thingNoArg locale_ args_ =
+                "one thing"
+
+            thingNoArgAlt : Locale.Locale -> a -> String
+            thingNoArgAlt locale_ args_ =
+                "one thing"
+
+            thingOne : Locale.Locale -> a -> String
+            thingOne locale_ args_ =
+                "one thing"
+
+            thingTwo : Locale.Locale -> a -> String
+            thingTwo locale_ args_ =
+                "two things"
+            """,
+        )
+
+    def test_parameterized_terms_numbers_with_function_non_static(self):
+        code, errs = compile_messages_to_elm(
+            """
+            -thing = { NUMBER($count, minimumSignificantDigits: 1) ->
+                  *[1] one thing
+                   [2] two things
+            }
+            thing-two = { -thing(count: 2) }
+            """,
+            self.locale,
+        )
+        # We're not smart enough to resolve this statically, but we should
+        # not crash, and we should inline the term.
+        self.assertCodeEqual(
+            code,
+            """
+            thingTwo : Locale.Locale -> a -> String
+            thingTwo locale_ args_ =
+                let
+                    defaults_ = NumberFormat.defaults
+                    fnum_ = Fluent.formattedNumber { defaults_ | locale = locale_, minimumSignificantDigits = Just 1 } 2
+                in
+                    case Fluent.numberValue fnum_ of
+                        2 ->
+                            "two things"
+                        _ ->
+                            "one thing"
+            """,
+        )
+
+    def test_parameterized_terms_missing(self):
+        code, errs = compile_messages_to_elm(
+            """
+            bad-term = { -missing(foo: "bar") }
+            """,
+            self.locale,
+        )
+        self.assertEqual(errs, [error_types.ReferenceError("Unknown term: -missing")])
+        self.assertEqual(errs[0].error_sources[0].message_id, "bad-term")
+
+    def test_parameterized_terms_positional_arg(self):
+        code, errs = compile_messages_to_elm(
+            """
+            -thing = { $article ->
+                  *[definite] the thing
+                   [indefinite] a thing
+            }
+            thing-positional-arg = { -thing("bar") }
+            """,
+            self.locale,
+        )
+        self.assertEqual(
+            errs,
+            [error_types.TermParameterError("Positional arguments passed to term '-thing'")],
+        )
+        self.assertEqual(errs[0].error_sources[0].message_id, "thing-positional-arg")
+
+    def test_parameterized_term_attributes(self):
+        code, errs = compile_messages_to_elm(
+            """
+            -brand = Cool Thing
+                .status = { $version ->
+                    [v2]     available
+                   *[v1]     deprecated
+                }
+
+            attr-with-arg = { -brand } is { -brand.status(version: "v2") ->
+                 [available]   available, yay!
+                *[deprecated]  deprecated, sorry
+            }
+            """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            attrWithArg : Locale.Locale -> a -> String
+            attrWithArg locale_ args_ =
+                "Cool Thing is available, yay!"
+            """,
+        )
+
+    def test_superfluous_or_bad_parameters(self):
+        code, errs = compile_messages_to_elm(
+            """
+            -term = My Thing
+            message = { -term(foo: "bar") }
+            -parameterized-term = { $foo ->
+                    *[a]   A
+                     [b]   { -other-term }
+             }
+            -other-term = { $bar ->
+                    *[c]   C
+                     [d]   D
+             }
+            message-2 = { -parameterized-term(fooo: "bar") }
+            """,
+            self.locale,
+        )
+        self.assertEqual(
+            errs,
+            [
+                error_types.TermParameterError(
+                    "Parameter 'foo' was passed to term '-term' which does not take parameters."
+                ),
+                error_types.TermParameterError(
+                    "Parameter 'fooo' was passed to term '-parameterized-term' which does not take this parameter. Did you mean: bar, foo?"
+                ),
+            ],
+        )
+
+    def test_messages_called_from_terms(self):
+        code, errs = compile_messages_to_elm(
+            """
+            msg = Msg is { NUMBER($arg) }
+            -foo = { $arg } { msg }
+            ref-foo = { -foo(arg: 1) }
+            """,
+            self.locale,
+        )
+        # This construct is technically allowed at the moment, but might be
+        # disallowed in future, and it doesn't make a huge amount of sense,
+        # so we disallow for now.
+        self.assertEqual(errs, [error_types.ReferenceError("Message 'msg' called from within a term")])
+        self.assertEqual(errs[0].error_sources[0].message_id, "ref-foo")
+
+
+class TestHtml(unittest.TestCase):
+    locale = "en-US"
+
+    maxDiff = None
+
+    def assertCodeEqual(self, code1, code2):
+        self.assertEqual(normalize_elm(code2), normalize_elm(code1))
+
+    def test_text(self):
+        code, errs = compile_messages_to_elm(
+            """
+            text-html = Me &amp; my friends ☺
+            """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            textHtml : Locale.Locale -> a -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            textHtml locale_ args_ attrs_ =
+                [ Html.text "Me & my friends ☺"
+                ]
+            """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_tags(self):
+        code, errs = compile_messages_to_elm(
+            """
+            tags-html = Some <b>bold text</b> and some <b>bold and <i>nested italic ☺</i></b> text
+            """,
+            self.locale,
+            dynamic_html_attributes=False,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            tagsHtml : Locale.Locale -> a -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            tagsHtml locale_ args_ attrs_ =
+                [ Html.text "Some "
+                , Html.b [] [ Html.text "bold text"
+                            ]
+                , Html.text " and some "
+                , Html.b [] [ Html.text "bold and "
+                            , Html.i [] [ Html.text "nested italic ☺"
+                                        ]
+                            ]
+                , Html.text " text"
+                ]
+            """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_tags_not_builtin(self):
+        code, errs = compile_messages_to_elm(
+            """
+            new-tag-html = <html5000newelement></html5000newelement>
+            """,
+            self.locale,
+            dynamic_html_attributes=False,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            newTagHtml : Locale.Locale -> a -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            newTagHtml locale_ args_ attrs_ =
+                [ Html.node "html5000newelement" [] []
+                ]
+            """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_static_attributes(self):
+        code, errs = compile_messages_to_elm(
+            """
+            tag-html = <b id="myid" data-foo data-bar="baz">text</b>
+            """,
+            self.locale,
+            dynamic_html_attributes=False,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            tagHtml : Locale.Locale -> a -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            tagHtml locale_ args_ attrs_ =
+                [ Html.b [ Attributes.attribute "data-bar" "baz"
+                         , Attributes.attribute "data-foo" ""
+                         , Attributes.id "myid"
+                         ] [ Html.text "text"
+                           ]
+                ]
+            """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_class_attributes(self):
+        # Check we work around bs4 'helpfulness'
+        code, errs = compile_messages_to_elm(
+            """
+            new-tag-html = <b class="foo">text</b>
+            """,
+            self.locale,
+            dynamic_html_attributes=False,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            newTagHtml : Locale.Locale -> a -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            newTagHtml locale_ args_ attrs_ =
+                [ Html.b [ Attributes.class "foo"
+                         ] [ Html.text "text"
+                           ]
+                ]
+            """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_args(self):
+        code, errs = compile_messages_to_elm(
+            """
+            hello-html = Hello { $name }
+            """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            helloHtml : Locale.Locale -> { a | name : String } -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            helloHtml locale_ args_ attrs_ =
+                [ Html.text (String.concat [ "Hello "
+                                           , args_.name
+                                           ])
+                ]
+            """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_dynamic_attributes(self):
+        code, errs = compile_messages_to_elm(
+            """
+            attributes-html = <b class="foo" data-foo id="myid">text</b>
+            """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            attributesHtml : Locale.Locale -> a -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            attributesHtml locale_ args_ attrs_ =
+                [ Html.b (List.concat [ [ Attributes.class "foo"
+                                        , Attributes.attribute "data-foo" ""
+                                        , Attributes.id "myid"
+                                        ]
+                                      , Fluent.selectAttributes attrs_ [ "b"
+                                                                       , ".foo"
+                                                                       , "b.foo"
+                                                                       , "#myid"
+                                                                       , "b#myid"
+                                                                       , "[data-foo]"
+                                                                       , "b[data-foo]"
+                                                                       , "[data-foo=\\"\\"]"
+                                                                       , "b[data-foo=\\"\\"]"
+                                                                       ]
+                                      ]) [ Html.text "text"
+                                         ]
+                ]
+            """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_dynamic_attributes_2(self):
+        code, errs = compile_messages_to_elm(
+            """
+            attributes-html = <b>text</b>
+            """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            attributesHtml : Locale.Locale -> a -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            attributesHtml locale_ args_ attrs_ =
+                [ Html.b (Fluent.selectAttributes attrs_ [ "b"
+                                                         ]) [ Html.text "text"
+                                                            ]
+                ]
+            """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_attribute_substitution(self):
+        # If we have any non-static text in attributes, we can't use them for attribute selectors
+        code, errs = compile_messages_to_elm(
+            """
+            attributes-html = <b class="foo{ bar }" data-foo="{ $arg }" id="{ baz.id }">text</b>
+            bar = Bar
+            baz = baz
+                .id = bazid
+            """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            attributesHtml : Locale.Locale -> { a | arg : String } -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            attributesHtml locale_ args_ attrs_ =
+                [ Html.b (List.concat [ [ Attributes.class (String.concat [ "foo"
+                                                                          , bar locale_ args_
+                                                                          ])
+                                        , Attributes.attribute "data-foo" args_.arg
+                                        , Attributes.id (baz_id locale_ args_)
+                                        ]
+                                      , Fluent.selectAttributes attrs_ [ "b"
+                                                                       , "[data-foo]"
+                                                                       , "b[data-foo]"
+                                                                       ]
+                                      ]) [ Html.text "text"
+                                         ]
+                ]
+
+            bar : Locale.Locale -> a -> String
+            bar locale_ args_ =
+                "Bar"
+
+            baz : Locale.Locale -> a -> String
+            baz locale_ args_ =
+                "baz"
+
+            baz_id : Locale.Locale -> a -> String
+            baz_id locale_ args_ =
+                "bazid"
+            """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_non_string_args_in_attributes(self):
+        code, errs = compile_messages_to_elm(
+            """
+            number-attribute-html = <b data-foo="{ NUMBER($arg) }">text</b>
+            """,
+            self.locale,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            numberAttributeHtml : Locale.Locale -> { a | arg : Fluent.FluentNumber number } -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            numberAttributeHtml locale_ args_ attrs_ =
+                [ Html.b (List.concat [ [ Attributes.attribute "data-foo" (Fluent.formatNumber locale_ args_.arg)
+                                        ]
+                                      , Fluent.selectAttributes attrs_ [ "b"
+                                                                       , "[data-foo]"
+                                                                       , "b[data-foo]"
+                                                                       ]
+                                      ]) [ Html.text "text"
+                                         ]
+                ]
+            """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_argument(self):
+        code, errs = compile_messages_to_elm(
+            """
+            hello-html = Hello <b>{ $username }</b>!
+            """,
+            self.locale,
+            dynamic_html_attributes=False,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            helloHtml : Locale.Locale -> { a | username : String } -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            helloHtml locale_ args_ attrs_ =
+                [ Html.text "Hello "
+                , Html.b [] [ Html.text args_.username
+                            ]
+                , Html.text "!"
+                ]
+             """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_non_string_args_in_text(self):
+        code, errs = compile_messages_to_elm(
+            """
+            foo-html = <b>Text { $arg } { DATETIME($arg) }</b>
+            """,
+            self.locale,
+            dynamic_html_attributes=False,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            fooHtml : Locale.Locale -> { a | arg : Fluent.FluentDate } -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            fooHtml locale_ args_ attrs_ =
+                [ Html.b [] [ Html.text (String.concat [ "Text "
+                                                       , Fluent.formatDate locale_ args_.arg
+                                                       , " "
+                                                       , Fluent.formatDate locale_ args_.arg
+                                                       ])
+                            ]
+                ]
+             """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_text_message_call(self):
+        code, errs = compile_messages_to_elm(
+            """
+            welcome-back = Welcome back!
+            hello-html = Hello, friend! <b>{ welcome-back }</b>
+            """,
+            self.locale,
+            dynamic_html_attributes=False,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            welcomeBack : Locale.Locale -> a -> String
+            welcomeBack locale_ args_ =
+                "Welcome back!"
+
+            helloHtml : Locale.Locale -> a -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            helloHtml locale_ args_ attrs_ =
+                [ Html.text "Hello, friend! "
+                , Html.b [] [ Html.text (welcomeBack locale_ args_)
+                            ]
+                ]
+             """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_html_message_call(self):
+        code, errs = compile_messages_to_elm(
+            """
+            welcome-html = Welcome to <b>Awesome site!</b>
+            hello-html = Hello! { welcome-html }
+            """,
+            self.locale,
+            dynamic_html_attributes=False,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            welcomeHtml : Locale.Locale -> a -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            welcomeHtml locale_ args_ attrs_ =
+                [ Html.text "Welcome to "
+                , Html.b [] [ Html.text "Awesome site!"
+                            ]
+                ]
+
+            helloHtml : Locale.Locale -> a -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            helloHtml locale_ args_ attrs_ =
+                List.concat [ [ Html.text "Hello! "
+                              ]
+                            , welcomeHtml locale_ args_ attrs_
+                            ]
+             """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_text_message_call_attribute(self):
+        code, errs = compile_messages_to_elm(
+            """
+            hello-html = Hello <b data-foo="&lt;stuff&gt; { hello-html.foo }">friend</b>
+                      .foo = <xxx>
+            """,
+            self.locale,
+            dynamic_html_attributes=False,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            helloHtml : Locale.Locale -> a -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            helloHtml locale_ args_ attrs_ =
+                [ Html.text "Hello "
+                , Html.b [ Attributes.attribute "data-foo" (String.concat [ "<stuff> "
+                                                                          , helloHtml_foo locale_ args_
+                                                                          ])
+                         ] [ Html.text "friend"
+                           ]
+                ]
+
+            helloHtml_foo : Locale.Locale -> a -> String
+            helloHtml_foo locale_ args_ =
+                "<xxx>"
+            """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_html_message_call_attribute(self):
+        code, errs = compile_messages_to_elm(
+            """
+            hello-html = Hello <b class="{ foo-html }">friend</b>
+            foo-html = Foo
+            """,
+            self.locale,
+        )
+        self.assertEqual(len(errs), 1)
+        self.assertEqual(errs[0].message, "Cannot use HTML message foo-html from plain text context.")
+
+    def test_html_message_call_from_plain_test(self):
+        code, errs = compile_messages_to_elm(
+            """
+            hello = Hello { foo-html }
+            foo-html = Foo
+            """,
+            self.locale,
+        )
+        self.assertEqual(len(errs), 1)
+        self.assertEqual(errs[0].message, "Cannot use HTML message foo-html from plain text context.")
+
+    def test_select_expression_1(self):
+        # Test we get HTML handling of the pattern inside the select express
+        # i.e HTML context propagates
+        code, errs = compile_messages_to_elm(
+            """
+            hello-html = Hello { $gender ->
+               [male]    <b>Mr. { $surname }</b>, nice to see you
+               [female]  <b>Ms. { $surname }</b>, nice to see you
+              *[other]   <b>{ $surname }</b>, nice to see you
+             }
+            """,
+            self.locale,
+            dynamic_html_attributes=False,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            helloHtml : Locale.Locale -> { a | gender : String, surname : String } -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            helloHtml locale_ args_ attrs_ =
+                List.concat [ [ Html.text "Hello "
+                              ]
+                            , case args_.gender of
+                                  "male" ->
+                                      [ Html.b [] [ Html.text (String.concat [ "Mr. "
+                                                                             , args_.surname
+                                                                             ])
+                                                  ]
+                                      , Html.text ", nice to see you"
+                                      ]
+                                  "female" ->
+                                      [ Html.b [] [ Html.text (String.concat [ "Ms. "
+                                                                             , args_.surname
+                                                                             ])
+                                                  ]
+                                      , Html.text ", nice to see you"
+                                      ]
+                                  _ ->
+                                      [ Html.b [] [ Html.text args_.surname
+                                                  ]
+                                      , Html.text ", nice to see you"
+                                      ]
+
+                            ]
+             """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_html_term_inline(self):
+        code, errs = compile_messages_to_elm(
+            """
+            welcome-html = Welcome to { -brand-html }
+            -brand-html = Awesomeness<sup>2</sup>
+            """,
+            self.locale,
+            dynamic_html_attributes=False,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            welcomeHtml : Locale.Locale -> a -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            welcomeHtml locale_ args_ attrs_ =
+                [ Html.text "Welcome to Awesomeness"
+                , Html.sup [] [ Html.text "2"
+                              ]
+                ]
+            """,
+        )
+        self.assertEqual(errs, [])
+
+    def test_plain_term_inline(self):
+        code, errs = compile_messages_to_elm(
+            """
+            welcome-html = Welcome to <b>{ -brand }</b>
+            -brand = Awesomeness2
+            """,
+            self.locale,
+            dynamic_html_attributes=False,
+        )
+        self.assertCodeEqual(
+            code,
+            """
+            welcomeHtml : Locale.Locale -> a -> List (String, List (Html.Attribute msg)) -> List (Html.Html msg)
+            welcomeHtml locale_ args_ attrs_ =
+                [ Html.text "Welcome to "
+                , Html.b [] [ Html.text "Awesomeness2"
+                            ]
+                ]
+            """,
+        )
+        self.assertEqual(errs, [])
