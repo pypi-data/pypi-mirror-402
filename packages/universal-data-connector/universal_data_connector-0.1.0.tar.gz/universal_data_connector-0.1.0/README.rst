@@ -1,0 +1,264 @@
+| |sponsor| |bluesky-nedbat| |mastodon-nedbat|
+
+**Note:** Since writing this README, I’ve found that the `Python Packaging User Guide tutorial`_ is an excellent reference for general packaging. This document focuses specifically on this project.
+
+.. _Python Packaging User Guide tutorial: https://packaging.python.org/en/latest/tutorials/packaging-projects/
+
+-----
+
+##########################
+universal-data-connector
+##########################
+
+`universal-data-connector` is a Python package and CLI tool for executing Oracle SQL files directly from the command line or Python. It is designed for data engineers, analysts, and platform teams who want a **simple CLI that runs a `.sql` file against Oracle and returns results as CSV**, without writing Python scripts.
+
+Key features:
+
+- Clean packaging using ``pyproject.toml``
+- CLI-first user experience
+- Environment-variable–based configuration for credentials
+- Separation between database logic and execution logic
+
+This repository focuses on **one practical packaging approach** (2025) and intentionally omits production extras like CI, tests, linting, or type checking. Comments throughout the source explain the structure and decisions.
+
+---
+
+How to use this project
+=======================
+
+This repository is both a **working package** and a **reference implementation**. You can:
+
+- Install and immediately run Oracle SQL files
+- Fork and adapt it for your organization
+- Copy files such as ``pyproject.toml`` or the CLI into existing projects
+
+You do **not** need to copy the entire repository.
+
+---
+
+Decisions
+=========
+
+Project name
+------------
+
+The package name is ``universal-data-connector``, which serves as:
+
+- The PyPI package name
+- The Python import namespace
+- The CLI entry point: ``oracle-run``
+
+If you fork or reuse the project, pick a unique PyPI name.
+
+.. _PyPI: https://pypi.org
+
+Version number
+--------------
+
+Defined in ``src/universal_data_connector/__init__.py`` as ``__version__``.  
+During testing, use `.devN` suffixes, e.g.:
+
+::
+
+    __version__ = "0.1.1.dev0"
+
+---
+
+CLI-first design
+----------------
+
+The CLI is the primary interface. Example::
+
+    oracle-run --sql main.sql --output results.csv
+
+Python usage is possible but secondary.
+
+---
+
+Environment variables
+---------------------
+
+Oracle connection details are provided via environment variables::
+
+    export ORACLE_USER=your_username
+    export ORACLE_PASSWORD=your_password
+    export ORACLE_HOST=your_host
+    export ORACLE_PORT=1521
+    export ODWH_SERVICE=your_service_name
+
+This avoids hard-coded credentials and supports local, CI/CD, containerized, or cloud environments.
+
+---
+
+Project layout
+==============
+
+::
+
+    src/
+     └── universal_data_connector/
+          ├── connector.py   # Oracle connection & execution logic
+          ├── runner.py      # SQL execution helper
+          └── cli.py         # Click-based CLI
+
+`pyproject.toml` defines:
+
+- Project metadata
+- Dependencies
+- Python version requirement
+- CLI entry point
+
+---
+
+Installation
+============
+
+Local editable install
+----------------------
+
+For development or local testing::
+
+    python -m pip install -e .
+
+This installs the CLI and allows immediate development without rebuilding the package.
+
+---
+
+Usage
+=====
+
+Running a SQL file
+------------------
+
+::
+
+    oracle-run --sql sql/main.sql
+
+Custom output file::
+
+    oracle-run --sql sql/main.sql --output results.csv
+
+If the query returns rows, they will be written to the output file. If no rows are returned, the command will still succeed.
+
+---
+
+Making distributions
+====================
+
+Build source and wheel distributions::
+
+    python -m build --sdist --wheel
+    python -m twine check dist/*
+
+The ``dist/`` directory will contain files like::
+
+    universal_data_connector-0.1.1-py3-none-any.whl
+    universal_data_connector-0.1.1.tar.gz
+
+Test installation::
+
+    python -m pip install universal_data_connector-0.1.1-py3-none-any.whl
+
+---
+
+Uploading to PyPI
+=================
+
+Public PyPI: https://pypi.org  
+Test PyPI: https://test.pypi.org
+
+Upload to Test PyPI::
+
+    python -m twine upload --repository testpypi dist/*
+
+Upload to Production PyPI::
+
+    python -m twine upload dist/*
+
+Install::
+
+    pip install universal-data-connector
+
+Run::
+
+    oracle-run --sql main.sql
+
+---
+
+Internal / private PyPI usage
+=============================
+
+This package can be published and consumed from an **internal Python repository**.
+
+Configure ``~/.pypirc``::
+
+    [distutils]
+    index-servers =
+        internal
+
+    [internal]
+    repository = https://pypi.company.com/repository/python-internal/
+    username = __token__
+    password = <access-token>
+
+Build and check::
+
+    python -m build --sdist --wheel
+    python -m twine check dist/*
+
+Upload::
+
+    python -m twine upload --repository internal dist/*
+
+Install from internal PyPI::
+
+    pip install universal-data-connector \
+        --index-url https://pypi.company.com/repository/python-internal/simple
+
+---
+
+Versioning
+===========
+
+- Use ``.devN`` for testing
+- Increment versions for releases
+- Treat releases as immutable artifacts
+
+---
+
+CI/CD considerations
+====================
+
+- Store credentials in secret managers
+- Build artifacts once per commit/tag
+- Upload only from protected branches
+
+---
+
+Internal usage expectations
+===========================
+
+- Users have repository access
+- Oracle credentials via environment variables
+- SQL files from approved sources
+
+Avoid:
+
+- Interactive prompts
+- Embedded secrets
+- Environment-specific logic
+
+---
+
+Shields
+=======
+
+.. |mastodon-nedbat| image:: https://img.shields.io/badge/Mastodon-follow-purple
+    :target: https://hachyderm.io
+    :alt: Mastodon
+.. |bluesky-nedbat| image:: https://img.shields.io/badge/Bluesky-follow-blue
+    :target: https://bsky.app
+    :alt: Bluesky
+.. |sponsor| image:: https://img.shields.io/badge/%E2%9D%A4-Sponsor-brightgreen
+    :target: https://github.com/sponsors
+    :alt: Sponsor
