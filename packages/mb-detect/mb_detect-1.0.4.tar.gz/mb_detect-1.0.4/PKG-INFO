@@ -1,0 +1,160 @@
+Metadata-Version: 2.4
+Name: mb_detect
+Version: 1.0.4
+Summary: A smart serial port detector for BBC micro:bit
+Home-page: https://github.com/mrgallen/mb_detect
+Author: Eoin Gallen
+Author-email: egallen@sainteunans.com
+License: MIT
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Description-Content-Type: text/markdown
+License-File: LICENSE.md
+Requires-Dist: pyserial
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: license
+Dynamic: license-file
+Dynamic: requires-dist
+Dynamic: summary
+
+# Micro:bit Detector
+
+A lightweight Python utility to automatically detect and select BBC micro:bit devices connected via USB.
+
+It handles cross-platform port detection (Windows/Mac/Linux), robustly manages multiple devices, and can automatically create the serial connection for you.
+
+## Features
+
+* **Auto-Detection:** Automatically finds the correct serial port (`COM3`, `/dev/ttyACM0`, etc.) using hardware IDs (VID 3368).
+* **Direct Connection:** Can return a ready-to-use `serial.Serial` object in one line.
+* **Multi-Device Support:** Can detect multiple connected micro:bits.
+* **Smart Selection:**
+    * If 1 device is found, it selects it automatically.
+    * If multiple are found, it can prompt the user to choose one.
+* **Metadata:** Retrieves Serial Numbers to distinguish between identical devices.
+
+## Installation
+
+```bash
+pip install mb_detect
+```
+
+## Usage
+
+### 1. The Recommended Way (Direct Connect)
+You can find and connect to the micro:bit in a single line. This returns a standard `serial.Serial` object, so you can use all standard PySerial methods (`write`, `readline`, `flush`, etc.) immediately.
+
+You can also pass standard PySerial arguments (like `timeout`) directly to this function.
+
+```python
+import mb_detect
+import time
+
+# Finds the micro:bit and connects with a 2-second timeout
+ser = mb_detect.connect(timeout=2)
+
+if ser:
+    print(f"✅ Connected to {ser.port}")
+    
+    # You can now use standard serial methods
+    ser.write(b'hello\n')
+    
+    response = ser.readline().decode().strip()
+    print(f"Received: {response}")
+    
+    ser.close()
+else:
+    print("❌ No micro:bit found or device is busy.")
+```
+
+### 2. Get Port String Only (Manual Connection)
+If you only want the port name (e.g., `"COM3"`) but want to handle the connection logic yourself, use `find()`.
+
+```python
+import mb_detect
+import serial
+
+# Returns the port name as a string (e.g., "COM3")
+port = mb_detect.find()
+
+if port:
+    print(f"Found micro:bit at {port}")
+    # You can pass this string to pyserial manually
+    ser = serial.Serial(port, 115200)
+```
+
+### 3. Handling Multiple micro:bits (Interactive)
+If you have multiple devices connected, both `find()` and `connect()` will automatically pause the script and ask the user to choose one via the terminal.
+
+```python
+# If 2 micro:bits are plugged in, this will print:
+#    ⚠️  Found 2 micro:bits:
+#    [0] Port: COM3 | Serial: 9900...
+#    [1] Port: COM4 | Serial: 9901...
+#
+#    Select device number (0-9): 
+
+ser = mb_detect.connect()
+print(f"User selected: {ser.port}")
+```
+
+### 4. Non-Interactive Mode (Automation)
+If you are running a script in the background (e.g., a robot or server) and cannot accept user input, use `interactive=False`. It will default to the first available micro:bit found.
+
+```python
+# Will not ask for input; just connects to the first one found
+ser = mb_detect.connect(interactive=False)
+```
+
+### 5. Advanced: Get All Data
+If you need the Serial Number or want to connect to *all* micro:bits at once, use the `scan()` function. This returns the full data list.
+
+```python
+all_devices = mb_detect.scan()
+
+# Returns a list of dictionaries:
+# [
+#   {'port': 'COM3', 'serial_number': '99000...', 'description': 'mbed Serial Port'},
+#   {'port': 'COM4', 'serial_number': '99001...', 'description': 'mbed Serial Port'}
+# ]
+
+for dev in all_devices:
+    print(f"Found device at {dev['port']} with serial {dev['serial_number']}")
+```
+
+### 6. Handling a Fleet (Multiple Connections)
+If you need to connect to **multiple** micro:bits simultaneously (e.g., a swarm of robots), use `connect_multiple()`. This returns a **list** of connected serial objects.
+
+```python
+import mb_detect
+
+# Connect to ALL connected micro:bits
+# IMPORTANT: Use a timeout so reading doesn't block the loop
+fleet = mb_detect.connect_multiple(timeout=0.1)
+
+print(f"Connected to {len(fleet)} devices.")
+
+# Loop through them to read data
+for ser in fleet:
+    if ser.in_waiting:
+        print(f"[{ser.port}] says: {ser.readline().decode().strip()}")
+
+# Close all
+for ser in fleet:
+    ser.close()
+```
+
+## Requirements
+
+* Python 3.6+
+* pyserial
+
+## License
+
+MIT
