@@ -1,0 +1,82 @@
+[project]
+name = "trueloc"
+dynamic = ["version"]
+description = "Count lines of code from GitHub pull requests"
+readme = "README.md"
+authors = [{ name = "Bas Nijholt", email = "bas@nijho.lt" }]
+requires-python = ">=3.12"
+dependencies = ["typer>=0.15", "httpx>=0.28", "rich>=13", "diskcache>=5", "dateparser>=1"]
+
+[project.scripts]
+trueloc = "trueloc:app"
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/trueloc/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trueloc"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "D",       # pydocstyle
+    "ANN",     # annotations
+    "COM812",  # trailing comma
+    "ISC001",  # implicit string concat
+    "T20",     # print statements (we use them for CLI)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "S101",    # assert usage is fine in tests
+    "PLR2004", # magic values are fine in tests
+    "S105",    # hardcoded passwords (test tokens)
+    "PLC0415", # import not at top level (test isolation)
+    "TC002",   # type-checking imports
+    "TC003",   # type-checking imports
+    "TC005",   # empty type-checking block
+    "SLF001",  # private member access (testing internals)
+    "DTZ001",  # datetime without tzinfo (test data)
+    "ARG005",  # unused lambda args (test mocks)
+    "EM101",   # string literal in exception (test helpers)
+    "FBT003",  # boolean positional (calling internal APIs)
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.ty.rules]
+unused-ignore-comment = "ignore"
+
+[dependency-groups]
+dev = ["mypy>=1.14", "pre-commit>=4", "ruff>=0.9", "pytest>=8", "pytest-cov>=4", "respx>=0.21", "ty"]
+docs = ["zensical", "markdown-gfm-admonition"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=trueloc --cov-report=term-missing --cov-report=html"
+
+[tool.coverage.run]
+source = ["src/trueloc"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
