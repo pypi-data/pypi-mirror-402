@@ -1,0 +1,89 @@
+[project]
+name = "{{ project_name }}"
+version = "{{ version }}"
+description = "{{ description }}"
+{%- if use_readme %}
+readme = "README.md"
+{%- endif %}
+requires-python = ">={{ python_version }}"
+authors = [
+    { name = "{{ author_name }}", email = "{{ author_email }}" }
+]
+license = { text = "{{ license }}" }
+dependencies = [
+    {%- if use_config %}
+    "pyyaml>=6.0",
+    {%- endif %}
+    {%- if has_env %}
+    "python-dotenv>=1.0.0",
+    {%- endif %}
+    {%- if is_ml_dl %}
+    "kagglehub>=0.2.0",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "scikit-learn>=1.3.0",
+    "matplotlib>=3.7.0",
+    "seaborn>=0.12.0",
+    "requests>=2.30.0",
+    "tqdm>=4.65.0",
+    {%- endif %}
+    {%- if is_dl %}
+    {%- if 'pytorch' in frameworks %}
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    {%- endif %}
+    {%- if 'tensorflow' in frameworks %}
+    "tensorflow>=2.13.0",
+    # "keras>=3.0.0", # Optional, included in tf usually
+    {%- endif %}
+    {%- endif %}
+]
+
+[project.scripts]
+{%- for name, entry in scripts.items() %}
+{{ name }} = "{{ entry }}"
+{%- endfor %}
+
+[build-system]
+{%- if builder == 'hatch' %}
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+{%- else %}
+# Default: uv native build backend
+requires = ["uv_build>=0.9.21,<0.10.0"]
+build-backend = "uv_build"
+{%- endif %}
+
+{%- set ns = namespace(any_tests=use_tests) %}
+{%- if not ns.any_tests %}
+    {%- for pkg in packages %}
+        {%- if pkg.use_tests %}
+            {%- set ns.any_tests = True %}
+        {%- endif %}
+    {%- endfor %}
+{%- endif %}
+
+{%- if ns.any_tests %}
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-mock>=3.15.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = [
+    {%- if use_tests %}
+    "src/{{ package_name }}/tests",
+    {%- endif %}
+    {%- for pkg in packages %}
+    {%- if pkg.use_tests %}
+    "src/{{ pkg.clean_name }}/tests",
+    {%- endif %}
+    {%- endfor %}
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+{%- endif %}
+
+
