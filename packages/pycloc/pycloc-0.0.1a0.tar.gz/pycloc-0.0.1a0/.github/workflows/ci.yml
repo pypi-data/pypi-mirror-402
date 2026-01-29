@@ -1,0 +1,30 @@
+name: CI
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    name: Quality Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Prepare repository
+        uses: ./.github/actions/prepare
+      - name: Run linter
+        run: just lint
+      - name: Run type checker
+        run: just check
+      - name: Run tests
+        run: just test
+      - name: Upload coverage report
+        if: always()
+        run: |
+          if [ -f coverage.md ]; then
+            echo "### Test Coverage" >> "$GITHUB_STEP_SUMMARY"
+            echo >> "$GITHUB_STEP_SUMMARY"
+            cat coverage.md >> "$GITHUB_STEP_SUMMARY"
+          fi
