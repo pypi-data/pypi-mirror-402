@@ -1,0 +1,405 @@
+# -*- coding: utf-8 -*-
+# __init__.py
+
+"""
+Keçeci Numbers: A Comprehensive Framework for Number Sequence Analysis.
+
+This package provides tools for generating, analyzing, and visualizing
+16 different types of Keçeci Number sequences, from standard integers
+to complex algebraic structures like quaternions and neutrosophic numbers.
+
+Bu dosya paketin başlangıç noktası olarak çalışır.
+Alt modülleri yükler, sürüm bilgileri tanımlar ve geriye dönük uyumluluk için uyarılar sağlar.
+"""
+
+from __future__ import annotations
+import warnings
+from .kececinumbers import _parse_engineering_notation
+
+# Paket sürüm numarası
+__version__ = "0.8.9"
+__author__ = "Mehmet Keçeci"
+__email__ = "mkececi@yaani.com"
+
+# Public API exposed to users of the 'kececinumbers' package.
+__all__ = [
+    # --- Custom Number Classes ---
+    '_parse_engineering_notation,'
+    'get_interactive',
+    'NeutrosophicNumber',
+    'NeutrosophicComplexNumber',
+    'HyperrealNumber',
+    'BicomplexNumber',
+    'NeutrosophicBicomplexNumber',
+    'OctonionNumber',
+    'Constants',
+    'SedenionNumber',
+    'CliffordNumber',
+    'DualNumber',
+    'SplitcomplexNumber',
+    'BaseNumber',
+    'TernaryNumber',
+    'SuperrealNumber',
+    'quaternion',
+    'ComplexNumber',
+    'HypercomplexNumber',
+    'Real',
+    'Complex',
+    'Quaternion',
+    'Octonion',
+    'Sedenion',
+    'Pathion',
+    'Chingon',
+    'Routon',
+    'Voudon',
+    '_parse_real',
+    '_parse_super_real',
+    'is_super_real_expression',
+    'normalize_super_real',
+    '_get_default_hypercomplex',
+    '_get_default_value',
+    '_parse_to_hypercomplex',
+    'ValueProcessor',
+    '_generate_sequence',
+    'extract_values_for_plotting',
+    '_generate_simple_sequence',
+    '_generate_detailed_sequence',
+    '_generate_default_value',
+
+    # --- High-Level Functions ---
+    'get_with_params',
+    'get_random_type',
+    '_get_integer_representation',
+    '_parse_quaternion',
+    '_parse_quaternion_from_csv',
+    '_parse_complex',
+    '_parse_bicomplex',
+    '_parse_universal',
+    '_parse_octonion',
+    '_parse_sedenion',
+    '_parse_neutrosophic',
+    '_parse_neutrosophic_complex',
+    '_parse_neutrosophic_bicomplex',
+    '_parse_hyperreal',
+    '_parse_clifford',
+    '_parse_dual',
+    '_parse_splitcomplex',
+    '_plot_comparison', 
+    '_find_kececi_zeta_zeros',
+    '_compute_gue_similarity',
+    '_load_zeta_zeros',
+    '_has_bicomplex_format',
+    '_gue_pair_correlation',
+    '_pair_correlation',
+    'kececi_bicomplex_algorithm',
+    'kececi_bicomplex_advanced',
+    'generate_kececi_vectorial',
+    'analyze_all_types',
+    'analyze_pair_correlation',
+    'print_detailed_report',
+    'generate_octonion',
+    'OctonionNumber',
+    'is_quaternion_like',
+    'is_neutrosophic_like',
+    #'coeffs',
+    'convert_to_float',
+    'safe_add',
+    '_extract_numeric_part',
+    '_has_comma_format',
+    '_is_complex_like',
+    '_is_divisible',
+    '_pair_correlation',
+    '_plot_component_distribution',
+    '_parse_pathion',
+    '_parse_chingon',
+    '_parse_routon',
+    '_parse_voudon',
+    '_pca_var_sum',
+    'format_fraction',
+    'test_kececi_conjecture',
+    'generate_interactive_plot',
+    'apply_pca_clustering',
+    'analyze_kececi_sequence',
+    'plot_octonion_3d',
+    '_parse_ternary',
+    '_parse_superreal',
+    'logger',
+    'chingon_zeros',
+    'chingon_ones',
+    'chingon_unit_vector',
+    'chingon_eye',
+    'chingon_random',
+    'chingon_linspace',
+    'chingon_dot',
+    'chingon_cross',
+    'chingon_norm',
+    'chingon_normalize',
+    'neutrosophic_zero',
+    'neutrosophic_one',
+    'neutrosophic_i',
+    'neutrosophic_f',
+    'parse_to_neutrosophic',
+    'parse_to_hyperreal',
+    '_safe_float_convert',
+    '_parse_complex_like_string',
+    '_safe_float',
+    'get_random_types_batch',
+    '_find_kececi_prime_number',
+    '_safe_power',
+    '_safe_mod',
+    '_safe_divide',
+    '_float_mod_zero',
+    'clean_sequence_for_plotting',
+    'extract_numeric_value',
+    'extract_numeric_values',
+    'extract_complex_values',
+    'extract_fraction_values',
+    'find_first_numeric',
+    'extract_clean_numbers',
+    '_parse_fraction',
+    
+    # --- Core Generation and Analysis ---
+    'unified_generator',
+    'is_prime',
+    'is_prime_like',
+    'is_near_integer',
+    'find_period',
+    'find_kececi_prime_number',
+
+    # --- Visualization and Reporting ---
+    'plot_numbers',
+
+    # --- Type Constants ---
+    'TYPE_POSITIVE_REAL',
+    'TYPE_NEGATIVE_REAL',
+    'TYPE_COMPLEX',
+    'TYPE_FLOAT',
+    'TYPE_RATIONAL',
+    'TYPE_QUATERNION',
+    'TYPE_NEUTROSOPHIC',
+    'TYPE_NEUTROSOPHIC_COMPLEX',
+    'TYPE_HYPERREAL',
+    'TYPE_BICOMPLEX',
+    'TYPE_NEUTROSOPHIC_BICOMPLEX',
+    'TYPE_OCTONION',
+    'TYPE_SEDENION',
+    'TYPE_CLIFFORD',
+    'TYPE_DUAL',
+    'TYPE_SPLIT_COMPLEX',
+    'TYPE_PATHION',
+    'TYPE_CHINGON',
+    'TYPE_ROUTON',
+    'TYPE_VOUDON',
+    'TYPE_SUPERREAL',
+    'TYPE_TERNARY',
+    'TYPE_HYPERCOMPLEX',
+]
+
+try:
+    # Import the public API into the package's namespace.
+    from .kececinumbers import (
+        # Classes / Number types
+        _parse_engineering_notation,
+        get_interactive,
+        TernaryNumber,
+        SuperrealNumber,
+        BaseNumber,
+        PathionNumber,
+        ChingonNumber,
+        RoutonNumber,
+        VoudonNumber,
+        OctonionNumber,
+        generate_octonion,
+        Constants,
+        NeutrosophicNumber,
+        NeutrosophicComplexNumber,
+        HyperrealNumber,
+        BicomplexNumber,
+        NeutrosophicBicomplexNumber,
+        SedenionNumber,
+        CliffordNumber,
+        DualNumber,
+        SplitcomplexNumber,
+        quaternion,
+        #coeffs,
+        find_period,
+        ComplexNumber,
+        HypercomplexNumber,
+        Real,
+        Complex,
+        Quaternion,
+        Octonion,
+        Sedenion,
+        Pathion,
+        Chingon,
+        Routon,
+        Voudon,
+        _parse_real,
+        _parse_super_real,
+        is_super_real_expression,
+        normalize_super_real,
+        _get_default_hypercomplex,
+        _get_default_value,
+        _parse_to_hypercomplex,
+        chingon_zeros,
+        chingon_ones,
+        chingon_unit_vector,
+        chingon_eye,
+        chingon_random,
+        chingon_linspace,
+        chingon_dot,
+        chingon_cross,
+        chingon_norm,
+        chingon_normalize,
+        neutrosophic_zero,
+        neutrosophic_one,
+        neutrosophic_i,
+        neutrosophic_f,
+        parse_to_neutrosophic,
+        parse_to_hyperreal,
+        _safe_float_convert,
+        _parse_complex_like_string,
+        _safe_float,
+        get_random_types_batch,
+        _find_kececi_prime_number,
+        _safe_power,
+        _safe_mod,
+        _safe_divide,
+        _float_mod_zero,
+        ValueProcessor,
+        _generate_sequence,
+        extract_values_for_plotting,
+        _generate_simple_sequence,
+        _generate_detailed_sequence,
+        _generate_default_value,
+        clean_sequence_for_plotting,
+        extract_numeric_value,
+        extract_numeric_values,
+        extract_complex_values,
+        extract_fraction_values,
+        find_first_numeric,
+        extract_clean_numbers,
+        _parse_fraction,
+
+        # Core generator / API
+        unified_generator,
+        get_with_params,
+        get_random_type,
+        generate_kececi_vectorial,
+        kececi_bicomplex_algorithm,
+        kececi_bicomplex_advanced,
+    
+        # Analysis / utilities
+        find_kececi_prime_number,
+        _get_integer_representation,
+        _is_divisible,
+        is_prime,
+        is_prime_like,
+        is_near_integer,
+        is_neutrosophic_like,
+        is_quaternion_like,
+        test_kececi_conjecture,
+        analyze_kececi_sequence,
+        analyze_all_types,
+        analyze_pair_correlation,
+        _compute_gue_similarity,
+        _find_kececi_zeta_zeros,
+        _load_zeta_zeros,
+        _pair_correlation,
+    
+        # Plotting / visualization
+        print_detailed_report,
+        plot_numbers,
+        plot_octonion_3d,
+        generate_interactive_plot,
+        apply_pca_clustering,
+        _plot_comparison,
+        _plot_component_distribution,
+    
+        # Parsers (if you want them public)
+        _parse_complex,
+        _parse_bicomplex,
+        _parse_octonion,
+        _parse_sedenion,
+        _parse_pathion,
+        _parse_chingon,
+        _parse_routon,
+        _parse_universal,
+        _parse_voudon,
+        _parse_clifford,
+        _parse_dual,
+        _parse_splitcomplex,
+        _parse_ternary,
+        _parse_superreal,
+        _parse_hyperreal,
+        _parse_neutrosophic,
+        _parse_neutrosophic_complex,
+        _parse_neutrosophic_bicomplex,
+        _parse_quaternion,
+        _parse_quaternion_from_csv,
+        _pca_var_sum,
+    
+        # Helpers / small utilities recently added
+        convert_to_float,
+        safe_add,
+        format_fraction,
+        _has_bicomplex_format,
+        _extract_numeric_part,
+        _has_comma_format,
+        _gue_pair_correlation,
+        _is_complex_like,
+        logger,
+    
+        # TYPE constants
+        TYPE_POSITIVE_REAL,
+        TYPE_NEGATIVE_REAL,
+        TYPE_COMPLEX,
+        TYPE_FLOAT,
+        TYPE_RATIONAL,
+        TYPE_QUATERNION,
+        TYPE_NEUTROSOPHIC,
+        TYPE_NEUTROSOPHIC_COMPLEX,
+        TYPE_HYPERREAL,
+        TYPE_BICOMPLEX,
+        TYPE_NEUTROSOPHIC_BICOMPLEX,
+        TYPE_OCTONION,
+        TYPE_SEDENION,
+        TYPE_CLIFFORD,
+        TYPE_DUAL,
+        TYPE_SPLIT_COMPLEX,
+        TYPE_PATHION,
+        TYPE_CHINGON,
+        TYPE_ROUTON,
+        TYPE_VOUDON,
+        TYPE_SUPERREAL,
+        TYPE_TERNARY,
+        TYPE_HYPERCOMPLEX,
+    )
+    """
+    # _gue_pair_correlation özel olarak kontrol edelim
+    try:
+        from .kececinumbers import get_interactive
+        from .kececinumbers import _gue_pair_correlation
+    except ImportError:
+        # Fonksiyon yoksa, yerine geçici bir fonksiyon tanımla
+        def _gue_pair_correlation(*args, **kwargs):
+            warnings.warn("_gue_pair_correlation not implemented yet", RuntimeWarning)
+            return None
+    """
+        
+except ImportError as e:
+    warnings.warn(f"Gerekli modül yüklenemedi: {e}", ImportWarning)
+
+# Eski bir fonksiyonun yer tutucusu - gelecekte kaldırılacak
+def eski_fonksiyon():
+    """
+    Kaldırılması planlanan eski bir fonksiyondur.
+    Lütfen alternatif fonksiyonları kullanın.
+    """
+    warnings.warn(
+        "eski_fonksiyon() artık kullanılmamaktadır ve gelecekte kaldırılacaktır. "
+        "Lütfen yeni alternatif fonksiyonları kullanın. "
+        "Keçeci numbers; Python 3.11-3.14 sürümlerinde sorunsuz çalışmalıdır.",
+        category=DeprecationWarning,
+        stacklevel=2
+    )
