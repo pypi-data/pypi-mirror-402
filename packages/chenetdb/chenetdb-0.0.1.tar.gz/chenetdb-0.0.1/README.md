@@ -1,0 +1,83 @@
+
+# ChenetDB 
+
+![Status](https://img.shields.io/badge/Status-In%20Development-orange)
+![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
+
+> **A Pythonic driver for managing graph data topology on top of MongoDB.**
+
+---
+
+## 🚧 Project Status: Pre-Alpha
+
+**ChenetDB is currently under active development.** The API is subject to change. We are building the core driver to allow seamless graph operations (Nodes, Edges, Traversals) using MongoDB as the persistent storage engine.
+
+**Current Stage:** 🏗️ *Architecture & Skeleton Implementation*  **Expected Alpha Release:** *Q3 2026*
+
+---
+
+## 💡 The Vision
+
+MongoDB is an incredible document store, but handling complex relationships often requires rigid schemas or expensive aggregations. **ChenetDB** bridges the gap. 
+
+It provides a strictly typed graph layer that abstracts the complexity of storing networks in a document database.
+
+
+
+### Key Features (Planned)
+* **3-Collection Architecture:** Automatically manages separate collections for `_nodes`, `_edges`, and `_logs` for every graph.
+* **Rich Properties:** Nodes and Edges are fully compliant MongoDB documents (store JSON of any complexity).
+* **ACID Graph Operations:** Atomic node/edge creation.
+* **Audit Logging:** Built-in history tracking for graph mutations.
+* **Pythonic API:** Feels like `NetworkX`, scales like `MongoDB`.
+
+---
+
+## 🛠️ Installation
+
+*Coming soon to PyPI.*
+
+Currently, you can install the development version via `uv` or `pip` from source:
+
+## Using uv (Recommended for contributors)
+```bash
+uv sync
+```
+
+## Or standard pip
+```
+pip install git+[https://github.com/Pont-Vision/ChenetDB.git](https://github.com/Pont-Vision/ChenetDB.git)# ChenetDB 
+```
+
+![Status](https://img.shields.io/badge/Status-In%20Development-orange)
+![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
+
+> **A Pythonic driver for managing graph data topology on top of MongoDB.**
+
+---
+
+## 🚧 Project Status: Pre-Alpha
+
+**ChenetDB is currently under active development.** The API is subject to change. We are building the core driver to allow seamless graph operations (Nodes, Edges, Traversals) using MongoDB as the persistent storage engine.
+
+**Current Stage:** 🏗️ *Architecture & Skeleton Implementation* **Expected Alpha Release:** *Q3 2026*
+
+---
+
+## 💡 The Vision
+
+MongoDB is an incredible document store, but handling complex relationships often requires rigid schemas or expensive aggregations. **ChenetDB** bridges the gap. 
+
+It provides a strictly typed graph layer that abstracts the complexity of storing networks in a document database.
+
+
+### Key Features (Planned)
+* **3-Collection Architecture:** Automatically manages separate collections for `_nodes`, `_edges`, and `_logs` for every graph.
+* **Rich Properties:** Nodes and Edges are fully compliant MongoDB documents (store JSON of any complexity).
+* **ACID Graph Operations:** Atomic node/edge creation.
+* **Audit Logging:** Built-in history tracking for graph mutations.
+* **Pythonic API:** Feels like `NetworkX`, scales like `MongoDB`.
+
+
