@@ -1,0 +1,475 @@
+# inputless-models
+
+Machine learning models for behavioral analytics, pattern recognition, predictive analytics, and anomaly detection.
+
+## Purpose
+
+Provides ML-powered models for identifying behavioral patterns, forecasting user behavior, and detecting anomalies in behavioral data. Includes advanced features like behavioral DNA profiling, predictive behavior models, and real-time anomaly alerts.
+
+## Features
+
+- **Pattern Recognition**: ML models for identifying sequence, temporal, spatial, behavioral, and correlation patterns
+- **Predictive Analytics**: Forecasting user behavior, conversion, abandonment, churn, and engagement
+- **Anomaly Detection**: Statistical, ML-based, and ensemble methods for detecting unusual behaviors
+- **Behavioral DNA Profiling**: Create unique behavioral fingerprints for users
+- **Predictive Behavior Models**: Predict next actions and session outcomes
+- **Real-Time Anomaly Alerts**: Real-time alerting system with root cause analysis
+
+## Installation
+
+### Using Poetry (Recommended)
+
+```bash
+cd packages/python-core/models
+poetry install
+```
+
+### Using pip
+
+```bash
+pip install inputless-models
+```
+
+### Optional Dependencies
+
+For deep learning models:
+```bash
+poetry install --extras torch
+```
+
+For time series analysis:
+```bash
+poetry install --extras statsforecast
+```
+
+## Quick Start
+
+### Pattern Recognition
+
+```python
+from inputless_models import PatternRecognitionModel, PatternRecognitionConfig
+
+# Create configuration
+config = PatternRecognitionConfig(
+    sequence_window=10,
+    temporal_resolution="1min",
+    min_pattern_confidence=0.7,
+    pattern_types=["sequence", "temporal", "spatial", "behavioral", "correlation"],
+)
+
+# Initialize model
+pattern_model = PatternRecognitionModel(config)
+
+# Recognize patterns from events
+events = [
+    {"type": "click", "timestamp": "2024-01-01T10:00:00Z", "duration": 100},
+    {"type": "scroll", "timestamp": "2024-01-01T10:00:01Z", "duration": 50},
+    {"type": "hover", "timestamp": "2024-01-01T10:00:02Z", "duration": 2000},
+    {"type": "click", "timestamp": "2024-01-01T10:00:03Z", "duration": 150},
+]
+
+patterns = pattern_model.recognize(events)
+
+for pattern in patterns:
+    print(f"Pattern: {pattern.pattern_type}, Confidence: {pattern.confidence:.2f}")
+    print(f"Events: {len(pattern.events)}")
+```
+
+### Predictive Analytics
+
+```python
+from inputless_models import PredictiveModel, PredictiveConfig
+
+# Create configuration
+config = PredictiveConfig(
+    prediction_horizon=7,  # 7 days ahead
+    model_type="ensemble",
+    confidence_threshold=0.7,
+)
+
+# Initialize model
+predictive = PredictiveModel(config)
+
+# Predict behavior
+events = [
+    {"type": "click", "duration": 100, "timestamp": "2024-01-01T10:00:00Z"},
+    {"type": "scroll", "duration": 50, "timestamp": "2024-01-01T10:00:01Z"},
+    {"type": "hover", "duration": 2000, "timestamp": "2024-01-01T10:00:02Z"},
+]
+
+# Predict different outcomes
+behavior_pred = predictive.predict_behavior(events)
+conversion_pred = predictive.predict_conversion(events)
+abandonment_pred = predictive.predict_abandonment(events)
+churn_pred = predictive.predict_churn(events)
+engagement_pred = predictive.predict_engagement(events)
+
+print(f"Conversion probability: {conversion_pred.value:.2f}")
+print(f"Confidence: {conversion_pred.confidence:.2f}")
+```
+
+### Anomaly Detection
+
+```python
+from inputless_models import AnomalyDetector, AnomalyDetectionConfig
+
+# Create configuration
+config = AnomalyDetectionConfig(
+    detection_method="ensemble",  # "statistical", "ml", or "ensemble"
+    sensitivity=0.8,
+    real_time_enabled=True,
+    alert_threshold=0.9,
+)
+
+# Initialize detector
+detector = AnomalyDetector(config)
+
+# Detect anomalies
+events = [
+    {"type": "click", "duration": 100},
+    {"type": "scroll", "duration": 50},
+    {"type": "error", "duration": 0, "metadata": {"error": "test"}},
+    {"type": "click", "duration": 5000},  # Anomalous duration
+    {"type": "hover", "duration": 200},
+]
+
+anomalies = detector.detect(events)
+
+for anomaly in anomalies:
+    print(f"Anomaly: {anomaly.anomaly_type}, Score: {anomaly.anomaly_score:.2f}")
+    print(f"Severity: {anomaly.severity}")
+    print(f"Event: {anomaly.event}")
+
+# Real-time detection
+is_anomaly = detector.detect_realtime({"type": "error", "duration": 0})
+if is_anomaly:
+    alert = detector.create_alert({"type": "error", "duration": 0})
+    print(f"Alert created: {alert}")
+```
+
+### Model Training
+
+```python
+from inputless_models import ModelTrainer, PatternRecognitionConfig, PredictiveConfig
+
+# Initialize trainer
+trainer = ModelTrainer()
+
+# Training data: list of event lists
+training_data = [
+    [
+        {"type": "click", "duration": 100},
+        {"type": "scroll", "duration": 50},
+        {"type": "click", "duration": 150},
+    ],
+    [
+        {"type": "hover", "duration": 2000},
+        {"type": "click", "duration": 100},
+    ],
+]
+
+# Pattern recognition training
+pattern_labels = ["pattern", "pattern", "normal"]
+pattern_config = PatternRecognitionConfig()
+pattern_model, pattern_metrics = trainer.train_pattern_model(
+    training_data, pattern_labels, pattern_config
+)
+
+print(f"Pattern model trained: {pattern_metrics}")
+
+# Predictive model training
+predictive_labels = {
+    "conversion": [1, 0],
+    "churn": [0, 1],
+    "abandonment": [0.3, 0.8],
+}
+predictive_config = PredictiveConfig()
+predictive_model, predictive_metrics = trainer.train_predictive_model(
+    training_data, predictive_labels, predictive_config
+)
+
+print(f"Predictive model trained: {predictive_metrics}")
+
+# Get training history
+history = trainer.get_training_history()
+print(f"Training sessions: {len(history)}")
+```
+
+### Advanced Features
+
+#### Behavioral DNA Profiling
+
+```python
+from inputless_models.features import BehavioralDNAProfiler
+
+# Initialize profiler
+profiler = BehavioralDNAProfiler(min_events=5)
+
+# Generate behavioral DNA profile
+events = [
+    {"type": "click", "duration": 100},
+    {"type": "scroll", "duration": 50},
+    {"type": "hover", "duration": 2000},
+    {"type": "click", "duration": 150},
+    {"type": "focus", "duration": 0},
+]
+
+profile = profiler.generate_profile(events, user_id="user_123")
+
+print(f"Profile ID: {profile.profile_id}")
+print(f"Signature: {profile.signature}")
+print(f"Traits: {profile.traits}")
+
+# Find similar profiles
+similar = profiler.find_similar(profile, threshold=0.7)
+print(f"Similar profiles: {len(similar)}")
+
+# Track evolution
+evolution = profiler.track_evolution("user_123", time_period="30days")
+print(f"Evolution: {evolution}")
+```
+
+#### Predictive Behavior Models
+
+```python
+from inputless_models.features import PredictiveBehaviorModel
+
+# Initialize model
+model = PredictiveBehaviorModel()
+
+# Predict next action
+events = [
+    {"type": "click", "duration": 100},
+    {"type": "scroll", "duration": 50},
+]
+
+next_actions = model.predict_next_action(events, top_k=5)
+
+for action in next_actions:
+    print(f"Action: {action.action}, Probability: {action.probability:.2f}")
+    print(f"Confidence: {action.confidence:.2f}")
+
+# Predict session outcome
+outcome = model.predict_session_outcome(events)
+print(f"Outcome: {outcome.outcome}")
+print(f"Probability: {outcome.probability:.2f}")
+```
+
+#### Real-Time Anomaly Alerts
+
+```python
+from inputless_models.features import BehavioralAnomalyAlerts
+from inputless_models import AnomalyDetectionConfig
+
+# Create configuration
+config = AnomalyDetectionConfig(
+    detection_method="ensemble",
+    real_time_enabled=True,
+    alert_threshold=0.8,
+)
+
+# Initialize alerts system
+alerts = BehavioralAnomalyAlerts(config, enable_root_cause=True)
+
+# Register callback for alerts
+def on_alert(alert):
+    print(f"Alert received: {alert.severity} - {alert.message}")
+    if alert.root_cause:
+        print(f"Root cause: {alert.root_cause}")
+    if alert.suggestions:
+        print(f"Suggestions: {alert.suggestions}")
+
+alerts.register_callback(on_alert)
+
+# Process events (alerts will be triggered automatically)
+events = [
+    {"type": "click", "duration": 100},
+    {"type": "error", "duration": 0},  # May trigger alert
+]
+
+for event in events:
+    alert = alerts.process_event(event)
+    if alert:
+        print(f"Alert triggered: {alert.alert_id}")
+
+# Get alert history
+history = alerts.get_alert_history(time_period="24hours", severity="high")
+print(f"High severity alerts: {len(history)}")
+```
+
+## Module Structure
+
+```
+src/inputless_models/
+├── __init__.py              # Main exports
+├── types.py                 # Pydantic models (Config, Pattern, Prediction, Anomaly)
+├── pattern_recognition.py   # Pattern recognition models
+├── predictive_analytics.py  # Forecasting models
+├── anomaly_detection.py    # Anomaly detection models
+├── model_training.py        # Training utilities
+└── features/
+    ├── __init__.py
+    ├── behavioral_dna_profiling.py    # Behavioral DNA profiling
+    ├── predictive_behavior_models.py   # Predictive behavior models
+    └── real_time_anomaly_alerts.py    # Real-time anomaly alerts
+```
+
+## Model Types
+
+### Pattern Recognition Models
+
+- **Sequence Patterns**: Identify recurring event sequences
+- **Temporal Patterns**: Time-based pattern recognition
+- **Spatial Patterns**: Location/viewport-based patterns
+- **Behavioral Patterns**: Clustering-based behavioral groups
+- **Correlation Patterns**: Event correlation analysis
+
+### Predictive Models
+
+- **Behavior Prediction**: Predict user behavior patterns
+- **Conversion Prediction**: Forecast conversion probability
+- **Abandonment Prediction**: Predict abandonment likelihood
+- **Churn Prediction**: Forecast user churn
+- **Engagement Prediction**: Predict engagement levels
+
+### Anomaly Detection Methods
+
+- **Statistical**: Z-score based detection
+- **ML-based**: Isolation Forest, LOF
+- **Ensemble**: Combination of multiple methods
+
+## Configuration
+
+### Pattern Recognition Config
+
+```python
+from inputless_models import PatternRecognitionConfig
+
+config = PatternRecognitionConfig(
+    sequence_window=10,              # Events in sequence window
+    temporal_resolution="1min",      # Temporal bin size
+    min_pattern_confidence=0.7,      # Minimum confidence threshold
+    pattern_types=["sequence", "temporal", "spatial", "behavioral", "correlation"],
+    clustering_algorithm="dbscan",   # Clustering algorithm
+    min_cluster_size=3,             # Minimum cluster size
+)
+```
+
+### Predictive Config
+
+```python
+from inputless_models import PredictiveConfig
+
+config = PredictiveConfig(
+    prediction_horizon=7,            # Days ahead to predict
+    model_type="ensemble",           # "ensemble", "rf", "gbm", "lstm"
+    retrain_frequency="weekly",      # Retraining frequency
+    confidence_threshold=0.7,        # Minimum confidence
+)
+```
+
+### Anomaly Detection Config
+
+```python
+from inputless_models import AnomalyDetectionConfig
+
+config = AnomalyDetectionConfig(
+    detection_method="ensemble",     # "statistical", "ml", or "ensemble"
+    sensitivity=0.8,                 # Detection sensitivity (0-1)
+    real_time_enabled=True,          # Enable real-time detection
+    alert_threshold=0.9,            # Alert severity threshold
+    window_size=100,                 # Sliding window size
+    contamination=0.1,              # Expected anomaly rate
+)
+```
+
+## Testing
+
+Run unit tests:
+
+```bash
+poetry run pytest
+```
+
+Run with coverage:
+
+```bash
+poetry run pytest --cov=src --cov-report=html
+```
+
+Run specific test file:
+
+```bash
+poetry run pytest tests/test_pattern_recognition.py
+```
+
+## API Reference
+
+### PatternRecognitionModel
+
+- `recognize(events: List[Dict]) -> List[Pattern]`: Recognize patterns from events
+- `train(events: List[Dict], labels: Optional[List[str]])`: Train the model
+- `save_model(filepath: str)`: Save model to file
+- `load_model(filepath: str)`: Load model from file
+
+### PredictiveModel
+
+- `predict_behavior(events: List[Dict]) -> Prediction`: Predict behavior
+- `predict_conversion(events: List[Dict]) -> Prediction`: Predict conversion
+- `predict_abandonment(events: List[Dict]) -> Prediction`: Predict abandonment
+- `predict_churn(events: List[Dict]) -> Prediction`: Predict churn
+- `predict_engagement(events: List[Dict]) -> Prediction`: Predict engagement
+- `train(training_data: List[List[Dict]], labels: Dict[str, List])`: Train models
+- `get_feature_importance(prediction_type: str) -> Dict`: Get feature importance
+
+### AnomalyDetector
+
+- `detect(events: List[Dict]) -> List[Anomaly]`: Detect anomalies
+- `detect_realtime(event: Dict) -> bool`: Real-time detection
+- `create_alert(event: Dict) -> Dict`: Create alert from anomaly
+- `train(events: List[Dict], labels: List[int])`: Train detector
+
+### ModelTrainer
+
+- `train_pattern_model(events, labels, config) -> Tuple[Model, Dict]`: Train pattern model
+- `train_predictive_model(training_data, labels, config) -> Tuple[Model, Dict]`: Train predictive model
+- `train_anomaly_detector(events, labels, config) -> Tuple[Detector, Dict]`: Train anomaly detector
+- `get_training_history() -> List[Dict]`: Get training history
+- `clear_history()`: Clear training history
+
+## Performance Considerations
+
+- **Pattern Recognition**: O(n²) for correlation patterns, O(n log n) for clustering
+- **Predictive Analytics**: Feature extraction is O(n), prediction is O(1)
+- **Anomaly Detection**: O(n log n) for ML methods, O(n) for statistical
+- **Real-Time Detection**: Requires sufficient event history (default: 10 events)
+
+## Best Practices
+
+1. **Training**: Train models on representative data with proper labels
+2. **Configuration**: Adjust confidence thresholds based on use case
+3. **Feature Engineering**: Ensure events have consistent structure
+4. **Real-Time Detection**: Maintain sufficient event history for accurate detection
+5. **Model Persistence**: Save trained models for reuse
+
+## Dependencies
+
+- `scikit-learn` - Machine learning library
+- `numpy` - Numerical computing
+- `pandas` - Data manipulation
+- `scipy` - Statistical analysis
+- `statsmodels` - Advanced statistics
+- `pyod` - Outlier detection
+- `pydantic` - Data validation
+- `torch` (optional) - Deep learning
+- `statsforecast` (optional) - Time series analysis
+
+## Distribution
+
+**PyPI package**: `inputless-models`  
+**Version**: 1.0.0  
+**Registry**: PyPI
+
+## License
+
+See LICENSE file for details.
