@@ -1,0 +1,96 @@
+Metadata-Version: 2.4
+Name: evse-hub
+Version: 0.3.2
+Summary: Solar monitoring and control daemons
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: PyYAML>=6
+Requires-Dist: requests>=2
+Requires-Dist: pymodbus>=3.11
+Requires-Dist: influxdb>=5.3
+Requires-Dist: msgpack>=1.0
+Requires-Dist: python-dateutil>=2.9
+Requires-Dist: pydantic>=2.0
+Dynamic: license-file
+
+# evse_hub Python Package
+
+This package provides tools and services for Modbus-based EVSE (Electric Vehicle Supply Equipment) and energy monitoring, including polling, status tracking, and integration with InfluxDB.
+
+## Structure
+
+```
+evse_hub/
+├── cli/
+│   ├── evse_online.py
+│   ├── evse_poll.py
+│   ├── evse_scan.py
+│   ├── runtime.py
+│   ├── status.py
+│   └── supervisor.py
+├── influx/
+│   └── influx_writes.py
+├── modbus/
+│   ├── etrel/
+│   │   ├── etrel.py
+│   │   ├── modbus_reads.py
+│   │   └── modbus_writes.py
+│   └── modbus_device.py
+├── ops/
+│   └── heartbeat.py
+└── tools/
+    ├── async_tools.py
+    ├── config.py
+    ├── device_config.py
+    └── wifi.py
+```
+
+## Main Components
+
+### CLI Tools (`evse_hub/cli/`)
+
+- **evse_online.py**: Service for tracking online status of EVSE endpoints and writing status to JSON.
+- **evse_poll.py**: Polls Modbus devices for master/charger data and writes to InfluxDB.
+- **evse_scan.py**: Scans a network for Modbus TCP devices.
+- **runtime.py**: Defines `EndpointRuntime`, which holds runtime state for a Modbus endpoint.
+- **status.py**: Defines `StatusSnapshot` and utilities for loading endpoint status from JSON.
+- **supervisor.py**: Orchestrates polling tasks for all endpoints, starting/stopping them based on online status.
+
+### Modbus Support (`evse_hub/modbus/`)
+
+- **modbus_device.py**: Abstraction for Modbus TCP client connections and polling.
+- **etrel/modbus_reads.py**: Functions for reading Etrel-specific Modbus registers.
+- **etrel/modbus_writes.py**: Functions for writing to Etrel Modbus registers.
+
+### InfluxDB Integration (`evse_hub/influx/`)
+
+- **influx_writes.py**: Functions for writing EVSE and master data to InfluxDB.
+
+### Utilities (`evse_hub/tools/`)
+
+- **async_tools.py**: Async helpers for running blocking code.
+- **config.py**: Configuration loading utilities.
+- **device_config.py**: Endpoint configuration dataclasses and YAML loading.
+- **wifi.py**: WiFi-related utilities.
+
+## Example: Polling and Supervising Endpoints
+
+- Use `evse_online.py` to maintain a status file of which endpoints are online.
+- Use `supervisor.py` to start/stop polling tasks for each endpoint based on their online status.
+- Polled data is written to InfluxDB using the routines in `influx_writes.py`.
+
+## Key Classes
+
+- `EndpointRuntime`: Holds runtime state for a single Modbus endpoint (config, client, locks, task, etc).
+- `StatusSnapshot`: Immutable snapshot of endpoint online status at a given timestamp.
+
+## Key Functions
+
+- `poll_endpoint`: Polls a single endpoint for its configured roles.
+- `supervisor`: Orchestrates the lifecycle of all endpoint runtime objects and manages their polling tasks.
+
+---
+
+This README is auto-generated from the code and docstrings in `src/evse_hub/`. For details on each module, see the source files and their docstrings.
+
