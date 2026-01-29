@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Type check
+        run: pnpm type-check
+
+      - name: Unit tests
+        run: pnpm test:run
+
+      - name: Build
+        run: pnpm build
+
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install chromium
+
+      - name: Install Python dependencies
+        run: uv sync
+
+      - name: Build frontend
+        run: pnpm build
+
+      - name: Copy frontend to package
+        run: |
+          rm -rf src/logler_web/static
+          cp -r dist src/logler_web/static
+
+      - name: Start backend server
+        run: |
+          uv run uvicorn logler_web:app --host 127.0.0.1 --port 8080 &
+          # Wait for server to be ready
+          for i in {1..30}; do
+            if curl -s http://127.0.0.1:8080/api/files/browse > /dev/null; then
+              echo "Backend ready"
+              break
+            fi
+            echo "Waiting for backend..."
+            sleep 1
+          done
+        env:
+          LOGLER_ROOT: ${{ github.workspace }}/examples
+
+      - name: Run E2E tests
+        run: pnpm test:e2e
+        env:
+          LOGLER_ROOT: ${{ github.workspace }}/examples
