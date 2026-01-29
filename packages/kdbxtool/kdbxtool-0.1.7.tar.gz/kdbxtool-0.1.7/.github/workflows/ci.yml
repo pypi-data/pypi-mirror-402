@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install dependencies
+        run: uv sync --dev --extra twofish --python ${{ matrix.python-version }}
+
+      - name: Run tests with coverage
+        run: uv run pytest tests/ -m "not hardware" --cov=kdbxtool --cov-report=xml --cov-report=html
+
+      - name: Generate coverage badge JSON
+        if: matrix.python-version == '3.12' && github.event_name == 'push'
+        run: |
+          # Extract coverage percentage from HTML report
+          COVERAGE=$(python -c "
+          import re
+          with open('htmlcov/index.html') as f:
+              content = f.read()
+          match = re.search(r'(\d+)%', content)
+          print(match.group(1) if match else '0')
+          ")
+
+          # Determine color based on coverage
+          if [ "$COVERAGE" -ge 90 ]; then
+            COLOR="brightgreen"
+          elif [ "$COVERAGE" -ge 80 ]; then
+            COLOR="green"
+          elif [ "$COVERAGE" -ge 70 ]; then
+            COLOR="yellowgreen"
+          elif [ "$COVERAGE" -ge 60 ]; then
+            COLOR="yellow"
+          else
+            COLOR="red"
+          fi
+
+          # Create shields.io endpoint JSON
+          cat > coverage-badge.json << EOF
+          {
+            "schemaVersion": 1,
+            "label": "coverage",
+            "message": "${COVERAGE}%",
+            "color": "${COLOR}"
+          }
+          EOF
+
+      - name: Upload coverage artifact
+        if: matrix.python-version == '3.12' && github.event_name == 'push'
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-report
+          path: |
+            htmlcov/
+            coverage.xml
+            coverage-badge.json
+
+  typecheck:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install dependencies
+        run: uv sync --dev --extra twofish
+
+      - name: Run mypy with HTML report
+        run: uv run mypy --strict --html-report mypy-report src/kdbxtool
+
+      - name: Generate mypy badge JSON
+        if: github.event_name == 'push'
+        run: |
+          # Extract imprecise percentage from mypy index.html
+          IMPRECISE=$(python -c "
+          import re
+          with open('mypy-report/index.html') as f:
+              content = f.read()
+          match = re.search(r'(\d+\.?\d*)% imprecise', content)
+          if match:
+              print(match.group(1))
+          else:
+              print('0')
+          ")
+
+          # Color based on imprecise % (lower is better)
+          IMPRECISE_INT=$(echo "$IMPRECISE" | cut -d. -f1)
+          if [ "$IMPRECISE_INT" -le 1 ]; then
+            COLOR="brightgreen"
+          elif [ "$IMPRECISE_INT" -le 5 ]; then
+            COLOR="green"
+          elif [ "$IMPRECISE_INT" -le 10 ]; then
+            COLOR="yellowgreen"
+          else
+            COLOR="yellow"
+          fi
+
+          cat > mypy-report/mypy-badge.json << EOF
+          {
+            "schemaVersion": 1,
+            "label": "mypy",
+            "message": "${IMPRECISE}% imprecise",
+            "color": "${COLOR}"
+          }
+          EOF
+
+      - name: Upload mypy artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v6
+        with:
+          name: mypy-report
+          path: mypy-report/
+
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Ruff check
+        run: uvx ruff check src/kdbxtool
+
+      - name: Ruff format check
+        run: uvx ruff format --check src/kdbxtool tests/
+
