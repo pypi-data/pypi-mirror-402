@@ -1,0 +1,182 @@
+Metadata-Version: 2.4
+Name: chowclassifier
+Version: 1.1.0
+Summary: Classification of time trends using Chow test
+Author-email: Luc Miaz <luc@miaz.ch>
+License-Expression: CC-BY-NC-4.0
+Project-URL: Homepage, https://chowclassifier.readthedocs.io/en/latest/
+Project-URL: GitLab, https://gitlab.com/lucmiaz/chowclassifier
+Keywords: chow,time-trends
+Classifier: Programming Language :: Python
+Classifier: Natural Language :: English
+Classifier: Development Status :: 4 - Beta
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: matplotlib>=3.5.0
+Requires-Dist: numpy>=1.19.4
+Requires-Dist: pandas>=1.1.5
+Requires-Dist: openpyxl
+Requires-Dist: scipy>=1.1.5
+Requires-Dist: seaborn>=0.11.2
+Requires-Dist: statsmodels>=0.13.1
+Requires-Dist: tqdm>=4.65.0
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Dynamic: license-file
+
+# ChowClassifier
+
+## Description
+There are many application where it is useful to analyse rapidly a large number of time-series for overall trends and possible breakpoint at which the trend changes. For example, spotting increasing trends in potential contaminants concentration from the outputs of non-target screening from high resolution mass spectrometry.
+
+ChowClassifier aims to solve this. It is a script that performs a series of Chow tests on a time-indexed dataset to determine if a breakpoint in the time trends is probable. Two classes `Chow` and `ChewData` enable to perform the tests, generate plots and export the results in `csv` and `excel`. Dataset with groups can be ran simultaneously with `ChewData` indicating with `namecol` the name of the grouping column. Calling `run` on a `ChewData` instance will create an instance of `Chow` for each group and classify them into the following categories.
+
+| Breakpoint ? | Category | Description |
+|--------------|----------|-------------|
+| No           |N         | non-significant overall trend |
+| No           |   I      | significant increasing overall trend |
+| No           | D        | significant decreasing overall trend |
+| Yes         | NN        | non-significant trend on set1 and non-significant trend on set2 |
+| Yes         | NI        | non-significant trend on set1 and significant increasing trend on set2 |
+| Yes         | ND        | non-significant trend on set1 ans significant decreasing trend on set2 |
+| Yes         | IN        | significant increasing trend on set1 and non-significant trend on set2 |
+| Yes         | ID        | significant increasing trend on set1 and significant decreasing trend on set2 |
+| Yes         | iI        | significant increasing trend on both set1 and set2 with greater increase in set2 |
+| Yes         | Ii        | significant increasing trend on both set1 and set2 with greater increase in set1 |
+| Yes         | DN        | significant decreasing trend on set1 and non-significant trend on set2 |
+| Yes         | DI        | significant decreasing trend on set1 and significant increasing trend on set2 |
+| Yes         | dD        | significant decreasing trend on both set1 and set2 with greater decrease in set2 |
+| Yes         | Dd        | significant decreasing trend on both set1 and set2 with greater decrease in set1 |
+
+where set1 and set2 indicate respectively the data before the breakpoint and after. The decision process for this classification is shown in the following schema:
+
+
+![Image unavailable, see schema on readthedocs.](img/Categorisation_TT.png)
+
+
+## Chow test
+Chow test was first derived by Gregory Chow[^1] in 1960 and later by Franklin Fisher[^2]. We test the significance of the breakpoint under the null hypothesis $Z=\frac{S_c-(S_1+S_2)}{S_1+S_2}\cdot\frac{N_1+N_2-2\cdot k}{k}$  where $k=3$ is the total number of parameters. This follows a F-distribution with $3$ and $N_1+N_2-6$ degrees of freedom, where $S_C$ is the sum of squared residuals of the regression on the full time series, $S_1$, $S_2$ are the sums of squared residuals of the regression on the first, and respectively, the second half of the time series and $N_1$, $N_2$ are the number of observation for each half. See also [^3].
+
+## Installation
+```
+pip install chowclassifier
+```
+
+## Citation
+
+If you use this package in your research, please cite:
+
+Influence of Season on Biodegradation Rates in Rivers
+Run Tian, Malte Posselt, Luc T. Miaz, Kathrin Fenner, and Michael S. McLachlan
+Environmental Science & Technology 2024 58 (16), 7144-7153
+DOI: [10.1021/acs.est.3c10541](https://doi.org/10.1021/acs.est.3c10541)
+
+[Download citation](https://pubs.acs.org/action/downloadCitation?doi=10.1021%2Facs.est.3c10541&include=cit&format=ris&direct=true&downloadFileName=acs.est.3c10541)
+
+## Use
+The script can be ran on any file with `python -m chowclassifier -f path/to/file/filename.csv -X xcol -y ycol -n grouping_name` or it can be imported:
+
+```python
+from chowclassifier import ChewData
+# define the path to data
+filepath = "example/data"
+# define the name of the file containing the data (with extension)
+filename = "stocks.csv"
+# define the path where figures will be saved
+savingpath_figures = 'example/fig'
+# what name has the X/time column?
+timecol = 'Date'
+# what name has the y/value column?
+ycol = 'Close'
+# what level of confidence? Note, when
+# testing multiple breakpoint, a Bonferroni correction will be applied
+alpha = 0.01
+# what level of confidence? Note, when
+# testing multiple breakpoint, a Bonferroni correction will be applied
+alpha = 0.01
+# initial breakpoint ?
+initial_breakpoint = None
+
+C = ChewData(filename = f"{'/'.join([x for x in [filepath,filename] if x not in [None,'']])}",
+            timecol = timecol,# name of time column (used as x-axis)
+            ycol = ycol,# name for value column (used as y-axis) Leave blank if multiple
+            alpha = alpha# level of confidence to use
+            )
+            timecol = timecol,# name of time column (used as x-axis)
+            ycol = ycol,# name for value column (used as y-axis) Leave blank if multiple
+            alpha = alpha# level of confidence to use
+            )
+
+########## use the code line below if your X/time column is not a number, e.g. a date
+########## comment it otherwise
+# C.parse_timecol(date_format = '%Y-%m-%d') # 
+# C.parse_timecol(date_format = '%Y-%m-%d') # 
+
+C.run(initial_breakpoint = initial_breakpoint)
+C.plot(xlabel = 'time',# label for x axis
+       ylabel='value',# label for y axis
+       title = "Chow Classification",# title of the main plot
+       filename = f"{'/'.join([x for x in [savingpath_figures,filename] if x not in [None,'']])}.png",# filename for the figure
+       figsize=(16,8),# figure size
+       sharey=True # whether the individual plots are forced to share y axis
+       )
+C.plot_individually(savingpath = savingpath_figures,# Saving path for the figures
+                    format = 'png',# figure format
+                    xlabel = 'time',# label for x axis
+                    ylabel='value',# label for y axis
+                    )
+
+C.plot_by_group('g',
+                savingpath = savingpath_figures,# Saving path for the figures
+                format = 'png',# figure format
+                xlabel = 'time',# label for x axis
+                ylabel='value',# label for y axis
+                plot_overall = True,# Whether to plot an overall trend across groups (including confidence inverval fill)
+                plot_individual_fill = True# Whether to plot individual confidence inverval fills
+                )
+C.run(initial_breakpoint = initial_breakpoint)
+C.plot(xlabel = 'time',# label for x axis
+       ylabel='value',# label for y axis
+       title = "Chow Classification",# title of the main plot
+       filename = f"{'/'.join([x for x in [savingpath_figures,filename] if x not in [None,'']])}.png",# filename for the figure
+       figsize=(16,8),# figure size
+       sharey=True # whether the individual plots are forced to share y axis
+       )
+C.plot_individually(savingpath = savingpath_figures,# Saving path for the figures
+                    format = 'png',# figure format
+                    xlabel = 'time',# label for x axis
+                    ylabel='value',# label for y axis
+                    )
+
+C.plot_by_group('g',
+                savingpath = savingpath_figures,# Saving path for the figures
+                format = 'png',# figure format
+                xlabel = 'time',# label for x axis
+                ylabel='value',# label for y axis
+                plot_overall = True,# Whether to plot an overall trend across groups (including confidence inverval fill)
+                plot_individual_fill = True# Whether to plot individual confidence inverval fills
+                )
+```
+
+## References
+
+[^1]: Chow, Gregory C. ‘Test of Equality Between Sets of Coefficients in Two Linear Regressions’. Econometrica 28, no. 3 (1960): 591–605. [jstor.org/stable/1910133](https://www.jstor.org/stable/1910133).
+
+[^2]: Fisher, Franklin M. ‘Tests of Equality Between Sets of Coefficients in Two Linear Regressions: An Expository Note’. Econometrica2 38, no. 2 (1970): 361–66. [jstor.org/stable/1913018](https://www.jstor.org/stable/1913018).
+
+[^3]: *Chow test* entry on Wikipedia: https://en.wikipedia.org/wiki/Chow_test
+
+## Version changes
+
+1.0.10 Minor addition, with show_legend option
+1.0.9 Correction of bugs, added jupyter notebook example.
+1.0.8 Correction of bugs.
+1.0.7 Split main classes and utilities in multiple files, added option to ChewData.plot to have grouped trends, corrected input parsing, corrected inconsistancy with intial_breakpoint/margin
+ Added option to change linestyle by trend individually
+1.0.5 Added option to plot confidence interval fill for individual group trends
+1.0.4 Added support for plotting individual trends by group
+1.0.3 Bug correction
+1.0.2 Added support to parse full csv/excel automatically
+1.0.1 First implementation of algorithm
