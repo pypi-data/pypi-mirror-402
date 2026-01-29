@@ -1,0 +1,138 @@
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  CI_IMAGE: registry.gitlab.inria.fr/ncedilni/pyezzi:ci
+  MANYLINUX_IMAGE: registry.gitlab.inria.fr/ncedilni/pyezzi:manylinux
+  MANYLINUX_TARGET: manylinux_2_38_x86_64
+
+.all_pythons: &all_pythons
+  parallel:
+    matrix:
+      - PYTHON_VERSION:
+          - "10"
+          - "11"
+          - "12"
+          - "13"
+          - "14"
+
+default:
+  tags:
+    - ci.inria.fr
+    - small
+
+tests:
+  stage: test
+  image: $CI_IMAGE
+  script:
+    - uv sync --frozen --all-groups
+    - coverage run -m pytest test --doctest-modules pyezzi
+    - coverage report
+    - coverage xml
+    - mypy
+    - pdoc pyezzi --math -o public
+  artifacts:
+    paths:
+      - public
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+build-sdist:
+  stage: build
+  image: $CI_IMAGE
+  artifacts:
+    paths:
+      - dist/
+  script: |
+    uv build --sdist
+
+build-wheels-macos:
+  tags: [macos]
+  stage: build
+  needs:
+    - build-sdist
+  artifacts:
+    paths:
+      - dist/
+  <<: *all_pythons
+  before_script:
+    - brew install uv
+    - brew install libomp
+    - brew install llvm  # apple's llvm does not support openmp -_-
+    - uv python install python3.$PYTHON_VERSION
+  variables:
+    CPPFLAGS: "-I/usr/local/opt/libomp/include -I/usr/local/opt/llvm/include"
+    LDFLAGS: "-L/usr/local/opt/libomp/lib -L/usr/local/opt/llvm/lib"
+    CC: "/usr/local/opt/llvm/bin/clang"
+    CXX: "/usr/local/opt/llvm/bin/clang++"
+  script:
+    - uv build --python 3.$PYTHON_VERSION --wheel
+
+build-wheels-windows:
+  tags: [windows]
+  stage: build
+  needs:
+    - build-wheels-macos
+  artifacts:
+    paths:
+      - dist/
+  <<: *all_pythons
+  before_script:
+    - choco install uv -y
+    - choco install visualstudio2019buildtools -y
+    - uv python install python3.$PYTHON_VERSION
+  script:
+    - uv build --python 3.$env:PYTHON_VERSION --wheel
+
+build-wheels-linux:
+  stage: build
+  image: $MANYLINUX_IMAGE
+  needs:
+    - build-wheels-windows
+  artifacts:
+    paths:
+      - dist/
+  <<: *all_pythons
+  script: |
+    python3.$PYTHON_VERSION -m build --wheel
+
+# wheels are $MANYLINUX_TARGET-compliant but there is no dedicated
+# container for that, so we need to call auditwheel afterward.
+wheel-repair:
+  stage: build
+  needs:
+    - build-wheels-linux
+  image: $MANYLINUX_IMAGE
+  artifacts:
+    paths:
+      - dist/
+  script: |
+    auditwheel repair dist/*-linux_x86_64.whl --plat $MANYLINUX_TARGET --wheel-dir dist/
+    rm dist/*-linux_x86_64.whl
+    ls -l dist/
+
+publish-pypi:
+  only:
+    - tags
+  stage: deploy
+  image: $CI_IMAGE
+  needs:
+    - wheel-repair
+    - tests
+  script: |
+    ls dist/*
+    uv publish --token $PYPI_TOKEN
+
+create-pages:
+  stage: deploy
+  pages: true
+  script: ls public
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_TAG

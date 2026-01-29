@@ -1,0 +1,30 @@
+ARG UV_VERSION=0.7.11
+ARG PYTHON_VERSION=3.13
+ARG BASE_LAYER=bookworm-slim
+ARG GIT_LFS_VERSION=3.6.1
+
+FROM ghcr.io/astral-sh/uv:$UV_VERSION-python$PYTHON_VERSION-$BASE_LAYER as ci
+ARG GIT_LFS_VERSION
+ENV UV_LINK_MODE=copy
+ENV PATH=.venv/bin:$PATH
+
+RUN apt update && apt install gcc git curl -y && rm -rf /var/lib/apt/lists/*
+
+RUN curl -L https://github.com/git-lfs/git-lfs/releases/download/v$GIT_LFS_VERSION/git-lfs-linux-amd64-v$GIT_LFS_VERSION.tar.gz -o /tmp/git-lfs.tar.gz && \
+    cd /tmp/ && \
+    tar xvf git-lfs.tar.gz && \
+    git-lfs-$GIT_LFS_VERSION/install.sh && \
+    rm -rf /tmp/git-lfs*
+
+COPY pyproject.toml uv.lock .
+
+RUN uv sync --frozen --all-groups --no-install-project --all-extras
+
+FROM quay.io/pypa/manylinux2014_x86_64 as manylinux
+ARG GIT_LFS_VERSION
+
+RUN curl -L https://github.com/git-lfs/git-lfs/releases/download/v$GIT_LFS_VERSION/git-lfs-linux-amd64-v$GIT_LFS_VERSION.tar.gz -o /tmp/git-lfs.tar.gz && \
+    cd /tmp/ && \
+    tar xvf git-lfs.tar.gz && \
+    git-lfs-$GIT_LFS_VERSION/install.sh && \
+    rm -rf /tmp/git-lfs*
