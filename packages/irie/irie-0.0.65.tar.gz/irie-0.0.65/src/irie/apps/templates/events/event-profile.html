@@ -1,0 +1,244 @@
+{% extends "layouts/base.html" %}
+{% load get %}
+{% load nbi %}
+{% block title %}Event (<code>{{ event.usgsid }}</code>){% endblock %} 
+{% block stylesheets %}
+
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
+<style>
+.crop {
+  width: 100%; /* 200px;*/
+  height: auto ; /* 150px; */
+  overflow: hidden;
+}
+.crop img {
+    width: 100%;
+    height: auto;
+    margin: -200px 0 -100px -100px;
+}
+</style>
+<style>
+@media print {
+  @page {
+    size: 8.5in 11in;
+  }
+  #event-table, #rendering, #structureProfile {
+    display:    none;
+    visibility: hidden;
+    max-width:  0;
+  }
+  #page {
+    width: 100%; 
+    margin-left:   0;
+    margin-right:  0;
+    margin-top:    0.5in;
+    margin-bottom: 0.75in;
+    float: none !important;
+  }
+  html, body {
+    margin:  0 !important;
+    padding: 0 !important;
+    height: 99%;
+    width: 100%;
+    float: none !important;
+  }
+  body {
+    font: 10pt "Computer Modern", Georgia, "Times New Roman", Times, serif;
+    line-height: 1.1;
+    background: #fff !important;
+    color: #000;
+  }
+  h1 {
+    font-size: 16pt;
+  }
+  h2, h3, h4 {
+    font-size: 14pt;
+  }
+  main, div.print {
+    visibility: visible;
+    width: auto; /* 100%; */
+    font-size: 10pt;
+    margin: 0; /* 0.50in 0.5in 0.5in 0.5in; */
+    float: none ! important;
+    page-break-inside:auto ;
+    /* height: 900px; */
+  }
+  tr    { page-break-inside:avoid; page-break-after:auto }
+  thead { display:table-header-group }
+  tfoot { display:table-footer-group }
+  table {
+    border-bottom: 2px solid black;
+    border-top: 2px solid black;
+    font-size: 8pt;
+    visibility: visible;
+    width: 100%; 
+    margin: 0; 
+    float: none;
+    page-break-inside:auto ; 
+    page-break-after:auto;
+  }
+  hr, img, nav, footer, .button, #rendering, #event-table {
+    visibility: hidden;
+    display: none;
+    max-height: 0;
+    max-width: 0;
+  }
+  details > summary {
+    list-style: none;
+  }
+  details > summary::marker {
+    display:none;
+  }
+  .ssid-data {
+    visibility: visible;
+    display: block;
+  }
+}
+.ct-series-a .ct-point, .ct-series-a .ct-line, .ct-series-a .ct-bar, .ct-series-a .ct-slice-donut{
+  stroke: #506690;
+}
+.ct-series-b .ct-point, .ct-series-b .ct-line, .ct-series-b .ct-bar, .ct-series-b .ct-slice-donut {
+  stroke: #61DAFB;
+}
+</style>
+{% endblock stylesheets %}
+
+{% block content %}
+<div class="print">
+    <div class="col-10 mb-4 d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center py-4">
+      <div class="d-block mb-4 mb-md-0">
+          <nav aria-label="breadcrumb" class="d-none d-md-inline-block">
+            <ol class="breadcrumb breadcrumb-dark breadcrumb-transparent">
+              <li class="breadcrumb-item">
+                <a href="{% url 'dashboard' %}">
+                  <svg class="icon icon-xxs" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                </a>
+              </li>
+              <li class="breadcrumb-item" aria-current="page"><a href="{% url 'asset_table' %}">Inventory</a></li>
+              <li class="breadcrumb-item active"><code>{{ event.usgsid }}</code></li>
+            </ol>
+          </nav>
+          <h1 class="h4"><samp>{{ event.id }}</samp> / {{ event.name }}</h1>
+      </div>
+      <div class="btn-toolbar mb-2 mb-md-0">
+        <a role="button"
+           href="https://earthquake.usgs.gov/earthquakes/eventpage/{{ event.usgsid }}/technical"
+           class="btn btn-sm btn-outline-primary d-inline-flex align-items-center mx-1">
+          USGS
+        </a>
+      </div>
+    </div>
+
+    
+    <details id="event-table" open><summary><h3>Records</h3></summary>
+      {% if event.records %}
+      <div class="row">
+        <div class="col-10 mb-4">
+        <div class="card card-body border-0 shadow table-wrapper table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Record ID</th>
+                <th>Station</th>
+                <th>Date</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for record in event.records.all %}
+              <tr style="cursor: pointer;" >
+                <td>{{ record.record_identifier }}</td>
+                <td>{{ record.cesmd }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+      </div>
+      </div>
+      {% endif %}
+    </details>
+    <hr>
+
+    {# STRUCTURE PROFILE #}
+
+
+</div>
+{% endblock content %}
+
+<script>
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+</script>
+{% block javascripts %}
+<script>
+  const table_keys = [
+    {% for method in evaluations.0.evaluation %}
+            "{{ method }}",
+    {% endfor %}];
+  for (const key of table_keys) {
+    let elem = document.querySelector(`#ssid-set-${key}`);
+    elem.onclick = () => {
+      // Unhide
+      [...document.querySelectorAll(`.ssid-method-${key}`)].map((x) => {
+        console.log(x);
+        x.style.display = null;
+      });
+      document.querySelector("#ssid-name").textContent = elem.innerText;
+      // Hide rest
+      for (const oth of table_keys) {
+        if (oth != key)
+          [...document.querySelectorAll(`.ssid-method-${oth}`)].map((x) => {
+            console.log(x);
+            x.style.display = 'none';
+          });
+      }
+    };
+  }
+</script>
+
+<script type="text/javascript">
+  function printTables() {
+    var myWindow = window.open('','','width=200,height=100')
+    myWindow.document.write("This is 'myWindow'")
+    myWindow.print();
+  }
+</script>
+<script>
+  function openFullViewer(src) {
+    // Construct the HTML for the full-screen viewer
+    const fullViewerHTML = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Full Viewer</title>
+        <style>
+          body { margin: 0; padding: 0; overflow: hidden; }
+          model-viewer { width: 100vw; height: 100vh; }
+        </style>
+      </head>
+      <body>
+        <model-viewer 
+          src="${src}" 
+          alt="3D Model" 
+          auto-rotate 
+          camera-controls
+          style="width: 100%; height: 100%;">
+        </model-viewer>
+        <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"><\/script>
+      </body>
+      </html>
+    `;
+
+    // Open a new tab
+    const newTab = window.open();
+
+    // Write the HTML into the new tab
+    newTab.document.open();
+    newTab.document.write(fullViewerHTML);
+    newTab.document.close();
+  }
+</script>
+
+{% endblock javascripts %}
