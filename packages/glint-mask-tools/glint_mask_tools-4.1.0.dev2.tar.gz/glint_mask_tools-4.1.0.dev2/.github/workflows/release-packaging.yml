@@ -1,0 +1,142 @@
+name: Create Release
+
+on:
+  push:
+    branches-ignore:
+      - '**'
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+rc[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+.dev[0-9]+'
+jobs:
+  build-binaries:
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    strategy:
+      matrix:
+        os: [ windows-latest, ubuntu-latest ]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.9.17"
+          enable-cache: true
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Get tag
+        id: tag
+        run: echo "tag=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+
+      - name: Install Linux dependencies
+        if: ${{ runner.os == 'Linux' }}
+        run: >
+          sudo apt-get install
+          '^libxcb.*-dev'
+          libx11-xcb-dev
+          libglu1-mesa-dev
+          libxrender-dev
+          libxi-dev
+          libxkbcommon-dev
+          libxkbcommon-x11-dev
+
+      - name: Install dependencies
+        run: |
+          uv version ${{ env.tag }}
+          uv sync --all-extras --dev
+
+      - name: Build Windows GUI Executable
+        if: ${{ runner.os == 'Windows' }}
+        run: >
+          uv run pyinstaller
+          --onefile
+          --windowed
+          --icon='src\gui\resources\gmt.ico'
+          --add-data='src\gui\resources\gmt.ico;resources'
+          --add-data="src\gui\resources\*.ui;resources"
+          --add-data="src\gui\resources\*.qss;resources"
+          --add-data="src\gui\resources\*.svg;resources"
+          --hidden-import="gui.widgets.buffer_ctrl"
+          --hidden-import="gui.widgets.threshold_ctrl"
+          --hidden-import="gui.widgets.directory_path"
+          src/gui/__main__.py
+
+      - name: Build Linux GUI Executable
+        if: ${{ runner.os == 'Linux' }}
+        run: >
+          uv run pyinstaller
+          --onefile
+          --icon='src/gui/resources/gmt.ico'
+          --add-data='src/gui/resources/gmt.ico:resources'
+          --add-data="src/gui/resources/*.ui:resources"
+          --add-data="src/gui/resources/*.qss:resources"
+          --add-data="src/gui/resources/*.svg:resources"
+          --hidden-import="gui.widgets.buffer_ctrl"
+          --hidden-import="gui.widgets.threshold_ctrl"
+          --hidden-import="gui.widgets.directory_path"
+          src/gui/__main__.py
+
+      - name: Archive release artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.os }}-dist
+          path: dist
+
+
+  create-release:
+    needs: build-binaries
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Get tag
+        id: tag
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      - name: Detect prerelease
+        id: prerelease
+        run: |
+          if echo ${{ env.tag }} | grep -qE '(rc|\.dev)[0-9]+$'; then
+              echo "prerelease=true" >> $GITHUB_ENV
+          else
+              echo "prerelease=false" >> $GITHUB_ENV
+          fi
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: windows-latest-dist
+          path: win64-dist
+
+      - name: Download Ubuntu artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: ubuntu-latest-dist
+          path: linux-dist
+
+      - name: Rename release artifacts
+        run: |
+          mv win64-dist/__main__.exe GlintMaskGenerator-${{ env.tag }}-win64.exe
+          mv linux-dist/__main__ GlintMaskGenerator-${{ env.tag }}-linux
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: ${{ env.tag }}
+          prerelease: ${{ env.prerelease }}
+          draft: true
+          files: |
+            GlintMaskGenerator-${{ env.tag }}-win64.exe
+            GlintMaskGenerator-${{ env.tag }}-linux
