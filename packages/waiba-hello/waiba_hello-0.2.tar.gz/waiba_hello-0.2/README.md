@@ -1,0 +1,45 @@
+# Waiba Hello Package
+
+A simple sample Python package that prints a friendly greeting.
+
+## Description
+
+This package demonstrates the basic structure of a Python package.
+Its only job is to print the following message:
+
+```
+Hello from Waiba!
+```
+
+## Installation
+```bash
+pip install waiba-hello
+```
+
+## Usage
+
+After installing the package, you can use it in your Python code:
+
+```python
+from waiba_hello import hello
+
+hello()
+```
+
+### Output
+
+```
+Hello from Waiba!
+```
+
+## Purpose
+
+This project is intended for learning and demonstration purposes, such as:
+
+* Understanding Python package structure
+* Testing packaging and distribution
+* Creating a minimal example package
+
+## License
+
+MIT License
