@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2023 OpenSynergy Indonesia
+     Copyright 2023 PT. Simetri Sinergi Indonesia
+     License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl). -->
+<odoo>
+    <record id="employee_business_trip_view_tree" model="ir.ui.view">
+        <field name="name">employee_business_trip - Tree</field>
+        <field name="model">employee_business_trip</field>
+        <field name="mode">primary</field>
+        <field
+            name="inherit_id"
+            ref="ssi_transaction_mixin.mixin_transaction_view_tree"
+        />
+        <field name="arch" type="xml">
+            <data>
+                <xpath expr="//field[@name='user_id']" position="after">
+                    <field name="employee_id" widget="many2one_avatar_employee" />
+                    <field name="department_id" optional="hide" />
+                    <field
+                        name="manager_id"
+                        optional="hide"
+                        widget="many2one_avatar_employee"
+                    />
+                    <field name="job_id" optional="hide" />
+                    <field name="type_id" />
+                    <field name="currency_id" optional="hide" />
+                    <field name="origin_id" />
+                    <field name="destination_id" />
+                    <field name="date" optional="hide" />
+                    <field name="date_due" optional="hide" />
+                    <field name="date_start" />
+                    <field name="date_end" />
+                    <field
+                        name="amount_untaxed"
+                        string="Untaxed"
+                        sum="Total Untaxed"
+                        optional="hide"
+                    />
+                    <field
+                        name="amount_tax"
+                        string="Tax"
+                        sum="Total Tax"
+                        optional="hide"
+                    />
+                    <field name="amount_total" string="Total" sum="Total" />
+                    <field
+                        name="amount_realized"
+                        string="Realized"
+                        sum="Total Realized"
+                    />
+                    <field
+                        name="amount_residual"
+                        string="Residual"
+                        sum="Total Residual"
+                    />
+                </xpath>
+            </data>
+        </field>
+    </record>
+
+    <record id="employee_business_trip_view_search" model="ir.ui.view">
+        <field name="name">employee_business_trip - Search</field>
+        <field name="model">employee_business_trip</field>
+        <field
+            name="inherit_id"
+            ref="ssi_transaction_mixin.mixin_transaction_view_search"
+        />
+        <field name="mode">primary</field>
+        <field name="arch" type="xml">
+            <data>
+                <xpath expr="//field[@name='user_id']" position="after">
+                    <field name="employee_id" />
+                    <field name="department_id" />
+                    <field name="manager_id" />
+                    <field name="job_id" />
+                    <field name="type_id" />
+                    <field name="currency_id" />
+                    <field name="pricelist_id" />
+                    <field name="origin_id" />
+                    <field name="destination_id" />
+                    <field name="date" />
+                    <field name="date_due" />
+                    <field name="date_start" />
+                    <field name="date_end" />
+                </xpath>
+                <xpath expr="//group[@name='group_by']" position="inside">
+                    <filter
+                        name="grp_employee"
+                        string="Employee"
+                        context="{'group_by':'employee_id'}"
+                    />
+                    <filter
+                        name="grp_department"
+                        string="Department"
+                        context="{'group_by':'department_id'}"
+                    />
+                    <filter
+                        name="grp_job"
+                        string="Job"
+                        context="{'group_by':'job_id'}"
+                    />
+                    <filter
+                        name="grp_manager"
+                        string="Manager"
+                        context="{'group_by':'manager_id'}"
+                    />
+                    <filter
+                        name="grp_type"
+                        string="Type"
+                        context="{'group_by':'type_id'}"
+                    />
+                    <filter
+                        name="grp_currency"
+                        string="Currency"
+                        context="{'group_by':'currency_id'}"
+                    />
+                    <filter
+                        name="grp_pricelist"
+                        string="Pricelist"
+                        context="{'group_by':'pricelist_id'}"
+                    />
+                </xpath>
+            </data>
+        </field>
+    </record>
+
+    <record id="employee_business_trip_view_form" model="ir.ui.view">
+        <field name="name">employee_business_trip - Form</field>
+        <field name="model">employee_business_trip</field>
+        <field name="mode">primary</field>
+        <field
+            name="inherit_id"
+            ref="ssi_transaction_mixin.mixin_transaction_view_form"
+        />
+        <field name="arch" type="xml">
+            <data>
+                <xpath expr="//field[@name='user_id']" position="after">
+                    <field name="employee_id" widget="many2one_avatar_employee" />
+                    <field name="department_id" readonly="1" force_save="1" />
+                    <field
+                        name="manager_id"
+                        widget="many2one_avatar_employee"
+                        readonly="1"
+                        force_save="1"
+                    />
+                    <field name="job_id" readonly="1" force_save="1" />
+                </xpath>
+                <xpath expr="//group[@name='header_right']" position="inside">
+                    <field name="type_id" />
+                    <field name="date" />
+
+                </xpath>
+                <xpath expr="//page[1]" position="before">
+                    <page name="trip" string="Trip Information">
+                        <group name="trip_1" colspan="4" col="2">
+                            <group
+                                name="trip_1_1"
+                                colspan="1"
+                                col="2"
+                                string="Date Travel"
+                            >
+                                <field name="date_start" />
+                                <field name="date_end" />
+                            </group>
+                            <group
+                                name="trip_1_2"
+                                colspan="1"
+                                col="2"
+                                string="Origin &amp; Destination"
+                            >
+                                <field
+                                    name="allowed_origin_ids"
+                                    invisible="1"
+                                    widget="many2many_tags"
+                                />
+                                <field
+                                    name="origin_id"
+                                    domain="[('id', 'in', allowed_origin_ids)]"
+                                />
+                                <field
+                                    name="allowed_destination_ids"
+                                    invisible="1"
+                                    widget="many2many_tags"
+                                />
+                                <field
+                                    name="destination_id"
+                                    domain="[('id', 'in', allowed_destination_ids)]"
+                                />
+                            </group>
+                        </group>
+                    </page>
+                    <page name="per_diem" string="Per Diem">
+                        <group name="per_diem_1" colspan="4" col="2">
+                            <group name="per_diem_1_1" colspan="1" col="2">
+                                <field name="company_currency_id" invisible="1" />
+                                <field
+                                    name="allowed_currency_ids"
+                                    invisible="1"
+                                    widget="many2many_tags"
+                                />
+                                <field
+                                    name="currency_id"
+                                    domain="[('id', 'in', allowed_currency_ids)]"
+                                />
+                                <field
+                                    name="allowed_pricelist_ids"
+                                    invisible="1"
+                                    widget="many2many_tags"
+                                />
+                                <field
+                                    name="pricelist_id"
+                                    domain="[('id', 'in', allowed_pricelist_ids)]"
+                                />
+                                <field
+                                    name="allowed_product_ids"
+                                    invisible="1"
+                                    widget="many2many_tags"
+                                />
+                                <field name="analytic_account_id" />
+                            </group>
+                            <group name="per_diem_1_2" colspan="1" col="2">
+                                <field name="date_due" />
+                            </group>
+                        </group>
+                        <field name="per_diem_ids">
+                            <tree editable="top">
+                                <field name="sequence" widget="handle" />
+                                <field name="pricelist_id" invisible="1" />
+                                <field
+                                    name="product_id"
+                                    domain="[('id', 'in', parent.allowed_product_ids)]"
+                                />
+                                <field name="currency_id" invisible="1" />
+                                <field name="name" />
+                                <field name="usage_id" />
+                                <field name="account_id" />
+                                <field name="analytic_account_id" />
+                                <field name="uom_quantity" string="Qty." />
+                                <field
+                                    name="allowed_uom_ids"
+                                    widget="many2many_tags"
+                                    invisible="1"
+                                />
+                                <field
+                                    name="uom_id"
+                                    domain="[('id','in',allowed_uom_ids)]"
+                                />
+                                <field name="price_unit" />
+                                <field name="tax_ids" widget="many2many_tags" />
+                                <field name="price_subtotal" string="Subtotal" />
+                            </tree>
+                        </field>
+                        <group name="per_diem_1" colspan="4" col="2">
+                            <group name="per_diem_1_1" colspan="1" col="2">
+                                <field name="amount_untaxed" />
+                                <field name="amount_tax" />
+                                <field name="amount_total" />
+                            </group>
+                            <group name="per_diem_1_2" colspan="1" col="2">
+                                <field name="amount_realized" />
+                                <field name="amount_residual" />
+                            </group>
+                        </group>
+                    </page>
+                    <page name="accounting" string="Accounting">
+                        <group name="accounting_1" colspan="4" col="2">
+                            <group name="accounting_1_1" colspan="1" col="2">
+                                <field name="journal_id" />
+                                <field name="payable_account_id" />
+                            </group>
+                            <group name="accounting_1_2" colspan="1" col="2">
+                                <field name="move_id" />
+                                <field name="payable_move_line_id" />
+                                <field name="realized" />
+                            </group>
+                        </group>
+                        <button
+                            name="action_compute_tax"
+                            string="Compute Tax"
+                            type="object"
+                            class="oe_highlight"
+                            icon="fa-gear"
+                            attrs="{'invisible':[('state','!=','draft')]}"
+                        />
+                        <field name="tax_ids">
+                            <tree editable="top">
+                                <field name="tax_id" />
+                                <field name="name" />
+                                <field name="currency_id" invisible="True" />
+                                <field name="account_id" />
+                                <field name="analytic_account_id" />
+                                <field name="manual" invisible="True" />
+                                <field name="base_amount" />
+                                <field name="tax_amount" />
+                            </tree>
+                            <form>
+                                <group name="tax" colspan="4" col="2">
+                                    <field name="tax_id" />
+                                    <field name="currency_id" invisible="True" />
+                                    <field name="account_id" />
+                                    <field name="analytic_account_id" />
+                                    <field name="manual" invisible="True" />
+                                    <field name="base_amount" />
+                                    <field name="tax_amount" />
+                                    <field name="account_move_line_id" />
+                                </group>
+                            </form>
+                        </field>
+                    </page>
+                </xpath>
+            </data>
+        </field>
+    </record>
+
+    <record id="employee_business_trip_action" model="ir.actions.act_window">
+        <field name="name">Business Trips</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">employee_business_trip</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <menuitem
+        id="employee_business_trip_menu"
+        name="Business Trips"
+        parent="ssi_hr_expense.expense_menu"
+        action="employee_business_trip_action"
+        groups="employee_business_trip_viewer_group"
+        sequence="35"
+    />
+</odoo>
