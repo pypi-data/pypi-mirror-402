@@ -1,0 +1,127 @@
+Metadata-Version: 2.4
+Name: pyezzi
+Version: 0.8.3
+Author-email: Nicolas Cedilnik <nicoco@nicoco.fr>
+License-Expression: CECILL-C
+Keywords: medical image processing
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Education
+Classifier: Intended Audience :: Science/Research
+Requires-Python: >=3.10
+Description-Content-Type: text/x-rst
+License-File: LICENSE
+Requires-Dist: numpy>=2
+Provides-Extra: cli
+Requires-Dist: scipy>=1.13.1; extra == "cli"
+Requires-Dist: simpleitk>=2.4.1; extra == "cli"
+Provides-Extra: example
+Requires-Dist: ipykernel>=6.29.5; extra == "example"
+Requires-Dist: matplotlib>=3.9.4; extra == "example"
+Dynamic: license-file
+
+======
+pYezzi
+======
+
+Compute the thickness of a solid using Yezzi and Prince method described in
+the article "An Eulerian PDE Approach for Computing Tissue Thickness", IEEE
+TRANSACTIONS ON MEDICAL IMAGING, VOL. 22, NO. 10, OCTOBER 2003. [#]_
+
+A C implementation by Rubén Cárdenes [#]_ helped me a lot writing this,
+especially the anisotropic part.
+
+.. [#] http://dx.doi.org/10.1109/tmi.2003.817775
+.. [#] http://www.dtic.upf.edu/~rcardenes/Ruben_Cardenes/Software.html
+
+
+Requirements
+============
+
+Runtime: numpy, OpenMP (e.g., the ``libgomp1`` package on debian).
+
+Build time: a C compiler (e.g., ``gcc`` + ``libc6-dev`` packages on debian).
+This is needed in case you are using a platform for which we do not provide binaries
+("wheels") on PyPI.
+
+Test time: ``scikit-image``, ``scipy``.
+
+
+Installation instruction
+========================
+
+Available on pypi. [#]_
+Use pip: ``pip install pyezzi``
+
+Alternatively, clone the repository and build cython modules with
+``pip install .``.
+
+.. [#]  https://pypi.python.org/pypi/pyezzi
+
+Usage
+=====
+
+Command line
+------------
+
+This package provides a basic CLI. Example usage:
+
+.. code:: bash
+
+    pyezzi /path/to/endo.mha /path/to/epi.mha /path/to/output.mha [--weights /path/to/thickness_weights.mha]
+
+If can use the excellent `uvx <https://docs.astral.sh/uv/guides/tools/>`_, you can download and
+launch it in a single command:
+
+.. code:: bash
+
+    uvx pyezzi[cli] --help
+
+
+Python API
+----------
+
+Full API documentation is available on
+`gitlabpages.inria.fr <https://ncedilni.gitlabpages.inria.fr/pyezzi>`_.
+
+.. code:: python
+
+    from pyezzi import compute_thickness_cardiac
+
+    thickness = compute_thickness_cardiac(endo, epi)
+
+``endo`` and ``epi`` are numpy binary masks.
+``endo`` represents the "inside" boundary of the domain, e.g., the cardiac ventricular blood pool.
+``epi`` represents the "outside" boundary of the domain, e.g., the cardiac ventricular epicardium.
+
+A ``spacing`` parameter specifying the spacing between voxels along the axes
+can optionnaly be specified.
+
+A ``weights`` parameter can be added to account for "holes" in the wall, cf
+"Cedilnik & Peyrat, Weighted tissue thickness, FIMH 2023". [#]_
+
+Check out the included jupyter notebooks in the ``example`` folder for more
+details.
+
+.. [#] https://hal.science/hal-04111276/
+
+Contributions
+=============
+
+We recommend using `uv <https://docs.astral.sh/uv/>`_ for project management
+and `pre-commit <https://pre-commit.com/>`_ to ensure code quality.
+
+After cloning, use ``uv sync --frozen --all-groups --all-extras`` to install dev dependencies.
+This will set up a virtualenv in ``.venv`` that you can activate with
+``source .venv/bin/activate``. Tests can then be run with ``pytest test``.
+
+To build the cython extension modules in place, use ``python setup.py develop``.
+
+License
+=======
+
+This work is licensed under the french CeCILL license. [#]_
+You're free to use and modify the code, but please cite the original paper and
+me.
+
+.. [#] https://www.cecill.info/licences/Licence_CeCILL_V2.1-en.html
