@@ -1,0 +1,41 @@
+# LangChain Notepad Middleware
+
+A production-grade LangChain middleware that provides a plain-text persistent "scratchpad" (notepad) for agents to store intermediate state across multi-hop tasks.
+
+## Installation
+
+```bash
+pip install langchain-notepad-middleware
+```
+
+## Usage
+
+```python
+from langchain.agents import create_agent
+from langchain_middleware_notepad import NotePadMiddleware
+
+# Create an agent with the middleware
+agent = create_agent(
+    model="openai:gpt-4o",
+    tools=[...],  # Your other tools
+    middleware=[NotePadMiddleware()],
+)
+```
+
+## How it Works
+
+The middleware injects a system prompt instructing the model to use the notepad for scratchpad memory. It also registers 5 tools for manipulating the notepad state:
+
+1.  **`notepad_append(text)`**: Append text to the note.
+2.  **`notepad_replace(text)`**: Overwrite the entire note.
+3.  **`notepad_read()`**: Read the current note content.
+4.  **`notepad_is_exist()`**: Check if a non-empty note exists.
+5.  **`notepad_clear()`**: Clear the note.
+
+The state is stored in a simple string field `notepad` within the agent state.
+
+## Best Practices
+
+- Use `append` for logging cumulative steps.
+- Use `replace` when summarizing or changing topics.
+- The middleware automatically injects prompt guidance, so you don't typically need to manually prompt the agent to use it, although specific task instructions help.
