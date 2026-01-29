@@ -1,0 +1,133 @@
+# AIssue Django Middleware
+
+Easy Django error monitoring with AIssue. Automatically capture and send all unhandled exceptions to your AIssue dashboard for AI-powered analysis and resolution suggestions.
+
+## Installation
+
+```bash
+pip install aissue-django
+```
+
+## Quick Setup
+
+1. **Add to your Django settings:**
+
+```python
+# settings.py
+MIDDLEWARE = [
+    # ... your existing middleware
+    'aissue_django.middleware.AIssueMiddleware',
+]
+
+# Required: Your AIssue API key
+AISSUE_API_KEY = 'your-api-key-here'
+```
+
+2. **Get your API key from your AIssue dashboard**
+
+That's it! The middleware will now automatically capture all unhandled exceptions and send them to AIssue.
+
+## Configuration Options
+
+All configuration is optional except for `AISSUE_API_KEY`:
+
+```python
+# Required
+AISSUE_API_KEY = 'your-api-key-here'
+
+# Optional settings with defaults
+AISSUE_BASE_URL = 'https://app.aissue.com'  # Your AIssue instance URL
+AISSUE_TIMEOUT = 5  # API request timeout in seconds
+AISSUE_ENABLED = True  # Enable/disable error logging
+AISSUE_LOG_IN_DEBUG = False  # Log errors even when DEBUG = True
+```
+
+## Debug Mode Behavior
+
+By default, the middleware **only logs errors when `DEBUG = False`** (production mode). This prevents development errors from cluttering your production error logs.
+
+To also log errors in development (when `DEBUG = True`), set:
+
+```python
+AISSUE_LOG_IN_DEBUG = True
+```
+
+## Features
+
+- **Automatic Error Capture**: Catches all unhandled Django exceptions
+- **Rich Context**: Captures request data, user info, headers, and full traceback
+- **Non-Intrusive**: Won't break your app if AIssue is unreachable
+- **Debug-Aware**: Respects Django's DEBUG setting
+- **Configurable**: Easy to enable/disable and customize
+- **User Context**: Automatically includes authenticated user information
+
+## What Gets Captured
+
+For each error, the middleware sends:
+
+- **Error Details**: Exception type, message, and full traceback
+- **Request Info**: URL path, HTTP method, GET/POST data, request body
+- **User Context**: Email and ID (if user is authenticated)
+- **Headers**: All HTTP headers
+- **Timestamp**: When the error occurred
+
+## Example Error Data
+
+```json
+{
+  "error_code": 500,
+  "path": "/api/users/123/",
+  "method": "POST",
+  "user_email": "user@example.com",
+  "user_id": "456",
+  "traceback": "Traceback (most recent call last)...",
+  "request_data": {
+    "GET": {},
+    "POST": {"name": "John"},
+    "body": "{\"age\": 30}"
+  },
+  "headers": {
+    "User-Agent": "Mozilla/5.0...",
+    "Content-Type": "application/json"
+  }
+}
+```
+
+## Security
+
+- **API Key**: Transmitted securely via X-API-Key header
+- **Sensitive Data**: Be mindful of sensitive data in request bodies/headers
+- **User Privacy**: User emails/IDs are only sent if users are authenticated
+
+## Troubleshooting
+
+### "AISSUE_API_KEY setting is required"
+
+Make sure you've added your API key to Django settings:
+
+```python
+AISSUE_API_KEY = 'your-actual-api-key'
+```
+
+### Not seeing errors in AIssue?
+
+1. Check that `DEBUG = False` or set `AISSUE_LOG_IN_DEBUG = True`
+2. Verify your API key is correct
+3. Check Django logs for AIssue connection errors
+4. Ensure the middleware is added to `MIDDLEWARE` setting
+
+### Temporarily disable logging
+
+```python
+AISSUE_ENABLED = False
+```
+
+## Support
+
+- **Documentation**: [https://docs.aissue.com/django](https://docs.aissue.com/django)
+- **Issues**: [GitHub Issues](https://github.com/aissue/aissue-django/issues)
+- **Email**: support@aissue.com
+
+## License
+
+MIT License - see LICENSE file for details. 
