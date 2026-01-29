@@ -1,0 +1,901 @@
+cp -rf py3.9/examples .
+cp -rf py3.9/doc .
+cp -f py3.9/index.html .
+cp -rf Python-3.10.0a5/Modules/_multiprocessing Modules/_multiprocess
+cp -rf py3.9/_multiprocess _multiprocess
+cp -rf py3.9/multiprocess multiprocess 
+cp Python-3.10.0a6/Lib/test/mp_*py multiprocess/tests
+cp Python-3.10.0a6/Lib/test/_test_multiprocessing.py multiprocess/tests/__init__.py
+
+# ----------------------------------------------------------------------
+diff Python-3.10.0a5/Modules/_multiprocessing/semaphore.c Modules/_multiprocess/semaphore.c
+10c10
+< #include "multiprocessing.h"
+---
+> #include "multiprocess.h"
+33,34c33,34
+< module _multiprocessing
+< class _multiprocessing.SemLock "SemLockObject *" "&_PyMp_SemLockType"
+---
+> module _multiprocess
+> class _multiprocess.SemLock "SemLockObject *" "&_PyMp_SemLockType"
+78c78
+< _multiprocessing.SemLock.acquire
+---
+> _multiprocess.SemLock.acquire
+87c87
+< _multiprocessing_SemLock_acquire_impl(SemLockObject *self, int blocking,
+---
+> _multiprocess_SemLock_acquire_impl(SemLockObject *self, int blocking,
+169c169
+< _multiprocessing.SemLock.release
+---
+> _multiprocess.SemLock.release
+175c175
+< _multiprocessing_SemLock_release_impl(SemLockObject *self)
+---
+> _multiprocess_SemLock_release_impl(SemLockObject *self)
+230c230
+< #ifndef HAVE_SEM_TIMEDWAIT
+---
+> // ifndef HAVE_SEM_TIMEDWAIT
+291c291
+< #endif /* !HAVE_SEM_TIMEDWAIT */
+---
+> // #endif /* !HAVE_SEM_TIMEDWAIT */
+294c294
+< _multiprocessing.SemLock.acquire
+---
+> _multiprocess.SemLock.acquire
+303c303
+< _multiprocessing_SemLock_acquire_impl(SemLockObject *self, int blocking,
+---
+> _multiprocess_SemLock_acquire_impl(SemLockObject *self, int blocking,
+379c379
+< _multiprocessing.SemLock.release
+---
+> _multiprocess.SemLock.release
+385c385
+< _multiprocessing_SemLock_release_impl(SemLockObject *self)
+---
+> _multiprocess_SemLock_release_impl(SemLockObject *self)
+471c471
+< _multiprocessing.SemLock.__new__
+---
+> _multiprocess.SemLock.__new__
+482c482
+< _multiprocessing_SemLock_impl(PyTypeObject *type, int kind, int value,
+---
+> _multiprocess_SemLock_impl(PyTypeObject *type, int kind, int value,
+530c530
+< _multiprocessing.SemLock._rebuild
+---
+> _multiprocess.SemLock._rebuild
+541c541
+< _multiprocessing_SemLock__rebuild_impl(PyTypeObject *type, SEM_HANDLE handle,
+---
+> _multiprocess_SemLock__rebuild_impl(PyTypeObject *type, SEM_HANDLE handle,
+578c578
+< _multiprocessing.SemLock._count
+---
+> _multiprocess.SemLock._count
+584c584
+< _multiprocessing_SemLock__count_impl(SemLockObject *self)
+---
+> _multiprocess_SemLock__count_impl(SemLockObject *self)
+591c591
+< _multiprocessing.SemLock._is_mine
+---
+> _multiprocess.SemLock._is_mine
+597c597
+< _multiprocessing_SemLock__is_mine_impl(SemLockObject *self)
+---
+> _multiprocess_SemLock__is_mine_impl(SemLockObject *self)
+605c605
+< _multiprocessing.SemLock._get_value
+---
+> _multiprocess.SemLock._get_value
+611c611
+< _multiprocessing_SemLock__get_value_impl(SemLockObject *self)
+---
+> _multiprocess_SemLock__get_value_impl(SemLockObject *self)
+630c630
+< _multiprocessing.SemLock._is_zero
+---
+> _multiprocess.SemLock._is_zero
+636c636
+< _multiprocessing_SemLock__is_zero_impl(SemLockObject *self)
+---
+> _multiprocess_SemLock__is_zero_impl(SemLockObject *self)
+658c658
+< _multiprocessing.SemLock._after_fork
+---
+> _multiprocess.SemLock._after_fork
+664c664
+< _multiprocessing_SemLock__after_fork_impl(SemLockObject *self)
+---
+> _multiprocess_SemLock__after_fork_impl(SemLockObject *self)
+672c672
+< _multiprocessing.SemLock.__enter__
+---
+> _multiprocess.SemLock.__enter__
+678c678
+< _multiprocessing_SemLock___enter___impl(SemLockObject *self)
+---
+> _multiprocess_SemLock___enter___impl(SemLockObject *self)
+681c681
+<     return _multiprocessing_SemLock_acquire_impl(self, 1, Py_None);
+---
+>     return _multiprocess_SemLock_acquire_impl(self, 1, Py_None);
+685c685
+< _multiprocessing.SemLock.__exit__
+---
+> _multiprocess.SemLock.__exit__
+696c696
+< _multiprocessing_SemLock___exit___impl(SemLockObject *self,
+---
+> _multiprocess_SemLock___exit___impl(SemLockObject *self,
+701c701
+<     return _multiprocessing_SemLock_release_impl(self);
+---
+>     return _multiprocess_SemLock_release_impl(self);
+744c744
+<     /* tp_name           */ "_multiprocessing.SemLock",
+---
+>     /* tp_name           */ "_multiprocess.SemLock",
+780c780
+<     /* tp_new            */ _multiprocessing_SemLock,
+---
+>     /* tp_new            */ _multiprocess_SemLock,
+# ----------------------------------------------------------------------
+$ mv multiprocessing.c multiprocess.c 
+$ mv multiprocessing.h multiprocess.h
+# ----------------------------------------------------------------------
+diff Python-3.10.0a5/Lib/multiprocessing/resource_tracker.py Python-3.10.0a6/Lib/multiprocessing/resource_tracker.py
+39a40,48
+>     # Use sem_unlink() to clean up named semaphores.
+>     #
+>     # sem_unlink() may be missing if the Python build process detected the
+>     # absence of POSIX named semaphores. In that case, no named semaphores were
+>     # ever opened, so no cleanup would be necessary.
+>     if hasattr(_multiprocessing, 'sem_unlink'):
+>         _CLEANUP_FUNCS.update({
+>             'semaphore': _multiprocessing.sem_unlink,
+>         })
+41d49
+<         'semaphore': _multiprocessing.sem_unlink,
+# ----------------------------------------------------------------------
+diff Python-3.10.0a6/Lib/test/_test_multiprocessing.py multiprocess/tests/__init__.py 
+23c23
+< import pickle
+---
+> import pickle #XXX: use dill?
+40c40
+< support.skip_if_broken_multiprocessing_synchronize()
+---
+> import_helper.import_module('multiprocess.synchronize')
+43,48c43,49
+< import multiprocessing.connection
+< import multiprocessing.dummy
+< import multiprocessing.heap
+< import multiprocessing.managers
+< import multiprocessing.pool
+< import multiprocessing.queues
+---
+> import multiprocess as multiprocessing
+> import multiprocess.connection
+> import multiprocess.dummy
+> import multiprocess.heap
+> import multiprocess.managers
+> import multiprocess.pool
+> import multiprocess.queues
+50c51
+< from multiprocessing import util
+---
+> from multiprocess import util
+53c54
+<     from multiprocessing import reduction
+---
+>     from multiprocess import reduction
+59c60
+<     from multiprocessing.sharedctypes import Value, copy
+---
+>     from multiprocess.sharedctypes import Value, copy
+65c66
+<     from multiprocessing import shared_memory
+---
+>     from multiprocess import shared_memory
+93c94
+<     from multiprocessing import resource_tracker
+---
+>     from multiprocess import resource_tracker
+121c122
+< from multiprocessing.connection import wait
+---
+> from multiprocess.connection import wait
+134c135
+< PRELOAD = ['__main__', 'test.test_multiprocessing_forkserver']
+---
+> PRELOAD = ['__main__', 'test_multiprocessing_forkserver']
+289c290
+<         from multiprocessing.process import parent_process
+---
+>         from multiprocess.process import parent_process
+292c293
+<     def test_parent_process(self):
+---
+>     def _test_parent_process(self):
+325c326
+<         from multiprocessing.process import parent_process
+---
+>         from multiprocess.process import parent_process
+492a494
+>     @unittest.skipIf(True, "fails with is_dill(obj, child=True)")
+744c746
+<         from multiprocessing.forkserver import _forkserver
+---
+>         from multiprocess.forkserver import _forkserver
+833,834c835,836
+<             self.assertIn("test_multiprocessing.py", err)
+<             self.assertIn("1/0 # MARKER", err)
+---
+>             self.assertIn("__init__.py", err)
+>             #self.assertIn("1/0 # MARKER", err) #FIXME
+1123c1125
+<                     import multiprocessing
+---
+>                     import multiprocess as multiprocessing
+2016c2018
+<             self.skipTest("requires multiprocessing.sharedctypes")
+---
+>             self.skipTest("requires multiprocess.sharedctypes")
+2582a2585
+>     @unittest.skipIf(True, "fails with is_dill(obj, child=True)")
+2624a2628
+>     @unittest.skipIf(True, "fails with is_dill(obj, child=True)")
+2722,2723c2726,2727
+<     def test_unpickleable_result(self):
+<         from multiprocessing.pool import MaybeEncodingError
+---
+>     def _test_unpickleable_result(self):
+>         from multiprocess.pool import MaybeEncodingError
+2811c2815
+< from multiprocessing.managers import BaseManager, BaseProxy, RemoteError
+---
+> from multiprocess.managers import BaseManager, BaseProxy, RemoteError
+3454c3458
+<         from multiprocessing import resource_sharer
+---
+>         from multiprocess import resource_sharer
+3699c3703
+<             self.skipTest("requires multiprocessing.sharedctypes")
+---
+>             self.skipTest("requires multiprocess.sharedctypes")
+3749c3753
+< @unittest.skipUnless(HAS_SHMEM, "requires multiprocessing.shared_memory")
+---
+> @unittest.skipUnless(HAS_SHMEM, "requires multiprocess.shared_memory")
+4310,4312c4314,4316
+<         modules = ['multiprocessing.' + m for m in modules]
+<         modules.remove('multiprocessing.__init__')
+<         modules.append('multiprocessing')
+---
+>         modules = ['multiprocess.' + m for m in modules]
+>         modules.remove('multiprocess.__init__')
+>         modules.append('multiprocess')
+4318,4320c4322,4324
+<             modules.remove('multiprocessing.popen_fork')
+<             modules.remove('multiprocessing.popen_forkserver')
+<             modules.remove('multiprocessing.popen_spawn_posix')
+---
+>             modules.remove('multiprocess.popen_fork')
+>             modules.remove('multiprocess.popen_forkserver')
+>             modules.remove('multiprocess.popen_spawn_posix')
+4322c4326
+<             modules.remove('multiprocessing.popen_spawn_win32')
+---
+>             modules.remove('multiprocess.popen_spawn_win32')
+4324c4328
+<                 modules.remove('multiprocessing.popen_forkserver')
+---
+>                 modules.remove('multiprocess.popen_forkserver')
+4328c4332
+<             modules.remove('multiprocessing.sharedctypes')
+---
+>             modules.remove('multiprocess.sharedctypes')
+4610c4614
+<         from multiprocessing.connection import wait
+---
+>         from multiprocess.connection import wait
+4650c4654
+<         from multiprocessing.connection import wait
+---
+>         from multiprocess.connection import wait
+4691c4695
+<         from multiprocessing.connection import wait
+---
+>         from multiprocess.connection import wait
+4719c4723
+<         from multiprocessing.connection import wait
+---
+>         from multiprocess.connection import wait
+4762c4766
+<         from multiprocessing.connection import wait
+---
+>         from multiprocess.connection import wait
+4810c4814
+<     def test_flags(self):
+---
+>     def _test_flags(self):
+4813c4817
+<         prog = ('from test._test_multiprocessing import TestFlags; ' +
+---
+>         prog = ('from multiprocess.tests import TestFlags; ' +
+5115c5119
+<     def test_resource_tracker(self):
+---
+>     def _test_resource_tracker(self):
+5121,5123c5125,5127
+<             import multiprocessing as mp
+<             from multiprocessing import resource_tracker
+<             from multiprocessing.shared_memory import SharedMemory
+---
+>             import multiprocess as mp
+>             from multiprocess import resource_tracker
+>             from multiprocess.shared_memory import SharedMemory
+5192c5196
+<         from multiprocessing.resource_tracker import _resource_tracker
+---
+>         from multiprocess.resource_tracker import _resource_tracker
+5240c5244
+<         from multiprocessing.resource_tracker import _resource_tracker
+---
+>         from multiprocess.resource_tracker import _resource_tracker
+5249c5253
+<         from multiprocessing.resource_tracker import _resource_tracker
+---
+>         from multiprocess.resource_tracker import _resource_tracker
+5416c5420
+<                 support.print_warning(f"multiprocessing.Manager still has "
+---
+>                 support.print_warning(f"multiprocess.Manager still has "
+5694c5698
+<                 support.print_warning(f"multiprocessing.Manager still has "
+---
+>                 support.print_warning(f"multiprocess.Manager still has "
+# ----------------------------------------------------------------------
+diff Python-3.10.0a7/Lib/test/_test_multiprocessing.py Python-3.10.0a6/Lib/test/_test_multiprocessing.py 
+829c829
+<         with open(testfn, encoding="utf-8") as f:
+---
+>         with open(testfn, 'r') as f:
+839c839
+<         sys.stderr = open(fd, 'w', encoding="utf-8", closefd=False)
+---
+>         sys.stderr = open(fd, 'w', closefd=False)
+846c846
+<         sys.stderr = open(fd, 'w', encoding="utf-8", closefd=False)
+---
+>         sys.stderr = open(fd, 'w', closefd=False)
+867c867
+<             with open(testfn, encoding="utf-8") as f:
+---
+>             with open(testfn, 'r') as f:
+1121c1121
+<             with open(module_name + '.py', 'w', encoding="utf-8") as f:
+---
+>             with open(module_name + '.py', 'w') as f:
+diff Python-3.10.0a7/Lib/multiprocessing/util.py Python-3.10.0a6/Lib/multiprocessing/util.py
+422c422
+<             sys.stdin = open(fd, encoding="utf-8", closefd=False)
+---
+>             sys.stdin = open(fd, closefd=False)
+# ----------------------------------------------------------------------
+diff Python-3.10.0b1/Lib/multiprocessing/managers.py Python-3.10.0a7/Lib/multiprocessing/managers.py
+195,196c195,199
+<     def _handle_request(self, c):
+<         request = None
+---
+>     def handle_request(self, c):
+>         '''
+>         Handle a new connection
+>         '''
+>         funcname = result = request = None
+213d215
+< 
+225,235c227
+<     def handle_request(self, conn):
+<         '''
+<         Handle a new connection
+<         '''
+<         try:
+<             self._handle_request(conn)
+<         except SystemExit:
+<             # Server.serve_client() calls sys.exit(0) on EOF
+<             pass
+<         finally:
+<             conn.close()
+---
+>         c.close()
+# ----------------------------------------------------------------------
+diff Python-3.10.0b1/Lib/multiprocessing/managers.py Python-3.10.0rc2/Lib/multiprocessing/managers.py
+11,12c11
+< __all__ = [ 'BaseManager', 'SyncManager', 'BaseProxy', 'Token',
+<             'SharedMemoryManager' ]
+---
+> __all__ = [ 'BaseManager', 'SyncManager', 'BaseProxy', 'Token' ]
+38d36
+<     HAS_SHMEM = True
+40a39,41
+> else:
+>     HAS_SHMEM = True
+>     __all__.append('SharedMemoryManager')
+970c971
+<               exposed=None, incref=True):
+---
+>               exposed=None, incref=True, manager_owned=False):
+990c991
+<                       incref=incref)
+---
+>                       incref=incref, manager_owned=manager_owned)
+# ----------------------------------------------------------------------
+diff Python-3.10.0b1/Lib/test/_test_multiprocessing.py Python-3.10.0rc2/Lib/test/_test_multiprocessing.py 
+2288a2289,2298
+>     def test_nested_queue(self):
+>         a = self.list() # Test queue inside list
+>         a.append(self.Queue())
+>         a[0].put(123)
+>         self.assertEqual(a[0].get(), 123)
+>         b = self.dict() # Test queue inside dict
+>         b[0] = self.Queue()
+>         b[0].put(456)
+>         self.assertEqual(b[0].get(), 456)
+> 
+3782d3791
+<         self.assertEqual(sms.size, sms2.size)
+# ----------------------------------------------------------------------
+diff Python-3.10.0rc2/Lib/test/_test_multiprocessing.py Python-3.10.0/Lib//test/_test_multiprocessing.py
+3773a3774,3779
+>     def _new_shm_name(self, prefix):
+>         # Add a PID to the name of a POSIX shared memory object to allow
+>         # running multiprocessing tests (test_multiprocessing_fork,
+>         # test_multiprocessing_spawn, etc) in parallel.
+>         return prefix + str(os.getpid())
+> 
+3775c3781,3782
+<         sms = shared_memory.SharedMemory('test01_tsmb', create=True, size=512)
+---
+>         name_tsmb = self._new_shm_name('test01_tsmb')
+>         sms = shared_memory.SharedMemory(name_tsmb, create=True, size=512)
+3779c3786
+<         self.assertEqual(sms.name, 'test01_tsmb')
+---
+>         self.assertEqual(sms.name, name_tsmb)
+3799c3806
+<         also_sms = shared_memory.SharedMemory('test01_tsmb')
+---
+>         also_sms = shared_memory.SharedMemory(name_tsmb)
+3804c3811
+<         same_sms = shared_memory.SharedMemory('test01_tsmb', size=20*sms.size)
+---
+>         same_sms = shared_memory.SharedMemory(name_tsmb, size=20*sms.size)
+3822c3829
+<             names = ['test01_fn', 'test02_fn']
+---
+>             names = [self._new_shm_name('test01_fn'), self._new_shm_name('test02_fn')]
+3843a3851,3856
+>             name_dblunlink = self._new_shm_name('test01_dblunlink')
+>             sms_uno = shared_memory.SharedMemory(
+>                 name_dblunlink,
+>                 create=True,
+>                 size=5000
+>             )
+3845,3850d3857
+<                 sms_uno = shared_memory.SharedMemory(
+<                     'test01_dblunlink',
+<                     create=True,
+<                     size=5000
+<                 )
+< 
+3854c3861
+<                     sms_duo = shared_memory.SharedMemory('test01_dblunlink')
+---
+>                     sms_duo = shared_memory.SharedMemory(name_dblunlink)
+3866c3873
+<                 'test01_tsmb',
+---
+>                 name_tsmb,
+3880c3887
+<             ok_if_exists_sms = OptionalAttachSharedMemory('test01_tsmb')
+---
+>             ok_if_exists_sms = OptionalAttachSharedMemory(name_tsmb)
+4085c4092,4093
+<         sl_copy = shared_memory.ShareableList(sl, name='test03_duplicate')
+---
+>         name_duplicate = self._new_shm_name('test03_duplicate')
+>         sl_copy = shared_memory.ShareableList(sl, name=name_duplicate)
+4088c4096
+<             self.assertEqual('test03_duplicate', sl_copy.shm.name)
+---
+>             self.assertEqual(name_duplicate, sl_copy.shm.name)
+# ----------------------------------------------------------------------
+diff Python-3.10.0/Lib/test/_test_multiprocessing.py py3.10/multiprocess/tests/__init__.py
+3826c3830
+>             'multiprocessing.shared_memory._make_filename') as mock_make_filename:
+---
+<             'multiprocess.shared_memory._make_filename') as mock_make_filename:
+# ----------------------------------------------------------------------
+diff Python-3.10.0/Lib/test/_test_multiprocessing.py Python-3.10.1/Lib/test/_test_multiprocessing.py 
+613a614
+>         gc.collect()  # For PyPy or other GCs.
+2669a2671
+>         gc.collect()  # For PyPy or other GCs.
+3794,3800d3795
+<         # Test pickling
+<         sms.buf[0:6] = b'pickle'
+<         pickled_sms = pickle.dumps(sms)
+<         sms2 = pickle.loads(pickled_sms)
+<         self.assertEqual(sms.name, sms2.name)
+<         self.assertEqual(bytes(sms.buf[0:6]), bytes(sms2.buf[0:6]), b'pickle')
+< 
+3898a3894,3916
+>     def test_shared_memory_recreate(self):
+>         # Test if shared memory segment is created properly,
+>         # when _make_filename returns an existing shared memory segment name
+>         with unittest.mock.patch(
+>             'multiprocessing.shared_memory._make_filename') as mock_make_filename:
+> 
+>             NAME_PREFIX = shared_memory._SHM_NAME_PREFIX
+>             names = ['test01_fn', 'test02_fn']
+>             # Prepend NAME_PREFIX which can be '/psm_' or 'wnsm_', necessary
+>             # because some POSIX compliant systems require name to start with /
+>             names = [NAME_PREFIX + name for name in names]
+> 
+>             mock_make_filename.side_effect = names
+>             shm1 = shared_memory.SharedMemory(create=True, size=1)
+>             self.addCleanup(shm1.unlink)
+>             self.assertEqual(shm1._name, names[0])
+> 
+>             mock_make_filename.side_effect = names
+>             shm2 = shared_memory.SharedMemory(create=True, size=1)
+>             self.addCleanup(shm2.unlink)
+>             self.assertEqual(shm2._name, names[1])
+> 
+>     def test_invalid_shared_memory_cration(self):
+3910a3929,3969
+>     def test_shared_memory_pickle_unpickle(self):
+>         for proto in range(pickle.HIGHEST_PROTOCOL + 1):
+>             with self.subTest(proto=proto):
+>                 sms = shared_memory.SharedMemory(create=True, size=512)
+>                 self.addCleanup(sms.unlink)
+>                 sms.buf[0:6] = b'pickle'
+> 
+>                 # Test pickling
+>                 pickled_sms = pickle.dumps(sms, protocol=proto)
+> 
+>                 # Test unpickling
+>                 sms2 = pickle.loads(pickled_sms)
+>                 self.assertIsInstance(sms2, shared_memory.SharedMemory)
+>                 self.assertEqual(sms.name, sms2.name)
+>                 self.assertEqual(bytes(sms.buf[0:6]), b'pickle')
+>                 self.assertEqual(bytes(sms2.buf[0:6]), b'pickle')
+> 
+>                 # Test that unpickled version is still the same SharedMemory
+>                 sms.buf[0:6] = b'newval'
+>                 self.assertEqual(bytes(sms.buf[0:6]), b'newval')
+>                 self.assertEqual(bytes(sms2.buf[0:6]), b'newval')
+> 
+>                 sms2.buf[0:6] = b'oldval'
+>                 self.assertEqual(bytes(sms.buf[0:6]), b'oldval')
+>                 self.assertEqual(bytes(sms2.buf[0:6]), b'oldval')
+> 
+>     def test_shared_memory_pickle_unpickle_dead_object(self):
+>         for proto in range(pickle.HIGHEST_PROTOCOL + 1):
+>             with self.subTest(proto=proto):
+>                 sms = shared_memory.SharedMemory(create=True, size=512)
+>                 sms.buf[0:6] = b'pickle'
+>                 pickled_sms = pickle.dumps(sms, protocol=proto)
+> 
+>                 # Now, we are going to kill the original object.
+>                 # So, unpickled one won't be able to attach to it.
+>                 sms.close()
+>                 sms.unlink()
+> 
+>                 with self.assertRaises(FileNotFoundError):
+>                     pickle.loads(pickled_sms)
+> 
+4128,4129c4187,4222
+<         sl = shared_memory.ShareableList(range(10))
+<         self.addCleanup(sl.shm.unlink)
+---
+>         for proto in range(pickle.HIGHEST_PROTOCOL + 1):
+>             with self.subTest(proto=proto):
+>                 sl = shared_memory.ShareableList(range(10))
+>                 self.addCleanup(sl.shm.unlink)
+> 
+>                 serialized_sl = pickle.dumps(sl, protocol=proto)
+>                 deserialized_sl = pickle.loads(serialized_sl)
+>                 self.assertIsInstance(
+>                     deserialized_sl, shared_memory.ShareableList)
+>                 self.assertEqual(deserialized_sl[-1], 9)
+>                 self.assertIsNot(sl, deserialized_sl)
+> 
+>                 deserialized_sl[4] = "changed"
+>                 self.assertEqual(sl[4], "changed")
+>                 sl[3] = "newvalue"
+>                 self.assertEqual(deserialized_sl[3], "newvalue")
+> 
+>                 larger_sl = shared_memory.ShareableList(range(400))
+>                 self.addCleanup(larger_sl.shm.unlink)
+>                 serialized_larger_sl = pickle.dumps(larger_sl, protocol=proto)
+>                 self.assertEqual(len(serialized_sl), len(serialized_larger_sl))
+>                 larger_sl.shm.close()
+> 
+>                 deserialized_sl.shm.close()
+>                 sl.shm.close()
+> 
+>     def test_shared_memory_ShareableList_pickling_dead_object(self):
+>         for proto in range(pickle.HIGHEST_PROTOCOL + 1):
+>             with self.subTest(proto=proto):
+>                 sl = shared_memory.ShareableList(range(10))
+>                 serialized_sl = pickle.dumps(sl, protocol=proto)
+> 
+>                 # Now, we are going to kill the original object.
+>                 # So, unpickled one won't be able to attach to it.
+>                 sl.shm.close()
+>                 sl.shm.unlink()
+4131,4150c4224,4225
+<         serialized_sl = pickle.dumps(sl)
+<         deserialized_sl = pickle.loads(serialized_sl)
+<         self.assertTrue(
+<             isinstance(deserialized_sl, shared_memory.ShareableList)
+<         )
+<         self.assertTrue(deserialized_sl[-1], 9)
+<         self.assertFalse(sl is deserialized_sl)
+<         deserialized_sl[4] = "changed"
+<         self.assertEqual(sl[4], "changed")
+< 
+<         # Verify data is not being put into the pickled representation.
+<         name = 'a' * len(sl.shm.name)
+<         larger_sl = shared_memory.ShareableList(range(400))
+<         self.addCleanup(larger_sl.shm.unlink)
+<         serialized_larger_sl = pickle.dumps(larger_sl)
+<         self.assertTrue(len(serialized_sl) == len(serialized_larger_sl))
+<         larger_sl.shm.close()
+< 
+<         deserialized_sl.shm.close()
+<         sl.shm.close()
+---
+>                 with self.assertRaises(FileNotFoundError):
+>                     pickle.loads(serialized_sl)
+4186a4262,4268
+>                 # Without this line it was raising warnings like:
+>                 #   UserWarning: resource_tracker:
+>                 #   There appear to be 1 leaked shared_memory
+>                 #   objects to clean up at shutdown
+>                 # See: https://bugs.python.org/issue45209
+>                 resource_tracker.unregister(f"/{name}", "shared_memory")
+> 
+4196c4278
+< #
+---
+> # Test to verify that `Finalize` works.
+4207a4290
+>         gc.collect()  # For PyPy or other GCs.
+4218a4302
+>         gc.collect()  # For PyPy or other GCs.
+4224a4309
+>         gc.collect()  # For PyPy or other GCs.
+# ----------------------------------------------------------------------
+$ diff Python-3.10.2/Lib/test/_test_multiprocessing.py Python-3.10.4/Lib/test/_test_multiprocessing.py 
+75a76,81
+> if support.check_sanitizer(address=True):
+>     # bpo-45200: Skip multiprocessing tests if Python is built with ASAN to
+>     # work around a libasan race condition: dead lock in pthread_create().
+>     raise unittest.SkipTest("libasan has a pthread_create() dead lock")
+> 
+> 
+# ----------------------------------------------------------------------
+diff Python-3.10.4/Lib/multiprocessing/managers.py Python-3.10.5/Lib/multiprocessing/managers.py
+680c680
+<                     process.join(timeout=0.1)
+---
+>                     process.join(timeout=1.0)
+diff Python-3.10.4/Lib/multiprocessing/queues.py Python-3.10.5/Lib/multiprocessing/queues.py
+142,148c142,145
+<         try:
+<             self._reader.close()
+<         finally:
+<             close = self._close
+<             if close:
+<                 self._close = None
+<                 close()
+---
+>         close = self._close
+>         if close:
+>             self._close = None
+>             close()
+172,173c169,171
+<                   self._wlock, self._writer.close, self._ignore_epipe,
+<                   self._on_queue_feeder_error, self._sem),
+---
+>                   self._wlock, self._reader.close, self._writer.close,
+>                   self._ignore_epipe, self._on_queue_feeder_error,
+>                   self._sem),
+214,215c212,213
+<     def _feed(buffer, notempty, send_bytes, writelock, close, ignore_epipe,
+<               onerror, queue_sem):
+---
+>     def _feed(buffer, notempty, send_bytes, writelock, reader_close,
+>               writer_close, ignore_epipe, onerror, queue_sem):
+241c239,240
+<                             close()
+---
+>                             reader_close()
+>                             writer_close()
+diff Python-3.10.4/Lib/multiprocessing/util.py Python-3.10.5/Lib/multiprocessing/util.py
+123c123
+<     raise TypeError('address type of {address!r} unrecognized')
+---
+>     raise TypeError(f'address type of {address!r} unrecognized')
+# ----------------------------------------------------------------------
+diff Python-3.10.5/Modules/_multiprocessing/semaphore.c Python-3.10.6/Modules/_multiprocessing/semaphore.c
+455,457c455
+<     SemLockObject *self;
+< 
+<     self = PyObject_New(SemLockObject, type);
+---
+>     SemLockObject *self = (SemLockObject *)type->tp_alloc(type, 0);
+574c572
+<     PyObject_Free(self);
+---
+>     Py_TYPE(self)->tp_free((PyObject*)self);
+diff Python-3.10.5/Lib/multiprocessing/context.py Python-3.10.6/Lib/multiprocessing/context.py
+225a226,229
+>     @staticmethod
+>     def _after_fork():
+>         return _default_context.get_context().Process._after_fork()
+> 
+285a290,294
+>         @staticmethod
+>         def _after_fork():
+>             # process is spawned, nothing to do
+>             pass
+> 
+328a338,342
+>         @staticmethod
+>         def _after_fork():
+>             # process is spawned, nothing to do
+>             pass
+> 
+diff Python-3.10.5/Lib/multiprocessing/pool.py Python-3.10.6/Lib/multiprocessing/pool.py
+205a206,208
+>         if maxtasksperchild is not None:
+>             if not isinstance(maxtasksperchild, int) or maxtasksperchild <= 0:
+>                 raise ValueError("maxtasksperchild must be a positive int or None")
+diff Python-3.10.5/Lib/multiprocessing/process.py Python-3.10.6/Lib/multiprocessing/process.py
+307,308c307
+<                 util._finalizer_registry.clear()
+<                 util._run_after_forkers()
+---
+>                 self._after_fork()
+338a338,344
+>     @staticmethod
+>     def _after_fork():
+>         from . import util
+>         util._finalizer_registry.clear()
+>         util._run_after_forkers()
+> 
+> 
+diff Python-3.10.5/Lib/multiprocessing/shared_memory.py Python-3.10.6/Lib/multiprocessing/shared_memory.py
+25a26
+> from . import resource_tracker
+119,120c120
+<             from .resource_tracker import register
+<             register(self._name, "shared_memory")
+---
+>             resource_tracker.register(self._name, "shared_memory")
+240d239
+<             from .resource_tracker import unregister
+242c241
+<             unregister(self._name, "shared_memory")
+---
+>             resource_tracker.unregister(self._name, "shared_memory")
+$ diff Python-3.10.5/Lib/test/_test_multiprocessing.py Python-3.10.6/Lib/test/_test_multiprocessing.py 
+7a8
+> import textwrap
+2806a2808,2812
+>     def test_pool_maxtasksperchild_invalid(self):
+>         for value in [0, -1, 0.5, "12"]:
+>             with self.assertRaises(ValueError):
+>                 multiprocessing.Pool(3, maxtasksperchild=value)
+> 
+3907c3913
+<             names = ['test01_fn', 'test02_fn']
+---
+>             names = [self._new_shm_name('test03_fn'), self._new_shm_name('test04_fn')]
+5701a5708,5736
+> class TestNamedResource(unittest.TestCase):
+>     def test_global_named_resource_spawn(self):
+>         #
+>         # gh-90549: Check that global named resources in main module
+>         # will not leak by a subprocess, in spawn context.
+>         #
+>         testfn = os_helper.TESTFN
+>         self.addCleanup(os_helper.unlink, testfn)
+>         with open(testfn, 'w', encoding='utf-8') as f:
+>             f.write(textwrap.dedent('''\
+>                 import multiprocessing as mp
+> 
+>                 ctx = mp.get_context('spawn')
+> 
+>                 global_resource = ctx.Semaphore()
+> 
+>                 def submain(): pass
+> 
+>                 if __name__ == '__main__':
+>                     p = ctx.Process(target=submain)
+>                     p.start()
+>                     p.join()
+>             '''))
+>         rc, out, err = test.support.script_helper.assert_python_ok(testfn)
+>         # on error, err = 'UserWarning: resource_tracker: There appear to
+>         # be 1 leaked semaphore objects to clean up at shutdown'
+>         self.assertEqual(err, b'')
+> 
+> 
+5931a5967,5978
+> 
+> 
+> @unittest.skipIf(not hasattr(_multiprocessing, 'SemLock'), 'SemLock not available')
+> @unittest.skipIf(sys.platform != "linux", "Linux only")
+> class SemLockTests(unittest.TestCase):
+> 
+>     def test_semlock_subclass(self):
+>         class SemLock(_multiprocessing.SemLock):
+>             pass
+>         name = f'test_semlock_subclass-{os.getpid()}'
+>         s = SemLock(1, 0, 10, name, 0)
+>         _multiprocessing.sem_unlink(name)
+# ----------------------------------------------------------------------
+diff Python-3.10.6/Lib/multiprocessing/resource_tracker.py Python-3.10.8/Lib/multiprocessing/resource_tracker.py
+164c164
+<         if len(name) > 512:
+---
+>         if len(msg) > 512:
+167c167
+<             raise ValueError('name too long')
+---
+>             raise ValueError('msg too long')
+diff Python-3.10.6/Lib/test/_test_multiprocessing.py Python-3.10.8/Lib/test/_test_multiprocessing.py 
+5379a5380,5387
+>     def test_too_long_name_resource(self):
+>         # gh-96819: Resource names that will make the length of a write to a pipe
+>         # greater than PIPE_BUF are not allowed
+>         rtype = "shared_memory"
+>         too_long_name_resource = "a" * (512 - len(rtype))
+>         with self.assertRaises(ValueError):
+>             resource_tracker.register(too_long_name_resource, rtype)
+> 
+# ----------------------------------------------------------------------
+diff Python-3.10.8/Lib/multiprocessing/connection.py Python-3.10.9/Lib/multiprocessing/connection.py
+76,80d75
+<         # Prefer abstract sockets if possible to avoid problems with the address
+<         # size.  When coding portable applications, some implementations have
+<         # sun_path as short as 92 bytes in the sockaddr_un struct.
+<         if util.abstract_sockets_supported:
+<             return f"\0listener-{os.getpid()}-{next(_mmap_counter)}"
+Common subdirectories: Python-3.10.8/Lib/multiprocessing/dummy and Python-3.10.9/Lib/multiprocessing/dummy
+diff Python-3.10.8/Lib/multiprocessing/shared_memory.py Python-3.10.9/Lib/multiprocessing/shared_memory.py
+176c176,179
+<                 size = _winapi.VirtualQuerySize(p_buf)
+---
+>                 try:
+>                     size = _winapi.VirtualQuerySize(p_buf)
+>                 finally:
+>                     _winapi.UnmapViewOfFile(p_buf)
+diff Python-3.10.8/Lib/test/_test_multiprocessing.py Python-3.10.9/Lib/test/_test_multiprocessing.py 
+5985c5985
+<         s = SemLock(1, 0, 10, name, 0)
+---
+>         s = SemLock(1, 0, 10, name, False)
