@@ -1,0 +1,3 @@
+# Tests for Host workflow
+# Adapted from python-3parclient-master/test/test_HPE3ParClient_host.py and hpe3par_ansible_module-master/test/unit/test_hpe3par_host.py
+# ...test code...
