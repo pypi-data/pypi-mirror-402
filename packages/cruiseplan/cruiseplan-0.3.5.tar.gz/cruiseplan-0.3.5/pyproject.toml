@@ -1,0 +1,194 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = [
+  "setuptools>=61.0",
+  "setuptools-scm[toml]>=3.4",
+  "wheel",
+]
+
+[project]
+name = "cruiseplan"
+description = "Oceanographic Research Cruise Planning System"
+readme = "README.md"
+license = { file = "LICENSE" }
+maintainers = [
+  { name = "Eleanor Frajka-Williams", email = "eleanorfrajka@gmail.com" },
+]
+requires-python = ">=3.9"
+classifiers = [
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: GIS",
+]
+
+# Define which fields are read from files/tools
+dynamic = ["version", "dependencies", "optional-dependencies"]
+
+# THIS ENABLES THE 'cruiseplan' TERMINAL COMMAND
+[project.scripts]
+cruiseplan = "cruiseplan.cli.main:main"
+
+[project.urls]
+documentation = "https://github.com/ocean-uhh/cruiseplan"
+homepage = "https://github.com/ocean-uhh/cruiseplan"
+repository = "https://github.com/ocean-uhh/cruiseplan"
+
+
+# ---------------------------------------------------------
+# TOOL CONFIGURATION
+# ---------------------------------------------------------
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cruiseplan*"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools.dynamic.optional-dependencies]
+dev = { file = ["requirements-dev.txt"] }
+# pip install -e ".[dev]"
+
+[tool.setuptools_scm]
+write_to = "cruiseplan/_version.py"
+write_to_template = "__version__ = '{version}'"
+version_scheme = "no-guess-dev"
+local_scheme = "no-local-version"
+
+[tool.check-manifest]
+ignore = [
+  "docs",
+  "docs/*",
+  "notebooks",
+  "notebooks/*",
+  "tests",
+  "tests/*",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+
+[tool.ruff]
+target-version = "py39"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+  "E",       # pycodestyle errors
+  "W",       # pycodestyle warnings
+  "F",       # pyflakes errors
+  "I",       # isort
+  "B",       # flake8-bugbear
+  "UP",      # pyupgrade
+  "D",       # pydocstyle (Docstrings)
+  "C901",    # mccabe complexity
+  "PLR",     # pylint refactor (includes function length)
+  "SIM",     # flake8-simplify
+  "RUF",     # Ruff-specific rules
+  "TRY",     # tryceratops (exception handling)
+  "PERF",    # performance anti-patterns
+]
+ignore = [
+  "D107",    # missing docstring in __init__
+  "D200",    # one-line docstring format - conflicts with codebase style
+  "D203",    # 1 blank line required before class docstring
+  "D213",    # multi-line summary docstring style
+  "D401",    # first line should be in imperative mood
+  "E501",    # line‑length (handled by black)
+  "PLR2004", # magic value comparison - inappropriate for scientific code
+  "SIM102",  # use single if statement - nested ifs often more readable for logical grouping  
+  "SIM105",  # use contextlib.suppress - prefer explicit try-except-pass
+  "SIM117",  # combine with statements - nested often more readable
+  "TRY003",  # avoid specifying long messages outside exception class
+  "PERF203", # try-except within a loop incurs performance penalty
+  "SIM108",  # use ternary operator instead of if-else-block
+  "RUF005",  # iterable unpacking - prefer readable concatenation
+  "TRY300",  # move statement to else block - prefer early return pattern
+  "TRY301",  # abstract raise to inner function - explicit raises are clearer in scientific code
+  "PLR0912", # too many branches - complex functions documented in CLAUDE-v0.3.3-refactor-complex.md
+  "PLR0913", # too many arguments - functions documented in CLAUDE-v0.3.3-refactor-complex.md  
+  "PERF401", # use list.extend - micro-optimization, current patterns are readable
+  "B904",    # exception chaining - good practice but not critical, many cases to fix manually
+  "TRY004",  # TypeError vs ValueError - good practice but not critical, many cases to fix manually
+  "B028",    # missing stacklevel in warnings - improves UX, documented in CLAUDE-v0.3.3-refactor-complex.md
+]
+
+# Per-file ignores for complex legacy functions (to be refactored gradually)
+[tool.ruff.lint.per-file-ignores]
+"cruiseplan/calculators/scheduler.py" = ["C901", "PLR0912", "PLR0915"]  # Legacy complex functions
+"cruiseplan/core/validation.py" = ["C901", "PLR0912", "PLR0915"]  # Complex validation functions
+"cruiseplan/output/netcdf_generator.py" = ["C901", "PLR0912", "PLR0915"]  # Large data processing functions
+"cruiseplan/data/pangaea.py" = ["C901"]  # Complex API handling functions
+"cruiseplan/output/map_generator.py" = ["C901"]  # Complex plotting functions
+"cruiseplan/cli/enrich.py" = ["C901", "PLR0912", "PLR0915"]  # CLI main functions (temporary)
+"cruiseplan/cli/main.py" = ["C901", "PLR0915"]  # CLI argument parsing
+"cruiseplan/cli/*.py" = ["C901"]  # CLI functions can be complex (temporary)
+"cruiseplan/utils/output_formatting.py" = ["RUF001"]  # Intentional use of emoji/unicode icons for visual output
+"tests/**/*.py" = ["D100", "D101", "D102", "D103", "D105", "D205", "D400", "E402", "E712", "F841", "PLR0913", "RUF001", "RUF003"]  # Test functions don't need docstrings, unused vars common, import placement flexible, explicit True/False comparisons allowed, many args OK for mocked tests, ambiguous characters OK in test data including multiplication symbols
+"**/*.ipynb" = ["B018"]  # Allow useless expressions in Jupyter notebooks (common for displaying values)
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+# TODO: Fix remaining ~100 D205 errors (blank line between summary and description)
+#       Key API files have been fixed, remainder are in implementation modules
+# TODO: Review test file imports (E402) - move imports to top where possible
+#       Some delayed imports are legitimate (mocking, conditional), others can be moved
+# TODO: Refactor functions with too many arguments (PLR0913) - 162 violations in main code
+#       API functions like pangaea() have 9+ parameters, consider using config objects
+
+[tool.ruff.lint.mccabe]
+# Maximum allowed complexity for functions (reduced from 15)
+max-complexity = 12
+
+[tool.ruff.lint.pylint]
+# Maximum number of statements in a function body (reduced from 75)
+max-statements = 60
+# Maximum number of arguments for function / method (reduced from 8)
+max-args = 6
+# Maximum number of branches for function / method body (reduced from 20)  
+max-branches = 15
+# Maximum number of return statements in function / method body (reduced from 8)
+max-returns = 6
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false  # Legacy code compatibility, tighten gradually
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+strict_equality = true
+# Additional strictness for better type checking
+disallow_any_generics = true
+warn_no_return = true
+strict_optional = true
+
+# Scientific computing packages often lack good type stubs
+[[tool.mypy.overrides]]
+module = [
+    "matplotlib.*",
+    "folium.*", 
+    "pangaeapy.*",
+    "branca.*",
+    "netCDF4.*",
+    "scipy.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "--verbose"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks integration tests",
+]
