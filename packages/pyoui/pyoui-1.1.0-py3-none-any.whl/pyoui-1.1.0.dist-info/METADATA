@@ -1,0 +1,161 @@
+Metadata-Version: 2.4
+Name: pyoui
+Version: 1.1.0
+Summary: Lookup the IEEE's OUI table by MAC, MAC prefix, organization name, or country
+Project-URL: Homepage, https://github.com/nbdy/pyoui
+Project-URL: Issues, https://github.com/nbdy/pyoui/issues
+Author-email: nbdy <me@nbdy.io>
+License: MIT License
+        
+        Copyright (c) 2020 nbdy
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+License-File: LICENSE
+Keywords: lookup,mac,oui
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Topic :: Software Development :: Build Tools
+Requires-Python: >=3.9
+Requires-Dist: loguru==0.7.3
+Requires-Dist: pycountry==24.6.1
+Requires-Dist: requests==2.32.5
+Requires-Dist: rich==13.9.4
+Requires-Dist: tqdm==4.67.1
+Provides-Extra: dev
+Requires-Dist: pre-commit==3.5.0; extra == 'dev'
+Requires-Dist: pytest==8.4.2; extra == 'dev'
+Requires-Dist: ruff==0.7.0; extra == 'dev'
+Description-Content-Type: text/markdown
+
+# 🛡️ pyoui
+
+[![CodeFactor](https://www.codefactor.io/repository/github/nbdy/pyoui/badge/master)](https://www.codefactor.io/repository/github/nbdy/pyoui/overview/master)
+
+**pyoui** is a lightweight Python utility to lookup and parse the IEEE OUI (Organizationally Unique Identifier) database. Easily identify network device vendors by their MAC addresses or search through the IEEE registry.
+
+## ✨ Features
+
+- 🔍 **Flexible Search:** Lookup by MAC address, prefix, organization name, or country.
+- 🚀 **CLI & Library:** Use it as a standalone tool or a Python package.
+- 📅 **Auto-Managed Data:** Automatically downloads and caches the latest IEEE OUI data.
+- 🛠️ **Modern Tooling:** Built with `uv`, `ruff`, and type hints.
+
+## 🚀 Installation
+
+### For Users
+```bash
+pip install pyoui
+```
+
+### For Developers (using `uv`)
+```bash
+uv add pyoui
+```
+
+### From Source
+```bash
+pip install git+https://github.com/nbdy/pyoui
+```
+
+## 📖 Usage
+
+### Command Line Interface
+
+Quickly search the OUI database from your terminal:
+
+```bash
+# Search by MAC prefix
+pyoui --prefix 00:22:72
+
+# Search by organization name
+pyoui --organization "national security"
+
+# Search by country code (ISO 3166-1 alpha-2)
+pyoui --country-code US
+```
+
+Run `pyoui --help` to see all available flags and options (like output formats: JSON, CSV, Table).
+
+### Python API
+
+Integrate `pyoui` into your own scripts:
+
+```python
+from pyoui import OUI
+
+# Initialize and parse the OUI data
+# It will download the database if it doesn't exist or is older than 30 days
+entries = OUI().parse()
+
+# Lookup by MAC address
+entry = next(entries.by_mac("BC:23:92:42:42:42"))
+print(f"Vendor: {entry.organization.name}")
+
+# Search by organization name
+for entry in entries.by_organization("national security"):
+    print(f"{entry.prefix} -> {entry.organization.name}")
+
+# Filter by country
+us_entries = list(entries.by_country_code("US"))
+print(f"Found {len(us_entries)} US-based organizations.")
+```
+
+## 🧑‍💻 Development
+
+This project uses [uv](https://github.com/astral-sh/uv) for dependency management.
+
+### Setup
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/nbdy/pyoui.git
+   cd pyoui
+   ```
+
+2. **Sync dependencies:**
+   ```bash
+   uv sync
+   ```
+
+3. **Install pre-commit hooks:**
+   We use `pre-commit` to ensure code quality.
+   ```bash
+   uv run pre-commit install
+   ```
+
+### Common Tasks
+
+- **Run Tests:** `uv run pytest`
+- **Lint Code:** `uv run ruff check .`
+- **Build Package:** `uv build`
+- **Run CLI locally:** `uv run pyoui --help`
+
+## 🚀 Publishing
+
+Releases are published automatically to PyPI via GitHub Actions using Trusted Publishing.
+
+1. Create a GitHub release.
+2. The workflow will build and upload the package to PyPI.
+
+---
+Made with ❤️ by [nbdy](https://github.com/nbdy)
