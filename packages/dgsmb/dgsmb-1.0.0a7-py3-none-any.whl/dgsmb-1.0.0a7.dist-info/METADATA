@@ -1,0 +1,654 @@
+Metadata-Version: 2.4
+Name: dgsmb
+Version: 1.0.0a7
+Summary: PySMB client library
+Author-email: Roman Rasputin <admin@roro.su>
+License: MIT License
+Project-URL: Homepage, https://gitlab.com/gng-group/dgsender
+Project-URL: BugTracker, https://gitlab.com/gng-group/dgsender/issues
+Keywords: pysmb,smb
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Operating System :: OS Independent
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Topic :: System :: Distributed Computing
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: pydantic
+Requires-Dist: pysmb
+Requires-Dist: dglog>=1.0.0
+Dynamic: license-file
+
+```markdown
+# dgsender
+
+Unified sender package for email, telegram, slack and zabbix with async support.
+
+## Features
+
+- 📧 **Email sending** - SMTP with TLS/SSL support, attachments, HTML emails
+- 📱 **Telegram** - Bot messaging with proxy support
+- 💬 **Slack/Mattermost** - Webhook integration
+- 📊 **Zabbix** - Monitoring data submission
+- ⚡ **Async support** - Non-blocking operations for high performance
+- 📈 **Metrics integration** - Optional metrics collection with dgmetrics
+- 🪵 **Custom logging** - Flexible logging configuration
+- 🔧 **Modular design** - Install only what you need
+
+## Installation
+
+### Basic installation
+```bash
+pip install dgsender
+```
+
+### With specific features
+```bash
+# Telegram only
+pip install dgsender[tg]
+
+# Email only  
+pip install dgsender[mail]
+
+# Zabbix only
+pip install dgsender[zabbix]
+
+# Async support
+pip install dgsender[async]
+
+# Metrics support
+pip install dgsender[metrics]
+
+# All features
+pip install dgsender[all]
+```
+
+## Quick Start
+
+### Email Sending
+
+```python
+from dgsender import EmailSender
+
+# Synchronous email sender
+email_sender = EmailSender(
+    host="smtp.gmail.com",
+    port=587,
+    use_tls=True,
+    username="user@gmail.com",
+    password="password"
+)
+
+email_sender.send(
+    msg="Hello from dgsender!",
+    subject="Test Email",
+    to=["recipient@example.com"],
+    from_addr="sender@example.com",
+    is_html=True
+)
+```
+
+### Telegram Messages
+
+```python
+from dgsender import TelegramSender
+
+tg_sender = TelegramSender(token="your_bot_token")
+tg_sender.send("Hello Telegram!", chat_id=123456789)
+```
+
+## Async Senders
+
+### Async Email Sender
+```python
+import asyncio
+from dgsender import AsyncEmailSender
+
+async def main():
+    sender = AsyncEmailSender(
+        host="smtp.gmail.com",
+        port=587,
+        use_tls=True,
+        username="user@gmail.com",
+        password="password"
+    )
+    
+    # Send single email
+    await sender.send(
+        msg="Hello from async!",
+        subject="Async Test",
+        to=["user@example.com"]
+    )
+    
+    # Send multiple emails concurrently
+    messages = [
+        {
+            "msg": "Message 1",
+            "subject": "Test 1", 
+            "to": ["user1@example.com"]
+        },
+        {
+            "msg": "Message 2",
+            "subject": "Test 2",
+            "to": ["user2@example.com"]
+        }
+    ]
+    results = await sender.send_multiple(messages)
+
+asyncio.run(main())
+```
+
+## Core Components
+
+### Email Senders
+
+#### Synchronous EmailSender
+```python
+from dgsender import EmailSender
+
+sender = EmailSender(
+    host="smtp.example.com",
+    port=587,
+    use_tls=True,
+    username="user@example.com",
+    password="password"
+)
+
+# Send with attachments
+sender.send(
+    msg="<h1>HTML Content</h1>",
+    subject="Email with attachments",
+    to=["user1@example.com", "user2@example.com"],
+    cc=["manager@example.com"],
+    attachments=["file1.pdf", "image.jpg"],
+    is_html=True
+)
+```
+
+#### Asynchronous AsyncEmailSender
+```python
+from dgsender import AsyncEmailSender
+
+async def send_emails():
+    sender = AsyncEmailSender(
+        host="smtp.example.com",
+        port=587,
+        use_tls=True
+    )
+    
+    await sender.send(
+        msg="Async email content",
+        subject="Async Test",
+        to=["user@example.com"]
+    )
+```
+
+### Telegram Senders
+
+#### Synchronous TelegramSender
+```python
+from dgsender import TelegramSender
+
+# Basic usage
+tg = TelegramSender(token="your_bot_token")
+tg.send("Simple message", chat_id=123456)
+
+# With proxy and custom options
+tg = TelegramSender(
+    token="your_bot_token",
+    base_url="https://api.telegram.org/bot",
+    proxy={"http": "http://proxy:3128", "https": "https://proxy:3128"}
+)
+
+tg.send(
+    "Formatted message",
+    chat_id=123456,
+    parse_mode="Markdown",
+    disable_web_page_preview=True
+)
+```
+
+#### Asynchronous AsyncTelegramSender
+```python
+from dgsender import AsyncTelegramSender
+
+async def send_telegram():
+    tg = AsyncTelegramSender(token="your_bot_token")
+    await tg.send("Async telegram message", chat_id=123456)
+```
+
+### Slack/Mattermost Senders
+
+```python
+from dgsender import SlackSender
+
+slack = SlackSender(webhook_url="https://hooks.slack.com/services/XXX")
+slack.send("Hello Slack!")
+
+# With custom options
+slack.send(
+    "Custom message",
+    channel="#alerts",
+    username="MyBot",
+    icon_url="https://example.com/icon.png"
+)
+```
+
+### Zabbix Sender
+
+```python
+from dgsender import ZabbixSender
+
+zabbix = ZabbixSender(server="zabbix.example.com", port=10051)
+zabbix.send(
+    host="web-server-01",
+    key="web.response.time",
+    value=150
+)
+```
+
+### Composite Sender
+
+```python
+from dgsender import CompositeSender, TelegramSender, EmailSender, SlackSender
+
+# Create multiple senders
+tg_sender = TelegramSender(token="tg_token")
+email_sender = EmailSender(host="smtp.example.com")
+slack_sender = SlackSender(webhook_url="slack_webhook")
+
+# Combine them
+composite = CompositeSender(senders=[tg_sender, email_sender, slack_sender])
+
+# Send to all channels
+results = composite.send_all(
+    "Important notification!",
+    # Telegram specific
+    chat_id=123456,
+    # Email specific  
+    subject="Alert",
+    to=["admin@example.com"],
+    # Slack specific
+    channel="#alerts"
+)
+
+print(f"Results: {results}")
+```
+
+## Advanced Usage
+
+### Custom Logging
+
+```python
+import logging
+from dgsender import EmailSender
+
+# Setup custom logger
+logger = logging.getLogger('my_app')
+handler = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+# Use custom logger
+sender = EmailSender(
+    host="smtp.example.com",
+    logger_instance=logger
+)
+```
+
+### Metrics Integration
+
+```python
+from dgsender import EmailSender, TelegramSender
+from dgmetrics import Metrics  # Optional dependency
+
+# Initialize metrics
+metrics = Metrics()
+
+# Senders with metrics
+email_sender = EmailSender(
+    host="smtp.example.com",
+    metrics_instance=metrics
+)
+
+tg_sender = TelegramSender(
+    token="your_bot_token", 
+    metrics_instance=metrics
+)
+
+# Send messages (metrics are collected automatically)
+email_sender.send(...)
+tg_sender.send(...)
+```
+
+### Custom Metrics Class
+
+```python
+from dgsender import EmailSender
+
+class MyMetrics:
+    def counter(self, name, value=1, tags=None):
+        print(f"Counter: {name} = {value}")
+    
+    def gauge(self, name, value, tags=None):
+        print(f"Gauge: {name} = {value}")
+    
+    def timer(self, name, value, tags=None):
+        print(f"Timer: {name} = {value}s")
+
+sender = EmailSender(
+    host="smtp.example.com",
+    metrics_instance=MyMetrics()
+)
+```
+
+### Error Handling
+
+```python
+from dgsender import EmailSender, EmailSendError
+
+sender = EmailSender(host="smtp.example.com")
+
+try:
+    sender.send(
+        msg="Test message",
+        subject="Test",
+        to=["user@example.com"]
+    )
+except EmailSendError as e:
+    print(f"Failed to send email: {e}")
+except Exception as e:
+    print(f"Unexpected error: {e}")
+```
+
+### Low-level Mailer Usage
+
+```python
+from dgsender import Mailer, AsyncMailer, Message
+
+# Synchronous mailer
+mailer = Mailer(host="smtp.example.com", port=587)
+message = Message(
+    From="sender@example.com",
+    To="recipient@example.com",
+    Subject="Direct Message",
+    Body="Hello from low-level mailer!"
+)
+mailer.send(message)
+
+# Asynchronous mailer
+async def async_send():
+    mailer = AsyncMailer(host="smtp.example.com", port=587)
+    await mailer.send(message)
+```
+
+## Configuration
+
+### Email Configuration
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `host` | str | "localhost" | SMTP server host |
+| `port` | int | 0 | SMTP server port |
+| `use_tls` | bool | False | Enable TLS encryption |
+| `use_ssl` | bool | False | Enable SSL encryption |
+| `username` | str | None | SMTP username |
+| `password` | str | None | SMTP password |
+| `reopen_mail_session` | bool | True | Recreate connection for each send |
+
+### Telegram Configuration
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `token` | str | Required | Bot token from BotFather |
+| `base_url` | str | "https://api.telegram.org/bot" | Telegram API base URL |
+| `proxy` | dict | None | Proxy configuration |
+
+### Common Parameters
+
+All senders support:
+- `logger_instance`: Custom logger instance
+- `metrics_instance`: Metrics collector instance
+
+## Exception Types
+
+| Exception | Description |
+|-----------|-------------|
+| `DGSenderError` | Base exception for all sender errors |
+| `EmailSendError` | Email sending related errors |
+| `TelegramSendError` | Telegram sending related errors |
+| `SlackSendError` | Slack/Mattermost sending related errors |
+| `ZabbixSendError` | Zabbix data submission errors |
+
+## SSL/TLS Configuration
+
+### SSL for Requests-based Senders (Telegram, Slack)
+
+```python
+from dgsender import TelegramSender, SlackSender
+
+# Disable SSL verification (not recommended for production)
+tg_sender = TelegramSender(
+    token="your_bot_token",
+    verify_ssl=False  # Disable certificate verification
+)
+
+# Use client certificate
+tg_sender = TelegramSender(
+    token="your_bot_token",
+    ssl_cert=("/path/to/client.crt", "/path/to/client.key")  # Client certificate
+)
+
+# For Slack
+slack_sender = SlackSender(
+    webhook_url="your_webhook",
+    verify_ssl=False  # Disable verification
+)
+```
+
+### SSL for Async Senders (aiohttp-based)
+
+```python
+import ssl
+from dgsender import AsyncTelegramSender, AsyncSlackSender
+
+# Disable SSL verification
+async_tg_sender = AsyncTelegramSender(
+    token="your_bot_token",
+    verify_ssl=False
+)
+
+# Use custom SSL context
+ssl_context = ssl.create_default_context()
+ssl_context.load_verify_locations(cafile="/path/to/ca-bundle.crt")
+
+async_tg_sender = AsyncTelegramSender(
+    token="your_bot_token",
+    ssl_context=ssl_context
+)
+
+# Use client certificate
+async_tg_sender = AsyncTelegramSender(
+    token="your_bot_token",
+    client_cert="/path/to/client.crt",
+    client_key="/path/to/client.key"
+)
+
+# For Slack
+async_slack_sender = AsyncSlackSender(
+    webhook_url="your_webhook",
+    verify_ssl=True,
+    client_cert="/path/to/client.crt",
+    client_key="/path/to/client.key"
+)
+```
+
+### Advanced SSL Configuration
+
+```python
+import ssl
+from dgsender import AsyncTelegramSender
+
+# Create custom SSL context with specific settings
+ssl_context = ssl.create_default_context()
+ssl_context.check_hostname = True
+ssl_context.verify_mode = ssl.CERT_REQUIRED
+ssl_context.load_default_certs()
+ssl_context.load_verify_locations(cafile="/path/to/custom-ca-bundle.crt")
+
+sender = AsyncTelegramSender(
+    token="your_bot_token",
+    ssl_context=ssl_context
+)
+```
+
+## SSL Configuration Parameters
+
+### For Requests-based Senders:
+- `verify_ssl`: bool - Enable/disable SSL certificate verification (default: True)
+- `ssl_cert`: str or tuple - Path to client certificate file, or tuple (cert, key)
+
+### For Async Senders (aiohttp):
+- `verify_ssl`: bool - Enable/disable SSL certificate verification (default: True)
+- `ssl_context`: ssl.SSLContext - Custom SSL context
+- `client_cert`: str - Path to client certificate file
+- `client_key`: str - Path to client private key file
+```
+
+## Примеры использования SSL:
+
+### Базовое отключение проверки SSL:
+```python
+from dgsender import TelegramSender
+
+# Для тестовых сред или самоподписанных сертификатов
+tg = TelegramSender(
+    token="your_bot_token",
+    verify_ssl=False
+)
+```
+
+### Использование клиентского сертификата:
+```python
+from dgsender import TelegramSender
+
+# Для серверов, требующих клиентскую аутентификацию
+tg = TelegramSender(
+    token="your_bot_token",
+    ssl_cert=("/path/to/client.crt", "/path/to/client.key")
+)
+```
+
+### Продвинутая SSL конфигурация для async:
+```python
+import ssl
+from dgsender import AsyncTelegramSender
+
+# Создание кастомного SSL контекста
+context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+context.load_cert_chain(
+    certfile="/path/to/client.crt",
+    keyfile="/path/to/client.key"
+)
+context.load_verify_locations(cafile="/path/to/ca-bundle.crt")
+
+sender = AsyncTelegramSender(
+    token="your_bot_token",
+    ssl_context=context
+)
+```
+
+
+## Performance Tips
+
+### Use Async Senders for High Throughput
+
+```python
+import asyncio
+from dgsender import AsyncEmailSender
+
+async def send_bulk_emails(messages):
+    sender = AsyncEmailSender(host="smtp.example.com")
+    tasks = []
+    
+    for msg_data in messages:
+        task = sender.send(**msg_data)
+        tasks.append(task)
+    
+    # Send all emails concurrently
+    await asyncio.gather(*tasks, return_exceptions=True)
+```
+
+### Reuse Sender Instances
+
+```python
+# Good: Reuse sender instance
+sender = EmailSender(host="smtp.example.com")
+for message in messages:
+    sender.send(**message)
+
+# Avoid: Creating new sender for each message
+for message in messages:
+    sender = EmailSender(host="smtp.example.com")  # Inefficient
+    sender.send(**message)
+```
+
+## Testing
+
+```python
+from dgsender import EmailSender
+import unittest
+from unittest.mock import Mock
+
+class TestEmailSender(unittest.TestCase):
+    def setUp(self):
+        self.sender = EmailSender(host="localhost", port=1025)  # Test SMTP
+        
+    def test_send_email(self):
+        # Test email sending logic
+        result = self.sender.send(
+            msg="Test message",
+            subject="Test",
+            to=["test@example.com"]
+        )
+        # Add your assertions here
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a pull request
+
+## License
+
+MIT License - see LICENSE file for details.
+
+## Support
+
+For issues and questions:
+- Create an issue on GitHub
+- Check existing documentation
+- Review example code in the repository
+
+## Changelog
+
+### v1.0.0
+- Initial release
+- Email, Telegram, Slack, Zabbix senders
+- Async support
+- Metrics integration
+- Custom logging support
+```
