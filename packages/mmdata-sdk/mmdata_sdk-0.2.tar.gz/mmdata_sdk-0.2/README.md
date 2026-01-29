@@ -1,0 +1,269 @@
+# Quant Data SDK
+
+量化研究数据 SDK，提供 StarRocks DWD/DIM 层数据的便捷查询接口。
+
+## 安装
+
+### 方式一：pip 安装（推荐）
+
+```bash
+cd quant-data-common
+pip install -e .
+```
+
+### 方式二：作为 Git Submodule
+
+```bash
+git submodule add git-url
+git submodule update --init --recursive
+```
+
+---
+
+## 快速开始
+
+```python
+from quant_data import QuantDataClient
+
+# 初始化客户端（连接参数通过实例传入）
+client = QuantDataClient(
+    host="",  # 内网使用 
+    port=9030,
+    user="",
+    password=""
+)
+
+# 获取日线数据（前复权）
+df = client.get_daily(
+    symbols=["000001", "600519"],
+    start_date="2024-01-01",
+    end_date="2024-12-31",
+    adjust="qfq"
+)
+print(df.head())
+```
+
+---
+
+## API 参考
+
+### QuantDataClient
+
+核心客户端类，提供所有数据查询方法。
+
+```python
+client = QuantDataClient(
+    host: str,           # StarRocks FE 地址
+    port: int = 9030,    # FE Query 端口
+    user: str = None,    # 用户名
+    password: str = None # 密码
+)
+```
+
+---
+
+### DWD 层数据接口
+
+#### get_daily() - 日线数据
+
+```python
+df = client.get_daily(
+    symbols=["000001"],      # 股票代码，str 或 list
+    start_date="2024-01-01", # 开始日期
+    end_date="2024-12-31",   # 结束日期
+    adjust="qfq",            # 复权类型: None/qfq/hfq
+    fields=None              # 返回字段（可选）
+)
+```
+
+**返回字段：**
+- `trade_date` - 交易日期
+- `symbol`, `exchange`, `ts_code` - 股票代码
+- `open`, `high`, `low`, `close`, `pre_close` - OHLC 价格
+- `vol`, `amount` - 成交量/额
+- `adj_factor` - 复权因子
+- `pct_chg`, `turnover_rate` - 涨跌幅/换手率
+- `pe_ttm`, `pb`, `total_mv`, `circ_mv` - 估值/市值
+
+**复权说明：**
+- `adjust=None` - 不复权，返回原始价格
+- `adjust="qfq"` - 前复权，以最新价格为基准（适合短期回测）
+- `adjust="hfq"` - 后复权，以上市首日为基准（适合长期收益计算）
+
+---
+
+#### get_mins() - 分钟线数据
+
+```python
+df = client.get_mins(
+    symbols=["000001"],
+    start_date="2024-01-01",
+    freq="5min",          # 1min/5min/15min/30min/60min
+    adjust="qfq"
+)
+```
+
+---
+
+#### get_finance() - 财务数据
+
+```python
+df = client.get_finance(
+    symbols=["000001"],
+    end_date="2024-09-30"  # 报告期
+)
+```
+
+**返回字段：**
+- 利润表：`revenue`, `n_income`, `basic_eps`
+- 资产负债表：`total_assets`, `total_liab`
+- 现金流：`n_cashflow_act`
+- 财务指标：`roe`, `roa`, `grossprofit_margin`, `debt_to_assets`
+
+---
+
+### DIM 层数据接口
+
+#### get_stock_basic() - 股票基础信息
+
+```python
+# 获取所有在市股票
+df = client.get_stock_basic(list_status="L")
+
+# 筛选条件
+df = client.get_stock_basic(
+    symbols=["000001"],     # 指定代码
+    list_status="L",        # L上市/D退市/P暂停
+    exchange="SZ",          # SZ/SH/BJ
+    market="主板"            # 主板/创业板/科创板
+)
+```
+
+---
+
+#### get_trade_cal() - 交易日历
+
+```python
+df = client.get_trade_cal(
+    start_date="2024-01-01",
+    end_date="2024-12-31",
+    exchange="SSE",         # SSE/SZSE/BSE
+    is_open=1               # 1交易日/0休市/None全部
+)
+```
+
+---
+
+#### get_industry() - 行业分类
+
+```python
+df = client.get_industry()
+```
+
+---
+
+### 便捷方法
+
+```python
+# 获取交易日列表
+dates = client.get_trade_dates("2024-01-01", "2024-12-31")
+# ['2024-01-02', '2024-01-03', ...]
+
+# 获取全部股票代码
+symbols = client.get_all_symbols(list_status="L")
+# ['000001', '000002', ...]
+```
+
+---
+
+## 使用示例
+
+### 示例 1：获取单只股票日线并绘图
+
+```python
+import matplotlib.pyplot as plt
+from quant_data import QuantDataClient
+
+client = QuantDataClient(host="your-starrocks-host", port=9030, user="your_user", password="your_password")
+
+# 获取平安银行前复权日线
+df = client.get_daily(symbols="000001", start_date="2024-01-01", adjust="qfq")
+
+# 绘制收盘价走势
+plt.figure(figsize=(12, 6))
+plt.plot(df['trade_date'], df['close'])
+plt.title("平安银行 (000001) 前复权收盘价")
+plt.xlabel("日期")
+plt.ylabel("价格")
+plt.grid(True)
+plt.show()
+```
+
+### 示例 2：筛选低估值股票
+
+```python
+# 获取所有在市股票最新日线
+df = client.get_daily(start_date="2024-12-30", end_date="2024-12-31")
+
+# 筛选条件：PE < 15 且 PB < 2
+low_pe = df[(df['pe_ttm'] > 0) & (df['pe_ttm'] < 15) & (df['pb'] < 2)]
+print(f"低估值股票数量: {len(low_pe)}")
+print(low_pe[['symbol', 'close', 'pe_ttm', 'pb']].head(20))
+```
+
+### 示例 3：计算动量因子
+
+```python
+import pandas as pd
+
+# 获取多只股票历史数据
+symbols = ["000001", "000002", "600519", "601318"]
+df = client.get_daily(symbols=symbols, start_date="2024-01-01", adjust="qfq")
+
+# 计算20日动量
+df = df.sort_values(['symbol', 'trade_date'])
+df['momentum_20d'] = df.groupby('symbol')['close'].pct_change(20)
+
+# 查看最新动量排名
+latest = df.groupby('symbol').tail(1)
+print(latest[['symbol', 'close', 'momentum_20d']].sort_values('momentum_20d', ascending=False))
+```
+
+### 示例 4：结合财务数据分析
+
+```python
+# 获取日线估值
+daily = client.get_daily(symbols=["000001"], start_date="2024-12-01")
+
+# 获取最新财务数据
+finance = client.get_finance(symbols=["000001"], end_date="2024-09-30")
+
+print("=== 市场数据 ===")
+print(daily[['trade_date', 'close', 'pe_ttm', 'pb']].tail())
+
+print("\n=== 财务指标 ===")
+print(finance[['end_date', 'roe', 'grossprofit_margin', 'debt_to_assets']])
+```
+
+---
+
+## 数据来源
+
+| 数据库 | 表名 | 说明 |
+|--------|------|------|
+| dwd | stock_daily | 日线数据（含估值指标） |
+| dwd | stock_mins_* | 分钟线数据 |
+| dwd | stock_finance | 财务宽表 |
+| dim | stock_basic | 股票基础信息 |
+| dim | trade_cal | 交易日历 |
+| dim | industry | 行业分类 |
+
+---
+
+## 依赖
+
+- Python >= 3.9
+- pandas >= 2.0.0
+- pymysql >= 1.1.0
+- dbutils >= 3.0.0
+- loguru >= 0.7.0
