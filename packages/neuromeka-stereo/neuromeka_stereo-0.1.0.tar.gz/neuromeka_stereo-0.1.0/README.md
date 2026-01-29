@@ -1,0 +1,165 @@
+# neuromeka_stereo
+
+TensorRT stereo inference utilities packaged for PyPI.
+
+## Folder layout
+```
+./
+  src/
+    neuromeka_stereo/
+      fs_infer.py
+      assets/
+        (empty by default; place plan/onnx here)
+      FoundationStereo_TRT/
+        core/
+        depth_anything_pretrained_models/
+        Utils.py
+  examples/
+    run_realsense_demo.py
+  pyproject.toml
+  environment.yml
+  README.md
+```
+
+## 1) Install
+Local install (recommended for this repo):
+```bash
+python -m pip install -e .
+```
+
+Or from PyPI (if published):
+```bash
+pip install neuromeka_stereo
+```
+
+Large plan files are not tracked in git. See "Assets (manual placement required)" below.
+
+## 2) TensorRT runtime (plan execution)
+```bash
+python -m pip install --extra-index-url https://pypi.nvidia.com tensorrt-cu12==10.14.1.48.post1
+python -m pip install "cuda-python<13"  # CUDA 12.x drivers
+```
+
+If your driver is CUDA 13.x, install the latest `cuda-python` instead.
+
+## 3) RealSense dependency
+`run_realsense_demo.py` needs `pyrealsense2`.
+Install it for your OS/WSL before running the demo.
+```bash
+python -m pip install pyrealsense2
+```
+
+## 4) Assets (manual placement required)
+Until official download URLs are published, plan/onnx files must be placed
+manually. If a required plan file is missing, `StereoInference` raises an error
+with the expected path.
+
+Place plan files here (preferred for this repo):
+```
+src/neuromeka_stereo/assets/
+```
+
+Or place them in the cache directory:
+```
+~/.cache/neuromeka_stereo
+```
+
+Expected filenames:
+- `foundation_stereo_RTX4060.plan`
+- `foundation_stereo_RTX5060.plan`
+- `foundation_stereo_RTX5090.plan`
+
+## 5) Optional: internal auto-download (for approved users only)
+If you have an internal HTTP/S3 host, set a base URL to enable auto-download:
+```bash
+export NEUROMEKA_STEREO_ASSET_BASE_URL=https://your-storage.example.com/neuromeka_stereo/
+```
+
+Or set per-asset URLs:
+```bash
+export NEUROMEKA_STEREO_ASSET_URL_FOUNDATION_STEREO_RTX4060_PLAN=https://your-storage.example.com/neuromeka_stereo/foundation_stereo_RTX4060.plan
+export NEUROMEKA_STEREO_ASSET_URL_FOUNDATION_STEREO_RTX5060_PLAN=https://your-storage.example.com/neuromeka_stereo/foundation_stereo_RTX5060.plan
+export NEUROMEKA_STEREO_ASSET_URL_FOUNDATION_STEREO_RTX5090_PLAN=https://your-storage.example.com/neuromeka_stereo/foundation_stereo_RTX5090.plan
+```
+
+Optional overrides:
+```bash
+export NEUROMEKA_STEREO_DEFAULT_PLAN=foundation_stereo_RTX5090.plan
+export NEUROMEKA_STEREO_CACHE_DIR=/path/to/cache
+```
+
+Optional integrity check:
+```bash
+export NEUROMEKA_STEREO_ASSET_SHA256_FOUNDATION_STEREO_RTX4060_PLAN=<sha256>
+```
+
+## 6) Optional: Conda dev environment
+Use this only for development/experiments (not required for runtime inference):
+```bash
+cd /home/user/neuromeka-repo/nrmk_foundation_stereo
+conda env create -f environment.yml
+conda activate nrmk_fs
+```
+
+## 7) Usage
+```python
+from neuromeka_stereo import StereoInference
+
+fs = StereoInference(
+    trt_path,
+    fx=fx,
+    baseline=baseline,
+    z_far=10.0
+)
+depth_m = fs.infer(left_ir, right_ir, return_depth=True)
+```
+
+## 8) Run demo (TensorRT plan)
+```bash
+python examples/run_realsense_demo.py \
+  --trt_path foundation_stereo_RTX4060.plan \
+  --width 480 --height 640 --fps 30 --z_far 10
+```
+
+Notes:
+- The TensorRT plan is **fixed to a specific input size** (commonly 480x640).
+  If the plan was built for 480x640, make sure your pipeline resizes to that
+  or rebuild the plan for your target size.
+- The plan is also tied to **GPU model + TensorRT major version**.
+  Use a GPU-specific plan file (e.g., `foundation_stereo_RTX4060.plan`,
+  `foundation_stereo_RTX5060.plan`, `foundation_stereo_RTX5090.plan`).
+  If you move to a different GPU or TRT version, rebuild the plan.
+
+## Benchmark (D435 IR, 480x640)
+Preliminary results; update for RTX 5060/5090 later.
+
+| GPU | Backend | Input | Latency (sec) | Notes |
+| --- | --- | --- | --- | --- |
+| RTX 4060 | TensorRT plan | 480x640 | ~0.42 | TRT plan execution |
+| RTX 5060 | TensorRT plan | 480x640 | ~0.30 | TRT plan execution |
+| RTX 5090 | TensorRT plan | 480x640 | ~0.07 | TRT plan execution |
+| RTX 4060 | Torch | 480x640 | ~1.12 | Torch inference |
+
+## Optional: Rebuild plan from ONNX
+If you also have an ONNX file on the new machine, build a fresh plan:
+
+Install `trtexec` (Ubuntu 22.04, CUDA 12.9 repo):
+```bash
+sudo apt-get install -y --allow-downgrades \
+  libnvinfer-bin=10.14.1.48-1+cuda12.9 \
+  libnvinfer10=10.14.1.48-1+cuda12.9 \
+  libnvinfer-plugin10=10.14.1.48-1+cuda12.9 \
+  libnvonnxparsers10=10.14.1.48-1+cuda12.9 \
+  libnvinfer-lean10=10.14.1.48-1+cuda12.9 \
+  libnvinfer-vc-plugin10=10.14.1.48-1+cuda12.9 \
+  libnvinfer-dispatch10=10.14.1.48-1+cuda12.9
+```
+
+```bash
+/usr/src/tensorrt/bin/trtexec \
+  --onnx=./src/neuromeka_stereo/assets/onnx/foundation_stereo_23-51-11_640x480.onnx \
+  --saveEngine=./src/neuromeka_stereo/assets/foundation_stereo_RTX4060.plan \
+  --fp16 \
+  --shapes=left:1x3x480x640,right:1x3x480x640 \
+  --skipInference
+```
