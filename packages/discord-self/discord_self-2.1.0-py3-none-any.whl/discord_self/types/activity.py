@@ -1,0 +1,43 @@
+from discord_self._vendor.discord.types.activity import (
+    Activity,
+    ActivityAssets,
+    ActivityEmoji,
+    ActivityParty,
+    ActivitySecret,
+    ActivitySecrets,
+    ActivityTimestamps,
+    ActivityType,
+    BasePresenceUpdate,
+    ClientStatus,
+    HangStatusVariantType,
+    PartialPresenceUpdate,
+    SettingsActivity,
+    StatusDisplayType,
+    StatusType,
+    UserID,
+    UserPresenceUpdate,
+)
+from discord_self._vendor.discord.types.snowflake import Snowflake
+from discord_self._vendor.discord.types.user import PartialUser
+
+__all__ = [
+    "Activity",
+    "ActivityAssets",
+    "ActivityEmoji",
+    "ActivityParty",
+    "ActivitySecret",
+    "ActivitySecrets",
+    "ActivityTimestamps",
+    "ActivityType",
+    "BasePresenceUpdate",
+    "ClientStatus",
+    "HangStatusVariantType",
+    "PartialPresenceUpdate",
+    "PartialUser",
+    "SettingsActivity",
+    "Snowflake",
+    "StatusDisplayType",
+    "StatusType",
+    "UserID",
+    "UserPresenceUpdate",
+]

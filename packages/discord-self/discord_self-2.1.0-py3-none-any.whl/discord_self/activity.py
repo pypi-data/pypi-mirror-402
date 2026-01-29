@@ -1,0 +1,33 @@
+from discord_self._vendor.discord.activity import (
+    Activity,
+    ActivityAssets,
+    ActivityButton,
+    ActivityImage,
+    ActivityParty,
+    ActivitySecrets,
+    ActivityTimestamps,
+    BaseActivity,
+    CustomActivity,
+    Game,
+    HangActivity,
+    Session,
+    Spotify,
+    Streaming,
+)
+
+__all__ = [
+    "Activity",
+    "ActivityAssets",
+    "ActivityButton",
+    "ActivityImage",
+    "ActivityParty",
+    "ActivitySecrets",
+    "ActivityTimestamps",
+    "BaseActivity",
+    "CustomActivity",
+    "Game",
+    "HangActivity",
+    "Session",
+    "Spotify",
+    "Streaming",
+]

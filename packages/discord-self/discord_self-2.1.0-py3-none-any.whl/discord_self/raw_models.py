@@ -1,0 +1,33 @@
+from discord_self._vendor.discord.raw_models import (
+    RawBulkMessageDeleteEvent,
+    RawGuildFeatureAckEvent,
+    RawIntegrationDeleteEvent,
+    RawMemberRemoveEvent,
+    RawMessageAckEvent,
+    RawMessageDeleteEvent,
+    RawMessageUpdateEvent,
+    RawPollVoteActionEvent,
+    RawReactionActionEvent,
+    RawReactionClearEmojiEvent,
+    RawReactionClearEvent,
+    RawThreadDeleteEvent,
+    RawThreadMembersUpdate,
+    RawUserFeatureAckEvent,
+)
+
+__all__ = [
+    "RawBulkMessageDeleteEvent",
+    "RawGuildFeatureAckEvent",
+    "RawIntegrationDeleteEvent",
+    "RawMemberRemoveEvent",
+    "RawMessageAckEvent",
+    "RawMessageDeleteEvent",
+    "RawMessageUpdateEvent",
+    "RawPollVoteActionEvent",
+    "RawReactionActionEvent",
+    "RawReactionClearEmojiEvent",
+    "RawReactionClearEvent",
+    "RawThreadDeleteEvent",
+    "RawThreadMembersUpdate",
+    "RawUserFeatureAckEvent",
+]
