@@ -1,0 +1,397 @@
+<%namespace name="util" module="bodhi.server.util"/>
+
+<%def name="karma(karma, show_digit=False, optional_text=None, zero_thumbsup=True, show_details=None)">
+  <%doc>
+  Return a span with the karma thumbsup icon, and an optional count of the karma.
+
+  Example:
+  <span><i class="fa fa-thumbs-o-up text-success pe-1"></i>3</span>
+
+  Args:
+      karma (int): The amount of karma
+      show_digit (bool): if true, show the amount of karma in the returned span
+      optional_text (str): a string to place after the icon
+      zero_thumbsup: if true, and karma is 0, show the thumbsup. otherwise if false,
+                     and karma is zero, show thumbsdown.
+      show_details: 2-tuple of the positive and negative karma of an update,
+                    usually provided by _composite_karma property.
+  
+  </%doc>
+  % if karma < 0:
+  <span class="text-danger">
+    % if show_details:
+    <span class="min-width-3 d-inline-block d-md-block d-xl-inline-block text-center">
+      % if show_details[0] > 0:
+      <sup class="text-success"><i class="fa fa-thumbs-up"></i></sup>
+      % endif
+    % endif
+    <i class="fa fa-thumbs-down pe-1 pe-md-0 pe-xl-1"></i>
+  % elif karma > 0:
+  <span class="text-success">
+    % if show_details:
+    <span class="min-width-3 d-inline-block d-md-block d-xl-inline-block text-center">
+      % if show_details[1] < 0:
+      <i class="fa fa-thumbs-up"></i>
+      <sub class="text-danger"><i class="fa fa-thumbs-down pe-1 pe-md-0 pe-xl-1"></i></sub>
+      % else:
+      <i class="fa fa-thumbs-up pe-1 pe-md-0 pe-xl-1"></i>
+      % endif
+    % else:
+    <i class="fa fa-thumbs-up pe-1 pe-md-0 pe-xl-1"></i>
+    % endif
+  % else:
+  <span class="text-muted">
+    % if show_details:
+    <span class="min-width-3 d-inline-block d-md-block d-xl-inline-block text-center">
+    % endif
+    % if show_details and show_details != (0,0):
+      <sup class="text-success"><i class="fa fa-thumbs-up"></i></sup>
+      <sub class="text-danger"><i class="fa fa-thumbs-down pe-1 pe-md-0 pe-xl-1"></i></sub>
+    % elif zero_thumbsup:
+      <i class="fa fa-thumbs-up text-muted pe-1 pe-md-0 pe-xl-1"></i>
+    % else:
+      <i class="fa fa-thumbs-down text-muted pe-1 pe-md-0 pe-xl-1"></i>
+    % endif
+  %endif
+    % if show_details:
+    </span>
+    % endif
+  % if optional_text:
+    ${optional_text} 
+  % endif
+  % if show_digit:
+      ${karma}
+  % endif
+  </span>
+</%def>
+
+<%def name="status_context(status)">\
+<%
+statusmap = {'pending': 'info',
+             'testing': 'warning',
+             'stable': 'success',
+             'unpushed': 'danger',
+             'obsolete': 'secondary'}
+%>\
+${statusmap[status]}\
+</%def>
+
+<%def name="compose_status_context(status)">\
+<%
+statusmap = {
+  'requested': 'primary',
+  'pending': 'primary',
+  'initializing': 'warning',
+  'updateinfo': 'warning',
+  'punging': 'warning',
+  'notifying': 'warning',
+  'cleaning': 'warning',
+  'syncing_repo': 'warning',
+  'signing_repo': 'warning',
+  'success': 'success',
+  'failed': 'danger'}
+%>\
+${statusmap[status]}\
+</%def>
+
+<%def name="status_text(update)">
+  <span class="fw-bold">${update.status.value}</span>
+  % if update.request:
+    <span title="this update has been requested to ${update.request.value}" data-bs-toggle="tooltip"><i class="fa fa-arrow-right text-white"></i> ${update.request.value}</span>
+  % endif
+</%def>
+
+
+
+<%def name="comment(comment, display_update=True)">
+% if comment.user.name == "bodhi":
+<div class="row">
+        <div class="col-12 text-muted font-size-09">
+          <div class="d-flex p-2 align-items-top">
+            <i class="fa fa-info-circle pt-2"></i>
+            <div class="fw-bold">${util.markup(comment.text, bodhi=False) | n}</div>
+            <a href="${comment.url()}" class="notblue pt-1 ms-auto text-nowrap" data-bs-toggle="tooltip" title="${comment.timestamp.strftime("%Y-%m-%d %H:%M:%S")} (UTC)">
+              ${util.age(comment.timestamp)}
+            </a>
+          </div>
+        </div>
+</div>
+% else:
+<div class="row my-2">
+  <div class="col-md-12">
+  % if comment.karma and comment.karma < 0:
+    <div class="card my-2 user-comment negative-karma-comment">
+  % else:
+    <div class="card my-2 user-comment">
+  % endif
+      <div class="card-header p-2 text-muted">
+        <div class="row no-gutters">
+          <div class="col font-size-09">
+          % if comment.user:
+          <a href="${request.route_url('user', name=comment.user.name)}" class="fw-bold notblue">
+            <img src="${util.avatar(comment.user.name, comment.user.email, size=16)}" alt="User Icon"/>
+            ${comment.user.name}
+          </a>
+          % if comment.text:
+            % if comment.karma or comment.bug_feedback or any([True for feedback in comment.unique_testcase_feedback if feedback.karma]):
+              commented &amp; provided feedback
+            % else:
+              commented
+            % endif
+          % else:
+            provided feedback
+          % endif
+          % endif
+          % if display_update:
+            <a href="${comment.update.get_url()}">
+              on ${comment.update.get_title(', ', 1, ", &hellip;") | n}
+            </a>
+          % endif
+          <a href="${comment.url()}" class="notblue" data-bs-toggle="tooltip" title="${comment.timestamp.strftime("%Y-%m-%d %H:%M:%S")} (UTC)">
+              ${util.age(comment.timestamp)}
+            </a>
+          </div>
+          <div class="col-auto">
+        % if comment.karma:
+        <span class="font-size-09 fw-bold"> ${karma(comment.karma, optional_text="karma")}</span>
+        % endif
+          </div>
+      </div>
+      </div>
+      
+      <%
+      has_feedback = False
+      if comment.bug_feedback:
+        for feedback in comment.bug_feedback:
+          if feedback.karma:
+            has_feedback = True
+      if comment.testcase_feedback:
+        for feedback in comment.testcase_feedback:
+          if feedback.karma:
+            has_feedback = True
+      %>
+      % if has_feedback or comment.text:
+      <div class="card-body p-0">
+        % if comment.text:
+        <div class="col-md-12 py-3">
+          ${util.markup(comment.text) | n}
+        </div>
+        %endif
+
+        % if has_feedback:
+        <div class="list-group list-group-flush font-size-09 border-top">
+          % for feedback in comment.bug_feedback:
+          % if feedback.karma:
+          <div class="list-group-item border-0 p-1 ps-2 bg-light ${'list-group-item-success' if feedback.karma == 1 else 'list-group-item-danger'}">${karma(feedback.karma)} ${util.bug_link(feedback.bug) | n}</div>
+          % endif
+          % endfor
+
+          % if comment.testcase_feedback:
+            % for feedback in comment.unique_testcase_feedback:
+            % if feedback.karma:
+            <div class="list-group-item border-0 p-1 ps-2 bg-light ${'list-group-item-success' if feedback.karma == 1 else 'list-group-item-danger'}">${karma(feedback.karma)} ${util.testcase_link(feedback.testcase) | n}</div>
+            % endif
+            % endfor
+          % endif
+        </div>
+        %endif
+
+      </div>
+      %endif
+    </div>
+  </div>
+</div>
+% endif
+</%def>
+
+<%def name="update(update, display_user=True, display_karma=True, display_commentcount=True)">
+  <div class="list-group-item p-1">
+      <div class="row align-items-center no-gutters">
+          <div class="col-md mb-1 mb-md-0">
+              <div class="d-flex align-items-center">
+                  <div class="flex-column flex-shrink-0">
+                    <div>${util.type2icon(update['type'])|n}</div>
+                    %if update.test_gating_status is not None and update.test_gating_status.value == 'failed':
+                    <div>
+                      <span data-toggle="tooltip" aria-label="This update failed gating tests" data-bs-original-title="This update failed gating tests">
+                        <i class="fa fa-fw fa-heartbeat text-danger"></i>
+                      </span>
+                    </div>
+                    %endif
+                  </div>
+                  <div class="flex-grow-1 ms-2">
+                      <div class="fw-bold">
+                        <a href="${request.route_url('update', id=update['alias'])}">
+                        ${update.get_title(amp=True,nvr=True,beautify=True) | h}
+                        </a>
+                      </div>
+                      <div class="line-height-1">
+                        <small> created
+                        %if display_user:
+    by <a href="${request.route_url('user', name=update['user']['name'])}">
+      ${update['user']['name']}
+    </a>
+                        %endif
+                          <span title="${update['date_submitted']} UTC"> ${util.age(update['date_submitted'])} </span>
+                          for <a href="${request.route_url('release', name=update['release']['name'])}">${update['release']['long_name']}
+                          </a></small>
+                    </div>
+                  </div>
+              </div>
+            </div>
+            <div class="col-6 col-md-auto">
+                <div>
+                  <span class="me-3 font-size-09 p-1 fw-normal badge text-bg-${status_context(update.status.value)}">${status_text(update)}</span>
+                </div>
+            </div>
+            %if display_commentcount:
+              <div class="col-3 col-md-1 text-muted text-center fw-bold">
+                  <div><i class="d-inline-block d-md-block d-xl-inline-block fa fa-comment-o pe-1 pe-md-0 pe-xl-1"></i> ${sum(1 for c in update.comments if c.user.name != 'bodhi')}</div>
+              </div>
+            %endif
+            %if display_karma:
+            <div class="col-3 col-md-1 col-lg-1 fw-bold">
+                <div class="text-center">${karma(update.karma, show_digit=True, show_details=update._composite_karma)}</div>
+            </div>
+            %endif
+      </div>
+  </div>
+</%def>
+
+<%def name="override(override, display_user=True)">
+<div class="list-group-item">
+  <div class="d-flex flex-row flex-wrap justify-content-between align-items-center">
+    <div class="flex-grow-1 me-2">
+        <div class="fw-bold">
+          <a href="${request.route_url('override', nvr=override['build']['nvr'])}">
+            ${override['build']['nvr']}
+          </a>
+        </div>
+        <div>
+          <small>created
+              %if display_user:
+              by
+                <a href="${request.route_url('user', name=override['submitter']['name'])}">
+                  ${override['submitter']['name']}
+                </a>
+              %endif
+            <span title="${override['submission_date']} UTC"> ${util.age(override['submission_date'])} </span>
+              for <a href="${request.route_url('release', name=override['build']['release']['name'])}">${override['build']['release']['long_name']}</a>
+          </small>
+        </div>
+    </div>
+    <div class="flex-shrink-0">
+      % if override['expired_date'] is None:
+      <div class='col-xs-auto pe-2 text-muted'><small>still active for <strong>${util.age(override['expiration_date'], True)}</strong></small></div>
+      % else:
+      <div class='col-xs-auto pe-2 text-muted'><small>expired <strong>${util.age(override['expired_date'])}</strong></small></div>
+      % endif
+    </div>
+  </div>
+</div>
+</%def>
+
+<%def name="markdown_help_modal()">
+  <div class="modal fade" id="markdown-help" tabindex="-1" role="dialog" aria-labelledby="markdown-help-label">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+          <h4 class="modal-title" id="markdown-help-label">Fedora-Flavored Markdown</h4>
+        </div>
+        <div class="modal-body">
+          <p> Text fields in Bodhi2 support an
+          <a href="https://github.com/fedora-infra/bodhi/blob/develop/bodhi-server/bodhi/server/ffmarkdown.py">enhanced</a>
+          version of <a href="http://daringfireball.net/projects/markdown/syntax" target="_blank">markdown</a>.
+          This is a cheat sheet for your reference.
+          </p>
+          <hr/>
+          <div class="row">
+            <div class="col-md-4">
+              <p>You can do <strong>headers</strong> by underlining or by prefixing with the <code>&#35;</code> character:</p>
+              <pre><code>This is an H1
+=============
+
+This is an H2
+-------------
+
+&#35; This is another H1
+
+&#35;&#35; This is another H2
+</code></pre>
+              <hr/>
+              <p>You can do <strong>blockquotes</strong> using email-style prefixes with the <code>&gt;</code> character:</p>
+              <pre><code>&gt; This is a quotation
+&gt; over many lines
+&gt; &gt; and it can be nested(!)
+</code></pre>
+              <hr/>
+              <p><strong>Lists</strong> work like you'd expect, by prefixing with any of the <code>*</code>, <code>+</code>, or <code>-</code> characters:</p>
+              <pre><code>Check out this list:
+
+* This
+* is
+* a list..
+</code></pre>
+              <p>You need a blank line between a paragraph and the start of a list for the renderer to pick up on it.</p>
+              </div>
+              <div class="col-md-4">
+              <p><strong>Emphasis</strong> can be added like this:</p>
+              <pre><code>*italics*
+_italics_
+**bold**
+__bold__
+</code></pre>
+              <hr/>
+              <p>You can save your <strong>code</strong> references from being misinterpreted as emphasis by surrounding them with backtick characters (<code>`</code>):</p>
+              <pre><code>Use `the_best_function()` and _not_ that crummy one.</code></pre>
+              <hr/>
+              <p><strong>Links</strong> look like this:</p>
+              <pre><code>[text](http://getfedora.org)</code></pre>
+              <p>..but we also support bare links if you just provide a URL.</p>
+              <hr/>
+              <p> You can create <strong>code blocks</strong> by indenting
+              every line of the block by at least 4 spaces or 1 tab. </p>
+              <pre><code>Here is a code block:
+
+    for i in range(4):
+        print i
+    print "done."
+</code></pre>
+            </div>
+            <div class="col-md-4">
+              <p>You can reference <strong>bug reports</strong> by simply writing something of the form <code>tracker&#35;ticketid</code>.</p>
+              <pre><code>This fixes PHP#1234 and Python#2345</code></pre>
+              <p>... we will automatically generate links to the tickets in the appropriate trackers in place.</p>
+              <p>The supported bug tracker prefixes are: (these are all case-insensitive)</p>
+              <ul>
+                <li><code>Fedora</code>, <code>RHBZ</code> and <code>RH</code> (all point to the Red Hat Bugzilla)</li>
+                <li><code>GCC</code></li>
+                <li><code>GNOME</code></li>
+                <li><code>KDE</code></li>
+                <li><code>PEAR</code></li>
+                <li><code>PHP</code></li>
+                <li><code>Python</code></li>
+                <li><code>SOURCEWARE</code></li>
+              </ul>
+              <hr/>
+              <p>And you can refer to <strong>other users</strong> by prefixing their username with the <code>@</code> symbol.</p>
+              <pre><code>Thanks @mattdm!</code></pre>
+              <p>This will generate a link to their profile, but it won't necessarily send them a notification unless they have a special <a href="https://apps.fedoraproject.org/notifications" target="_blank">FMN</a> rule set up to catch it.</p>
+              <hr/>
+              <p>Lastly, you can embed inline <strong>images</strong> with syntax like this:</p>
+              <pre><code>![Alt text](/path/to/img.jpg)</code></pre>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          You can read much more about markdown syntax at <a href="http://daringfireball.net/projects/markdown/syntax" target="_blank">daringfireball.net</a>.
+        </div>
+      </div>
+    </div>
+  </div>
+</%def>
+
+<%def name="frozen_badge()">
+  <span class="badge bg-info ms-1" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="This release is currently frozen and updates will not be pushed to stable until freeze is lifted">frozen</span>
+</%def>

@@ -1,0 +1,86 @@
+<%inherit file="master.html"/>
+
+<%def name="counts_box(r, status)">
+<div class="col-1 align-self-right text-center">
+  <a href="${request.route_url('updates')}?releases=${r['name']}&amp;status=${status}">${release_updates_counts[r['name']][status+'_updates_total']}</a>
+</div>
+</%def>
+
+<%def name="release_list(release_status, stable_only=False)">
+<%
+if release_status == 'pending':
+  releases_list = request.releases['pending'] + request.releases['frozen']
+else:
+  releases_list = request.releases[release_status]
+%>\
+<ul class="list-group my-3">
+    <li class="list-group-item bg-light">
+        <div class="row">
+            <div class="col fw-bold">
+                ${release_status.capitalize()} Releases <span class="badge rounded-pill text-bg-primary">${len(releases_list)}</span>
+            </div>
+            % if not stable_only:
+            <div class="col-1 align-self-right fw-bold text-muted text-center">Pending</div>
+            <div class="col-1 align-self-right fw-bold text-muted text-center">Testing</div>
+            % endif
+            <div class="col-1 align-self-right fw-bold text-muted text-center">Stable</div>
+
+          </div>
+      
+    </li>
+    % for r in sorted(releases_list, key=lambda i: i['name'], reverse=True):
+    <li class="list-group-item">
+        <div class="row">
+          <div class="col fw-bold">
+            <a href="${request.route_url('releases')}${r['name']}">${r['long_name']}</a>
+            % if r['state'] == 'frozen':
+            ${self.fragments.frozen_badge()}
+            % endif
+          </div>
+          % if not stable_only:
+          ${counts_box(r, "pending")}
+          ${counts_box(r, "testing")}
+          % endif
+          ${counts_box(r, "stable")}
+        </div>
+    </li>
+    % endfor
+  </ul>
+</%def>
+
+<div class="subheader py-4">
+    <div class="container">
+      <div class="row">
+          <div class="col-md-6 col-md-offset-3">
+              % if active:
+              <h3 class="fw-bold m-0 mb-2">Active Releases</h3>
+              <span>See here for <a href="${request.route_url('releases')}?active=false">Archived and disabled Releases</a></span>
+              % else:
+              <h3 class="fw-bold m-0 mb-2">Archived and disabled Releases</h3>
+              <span>See here for <a href="${request.route_url('releases')}">Active Releases</a></span>
+              % endif
+          </div>
+      </div>
+    </div>
+  </div>
+<div class="container pt-2">
+    % if active:
+      ${release_list('current', stable_only=False)}
+      ${release_list('pending', stable_only=False)}
+    % else:
+      ${release_list('archived', stable_only=True)}
+      % if request.releases['disabled']:
+        ${release_list('disabled', stable_only=True)}
+      % endif
+    % endif
+</div>
+
+<%block name="javascript">
+${parent.javascript()}
+<script>
+  $(document).ready(function() {
+    // Initialize tooltips
+    $('[data-bs-toggle="tooltip"]').tooltip()
+  });
+</script>
+</%block>
