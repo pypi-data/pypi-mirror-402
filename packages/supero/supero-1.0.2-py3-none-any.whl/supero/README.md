@@ -1,0 +1,968 @@
+# Supero Python SDK
+
+**The AI-native backend platform.** Build complete APIs in minutes, not months.
+
+Supero transforms your data schemas into a full-featured backend with REST APIs, CRUD operations, queries, aggregations, relationships, multi-tenancy, and AI agents — all without writing backend code.
+
+---
+
+## ✨ The Magic of Supero
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│              UPLOAD YOUR JSON SCHEMAS                            │
+│                        ↓                                         │
+│                                                                  │
+│   ┌─────────────────────────────────────────────────────────┐   │
+│   │              SUPERO GENERATES:                           │   │
+│   │                                                          │   │
+│   │   ✓ REST APIs          ✓ Database Tables                │   │
+│   │   ✓ Authentication     ✓ Authorization                  │   │
+│   │   ✓ Multi-Tenancy      ✓ Data Isolation                 │   │
+│   │   ✓ AI Agents          ✓ Natural Language               │   │
+│   │   ✓ Vector Search      ✓ Conversation Memory            │   │
+│   │   ✓ Python SDK         ✓ Type Safety                    │   │
+│   │                                                          │   │
+│   └─────────────────────────────────────────────────────────┘   │
+│                        ↓                                         │
+│                                                                  │
+│           YOUR SAAS PLATFORM IS READY!                           │
+│                                                                  │
+│       In minutes, not months. No backend team required.          │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Authentication](#authentication)
+- [Schema Definition](#schema-definition)
+- [CRUD Operations](#crud-operations)
+- [Query Builder](#query-builder)
+- [Aggregations](#aggregations)
+- [References (Relationships)](#references-relationships)
+- [Parent-Child Hierarchies](#parent-child-hierarchies)
+- [Bulk Operations](#bulk-operations)
+- [Convenience Methods](#convenience-methods)
+- [Error Handling](#error-handling)
+- [Typed SDK](#typed-sdk)
+- [AI Features](#ai-features)
+- [RBAC & API Keys](#rbac--api-keys)
+- [Multi-Tenant Architecture](#multi-tenant-architecture)
+- [Complete API Reference](#complete-api-reference)
+- [Examples](#examples)
+
+---
+
+## Installation
+
+### From PyPI
+
+```bash
+pip install supero
+```
+
+### Domain-Specific Wheel (For Production)
+
+Once you've set up your domain, you can generate a typed SDK wheel:
+
+```python
+org.install_sdk()  # Generates supero_acme-1.0.0-py3-none-any.whl
+```
+
+Then distribute and install the wheel:
+
+```bash
+pip install supero_acme-1.0.0-py3-none-any.whl
+```
+
+### What's Inside the Domain Wheel?
+
+| Build Type | Wheel Name | Contents |
+|------------|------------|----------|
+| **Platform** | `supero-1.0.0-py3-none-any.whl` | Base SDK for setup |
+| **Domain** | `supero_<domain>-1.0.0-py3-none-any.whl` | Typed models + API client |
+
+**Benefits of domain wheels:**
+- ✅ Full IDE auto-completion for your schemas
+- ✅ Type safety and editor warnings
+- ✅ Single file deployment
+- ✅ Multiple domains can coexist
+
+---
+
+## Quick Start
+
+### The Flow
+
+```
+1. Register Domain  →  2. Create Project  →  3. Upload Schemas  →  4. CRUD
+```
+
+### 1. Register Domain (First Time)
+
+```python
+from supero import register_domain
+
+org = register_domain(
+    domain_name="acme",
+    admin_email="admin@acme.com",
+    admin_password="SecurePass123!"
+)
+```
+> This creates your organization with the necessary infrastructure.
+
+### 2. Create Your Project
+
+```python
+project = org.Project.create(name="ecommerce", description="E-commerce Platform")
+org = org.switch_project(project_name="ecommerce")
+```
+
+### 3. Upload Schemas
+
+Create `schemas/task.json`:
+
+```json
+{
+  "name": "task",
+  "fields": {
+    "title": {"type": "string", "required": true},
+    "done": {"type": "boolean", "default": false},
+    "priority": {"type": "string", "enum": ["low", "medium", "high"]}
+  }
+}
+```
+
+Upload:
+
+```python
+org.upload_schemas("schemas/")
+```
+
+**That's it.** You now have a full REST API for tasks.
+
+### 4. Use Your API
+
+```python
+# Create
+task = org.crud.create("task", name="task-1", title="Learn Supero", priority="high")
+
+# Read
+task = org.crud.get("task", task["uuid"])
+
+# Update
+org.crud.update("task", task["uuid"], done=True)
+
+# Delete
+org.crud.delete("task", task["uuid"])
+```
+
+### Returning Users - Login
+
+```python
+from supero import login
+
+# Single-tenant app
+org = login("acme", "user@acme.com", "password", project="ecommerce")
+
+# Multi-tenant app
+org = login("acme", "user@acme.com", "password", project="hr-system", tenant="sales")
+```
+
+---
+
+## Authentication
+
+### Register New Domain
+
+```python
+from supero import register_domain
+
+org = register_domain(
+    domain_name="acme",
+    admin_email="admin@acme.com",
+    admin_password="SecurePass123!"
+)
+
+# Create your application project
+project = org.Project.create(name="myapp")
+org = org.switch_project(project_name="myapp")
+```
+
+### Login with Credentials
+
+```python
+from supero import login
+
+# Single-tenant (tenant is auto-created)
+org = login("acme", "user@acme.com", "password", project="myapp")
+
+# Multi-tenant (specify tenant)
+org = login("acme", "user@acme.com", "password", project="saas-app", tenant="customer-a")
+```
+
+### Token-Based Authentication (Production)
+
+For frontends, microservices, or APIs, use token-based auth:
+
+```python
+from supero import login, quickstart
+
+# Step 1: Login to get a token
+org = login("acme", "user@acme.com", "password", project="myapp")
+token = org.jwt_token  # Save this (e.g., localStorage, config, env var)
+
+# Step 2: Later, reconnect without credentials
+org = quickstart("acme", "myapp", jwt_token=token)
+
+# Multi-tenant
+org = quickstart("acme", "saas-app", jwt_token=token, tenant="customer-a")
+```
+
+### Get JWT via REST API
+
+```bash
+curl -X POST https://api.supero.dev/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "domain": "acme",
+    "project": "myapp",
+    "email": "user@acme.com",
+    "password": "your-password"
+  }'
+
+# Response: {"token": "eyJhbGc...", "expires_in": 86400}
+```
+
+### Login with API Key
+
+```python
+from supero import quickstart
+
+org = quickstart("acme", "myapp", api_key="ak_prod_123")
+```
+
+---
+
+## Schema Definition
+
+Schemas define your data models. Place JSON files in a `schemas/` directory.
+
+### Basic Schema
+
+```json
+{
+  "name": "customer",
+  "fields": {
+    "email": {"type": "string", "required": true, "unique": true},
+    "company": {"type": "string"},
+    "tier": {"type": "string", "enum": ["free", "pro", "enterprise"], "default": "free"},
+    "active": {"type": "boolean", "default": true}
+  }
+}
+```
+
+### Field Types
+
+| Type | JSON Example | Python Example | Notes |
+|------|--------------|----------------|-------|
+| `string` | `"hello"` | `"hello"` | Text |
+| `number` | `42`, `3.14` | `42`, `3.14` | Integer or float |
+| `boolean` | `true`, `false` | `True`, `False` | |
+| `array` | `["a", "b"]` | `["a", "b"]` | List of values |
+| `object` | `{"key": "val"}` | `{"key": "val"}` | Nested object |
+| `datetime` | `"2024-01-15T10:30:00Z"` | `"2024-01-15T10:30:00Z"` | ISO 8601 format |
+
+### Field Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `type` | string | Field type (required) |
+| `required` | boolean | Field must be provided |
+| `default` | any | Default value if not provided |
+| `unique` | boolean | Value must be unique across all objects |
+| `enum` | array | Allowed values |
+
+### Schema with References
+
+```json
+{
+  "name": "order",
+  "fields": {
+    "total": {"type": "number", "required": true},
+    "status": {"type": "string", "enum": ["pending", "shipped", "delivered"], "default": "pending"}
+  },
+  "refs": {
+    "customer": {"type": "customer"},
+    "products": {"type": "product", "many": true}
+  }
+}
+```
+
+### Upload Schemas
+
+```python
+# Upload all schemas from directory
+org.upload_schemas("schemas/")
+
+# Upload single schema
+org.upload_schema("schemas/task.json")
+```
+
+---
+
+## CRUD Operations
+
+All CRUD operations are available via `org.crud`.
+
+### Create
+
+```python
+task = org.crud.create("task",
+    name="task-001",
+    title="Learn Supero",
+    priority="high"
+)
+# Returns: {"uuid": "...", "name": "task-001", "title": "Learn Supero", ...}
+```
+
+### Read
+
+```python
+# Get by UUID
+task = org.crud.get("task", "uuid-here")
+
+# Get by name
+task = org.crud.get_by_name("task", "task-001")
+
+# Get by fully qualified name
+task = org.crud.get_by_fq_name("task", ["my-app", "task-001"])
+
+# List all
+tasks = org.crud.list("task")
+
+# List with pagination
+tasks = org.crud.list("task", limit=10, offset=20)
+```
+
+### Update
+
+```python
+task = org.crud.update("task", "uuid-here", done=True, priority="low")
+```
+
+### Delete
+
+```python
+success = org.crud.delete("task", "uuid-here")
+# Returns: True if deleted, False if failed
+```
+
+---
+
+## Query Builder
+
+For complex queries, use the fluent query builder.
+
+### Basic Query
+
+```python
+tasks = org.crud.query("task").all()
+```
+
+### Filtering
+
+```python
+# Single filter
+tasks = org.crud.query("task").filter(done=False).all()
+
+# Multiple filters (AND)
+tasks = org.crud.query("task").filter(done=False, priority="high").all()
+
+# Chained filters
+tasks = org.crud.query("task") \
+    .filter(done=False) \
+    .filter(priority="high") \
+    .all()
+```
+
+### Ordering
+
+```python
+# Ascending
+tasks = org.crud.query("task").order_by("created_at").all()
+
+# Descending (prefix with -)
+tasks = org.crud.query("task").order_by("-created_at").all()
+
+# Multiple fields
+tasks = org.crud.query("task").order_by("-priority", "created_at").all()
+```
+
+### Pagination
+
+```python
+# Limit and offset
+tasks = org.crud.query("task").limit(10).offset(20).all()
+
+# Page-based
+tasks = org.crud.query("task").paginate(page=3, per_page=25).all()
+```
+
+### Other Query Methods
+
+```python
+# Get first match
+task = org.crud.query("task").filter(priority="high").first()
+
+# Check existence
+exists = org.crud.query("task").filter(priority="high").exists()
+
+# Count
+count = org.crud.query("task").filter(done=False).count()
+
+# Delete all matching
+deleted = org.crud.query("task").filter(done=True).delete_all()
+```
+
+### Shorthand: find()
+
+```python
+tasks = org.crud.find("task", done=False, priority="high")
+```
+
+---
+
+## Aggregations
+
+```python
+# Count
+total = org.crud.count("task")
+active = org.crud.count("task", done=False)
+
+# Sum, Average, Min, Max
+revenue = org.crud.sum("order", "amount")
+avg_price = org.crud.avg("product", "price")
+cheapest = org.crud.min("product", "price")
+highest = org.crud.max("order", "amount")
+
+# Distinct values
+statuses = org.crud.distinct("order", "status")
+# → ["pending", "shipped", "delivered"]
+
+# Group by (count)
+by_priority = org.crud.count_by("task", "priority")
+# → {"low": 10, "medium": 25, "high": 5}
+
+# Full stats
+stats = org.crud.stats("order", "amount")
+# → {"count": 100, "sum": 15000, "avg": 150.0, "min": 10, "max": 500}
+```
+
+---
+
+## References (Relationships)
+
+### Define References in Schema
+
+```json
+{
+  "name": "order",
+  "fields": { "total": {"type": "number"} },
+  "refs": {
+    "customer": {"type": "customer"},
+    "products": {"type": "product", "many": true}
+  }
+}
+```
+
+### Use References
+
+```python
+# Create objects
+customer = org.crud.create("customer", name="cust-1", email="john@example.com")
+order = org.crud.create("order", name="order-1", total=99.99)
+
+# Link them
+org.crud.set_ref("order", order["uuid"], "customer", customer["uuid"])
+
+# With metadata
+org.crud.set_ref("order", order["uuid"], "customer", customer["uuid"],
+    role="billing", notes="Primary contact")
+
+# Get reference
+ref = org.crud.get_ref("order", order["uuid"], "customer")
+customer = ref["target"]
+role = ref["link_data"]["role"]
+
+# Remove reference
+org.crud.remove_ref("order", order["uuid"], "customer")
+```
+
+---
+
+## Parent-Child Hierarchies
+
+```python
+# Create parent
+customer = org.crud.create("customer", name="acme-corp", email="contact@acme.com")
+
+# Create child with parent reference
+order = org.crud.create("order",
+    parent=customer,
+    name="order-001",
+    total=199.99
+)
+# fq_name will be: ["my-app", "acme-corp", "order-001"]
+```
+
+---
+
+## Bulk Operations
+
+```python
+# Create many
+tasks = org.crud.bulk_create("task", [
+    {"name": "task-1", "title": "First task", "priority": "high"},
+    {"name": "task-2", "title": "Second task", "priority": "medium"},
+])
+
+# Get many
+tasks = org.crud.bulk_get("task", ["uuid-1", "uuid-2"])
+
+# Update many
+org.crud.bulk_update("task", [
+    {"uuid": "uuid-1", "done": True},
+    {"uuid": "uuid-2", "done": True},
+])
+
+# Delete many
+org.crud.bulk_delete("task", ["uuid-1", "uuid-2"])
+```
+
+---
+
+## Convenience Methods
+
+```python
+# Check existence
+if org.crud.exists("user", email="admin@example.com"):
+    print("User exists")
+
+# Get or create (idempotent)
+task, created = org.crud.get_or_create("task", "task-001",
+    title="Default Title",
+    priority="medium"
+)
+
+# Update or create
+task, created = org.crud.update_or_create("task", "task-001",
+    title="Updated Title",
+    done=True
+)
+```
+
+---
+
+## Error Handling
+
+```python
+# Safe get (returns None if not found)
+task = org.crud.get("task", "invalid-uuid")
+if task is None:
+    print("Not found")
+
+# Safe delete (returns False if failed)
+if not org.crud.delete("task", "invalid-uuid"):
+    print("Delete failed")
+
+# Try/except
+try:
+    task = org.crud.create("task", name="task-1", title="Test")
+except Exception as e:
+    print(f"Create failed: {e}")
+```
+
+---
+
+## Typed SDK
+
+Generate a typed SDK for full IDE auto-completion.
+
+```python
+org.install_sdk()
+```
+
+### Typed Usage
+
+```python
+# Instead of string-based:
+task = org.crud.create("task", name="t1", title="Learn Supero")
+
+# Use typed access:
+task = org.Task.create(name="t1", title="Learn Supero")
+
+# Full examples
+task = org.Task.get(uuid)
+tasks = org.Task.find(done=False)
+org.Task.update(uuid, done=True)
+org.Task.delete(uuid)
+
+# Query
+tasks = org.Task.query().filter(done=False).order_by("-priority").all()
+```
+
+### Comparison
+
+| Feature | `org.crud` | `org.Task` (Typed) |
+|---------|------------|-------------------|
+| Auto-completion | ❌ | ✅ |
+| Type hints | ❌ | ✅ |
+| Typo detection | Runtime | Editor |
+
+---
+
+## AI Features
+
+### Simple Chat
+
+```python
+response = org.ai.chat("What projects do we have?")
+print(response.content)
+```
+
+### Quick Question
+
+```python
+answer = org.ask("How many active projects are there?")
+# → "You have 5 active projects."
+```
+
+### Streaming
+
+```python
+for chunk in org.ai.chat_stream("Explain our architecture"):
+    print(chunk, end="", flush=True)
+```
+
+### Multi-Turn Conversations
+
+```python
+session = org.ai.sessions.create()
+
+org.ai.chat("List all projects", session_id=session.id)
+org.ai.chat("Create a task for the first one", session_id=session.id)
+org.ai.chat("Call it 'Setup CI/CD'", session_id=session.id)
+```
+
+### Vector Search (RAG)
+
+```python
+# Index
+org.ai.vectors.index(
+    content="Project Alpha is our flagship e-commerce platform...",
+    metadata={"type": "project_doc"}
+)
+
+# Search
+results = org.ai.vectors.search("how does authentication work?", limit=5)
+```
+
+### Configure AI
+
+```python
+org.ai.configure(
+    model="claude-sonnet-4-20250514",
+    max_tokens=8000,
+    temperature=0.5
+)
+```
+
+---
+
+## RBAC & API Keys
+
+```python
+# Pass api_key to CRUD operations
+task = org.crud.create("task", name="t1", title="Test", api_key="user-key")
+
+# Or with query builder
+tasks = org.crud.query("task") \
+    .with_api_key("user-key") \
+    .filter(done=False) \
+    .all()
+```
+
+---
+
+## Multi-Tenant Architecture
+
+### Hierarchy
+
+```
+Domain ──→ Project ──→ Tenant ──→ User Account
+   │           │
+   │           └──→ Schemas (linked to project)
+   │
+   └──→ default-project / default-tenant (auto-created)
+```
+
+| Level | Description | Required? |
+|-------|-------------|-----------|
+| **Domain** | Top-level organization | ✅ Yes |
+| **Project** | Your application | ✅ Yes |
+| **Tenant** | Isolated environment | Optional* |
+| **User** | Individual account | ✅ Yes |
+
+*Single-tenant apps: tenant is auto-created and abstracted away  
+*Multi-tenant apps: create and specify tenants explicitly
+
+### Single-Tenant vs Multi-Tenant
+
+| Type | Tenant Handling | Login Example |
+|------|-----------------|---------------|
+| **Single-Tenant** | Auto (abstracted) | `login("acme", email, pwd, project="ecommerce")` |
+| **Multi-Tenant** | Explicit | `login("acme", email, pwd, project="hr", tenant="sales")` |
+
+### Multi-Tenant Setup
+
+```python
+from supero import register_domain, login
+
+# Setup (as admin)
+org = register_domain("acme", "admin@acme.com", "SecurePass123!")
+org.Project.create(name="hr-system")
+org = org.switch_project(project_name="hr-system")
+
+# Create tenants
+org.Tenant.create(name="sales")
+org.Tenant.create(name="payroll")
+
+org.upload_schemas("schemas/")
+
+# Usage: Each tenant has isolated data
+sales = login("acme", "sales@acme.com", "password", project="hr-system", tenant="sales")
+payroll = login("acme", "payroll@acme.com", "password", project="hr-system", tenant="payroll")
+
+sales.crud.create("employee", name="alice", department="Sales")
+payroll.crud.create("payslip", name="pay-001", amount=5000)
+
+# Data is isolated!
+sales.crud.list("employee")   # Only sales data
+payroll.crud.list("payslip")  # Only payroll data
+```
+
+### Domain Wheel Distribution
+
+SDK is generated at the domain level. Project/tenant are specified at login:
+
+```bash
+pip install supero_acme-1.0.0-py3-none-any.whl
+```
+
+```python
+from supero import login, quickstart
+
+# Same wheel, different project/tenant
+ecom = login("acme", "user@acme.com", "pass", project="ecommerce")
+sales = login("acme", "user@acme.com", "pass", project="hr-system", tenant="sales")
+
+# Or with tokens (after obtaining from login)
+ecom_token = ecom.token
+ecom = quickstart("acme", "ecommerce", jwt_token=ecom_token)
+```
+
+---
+
+## Complete API Reference
+
+### Setup Methods
+
+| Method | Description |
+|--------|-------------|
+| `register_domain(domain_name, admin_email, admin_password)` | Create new domain |
+| `org.Project.create(name, description=)` | Create project |
+| `org.Tenant.create(name, description=)` | Create tenant |
+| `org.switch_project(project_name=, tenant_name=)` | Switch context |
+| `login(domain, email, password, project=, tenant=)` | Login with credentials |
+| `quickstart(domain, project, *, jwt_token=, tenant=)` | Connect with token |
+| `org.upload_schemas(path)` | Upload schemas |
+| `org.install_sdk()` | Generate typed SDK |
+
+### CRUD Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `create(type, name=, **fields)` | `dict` | Create object |
+| `get(type, uuid)` | `dict \| None` | Get by UUID |
+| `get_by_name(type, name)` | `dict \| None` | Get by name |
+| `list(type, limit=, offset=)` | `list` | List all |
+| `update(type, uuid, **fields)` | `dict` | Update object |
+| `delete(type, uuid)` | `bool` | Delete object |
+
+### Query Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `query(type)` | `QueryBuilder` | Start query |
+| `find(type, **filters)` | `list` | Shorthand filter |
+| `.filter(**conditions)` | `QueryBuilder` | Add filters |
+| `.order_by(*fields)` | `QueryBuilder` | Set ordering |
+| `.limit(n)` / `.offset(n)` | `QueryBuilder` | Pagination |
+| `.all()` | `list` | Execute query |
+| `.first()` | `dict \| None` | Get first |
+| `.count()` | `int` | Count matches |
+| `.exists()` | `bool` | Check existence |
+
+### Aggregation Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `count(type, **filters)` | `int` | Count objects |
+| `sum(type, field, **filters)` | `number` | Sum field |
+| `avg(type, field, **filters)` | `number` | Average field |
+| `min/max(type, field)` | `number` | Min/max value |
+| `distinct(type, field)` | `list` | Unique values |
+| `count_by(type, field)` | `dict` | Group counts |
+| `stats(type, field)` | `dict` | Full statistics |
+
+### Reference Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `set_ref(type, uuid, ref_field, ref_uuid, **link_data)` | `dict` | Create link |
+| `get_ref(type, uuid, ref_field)` | `dict \| None` | Get link |
+| `remove_ref(type, uuid, ref_field)` | `bool` | Remove link |
+
+### Bulk Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `bulk_create(type, items)` | `list` | Create multiple |
+| `bulk_get(type, uuids)` | `list` | Get multiple |
+| `bulk_update(type, updates)` | `list` | Update multiple |
+| `bulk_delete(type, uuids)` | `int` | Delete multiple |
+
+### AI Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `org.ai.chat(message, session_id=)` | `Response` | Chat with AI |
+| `org.ai.chat_stream(message)` | `Iterator` | Streaming chat |
+| `org.ask(question)` | `str` | Quick Q&A |
+| `org.ai.sessions.create()` | `Session` | Create session |
+| `org.ai.vectors.index(content, metadata=)` | `str` | Index document |
+| `org.ai.vectors.search(query, limit=)` | `list` | Semantic search |
+
+---
+
+## Examples
+
+### E-Commerce App (Single-Tenant)
+
+```python
+from supero import register_domain, login
+
+# Setup
+org = register_domain("acme", "admin@acme.com", "SecurePass123!")
+org.Project.create(name="ecommerce")
+org = org.switch_project(project_name="ecommerce")
+org.upload_schemas("schemas/")
+
+# Usage
+org = login("acme", "user@acme.com", "password", project="ecommerce")
+
+customer = org.crud.create("customer", name="john", email="john@example.com")
+order = org.crud.create("order", parent=customer, name="order-001", total=99.99)
+org.crud.set_ref("order", order["uuid"], "customer", customer["uuid"])
+
+revenue = org.crud.sum("order", "total", status="completed")
+print(f"Revenue: ${revenue}")
+```
+
+### HR System (Multi-Tenant)
+
+```python
+from supero import register_domain, login
+
+# Setup
+org = register_domain("acme", "admin@acme.com", "SecurePass123!")
+org.Project.create(name="hr-system")
+org = org.switch_project(project_name="hr-system")
+org.Tenant.create(name="sales")
+org.Tenant.create(name="payroll")
+org.upload_schemas("schemas/")
+
+# Usage - isolated data per tenant
+sales = login("acme", "sales@acme.com", "pass", project="hr-system", tenant="sales")
+payroll = login("acme", "payroll@acme.com", "pass", project="hr-system", tenant="payroll")
+
+sales.crud.create("employee", name="alice", department="Sales")
+payroll.crud.create("payslip", name="pay-001", amount=5000)
+```
+
+### AI-Powered App
+
+```python
+from supero import login
+
+org = login("acme", "admin@acme.com", "pass", project="myapp")
+
+session = org.ai.sessions.create()
+org.ai.chat("List all projects", session_id=session.id)
+org.ai.chat("Create a task for the first one", session_id=session.id)
+
+for chunk in org.ai.chat_stream("Generate a status report"):
+    print(chunk, end="", flush=True)
+```
+
+---
+
+## Best Practices
+
+1. **Use meaningful names** — `name="acme-corp-2024"` not `name="customer1"`
+2. **Use get_or_create for idempotency** — Safe to call multiple times
+3. **Use bulk operations** — One API call instead of many
+4. **Handle None returns** — `get()` returns `None` if not found
+5. **Use Typed SDK in production** — Full IDE support and type safety
+
+---
+
+## Troubleshooting
+
+### "name field is required"
+```python
+# Wrong
+org.crud.create("task", title="My Task")
+# Correct
+org.crud.create("task", name="task-001", title="My Task")
+```
+
+### "parent must have uuid and object_type"
+```python
+# Wrong
+org.crud.create("order", parent={"name": "cust-1"}, ...)
+# Correct
+customer = org.crud.get("customer", uuid)
+org.crud.create("order", parent=customer, ...)
+```
+
+---
+
+<div align="center">
+
+## 🚀 Build the Future of SaaS with Supero
+
+**Upload your schemas → Get a complete backend with AI in minutes, not months.**
+
+[Documentation](https://docs.supero.dev) • [GitHub](https://github.com/supero) • [Support](https://support.supero.dev)
+
+**Built with ❤️ by the Supero Team**
+
+</div>
