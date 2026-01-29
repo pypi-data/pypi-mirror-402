@@ -1,0 +1,447 @@
+#!/usr/bin/env python3
+"""
+Base E2E Test Runner for Python SDK Instrumentations
+
+This module provides a reusable base class for e2e test orchestration.
+Each instrumentation's entrypoint.py can inherit from this class and
+customize only the setup phase.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+
+class Colors:
+    """ANSI color codes for terminal output."""
+
+    GREEN = "\033[0;32m"
+    RED = "\033[0;31m"
+    YELLOW = "\033[1;33m"
+    BLUE = "\033[0;34m"
+    NC = "\033[0m"  # No Color
+
+
+class E2ETestRunnerBase:
+    """
+    Base class for e2e test orchestration.
+
+    Subclasses should override:
+    - setup(): To add instrumentation-specific setup (e.g., database schema)
+
+    The base class provides:
+    - Signal handling for graceful cleanup
+    - Application lifecycle management
+    - Trace recording and verification
+    - Tusk CLI test execution
+    - Result parsing and reporting
+    """
+
+    def __init__(self, app_port: int = 8000):
+        self.app_port = app_port
+        self.app_process: subprocess.Popen | None = None
+        self.app_log_file: tempfile._TemporaryFileWrapper | None = None
+        self.exit_code = 0
+        self.expected_request_count: int | None = None
+
+        # Register signal handlers for cleanup
+        signal.signal(signal.SIGTERM, self._signal_handler)
+        signal.signal(signal.SIGINT, self._signal_handler)
+
+    def _signal_handler(self, signum, frame):
+        """Handle termination signals gracefully."""
+        print(f"\n{Colors.YELLOW}Received signal {signum}, cleaning up...{Colors.NC}")
+        self.cleanup()
+        sys.exit(1)
+
+    def log(self, message: str, color: str = Colors.NC):
+        """Print colored log message."""
+        print(f"{color}{message}{Colors.NC}", flush=True)
+
+    def run_command(self, cmd: list[str], env: dict | None = None, check: bool = True) -> subprocess.CompletedProcess:
+        """Run a command and return result."""
+        full_env = os.environ.copy()
+        if env:
+            full_env.update(env)
+
+        result = subprocess.run(cmd, env=full_env, capture_output=True, text=True)
+
+        if check and result.returncode != 0:
+            self.log(f"Command failed: {' '.join(cmd)}", Colors.RED)
+            self.log(f"stdout: {result.stdout}", Colors.RED)
+            self.log(f"stderr: {result.stderr}", Colors.RED)
+            raise subprocess.CalledProcessError(result.returncode, cmd)
+
+        return result
+
+    def _parse_request_count(self, output: str):
+        """Parse the request count from test_requests.py output."""
+        for line in output.split("\n"):
+            if line.startswith("TOTAL_REQUESTS_SENT:"):
+                try:
+                    count = int(line.split(":")[1])
+                    self.expected_request_count = count
+                    self.log(f"Captured request count: {count}", Colors.GREEN)
+                except (ValueError, IndexError):
+                    self.log(f"Failed to parse request count from: {line}", Colors.YELLOW)
+
+    def wait_for_service(self, check_cmd: list[str], timeout: int = 30, interval: int = 1) -> bool:
+        """Wait for a service to become ready."""
+        elapsed = 0
+        last_error = None
+        while elapsed < timeout:
+            try:
+                result = subprocess.run(check_cmd, capture_output=True, timeout=5, text=True)
+                if result.returncode == 0:
+                    return True
+                last_error = f"returncode={result.returncode}, stderr={result.stderr}"
+            except subprocess.TimeoutExpired:
+                last_error = "timeout"
+            except subprocess.CalledProcessError as e:
+                last_error = str(e)
+
+            time.sleep(interval)
+            elapsed += interval
+
+        self.log(f"Service check failed after {timeout}s. Last error: {last_error}", Colors.RED)
+        raise TimeoutError(f"Service not ready after {timeout}s")
+
+    def setup(self):
+        """
+        Phase 1: Setup dependencies and services.
+
+        Override this method in subclasses to add instrumentation-specific setup
+        (e.g., database schema initialization, external service setup).
+        """
+        self.log("=" * 50, Colors.BLUE)
+        self.log("Phase 1: Setup", Colors.BLUE)
+        self.log("=" * 50, Colors.BLUE)
+
+        # Install Python dependencies
+        self.log("Installing Python dependencies...", Colors.BLUE)
+        self.run_command(["pip", "install", "-q", "-r", "requirements.txt"])
+
+        self.log("Setup complete", Colors.GREEN)
+
+    def record_traces(self) -> bool:
+        """Phase 2: Start app and record traces."""
+        self.log("=" * 50, Colors.BLUE)
+        self.log("Phase 2: Recording Traces", Colors.BLUE)
+        self.log("=" * 50, Colors.BLUE)
+
+        # Clear existing traces
+        traces_dir = Path(".tusk/traces")
+        logs_dir = Path(".tusk/logs")
+
+        if traces_dir.exists():
+            for f in traces_dir.glob("*.jsonl"):
+                f.unlink()
+        if logs_dir.exists():
+            for f in logs_dir.glob("*"):
+                f.unlink()
+
+        # Start application in RECORD mode
+        self.log("Starting application in RECORD mode...", Colors.GREEN)
+        env = {"TUSK_DRIFT_MODE": "RECORD", "PYTHONUNBUFFERED": "1"}
+
+        # Use a temporary file to capture app output for debugging.
+        # This avoids pipe buffer issues while still allowing diagnostics.
+        # Note: Can't use context manager here - file must stay open for subprocess
+        # and be cleaned up later in cleanup(). Using delete=False + manual unlink.
+        self.app_log_file = tempfile.NamedTemporaryFile(mode="w+", suffix=".log", delete=False)  # noqa: SIM115
+
+        self.app_process = subprocess.Popen(
+            ["python", "src/app.py"],
+            env={**os.environ, **env},
+            stdout=self.app_log_file,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+
+        # Wait for app to be ready
+        self.log("Waiting for application to be ready...", Colors.BLUE)
+        try:
+            self.wait_for_service(
+                ["curl", "-fsS", f"http://localhost:{self.app_port}/health"],
+                timeout=30,
+            )
+            self.log("Application is ready", Colors.GREEN)
+        except TimeoutError:
+            self.log("Application failed to become ready", Colors.RED)
+            if self.app_process:
+                self.app_process.terminate()
+                try:
+                    self.app_process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self.app_process.kill()
+                    self.app_process.wait()
+            # Read and display app output for debugging
+            if self.app_log_file:
+                self.app_log_file.flush()
+                self.app_log_file.seek(0)
+                app_output = self.app_log_file.read()
+                self.log(f"App output:\n{app_output}", Colors.YELLOW)
+            self.exit_code = 1
+            return False
+
+        # Execute test requests
+        self.log("Executing test requests...", Colors.GREEN)
+        try:
+            # Pass PYTHONPATH so test_requests.py can import from e2e_common
+            result = self.run_command(
+                ["python", "src/test_requests.py"],
+                env={"PYTHONPATH": "/sdk"},
+            )
+            # Parse request count from output
+            self._parse_request_count(result.stdout)
+        except subprocess.CalledProcessError:
+            self.log("Test requests failed", Colors.RED)
+            self.exit_code = 1
+            return False
+
+        # Wait for traces to flush
+        self.log("Waiting for traces to flush...", Colors.YELLOW)
+        time.sleep(3)
+
+        # Stop application
+        self.log("Stopping application...", Colors.YELLOW)
+        if self.app_process:
+            self.app_process.terminate()
+            try:
+                self.app_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.app_process.kill()
+                self.app_process.wait()
+            self.app_process = None
+
+        # Verify traces were created
+        trace_files = list(traces_dir.glob("*.jsonl"))
+        self.log(f"Recorded {len(trace_files)} trace files", Colors.GREEN)
+
+        if len(trace_files) == 0:
+            self.log("ERROR: No traces recorded!", Colors.RED)
+            self.exit_code = 1
+            return False
+
+        return True
+
+    def run_tests(self):
+        """Phase 3: Run Tusk CLI tests."""
+        self.log("=" * 50, Colors.BLUE)
+        self.log("Phase 3: Running Tusk Tests", Colors.BLUE)
+        self.log("=" * 50, Colors.BLUE)
+
+        env = {"TUSK_ANALYTICS_DISABLED": "1"}
+
+        result = self.run_command(
+            ["tusk", "run", "--print", "--output-format", "json", "--enable-service-logs"],
+            env=env,
+            check=False,
+        )
+
+        # Debug: show what tusk run returned
+        self.log(f"tusk run exit code: {result.returncode}", Colors.YELLOW)
+        if result.stdout:
+            self.log(f"tusk run stdout:\n{result.stdout}", Colors.YELLOW)
+        if result.stderr:
+            self.log(f"tusk run stderr:\n{result.stderr}", Colors.YELLOW)
+
+        # Parse JSON results
+        self.parse_test_results(result.stdout)
+
+        if result.returncode != 0:
+            self.exit_code = 1
+
+    def parse_test_results(self, output: str):
+        """Parse and display test results."""
+        self.log("=" * 50)
+        self.log("Test Results:")
+        self.log("=" * 50)
+
+        try:
+            # Extract JSON objects from output (handles pretty-printed JSON)
+            results = []
+            decoder = json.JSONDecoder()
+            idx = 0
+            output = output.strip()
+
+            while idx < len(output):
+                # Skip whitespace
+                while idx < len(output) and output[idx] in " \t\n\r":
+                    idx += 1
+                if idx >= len(output):
+                    break
+
+                # Try to decode a JSON object starting at idx
+                if output[idx] == "{":
+                    try:
+                        obj, end_idx = decoder.raw_decode(output, idx)
+                        if isinstance(obj, dict) and "test_id" in obj:
+                            results.append(obj)
+                        # raw_decode returns absolute index, not relative offset
+                        idx = end_idx
+                    except json.JSONDecodeError:
+                        idx += 1
+                else:
+                    idx += 1
+
+            all_passed = True
+            passed_count = 0
+            for result in results:
+                test_id = result.get("test_id", "unknown")
+                passed = result.get("passed", False)
+                duration = result.get("duration", 0)
+
+                if passed:
+                    self.log(f"✓ Test ID: {test_id} (Duration: {duration}ms)", Colors.GREEN)
+                    passed_count += 1
+                else:
+                    self.log(f"✗ Test ID: {test_id} (Duration: {duration}ms)", Colors.RED)
+                    all_passed = False
+
+            if all_passed and len(results) > 0:
+                self.log("All tests passed!", Colors.GREEN)
+            elif len(results) == 0:
+                self.log("No test results found", Colors.YELLOW)
+            else:
+                self.log("Some tests failed!", Colors.RED)
+                self.exit_code = 1
+
+            # Validate request count matches passed tests
+            if self.expected_request_count is not None:
+                if passed_count < self.expected_request_count:
+                    self.log(
+                        f"✗ Request count mismatch: {passed_count} passed tests != {self.expected_request_count} requests sent",
+                        Colors.RED,
+                    )
+                    self.exit_code = 1
+                else:
+                    self.log(
+                        f"✓ Request count validation: {passed_count} passed tests >= {self.expected_request_count} requests sent",
+                        Colors.GREEN,
+                    )
+
+        except Exception as e:
+            self.log(f"Failed to parse test results: {e}", Colors.RED)
+            self.log(f"Raw output:\n{output}", Colors.YELLOW)
+            self.exit_code = 1
+
+    def check_socket_instrumentation_warnings(self):
+        """
+        Check for socket instrumentation warnings in logs.
+
+        This detects unpatched dependencies - libraries making TCP calls
+        from within a SERVER span context without proper instrumentation.
+        Similar to Node SDK's check_tcp_instrumentation_warning.
+        """
+        self.log("=" * 50, Colors.BLUE)
+        self.log("Checking for Instrumentation Warnings", Colors.BLUE)
+        self.log("=" * 50, Colors.BLUE)
+
+        logs_dir = Path(".tusk/logs")
+        traces_dir = Path(".tusk/traces")
+
+        log_files = list(logs_dir.glob("*")) if logs_dir.exists() else []
+        if not log_files:
+            self.log("✗ ERROR: No log files found!", Colors.RED)
+            self.exit_code = 1
+            return
+
+        # Check for TCP instrumentation warning in logs
+        warning_pattern = "[SocketInstrumentation] TCP"
+        warning_suffix = "called from inbound request context, likely unpatched dependency"
+
+        found_warning = False
+        for log_file in log_files:
+            try:
+                content = log_file.read_text()
+                if warning_pattern in content and warning_suffix in content:
+                    found_warning = True
+                    self.log(f"✗ ERROR: Found socket instrumentation warning in {log_file.name}!", Colors.RED)
+                    self.log("  This indicates an unpatched dependency is making TCP calls.", Colors.RED)
+
+                    for line in content.split("\n"):
+                        if warning_pattern in line:
+                            self.log(f"  {line.strip()}", Colors.YELLOW)
+                    break
+            except Exception as e:
+                self.log(f"Warning: Could not read log file {log_file}: {e}", Colors.YELLOW)
+
+        if found_warning:
+            self.exit_code = 1
+        else:
+            self.log("✓ No socket instrumentation warnings found.", Colors.GREEN)
+
+        # Verify trace files exist (double-check after tusk run)
+        trace_files = list(traces_dir.glob("*.jsonl")) if traces_dir.exists() else []
+        if trace_files:
+            self.log(f"✓ Found {len(trace_files)} trace file(s).", Colors.GREEN)
+        else:
+            self.log("✗ ERROR: No trace files found!", Colors.RED)
+            self.exit_code = 1
+
+    def cleanup(self):
+        """Phase 5: Cleanup resources."""
+        self.log("=" * 50, Colors.BLUE)
+        self.log("Phase 5: Cleanup", Colors.BLUE)
+        self.log("=" * 50, Colors.BLUE)
+
+        # Stop app process if still running
+        if self.app_process:
+            self.log("Stopping application process...", Colors.YELLOW)
+            self.app_process.terminate()
+            try:
+                self.app_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.app_process.kill()
+                self.app_process.wait()
+
+        # Clean up app log file
+        if self.app_log_file:
+            try:
+                self.app_log_file.close()
+                os.unlink(self.app_log_file.name)
+            except OSError:
+                pass
+            self.app_log_file = None
+
+        # Traces are kept in container for inspection
+        self.log("Cleanup complete", Colors.GREEN)
+
+    def run(self) -> int:
+        """Run the full e2e test lifecycle."""
+        try:
+            self.setup()
+
+            if not self.record_traces():
+                return 1
+
+            self.run_tests()
+
+            self.check_socket_instrumentation_warnings()
+
+            return self.exit_code
+
+        except Exception as e:
+            self.log(f"Test failed with exception: {e}", Colors.RED)
+            import traceback
+
+            traceback.print_exc()
+            return 1
+
+        finally:
+            self.cleanup()
+
+
+if __name__ == "__main__":
+    # Can be run directly for testing
+    runner = E2ETestRunnerBase()
+    exit_code = runner.run()
+    sys.exit(exit_code)
