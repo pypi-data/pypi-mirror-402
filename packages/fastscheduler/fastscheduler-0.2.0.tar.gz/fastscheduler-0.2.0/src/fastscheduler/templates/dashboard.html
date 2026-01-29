@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>FastScheduler</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #09090b;
+            --bg-secondary: #111113;
+            --bg-tertiary: #18181b;
+            --bg-elevated: #1f1f23;
+            --border-subtle: #27272a;
+            --border-default: #3f3f46;
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1aa;
+            --text-tertiary: #71717a;
+            --accent-primary: #8b5cf6;
+            --accent-secondary: #a78bfa;
+            --status-running: #f59e0b;
+            --status-running-bg: rgba(245, 158, 11, 0.12);
+            --status-scheduled: #3b82f6;
+            --status-scheduled-bg: rgba(59, 130, 246, 0.12);
+            --status-completed: #10b981;
+            --status-completed-bg: rgba(16, 185, 129, 0.12);
+            --status-failed: #ef4444;
+            --status-failed-bg: rgba(239, 68, 68, 0.12);
+            --status-paused: #8b5cf6;
+            --status-paused-bg: rgba(139, 92, 246, 0.12);
+            --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+            --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Navbar */
+        .navbar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 0 32px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .navbar-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .logo-icon {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .main-tabs {
+            display: flex;
+            gap: 2px;
+            background: var(--bg-tertiary);
+            padding: 3px;
+            border-radius: var(--radius-sm);
+        }
+
+        .main-tab {
+            padding: 6px 14px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            transition: all var(--transition-fast);
+        }
+
+        .main-tab:hover {
+            color: var(--text-primary);
+        }
+
+        .main-tab.active {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+        }
+
+        .tab-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            margin-left: 6px;
+            background: var(--status-failed);
+            color: white;
+            border-radius: 9px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .dead-letter-info {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 12px 16px;
+            margin-bottom: 16px;
+        }
+
+        .dead-letter-info p {
+            color: var(--text-secondary);
+            font-size: 13px;
+            margin: 0;
+        }
+
+        .navbar-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background: var(--status-completed-bg);
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--status-completed);
+        }
+
+        .status-pill.stopped {
+            background: var(--status-failed-bg);
+            color: var(--status-failed);
+        }
+
+        .status-pill .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .connection-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 100px;
+            font-size: 11px;
+            font-weight: 500;
+            background: var(--status-completed-bg);
+            color: var(--status-completed);
+        }
+
+        .connection-pill.disconnected {
+            background: var(--status-failed-bg);
+            color: var(--status-failed);
+        }
+
+        /* Main */
+        .main {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px 32px;
+        }
+
+        .view {
+            display: none;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        /* Stats Row */
+        .stats-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-box {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 16px 20px;
+            flex: 1;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+        }
+
+        .stat-sub {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            margin-top: 2px;
+        }
+
+        .stat-sub.bad {
+            color: var(--status-failed);
+        }
+
+        /* Jobs Table */
+        .section-box {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .jobs-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .jobs-table th {
+            text-align: left;
+            padding: 10px 16px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .jobs-table td {
+            padding: 12px 16px;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border-subtle);
+            vertical-align: middle;
+        }
+
+        .jobs-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .jobs-table tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .job-name {
+            font-family: var(--font-mono);
+            font-weight: 500;
+        }
+
+        .job-schedule {
+            color: var(--text-secondary);
+        }
+
+        .job-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 8px;
+            border-radius: 100px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .job-status.scheduled {
+            background: var(--status-scheduled-bg);
+            color: var(--status-scheduled);
+        }
+
+        .job-status.running {
+            background: var(--status-running-bg);
+            color: var(--status-running);
+        }
+
+        .job-status.paused {
+            background: var(--status-paused-bg);
+            color: var(--status-paused);
+        }
+
+        .job-status.failed {
+            background: var(--status-failed-bg);
+            color: var(--status-failed);
+        }
+
+        /* Run Indicators - 5 dots */
+        .run-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .run-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .run-dot.success {
+            background: var(--status-completed);
+            border-color: var(--status-completed);
+        }
+
+        .run-dot.failed {
+            background: var(--status-failed);
+            border-color: var(--status-failed);
+        }
+
+        .run-dot-tooltip {
+            position: relative;
+        }
+
+        .run-dot-tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+            z-index: 10;
+            margin-bottom: 4px;
+        }
+
+        .next-run {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .next-run-countdown {
+            color: var(--accent-secondary);
+            font-weight: 500;
+        }
+
+        /* Action Buttons */
+        .action-btns {
+            display: flex;
+            gap: 4px;
+        }
+
+        .action-btn {
+            padding: 5px 10px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .action-btn:hover {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            border-color: var(--border-default);
+        }
+
+        .action-btn.danger:hover {
+            background: var(--status-failed-bg);
+            color: var(--status-failed);
+            border-color: var(--status-failed);
+        }
+
+        /* History Table */
+        .history-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border-subtle);
+            flex-wrap: wrap;
+        }
+
+        .filter-select {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 4px;
+            padding: 6px 10px;
+            color: var(--text-primary);
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .filter-select:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+        }
+
+        .search-input {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 4px;
+            padding: 6px 10px;
+            color: var(--text-primary);
+            font-size: 12px;
+            width: 180px;
+        }
+
+        .search-input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+        }
+
+        .history-count {
+            margin-left: auto;
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .history-table th {
+            text-align: left;
+            padding: 10px 16px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            background: var(--bg-tertiary);
+            position: sticky;
+            top: 0;
+        }
+
+        .history-table td {
+            padding: 10px 16px;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .history-table tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .history-status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 100px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .history-status.completed {
+            background: var(--status-completed-bg);
+            color: var(--status-completed);
+        }
+
+        .history-status.failed {
+            background: var(--status-failed-bg);
+            color: var(--status-failed);
+        }
+
+        .history-status.missed {
+            background: var(--status-running-bg);
+            color: var(--status-running);
+        }
+
+        .history-job {
+            font-family: var(--font-mono);
+            font-weight: 500;
+        }
+
+        .history-time {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .history-duration {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .history-error {
+            color: var(--status-failed);
+            font-size: 12px;
+            max-width: 250px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .history-container {
+            max-height: calc(100vh - 300px);
+            overflow-y: auto;
+        }
+
+        /* Empty state */
+        .empty-state {
+            padding: 48px;
+            text-align: center;
+            color: var(--text-tertiary);
+        }
+
+        /* Toast */
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 300;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .toast {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            animation: slideIn 0.2s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .toast-icon {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+        }
+
+        .toast.success .toast-icon {
+            background: var(--status-completed-bg);
+            color: var(--status-completed);
+        }
+
+        .toast.error .toast-icon {
+            background: var(--status-failed-bg);
+            color: var(--status-failed);
+        }
+
+        .toast-text {
+            font-size: 13px;
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .navbar {
+                padding: 0 16px;
+            }
+
+            .main {
+                padding: 16px;
+            }
+
+            .stats-row {
+                flex-wrap: wrap;
+            }
+
+            .stat-box {
+                flex: 1 1 45%;
+            }
+
+            .jobs-table,
+            .history-table {
+                font-size: 12px;
+            }
+
+            .jobs-table th,
+            .jobs-table td,
+            .history-table th,
+            .history-table td {
+                padding: 8px 12px;
+            }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-default);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="navbar-left">
+            <div class="logo">
+                <div class="logo-icon">⚡</div>
+                <span>FastScheduler</span>
+            </div>
+            <div class="main-tabs">
+                <button class="main-tab active" onclick="switchView('dashboard')">Dashboard</button>
+                <button class="main-tab" onclick="switchView('history')">History</button>
+                <button class="main-tab" onclick="switchView('failed')">Failed <span id="failed-badge" class="tab-badge"
+                        style="display: none;">0</span></button>
+            </div>
+        </div>
+        <div class="navbar-right">
+            <div id="scheduler-status" class="status-pill">
+                <span class="dot"></span>
+                <span>Running</span>
+            </div>
+            <div id="connection-badge" class="connection-pill disconnected">
+                <span class="dot"></span>
+                <span id="connection-text">Connecting</span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="main">
+        <!-- Dashboard View -->
+        <div id="dashboard-view" class="view active">
+            <div class="stats-row">
+                <div class="stat-box">
+                    <div class="stat-label">Active Jobs</div>
+                    <div class="stat-value" id="stat-jobs">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Total Runs</div>
+                    <div class="stat-value" id="stat-runs">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Failures</div>
+                    <div class="stat-value" id="stat-failures">0</div>
+                    <div class="stat-sub" id="stat-rate"></div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Uptime</div>
+                    <div class="stat-value" id="stat-uptime">--</div>
+                </div>
+            </div>
+
+            <div class="section-box">
+                <div class="section-header">
+                    <div class="section-title">Scheduled Jobs</div>
+                    <div id="jobs-count" style="font-size: 12px; color: var(--text-tertiary);"></div>
+                </div>
+                <table class="jobs-table">
+                    <thead>
+                        <tr>
+                            <th>Job</th>
+                            <th>Schedule</th>
+                            <th>Status</th>
+                            <th>Last 5 Runs</th>
+                            <th>Next Run</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="jobs-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- History View -->
+        <div id="history-view" class="view">
+            <div class="section-box">
+                <div class="section-header">
+                    <div class="section-title">Execution History</div>
+                </div>
+                <div class="history-toolbar">
+                    <select class="filter-select" id="history-status-filter">
+                        <option value="all">All Statuses</option>
+                        <option value="completed">Completed</option>
+                        <option value="failed">Failed</option>
+                        <option value="missed">Missed</option>
+                    </select>
+                    <select class="filter-select" id="history-job-filter">
+                        <option value="all">All Jobs</option>
+                    </select>
+                    <input type="text" class="search-input" placeholder="Search..." id="history-search">
+                    <div class="history-count" id="history-count">0 entries</div>
+                </div>
+                <div class="history-container">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Job</th>
+                                <th>Time</th>
+                                <th>Duration</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Failed Jobs (Dead Letter Queue) View -->
+        <div id="failed-view" class="view">
+            <div class="section-box">
+                <div class="section-header">
+                    <div class="section-title">Failed Jobs (Dead Letter Queue)</div>
+                    <button class="action-btn danger" onclick="clearDeadLetters()" id="clear-dead-letters-btn"
+                        style="display: none;">Clear All</button>
+                </div>
+                <div class="dead-letter-info">
+                    <p>Jobs that have exhausted all retry attempts are logged here. Use this to diagnose recurring
+                        issues and track job failures.</p>
+                </div>
+                <div class="history-toolbar">
+                    <input type="text" class="search-input" placeholder="Search failed jobs..." id="failed-search">
+                    <div class="history-count" id="failed-count">0 entries</div>
+                </div>
+                <div class="history-container">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Job</th>
+                                <th>Error</th>
+                                <th>Run #</th>
+                                <th>Retries</th>
+                                <th>Duration</th>
+                            </tr>
+                        </thead>
+                        <tbody id="failed-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+        let eventSource = null;
+        let data = { jobs: [], history: [], stats: {}, running: false, dead_letters: [], dead_letter_count: 0 };
+        let prevHistory = [];
+        let currentView = 'dashboard';
+        let historyStatusFilter = 'all';
+        let historyJobFilter = 'all';
+        let historySearch = '';
+        let failedSearch = '';
+
+        const API = '{{prefix}}';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setupListeners();
+            connectSSE();
+        });
+
+        function setupListeners() {
+            document.getElementById('history-status-filter').addEventListener('change', e => {
+                historyStatusFilter = e.target.value;
+                renderHistory();
+            });
+            document.getElementById('history-job-filter').addEventListener('change', e => {
+                historyJobFilter = e.target.value;
+                renderHistory();
+            });
+            document.getElementById('history-search').addEventListener('input', e => {
+                historySearch = e.target.value.toLowerCase();
+                renderHistory();
+            });
+            document.getElementById('failed-search').addEventListener('input', e => {
+                failedSearch = e.target.value.toLowerCase();
+                renderFailed();
+            });
+        }
+
+        function switchView(view) {
+            currentView = view;
+            document.querySelectorAll('.main-tab').forEach((t, i) => {
+                t.classList.toggle('active',
+                    (view === 'dashboard' && i === 0) ||
+                    (view === 'history' && i === 1) ||
+                    (view === 'failed' && i === 2)
+                );
+            });
+            document.getElementById('dashboard-view').classList.toggle('active', view === 'dashboard');
+            document.getElementById('history-view').classList.toggle('active', view === 'history');
+            document.getElementById('failed-view').classList.toggle('active', view === 'failed');
+            if (view === 'history') renderHistory();
+            if (view === 'failed') renderFailed();
+        }
+
+        function connectSSE() {
+            if (eventSource) eventSource.close();
+            eventSource = new EventSource(`${API}/events`);
+
+            eventSource.onopen = () => updateConnection(true);
+            eventSource.onerror = () => {
+                eventSource.close();
+                updateConnection(false);
+                setTimeout(connectSSE, 2000);
+            };
+            eventSource.onmessage = e => {
+                try {
+                    const newData = JSON.parse(e.data);
+                    checkForToasts(newData);
+                    data = newData;
+                    render();
+                } catch (err) {
+                    console.error('Parse error:', err);
+                }
+            };
+        }
+
+        function updateConnection(connected) {
+            const badge = document.getElementById('connection-badge');
+            const text = document.getElementById('connection-text');
+            badge.classList.toggle('disconnected', !connected);
+            text.textContent = connected ? 'Live' : 'Offline';
+        }
+
+        function checkForToasts(newData) {
+            if (prevHistory.length === 0) {
+                prevHistory = [...newData.history];
+                return;
+            }
+            const newEvents = newData.history.filter(h =>
+                !prevHistory.find(p => p.timestamp === h.timestamp && p.job_id === h.job_id)
+            );
+            newEvents.forEach(evt => {
+                if (evt.status === 'completed') {
+                    toast('success', `${evt.func_name} completed`);
+                } else if (evt.status === 'failed') {
+                    toast('error', `${evt.func_name} failed`);
+                }
+            });
+            prevHistory = [...newData.history];
+        }
+
+        function render() {
+            // Status
+            const statusEl = document.getElementById('scheduler-status');
+            statusEl.classList.toggle('stopped', !data.running);
+            statusEl.innerHTML = `<span class="dot"></span><span>${data.running ? 'Running' : 'Stopped'}</span>`;
+
+            // Stats
+            document.getElementById('stat-jobs').textContent = data.jobs.length;
+            document.getElementById('stat-runs').textContent = (data.stats.total_runs || 0).toLocaleString();
+            document.getElementById('stat-failures').textContent = data.stats.total_failures || 0;
+            document.getElementById('stat-uptime').textContent = data.stats.uptime_readable || '--';
+
+            const runs = data.stats.total_runs || 0;
+            const fails = data.stats.total_failures || 0;
+            const rateEl = document.getElementById('stat-rate');
+            if (runs > 0) {
+                const rate = ((runs - fails) / runs * 100).toFixed(1);
+                rateEl.textContent = `${rate}% success`;
+                rateEl.classList.toggle('bad', parseFloat(rate) < 95);
+            } else {
+                rateEl.textContent = '';
+            }
+
+            // Update failed badge
+            const failedBadge = document.getElementById('failed-badge');
+            const deadLetterCount = data.dead_letter_count || 0;
+            if (deadLetterCount > 0) {
+                failedBadge.style.display = 'inline-flex';
+                failedBadge.textContent = deadLetterCount > 99 ? '99+' : deadLetterCount;
+            } else {
+                failedBadge.style.display = 'none';
+            }
+
+            // Show/hide clear button
+            const clearBtn = document.getElementById('clear-dead-letters-btn');
+            clearBtn.style.display = deadLetterCount > 0 ? 'block' : 'none';
+
+            // Render current view
+            if (currentView === 'dashboard') {
+                renderJobs();
+            } else if (currentView === 'history') {
+                renderHistory();
+            } else if (currentView === 'failed') {
+                renderFailed();
+            }
+
+            // Update job filter dropdown
+            updateJobDropdown();
+        }
+
+        function renderJobs() {
+            const tbody = document.getElementById('jobs-tbody');
+            const jobs = [...data.jobs].sort((a, b) => a.func_name.localeCompare(b.func_name));
+
+            document.getElementById('jobs-count').textContent = `${jobs.length} job${jobs.length !== 1 ? 's' : ''}`;
+
+            if (jobs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No scheduled jobs</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = jobs.map(job => {
+                const lastRuns = getLastRuns(job.func_name, 5);
+                const runDots = lastRuns.map((r, i) => {
+                    const cls = r ? (r.status === 'completed' ? 'success' : 'failed') : '';
+                    const tip = r ? `${r.status} - ${formatTime(r.timestamp_readable)}` : 'No data';
+                    return `<div class="run-dot ${cls} run-dot-tooltip" data-tooltip="${esc(tip)}"></div>`;
+                }).join('');
+
+                return `
+                    <tr>
+                        <td><span class="job-name">${esc(job.func_name)}</span></td>
+                        <td><span class="job-schedule">${esc(job.schedule)}</span></td>
+                        <td><span class="job-status ${job.status}">${job.status}</span></td>
+                        <td><div class="run-dots">${runDots}</div></td>
+                        <td>
+                            <div class="next-run">${job.next_run}</div>
+                            <div class="next-run-countdown">${formatCountdown(job.next_run_in)}</div>
+                        </td>
+                        <td>
+                            <div class="action-btns">
+                                ${job.status === 'paused'
+                        ? `<button class="action-btn" onclick="resumeJob('${job.job_id}')">Resume</button>`
+                        : `<button class="action-btn" onclick="pauseJob('${job.job_id}')">Pause</button>`
+                    }
+                                <button class="action-btn" onclick="runJobNow('${job.job_id}')" ${job.status === 'running' ? 'disabled' : ''}>Run</button>
+                                <button class="action-btn danger" onclick="cancelJob('${job.job_id}')">Cancel</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function getLastRuns(funcName, count) {
+            // Get last N completed/failed runs for this job
+            const runs = data.history
+                .filter(h => h.func_name === funcName && ['completed', 'failed'].includes(h.status))
+                .slice(-count);
+
+            // Pad with nulls if less than count
+            while (runs.length < count) runs.unshift(null);
+            return runs;
+        }
+
+        function renderHistory() {
+            // Filter to only show completed, failed, missed (not running/scheduled)
+            let history = data.history
+                .filter(h => ['completed', 'failed', 'missed'].includes(h.status))
+                .reverse();
+
+            if (historyStatusFilter !== 'all') {
+                history = history.filter(h => h.status === historyStatusFilter);
+            }
+            if (historyJobFilter !== 'all') {
+                history = history.filter(h => h.func_name === historyJobFilter);
+            }
+            if (historySearch) {
+                history = history.filter(h =>
+                    h.func_name.toLowerCase().includes(historySearch) ||
+                    (h.error && h.error.toLowerCase().includes(historySearch))
+                );
+            }
+
+            document.getElementById('history-count').textContent = `${history.length} entries`;
+
+            const tbody = document.getElementById('history-tbody');
+            if (history.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No history entries</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = history.map(h => `
+                <tr>
+                    <td><span class="history-status ${h.status}">${h.status}</span></td>
+                    <td><span class="history-job">${esc(h.func_name)}</span></td>
+                    <td><span class="history-time">${h.timestamp_readable || formatTs(h.timestamp)}</span></td>
+                    <td><span class="history-duration">${h.execution_time ? h.execution_time.toFixed(2) + 's' : '-'}</span></td>
+                    <td>${h.error
+                    ? `<span class="history-error" title="${esc(h.error)}">${esc(h.error)}</span>`
+                    : `<span style="color:var(--text-tertiary)">Run #${h.run_count || '-'}</span>`
+                }</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderFailed() {
+            let deadLetters = data.dead_letters || [];
+
+            if (failedSearch) {
+                deadLetters = deadLetters.filter(dl =>
+                    dl.func_name.toLowerCase().includes(failedSearch) ||
+                    (dl.error && dl.error.toLowerCase().includes(failedSearch))
+                );
+            }
+
+            document.getElementById('failed-count').textContent = `${deadLetters.length} entries`;
+
+            const tbody = document.getElementById('failed-tbody');
+            if (deadLetters.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No failed jobs in dead letter queue</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = deadLetters.map(dl => `
+                <tr>
+                    <td><span class="history-time">${dl.timestamp_readable || formatTs(dl.timestamp)}</span></td>
+                    <td><span class="history-job">${esc(dl.func_name)}</span></td>
+                    <td><span class="history-error" title="${esc(dl.error || '')}">${esc(dl.error || 'Unknown error')}</span></td>
+                    <td><span style="color:var(--text-secondary)">#${dl.run_count || '-'}</span></td>
+                    <td><span style="color:var(--text-secondary)">${dl.retry_count || 0}</span></td>
+                    <td><span class="history-duration">${dl.execution_time ? dl.execution_time.toFixed(2) + 's' : '-'}</span></td>
+                </tr>
+            `).join('');
+        }
+
+        function updateJobDropdown() {
+            const select = document.getElementById('history-job-filter');
+            const current = select.value;
+            const names = [...new Set(data.history.map(h => h.func_name))].sort();
+
+            select.innerHTML = '<option value="all">All Jobs</option>' +
+                names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+
+            if (names.includes(current) || current === 'all') {
+                select.value = current;
+            }
+        }
+
+        // Actions
+        async function pauseJob(id) {
+            const res = await fetch(`${API}/api/jobs/${id}/pause`, { method: 'POST' });
+            const d = await res.json();
+            toast(d.success ? 'success' : 'error', d.success ? 'Job paused' : d.error);
+        }
+
+        async function resumeJob(id) {
+            const res = await fetch(`${API}/api/jobs/${id}/resume`, { method: 'POST' });
+            const d = await res.json();
+            toast(d.success ? 'success' : 'error', d.success ? 'Job resumed' : d.error);
+        }
+
+        async function cancelJob(id) {
+            if (!confirm('Cancel this job?')) return;
+            const res = await fetch(`${API}/api/jobs/${id}/cancel`, { method: 'POST' });
+            const d = await res.json();
+            toast(d.success ? 'success' : 'error', d.success ? 'Job cancelled' : d.error);
+        }
+
+        async function runJobNow(id) {
+            const res = await fetch(`${API}/api/jobs/${id}/run`, { method: 'POST' });
+            const d = await res.json();
+            toast(d.success ? 'success' : 'error', d.success ? 'Job triggered' : d.error);
+        }
+
+        async function clearDeadLetters() {
+            if (!confirm('Clear all failed job entries from the dead letter queue?')) return;
+            const res = await fetch(`${API}/api/dead-letters`, { method: 'DELETE' });
+            const d = await res.json();
+            toast(d.success ? 'success' : 'error', d.success ? `Cleared ${d.cleared} entries` : 'Failed to clear');
+        }
+
+        // Toast
+        function toast(type, msg) {
+            const container = document.getElementById('toast-container');
+            const el = document.createElement('div');
+            el.className = `toast ${type}`;
+            el.innerHTML = `<div class="toast-icon">${type === 'success' ? '✓' : '✗'}</div><div class="toast-text">${esc(msg)}</div>`;
+            container.appendChild(el);
+            setTimeout(() => {
+                el.style.opacity = '0';
+                setTimeout(() => el.remove(), 200);
+            }, 3000);
+        }
+
+        // Utils
+        function formatCountdown(s) {
+            if (s <= 0) return 'Now';
+            if (s < 60) return `${Math.round(s)}s`;
+            if (s < 3600) return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
+            if (s < 86400) return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+            return `${Math.floor(s / 86400)}d`;
+        }
+
+        function formatTime(str) {
+            if (!str) return '';
+            const parts = str.split(' ');
+            return parts[1] || str;
+        }
+
+        function formatTs(ts) {
+            return ts ? new Date(ts * 1000).toLocaleString() : '';
+        }
+
+        function esc(s) {
+            if (!s) return '';
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        window.addEventListener('beforeunload', () => eventSource?.close());
+    </script>
+</body>
+
+</html>
