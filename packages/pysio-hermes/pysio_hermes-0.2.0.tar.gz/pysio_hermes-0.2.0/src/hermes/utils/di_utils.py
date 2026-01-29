@@ -1,0 +1,59 @@
+############
+#
+# Copyright (c) 2024-2026 Maxim Yudayev and KU Leuven eMedia Lab
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+# Created 2024-2025 for the KU Leuven AidWear, AidFOG, and RevalExo projects
+# by Maxim Yudayev [https://yudayev.com].
+#
+# ############
+
+import importlib
+from typing import Any
+
+
+def search_module_class(module_name: str, class_name: str) -> type[Any]:
+    """Queries the current Python environment to match the requested `hermes.<module>`.
+
+    Args:
+        module_name (str): Name of the Python module containing the requested HERMES supported class.
+        class_name (str): Name of the class in the provided module to retrieve for construction.
+    """
+    module_path = "hermes.%s" % module_name
+
+    try:
+        module = importlib.import_module(module_path)
+    except ImportError as e:
+        print(e, flush=True)
+        raise ImportError(
+            "Could not import subpackage '%s'. "
+            "Ensure it is installed: pip install pysio-hermes-%s"
+            % (module_name, module_name)
+        ) from e
+
+    if not hasattr(module, class_name):
+        raise AttributeError(
+            "Class '%s' not found in module '%s'. "
+            "Check the spelling of the class name." % (class_name, module_name)
+        )
+
+    class_type = getattr(module, class_name)
+
+    return class_type
