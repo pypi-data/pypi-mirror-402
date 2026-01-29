@@ -1,0 +1,103 @@
+Metadata-Version: 2.4
+Name: py-ha-smn
+Version: 1.0.0
+Summary: Async Python client for the Servicio Meteorológico Nacional Argentina (SMN) API
+Author-email: catastrophicode <catastrophicode@users.noreply.github.com>
+License: Apache-2.0
+Project-URL: Homepage, https://github.com/catastrophicode/py-ha-smn
+Project-URL: Repository, https://github.com/catastrophicode/py-ha-smn
+Project-URL: Issues, https://github.com/catastrophicode/py-ha-smn/issues
+Keywords: smn,argentina,weather,api,async,aiohttp,home-assistant
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Topic :: Scientific/Engineering :: Atmospheric Science
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: aiohttp>=3.8.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.21.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Requires-Dist: aioresponses>=0.7.4; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+Dynamic: license-file
+
+# py-ha-smn
+
+Async Python client for the Servicio Meteorológico Nacional Argentina (SMN) API.
+
+This library is designed for use with [Home Assistant](https://www.home-assistant.io/).
+
+## Installation
+
+```bash
+pip install py-ha-smn
+```
+
+## Usage
+
+```python
+import aiohttp
+from smn_argentina_api import SMNApiClient, SMNTokenManager
+
+async def main():
+    async with aiohttp.ClientSession() as session:
+        # Create token manager and API client
+        token_manager = SMNTokenManager(session)
+        client = SMNApiClient(session, token_manager)
+
+        # Get location ID from coordinates
+        location = await client.async_get_location(-34.6037, -58.3816)
+        location_id = str(location.get("id"))
+
+        # Fetch current weather
+        weather = await client.async_get_current_weather(location_id)
+        print(f"Temperature: {weather.get('temperature')}°C")
+
+        # Fetch forecast
+        forecast = await client.async_get_forecast(location_id)
+        print(f"Forecast days: {len(forecast.get('forecast', []))}")
+
+        # Fetch alerts
+        alerts = await client.async_get_alerts(location_id)
+        print(f"Warnings: {len(alerts.get('warnings', []))}")
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
+```
+
+## API Methods
+
+### SMNApiClient
+
+- `async_get_location(latitude, longitude)` - Get location ID from coordinates
+- `async_get_current_weather(location_id)` - Fetch current weather data
+- `async_get_forecast(location_id)` - Fetch weather forecast
+- `async_get_alerts(location_id)` - Fetch weather alerts
+- `async_get_shortterm_alerts(location_id)` - Fetch short-term severe weather alerts
+- `async_get_heat_warnings(area_id)` - Fetch heat warnings
+
+### SMNTokenManager
+
+Handles JWT token authentication with the SMN API. Automatically refreshes tokens before expiration.
+
+## Exceptions
+
+- `SMNError` - Base exception for all SMN API errors
+- `SMNConnectionError` - Connection to SMN API failed
+- `SMNAuthenticationError` - Authentication with SMN API failed
+- `SMNTokenError` - Token fetching or parsing failed
+
+## License
+
+Apache License 2.0
