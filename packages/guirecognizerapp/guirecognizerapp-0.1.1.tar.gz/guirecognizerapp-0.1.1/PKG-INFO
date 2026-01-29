@@ -1,0 +1,228 @@
+Metadata-Version: 2.4
+Name: guirecognizerapp
+Version: 0.1.1
+Summary: Companion application for library guirecognizer
+Author-email: FAB V <fab5code@gmail.com>
+License-Expression: MIT
+Project-URL: Repository, https://github.com/fab5code/guirecognizerapp.git
+Project-URL: Issues, https://github.com/fab5code/guirecognizerapp/issues
+Keywords: GUI,recognize,screen
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3.13
+Requires-Python: >=3.13
+Description-Content-Type: text/x-rst
+License-File: LICENSE
+Requires-Dist: guirecognizer
+Requires-Dist: fastapi[standard]<0.117.0,>=0.116.1
+Requires-Dist: keyboard
+Requires-Dist: platformdirs
+Requires-Dist: show-in-file-manager
+Requires-Dist: screeninfo; sys_platform == "win32"
+Provides-Extra: dev
+Requires-Dist: packaging; extra == "dev"
+Requires-Dist: coverage; extra == "dev"
+Requires-Dist: build; extra == "dev"
+Requires-Dist: twine; extra == "dev"
+Requires-Dist: pytesseract; extra == "dev"
+Requires-Dist: easyocr; extra == "dev"
+Requires-Dist: Babel; extra == "dev"
+Dynamic: license-file
+
+guirecognizerapp
+================
+
+**guirecognizerapp** is the companion application for *guirecognizer*.
+It helps create and preview actions and preprocessing operations through a visual interface, before using them in a Python bot.
+
+See documentation with tutorials and examples: `https://guirecognizer.readthedocs.io <https://guirecognizer.readthedocs.io>`_.
+
+Development
+-----------
+
+Install the dependencies
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+For the client and its e2e tests.
+
+.. code-block:: console
+
+  $ npm install
+  $ cd client
+  client$ npm install
+
+Backend
+
+.. code-block:: console
+
+  (venv) $ pip install -e ".[dev]"
+
+Launch app
+^^^^^^^^^^
+
+Launch client
+
+.. code-block:: console
+
+  $ cd client
+  client$ npm run dev
+
+Launch server
+
+.. code-block:: console
+
+  (venv) $ fastapi dev --port 5174 guirecognizerapp/main.py
+
+Build/Update i18n
+^^^^^^^^^^^^^^^^^
+
+For the client, keep the i18n file sorted by key.
+
+.. code-block:: console
+
+  $ python scripts/sortJsonFile.py client/messages/en.json
+
+For the backend, on git bash with Babel installed, activate the virtual environment.
+
+.. code-block:: console
+
+  $ cd .venv/Scripts
+  $ . activate
+  $ cd ../..
+
+Build the i18n files for the server.
+
+.. code-block:: console
+
+  (venv) $ ./scripts/manageIl8n.sh
+
+Create wheel
+^^^^^^^^^^^^
+
+To build the wheel, only run this command:
+
+.. code-block:: console
+
+  (venv) $ npm run wheel
+
+Here are the two steps followed by the previous command.
+It builds the client. The client built code is placed inside guirecognizerapp folder to be bundled in the python wheel.
+
+.. code-block:: console
+
+  $ cd client
+  client$ npm run build
+
+It creates the folder guirecognizerapp/generated/client.
+Then it builds the wheel like any Python code.
+
+.. code-block:: console
+
+  (venv) $ python -m build
+
+To launch the server once the wheel is installed:
+
+.. code-block:: console
+
+  (venv) $ python -m guirecognizerapp
+
+OCR
+^^^
+
+Two optical character recognition libraries are supported: `EasyOCR <https://github.com/JaidedAI/EasyOCR>`_ and `tesseract <https://github.com/tesseract-ocr/tesseract>`_.
+
+Install EasyOCR (already in the dev dependencies).
+
+.. code-block:: console
+
+  (venv) $ python install easyocr
+
+Install pytesseract (already in the dev dependencies).
+
+.. code-block:: console
+
+  (venv) $ python install easyocr
+
+Install tesseract: follow installation instruction in `https://github.com/tesseract-ocr/tesseract <https://github.com/tesseract-ocr/tesseract>`_.
+
+Client tests
+^^^^^^^^^^^^
+
+Unit tests with vitest
+
+.. code-block:: console
+
+  $ npm run vitest
+
+E2e test with playwright
+
+.. code-block:: console
+
+  (venv) $ npm run e2e
+
+For playwright ui mode.
+
+.. code-block:: console
+
+  (venv) $ npx playwright test --ui
+
+When building a test with Playwright *Pick locator* go to *http://localhost:5201*.
+
+Coverage
+^^^^^^^^
+
+Client coverage
+
+.. code-block:: console
+
+  (venv) $ npm run clientCoverage
+
+Then open *clientCoverage/index.html*
+
+Backend coverage
+
+.. code-block:: console
+
+  (venv) $ coverage run
+  (venv) $ coverage html
+
+Then open *htmlcov/index.html*
+
+Coding style
+^^^^^^^^^^^^
+
+Some visual studio code settings of visualStudioCodeSettings.json should be used to ensure some homogeneity in the coding style.
+
+In Visual Studio Code, install extensions
+
+- Svelte for client code
+- ESLint for typescript linting
+- Sherlock for client i18n helper
+- Playwright Test for client e2e tests
+- Vitest for client unit tests
+- isort to sort python automatically
+- Pylance for type checking
+
+Miscellaneous
+^^^^^^^^^^^^^
+
+Some commands for a rough idea of number of lines of code (not a relevant metric but for curiosity).
+
+.. code-block:: console
+
+  $ find client/src/ -type d -name components -prune -o -name "*.svelte" -o -name "*.ts" | xargs wc -l | sort -nr
+  $ find guirecognizerapp -name "*.py" | xargs wc -l | sort -nr
+  $ find tests -name "*.py" | xargs wc -l | sort -nr
+  $ find e2e \( -name "*.ts" -o -name "*.py" -o -name "*.bat" -o -name "*.sh" \) | xargs wc -l | sort -nr
+
+Improvements
+------------
+
+**Keyboard settings configuration**: add a way to configure the shortcuts. Add them in the global config file. Add a reset button.
+The main motivation comes from the take screenshot shortcut because this shortcut needs to be global and not isolated to the web page.
+
+**e2e from building wheel**: create another e2e setup that builds the wheel, creates a venv, launches the app then tests a very simple scenario.
+
+**Fix coverage for ProcessManager class**: the coverage for this python class doesn't properly work despite being tested.
+
+**Improve logger usage**: in python backend and in tests.
