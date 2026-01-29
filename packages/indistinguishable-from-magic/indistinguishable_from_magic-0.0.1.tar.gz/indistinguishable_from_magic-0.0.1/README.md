@@ -1,0 +1,1 @@
+https://docs.ifmagic.io/api/languages/python
