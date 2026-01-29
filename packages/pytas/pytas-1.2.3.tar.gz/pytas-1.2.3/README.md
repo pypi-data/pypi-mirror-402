@@ -1,0 +1,54 @@
+# pytas
+Python for transient absorption spectroscopy: a suite of GUI tools based on matplotlib and QT.
+
+# Installation
+conda install -c conda-forge pytas
+
+
+# List of main utilities
+
+TA_plot_matrix_GUI                           usually abbreviated as TA_plt
+
+TA_merge_matrices_GUI                        usually abbreviated as TA_mrg
+
+TA_t0_correction_and_background_removal_GUI  usually abbreviated as TA_t0
+
+
+
+# List of Shared Supporting Functions
+1: TA_sh.TA_matrix_window_average(TA_matrix,window_size)
+
+2: TA_sh.create_TA_Blue_White_Red_colormap(min_max)
+
+3: TA_sh.create_TA_Blue_White_Red_Black_colormap(min_max)
+
+4: TA_sh.list_hdf5_contents(HDF5_filename)
+
+5: TA_sh.load_hdf5_data(filename,dataset_path_string)
+
+
+
+# Example Work Flow
+TA_blue_spectrum_hdf5_filename = 'HHHF_Zn_heme_ZnCl_p425nm_blue_300uW.h5'
+
+TA_red_spectrum_hdf5_filename  = 'HHHF_Zn_heme_ZnCl_p425nm_red_300uW.h5'
+
+TA_t0.t0_correction_and_background_removal(TA_blue_spectrum_hdf5_filename)
+
+TA_t0.t0_correction_and_background_removal(TA_red_spectrum_hdf5_filename)
+
+TA_mrg.merge_TA_matrices(TA_blue_spectrum_hdf5_filename+'.t0_corr.csv.merged.csv',TA_red_spectrum_hdf5_filename+'.t0_corr.csv.merged.csv')
+
+
+
+
+# Next Code To Develop
+o Develop a SVD amd Global Analysis module 
+
+
+# File Locations
+/...BACKED_UP/Software/...Transient_Absorption_Processing/python_qt_TA_data_processing_GUI
+
+https://github.com/damonturney/pytas
+
+
