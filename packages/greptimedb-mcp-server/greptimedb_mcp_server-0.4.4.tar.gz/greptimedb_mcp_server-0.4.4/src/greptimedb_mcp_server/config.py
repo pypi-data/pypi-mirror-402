@@ -1,0 +1,263 @@
+import argparse
+from dataclasses import dataclass
+import os
+
+
+@dataclass
+class Config:
+    """
+    Configuration for the greptimedb mcp server.
+    """
+
+    host: str
+    """
+    GreptimeDB host
+    """
+
+    port: int
+    """
+    GreptimeDB MySQL protocol port
+    """
+
+    user: str
+    """
+    GreptimeDB username
+    """
+
+    password: str
+    """
+    GreptimeDB password
+    """
+
+    database: str
+    """
+    GreptimeDB database name
+    """
+
+    time_zone: str
+    """
+    GreptimeDB session time zone
+    """
+
+    pool_size: int
+    """
+    Connection pool size
+    """
+
+    http_port: int
+    """
+    GreptimeDB HTTP API port
+    """
+
+    http_protocol: str
+    """
+    HTTP protocol (http or https)
+    """
+
+    mask_enabled: bool
+    """
+    Enable data masking for sensitive columns
+    """
+
+    mask_patterns: str
+    """
+    Additional sensitive column patterns (comma-separated)
+    """
+
+    transport: str
+    """
+    MCP transport mode: stdio, sse, or streamable-http
+    """
+
+    listen_host: str
+    """
+    MCP HTTP server bind host (for sse/streamable-http transports)
+    """
+
+    listen_port: int
+    """
+    MCP HTTP server bind port (for sse/streamable-http transports)
+    """
+
+    audit_enabled: bool
+    """
+    Enable audit logging for all tool calls
+    """
+
+    allowed_hosts: list[str]
+    """
+    Allowed hosts for DNS rebinding protection (for sse/streamable-http).
+    If empty, DNS rebinding protection is disabled.
+    """
+
+    allowed_origins: list[str]
+    """
+    Allowed origins for CORS (for sse/streamable-http).
+    Only used when DNS rebinding protection is enabled.
+    """
+
+    @staticmethod
+    def from_env_arguments() -> "Config":
+        """
+        Parse command line arguments.
+        """
+        parser = argparse.ArgumentParser(description="GreptimeDB MCP Server")
+
+        parser.add_argument(
+            "--host",
+            type=str,
+            help="GreptimeDB host",
+            default=os.getenv("GREPTIMEDB_HOST", "localhost"),
+        )
+
+        parser.add_argument(
+            "--port",
+            type=int,
+            help="GreptimeDB MySQL protocol port",
+            default=os.getenv("GREPTIMEDB_PORT", 4002),
+        )
+
+        parser.add_argument(
+            "--database",
+            type=str,
+            help="GreptimeDB connect database name",
+            default=os.getenv("GREPTIMEDB_DATABASE", "public"),
+        )
+
+        parser.add_argument(
+            "--user",
+            type=str,
+            help="GreptimeDB username",
+            default=os.getenv("GREPTIMEDB_USER", ""),
+        )
+
+        parser.add_argument(
+            "--password",
+            type=str,
+            help="GreptimeDB password",
+            default=os.getenv("GREPTIMEDB_PASSWORD", ""),
+        )
+
+        parser.add_argument(
+            "--timezone",
+            type=str,
+            help="GreptimeDB session time zone",
+            default=os.getenv("GREPTIMEDB_TIMEZONE", ""),
+        )
+
+        parser.add_argument(
+            "--pool-size",
+            type=int,
+            help="Connection pool size (default: 5)",
+            default=int(os.getenv("GREPTIMEDB_POOL_SIZE", "5")),
+        )
+
+        parser.add_argument(
+            "--http-port",
+            type=int,
+            help="GreptimeDB HTTP API port (default: 4000)",
+            default=int(os.getenv("GREPTIMEDB_HTTP_PORT", "4000")),
+        )
+
+        parser.add_argument(
+            "--http-protocol",
+            type=str,
+            choices=["http", "https"],
+            help="HTTP protocol for API calls (default: http)",
+            default=os.getenv("GREPTIMEDB_HTTP_PROTOCOL", "http"),
+        )
+
+        parser.add_argument(
+            "--mask-enabled",
+            type=lambda x: x.lower() not in ("false", "0", "no"),
+            help="Enable data masking for sensitive columns (default: true)",
+            default=os.getenv("GREPTIMEDB_MASK_ENABLED", "true"),
+        )
+
+        parser.add_argument(
+            "--mask-patterns",
+            type=str,
+            help="Additional sensitive column patterns (comma-separated)",
+            default=os.getenv("GREPTIMEDB_MASK_PATTERNS", ""),
+        )
+
+        parser.add_argument(
+            "--transport",
+            type=str,
+            choices=["stdio", "sse", "streamable-http"],
+            help="MCP transport mode (default: stdio)",
+            default=os.getenv("GREPTIMEDB_TRANSPORT", "stdio"),
+        )
+
+        parser.add_argument(
+            "--listen-host",
+            type=str,
+            help="MCP HTTP server bind host (default: 0.0.0.0)",
+            default=os.getenv("GREPTIMEDB_LISTEN_HOST", "0.0.0.0"),
+        )
+
+        parser.add_argument(
+            "--listen-port",
+            type=int,
+            help="MCP HTTP server bind port (default: 8080)",
+            default=int(os.getenv("GREPTIMEDB_LISTEN_PORT", "8080")),
+        )
+
+        parser.add_argument(
+            "--audit-enabled",
+            type=lambda x: x.lower() not in ("false", "0", "no"),
+            help="Enable audit logging for all tool calls (default: true)",
+            default=os.getenv("GREPTIMEDB_AUDIT_ENABLED", "true"),
+        )
+
+        parser.add_argument(
+            "--allowed-hosts",
+            type=str,
+            help=(
+                "Allowed hosts for DNS rebinding protection (comma-separated). "
+                "If not set, DNS rebinding protection is disabled. "
+                "Example: localhost:*,127.0.0.1:*,my-service.namespace:*"
+            ),
+            default=os.getenv("GREPTIMEDB_ALLOWED_HOSTS", ""),
+        )
+
+        parser.add_argument(
+            "--allowed-origins",
+            type=str,
+            help=(
+                "Allowed origins for CORS (comma-separated). "
+                "Only used when allowed-hosts is set. "
+                "Example: http://localhost:*,https://my-app.example.com"
+            ),
+            default=os.getenv("GREPTIMEDB_ALLOWED_ORIGINS", ""),
+        )
+
+        args = parser.parse_args()
+
+        return Config(
+            host=args.host,
+            port=args.port,
+            database=args.database,
+            user=args.user,
+            password=args.password,
+            time_zone=args.timezone,
+            pool_size=args.pool_size,
+            http_port=args.http_port,
+            http_protocol=args.http_protocol,
+            mask_enabled=args.mask_enabled,
+            mask_patterns=args.mask_patterns,
+            transport=args.transport,
+            listen_host=args.listen_host,
+            listen_port=args.listen_port,
+            audit_enabled=args.audit_enabled,
+            allowed_hosts=_parse_comma_separated(args.allowed_hosts),
+            allowed_origins=_parse_comma_separated(args.allowed_origins),
+        )
+
+
+def _parse_comma_separated(value: str) -> list[str]:
+    """Parse a comma-separated string into a list of trimmed non-empty strings."""
+    value = value.strip()
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
