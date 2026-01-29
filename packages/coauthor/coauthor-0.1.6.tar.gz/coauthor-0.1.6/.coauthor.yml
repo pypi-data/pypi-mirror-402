@@ -1,0 +1,160 @@
+# ---
+# name: coauthor
+# type: Python
+# description: Coauthor AI Agent for working on code and documentation
+# jinja:
+#   search_path: .coauthor/templates
+#   # custom_delimiters:
+#   #   block_start_string: "{{%"
+#   #   block_end_string: "%}}"
+#   #   variable_start_string: "{{"
+#   #   variable_end_string: "}}"
+# agent:
+#   # Azure
+#   # model: gpt-4.1
+#   # summary_model: gpt-4.1-mini
+#   # OpenRouter
+#   # model: x-ai/grok-4
+#   model: anthropic/claude-sonnet-4.5
+#   # model: deepseek/deepseek-v3.2
+#   # mode: openai/gpt-5.2-pro
+#   summary_model: x-ai/grok-4
+#   api_key_var: OPENAI_API_KEY
+#   api_url_var: OPENAI_API_URL
+# tool_environment: |
+#   source ~/.bashrc
+#   source ~/.virtualenv/c2d_ai/bin/activate
+# file-watcher:
+#   ignore-folders:
+#     - docs/_build
+#     - __pycache__
+#     - src/coauthor/profiles # config.yml contain @ai:
+#     - tmp
+#     - .coauthor
+#   ignore-files:
+#     - .coauthor.yml
+# workflows:
+#   - name: coauthor
+#     path_patterns:
+#       - .*\.py$
+#       - .*\.yml$
+#     content_patterns:
+#       - ".*@ai:.*"
+#     watch:
+#       filesystem:
+#         paths:
+#           # - src
+#           # - tests
+#           - .
+#     tasks:
+#       - id: python
+#         type: ai
+#         # model: openai/gpt-5.2-pro
+#         tools: []
+#       - id: write-file
+#         type: write_file
+#         content: >-
+#           {{ config | get_task_attribute('python', 'response') }}
+#   - name: coauthor-doc
+#     path_patterns:
+#       - .*\.md$
+#     content_patterns:
+#       - ".*@ai:.*"
+#     watch:
+#       filesystem:
+#         paths:
+#           # - docs
+#           - .
+#     tasks:
+#       - id: docs
+#         type: ai
+#         tools: []
+#         messages:
+#           - file: coauthor-doc/user/context.md
+#             frontmatter: coauthor/context
+#       - id: write-file
+#         type: write_file
+#         content: >-
+#           {{ config | get_task_attribute('docs', 'response') }}
+#   - name: jira
+#     description: Coauthor tickets in JIRA
+#     profile: jira
+#     profile_args:
+#       agent: # TODO not seen/used by Coauthor
+#         # Azure:
+#         model: gpt-4.1
+#         summary_model: gpt-4.1-mini
+#         api_key_var: OPENAI_API_KEY
+#         api_url_var: OPENAI_API_URL
+#       content_patterns:
+#         - '\[~coauthor\]'
+# watch:
+#   jira:
+#     custom_fields:
+#       epic: customfield_10011
+#       story_points: customfield_10007
+#     # url: https://www.example.com/jira/
+#     query: >-
+#       project = C2 AND component = COAUTHOR
+#       AND (updated >= -0.35h OR created >= -0.35h)
+#     sleep: 10
+# # projects:
+# #   - name: coauthor-oo
+# #     read-only: true
+# #     description: >-
+# #       COmplete new version of Coauthor that follows Python best practices and
+# #       OO principles
+# #     path: ~/git/gitlab/c2/c2/coauthor-oo
+# #   - name: coauthor-work
+# #     description: >-
+# #       Repository for performing tasks with Coauthor. It's purpose is to contain
+# #       several Coauthor configuration files (.coauthor.yml) for projects I am
+# #       working on.
+# #     path: ~/git/ok/ok/coauthor-work
+# # projects:
+# #   - name: jira
+# #     type: jira
+# #     description: Coauthor tickets in JIRA
+# #     path: .
+# #     profile: jira
+# #     profile_args:
+# #       agent:
+# #         # OpenRouter:
+# #         # model: x-ai/grok-4
+# #         # model: openai/gpt-5.2-pro
+# #         # model: gpt-4.1
+# #         # summary_model: openai/gpt-4.1-mini
+# #         # summary_model: x-ai/grok-4
+# #         # model: openai/gpt-5.2-pro
+# #         # model: deepseek/deepseek-v3.2
+# #         # Azure:
+# #         model: gpt-4.1
+# #         api_key_var: OPENAI_API_KEY
+# #         api_url_var: OPENAI_API_URL
+# #       content_patterns:
+# #         - '\[~coauthor\]'
+# #       watch:
+# #         jira:
+# #           # url: https://www.example.com/jira/
+# #           query: >-
+# #             project = C2 AND component = COAUTHOR
+# #             AND (updated >= -0.35h OR created >= -0.35h)
+# #           sleep: 10
+# #       # content_patterns:
+# #       #   - "@ai: "
+# #       # watch:
+# #       #   jira:
+# #       #     # url: https://www.example.com/jira/
+# #       #     comments:
+# #       #       - query: >-
+# #       #           project = C2 AND component = COAUTHOR
+# #       #           AND (updated >= -0.35h OR created >= -0.35h)
+# #       #         # AND labels in (coauthor-comments)
+# #       #         add_labels: [coauthor-comments]
+# #       #         # remove_labels: [ai-comment]
+# #       #     tickets:
+# #       #       - query: project = C2 AND component = COAUTHOR AND labels in (rfai)
+# #       #         add_labels: [rfr]
+# #       #         remove_labels: [rfai]
+# #       #         assign_to_creator: false
+# #       #     sleep: 10
