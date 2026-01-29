@@ -1,0 +1,207 @@
+# regexonic
+
+A more Pythonic extension of Python's builtin `re` module.
+
+```python
+import regexonic as re
+```
+
+Serves as a drop-in replacement for the builtin `re` library—all standard `re` functions, constants, and classes are re-exported.
+
+## Installation
+
+```sh
+pip install regexonic
+```
+
+OR
+
+```sh
+uv add regexonic
+```
+
+## Purpose
+
+The standard `re` module works well, but has some rough edges:
+
+- Methods return `None` on failure, requiring constant null checks
+- No built-in way to raise exceptions on match failure
+- Type hints could be more precise for IDE support
+- Common patterns like "validate or raise" require boilerplate
+
+`regexonic` provides a thin wrapper that addresses these issues while maintaining full compatibility with the standard library.
+
+## Usage
+
+```python
+import regexonic as re
+
+# Create a pattern using the helper function
+email = re.define(r"[\w.-]+@[\w.-]+\.\w+")
+
+# Or use the class directly
+email = re.Expression(r"[\w.-]+@[\w.-]+\.\w+")
+
+# Boolean checking
+email.check("user@example.com")  # True
+email.check("invalid-email")     # False
+
+# Get match or None (standard behavior)
+email.match("user@example.com")  # <re.Match object>
+email.match("invalid-email")     # None
+
+# Get match or raise exception
+email.match("user@example.com", required=True)  # <re.Match object>
+email.match("invalid-email", required=True)     # Raises MatchNotFoundError
+
+# Validate and return the string
+email.validate("user@example.com")  # "user@example.com"
+email.validate("invalid-email")     # Raises ValueError
+```
+
+## Core Classes
+
+### `Expression`
+
+A drop-in replacement for `re.Pattern` with enhanced functionality.
+
+```python
+import regexonic as re
+
+pattern = re.Expression(r"\d{3}-\d{4}", flags=re.IGNORECASE)
+
+# All standard re.Pattern methods are available
+pattern.search("Call 555-1234 today")
+pattern.findall("555-1234 or 555-5678")
+pattern.sub("XXX-XXXX", "Call 555-1234")
+pattern.split("a-555-1234-b")
+
+# Enhanced methods with `required` parameter
+pattern.search("no numbers here", required=True)  # Raises SearchNotFoundError
+pattern.match("555-1234", required=True)          # Returns match or raises MatchNotFoundError
+
+# Convenience methods
+pattern.check("555-1234")              # True (full match by default)
+pattern.check("555-1234", full=False)  # True (partial match)
+pattern.test("555-1234")               # Alias for check()
+pattern.validate("555-1234")           # Returns string or raises ValueError
+```
+
+### `Structure`
+
+A base class for creating reusable pattern classes with custom methods.
+
+```python
+import regexonic as re
+
+class PhoneNumber(re.Structure):
+    compiled = re.compile(r"(?P<area>\d{3})-(?P<exchange>\d{3})-(?P<number>\d{4})")
+    
+    @classmethod
+    def parse(cls, string: str) -> dict[str, str]:
+        match = cls.fullmatch(string, required=True)
+        return match.groupdict()
+    
+    @classmethod
+    def format(cls, string: str) -> str:
+        groups = cls.parse(string)
+        return f"({groups['area']}) {groups['exchange']}-{groups['number']}"
+
+PhoneNumber.check("555-123-4567")      # True
+PhoneNumber.parse("555-123-4567")      # {'area': '555', 'exchange': '123', 'number': '4567'}
+PhoneNumber.format("555-123-4567")     # "(555) 123-4567"
+```
+
+### `Matcher`
+
+A lightweight callable class optimized for boolean matching.
+
+```python
+import regexonic as re
+
+is_hex_color = re.Matcher(r"#[0-9A-Fa-f]{6}")
+
+is_hex_color("#FF5733")  # True
+is_hex_color("red")      # False
+
+# Get the actual match object when needed
+is_hex_color.get("#FF5733")                  # <re.Match object>
+is_hex_color.get("red", required=True)       # Raises MatchNotFoundError
+```
+
+### `Subber`
+
+A callable wrapper for substitution operations.
+
+```python
+import regexonic as re
+
+censor = re.Subber("***", r"\b(bad|ugly|evil)\b", flags=re.IGNORECASE)
+
+censor("That was a bad idea")   # "That was a *** idea"
+censor("Bad BAD bad", count=2)  # "*** *** bad"
+censor.n("Bad BAD bad")         # ("*** *** ***", 3) - returns count too
+```
+
+## Exception Handling
+
+`regexonic` provides descriptive exceptions when matches fail:
+
+```python
+import regexonic as re
+
+pattern = re.define(r"\d+")
+
+try:
+    pattern.match("no digits", required=True)
+except re.MatchNotFoundError as e:
+    print(e.pattern)   # The regex pattern
+    print(e.input)     # The input string
+    print(e.detail)    # Human-readable message
+```
+
+## Type Safety
+
+All classes are generic and support both `str` and `bytes` patterns:
+
+```python
+import regexonic as re
+
+# String patterns
+str_pattern: re.Expression[str] = re.Expression(r"\w+")
+str_pattern.match("hello")  # Match[str]
+
+# Bytes patterns
+bytes_pattern: re.Expression[bytes] = re.Expression(rb"\w+")
+bytes_pattern.match(b"hello")  # Match[bytes]
+```
+
+## API Reference
+
+### Expression Methods
+
+| Method | Description |
+|--------|-------------|
+| `search(string, *, required=False)` | Search for pattern anywhere in string |
+| `match(string, *, full=False, required=False)` | Match at beginning of string |
+| `fullmatch(string, *, required=False)` | Match entire string |
+| `findall(string)` | Return all non-overlapping matches |
+| `finditer(string)` | Return iterator of match objects |
+| `split(string, maxsplit=0)` | Split string by pattern |
+| `sub(repl, string, count=0)` | Replace matches with replacement |
+| `subn(repl, string, count=0)` | Replace and return count |
+| `check(string, full=True)` | Return `True` if pattern matches |
+| `test(string, full=True)` | Alias for `check()` |
+| `validate(string, full=True)` | Return string or raise `ValueError` |
+
+### Re-exported from `re`
+
+All standard `re` module exports are available:
+
+- **Functions**: `compile`, `search`, `match`, `fullmatch`, `split`, `findall`, `finditer`, `sub`, `subn`, `escape`, `purge`
+- **Constants**: `ASCII`/`A`, `IGNORECASE`/`I`, `LOCALE`/`L`, `MULTILINE`/`M`, `DOTALL`/`S`, `UNICODE`/`U`, `VERBOSE`/`X`, `NOFLAG`
+- **Classes**: `Pattern`, `Match`, `RegexFlag`, `error`
+
+## License
+
+MIT
