@@ -1,0 +1,416 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for m in resources %}
+{{ resource_spacer() }}
+resource "google_compute_url_map" "{{ m.name_sanitized }}" {
+  name = "{{ m.name }}"
+
+  {% if m.description %}
+  description = "{{ m.description }}"
+  {% endif %}
+
+  {% if m.default_service %}
+  default_service = "{{ m.default_service }}"
+  {% endif %}
+
+  {% if m.default_url_redirect %}
+  default_url_redirect {
+    {% if m.default_url_redirect.host_redirect %}
+    host_redirect = "{{ m.default_url_redirect.host_redirect }}"
+    {% endif %}
+    {% if m.default_url_redirect.path_redirect %}
+    path_redirect = "{{ m.default_url_redirect.path_redirect }}"
+    {% endif %}
+    {% if m.default_url_redirect.prefix_redirect %}
+    prefix_redirect = "{{ m.default_url_redirect.prefix_redirect }}"
+    {% endif %}
+    {% if m.default_url_redirect.redirect_response_code %}
+    redirect_response_code = "{{ m.default_url_redirect.redirect_response_code }}"
+    {% endif %}
+    {% if m.default_url_redirect.https_redirect is not none %}
+    https_redirect = {{ m.default_url_redirect.https_redirect | lower }}
+    {% endif %}
+    {% if m.default_url_redirect.strip_query is not none %}
+    strip_query = {{ m.default_url_redirect.strip_query | lower }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if m.default_route_action %}
+  default_route_action {
+    {% if m.default_route_action.weighted_backend_services %}
+    {% for wbs in m.default_route_action.weighted_backend_services %}
+    weighted_backend_service {
+      {% if wbs.backend_service %}
+      backend_service = google_compute_backend_service.{{ wbs.backend_service }}.id
+      {% endif %}
+      {% if wbs.weight %}
+      weight = {{ wbs.weight }}
+      {% endif %}
+      {% if wbs.header_action %}
+      header_action {
+        {% if wbs.header_action.request_headers_to_add %}
+        {% for header in wbs.header_action.request_headers_to_add %}
+        request_headers_to_add {
+          {% if header.header_name %}
+          header_name = "{{ header.header_name }}"
+          {% endif %}
+          {% if header.header_value %}
+          header_value = "{{ header.header_value }}"
+          {% endif %}
+          {% if header.replace is not none %}
+          replace = {{ header.replace | lower }}
+          {% endif %}
+        }
+        {% endfor %}
+        {% endif %}
+        {% if wbs.header_action.request_headers_to_remove %}
+        request_headers_to_remove = {{ wbs.header_action.request_headers_to_remove | tojson }}
+        {% endif %}
+        {% if wbs.header_action.response_headers_to_add %}
+        {% for header in wbs.header_action.response_headers_to_add %}
+        response_headers_to_add {
+          {% if header.header_name %}
+          header_name = "{{ header.header_name }}"
+          {% endif %}
+          {% if header.header_value %}
+          header_value = "{{ header.header_value }}"
+          {% endif %}
+          {% if header.replace is not none %}
+          replace = {{ header.replace | lower }}
+          {% endif %}
+        }
+        {% endfor %}
+        {% endif %}
+        {% if wbs.header_action.response_headers_to_remove %}
+        response_headers_to_remove = {{ wbs.header_action.response_headers_to_remove | tojson }}
+        {% endif %}
+      }
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+    {% if m.default_route_action.url_rewrite %}
+    url_rewrite {
+      {% if m.default_route_action.url_rewrite.path_prefix_rewrite %}
+      path_prefix_rewrite = "{{ m.default_route_action.url_rewrite.path_prefix_rewrite }}"
+      {% endif %}
+      {% if m.default_route_action.url_rewrite.host_rewrite %}
+      host_rewrite = "{{ m.default_route_action.url_rewrite.host_rewrite }}"
+      {% endif %}
+    }
+    {% endif %}
+    {% if m.default_route_action.timeout %}
+    timeout {
+      {% if m.default_route_action.timeout.seconds %}
+      seconds = {{ m.default_route_action.timeout.seconds }}
+      {% endif %}
+      {% if m.default_route_action.timeout.nanos %}
+      nanos = {{ m.default_route_action.timeout.nanos }}
+      {% endif %}
+    }
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if m.host_rules %}
+  {% for host_rule in m.host_rules %}
+  host_rule {
+    {% if host_rule.description %}
+    description = "{{ host_rule.description }}"
+    {% endif %}
+    {% if host_rule.hosts %}
+    hosts = {{ host_rule.hosts | tojson }}
+    {% endif %}
+    {% if host_rule.path_matcher %}
+    path_matcher = "{{ host_rule.path_matcher }}"
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if m.path_matchers %}
+  {% for path_matcher in m.path_matchers %}
+  path_matcher {
+    {% if path_matcher.name %}
+    name = "{{ path_matcher.name }}"
+    {% endif %}
+    {% if path_matcher.description %}
+    description = "{{ path_matcher.description }}"
+    {% endif %}
+    {% if path_matcher.default_service %}
+    default_service = "{{ path_matcher.default_service }}"
+    {% endif %}
+
+    {% if path_matcher.default_url_redirect %}
+    default_url_redirect {
+      {% if path_matcher.default_url_redirect.host_redirect %}
+      host_redirect = "{{ path_matcher.default_url_redirect.host_redirect }}"
+      {% endif %}
+      {% if path_matcher.default_url_redirect.path_redirect %}
+      path_redirect = "{{ path_matcher.default_url_redirect.path_redirect }}"
+      {% endif %}
+      {% if path_matcher.default_url_redirect.prefix_redirect %}
+      prefix_redirect = "{{ path_matcher.default_url_redirect.prefix_redirect }}"
+      {% endif %}
+      {% if path_matcher.default_url_redirect.redirect_response_code %}
+      redirect_response_code = "{{ path_matcher.default_url_redirect.redirect_response_code }}"
+      {% endif %}
+      {% if path_matcher.default_url_redirect.https_redirect is not none %}
+      https_redirect = {{ path_matcher.default_url_redirect.https_redirect | lower }}
+      {% endif %}
+      {% if path_matcher.default_url_redirect.strip_query is not none %}
+      strip_query = {{ path_matcher.default_url_redirect.strip_query | lower }}
+      {% endif %}
+    }
+    {% endif %}
+
+    {% if path_matcher.default_route_action %}
+    default_route_action {
+      {% if path_matcher.default_route_action.weighted_backend_services %}
+      {% for wbs in path_matcher.default_route_action.weighted_backend_services %}
+      weighted_backend_service {
+        {% if wbs.backend_service %}
+        backend_service = google_compute_backend_service.{{ wbs.backend_service }}.id
+        {% endif %}
+        {% if wbs.weight %}
+        weight = {{ wbs.weight }}
+        {% endif %}
+      }
+      {% endfor %}
+      {% endif %}
+    }
+    {% endif %}
+
+    {% if path_matcher.path_rules %}
+    {% for path_rule in path_matcher.path_rules %}
+    path_rule {
+      {% if path_rule.paths %}
+      paths = {{ path_rule.paths | tojson }}
+      {% endif %}
+      {% if path_rule.service %}
+      service = "{{ path_rule.service }}"
+      {% endif %}
+
+      {% if path_rule.url_redirect %}
+      url_redirect {
+        {% if path_rule.url_redirect.host_redirect %}
+        host_redirect = "{{ path_rule.url_redirect.host_redirect }}"
+        {% endif %}
+        {% if path_rule.url_redirect.path_redirect %}
+        path_redirect = "{{ path_rule.url_redirect.path_redirect }}"
+        {% endif %}
+        {% if path_rule.url_redirect.prefix_redirect %}
+        prefix_redirect = "{{ path_rule.url_redirect.prefix_redirect }}"
+        {% endif %}
+        {% if path_rule.url_redirect.redirect_response_code %}
+        redirect_response_code = "{{ path_rule.url_redirect.redirect_response_code }}"
+        {% endif %}
+        {% if path_rule.url_redirect.https_redirect is not none %}
+        https_redirect = {{ path_rule.url_redirect.https_redirect | lower }}
+        {% endif %}
+        {% if path_rule.url_redirect.strip_query is not none %}
+        strip_query = {{ path_rule.url_redirect.strip_query | lower }}
+        {% endif %}
+      }
+      {% endif %}
+
+      {% if path_rule.route_action %}
+      route_action {
+        {% if path_rule.route_action.weighted_backend_services %}
+        {% for wbs in path_rule.route_action.weighted_backend_services %}
+        weighted_backend_service {
+          {% if wbs.backend_service %}
+          backend_service = google_compute_backend_service.{{ wbs.backend_service }}.id
+          {% endif %}
+          {% if wbs.weight %}
+          weight = {{ wbs.weight }}
+          {% endif %}
+        }
+        {% endfor %}
+        {% endif %}
+      }
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+
+    {% if path_matcher.route_rules %}
+    {% for route_rule in path_matcher.route_rules %}
+    route_rule {
+      {% if route_rule.priority %}
+      priority = {{ route_rule.priority }}
+      {% endif %}
+      {% if route_rule.description %}
+      description = "{{ route_rule.description }}"
+      {% endif %}
+      {% if route_rule.service %}
+      service = "{{ route_rule.service }}"
+      {% endif %}
+
+      {% if route_rule.match_rules %}
+      {% for match_rule in route_rule.match_rules %}
+      match_rule {
+        {% if match_rule.full_path_match %}
+        full_path_match = "{{ match_rule.full_path_match }}"
+        {% endif %}
+        {% if match_rule.prefix_match %}
+        prefix_match = "{{ match_rule.prefix_match }}"
+        {% endif %}
+        {% if match_rule.regex_match %}
+        regex_match = "{{ match_rule.regex_match }}"
+        {% endif %}
+        {% if match_rule.ignore_case is not none %}
+        ignore_case = {{ match_rule.ignore_case | lower }}
+        {% endif %}
+
+        {% if match_rule.header_matches %}
+        {% for header_match in match_rule.header_matches %}
+        header_match {
+          {% if header_match.header_name %}
+          header_name = "{{ header_match.header_name }}"
+          {% endif %}
+          {% if header_match.exact_match %}
+          exact_match = "{{ header_match.exact_match }}"
+          {% endif %}
+          {% if header_match.regex_match %}
+          regex_match = "{{ header_match.regex_match }}"
+          {% endif %}
+          {% if header_match.prefix_match %}
+          prefix_match = "{{ header_match.prefix_match }}"
+          {% endif %}
+          {% if header_match.suffix_match %}
+          suffix_match = "{{ header_match.suffix_match }}"
+          {% endif %}
+          {% if header_match.present_match is not none %}
+          present_match = {{ header_match.present_match | lower }}
+          {% endif %}
+          {% if header_match.invert_match is not none %}
+          invert_match = {{ header_match.invert_match | lower }}
+          {% endif %}
+
+          {% if header_match.range_match %}
+          range_match {
+            {% if header_match.range_match.range_start %}
+            range_start = {{ header_match.range_match.range_start }}
+            {% endif %}
+            {% if header_match.range_match.range_end %}
+            range_end = {{ header_match.range_match.range_end }}
+            {% endif %}
+          }
+          {% endif %}
+        }
+        {% endfor %}
+        {% endif %}
+
+        {% if match_rule.query_parameter_matches %}
+        {% for query_match in match_rule.query_parameter_matches %}
+        query_parameter_match {
+          {% if query_match.name %}
+          name = "{{ query_match.name }}"
+          {% endif %}
+          {% if query_match.exact_match %}
+          exact_match = "{{ query_match.exact_match }}"
+          {% endif %}
+          {% if query_match.regex_match %}
+          regex_match = "{{ query_match.regex_match }}"
+          {% endif %}
+          {% if query_match.present_match is not none %}
+          present_match = {{ query_match.present_match | lower }}
+          {% endif %}
+        }
+        {% endfor %}
+        {% endif %}
+      }
+      {% endfor %}
+      {% endif %}
+
+      {% if route_rule.url_redirect %}
+      url_redirect {
+        {% if route_rule.url_redirect.host_redirect %}
+        host_redirect = "{{ route_rule.url_redirect.host_redirect }}"
+        {% endif %}
+        {% if route_rule.url_redirect.path_redirect %}
+        path_redirect = "{{ route_rule.url_redirect.path_redirect }}"
+        {% endif %}
+        {% if route_rule.url_redirect.prefix_redirect %}
+        prefix_redirect = "{{ route_rule.url_redirect.prefix_redirect }}"
+        {% endif %}
+        {% if route_rule.url_redirect.redirect_response_code %}
+        redirect_response_code = "{{ route_rule.url_redirect.redirect_response_code }}"
+        {% endif %}
+        {% if route_rule.url_redirect.https_redirect is not none %}
+        https_redirect = {{ route_rule.url_redirect.https_redirect | lower }}
+        {% endif %}
+        {% if route_rule.url_redirect.strip_query is not none %}
+        strip_query = {{ route_rule.url_redirect.strip_query | lower }}
+        {% endif %}
+      }
+      {% endif %}
+
+      {% if route_rule.route_action %}
+      route_action {
+        {% if route_rule.route_action.weighted_backend_services %}
+        {% for wbs in route_rule.route_action.weighted_backend_services %}
+        weighted_backend_service {
+          {% if wbs.backend_service %}
+          backend_service = google_compute_backend_service.{{ wbs.backend_service }}.id
+          {% endif %}
+          {% if wbs.weight %}
+          weight = {{ wbs.weight }}
+          {% endif %}
+        }
+        {% endfor %}
+        {% endif %}
+      }
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if m.tests %}
+  {% for test in m.tests %}
+  test {
+    {% if test.description %}
+    description = "{{ test.description }}"
+    {% endif %}
+    {% if test.host %}
+    host = "{{ test.host }}"
+    {% endif %}
+    {% if test.path %}
+    path = "{{ test.path }}"
+    {% endif %}
+    {% if test.service %}
+    service = "{{ test.service }}"
+    {% endif %}
+
+    {% if test.headers %}
+    {% for header in test.headers %}
+    header {
+      {% if header.name %}
+      name = "{{ header.name }}"
+      {% endif %}
+      {% if header.value %}
+      value = "{{ header.value }}"
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if m.labels %}
+  labels = {{ m.labels | tojson }}
+  {% endif %}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

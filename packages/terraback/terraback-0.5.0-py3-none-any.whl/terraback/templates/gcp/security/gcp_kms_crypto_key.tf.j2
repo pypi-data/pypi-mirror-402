@@ -1,0 +1,70 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for key in resources %}
+{{ resource_spacer() }}
+resource "google_kms_crypto_key" "{{ key.name_sanitized }}" {
+  name     = "{{ key.name }}"
+  key_ring = "{{ key.key_ring }}"
+
+  {% if key.get('rotation_period') %}
+  rotation_period = "{{ key.rotation_period }}"
+  {% endif %}
+
+  {% if key.get('purpose') %}
+  purpose = "{{ key.purpose }}"
+  {% endif %}
+
+  {% if key.get('version_template') %}
+  version_template {
+    {% if key.version_template.get('algorithm') %}
+    algorithm = "{{ key.version_template.algorithm }}"
+    {% endif %}
+    
+    {% if key.version_template.get('protection_level') %}
+    protection_level = "{{ key.version_template.protection_level }}"
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if key.get('destroy_scheduled_duration') %}
+  destroy_scheduled_duration = "{{ key.destroy_scheduled_duration }}"
+  {% endif %}
+
+  {% if key.get('import_only') is not none %}
+  import_only = {{ key.import_only | lower }}
+  {% endif %}
+
+  {% if key.get('skip_initial_version_creation') is not none %}
+  skip_initial_version_creation = {{ key.skip_initial_version_creation | lower }}
+  {% endif %}
+
+  {{ render_gcp_labels(key, indent=2) }}
+
+  {% if key.get('lifecycle_prevent_destroy', true) %}
+  lifecycle {
+    prevent_destroy = true
+  }
+  {% endif %}
+}
+
+{% if key.get('iam_members') %}
+{% for member in key.iam_members %}
+{{ resource_spacer() }}
+resource "google_kms_crypto_key_iam_member" "{{ key.name_sanitized }}_{{ loop.index }}" {
+  crypto_key_id = google_kms_crypto_key.{{ key.name_sanitized }}.id
+  role          = "{{ member.role }}"
+  member        = "{{ member.member }}"
+
+  {% if member.get('condition') %}
+  condition {
+    title       = "{{ member.condition.title }}"
+    description = "{{ member.condition.description }}"
+    expression  = "{{ member.condition.expression }}"
+  }
+  {% endif %}
+}
+
+{% endfor %}
+{% endif %}
+
+{% endfor %}{% endblock %}

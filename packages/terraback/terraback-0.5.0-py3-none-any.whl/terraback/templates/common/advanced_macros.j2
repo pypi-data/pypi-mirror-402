@@ -1,0 +1,253 @@
+{# Advanced macros for Terraform templates - Enhanced macro library #}
+{# This file provides reusable macros to reduce duplication across templates #}
+
+{# ========== Documentation ========== #}
+{# 
+   This macro library provides:
+   - Conditional field rendering with proper null handling
+   - Block structure generation (dynamic blocks)
+   - List and map rendering with various formats
+   - Provider-agnostic patterns
+   - Error handling and validation helpers
+#}
+
+{# ========== Base Utilities ========== #}
+
+{# Safely render a field if it exists and has a value #}
+{% macro render_field(name, value, indent=2, quote=true, default=none) %}
+{% if value is defined and value is not none and value != "" %}
+{{ ' ' * indent }}{{ name }} = {% if quote %}"{{ value }}"{% else %}{{ value }}{% endif %}
+{% elif default is not none %}
+{{ ' ' * indent }}{{ name }} = {% if quote %}"{{ default }}"{% else %}{{ default }}{% endif %}
+{% endif %}
+{% endmacro %}
+
+{# Render a boolean field with proper Terraform formatting #}
+{% macro render_bool_field(name, value, indent=2, default=none) %}
+{% if value is defined and value is not none %}
+{{ ' ' * indent }}{{ name }} = {{ value | tf_bool }}
+{% elif default is not none %}
+{{ ' ' * indent }}{{ name }} = {{ default | tf_bool }}
+{% endif %}
+{% endmacro %}
+
+{# Render a numeric field without quotes #}
+{% macro render_number_field(name, value, indent=2, default=none) %}
+{{ render_field(name, value, indent, quote=false, default=default) }}
+{% endmacro %}
+
+{# ========== Complex Data Structures ========== #}
+
+{# Render a list field with proper formatting #}
+{% macro render_list_field(name, items, indent=2, quote=true) %}
+{% if items and items | length > 0 %}
+{{ ' ' * indent }}{{ name }} = [
+{% for item in items %}
+{{ ' ' * (indent + 2) }}{% if quote %}"{{ item }}"{% else %}{{ item }}{% endif %}{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * indent }}]
+{% endif %}
+{% endmacro %}
+
+{# Render a map field with key-value pairs #}
+{% macro render_map_field(name, data, indent=2, quote_values=true) %}
+{% if data %}
+{{ ' ' * indent }}{{ name }} = {
+{% for key, value in data.items() %}
+{{ ' ' * (indent + 2) }}"{{ key }}" = {% if quote_values %}"{{ value | replace('"', '\\"') }}"{% else %}{{ value }}{% endif %}{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{# ========== Dynamic Block Patterns ========== #}
+
+{# Generic dynamic block renderer with callback #}
+{% macro render_dynamic_block(block_name, items, indent=2) %}
+{% if items and items | length > 0 %}
+{% for item in items %}
+{{ ' ' * indent }}{{ block_name }} {
+{{ caller(item, indent + 2, loop.index0) }}
+{{ ' ' * indent }}}
+{% endfor %}
+{% endif %}
+{% endmacro %}
+
+{# Render dynamic blocks (Terraform 0.12+ style) #}
+{% macro render_dynamic_blocks(block_name, items, indent=2) %}
+{% if items and items | length > 0 %}
+{{ ' ' * indent }}dynamic "{{ block_name }}" {
+{{ ' ' * (indent + 2) }}for_each = {{ items | tojson }}
+{{ ' ' * (indent + 2) }}content {
+{{ caller(indent + 4) }}
+{{ ' ' * (indent + 2) }}}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{# ========== Resource Reference Helpers ========== #}
+
+{# Generate resource reference #}
+{% macro resource_ref(resource_type, resource_name, attribute="id") %}
+{{ resource_type }}.{{ resource_name }}.{{ attribute }}
+{%- endmacro %}
+
+{# Generate conditional resource reference #}
+{% macro conditional_resource_ref(condition, resource_type, resource_name, attribute="id", else_value="null") %}
+{{ condition }} ? {{ resource_ref(resource_type, resource_name, attribute) }} : {{ else_value }}
+{%- endmacro %}
+
+{# ========== Common Configuration Blocks ========== #}
+
+{# Render lifecycle rules #}
+{% macro render_lifecycle(lifecycle, indent=2) %}
+{% if lifecycle %}
+{{ ' ' * indent }}lifecycle {
+{% if lifecycle.get('create_before_destroy') is defined %}
+{{ ' ' * (indent + 2) }}create_before_destroy = {{ lifecycle.create_before_destroy | tf_bool }}
+{% endif %}
+{% if lifecycle.get('prevent_destroy') is defined %}
+{{ ' ' * (indent + 2) }}prevent_destroy = {{ lifecycle.prevent_destroy | tf_bool }}
+{% endif %}
+{% if lifecycle.get('ignore_changes') %}
+{{ ' ' * (indent + 2) }}ignore_changes = {{ lifecycle.ignore_changes | tojson }}
+{% endif %}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{# Render timeouts block #}
+{% macro render_timeouts(timeouts, indent=2) %}
+{% if timeouts %}
+{{ ' ' * indent }}timeouts {
+{{ render_field('create', timeouts.get('create'), indent + 2) }}
+{{ render_field('update', timeouts.get('update'), indent + 2) }}
+{{ render_field('delete', timeouts.get('delete'), indent + 2) }}
+{{ render_field('read', timeouts.get('read'), indent + 2) }}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{# ========== Provider-Agnostic Tag Rendering ========== #}
+
+{# Universal tag renderer that handles multiple formats #}
+{% macro render_tags_universal(resource, indent=2, provider="aws") %}
+{% if provider == "aws" %}
+  {{ render_aws_style_tags(resource, indent) }}
+{% elif provider == "azure" %}
+  {{ render_azure_style_tags(resource, indent) }}
+{% elif provider == "gcp" %}
+  {{ render_gcp_style_labels(resource, indent) }}
+{% endif %}
+{% endmacro %}
+
+{# AWS-style tag rendering #}
+{% macro render_aws_style_tags(resource, indent=2) %}
+{% set tags = resource.get('tags_formatted') or resource.get('Tags') or resource.get('TagList') %}
+{% if tags %}
+  {% if tags is mapping %}
+    {{ render_map_field('tags', tags, indent) }}
+  {% else %}
+    {# Convert list format to map #}
+    {% set tag_map = {} %}
+    {% for tag in tags %}
+      {% set _ = tag_map.update({tag.get('Key', tag.get('key', '')): tag.get('Value', tag.get('value', ''))}) %}
+    {% endfor %}
+    {{ render_map_field('tags', tag_map, indent) }}
+  {% endif %}
+{% endif %}
+{% endmacro %}
+
+{# Azure-style tag rendering #}
+{% macro render_azure_style_tags(resource, indent=2) %}
+{% set tags = resource.get('tags') or resource.get('Tags') %}
+{% if tags %}
+  {{ render_map_field('tags', tags, indent) }}
+{% endif %}
+{% endmacro %}
+
+{# GCP-style label rendering #}
+{% macro render_gcp_style_labels(resource, indent=2) %}
+{% set labels = resource.get('labels') or resource.get('Labels') %}
+{% if labels %}
+  {{ render_map_field('labels', labels, indent) }}
+{% endif %}
+{% endmacro %}
+
+{# ========== Validation and Error Handling ========== #}
+
+{# Check if a required field exists, with error message #}
+{% macro require_field(resource, field_name, resource_type="resource") %}
+{% if not resource.get(field_name) %}
+  {{ '# ERROR: Required field "' + field_name + '" missing in ' + resource_type + ' "' + resource.get('name', 'unknown') + '"' }}
+{% endif %}
+{% endmacro %}
+
+{# Validate field value against allowed options #}
+{% macro validate_enum(value, allowed_values, field_name) %}
+{% if value and value not in allowed_values %}
+  {{ '# WARNING: Invalid value "' + value + '" for field "' + field_name + '". Allowed values: ' + allowed_values|join(', ') }}
+{% endif %}
+{% endmacro %}
+
+{# ========== Import Statement Generation ========== #}
+
+{# Generate import comment with proper formatting #}
+{% macro render_import_comment(resource_type, resource_name, import_id, extra_info=none) %}
+# Import command:
+# terraform import {{ resource_type }}.{{ resource_name }} {{ import_id }}
+{% if extra_info %}
+# {{ extra_info }}
+{% endif %}
+{% endmacro %}
+
+{# ========== Conditional Block Helpers ========== #}
+
+{# Render a block only if condition is met #}
+{% macro conditional_block(condition, block_name, indent=2) %}
+{% if condition %}
+{{ ' ' * indent }}{{ block_name }} {
+{{ caller(indent + 2) }}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{# ========== JSON Encoding Helpers ========== #}
+
+{# Safely encode complex data as JSON #}
+{% macro render_json_field(name, data, indent=2, inline=false) %}
+{% if data %}
+{% if inline %}
+{{ ' ' * indent }}{{ name }} = jsonencode({{ data | tojson }})
+{% else %}
+{{ ' ' * indent }}{{ name }} = jsonencode(
+{{ data | tojson | indent(indent + 2, first=false) }}
+{{ ' ' * indent }})
+{% endif %}
+{% endif %}
+{% endmacro %}
+
+{# ========== List Manipulation ========== #}
+
+{# Filter and render a list based on a condition #}
+{% macro render_filtered_list(name, items, filter_attr, filter_value, indent=2, quote=true) %}
+{% set filtered = [] %}
+{% for item in items %}
+  {% if item.get(filter_attr) == filter_value %}
+    {% set _ = filtered.append(item) %}
+  {% endif %}
+{% endfor %}
+{{ render_list_field(name, filtered, indent, quote) }}
+{% endmacro %}
+
+{# ========== String Helpers ========== #}
+
+{# Safely handle string interpolation #}
+{% macro safe_string(value, default="") %}
+{{ value if value is defined and value is not none else default }}
+{%- endmacro %}
+
+{# Convert various naming formats to terraform-safe names #}
+{% macro terraform_name(value) %}
+{{ value | lower | replace('-', '_') | replace(' ', '_') | replace('.', '_') }}
+{%- endmacro %}

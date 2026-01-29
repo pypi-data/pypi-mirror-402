@@ -1,0 +1,64 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_dns_{{ resource.properties.record_type | lower }}_record" "{{ resource.name }}" {
+  name                = "{{ resource.properties.name }}"
+  zone_name           = "{{ resource.properties.zone_name }}"
+  resource_group_name = "{{ resource.properties.resource_group_name }}"
+  ttl                 = {{ resource.properties.ttl }}
+  
+  {% if resource.properties.record_type == "A" %}
+  records = {{ resource.properties.records | tojson }}
+  {% elif resource.properties.record_type == "AAAA" %}
+  records = {{ resource.properties.records | tojson }}
+  {% elif resource.properties.record_type == "CAA" %}
+  {% for record in resource.properties.records %}
+  record {
+    flags = {{ record.flags }}
+    tag   = "{{ record.tag }}"
+    value = "{{ record.value }}"
+  }
+  {% endfor %}
+  {% elif resource.properties.record_type == "CNAME" %}
+  record = "{{ resource.properties.record }}"
+  {% elif resource.properties.record_type == "MX" %}
+  {% for record in resource.properties.records %}
+  record {
+    preference = {{ record.preference }}
+    exchange   = "{{ record.exchange }}"
+  }
+  {% endfor %}
+  {% elif resource.properties.record_type == "NS" %}
+  records = {{ resource.properties.records | tojson }}
+  {% elif resource.properties.record_type == "PTR" %}
+  records = {{ resource.properties.records | tojson }}
+  {% elif resource.properties.record_type == "SRV" %}
+  {% for record in resource.properties.records %}
+  record {
+    priority = {{ record.priority }}
+    weight   = {{ record.weight }}
+    port     = {{ record.port }}
+    target   = "{{ record.target }}"
+  }
+  {% endfor %}
+  {% elif resource.properties.record_type == "TXT" %}
+  {% for record in resource.properties.records %}
+  record {
+    value = "{{ record.value }}"
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.target_resource_id is defined %}
+  target_resource_id = "{{ resource.properties.target_resource_id }}"
+  {% endif %}
+  
+  {% if resource.properties.tags is defined and resource.properties.tags %}
+  tags = {{ resource.properties.tags | tojson }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

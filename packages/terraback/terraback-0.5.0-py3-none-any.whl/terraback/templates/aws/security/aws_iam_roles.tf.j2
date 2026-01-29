@@ -1,0 +1,27 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for role in resources %}
+{{ resource_spacer() }}
+resource "aws_iam_role" "{{ role.RoleName | tf_resource_name }}" {
+  name = "{{ role.RoleName }}"
+  path = "{{ role.Path }}"
+
+  assume_role_policy = jsonencode({{ role.AssumeRolePolicyDocument | tojson }})
+
+  {% if role.get('Description') %}
+  description = "{{ role.Description | replace('"', '\\"') }}"
+  {% endif %}
+
+  {% if role.get('MaxSessionDuration') %}
+  max_session_duration = {{ role.MaxSessionDuration }}
+  {% endif %}
+
+  {% if role.get('PermissionsBoundary') %}
+  permissions_boundary = "{{ role.PermissionsBoundary }}"
+  {% endif %}
+
+  {{ render_common_tags(role, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

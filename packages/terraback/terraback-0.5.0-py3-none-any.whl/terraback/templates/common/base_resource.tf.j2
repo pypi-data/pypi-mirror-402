@@ -1,0 +1,34 @@
+{% import "common/macros.j2" as macros %}
+{# Joiner for consistent blank lines between rendered resources #}
+{% set resource_spacer = joiner('\n\n') %}
+
+{# Macro to render tags for a resource dict. Supports 'tags_formatted' or AWS-style Tag lists. #}
+{% macro render_common_tags(resource, indent=2) %}
+{% if resource.get('tags_formatted') %}
+{{ macros.render_map('tags', resource.tags_formatted, indent) }}
+{% elif resource.get('Tags') %}
+{% if resource.Tags is mapping %}
+{{ macros.render_map('tags', resource.Tags, indent) }}
+{% else %}
+{{ macros.render_tag_list(resource.Tags, indent) }}
+{% endif %}
+{% elif resource.get('TagList') %}
+{{ macros.render_tag_list(resource.TagList, indent) }}
+{% endif %}
+{% endmacro %}
+
+{# Macro to conditionally render import blocks #}
+{% macro render_import_block(resource, resource_type, resource_name) %}
+{% if resource.get('id') or resource.get('remote_id') %}
+# Import existing {{ resource_type.replace('_', ' ').title() }}: {{ resource_name }}
+import {
+  to = {{ resource_type }}.{{ resource_name }}
+  id = "{{ resource.get('id') or resource.get('remote_id') }}"
+}
+
+{% endif %}
+{% endmacro %}
+
+{# Block that child templates override to emit resource definitions #}
+{% block resources %}{% endblock %}
+

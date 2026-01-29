@@ -1,0 +1,46 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for sub in resources %}
+{{ resource_spacer() }}
+resource "aws_sns_topic_subscription" "{{ sub.name_sanitized | tf_resource_name }}" {
+  topic_arn = "{{ sub.TopicArn }}"
+  protocol  = "{{ sub.Protocol }}"
+  endpoint  = "{{ sub.Endpoint }}"
+
+  {% if sub.get('subscription_role_arn') %}
+  subscription_role_arn = "{{ sub.subscription_role_arn }}"
+  {%  endif %}
+
+  {% if sub.get('raw_message_delivery') is defined and sub.raw_message_delivery is not none %}
+  raw_message_delivery = {{ sub.raw_message_delivery | lower }}
+  {%  endif %}
+
+  {% if sub.get('filter_policy') %}
+  filter_policy = jsonencode({{ sub.filter_policy | tojson }})
+  {%  endif %}
+
+  {% if sub.get('filter_policy_scope') and sub.filter_policy_scope != "MessageAttributes" %}
+  filter_policy_scope = "{{ sub.filter_policy_scope }}"
+  {%  endif %}
+
+  {% if sub.get('endpoint_auto_confirms') is not none %}
+  endpoint_auto_confirms = {{ sub.endpoint_auto_confirms | lower }}
+  {%  endif %}
+
+  {% if sub.get('confirmation_timeout_in_minutes') is defined and sub.confirmation_timeout_in_minutes is not none %}
+  confirmation_timeout_in_minutes = {{ sub.confirmation_timeout_in_minutes }}
+  {%  endif %}
+
+  {% if sub.get('delivery_policy') %}
+  delivery_policy = jsonencode({{ sub.delivery_policy | tojson }})
+  {%  endif %}
+
+  {% if sub.get('redrive_policy') %}
+  redrive_policy = jsonencode({{ sub.redrive_policy | tojson }})
+  {%  endif %}
+
+  # Note: confirmation_was_authenticated is a read-only attribute and cannot be set
+}
+
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends 'common/base_resource.tf.j2' %}
+{% import 'common/macros.j2' as macros %}
+{% block resources %}
+{% for pool in resources %}
+{{ resource_spacer() }}
+resource "azurerm_mssql_elasticpool" "{{ pool.name_sanitized }}" {
+  name                = "{{ pool.name }}"
+  resource_group_name = "{{ pool.resource_group_name }}"
+  location            = "{{ pool.location }}"
+  server_name         = "{{ pool.server_name }}"
+  
+  {% if pool.license_type %}
+  license_type        = "{{ pool.license_type }}"
+  {% endif %}
+  
+  {% if pool.max_size_gb %}
+  max_size_gb         = {{ pool.max_size_gb }}
+  {% elif pool.max_size_bytes %}
+  {# For Basic tier with 50 DTUs, Azure requires exactly 4.8828125 GB #}
+  {% if pool.sku and pool.sku.tier == 'Basic' and pool.sku.capacity == 50 %}
+  max_size_gb         = 4.8828125
+  {% else %}
+  max_size_gb         = {{ (pool.max_size_bytes / 1073741824) }}
+  {% endif %}
+  {% endif %}
+  
+  {% if pool.zone_redundant is defined %}
+  zone_redundant      = {{ pool.zone_redundant | lower }}
+  {% endif %}
+  
+  {% if pool.maintenance_configuration_name %}
+  maintenance_configuration_name = "{{ pool.maintenance_configuration_name }}"
+  {% endif %}
+
+  {% if pool.sku_formatted %}
+  sku {
+    name     = "{{ pool.sku_formatted.name }}"
+    {% if pool.sku_formatted.tier %}
+    tier     = "{{ pool.sku_formatted.tier }}"
+    {% endif %}
+    {% if pool.sku_formatted.family %}
+    family   = "{{ pool.sku_formatted.family }}"
+    {% endif %}
+    capacity = {{ pool.sku_formatted.capacity }}
+  }
+  {% elif pool.sku %}
+  sku {
+    name     = "{{ pool.sku.name }}"
+    {% if pool.sku.tier %}
+    tier     = "{{ pool.sku.tier }}"
+    {% endif %}
+    {% if pool.sku.family %}
+    family   = "{{ pool.sku.family }}"
+    {% endif %}
+    capacity = {{ pool.sku.capacity }}
+  }
+  {% endif %}
+
+  {% if pool.per_database_settings_formatted %}
+  per_database_settings {
+    min_capacity = {{ pool.per_database_settings_formatted.min_capacity }}
+    max_capacity = {{ pool.per_database_settings_formatted.max_capacity }}
+  }
+  {% elif pool.per_database_settings %}
+  per_database_settings {
+    min_capacity = {{ pool.per_database_settings.min_capacity }}
+    max_capacity = {{ pool.per_database_settings.max_capacity }}
+  }
+  {% endif %}
+
+{{ macros.render_tags(pool.tags) }}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

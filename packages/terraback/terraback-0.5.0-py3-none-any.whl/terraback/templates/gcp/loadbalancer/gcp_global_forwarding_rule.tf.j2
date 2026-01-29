@@ -1,0 +1,69 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for rule in resources %}
+{{ resource_spacer() }}
+resource "google_compute_global_forwarding_rule" "{{ rule.name_sanitized }}" {
+  name = "{{ rule.name }}"
+
+  {% if rule.description %}
+  description = "{{ rule.description }}"
+  {% endif %}
+
+  {% if rule.target %}
+  target = "{{ rule.target }}"
+  {% endif %}
+
+  {% if rule.ip_address %}
+  ip_address = "{{ rule.ip_address }}"
+  {% endif %}
+  {% if rule.ip_protocol %}
+  ip_protocol = "{{ rule.ip_protocol }}"
+  {% endif %}
+  {% if rule.load_balancing_scheme %}
+  load_balancing_scheme = "{{ rule.load_balancing_scheme }}"
+  {% endif %}
+
+  {% if rule.port_range %}
+  port_range = "{{ rule.port_range }}"
+  {% endif %}
+  {% if rule.ports %}
+  ports = {{ rule.ports | tojson }}
+  {% endif %}
+
+  {% if rule.ip_version %}
+  ip_version = "{{ rule.ip_version }}"
+  {% endif %}
+  {% if rule.network %}
+  network = "{{ rule.network }}"
+  {% endif %}
+  {% if rule.subnetwork %}
+  subnetwork = "{{ rule.subnetwork }}"
+  {% endif %}
+  {% if rule.network_tier %}
+  network_tier = "{{ rule.network_tier }}"
+  {% endif %}
+
+  {% if rule.labels %}
+  labels = {{ rule.labels | tojson }}
+  {% endif %}
+
+  {% if rule.service_directory_registrations %}
+  {% for registration in rule.service_directory_registrations %}
+  service_directory_registrations {
+    {% if registration.namespace %}
+    namespace = "{{ registration.namespace }}"
+    {% endif %}
+    {% if registration.service %}
+    service = "{{ registration.service }}"
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

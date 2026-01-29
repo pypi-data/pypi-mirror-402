@@ -1,0 +1,18 @@
+{% from "common/base_resource.tf.j2" import render_common_tags %}
+{% for key_pair in resources %}
+# For existing key pairs, use a data source instead of a resource
+# This avoids the need for the public key file
+data "aws_key_pair" "{{ key_pair.KeyName | tf_resource_name }}" {
+  key_name = "{{ key_pair.KeyName }}"
+  
+  # Key fingerprint: {{ key_pair.get('KeyFingerprint', 'unknown') }}
+}
+
+# If you need to manage this key pair with Terraform, uncomment below:
+# resource "aws_key_pair" "{{ key_pair.KeyName | tf_resource_name }}" {
+#   key_name = "{{ key_pair.KeyName }}"
+#   public_key = "REPLACE_WITH_ACTUAL_PUBLIC_KEY_CONTENT"
+#   {{ render_common_tags(key_pair, indent=2) | indent(2) }}
+# }
+
+{% endfor %}

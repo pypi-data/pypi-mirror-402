@@ -1,0 +1,77 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for instance in resources %}
+{{ resource_spacer() }}
+resource "google_memcache_instance" "{{ instance.name_sanitized }}" {
+  name         = "{{ instance.name }}"
+  node_count   = {{ instance.node_count }}
+  
+  {% if instance.get('display_name') %}
+  display_name = "{{ instance.display_name }}"
+  {% endif %}
+
+  {% if instance.get('region') %}
+  region       = "{{ instance.region }}"
+  {% endif %}
+
+  {% if instance.get('zones') %}
+  zones        = [
+    {% for zone in instance.zones %}
+    "{{ zone }}"{{ "," if not loop.last }}
+    {% endfor %}
+  ]
+  {% endif %}
+
+  node_config {
+    cpu_count      = {{ instance.node_config.cpu_count }}
+    memory_size_mb = {{ instance.node_config.memory_size_mb }}
+  }
+
+  {% if instance.get('memcache_version') %}
+  memcache_version = "{{ instance.memcache_version }}"
+  {% endif %}
+
+  {% if instance.get('authorized_network') %}
+  authorized_network = "{{ instance.authorized_network }}"
+  {% endif %}
+
+  {% if instance.get('memcache_parameters') %}
+  memcache_parameters {
+    {% if instance.memcache_parameters.get('id') %}
+    id = "{{ instance.memcache_parameters.id }}"
+    {% endif %}
+    
+    {% if instance.memcache_parameters.get('params') %}
+    params = {
+      {% for key, value in instance.memcache_parameters.params.items() %}
+      {{ key }} = "{{ value }}"{{ "," if not loop.last }}
+      {% endfor %}
+    }
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if instance.get('maintenance_policy') %}
+  maintenance_policy {
+    {% if instance.maintenance_policy.get('weekly_maintenance_window') %}
+    {% for window in instance.maintenance_policy.weekly_maintenance_window %}
+    weekly_maintenance_window {
+      day = "{{ window.day }}"
+      duration = "{{ window.duration }}"
+      
+      start_time {
+        hours   = {{ window.start_time.hours }}
+        minutes = {{ window.start_time.minutes }}
+        seconds = {{ window.start_time.seconds }}
+        nanos   = {{ window.start_time.nanos }}
+      }
+    }
+    {% endfor %}
+    {% endif %}
+  }
+  {% endif %}
+
+  {{ render_gcp_labels(instance, indent=2) }}
+}
+
+{% endfor %}{% endblock %}

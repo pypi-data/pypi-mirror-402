@@ -1,0 +1,277 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for firehose in resources %}
+{{ resource_spacer() }}
+resource "aws_kinesis_firehose_delivery_stream" "{{ firehose.name_sanitized }}" {
+  name        = "{{ firehose.deliveryStreamName }}"
+  destination = "{{ firehose.destination | default('extended_s3') }}"
+
+  {% if firehose.get('kinesis_source_configuration') %}
+  kinesis_source_configuration {
+    kinesis_stream_arn = "{{ firehose.kinesis_source_configuration.kinesis_stream_arn }}"
+    role_arn          = "{{ firehose.kinesis_source_configuration.role_arn }}"
+  }
+  {% elif firehose.get('kinesisStreamSourceConfiguration') %}
+  kinesis_source_configuration {
+    kinesis_stream_arn = "{{ firehose.kinesisStreamSourceConfiguration.kinesisStreamARN }}"
+    role_arn          = "{{ firehose.kinesisStreamSourceConfiguration.roleARN }}"
+  }
+  {% endif %}
+
+  {% if firehose.get('extended_s3_configuration') or firehose.get('extendedS3DestinationConfiguration') %}
+  extended_s3_configuration {
+    {% set s3_config = firehose.get('extended_s3_configuration', firehose.get('extendedS3DestinationConfiguration', {})) %}
+    
+    {% if s3_config.get('bucketARN') %}
+    bucket_arn = "{{ s3_config.bucketARN }}"
+    {% elif s3_config.get('bucket_arn') %}
+    bucket_arn = "{{ s3_config.bucket_arn }}"
+    {% endif %}
+    
+    {% if s3_config.get('roleARN') %}
+    role_arn = "{{ s3_config.roleARN }}"
+    {% elif s3_config.get('role_arn') %}
+    role_arn = "{{ s3_config.role_arn }}"
+    {% endif %}
+
+    {% if s3_config.get('prefix') %}
+    prefix = "{{ s3_config.prefix }}"
+    {% endif %}
+
+    {% if s3_config.get('error_output_prefix') %}
+    error_output_prefix = "{{ s3_config.error_output_prefix }}"
+    {% elif s3_config.get('errorOutputPrefix') %}
+    error_output_prefix = "{{ s3_config.errorOutputPrefix }}"
+    {% endif %}
+
+    {% if s3_config.get('compressionFormat') %}
+    compression_format = "{{ s3_config.compressionFormat }}"
+    {% elif s3_config.get('compression_format') %}
+    compression_format = "{{ s3_config.compression_format }}"
+    {% endif %}
+
+    {% if s3_config.get('bufferingHints') %}
+    buffering_interval = {{ s3_config.bufferingHints.get('intervalInSeconds', 300) }}
+    buffering_size     = {{ s3_config.bufferingHints.get('sizeInMBs', 5) }}
+    {% endif %}
+
+    {% if s3_config.get('cloudWatchLoggingOptions') %}
+    cloudwatch_logging_options {
+      enabled         = {{ s3_config.cloudWatchLoggingOptions.get('enabled', false) | lower }}
+      {% if s3_config.cloudWatchLoggingOptions.get('logGroupName') %}
+      log_group_name  = "{{ s3_config.cloudWatchLoggingOptions.logGroupName }}"
+      {% endif %}
+      {% if s3_config.cloudWatchLoggingOptions.get('logStreamName') %}
+      log_stream_name = "{{ s3_config.cloudWatchLoggingOptions.logStreamName }}"
+      {% endif %}
+    }
+    {% endif %}
+
+    {% if s3_config.get('processingConfiguration') %}
+    processing_configuration {
+      enabled = {{ s3_config.processingConfiguration.get('enabled', false) | lower }}
+      
+      {% if s3_config.processingConfiguration.get('processors') %}
+      {% for processor in s3_config.processingConfiguration.processors %}
+      processors {
+        type = "{{ processor.type }}"
+        
+        {% if processor.get('parameters') %}
+        {% for param in processor.parameters %}
+        parameters {
+          parameter_name  = "{{ param.parameterName }}"
+          parameter_value = "{{ param.parameterValue }}"
+        }
+        {% endfor %}
+        {% endif %}
+      }
+      {% endfor %}
+      {% endif %}
+    }
+    {% endif %}
+
+    {% if s3_config.get('dataFormatConversionConfiguration') %}
+    data_format_conversion_configuration {
+      {% if s3_config.dataFormatConversionConfiguration.get('enabled') is defined %}
+      enabled = {{ s3_config.dataFormatConversionConfiguration.enabled | lower }}
+      {% endif %}
+
+      {% if s3_config.dataFormatConversionConfiguration.get('outputFormatConfiguration') %}
+      output_format_configuration {
+        {% if s3_config.dataFormatConversionConfiguration.outputFormatConfiguration.get('serializer') %}
+        serializer {
+          {% if s3_config.dataFormatConversionConfiguration.outputFormatConfiguration.serializer.get('parquetSerDe') %}
+          parquet_ser_de {
+            {% if s3_config.dataFormatConversionConfiguration.outputFormatConfiguration.serializer.parquetSerDe.get('compression') %}
+            compression = "{{ s3_config.dataFormatConversionConfiguration.outputFormatConfiguration.serializer.parquetSerDe.compression }}"
+            {% endif %}
+          }
+          {% endif %}
+          {% if s3_config.dataFormatConversionConfiguration.outputFormatConfiguration.serializer.get('orcSerDe') %}
+          orc_ser_de {
+            {% if s3_config.dataFormatConversionConfiguration.outputFormatConfiguration.serializer.orcSerDe.get('compression') %}
+            compression = "{{ s3_config.dataFormatConversionConfiguration.outputFormatConfiguration.serializer.orcSerDe.compression }}"
+            {% endif %}
+          }
+          {% endif %}
+        }
+        {% endif %}
+      }
+      {% endif %}
+
+      {% if s3_config.dataFormatConversionConfiguration.get('schemaConfiguration') %}
+      schema_configuration {
+        {% if s3_config.dataFormatConversionConfiguration.schemaConfiguration.get('databaseName') %}
+        database_name = "{{ s3_config.dataFormatConversionConfiguration.schemaConfiguration.databaseName }}"
+        {% endif %}
+        {% if s3_config.dataFormatConversionConfiguration.schemaConfiguration.get('tableName') %}
+        table_name = "{{ s3_config.dataFormatConversionConfiguration.schemaConfiguration.tableName }}"
+        {% endif %}
+        {% if s3_config.dataFormatConversionConfiguration.schemaConfiguration.get('roleARN') %}
+        role_arn = "{{ s3_config.dataFormatConversionConfiguration.schemaConfiguration.roleARN }}"
+        {% endif %}
+      }
+      {% endif %}
+    }
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if firehose.get('elasticsearch_configuration') or firehose.get('elasticsearchDestinationConfiguration') %}
+  elasticsearch_configuration {
+    {% set es_config = firehose.get('elasticsearch_configuration', firehose.get('elasticsearchDestinationConfiguration', {})) %}
+    
+    {% if es_config.get('domainARN') %}
+    domain_arn = "{{ es_config.domainARN }}"
+    {% elif es_config.get('domain_arn') %}
+    domain_arn = "{{ es_config.domain_arn }}"
+    {% endif %}
+    
+    {% if es_config.get('roleARN') %}
+    role_arn = "{{ es_config.roleARN }}"
+    {% elif es_config.get('role_arn') %}
+    role_arn = "{{ es_config.role_arn }}"
+    {% endif %}
+    
+    {% if es_config.get('indexName') %}
+    index_name = "{{ es_config.indexName }}"
+    {% elif es_config.get('index_name') %}
+    index_name = "{{ es_config.index_name }}"
+    {% endif %}
+    
+    {% if es_config.get('typeName') %}
+    type_name = "{{ es_config.typeName }}"
+    {% elif es_config.get('type_name') %}
+    type_name = "{{ es_config.type_name }}"
+    {% endif %}
+    
+    {% if es_config.get('indexRotationPeriod') %}
+    index_rotation_period = "{{ es_config.indexRotationPeriod }}"
+    {% elif es_config.get('index_rotation_period') %}
+    index_rotation_period = "{{ es_config.index_rotation_period }}"
+    {% endif %}
+    
+    {% if es_config.get('bufferingHints') %}
+    buffering_interval = {{ es_config.bufferingHints.get('intervalInSeconds', 300) }}
+    buffering_size     = {{ es_config.bufferingHints.get('sizeInMBs', 5) }}
+    {% endif %}
+    
+    {% if es_config.get('retryDuration') %}
+    retry_duration = {{ es_config.retryDuration }}
+    {% elif es_config.get('retry_duration') %}
+    retry_duration = {{ es_config.retry_duration }}
+    {% endif %}
+    
+    {% if es_config.get('s3BackupMode') %}
+    s3_backup_mode = "{{ es_config.s3BackupMode }}"
+    {% elif es_config.get('s3_backup_mode') %}
+    s3_backup_mode = "{{ es_config.s3_backup_mode }}"
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if firehose.get('redshift_configuration') or firehose.get('redshiftDestinationConfiguration') %}
+  redshift_configuration {
+    {% set rs_config = firehose.get('redshift_configuration', firehose.get('redshiftDestinationConfiguration', {})) %}
+    
+    {% if rs_config.get('clusterJDBCURL') %}
+    cluster_jdbcurl = "{{ rs_config.clusterJDBCURL }}"
+    {% elif rs_config.get('cluster_jdbcurl') %}
+    cluster_jdbcurl = "{{ rs_config.cluster_jdbcurl }}"
+    {% endif %}
+    
+    {% if rs_config.get('username') %}
+    username = "{{ rs_config.username }}"
+    {% endif %}
+    
+    {% if rs_config.get('password') %}
+    password = "{{ rs_config.password }}"
+    {% endif %}
+    
+    {% if rs_config.get('roleARN') %}
+    role_arn = "{{ rs_config.roleARN }}"
+    {% elif rs_config.get('role_arn') %}
+    role_arn = "{{ rs_config.role_arn }}"
+    {% endif %}
+    
+    {% if rs_config.get('copyCommand') %}
+    copy_options = "{{ rs_config.copyCommand.get('copyOptions', '') }}"
+    data_table_name = "{{ rs_config.copyCommand.get('dataTableName') }}"
+    {% if rs_config.copyCommand.get('dataTableColumns') %}
+    data_table_columns = "{{ rs_config.copyCommand.dataTableColumns }}"
+    {% endif %}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if firehose.get('http_endpoint_configuration') or firehose.get('httpEndpointDestinationConfiguration') %}
+  http_endpoint_configuration {
+    {% set http_config = firehose.get('http_endpoint_configuration', firehose.get('httpEndpointDestinationConfiguration', {})) %}
+    
+    {% if http_config.get('endpointConfiguration', {}).get('url') %}
+    url = "{{ http_config.endpointConfiguration.url }}"
+    {% elif http_config.get('url') %}
+    url = "{{ http_config.url }}"
+    {% endif %}
+    
+    {% if http_config.get('endpointConfiguration', {}).get('name') %}
+    name = "{{ http_config.endpointConfiguration.name }}"
+    {% elif http_config.get('name') %}
+    name = "{{ http_config.name }}"
+    {% endif %}
+    
+    {% if http_config.get('roleARN') %}
+    role_arn = "{{ http_config.roleARN }}"
+    {% elif http_config.get('role_arn') %}
+    role_arn = "{{ http_config.role_arn }}"
+    {% endif %}
+    
+    {% if http_config.get('bufferingHints') %}
+    buffering_interval = {{ http_config.bufferingHints.get('intervalInSeconds', 300) }}
+    buffering_size     = {{ http_config.bufferingHints.get('sizeInMBs', 5) }}
+    {% endif %}
+    
+    {% if http_config.get('requestConfiguration') %}
+    request_configuration {
+      {% if http_config.requestConfiguration.get('contentEncoding') %}
+      content_encoding = "{{ http_config.requestConfiguration.contentEncoding }}"
+      {% endif %}
+      
+      {% if http_config.requestConfiguration.get('commonAttributes') %}
+      {% for attr in http_config.requestConfiguration.commonAttributes %}
+      common_attributes {
+        name  = "{{ attr.attributeName }}"
+        value = "{{ attr.attributeValue }}"
+      }
+      {% endfor %}
+      {% endif %}
+    }
+    {% endif %}
+  }
+  {% endif %}
+
+  {{ render_common_tags(firehose, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

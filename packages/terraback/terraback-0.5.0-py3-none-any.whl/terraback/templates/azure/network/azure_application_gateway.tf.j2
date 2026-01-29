@@ -1,0 +1,201 @@
+{% import 'common/macros.j2' as macros %}
+{% set resource_spacer = joiner('\n\n') %}
+{% for gateway in resources %}
+{{ resource_spacer() }}
+resource "azurerm_application_gateway" "{{ gateway.name_sanitized }}" {
+  name                = "{{ gateway.name }}"
+  location            = "{{ gateway.location }}"
+  resource_group_name = "{{ gateway.resource_group_name }}"
+
+  {% if gateway.sku_formatted %}
+  sku {
+    name     = "{{ gateway.sku_formatted.name }}"
+    tier     = "{{ gateway.sku_formatted.tier }}"
+    {% if gateway.sku_formatted.capacity %}
+    capacity = {{ gateway.sku_formatted.capacity }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if gateway.gateway_ip_configurations_formatted %}
+  {% for config in gateway.gateway_ip_configurations_formatted %}
+  gateway_ip_configuration {
+    name      = "{{ config.name }}"
+    subnet_id = "{{ config.subnet_id }}"
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if gateway.frontend_ip_configurations_formatted %}
+  {% for config in gateway.frontend_ip_configurations_formatted %}
+  frontend_ip_configuration {
+    name = "{{ config.name }}"
+    {% if config.public_ip_address_id %}
+    public_ip_address_id = "{{ config.public_ip_address_id }}"
+    {% endif %}
+    {% if config.subnet_id %}
+    subnet_id                            = "{{ config.subnet_id }}"
+    private_ip_address                   = "{{ config.private_ip_address }}"
+    private_ip_address_allocation        = "{{ config.private_ip_allocation_method }}"
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if gateway.frontend_ports_formatted %}
+  {% for port in gateway.frontend_ports_formatted %}
+  frontend_port {
+    name = "{{ port.name }}"
+    port = {{ port.port }}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if gateway.backend_address_pools_formatted %}
+  {% for pool in gateway.backend_address_pools_formatted %}
+  backend_address_pool {
+    name = "{{ pool.name }}"
+    {% if pool.ip_addresses %}
+    ip_addresses = {{ pool.ip_addresses | tojson }}
+    {% endif %}
+    {% if pool.fqdns %}
+    fqdns = {{ pool.fqdns | tojson }}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if gateway.backend_http_settings_formatted %}
+  {% for settings in gateway.backend_http_settings_formatted %}
+  backend_http_settings {
+    name                                = "{{ settings.name }}"
+    port                                = {{ settings.port }}
+    protocol                            = "{{ settings.protocol }}"
+    cookie_based_affinity               = "{{ settings.cookie_based_affinity }}"
+    {% if settings.request_timeout %}
+    request_timeout                     = {{ settings.request_timeout }}
+    {% endif %}
+    {% if settings.pick_host_name_from_backend_address %}
+    pick_host_name_from_backend_address = {{ settings.pick_host_name_from_backend_address | lower }}
+    {% endif %}
+    {% if settings.probe_id %}
+    probe_id                            = "{{ settings.probe_id }}"
+    {% endif %}
+    {% if settings.authentication_certificate_ids %}
+    {% for cert_id in settings.authentication_certificate_ids %}
+    authentication_certificate {
+      id = "{{ cert_id }}"
+    }
+    {% endfor %}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if gateway.http_listeners_formatted %}
+  {% for listener in gateway.http_listeners_formatted %}
+  http_listener {
+    name                           = "{{ listener.name }}"
+    frontend_ip_configuration_name = "{{ listener.frontend_ip_configuration_name }}"
+    frontend_port_name             = "{{ listener.frontend_port_name }}"
+    protocol                       = "{{ listener.protocol }}"
+    {% if listener.host_name %}
+    host_name                      = "{{ listener.host_name }}"
+    {% endif %}
+    {% if listener.require_sni %}
+    require_sni                    = {{ listener.require_sni | lower }}
+    {% endif %}
+    {% if listener.ssl_certificate_id %}
+    ssl_certificate_name           = "{{ listener.ssl_certificate_id.split('/')[-1] }}"
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if gateway.request_routing_rules_formatted %}
+  {% for rule in gateway.request_routing_rules_formatted %}
+  request_routing_rule {
+    name                       = "{{ rule.name }}"
+    rule_type                  = "{{ rule.rule_type }}"
+    http_listener_name         = "{{ rule.http_listener_name }}"
+    {% if rule.priority %}
+    priority                   = {{ rule.priority }}
+    {% endif %}
+    {% if rule.backend_address_pool_name %}
+    backend_address_pool_name  = "{{ rule.backend_address_pool_name }}"
+    {% endif %}
+    {% if rule.backend_http_settings_name %}
+    backend_http_settings_name = "{{ rule.backend_http_settings_name }}"
+    {% endif %}
+    {% if rule.url_path_map_id %}
+    url_path_map_name          = "{{ rule.url_path_map_id.split('/')[-1] }}"
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if gateway.probes_formatted %}
+  {% for probe in gateway.probes_formatted %}
+  probe {
+    name                                      = "{{ probe.name }}"
+    protocol                                  = "{{ probe.protocol }}"
+    host                                      = "{{ probe.host }}"
+    path                                      = "{{ probe.path }}"
+    interval                                  = {{ probe.interval }}
+    timeout                                   = {{ probe.timeout }}
+    unhealthy_threshold                       = {{ probe.unhealthy_threshold }}
+    {% if probe.pick_host_name_from_backend_http_settings %}
+    pick_host_name_from_backend_http_settings = {{ probe.pick_host_name_from_backend_http_settings | lower }}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if gateway.ssl_certificates_formatted %}
+  {% for cert in gateway.ssl_certificates_formatted %}
+  ssl_certificate {
+    name     = "{{ cert.name }}"
+    data     = filebase64("${path.module}/certificates/{{ cert.name }}.pfx")
+    password = var.ssl_certificate_password
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if gateway.waf_configuration %}
+  waf_configuration {
+    enabled                  = {{ gateway.waf_configuration.enabled | lower }}
+    firewall_mode            = "{{ gateway.waf_configuration.firewall_mode }}"
+    rule_set_type            = "{{ gateway.waf_configuration.rule_set_type }}"
+    rule_set_version         = "{{ gateway.waf_configuration.rule_set_version }}"
+    {% if gateway.waf_configuration.file_upload_limit_mb %}
+    file_upload_limit_mb     = {{ gateway.waf_configuration.file_upload_limit_mb }}
+    {% endif %}
+    {% if gateway.waf_configuration.request_body_check is not none %}
+    request_body_check       = {{ gateway.waf_configuration.request_body_check | lower }}
+    {% endif %}
+    {% if gateway.waf_configuration.max_request_body_size_kb %}
+    max_request_body_size_kb = {{ gateway.waf_configuration.max_request_body_size_kb }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if gateway.enable_http2 is not none %}
+  enable_http2 = {{ gateway.enable_http2 | lower }}
+  {% endif %}
+
+  {% if gateway.fips_enabled is not none %}
+  fips_enabled = {{ gateway.fips_enabled | lower }}
+  {% endif %}
+
+  {% if gateway.zones %}
+  zones = {{ gateway.zones | tojson }}
+  {% endif %}
+
+{{ macros.render_tags(gateway.tags) }}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}

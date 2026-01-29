@@ -1,0 +1,265 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_api_management" "{{ resource.name }}" {
+  name                = "{{ resource.properties.name }}"
+  location            = "{{ resource.properties.location | normalize_location('azure') }}"
+  resource_group_name = "{{ resource.properties.resource_group_name }}"
+  publisher_name      = "{{ resource.properties.publisher_name }}"
+  publisher_email     = "{{ resource.properties.publisher_email }}"
+  sku_name            = "{{ resource.properties.sku_name }}"
+  
+  {% if resource.properties.virtual_network_type is defined %}
+  virtual_network_type = "{{ resource.properties.virtual_network_type }}"
+  {% endif %}
+  
+  {# Computed attributes (management_api_url, portal_url, gateway_url, gateway_regional_url) are excluded #}
+  
+  {% if resource.properties.public_ip_address_id is defined and resource.properties.public_ip_address_id %}
+  public_ip_address_id = "{{ resource.properties.public_ip_address_id }}"
+  {% endif %}
+  
+  {% if resource.properties.notification_sender_email is defined and resource.properties.notification_sender_email %}
+  notification_sender_email = "{{ resource.properties.notification_sender_email }}"
+  {% endif %}
+  
+  {% if resource.properties.policy is defined and resource.properties.policy %}
+  policy {
+    {% if resource.properties.policy.xml_content is defined %}
+    xml_content = "{{ resource.properties.policy.xml_content }}"
+    {% endif %}
+    {% if resource.properties.policy.xml_link is defined %}
+    xml_link = "{{ resource.properties.policy.xml_link }}"
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.properties.protocols is defined and resource.properties.protocols and resource.properties.protocols.enable_http2 is defined %}
+  protocols {
+    enable_http2 = {{ resource.properties.protocols.enable_http2 | default(false) | lower }}
+  }
+  {% endif %}
+  
+  {% if resource.properties.security is defined %}
+  security {
+    {% if resource.properties.security.enable_backend_ssl30 is defined %}
+    backend_ssl30_enabled = {{ resource.properties.security.enable_backend_ssl30 | lower }}
+    {% endif %}
+    {% if resource.properties.security.enable_backend_tls10 is defined %}
+    backend_tls10_enabled = {{ resource.properties.security.enable_backend_tls10 | lower }}
+    {% endif %}
+    {% if resource.properties.security.enable_backend_tls11 is defined %}
+    backend_tls11_enabled = {{ resource.properties.security.enable_backend_tls11 | lower }}
+    {% endif %}
+    {% if resource.properties.security.enable_frontend_ssl30 is defined %}
+    frontend_ssl30_enabled = {{ resource.properties.security.enable_frontend_ssl30 | lower }}
+    {% endif %}
+    {% if resource.properties.security.enable_frontend_tls10 is defined %}
+    frontend_tls10_enabled = {{ resource.properties.security.enable_frontend_tls10 | lower }}
+    {% endif %}
+    {% if resource.properties.security.enable_frontend_tls11 is defined %}
+    frontend_tls11_enabled = {{ resource.properties.security.enable_frontend_tls11 | lower }}
+    {% endif %}
+    {% if resource.properties.security.triple_des_ciphers_enabled is defined %}
+    triple_des_ciphers_enabled = {{ resource.properties.security.triple_des_ciphers_enabled | lower }}
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.properties.sign_in is defined and resource.properties.sign_in %}
+  sign_in {
+    enabled = {{ resource.properties.sign_in.enabled | lower }}
+  }
+  {% endif %}
+  
+  {% if resource.properties.sign_up is defined and resource.properties.sign_up %}
+  sign_up {
+    enabled = {{ resource.properties.sign_up.enabled | lower }}
+    
+    {% if resource.properties.sign_up.terms_of_service is defined and resource.properties.sign_up.terms_of_service %}
+    terms_of_service {
+      enabled         = {{ resource.properties.sign_up.terms_of_service.enabled | lower }}
+      consent_required = {{ resource.properties.sign_up.terms_of_service.consent_required | lower }}
+      {% if resource.properties.sign_up.terms_of_service.text is defined and resource.properties.sign_up.terms_of_service.text %}
+      text = "{{ resource.properties.sign_up.terms_of_service.text }}"
+      {% endif %}
+    }
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.properties.identity is defined and resource.properties.identity and resource.properties.identity.type is defined %}
+
+  
+  identity {
+
+  
+    type = "{{ resource.properties.identity.type }}"
+    {% if resource.properties.identity.identity_ids is defined %}
+    identity_ids = {{ resource.properties.identity.identity_ids | tojson }}
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.properties.virtual_network_configuration is defined and resource.properties.virtual_network_configuration %}
+  virtual_network_configuration {
+    subnet_id = "{{ resource.properties.virtual_network_configuration.subnet_id }}"
+  }
+  {% endif %}
+  
+  {% if resource.properties.additional_location is defined %}
+  {% for location in resource.properties.additional_location %}
+  additional_location {
+    location = "{{ location.location }}"
+    
+    {% if location.capacity is defined %}
+    capacity = {{ location.capacity }}
+    {% endif %}
+    
+    {% if location.zones is defined %}
+    zones = {{ location.zones | tojson }}
+    {% endif %}
+    
+    {% if location.public_ip_address_id is defined %}
+    public_ip_address_id = "{{ location.public_ip_address_id }}"
+    {% endif %}
+    
+    {% if location.virtual_network_configuration is defined and location.virtual_network_configuration %}
+    virtual_network_configuration {
+      subnet_id = "{{ location.virtual_network_configuration.subnet_id }}"
+    }
+    {% endif %}
+    
+    {% if location.gateway_disabled is defined %}
+    gateway_disabled = {{ location.gateway_disabled | lower }}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.certificate is defined %}
+  {% for cert in resource.properties.certificate %}
+  certificate {
+    encoded_certificate  = "{{ cert.encoded_certificate }}"
+    certificate_password = var.certificate_password
+    store_name          = "{{ cert.store_name }}"
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.hostname_configuration is defined %}
+  hostname_configuration {
+    {% if resource.properties.hostname_configuration.management is defined %}
+    {% for mgmt in resource.properties.hostname_configuration.management %}
+    management {
+      host_name                    = "{{ mgmt.host_name }}"
+      {% if mgmt.key_vault_id is defined and mgmt.key_vault_id and mgmt.key_vault_id != null and mgmt.key_vault_id != "None" %}
+      key_vault_id                 = "{{ mgmt.key_vault_id }}"
+      {% endif %}
+      {% if mgmt.certificate is defined and mgmt.certificate %}
+      certificate                  = "{{ mgmt.certificate }}"
+      {% endif %}
+      {% if mgmt.certificate_password is defined and mgmt.certificate %}
+      certificate_password         = var.certificate_password
+      {% endif %}
+      {% if mgmt.negotiate_client_certificate is defined %}
+      negotiate_client_certificate = {{ mgmt.negotiate_client_certificate | lower }}
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+    
+    {% if resource.properties.hostname_configuration.portal is defined %}
+    {% for portal in resource.properties.hostname_configuration.portal %}
+    portal {
+      host_name                    = "{{ portal.host_name }}"
+      {% if portal.key_vault_id is defined and portal.key_vault_id and portal.key_vault_id != null and portal.key_vault_id != "None" %}
+      key_vault_id                 = "{{ portal.key_vault_id }}"
+      {% endif %}
+      {% if portal.certificate is defined and portal.certificate %}
+      certificate                  = "{{ portal.certificate }}"
+      {% endif %}
+      {% if portal.certificate_password is defined and portal.certificate %}
+      certificate_password         = var.certificate_password
+      {% endif %}
+      {% if portal.negotiate_client_certificate is defined %}
+      negotiate_client_certificate = {{ portal.negotiate_client_certificate | lower }}
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+    
+    {% if resource.properties.hostname_configuration.developer_portal is defined %}
+    {% for dev_portal in resource.properties.hostname_configuration.developer_portal %}
+    developer_portal {
+      host_name                    = "{{ dev_portal.host_name }}"
+      key_vault_id                 = "{{ dev_portal.key_vault_id }}"
+      {% if dev_portal.certificate is defined %}
+      certificate                  = "{{ dev_portal.certificate }}"
+      {% endif %}
+      {% if dev_portal.certificate_password is defined %}
+      certificate_password         = var.certificate_password
+      {% endif %}
+      {% if dev_portal.negotiate_client_certificate is defined %}
+      negotiate_client_certificate = {{ dev_portal.negotiate_client_certificate | lower }}
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+    
+    {% if resource.properties.hostname_configuration.proxy is defined %}
+    {% for proxy in resource.properties.hostname_configuration.proxy %}
+    proxy {
+      host_name                    = "{{ proxy.host_name }}"
+      {% if proxy.key_vault_id is defined and proxy.key_vault_id and proxy.key_vault_id != null and proxy.key_vault_id != "None" %}
+      key_vault_id                 = "{{ proxy.key_vault_id }}"
+      {% endif %}
+      {% if proxy.certificate is defined and proxy.certificate %}
+      certificate                  = "{{ proxy.certificate }}"
+      {% endif %}
+      {% if proxy.certificate_password is defined and proxy.certificate %}
+      certificate_password         = var.certificate_password
+      {% endif %}
+      {% if proxy.negotiate_client_certificate is defined %}
+      negotiate_client_certificate = {{ proxy.negotiate_client_certificate | lower }}
+      {% endif %}
+      {% if proxy.default_ssl_binding is defined %}
+      default_ssl_binding          = {{ proxy.default_ssl_binding | lower }}
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+    
+    {% if resource.properties.hostname_configuration.scm is defined %}
+    {% for scm in resource.properties.hostname_configuration.scm %}
+    scm {
+      host_name                    = "{{ scm.host_name }}"
+      key_vault_id                 = "{{ scm.key_vault_id }}"
+      {% if scm.certificate is defined %}
+      certificate                  = "{{ scm.certificate }}"
+      {% endif %}
+      {% if scm.certificate_password is defined %}
+      certificate_password         = var.certificate_password
+      {% endif %}
+      {% if scm.negotiate_client_certificate is defined %}
+      negotiate_client_certificate = {{ scm.negotiate_client_certificate | lower }}
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.properties.zones is defined and resource.properties.zones and resource.properties.zones | length > 0 %}
+  zones = {{ resource.properties.zones | tojson }}
+  {% endif %}
+  
+  {% if resource.properties.tags is defined and resource.properties.tags %}
+  tags = {{ resource.properties.tags | tojson }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,70 @@
+{%- for instance in resources %}
+{% if instance.name_sanitized and instance.name_sanitized != "unnamed_resource" %}
+# AWS EC2 Instance: {{ instance.InstanceId }}
+resource "aws_instance" "{{ instance.name_sanitized }}" {
+  # Import: terraform import aws_instance.{{ instance.name_sanitized }} {{ instance.InstanceId }}
+
+  ami                    = "{{ instance.ImageId }}"
+  instance_type          = "{{ instance.InstanceType }}"
+
+  {%- if instance.get('SubnetId') %}
+  subnet_id              = "{{ instance.SubnetId }}"
+  {%- endif %}
+
+  {%- if instance.get('KeyName') %}
+  key_name               = "{{ instance.KeyName }}"
+  {%- endif %}
+
+  {%- if instance.get('IamInstanceProfile') %}
+  iam_instance_profile   = "{{ instance.IamInstanceProfile.Arn.split('/')[-1] }}"
+  {%- endif %}
+
+  {%- if instance.get('Monitoring') and instance.Monitoring.State == "enabled" %}
+  monitoring             = true
+  {%- endif %}
+
+  {%- if instance.get('EbsOptimized') %}
+  ebs_optimized          = {{ instance.EbsOptimized | lower }}
+  {%- endif %}
+
+  {%- if instance.get('SecurityGroups') %}
+  vpc_security_group_ids = [
+    {%- for sg in instance.SecurityGroups %}
+    "{{ sg.GroupId }}"{{ "," if not loop.last }}
+    {%- endfor %}
+  ]
+  {%- endif %}
+
+  {%- if instance.get('BlockDeviceMappings') %}
+  {%- for device in instance.BlockDeviceMappings if device.get('Ebs') %}
+
+  root_block_device {
+    volume_type = "{{ device.Ebs.get('VolumeType', 'gp2') }}"
+    volume_size = {{ device.Ebs.get('VolumeSize', 8) }}
+    {%- if device.Ebs.get('Encrypted') %}
+    encrypted   = true
+    {%- endif %}
+    {%- if device.Ebs.get('DeleteOnTermination') is not none %}
+    delete_on_termination = {{ device.Ebs.DeleteOnTermination | lower }}
+    {%- endif %}
+  }
+  {%- endfor %}
+  {%- endif %}
+
+  {%- if instance.get('Tags') %}
+  tags = {
+    {%- for tag in instance.Tags %}
+    "{{ tag.Key }}" = "{{ tag.Value }}"{{ "," if not loop.last }}
+    {%- endfor %}
+  }
+  {%- endif %}
+
+  lifecycle {
+    ignore_changes = [
+      ami,
+      user_data
+    ]
+  }
+}
+{% endif %}
+{%- endfor %}

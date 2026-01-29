@@ -1,0 +1,240 @@
+{# Compute Component Macros #}
+{# Reusable components for compute-related configurations #}
+
+{% import "common/advanced_macros.j2" as macros %}
+
+{# ========== EC2 Instance Configuration ========== #}
+{% macro render_ec2_instance_config(instance, indent=2) %}
+{{ macros.render_field('ami', instance.get('ImageId'), indent) }}
+{{ macros.render_field('instance_type', instance.get('InstanceType'), indent) }}
+{{ macros.render_field('key_name', instance.get('KeyName'), indent) }}
+{{ macros.render_field('availability_zone', instance.get('Placement', {}).get('AvailabilityZone'), indent) }}
+{{ macros.render_field('subnet_id', instance.get('SubnetId'), indent) }}
+{% set sg_ids = [] %}
+{% for sg in instance.get('SecurityGroups', []) %}
+  {% if sg is mapping %}
+    {% set _ = sg_ids.append(sg.get('GroupId', sg.get('groupId', ''))) %}
+  {% else %}
+    {% set _ = sg_ids.append(sg) %}
+  {% endif %}
+{% endfor %}
+{{ macros.render_list_field('vpc_security_group_ids', sg_ids, indent) }}
+{{ macros.render_bool_field('monitoring', instance.get('Monitoring', {}).get('State') == 'enabled', indent) }}
+{{ macros.render_bool_field('ebs_optimized', instance.get('EbsOptimized'), indent) }}
+{{ macros.render_bool_field('source_dest_check', instance.get('SourceDestCheck'), indent) }}
+{{ macros.render_field('iam_instance_profile', instance.get('IamInstanceProfile', {}).get('Arn', '').split('/')[-1], indent) }}
+{{ macros.render_field('user_data', instance.get('UserData'), indent) }}
+{{ macros.render_field('user_data_base64', instance.get('UserDataBase64'), indent) }}
+{% endmacro %}
+
+{# ========== EBS Volume Configuration ========== #}
+{% macro render_ebs_volume(volume, indent=2) %}
+{{ ' ' * indent }}ebs_block_device {
+  {{ macros.render_field('device_name', volume.get('DeviceName'), indent+2) }}
+  {{ macros.render_field('volume_type', volume.get('Ebs', {}).get('VolumeType', 'gp3'), indent+2) }}
+  {{ macros.render_number_field('volume_size', volume.get('Ebs', {}).get('VolumeSize'), indent+2) }}
+  {{ macros.render_number_field('iops', volume.get('Ebs', {}).get('Iops'), indent+2) }}
+  {{ macros.render_number_field('throughput', volume.get('Ebs', {}).get('Throughput'), indent+2) }}
+  {{ macros.render_bool_field('delete_on_termination', volume.get('Ebs', {}).get('DeleteOnTermination'), indent+2) }}
+  {{ macros.render_bool_field('encrypted', volume.get('Ebs', {}).get('Encrypted'), indent+2) }}
+  {{ macros.render_field('kms_key_id', volume.get('Ebs', {}).get('KmsKeyId'), indent+2) }}
+  {{ macros.render_field('snapshot_id', volume.get('Ebs', {}).get('SnapshotId'), indent+2) }}
+{{ ' ' * indent }}}
+{% endmacro %}
+
+{# ========== Launch Template Configuration ========== #}
+{% macro render_launch_template_data(template_data, indent=2) %}
+{{ macros.render_field('image_id', template_data.get('ImageId'), indent) }}
+{{ macros.render_field('instance_type', template_data.get('InstanceType'), indent) }}
+{{ macros.render_field('key_name', template_data.get('KeyName'), indent) }}
+{{ macros.render_field('kernel_id', template_data.get('KernelId'), indent) }}
+{{ macros.render_field('ramdisk_id', template_data.get('RamdiskId'), indent) }}
+
+{# Instance profile #}
+{% if template_data.get('IamInstanceProfile') %}
+{{ ' ' * indent }}iam_instance_profile {
+  {{ macros.render_field('arn', template_data.IamInstanceProfile.get('Arn'), indent+2) }}
+  {{ macros.render_field('name', template_data.IamInstanceProfile.get('Name'), indent+2) }}
+{{ ' ' * indent }}}
+{% endif %}
+
+{# Network interfaces #}
+{% for interface in template_data.get('NetworkInterfaces', []) %}
+{{ ' ' * indent }}network_interfaces {
+  {{ macros.render_number_field('device_index', interface.get('DeviceIndex'), indent+2) }}
+  {{ macros.render_field('network_interface_id', interface.get('NetworkInterfaceId'), indent+2) }}
+  {{ macros.render_field('subnet_id', interface.get('SubnetId'), indent+2) }}
+  {{ macros.render_list_field('security_groups', interface.get('Groups', []), indent+2) }}
+  {{ macros.render_bool_field('delete_on_termination', interface.get('DeleteOnTermination'), indent+2) }}
+  {{ macros.render_bool_field('associate_public_ip_address', interface.get('AssociatePublicIpAddress'), indent+2) }}
+{{ ' ' * indent }}}
+{% endfor %}
+
+{# Block device mappings #}
+{% for device in template_data.get('BlockDeviceMappings', []) %}
+{{ render_ebs_volume(device, indent) }}
+{% endfor %}
+
+{# User data #}
+{{ macros.render_field('user_data', template_data.get('UserData'), indent) }}
+
+{# Monitoring #}
+{% if template_data.get('Monitoring') %}
+{{ ' ' * indent }}monitoring {
+  {{ macros.render_bool_field('enabled', template_data.Monitoring.get('Enabled'), indent+2) }}
+{{ ' ' * indent }}}
+{% endif %}
+
+{# Placement #}
+{% if template_data.get('Placement') %}
+{{ ' ' * indent }}placement {
+  {{ macros.render_field('availability_zone', template_data.Placement.get('AvailabilityZone'), indent+2) }}
+  {{ macros.render_field('group_name', template_data.Placement.get('GroupName'), indent+2) }}
+  {{ macros.render_field('tenancy', template_data.Placement.get('Tenancy'), indent+2) }}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{# ========== Auto Scaling Group Configuration ========== #}
+{% macro render_asg_config(asg, indent=2) %}
+{{ macros.render_field('name', asg.get('AutoScalingGroupName'), indent) }}
+{{ macros.render_number_field('min_size', asg.get('MinSize'), indent) }}
+{{ macros.render_number_field('max_size', asg.get('MaxSize'), indent) }}
+{{ macros.render_number_field('desired_capacity', asg.get('DesiredCapacity'), indent) }}
+{{ macros.render_number_field('default_cooldown', asg.get('DefaultCooldown'), indent) }}
+{{ macros.render_list_field('availability_zones', asg.get('AvailabilityZones', []), indent) }}
+{{ macros.render_list_field('vpc_zone_identifier', asg.get('VPCZoneIdentifier', '').split(',') if asg.get('VPCZoneIdentifier') else [], indent) }}
+{{ macros.render_field('health_check_type', asg.get('HealthCheckType'), indent) }}
+{{ macros.render_number_field('health_check_grace_period', asg.get('HealthCheckGracePeriod'), indent) }}
+{{ macros.render_list_field('load_balancers', asg.get('LoadBalancerNames', []), indent) }}
+{{ macros.render_list_field('target_group_arns', asg.get('TargetGroupARNs', []), indent) }}
+{{ macros.render_field('placement_group', asg.get('PlacementGroup'), indent) }}
+
+{# Launch configuration or template #}
+{% if asg.get('LaunchConfigurationName') %}
+{{ macros.render_field('launch_configuration', asg.get('LaunchConfigurationName'), indent) }}
+{% elif asg.get('LaunchTemplate') %}
+{{ ' ' * indent }}launch_template {
+  {{ macros.render_field('id', asg.LaunchTemplate.get('LaunchTemplateId'), indent+2) }}
+  {{ macros.render_field('name', asg.LaunchTemplate.get('LaunchTemplateName'), indent+2) }}
+  {{ macros.render_field('version', asg.LaunchTemplate.get('Version'), indent+2) }}
+{{ ' ' * indent }}}
+{% endif %}
+
+{# Mixed instances policy #}
+{% if asg.get('MixedInstancesPolicy') %}
+{{ render_mixed_instances_policy(asg.MixedInstancesPolicy, indent) }}
+{% endif %}
+{% endmacro %}
+
+{# ========== Lambda Function Configuration ========== #}
+{% macro render_lambda_config(function, indent=2) %}
+{{ macros.render_field('function_name', function.get('FunctionName'), indent) }}
+{{ macros.render_field('runtime', function.get('Runtime'), indent) }}
+{{ macros.render_field('handler', function.get('Handler'), indent) }}
+{{ macros.render_field('role', function.get('Role'), indent) }}
+{{ macros.render_field('description', function.get('Description'), indent) }}
+{{ macros.render_number_field('timeout', function.get('Timeout'), indent) }}
+{{ macros.render_number_field('memory_size', function.get('MemorySize'), indent) }}
+{{ macros.render_field('publish', function.get('Publish'), indent, quote=false) }}
+
+{# Environment variables #}
+{% if function.get('Environment', {}).get('Variables') %}
+{{ ' ' * indent }}environment {
+  {{ macros.render_map_field('variables', function.Environment.Variables, indent+2) }}
+{{ ' ' * indent }}}
+{% endif %}
+
+{# VPC configuration #}
+{% if function.get('VpcConfig') %}
+{{ render_vpc_config(function.VpcConfig, indent) }}
+{% endif %}
+
+{# Dead letter config #}
+{% if function.get('DeadLetterConfig') %}
+{{ ' ' * indent }}dead_letter_config {
+  {{ macros.render_field('target_arn', function.DeadLetterConfig.get('TargetArn'), indent+2) }}
+{{ ' ' * indent }}}
+{% endif %}
+
+{# Tracing config #}
+{% if function.get('TracingConfig') %}
+{{ ' ' * indent }}tracing_config {
+  {{ macros.render_field('mode', function.TracingConfig.get('Mode'), indent+2) }}
+{{ ' ' * indent }}}
+{% endif %}
+
+{# Layers #}
+{{ macros.render_list_field('layers', function.get('Layers', []), indent) }}
+
+{# File system config #}
+{% for fs_config in function.get('FileSystemConfigs', []) %}
+{{ ' ' * indent }}file_system_config {
+  {{ macros.render_field('arn', fs_config.get('Arn'), indent+2) }}
+  {{ macros.render_field('local_mount_path', fs_config.get('LocalMountPath'), indent+2) }}
+{{ ' ' * indent }}}
+{% endfor %}
+{% endmacro %}
+
+{# ========== Container/ECS Task Definition ========== #}
+{% macro render_container_definition(container, indent=2) %}
+{{ ' ' * indent }}container_definitions = jsonencode([
+{% for container_def in container.get('containerDefinitions', []) %}
+{{ ' ' * (indent + 2) }}{
+{{ ' ' * (indent + 4) }}name  = "{{ container_def.get('name') }}"
+{{ ' ' * (indent + 4) }}image = "{{ container_def.get('image') }}"
+{% if container_def.get('cpu') %}
+{{ ' ' * (indent + 4) }}cpu   = {{ container_def.get('cpu') }}
+{% endif %}
+{% if container_def.get('memory') %}
+{{ ' ' * (indent + 4) }}memory = {{ container_def.get('memory') }}
+{% endif %}
+{% if container_def.get('essential') is not none %}
+{{ ' ' * (indent + 4) }}essential = {{ container_def.get('essential') | tf_bool }}
+{% endif %}
+{% if container_def.get('portMappings') %}
+{{ ' ' * (indent + 4) }}portMappings = {{ container_def.get('portMappings') | tojson }}
+{% endif %}
+{% if container_def.get('environment') %}
+{{ ' ' * (indent + 4) }}environment = {{ container_def.get('environment') | tojson }}
+{% endif %}
+{% if container_def.get('secrets') %}
+{{ ' ' * (indent + 4) }}secrets = {{ container_def.get('secrets') | tojson }}
+{% endif %}
+{{ ' ' * (indent + 2) }}}{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * indent }}])
+{% endmacro %}
+
+{# ========== Mixed Instances Policy ========== #}
+{% macro render_mixed_instances_policy(policy, indent=2) %}
+{{ ' ' * indent }}mixed_instances_policy {
+  {% if policy.get('LaunchTemplate') %}
+  {{ ' ' * (indent + 2) }}launch_template {
+    {{ ' ' * (indent + 4) }}launch_template_specification {
+      {{ macros.render_field('launch_template_id', policy.LaunchTemplate.get('LaunchTemplateSpecification', {}).get('LaunchTemplateId'), indent+6) }}
+      {{ macros.render_field('launch_template_name', policy.LaunchTemplate.get('LaunchTemplateSpecification', {}).get('LaunchTemplateName'), indent+6) }}
+      {{ macros.render_field('version', policy.LaunchTemplate.get('LaunchTemplateSpecification', {}).get('Version'), indent+6) }}
+    {{ ' ' * (indent + 4) }}}
+    
+    {% for override in policy.LaunchTemplate.get('Overrides', []) %}
+    {{ ' ' * (indent + 4) }}override {
+      {{ macros.render_field('instance_type', override.get('InstanceType'), indent+6) }}
+      {{ macros.render_field('weighted_capacity', override.get('WeightedCapacity'), indent+6) }}
+    {{ ' ' * (indent + 4) }}}
+    {% endfor %}
+  {{ ' ' * (indent + 2) }}}
+  {% endif %}
+  
+  {% if policy.get('InstancesDistribution') %}
+  {{ ' ' * (indent + 2) }}instances_distribution {
+    {{ macros.render_field('on_demand_allocation_strategy', policy.InstancesDistribution.get('OnDemandAllocationStrategy'), indent+4) }}
+    {{ macros.render_number_field('on_demand_base_capacity', policy.InstancesDistribution.get('OnDemandBaseCapacity'), indent+4) }}
+    {{ macros.render_number_field('on_demand_percentage_above_base_capacity', policy.InstancesDistribution.get('OnDemandPercentageAboveBaseCapacity'), indent+4) }}
+    {{ macros.render_field('spot_allocation_strategy', policy.InstancesDistribution.get('SpotAllocationStrategy'), indent+4) }}
+    {{ macros.render_number_field('spot_instance_pools', policy.InstancesDistribution.get('SpotInstancePools'), indent+4) }}
+    {{ macros.render_field('spot_max_price', policy.InstancesDistribution.get('SpotMaxPrice'), indent+4) }}
+  {{ ' ' * (indent + 2) }}}
+  {% endif %}
+{{ ' ' * indent }}}
+{% endmacro %}

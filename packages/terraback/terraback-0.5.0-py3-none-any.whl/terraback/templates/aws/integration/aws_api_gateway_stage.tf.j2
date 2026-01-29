@@ -1,0 +1,20 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for stage in resources %}
+{{ resource_spacer() }}
+resource "aws_api_gateway_stage" "{{ stage.restApiId }}_{{ stage.stageName }}" {
+  deployment_id = "{{ stage.deploymentId }}"
+  rest_api_id   = "{{ stage.restApiId }}"
+  stage_name    = "{{ stage.stageName }}"
+
+  {% if stage.get('cacheClusterEnabled') is not none %}
+  cache_cluster_enabled = {{ stage.cacheClusterEnabled | tf_bool }}
+  {%  endif %}
+
+  {% if stage.get('cacheClusterSize') %}
+  cache_cluster_size = "{{ stage.cacheClusterSize }}"
+  {%  endif %}
+}
+
+{% endfor %}
+{% endblock %}

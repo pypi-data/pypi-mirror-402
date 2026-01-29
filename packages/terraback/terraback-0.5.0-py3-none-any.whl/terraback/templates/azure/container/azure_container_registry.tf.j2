@@ -1,0 +1,157 @@
+{% extends 'common/base_resource.tf.j2' %}
+{% import 'common/macros.j2' as macros %}
+{% block resources %}
+{% for registry in resources %}
+{{ resource_spacer() }}
+resource "azurerm_container_registry" "{{ registry.name_sanitized }}" {
+  name                = "{{ registry.name }}"
+  location            = "{{ registry.location }}"
+  resource_group_name = "{{ registry.resource_group_name }}"
+  sku                 = "{{ registry.sku }}"
+  
+  {% if registry.login_server is defined %}
+  # login_server = "{{ registry.login_server }}" # Read-only attribute
+  {% endif %}
+  
+  {% if registry.admin_enabled is defined %}
+  admin_enabled = {{ registry.admin_enabled | lower }}
+  {% endif %}
+  
+  {% if registry.public_network_access_enabled is defined %}
+  public_network_access_enabled = {{ registry.public_network_access_enabled | lower }}
+  {% endif %}
+  
+  {% if registry.quarantine_policy_enabled is defined %}
+  quarantine_policy_enabled = {{ registry.quarantine_policy_enabled | lower }}
+  {% endif %}
+  
+  {% if registry.zone_redundancy_enabled is defined %}
+  zone_redundancy_enabled = {{ registry.zone_redundancy_enabled | lower }}
+  {% endif %}
+  
+  {% if registry.export_policy_enabled is defined %}
+  export_policy_enabled = {{ registry.export_policy_enabled | lower }}
+  {% endif %}
+  
+  {% if registry.anonymous_pull_enabled is defined %}
+  anonymous_pull_enabled = {{ registry.anonymous_pull_enabled | lower }}
+  {% endif %}
+  
+  {% if registry.data_endpoint_enabled is defined %}
+  data_endpoint_enabled = {{ registry.data_endpoint_enabled | lower }}
+  {% endif %}
+  
+  {% if registry.network_rule_bypass_option %}
+  network_rule_bypass_option = "{{ registry.network_rule_bypass_option }}"
+  {% endif %}
+  
+  {% if registry.network_rule_set_formatted %}
+  network_rule_set {
+    {% if registry.network_rule_set_formatted.default_action %}
+    default_action = "{{ registry.network_rule_set_formatted.default_action }}"
+    {% endif %}
+    
+    {% for ip_rule in registry.network_rule_set_formatted.ip_rules %}
+    ip_rule {
+      action   = "Allow"
+      ip_range = "{{ ip_rule.ip_address_or_range }}"
+    }
+    {% endfor %}
+    
+    {% for vnet_rule in registry.network_rule_set_formatted.virtual_network_rules %}
+    virtual_network {
+      action    = "Allow"
+      subnet_id = "{{ vnet_rule.subnet_id }}"
+    }
+    {% endfor %}
+  }
+  {% endif %}
+  
+  {% if registry.retention_policy_formatted and registry.retention_policy_formatted.enabled %}
+  retention_policy {
+    enabled = true
+    days    = {{ registry.retention_policy_formatted.days }}
+  }
+  {% endif %}
+  
+  {% if registry.trust_policy and registry.trust_policy.enabled %}
+  trust_policy {
+    enabled = {{ registry.trust_policy.enabled | lower }}
+  }
+  {% endif %}
+  
+  {% if registry.encryption_formatted and registry.encryption_formatted.enabled and registry.encryption_formatted.key_vault_key_id %}
+  encryption {
+    enabled            = true
+    key_vault_key_id   = "{{ registry.encryption_formatted.key_vault_key_id }}"
+    {% if registry.identity and registry.identity.principal_id %}
+    identity_client_id = "{{ registry.identity.principal_id }}"
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if registry.identity %}
+  identity {
+    type = "{{ registry.identity.type }}"
+    {% if registry.identity.identity_ids %}
+    identity_ids = {{ registry.identity.identity_ids | tojson }}
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if registry.georeplications %}
+  {% for replication in registry.georeplications %}
+  georeplications {
+    location                  = "{{ replication.location }}"
+    zone_redundancy_enabled   = {{ replication.zone_redundancy_enabled | default(false) | lower }}
+    regional_endpoint_enabled = {{ replication.regional_endpoint_enabled | default(false) | lower }}
+    {% if replication.tags %}
+    tags = {{ replication.tags | tojson }}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+{{ macros.render_tags(registry.tags) }}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% if registry.webhooks %}
+{% for webhook in registry.webhooks %}
+{{ resource_spacer() }}
+resource "azurerm_container_registry_webhook" "{{ registry.name_sanitized }}_{{ webhook.name | replace('-', '_') | replace('.', '_') | lower }}" {
+  name                = "{{ webhook.name }}"
+  resource_group_name = "{{ registry.resource_group_name }}"
+  registry_name       = azurerm_container_registry.{{ registry.name_sanitized }}.name
+  location            = "{{ registry.location }}"
+  
+  service_uri = "{{ webhook.service_uri }}"
+  actions     = {{ webhook.actions | tojson }}
+  status      = "{{ webhook.status | default('enabled') }}"
+  {% if webhook.scope %}
+  scope       = "{{ webhook.scope }}"
+  {% endif %}
+  
+  {% if webhook.custom_headers %}
+  custom_headers = {{ webhook.custom_headers | tojson }}
+  {% endif %}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+
+
+
+
+
+
+{% endblock %}
+

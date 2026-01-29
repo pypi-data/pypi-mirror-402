@@ -1,0 +1,68 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% import "gcp/macros.j2" as gcp_macros %}
+{% block resources %}
+{% for policy in resources %}
+
+# Import existing binary authorization policy: {{ policy.name }}
+import {
+  to = google_binary_authorization_policy.{{ policy.name_sanitized }}
+  id = "{{ policy.project }}"
+}
+
+{{ resource_spacer() }}
+resource "google_binary_authorization_policy" "{{ policy.name_sanitized }}" {
+  {% if policy.get('project') %}
+
+  {% endif %}
+
+  {% if policy.get('description') %}
+  description = "{{ policy.description }}"
+  {% endif %}
+
+  {% if policy.get('global_policy_evaluation_mode') %}
+  global_policy_evaluation_mode = "{{ policy.global_policy_evaluation_mode }}"
+  {% endif %}
+
+  {% if policy.get('admission_whitelist_patterns') %}
+  {% for pattern in policy.admission_whitelist_patterns %}
+  admission_whitelist_patterns {
+    name_pattern = "{{ pattern.name_pattern }}"
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if policy.get('cluster_admission_rules') %}
+  {% for cluster, rule in policy.cluster_admission_rules.items() %}
+  cluster_admission_rules {
+    cluster                 = "{{ cluster }}"
+    evaluation_mode         = "{{ rule.evaluation_mode }}"
+    enforcement_mode        = "{{ rule.enforcement_mode }}"
+    
+    {% if rule.get('require_attestations_by') %}
+    require_attestations_by = [
+      {% for attestor in rule.require_attestations_by %}
+      "{{ attestor }}"{{ "," if not loop.last }}
+      {% endfor %}
+    ]
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  default_admission_rule {
+    evaluation_mode  = "{{ policy.default_admission_rule.evaluation_mode }}"
+    enforcement_mode = "{{ policy.default_admission_rule.enforcement_mode }}"
+    
+    {% if policy.default_admission_rule.get('require_attestations_by') %}
+    require_attestations_by = [
+      {% for attestor in policy.default_admission_rule.require_attestations_by %}
+      "{{ attestor }}"{{ "," if not loop.last }}
+      {% endfor %}
+    ]
+    {% endif %}
+  }
+
+  {{ gcp_macros.render_gcp_labels(policy, indent=2) }}
+}
+
+{% endfor %}{% endblock %}

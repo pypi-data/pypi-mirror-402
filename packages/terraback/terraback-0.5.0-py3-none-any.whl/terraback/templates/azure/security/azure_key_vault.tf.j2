@@ -1,0 +1,167 @@
+{% extends 'common/base_resource.tf.j2' %}
+{% import 'common/macros.j2' as macros %}
+{% block resources %}
+{% for kv in resources %}
+{{ resource_spacer() }}
+# Import existing Key Vault: {{ kv.name }}
+import {
+  to = azurerm_key_vault.{{ kv.name_sanitized }}
+  id = "{{ kv.id }}"
+}
+
+resource "azurerm_key_vault" "{{ kv.name_sanitized }}" {
+  name                = "{{ kv.name }}"
+  location            = "{{ kv.location }}"
+  resource_group_name = "{{ kv.resource_group_name }}"
+  tenant_id           = "{{ kv.tenant_id }}"
+  sku_name            = "{{ kv.sku_name | default('standard') }}"
+  
+  {% if kv.soft_delete_retention_days %}
+  soft_delete_retention_days = {{ kv.soft_delete_retention_days }}
+  {% endif %}
+  
+  {% if kv.purge_protection_enabled is defined %}
+  purge_protection_enabled = {{ kv.purge_protection_enabled | lower }}
+  {% endif %}
+  
+  {% if kv.enabled_for_deployment is defined %}
+  enabled_for_deployment = {{ kv.enabled_for_deployment | lower }}
+  {% endif %}
+  
+  {% if kv.enabled_for_disk_encryption is defined %}
+  enabled_for_disk_encryption = {{ kv.enabled_for_disk_encryption | lower }}
+  {% endif %}
+  
+  {% if kv.enabled_for_template_deployment is defined %}
+  enabled_for_template_deployment = {{ kv.enabled_for_template_deployment | lower }}
+  {% endif %}
+  
+  {% if kv.enable_rbac_authorization is defined %}
+  enable_rbac_authorization = {{ kv.enable_rbac_authorization | lower }}
+  {% endif %}
+  
+  {% if kv.public_network_access_enabled is defined %}
+  public_network_access_enabled = {{ kv.public_network_access_enabled | lower }}
+  {% endif %}
+
+  {% if kv.access_policies %}
+  {% for policy in kv.access_policies %}
+  access_policy {
+    tenant_id = "{{ policy.tenant_id }}"
+    object_id = "{{ policy.object_id }}"
+    {% if policy.application_id %}
+    application_id = "{{ policy.application_id }}"
+    {% endif %}
+    
+    {% if policy.certificate_permissions %}
+    certificate_permissions = {{ policy.certificate_permissions | tojson }}
+    {% endif %}
+    
+    {% if policy.key_permissions %}
+    key_permissions = {{ policy.key_permissions | tojson }}
+    {% endif %}
+    
+    {% if policy.secret_permissions %}
+    secret_permissions = {{ policy.secret_permissions | tojson }}
+    {% endif %}
+    
+    {% if policy.storage_permissions %}
+    storage_permissions = {{ policy.storage_permissions | tojson }}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if kv.network_acls %}
+  network_acls {
+    bypass                     = "{{ kv.network_acls.bypass | default('AzureServices') }}"
+    default_action             = "{{ kv.network_acls.default_action | default('Allow') }}"
+    
+    {% if kv.network_acls.ip_rules %}
+    ip_rules = {{ kv.network_acls.ip_rules | tojson }}
+    {% endif %}
+    
+    {% if kv.network_acls.virtual_network_subnet_ids %}
+    virtual_network_subnet_ids = {{ kv.network_acls.virtual_network_subnet_ids | tojson }}
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if kv.contact %}
+  {% for contact in kv.contact %}
+  contact {
+    email = "{{ contact.email }}"
+    {% if contact.name %}
+    name  = "{{ contact.name }}"
+    {% endif %}
+    {% if contact.phone %}
+    phone = "{{ contact.phone }}"
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+{{ macros.render_tags(kv.tags) }}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% if kv.diagnostic_settings %}
+{% for setting in kv.diagnostic_settings %}
+{{ resource_spacer() }}
+resource "azurerm_monitor_diagnostic_setting" "{{ kv.name_sanitized }}_{{ setting.name | replace('-', '_') | replace('.', '_') | lower }}" {
+  name               = "{{ setting.name }}"
+  target_resource_id = azurerm_key_vault.{{ kv.name_sanitized }}.id
+  
+  {% if setting.workspace_id %}
+  log_analytics_workspace_id = "{{ setting.workspace_id }}"
+  {% endif %}
+  
+  {% if setting.storage_account_id %}
+  storage_account_id = "{{ setting.storage_account_id }}"
+  {% endif %}
+  
+  {% if setting.event_hub_auth_rule_id %}
+  eventhub_authorization_rule_id = "{{ setting.event_hub_auth_rule_id }}"
+  {% endif %}
+  
+  {% for log in setting.logs %}
+  {% if log.enabled %}
+  enabled_log {
+    category = "{{ log.category }}"
+    
+    {% if log.retention_policy %}
+    retention_policy {
+      enabled = {{ log.retention_policy.enabled | lower }}
+      {% if log.retention_policy.days %}
+      days    = {{ log.retention_policy.days }}
+      {% endif %}
+    }
+    {% endif %}
+  }
+  {% endif %}
+  {% endfor %}
+  
+  {% for metric in setting.metrics %}
+  {% if metric.enabled %}
+  metric {
+    category = "{{ metric.category }}"
+    
+    {% if metric.retention_policy %}
+    retention_policy {
+      enabled = {{ metric.retention_policy.enabled | lower }}
+      {% if metric.retention_policy.days %}
+      days    = {{ metric.retention_policy.days }}
+      {% endif %}
+    }
+    {% endif %}
+  }
+  {% endif %}
+  {% endfor %}
+}
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+{% endblock %}

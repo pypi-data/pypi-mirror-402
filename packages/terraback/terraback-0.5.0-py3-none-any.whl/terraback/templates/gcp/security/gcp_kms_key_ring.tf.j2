@@ -1,0 +1,40 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for key_ring in resources %}
+{{ resource_spacer() }}
+resource "google_kms_key_ring" "{{ key_ring.name_sanitized }}" {
+  name     = "{{ key_ring.name }}"
+  location = "{{ key_ring.location }}"
+
+  {% if key_ring.get('project') %}
+
+  {% endif %}
+
+  {{ render_gcp_labels(key_ring, indent=2) }}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% if key_ring.get('iam_members') %}
+{% for member in key_ring.iam_members %}
+{{ resource_spacer() }}
+resource "google_kms_key_ring_iam_member" "{{ key_ring.name_sanitized }}_{{ loop.index }}" {
+  key_ring_id = google_kms_key_ring.{{ key_ring.name_sanitized }}.id
+  role        = "{{ member.role }}"
+  member      = "{{ member.member }}"
+
+  {% if member.get('condition') %}
+  condition {
+    title       = "{{ member.condition.title }}"
+    description = "{{ member.condition.description }}"
+    expression  = "{{ member.condition.expression }}"
+  }
+  {% endif %}
+}
+
+{% endfor %}
+{% endif %}
+
+{% endfor %}{% endblock %}

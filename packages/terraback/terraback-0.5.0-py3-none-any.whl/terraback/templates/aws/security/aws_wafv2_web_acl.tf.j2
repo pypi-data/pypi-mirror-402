@@ -1,0 +1,349 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for acl in resources %}
+{{ resource_spacer() }}
+resource "aws_wafv2_web_acl" "{{ acl.name_sanitized }}" {
+  name  = "{{ acl.name }}"
+  scope = "{{ acl.scope | default('REGIONAL') }}"
+  
+  {% if acl.get('description') %}
+  description = "{{ acl.description }}"
+  {% endif %}
+
+  default_action {
+    {% if acl.get('default_action', {}).get('allow') or acl.get('defaultAction', {}).get('allow') %}
+    allow {}
+    {% elif acl.get('default_action', {}).get('block') or acl.get('defaultAction', {}).get('block') %}
+    block {
+      {% if acl.get('default_action', {}).get('block', {}).get('custom_response') or acl.get('defaultAction', {}).get('block', {}).get('customResponse') %}
+      custom_response {
+        response_code = {{ acl.get('default_action', {}).get('block', {}).get('custom_response', {}).get('response_code', acl.get('defaultAction', {}).get('block', {}).get('customResponse', {}).get('responseCode', 403)) }}
+        
+        {% if acl.get('default_action', {}).get('block', {}).get('custom_response', {}).get('response_header') or acl.get('defaultAction', {}).get('block', {}).get('customResponse', {}).get('responseHeaders') %}
+        {% for header in acl.get('default_action', {}).get('block', {}).get('custom_response', {}).get('response_header', acl.get('defaultAction', {}).get('block', {}).get('customResponse', {}).get('responseHeaders', [])) %}
+        response_header {
+          name  = "{{ header.name }}"
+          value = "{{ header.value }}"
+        }
+        {% endfor %}
+        {% endif %}
+        
+        {% if acl.get('default_action', {}).get('block', {}).get('custom_response', {}).get('custom_response_body_key') or acl.get('defaultAction', {}).get('block', {}).get('customResponse', {}).get('customResponseBodyKey') %}
+        custom_response_body_key = "{{ acl.get('default_action', {}).get('block', {}).get('custom_response', {}).get('custom_response_body_key', acl.get('defaultAction', {}).get('block', {}).get('customResponse', {}).get('customResponseBodyKey')) }}"
+        {% endif %}
+      }
+      {% endif %}
+    }
+    {% endif %}
+  }
+
+  {% if acl.get('rules') %}
+  {% for rule in acl.rules %}
+  rule {
+    name     = "{{ rule.name }}"
+    priority = {{ rule.priority }}
+
+    {% if rule.get('override_action') or rule.get('overrideAction') %}
+    override_action {
+      {% if rule.get('override_action', {}).get('count') or rule.get('overrideAction', {}).get('count') %}
+      count {}
+      {% elif rule.get('override_action', {}).get('none') or rule.get('overrideAction', {}).get('none') %}
+      none {}
+      {% endif %}
+    }
+    {% endif %}
+
+    {% if rule.get('action') %}
+    action {
+      {% if rule.action.get('allow') %}
+      allow {
+        {% if rule.action.allow.get('custom_request_handling') or rule.action.allow.get('customRequestHandling') %}
+        custom_request_handling {
+          {% for header in rule.action.allow.get('custom_request_handling', {}).get('insert_header', rule.action.allow.get('customRequestHandling', {}).get('insertHeaders', [])) %}
+          insert_header {
+            name  = "{{ header.name }}"
+            value = "{{ header.value }}"
+          }
+          {% endfor %}
+        }
+        {% endif %}
+      }
+      {% elif rule.action.get('block') %}
+      block {
+        {% if rule.action.block.get('custom_response') or rule.action.block.get('customResponse') %}
+        custom_response {
+          response_code = {{ rule.action.block.get('custom_response', {}).get('response_code', rule.action.block.get('customResponse', {}).get('responseCode', 403)) }}
+          
+          {% if rule.action.block.get('custom_response', {}).get('custom_response_body_key') or rule.action.block.get('customResponse', {}).get('customResponseBodyKey') %}
+          custom_response_body_key = "{{ rule.action.block.get('custom_response', {}).get('custom_response_body_key', rule.action.block.get('customResponse', {}).get('customResponseBodyKey')) }}"
+          {% endif %}
+        }
+        {% endif %}
+      }
+      {% elif rule.action.get('count') %}
+      count {
+        {% if rule.action.count.get('custom_request_handling') or rule.action.count.get('customRequestHandling') %}
+        custom_request_handling {
+          {% for header in rule.action.count.get('custom_request_handling', {}).get('insert_header', rule.action.count.get('customRequestHandling', {}).get('insertHeaders', [])) %}
+          insert_header {
+            name  = "{{ header.name }}"
+            value = "{{ header.value }}"
+          }
+          {% endfor %}
+        }
+        {% endif %}
+      }
+      {% elif rule.action.get('captcha') %}
+      captcha {
+        {% if rule.action.captcha.get('custom_request_handling') or rule.action.captcha.get('customRequestHandling') %}
+        custom_request_handling {
+          {% for header in rule.action.captcha.get('custom_request_handling', {}).get('insert_header', rule.action.captcha.get('customRequestHandling', {}).get('insertHeaders', [])) %}
+          insert_header {
+            name  = "{{ header.name }}"
+            value = "{{ header.value }}"
+          }
+          {% endfor %}
+        }
+        {% endif %}
+      }
+      {% endif %}
+    }
+    {% endif %}
+
+    statement {
+      {% if rule.statement.get('managed_rule_group_statement') or rule.statement.get('managedRuleGroupStatement') %}
+      managed_rule_group_statement {
+        name        = "{{ rule.statement.get('managed_rule_group_statement', {}).get('name', rule.statement.get('managedRuleGroupStatement', {}).get('name')) }}"
+        vendor_name = "{{ rule.statement.get('managed_rule_group_statement', {}).get('vendor_name', rule.statement.get('managedRuleGroupStatement', {}).get('vendorName')) }}"
+        
+        {% if rule.statement.get('managed_rule_group_statement', {}).get('version') or rule.statement.get('managedRuleGroupStatement', {}).get('version') %}
+        version = "{{ rule.statement.get('managed_rule_group_statement', {}).get('version', rule.statement.get('managedRuleGroupStatement', {}).get('version')) }}"
+        {% endif %}
+        
+        {% if rule.statement.get('managed_rule_group_statement', {}).get('excluded_rule') or rule.statement.get('managedRuleGroupStatement', {}).get('excludedRules') %}
+        {% for excluded in rule.statement.get('managed_rule_group_statement', {}).get('excluded_rule', rule.statement.get('managedRuleGroupStatement', {}).get('excludedRules', [])) %}
+        excluded_rule {
+          name = "{{ excluded.get('name', excluded) }}"
+        }
+        {% endfor %}
+        {% endif %}
+        
+        {% if rule.statement.get('managed_rule_group_statement', {}).get('scope_down_statement') or rule.statement.get('managedRuleGroupStatement', {}).get('scopeDownStatement') %}
+        scope_down_statement {
+          {{ render_statement(rule.statement.get('managed_rule_group_statement', {}).get('scope_down_statement', rule.statement.get('managedRuleGroupStatement', {}).get('scopeDownStatement'))) | indent(10) }}
+        }
+        {% endif %}
+      }
+      {% elif rule.statement.get('rate_based_statement') or rule.statement.get('rateBasedStatement') %}
+      rate_based_statement {
+        limit              = {{ rule.statement.get('rate_based_statement', {}).get('limit', rule.statement.get('rateBasedStatement', {}).get('limit')) }}
+        aggregate_key_type = "{{ rule.statement.get('rate_based_statement', {}).get('aggregate_key_type', rule.statement.get('rateBasedStatement', {}).get('aggregateKeyType', 'IP')) }}"
+        
+        {% if rule.statement.get('rate_based_statement', {}).get('scope_down_statement') or rule.statement.get('rateBasedStatement', {}).get('scopeDownStatement') %}
+        scope_down_statement {
+          {{ render_statement(rule.statement.get('rate_based_statement', {}).get('scope_down_statement', rule.statement.get('rateBasedStatement', {}).get('scopeDownStatement'))) | indent(10) }}
+        }
+        {% endif %}
+        
+        {% if rule.statement.get('rate_based_statement', {}).get('forwarded_ip_config') or rule.statement.get('rateBasedStatement', {}).get('forwardedIPConfig') %}
+        forwarded_ip_config {
+          header_name       = "{{ rule.statement.get('rate_based_statement', {}).get('forwarded_ip_config', {}).get('header_name', rule.statement.get('rateBasedStatement', {}).get('forwardedIPConfig', {}).get('headerName')) }}"
+          fallback_behavior = "{{ rule.statement.get('rate_based_statement', {}).get('forwarded_ip_config', {}).get('fallback_behavior', rule.statement.get('rateBasedStatement', {}).get('forwardedIPConfig', {}).get('fallbackBehavior', 'MATCH')) }}"
+        }
+        {% endif %}
+      }
+      {% elif rule.statement.get('byte_match_statement') or rule.statement.get('byteMatchStatement') %}
+      byte_match_statement {
+        search_string         = "{{ rule.statement.get('byte_match_statement', {}).get('search_string', rule.statement.get('byteMatchStatement', {}).get('searchString')) }}"
+        positional_constraint = "{{ rule.statement.get('byte_match_statement', {}).get('positional_constraint', rule.statement.get('byteMatchStatement', {}).get('positionalConstraint')) }}"
+        
+        {% if rule.statement.get('byte_match_statement', {}).get('field_to_match') or rule.statement.get('byteMatchStatement', {}).get('fieldToMatch') %}
+        field_to_match {
+          {{ render_field_to_match(rule.statement.get('byte_match_statement', {}).get('field_to_match', rule.statement.get('byteMatchStatement', {}).get('fieldToMatch'))) | indent(10) }}
+        }
+        {% endif %}
+        
+        {% if rule.statement.get('byte_match_statement', {}).get('text_transformation') or rule.statement.get('byteMatchStatement', {}).get('textTransformations') %}
+        {% for transform in rule.statement.get('byte_match_statement', {}).get('text_transformation', rule.statement.get('byteMatchStatement', {}).get('textTransformations', [])) %}
+        text_transformation {
+          priority = {{ transform.priority }}
+          type     = "{{ transform.type }}"
+        }
+        {% endfor %}
+        {% endif %}
+      }
+      {% elif rule.statement.get('geo_match_statement') or rule.statement.get('geoMatchStatement') %}
+      geo_match_statement {
+        country_codes = {{ rule.statement.get('geo_match_statement', {}).get('country_codes', rule.statement.get('geoMatchStatement', {}).get('countryCodes')) | tojson }}
+        
+        {% if rule.statement.get('geo_match_statement', {}).get('forwarded_ip_config') or rule.statement.get('geoMatchStatement', {}).get('forwardedIPConfig') %}
+        forwarded_ip_config {
+          header_name       = "{{ rule.statement.get('geo_match_statement', {}).get('forwarded_ip_config', {}).get('header_name', rule.statement.get('geoMatchStatement', {}).get('forwardedIPConfig', {}).get('headerName')) }}"
+          fallback_behavior = "{{ rule.statement.get('geo_match_statement', {}).get('forwarded_ip_config', {}).get('fallback_behavior', rule.statement.get('geoMatchStatement', {}).get('forwardedIPConfig', {}).get('fallbackBehavior', 'MATCH')) }}"
+        }
+        {% endif %}
+      }
+      {% elif rule.statement.get('ip_set_reference_statement') or rule.statement.get('iPSetReferenceStatement') %}
+      ip_set_reference_statement {
+        arn = "{{ rule.statement.get('ip_set_reference_statement', {}).get('arn', rule.statement.get('iPSetReferenceStatement', {}).get('arn')) }}"
+        
+        {% if rule.statement.get('ip_set_reference_statement', {}).get('ip_set_forwarded_ip_config') or rule.statement.get('iPSetReferenceStatement', {}).get('iPSetForwardedIPConfig') %}
+        ip_set_forwarded_ip_config {
+          header_name       = "{{ rule.statement.get('ip_set_reference_statement', {}).get('ip_set_forwarded_ip_config', {}).get('header_name', rule.statement.get('iPSetReferenceStatement', {}).get('iPSetForwardedIPConfig', {}).get('headerName')) }}"
+          fallback_behavior = "{{ rule.statement.get('ip_set_reference_statement', {}).get('ip_set_forwarded_ip_config', {}).get('fallback_behavior', rule.statement.get('iPSetReferenceStatement', {}).get('iPSetForwardedIPConfig', {}).get('fallbackBehavior', 'MATCH')) }}"
+          position          = "{{ rule.statement.get('ip_set_reference_statement', {}).get('ip_set_forwarded_ip_config', {}).get('position', rule.statement.get('iPSetReferenceStatement', {}).get('iPSetForwardedIPConfig', {}).get('position', 'LAST')) }}"
+        }
+        {% endif %}
+      }
+      {% endif %}
+    }
+
+    {% if rule.get('visibility_config') or rule.get('visibilityConfig') %}
+    visibility_config {
+      cloudwatch_metrics_enabled = {{ rule.get('visibility_config', {}).get('cloudwatch_metrics_enabled', rule.get('visibilityConfig', {}).get('cloudwatchMetricsEnabled', true)) | lower }}
+      metric_name                = "{{ rule.get('visibility_config', {}).get('metric_name', rule.get('visibilityConfig', {}).get('metricName', rule.name)) }}"
+      sampled_requests_enabled   = {{ rule.get('visibility_config', {}).get('sampled_requests_enabled', rule.get('visibilityConfig', {}).get('sampledRequestsEnabled', true)) | lower }}
+    }
+    {% endif %}
+    
+    {% if rule.get('captcha_config') or rule.get('captchaConfig') %}
+    captcha_config {
+      {% if rule.get('captcha_config', {}).get('immunity_time_property') or rule.get('captchaConfig', {}).get('immunityTimeProperty') %}
+      immunity_time_property {
+        immunity_time = {{ rule.get('captcha_config', {}).get('immunity_time_property', {}).get('immunity_time', rule.get('captchaConfig', {}).get('immunityTimeProperty', {}).get('immunityTime', 300)) }}
+      }
+      {% endif %}
+    }
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if acl.get('visibility_config') or acl.get('visibilityConfig') %}
+  visibility_config {
+    cloudwatch_metrics_enabled = {{ acl.get('visibility_config', {}).get('cloudwatch_metrics_enabled', acl.get('visibilityConfig', {}).get('cloudwatchMetricsEnabled', true)) | lower }}
+    metric_name                = "{{ acl.get('visibility_config', {}).get('metric_name', acl.get('visibilityConfig', {}).get('metricName', acl.name)) }}"
+    sampled_requests_enabled   = {{ acl.get('visibility_config', {}).get('sampled_requests_enabled', acl.get('visibilityConfig', {}).get('sampledRequestsEnabled', true)) | lower }}
+  }
+  {% endif %}
+
+  {% if acl.get('custom_response_body') or acl.get('customResponseBodies') %}
+  {% for key, body in (acl.get('custom_response_body', acl.get('customResponseBodies', {}))).items() %}
+  custom_response_body {
+    key          = "{{ key }}"
+    content      = "{{ body.content }}"
+    content_type = "{{ body.contentType }}"
+  }
+  {% endfor %}
+  {% endif %}
+
+  {{ render_common_tags(acl, indent=2) }}
+}
+
+{% if acl.get('logging_configuration') or acl.get('loggingConfiguration') %}
+resource "aws_wafv2_web_acl_logging_configuration" "{{ acl.name_sanitized }}" {
+  resource_arn            = aws_wafv2_web_acl.{{ acl.name_sanitized }}.arn
+  {% set log_config = acl.get('logging_configuration', acl.get('loggingConfiguration', {})) %}
+  log_destination_configs = {{ log_config.get('log_destination_configs', log_config.get('logDestinationConfigs', [])) | tojson }}
+  
+  {% if log_config.get('redacted_fields') or log_config.get('redactedFields') %}
+  {% for field in log_config.get('redacted_fields', log_config.get('redactedFields', [])) %}
+  redacted_fields {
+    {{ render_field_to_match(field) | indent(4) }}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if log_config.get('logging_filter') or log_config.get('loggingFilter') %}
+  logging_filter {
+    default_behavior = "{{ log_config.get('logging_filter', {}).get('default_behavior', log_config.get('loggingFilter', {}).get('defaultBehavior')) }}"
+    
+    {% for filter in log_config.get('logging_filter', {}).get('filter', log_config.get('loggingFilter', {}).get('filters', [])) %}
+    filter {
+      behavior    = "{{ filter.behavior }}"
+      requirement = "{{ filter.requirement }}"
+      
+      {% for condition in filter.get('condition', filter.get('conditions', [])) %}
+      condition {
+        {% if condition.get('action_condition') or condition.get('actionCondition') %}
+        action_condition {
+          action = "{{ condition.get('action_condition', {}).get('action', condition.get('actionCondition', {}).get('action')) }}"
+        }
+        {% endif %}
+        
+        {% if condition.get('label_name_condition') or condition.get('labelNameCondition') %}
+        label_name_condition {
+          label_name = "{{ condition.get('label_name_condition', {}).get('label_name', condition.get('labelNameCondition', {}).get('labelName')) }}"
+        }
+        {% endif %}
+      }
+      {% endfor %}
+    }
+    {% endfor %}
+  }
+  {% endif %}
+}
+{% endif %}
+
+{% endfor %}
+
+{# Macro for rendering field_to_match #}
+{% macro render_field_to_match(field) %}
+{% if field.get('single_header') or field.get('singleHeader') %}
+single_header {
+  name = "{{ field.get('single_header', {}).get('name', field.get('singleHeader', {}).get('name')) }}"
+}
+{% elif field.get('single_query_argument') or field.get('singleQueryArgument') %}
+single_query_argument {
+  name = "{{ field.get('single_query_argument', {}).get('name', field.get('singleQueryArgument', {}).get('name')) }}"
+}
+{% elif field.get('all_query_arguments') or field.get('allQueryArguments') %}
+all_query_arguments {}
+{% elif field.get('uri_path') or field.get('uriPath') %}
+uri_path {}
+{% elif field.get('query_string') or field.get('queryString') %}
+query_string {}
+{% elif field.get('body') %}
+body {}
+{% elif field.get('method') %}
+method {}
+{% elif field.get('json_body') or field.get('jsonBody') %}
+json_body {
+  match_pattern {
+    {% if field.get('json_body', {}).get('match_pattern', {}).get('all') or field.get('jsonBody', {}).get('matchPattern', {}).get('all') %}
+    all {}
+    {% elif field.get('json_body', {}).get('match_pattern', {}).get('included_paths') or field.get('jsonBody', {}).get('matchPattern', {}).get('includedPaths') %}
+    included_paths = {{ field.get('json_body', {}).get('match_pattern', {}).get('included_paths', field.get('jsonBody', {}).get('matchPattern', {}).get('includedPaths')) | tojson }}
+    {% endif %}
+  }
+  match_scope = "{{ field.get('json_body', {}).get('match_scope', field.get('jsonBody', {}).get('matchScope', 'ALL')) }}"
+  
+  {% if field.get('json_body', {}).get('invalid_fallback_behavior') or field.get('jsonBody', {}).get('invalidFallbackBehavior') %}
+  invalid_fallback_behavior = "{{ field.get('json_body', {}).get('invalid_fallback_behavior', field.get('jsonBody', {}).get('invalidFallbackBehavior')) }}"
+  {% endif %}
+}
+{% endif %}
+{% endmacro %}
+
+{# Macro for rendering nested statements #}
+{% macro render_statement(stmt) %}
+{# This is a simplified version - you would need to implement full recursive statement rendering #}
+{% if stmt.get('byte_match_statement') or stmt.get('byteMatchStatement') %}
+byte_match_statement {
+  search_string         = "{{ stmt.get('byte_match_statement', {}).get('search_string', stmt.get('byteMatchStatement', {}).get('searchString')) }}"
+  positional_constraint = "{{ stmt.get('byte_match_statement', {}).get('positional_constraint', stmt.get('byteMatchStatement', {}).get('positionalConstraint')) }}"
+  
+  field_to_match {
+    {{ render_field_to_match(stmt.get('byte_match_statement', {}).get('field_to_match', stmt.get('byteMatchStatement', {}).get('fieldToMatch'))) | indent(4) }}
+  }
+  
+  {% for transform in stmt.get('byte_match_statement', {}).get('text_transformation', stmt.get('byteMatchStatement', {}).get('textTransformations', [])) %}
+  text_transformation {
+    priority = {{ transform.priority }}
+    type     = "{{ transform.type }}"
+  }
+  {% endfor %}
+}
+{% endif %}
+{% endmacro %}
+{% endblock %}

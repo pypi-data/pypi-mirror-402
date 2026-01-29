@@ -1,0 +1,97 @@
+{% extends 'common/base_resource.tf.j2' %}
+{% import 'common/macros.j2' as macros %}
+{% block resources %}
+{% for cert in resources %}
+{{ resource_spacer() }}
+resource "azurerm_key_vault_certificate" "{{ cert.name_sanitized }}" {
+  name         = "{{ cert.name }}"
+  key_vault_id = "{{ cert.key_vault_id }}"
+
+  {% if cert.certificate %}
+  certificate {
+    contents = "{{ cert.certificate.contents }}"
+    {% if cert.certificate.password %}
+    password = var.certificate_password
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if cert.certificate_policy %}
+  certificate_policy {
+    issuer_parameters {
+      name = "{{ cert.certificate_policy.issuer_parameters.name }}"
+    }
+
+    key_properties {
+      exportable = {{ cert.certificate_policy.key_properties.exportable | lower }}
+      key_size   = {{ cert.certificate_policy.key_properties.key_size }}
+      key_type   = "{{ cert.certificate_policy.key_properties.key_type }}"
+      reuse_key  = {{ cert.certificate_policy.key_properties.reuse_key | lower }}
+      {% if cert.certificate_policy.key_properties.curve %}
+      curve      = "{{ cert.certificate_policy.key_properties.curve }}"
+      {% endif %}
+    }
+
+    {% for action in cert.certificate_policy.lifetime_action %}
+    lifetime_action {
+      action {
+        action_type = "{{ action.action.action_type }}"
+      }
+
+      trigger {
+        {% if action.trigger.days_before_expiry %}
+        days_before_expiry = {{ action.trigger.days_before_expiry }}
+        {% endif %}
+        {% if action.trigger.lifetime_percentage %}
+        lifetime_percentage = {{ action.trigger.lifetime_percentage }}
+        {% endif %}
+      }
+    }
+    {% endfor %}
+
+    secret_properties {
+      content_type = "{{ cert.certificate_policy.secret_properties.content_type }}"
+    }
+
+    x509_certificate_properties {
+      {% if cert.certificate_policy.x509_certificate_properties.extended_key_usage %}
+      extended_key_usage = {{ cert.certificate_policy.x509_certificate_properties.extended_key_usage | tojson }}
+      {% endif %}
+      
+      {% if cert.certificate_policy.x509_certificate_properties.key_usage %}
+      key_usage = {{ cert.certificate_policy.x509_certificate_properties.key_usage | tojson }}
+      {% endif %}
+      
+      subject            = "{{ cert.certificate_policy.x509_certificate_properties.subject }}"
+      validity_in_months = {{ cert.certificate_policy.x509_certificate_properties.validity_in_months }}
+      
+      {% if cert.certificate_policy.x509_certificate_properties.subject_alternative_names %}
+      subject_alternative_names {
+        {% if cert.certificate_policy.x509_certificate_properties.subject_alternative_names.dns_names %}
+        dns_names = {{ cert.certificate_policy.x509_certificate_properties.subject_alternative_names.dns_names | tojson }}
+        {% endif %}
+        {% if cert.certificate_policy.x509_certificate_properties.subject_alternative_names.emails %}
+        emails = {{ cert.certificate_policy.x509_certificate_properties.subject_alternative_names.emails | tojson }}
+        {% endif %}
+        {% if cert.certificate_policy.x509_certificate_properties.subject_alternative_names.upns %}
+        upns = {{ cert.certificate_policy.x509_certificate_properties.subject_alternative_names.upns | tojson }}
+        {% endif %}
+      }
+      {% endif %}
+    }
+  }
+  {% endif %}
+
+{{ macros.render_tags(cert.tags) }}
+
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes = [
+      certificate,
+      certificate[0].password
+    ]
+  }
+}
+
+{% endfor %}
+{% endblock %}

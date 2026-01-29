@@ -1,0 +1,151 @@
+{# AWS-specific macros for Terraform templates #}
+
+{% macro render_tags(tags, indent=2) %}
+{% if tags %}
+{{ ' ' * indent }}tags = {
+{% for key, value in tags.items() %}
+{{ ' ' * (indent + 2) }}"{{ key }}" = "{{ value | replace('"', '\\"') }}"{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{% macro render_aws_tags(resource, indent=2) %}
+{# AWS resources can have tags in different formats #}
+{% if resource.get('tags_formatted') %}
+{{ render_tags(resource.tags_formatted, indent) }}
+{% elif resource.get('Tags') %}
+{% if resource.Tags is mapping %}
+{{ render_tags(resource.Tags, indent) }}
+{% else %}
+{# Convert Tag list format to map #}
+{% set tag_dict = {} %}
+{% for tag in resource.Tags %}
+{% set _ = tag_dict.update({tag.Key: tag.Value}) %}
+{% endfor %}
+{{ render_tags(tag_dict, indent) }}
+{% endif %}
+{% elif resource.get('TagList') %}
+{# Convert TagList format to map #}
+{% set tag_dict = {} %}
+{% for tag in resource.TagList %}
+{% set _ = tag_dict.update({tag.Key: tag.Value}) %}
+{% endfor %}
+{{ render_tags(tag_dict, indent) }}
+{% endif %}
+{% endmacro %}
+
+{% macro render_security_group_rules(rules, indent=2) %}
+{% for rule in rules %}
+{{ ' ' * indent }}ingress {
+{{ ' ' * (indent + 2) }}from_port   = {{ rule.get('from_port', rule.get('FromPort', 0)) }}
+{{ ' ' * (indent + 2) }}to_port     = {{ rule.get('to_port', rule.get('ToPort', 0)) }}
+{{ ' ' * (indent + 2) }}protocol    = "{{ rule.get('protocol', rule.get('IpProtocol', '-1')) }}"
+{% if rule.get('cidr_blocks') or rule.get('CidrBlock') %}
+{{ ' ' * (indent + 2) }}cidr_blocks = [
+{% for cidr in (rule.get('cidr_blocks', [rule.get('CidrBlock')] if rule.get('CidrBlock') else [])) %}
+{{ ' ' * (indent + 4) }}"{{ cidr }}"{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * (indent + 2) }}]
+{% endif %}
+{% if rule.get('description') or rule.get('Description') %}
+{{ ' ' * (indent + 2) }}description = "{{ rule.get('description', rule.get('Description', '')) }}"
+{% endif %}
+{{ ' ' * indent }}}
+{% endfor %}
+{% endmacro %}
+
+{% macro render_iam_policy_document(statements, indent=2) %}
+{{ ' ' * indent }}policy = jsonencode({
+{{ ' ' * (indent + 2) }}Version = "2012-10-17"
+{{ ' ' * (indent + 2) }}Statement = [
+{% for statement in statements %}
+{{ ' ' * (indent + 4) }}{
+{{ ' ' * (indent + 6) }}Effect   = "{{ statement.get('Effect', 'Allow') }}"
+{{ ' ' * (indent + 6) }}Action   = {{ statement.Action | tojson }}
+{{ ' ' * (indent + 6) }}Resource = {{ statement.Resource | tojson }}
+{% if statement.get('Condition') %}
+{{ ' ' * (indent + 6) }}Condition = {{ statement.Condition | tojson }}
+{% endif %}
+{{ ' ' * (indent + 4) }}}{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * (indent + 2) }}]
+{{ ' ' * indent }}})
+{% endmacro %}
+
+{% macro render_instance_profile(instance_profile, indent=2) %}
+{% if instance_profile %}
+{{ ' ' * indent }}iam_instance_profile = "{{ instance_profile.Arn.split('/')[-1] if instance_profile.get('Arn') else instance_profile.get('Id', '') }}"
+{% endif %}
+{% endmacro %}
+
+{% macro render_key_name(key_name, indent=2) %}
+{% if key_name %}
+{{ ' ' * indent }}key_name = "{{ key_name }}"
+{% endif %}
+{% endmacro %}
+
+{% macro render_vpc_config(vpc_config, indent=2) %}
+{% if vpc_config %}
+{{ ' ' * indent }}vpc_config {
+{% if vpc_config.get('SubnetIds') %}
+{{ ' ' * (indent + 2) }}subnet_ids = [
+{% for subnet_id in vpc_config.SubnetIds %}
+{{ ' ' * (indent + 4) }}"{{ subnet_id }}"{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * (indent + 2) }}]
+{% endif %}
+{% if vpc_config.get('SecurityGroupIds') %}
+{{ ' ' * (indent + 2) }}security_group_ids = [
+{% for sg_id in vpc_config.SecurityGroupIds %}
+{{ ' ' * (indent + 4) }}"{{ sg_id }}"{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * (indent + 2) }}]
+{% endif %}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{% macro render_environment_variables(env_vars, indent=2) %}
+{% if env_vars %}
+{{ ' ' * indent }}environment {
+{{ ' ' * (indent + 2) }}variables = {
+{% for key, value in env_vars.items() %}
+{{ ' ' * (indent + 4) }}"{{ key }}" = "{{ value }}"{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * (indent + 2) }}}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{% macro render_s3_lifecycle_rules(rules, indent=2) %}
+{% for rule in rules %}
+{{ ' ' * indent }}lifecycle_rule {
+{{ ' ' * (indent + 2) }}id      = "{{ rule.get('Id', 'rule-' + loop.index|string) }}"
+{{ ' ' * (indent + 2) }}enabled = {{ rule.get('Status', 'Enabled') == 'Enabled' | lower }}
+{% if rule.get('Prefix') is defined %}
+{{ ' ' * (indent + 2) }}prefix  = "{{ rule.Prefix }}"
+{% endif %}
+{% if rule.get('Expiration') %}
+{{ ' ' * (indent + 2) }}expiration {
+{% if rule.Expiration.get('Days') %}
+{{ ' ' * (indent + 4) }}days = {{ rule.Expiration.Days }}
+{% endif %}
+{% if rule.Expiration.get('Date') %}
+{{ ' ' * (indent + 4) }}date = "{{ rule.Expiration.Date }}"
+{% endif %}
+{{ ' ' * (indent + 2) }}}
+{% endif %}
+{{ ' ' * indent }}}
+{% endfor %}
+{% endmacro %}
+
+{% macro render_cloudwatch_dimensions(dimensions, indent=2) %}
+{% if dimensions %}
+{{ ' ' * indent }}dimensions = {
+{% for key, value in dimensions.items() %}
+{{ ' ' * (indent + 2) }}"{{ key }}" = "{{ value }}"{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}

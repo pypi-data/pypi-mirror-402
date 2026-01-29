@@ -1,0 +1,62 @@
+{% extends 'common/base_resource.tf.j2' %}
+{% import 'common/macros.j2' as macros %}
+{% block resources %}
+{% for key in resources %}
+{{ resource_spacer() }}
+resource "azurerm_key_vault_key" "{{ key.name_sanitized }}" {
+  name         = "{{ key.name }}"
+  key_vault_id = "{{ key.key_vault_id }}"
+  key_type     = "{{ key.key_type }}"
+  
+  {% if key.key_size %}
+  key_size     = {{ key.key_size }}
+  {% endif %}
+  
+  {% if key.curve %}
+  curve        = "{{ key.curve }}"
+  {% endif %}
+  
+  {% if key.key_opts %}
+  key_opts     = {{ key.key_opts | tojson }}
+  {% endif %}
+  
+  {% if key.not_before_date %}
+  not_before_date = "{{ key.not_before_date }}"
+  {% endif %}
+  
+  {% if key.expiration_date %}
+  expiration_date = "{{ key.expiration_date }}"
+  {% endif %}
+
+  {% if key.rotation_policy %}
+  rotation_policy {
+    {% if key.rotation_policy.automatic %}
+    automatic {
+      {% if key.rotation_policy.automatic.time_after_creation %}
+      time_after_creation = "{{ key.rotation_policy.automatic.time_after_creation }}"
+      {% endif %}
+      {% if key.rotation_policy.automatic.time_before_expiry %}
+      time_before_expiry = "{{ key.rotation_policy.automatic.time_before_expiry }}"
+      {% endif %}
+    }
+    {% endif %}
+    
+    {% if key.rotation_policy.expire_after %}
+    expire_after = "{{ key.rotation_policy.expire_after }}"
+    {% endif %}
+    
+    {% if key.rotation_policy.notify_before_expiry %}
+    notify_before_expiry = "{{ key.rotation_policy.notify_before_expiry }}"
+    {% endif %}
+  }
+  {% endif %}
+
+{{ macros.render_tags(key.tags) }}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

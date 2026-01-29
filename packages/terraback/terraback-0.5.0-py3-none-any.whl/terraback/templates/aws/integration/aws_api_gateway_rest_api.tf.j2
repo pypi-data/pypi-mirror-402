@@ -1,0 +1,35 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for api in resources %}
+{{ resource_spacer() }}
+resource "aws_api_gateway_rest_api" "{{ api.name_sanitized }}" {
+  name        = "{{ api.name }}"
+  description = "{{ api.description | default('') }}"
+
+  {% if api.get('binaryMediaTypes') %}
+  binary_media_types = [
+    {% for mtype in api.binaryMediaTypes %}
+    "{{ mtype }}"{{ "," if not loop.last }}
+    {% endfor %}
+  ]
+  {%  endif %}
+
+  {% if api.get('apiKeySource') %}
+  api_key_source = "{{ api.apiKeySource }}"
+  {%  endif %}
+
+  {% if api.get('endpointConfiguration') %}
+  endpoint_configuration {
+    types = {{ api.endpointConfiguration.types | to_json }}
+  }
+  {% else %}
+  endpoint_configuration {
+    types = ["REGIONAL"]
+  }
+  {% endif %}
+
+  {{ render_common_tags(api, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

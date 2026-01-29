@@ -1,0 +1,47 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for proxy in resources %}
+{{ resource_spacer() }}
+resource "google_compute_region_target_https_proxy" "{{ proxy.name_sanitized }}" {
+  name   = "{{ proxy.name }}"
+  region = "{{ proxy.region }}"
+
+  {% if proxy.url_map %}
+  url_map = google_compute_region_url_map.{{ proxy.url_map.replace('-', '_').lower() }}.id
+  {% endif %}
+
+  {% if proxy.ssl_certificates %}
+  ssl_certificates = [
+    {% for cert in proxy.ssl_certificates %}
+    google_compute_region_ssl_certificate.{{ cert.replace('-', '_').lower() }}.id{{ "," if not loop.last else "" }}
+    {% endfor %}
+  ]
+  {% endif %}
+
+  {% if proxy.description %}
+  description = "{{ proxy.description }}"
+  {% endif %}
+
+  {% if proxy.ssl_policy %}
+  ssl_policy = google_compute_region_ssl_policy.{{ proxy.ssl_policy.replace('-', '_').lower() }}.id
+  {% endif %}
+
+  {% if proxy.proxy_bind %}
+  proxy_bind = {{ proxy.proxy_bind | lower }}
+  {% endif %}
+
+  {% if proxy.certificate_map %}
+  certificate_map = google_compute_certificate_map.{{ proxy.certificate_map.replace('-', '_').lower() }}.id
+  {% endif %}
+
+  {% if proxy.server_tls_policy %}
+  server_tls_policy = google_network_security_server_tls_policy.{{ proxy.server_tls_policy.replace('-', '_').lower() }}.id
+  {% endif %}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

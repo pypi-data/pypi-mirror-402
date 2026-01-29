@@ -1,0 +1,69 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% import "common/macros.j2" as common_macros %}
+{% block resources %}
+{% for nat in resources %}
+
+# Import existing NAT gateway: {{ nat.name }}
+import {
+  to = google_compute_router_nat.{{ nat.name_sanitized }}
+  id = "{{ nat.id }}"
+}
+
+{{ resource_spacer() }}
+resource "google_compute_router_nat" "{{ nat.name_sanitized }}" {
+  name                               = "{{ nat.name }}"
+  router                             = "{{ nat.router }}"
+  region                             = "{{ nat.region }}"
+  
+  nat_ip_allocate_option             = "{{ nat.nat_ip_allocate_option }}"
+  source_subnetwork_ip_ranges_to_nat = "{{ nat.source_subnetwork_ip_ranges_to_nat }}"
+
+  {% if nat.nat_ips %}
+  nat_ips = [
+    {% for ip in nat.nat_ips %}
+    "{{ ip }}"{{ "," if not loop.last }}
+    {% endfor %}
+  ]
+  {% endif %}
+
+  {% for subnetwork in nat.subnetworks %}
+  subnetwork {
+    name                    = "{{ subnetwork.name }}"
+    source_ip_ranges_to_nat = {{ subnetwork.source_ip_ranges_to_nat | tojson }}
+    {% if subnetwork.secondary_ip_range_names %}
+    secondary_ip_range_names = {{ subnetwork.secondary_ip_range_names | tojson }}
+    {% endif %}
+  }
+  {% endfor %}
+
+  {% if nat.log_config %}
+  log_config {
+    enable = {{ nat.log_config.enable | lower }}
+    filter = "{{ nat.log_config.filter }}"
+  }
+  {% endif %}
+
+  # Timeout settings
+  icmp_idle_timeout_sec                = {{ nat.icmp_idle_timeout_sec }}
+  tcp_established_idle_timeout_sec     = {{ nat.tcp_established_idle_timeout_sec }}
+  tcp_transitory_idle_timeout_sec      = {{ nat.tcp_transitory_idle_timeout_sec }}
+  udp_idle_timeout_sec                 = {{ nat.udp_idle_timeout_sec }}
+
+  # Port allocation settings
+  min_ports_per_vm                     = {{ nat.min_ports_per_vm }}
+  {% if nat.max_ports_per_vm and nat.max_ports_per_vm != 65536 %}
+  max_ports_per_vm                     = {{ nat.max_ports_per_vm }}
+  {% endif %}
+
+  {% if nat.enable_endpoint_independent_mapping is not none %}
+  enable_endpoint_independent_mapping  = {{ nat.enable_endpoint_independent_mapping | lower }}
+  {% endif %}
+
+{{ common_macros.render_depends_on(nat.depends_on, indent=2) }}
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

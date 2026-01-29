@@ -1,0 +1,27 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for proxy in resources %}
+{{ resource_spacer() }}
+resource "google_compute_region_target_http_proxy" "{{ proxy.name_sanitized }}" {
+  name   = "{{ proxy.name }}"
+  region = "{{ proxy.region }}"
+
+  {% if proxy.url_map %}
+  url_map = google_compute_region_url_map.{{ proxy.url_map.replace('-', '_').lower() }}.id
+  {% endif %}
+
+  {% if proxy.description %}
+  description = "{{ proxy.description }}"
+  {% endif %}
+
+  {% if proxy.proxy_bind %}
+  proxy_bind = {{ proxy.proxy_bind | lower }}
+  {% endif %}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

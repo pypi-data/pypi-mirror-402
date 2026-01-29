@@ -1,0 +1,49 @@
+{% extends "common/base_resource.tf.j2" %}
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_storage_share" "{{ resource.name.replace('-', '_').replace('.', '_').lower() }}" {
+  name                 = "{{ resource.properties.name }}"
+  {% if resource.properties.storage_account_id is defined %}
+  storage_account_id   = "{{ resource.properties.storage_account_id }}"
+  {% elif resource.properties.storage_account_name is defined %}
+  storage_account_id   = "/subscriptions/${data.azurerm_subscription.current.subscription_id}/resourceGroups/{{ resource.properties.resource_group_name | default('${data.azurerm_resource_group.current.name}') }}/providers/Microsoft.Storage/storageAccounts/{{ resource.properties.storage_account_name }}"
+  {% endif %}
+  quota                = {{ resource.properties.quota }}
+  
+  {% if resource.properties.enabled_protocol is defined %}
+  enabled_protocol = "{{ resource.properties.enabled_protocol }}"
+  {% endif %}
+  
+  {% if resource.properties.access_tier is defined %}
+  access_tier = "{{ resource.properties.access_tier }}"
+  {% endif %}
+  
+  {% if resource.properties.metadata is defined %}
+  metadata = {{ resource.properties.metadata | to_terraform_collection('map') }}
+  {% endif %}
+  
+  {% if resource.properties.acl is defined %}
+  {% for acl_item in resource.properties.acl %}
+  acl {
+    id = "{{ acl_item.id }}"
+    {% if acl_item.access_policy is defined %}
+    {% for policy in acl_item.access_policy %}
+    access_policy {
+      permissions = "{{ policy.permissions }}"
+      {% if policy.start is defined %}
+      start  = "{{ policy.start }}"
+      {% endif %}
+      {% if policy.expiry is defined %}
+      expiry = "{{ policy.expiry }}"
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

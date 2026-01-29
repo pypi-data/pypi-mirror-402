@@ -1,0 +1,34 @@
+{% extends "common/base_resource.tf.j2" %}
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_route_table" "{{ resource.name.replace('-', '_').replace('.', '_').lower() }}" {
+  name                          = "{{ resource.properties.name }}"
+  location                      = "{{ resource.properties.location }}"
+  resource_group_name           = "{{ resource.properties.resource_group_name }}"
+  
+  {% if resource.properties.disable_bgp_route_propagation is defined %}
+  {# In azurerm v4.x, this is inverted to bgp_route_propagation_enabled #}
+  bgp_route_propagation_enabled = {{ (not resource.properties.disable_bgp_route_propagation) | lower }}
+  {% endif %}
+  
+  {% if resource.properties.routes is defined %}
+  {% for route in resource.properties.routes %}
+  route {
+    name                   = "{{ route.name }}"
+    address_prefix         = "{{ route.address_prefix }}"
+    next_hop_type          = "{{ route.next_hop_type }}"
+    {% if route.next_hop_in_ip_address is defined %}
+    next_hop_in_ip_address = "{{ route.next_hop_in_ip_address }}"
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.tags is defined and resource.properties.tags %}
+  tags = {{ resource.properties.tags | tojson }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

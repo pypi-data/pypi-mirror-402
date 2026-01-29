@@ -1,0 +1,116 @@
+{# AWS EC2 Instance Template - Using new standardized base and components #}
+{% extends "common/base_resource_v2.tf.j2" %}
+{% set provider = "aws" %}
+{% set resource_type = "aws_instance" %}
+
+{# Import compute components #}
+{% import "common/components/compute.j2" as compute %}
+{% import "common/components/networking.j2" as networking %}
+
+{% block resources %}
+{% for resource in resources %}
+  {# Resource validation #}
+  {% set resource_name = resource.get('name_sanitized', 'unnamed_resource') %}
+  {% if resource_name and resource_name != "unnamed_resource" %}
+
+# {{ resource_type | replace('_', ' ') | title }}: {{ resource.get('InstanceId', resource_name) }}
+# Import command:
+# terraform import {{ resource_type }}.{{ resource_name }} {{ resource.get('InstanceId', resource_name) }}
+resource "{{ resource_type }}" "{{ resource_name }}" {
+  {{ macros.render_field('ami', resource.get('ImageId'), indent=2) }}
+  {{ macros.render_field('instance_type', resource.get('InstanceType'), indent=2) }}
+  {{ macros.render_field('key_name', resource.get('KeyName'), indent=2) }}
+  {{ macros.render_field('availability_zone', resource.get('Placement', {}).get('AvailabilityZone'), indent=2) }}
+  
+  {# Network configuration - handle both cases #}
+  {% if resource.get('NetworkInterfaces') and resource.get('NetworkInterfaces')|length > 0 %}
+    {# If instance has network interfaces, use subnet and security groups from primary interface #}
+    {% set primary_interface = resource.NetworkInterfaces[0] %}
+    {{ macros.render_field('subnet_id', primary_interface.get('SubnetId') or resource.get('SubnetId'), indent=2) }}
+    {% set sg_ids = [] %}
+    {% for sg in primary_interface.get('Groups', []) %}
+      {% if sg is mapping %}
+        {% set _ = sg_ids.append(sg.get('GroupId', sg.get('groupId', ''))) %}
+      {% else %}
+        {% set _ = sg_ids.append(sg) %}
+      {% endif %}
+    {% endfor %}
+    {{ macros.render_list_field('vpc_security_group_ids', sg_ids, indent=2) }}
+    {{ macros.render_bool_field('source_dest_check', primary_interface.get('SourceDestCheck', resource.get('SourceDestCheck')), indent=2) }}
+  {% else %}
+    {# No network interfaces - use instance-level settings #}
+    {{ macros.render_field('subnet_id', resource.get('SubnetId'), indent=2) }}
+    {% set sg_ids = [] %}
+    {% for sg in resource.get('SecurityGroups', []) %}
+      {% if sg is mapping %}
+        {% set _ = sg_ids.append(sg.get('GroupId', sg.get('groupId', ''))) %}
+      {% else %}
+        {% set _ = sg_ids.append(sg) %}
+      {% endif %}
+    {% endfor %}
+    {{ macros.render_list_field('vpc_security_group_ids', sg_ids, indent=2) }}
+    {{ macros.render_bool_field('source_dest_check', resource.get('SourceDestCheck'), indent=2) }}
+  {% endif %}
+  
+  {{ macros.render_bool_field('monitoring', resource.get('Monitoring', {}).get('State') == 'enabled', indent=2) }}
+  {{ macros.render_bool_field('ebs_optimized', resource.get('EbsOptimized'), indent=2) }}
+  {{ macros.render_field('iam_instance_profile', resource.get('IamInstanceProfile', {}).get('Arn', '').split('/')[-1], indent=2) }}
+  {{ macros.render_field('user_data', resource.get('UserData'), indent=2) }}
+  {{ macros.render_field('user_data_base64', resource.get('UserDataBase64'), indent=2) }}
+  
+  {# Root block device (if different from launch config) #}
+  {% if resource.get('RootDeviceName') and resource.get('RootDeviceType') == 'ebs' %}
+  root_block_device {
+    {{ macros.render_field('volume_type', 'gp3', indent=4) }}
+    {{ macros.render_number_field('volume_size', resource.get('RootDeviceSize', 20), indent=4) }}
+    {{ macros.render_bool_field('delete_on_termination', true, indent=4) }}
+    {{ macros.render_bool_field('encrypted', resource.get('RootDeviceEncrypted', false), indent=4) }}
+  }
+  {% endif %}
+  
+  {# Additional EBS volumes (excluding root device) #}
+  {% for device in resource.get('BlockDeviceMappings', []) %}
+    {% if device.get('Ebs') and device.get('DeviceName') != resource.get('RootDeviceName') %}
+  {{ compute.render_ebs_volume(device, indent=2) }}
+    {% endif %}
+  {% endfor %}
+  
+  {# Network interfaces - only include if they need to be created, not for existing ones #}
+  {# Skip network interface blocks for existing instances with attached interfaces #}
+  {% if false %}  {# Disabled for now - existing interfaces shouldn't be defined in the resource #}
+  {% for interface in resource.get('NetworkInterfaces', []) %}
+  {{ networking.render_network_interface(interface, indent=2) }}
+  {% endfor %}
+  {% endif %}
+  
+  {# Credit specification for T-series instances #}
+  {% if resource.get('CreditSpecification') %}
+  credit_specification {
+    {{ macros.render_field('cpu_credits', resource.CreditSpecification.get('CpuCredits'), indent=4) }}
+  }
+  {% endif %}
+  
+  {# Metadata options #}
+  {% if resource.get('MetadataOptions') %}
+  metadata_options {
+    {{ macros.render_field('http_endpoint', resource.MetadataOptions.get('HttpEndpoint'), indent=4) }}
+    {{ macros.render_field('http_tokens', resource.MetadataOptions.get('HttpTokens'), indent=4) }}
+    {{ macros.render_number_field('http_put_response_hop_limit', resource.MetadataOptions.get('HttpPutResponseHopLimit'), indent=4) }}
+    {{ macros.render_field('instance_metadata_tags', resource.MetadataOptions.get('InstanceMetadataTags'), indent=4) }}
+  }
+  {% endif %}
+  
+  {# Enclave options #}
+  {% if resource.get('EnclaveOptions') %}
+  enclave_options {
+    {{ macros.render_bool_field('enabled', resource.EnclaveOptions.get('Enabled'), indent=4) }}
+  }
+  {% endif %}
+  
+  {# Tags #}
+  {{ macros.render_tags_universal(resource, indent=2, provider=provider) }}
+}
+
+  {% endif %}
+{% endfor %}
+{% endblock %}

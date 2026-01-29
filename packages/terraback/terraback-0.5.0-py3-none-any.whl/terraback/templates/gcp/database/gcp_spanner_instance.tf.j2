@@ -1,0 +1,141 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for instance in resources %}
+{{ resource_spacer() }}
+resource "google_spanner_instance" "{{ instance.name_sanitized }}" {
+  name         = "{{ instance.name }}"
+  config       = "{{ instance.config }}"
+  display_name = "{{ instance.display_name }}"
+  
+  {% if instance.get('num_nodes') %}
+  num_nodes    = {{ instance.num_nodes }}
+  {% endif %}
+  
+  {% if instance.get('processing_units') %}
+  processing_units = {{ instance.processing_units }}
+  {% endif %}
+
+  {% if instance.get('project') %}
+
+  {% endif %}
+
+  {% if instance.get('force_destroy') is not none %}
+  force_destroy = {{ instance.force_destroy | lower }}
+  {% endif %}
+
+  {% if instance.get('autoscaling_config') %}
+  autoscaling_config {
+    {% if instance.autoscaling_config.get('autoscaling_limits') %}
+    autoscaling_limits {
+      {% if instance.autoscaling_config.autoscaling_limits.get('min_processing_units') %}
+      min_processing_units = {{ instance.autoscaling_config.autoscaling_limits.min_processing_units }}
+      {% endif %}
+      
+      {% if instance.autoscaling_config.autoscaling_limits.get('max_processing_units') %}
+      max_processing_units = {{ instance.autoscaling_config.autoscaling_limits.max_processing_units }}
+      {% endif %}
+      
+      {% if instance.autoscaling_config.autoscaling_limits.get('min_nodes') %}
+      min_nodes = {{ instance.autoscaling_config.autoscaling_limits.min_nodes }}
+      {% endif %}
+      
+      {% if instance.autoscaling_config.autoscaling_limits.get('max_nodes') %}
+      max_nodes = {{ instance.autoscaling_config.autoscaling_limits.max_nodes }}
+      {% endif %}
+    }
+    {% endif %}
+    
+    {% if instance.autoscaling_config.get('autoscaling_targets') %}
+    autoscaling_targets {
+      {% if instance.autoscaling_config.autoscaling_targets.get('high_priority_cpu_utilization_percent') %}
+      high_priority_cpu_utilization_percent = {{ instance.autoscaling_config.autoscaling_targets.high_priority_cpu_utilization_percent }}
+      {% endif %}
+      
+      {% if instance.autoscaling_config.autoscaling_targets.get('storage_utilization_percent') %}
+      storage_utilization_percent = {{ instance.autoscaling_config.autoscaling_targets.storage_utilization_percent }}
+      {% endif %}
+    }
+    {% endif %}
+  }
+  {% endif %}
+
+  {{ render_gcp_labels(instance, indent=2) }}
+}
+
+{% if instance.get('databases') %}
+{% for database in instance.databases %}
+{{ resource_spacer() }}
+resource "google_spanner_database" "{{ instance.name_sanitized }}_{{ database.name_sanitized }}" {
+  instance                 = google_spanner_instance.{{ instance.name_sanitized }}.name
+  name                     = "{{ database.name }}"
+  
+  {% if database.get('project') %}
+
+  {% endif %}
+  
+  {% if database.get('version_retention_period') %}
+  version_retention_period = "{{ database.version_retention_period }}"
+  {% endif %}
+  
+  {% if database.get('ddl') %}
+  ddl = [
+    {% for statement in database.ddl %}
+    <<-EOT
+{{ statement | indent(6, True) }}
+    EOT{{ "," if not loop.last }}
+    {% endfor %}
+  ]
+  {% endif %}
+  
+  {% if database.get('deletion_protection') is not none %}
+  deletion_protection = {{ database.deletion_protection | lower }}
+  {% endif %}
+  
+  {% if database.get('enable_drop_protection') is not none %}
+  enable_drop_protection = {{ database.enable_drop_protection | lower }}
+  {% endif %}
+
+  {% if database.get('encryption_config') %}
+  encryption_config {
+    kms_key_name = "{{ database.encryption_config.kms_key_name }}"
+  }
+  {% endif %}
+}
+
+{% if database.get('iam_bindings') %}
+{% for binding in database.iam_bindings %}
+{{ resource_spacer() }}
+resource "google_spanner_database_iam_binding" "{{ instance.name_sanitized }}_{{ database.name_sanitized }}_{{ loop.index }}" {
+  instance = google_spanner_instance.{{ instance.name_sanitized }}.name
+  database = google_spanner_database.{{ instance.name_sanitized }}_{{ database.name_sanitized }}.name
+  role     = "{{ binding.role }}"
+  members  = [
+    {% for member in binding.members %}
+    "{{ member }}"{{ "," if not loop.last }}
+    {% endfor %}
+  ]
+}
+
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+{% endif %}
+
+{% if instance.get('iam_bindings') %}
+{% for binding in instance.iam_bindings %}
+{{ resource_spacer() }}
+resource "google_spanner_instance_iam_binding" "{{ instance.name_sanitized }}_{{ loop.index }}" {
+  instance = google_spanner_instance.{{ instance.name_sanitized }}.name
+  role     = "{{ binding.role }}"
+  members  = [
+    {% for member in binding.members %}
+    "{{ member }}"{{ "," if not loop.last }}
+    {% endfor %}
+  ]
+}
+
+{% endfor %}
+{% endif %}
+
+{% endfor %}{% endblock %}

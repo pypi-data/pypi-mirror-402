@@ -1,0 +1,98 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for inst in resources %}
+{{ resource_spacer() }}
+resource "google_sql_database_instance" "{{ inst.name_sanitized }}" {
+  name             = "{{ inst.name }}"
+  region           = "{{ inst.region }}"
+  database_version = "{{ inst.database_version }}"
+
+  {% if inst.settings %}
+  settings {
+    tier              = "{{ inst.settings.tier }}"
+    activation_policy = "{{ inst.settings.activation_policy | default('ALWAYS') }}"
+    availability_type = "{{ inst.settings.availability_type | default('ZONAL') }}"
+    pricing_plan      = "{{ inst.settings.pricing_plan | default('PER_USE') }}"
+    
+    disk_type         = "{{ inst.settings.disk_type | default('PD_SSD') }}"
+    disk_size         = {{ inst.settings.disk_size | default(10) }}
+    disk_autoresize   = {{ inst.settings.disk_autoresize | default(true) | lower }}
+    {% if inst.settings.disk_autoresize_limit is defined %}
+    disk_autoresize_limit = {{ inst.settings.disk_autoresize_limit }}
+    {% endif %}
+    
+    {% if inst.settings.backup_configuration %}
+    backup_configuration {
+      enabled                        = {{ inst.settings.backup_configuration.enabled | default(false) | lower }}
+      start_time                     = "{{ inst.settings.backup_configuration.start_time | default('23:00') }}"
+      {% if inst.settings.backup_configuration.point_in_time_recovery_enabled is defined %}
+      point_in_time_recovery_enabled = {{ inst.settings.backup_configuration.point_in_time_recovery_enabled | lower }}
+      {% endif %}
+      {% if inst.settings.backup_configuration.transaction_log_retention_days is defined %}
+      transaction_log_retention_days = {{ inst.settings.backup_configuration.transaction_log_retention_days }}
+      {% endif %}
+      {% if inst.settings.backup_configuration.location %}
+      location                       = "{{ inst.settings.backup_configuration.location }}"
+      {% endif %}
+    }
+    {% endif %}
+    
+    {% if inst.settings.ip_configuration %}
+    ip_configuration {
+      ipv4_enabled = {{ inst.settings.ip_configuration.ipv4_enabled | default(true) | lower }}
+      require_ssl  = {{ inst.settings.ip_configuration.require_ssl | default(false) | lower }}
+      
+      {% if inst.settings.ip_configuration.private_network %}
+      private_network = "{{ inst.settings.ip_configuration.private_network }}"
+      {% endif %}
+      
+      {% for network in inst.settings.ip_configuration.authorized_networks | default([]) %}
+      authorized_networks {
+        name  = "{{ network.name | default('authorized-network-' + loop.index|string) }}"
+        value = "{{ network.value }}"
+      }
+      {% endfor %}
+    }
+    {% endif %}
+    
+    {% for flag in inst.settings.database_flags | default([]) %}
+    database_flags {
+      name  = "{{ flag.name }}"
+      value = "{{ flag.value }}"
+    }
+    {% endfor %}
+    
+    {% if inst.settings.user_labels %}
+    user_labels = {
+      {% for key, value in inst.settings.user_labels.items() %}
+      "{{ key }}" = "{{ value }}"{{ "," if not loop.last }}
+      {% endfor %}
+    }
+    {% endif %}
+    
+    {% if inst.settings.maintenance_window %}
+    maintenance_window {
+      day          = {{ inst.settings.maintenance_window.day | default(7) }}
+      hour         = {{ inst.settings.maintenance_window.hour | default(0) }}
+      update_track = "{{ inst.settings.maintenance_window.update_track | default('stable') }}"
+    }
+    {% endif %}
+    
+    {% if inst.settings.insights_config %}
+    insights_config {
+      query_insights_enabled  = {{ inst.settings.insights_config.query_insights_enabled | default(false) | lower }}
+      query_string_length     = {{ inst.settings.insights_config.query_string_length | default(1024) }}
+      record_application_tags = {{ inst.settings.insights_config.record_application_tags | default(false) | lower }}
+      record_client_address   = {{ inst.settings.insights_config.record_client_address | default(false) | lower }}
+    }
+    {% endif %}
+  }
+  {% endif %}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

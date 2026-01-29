@@ -1,0 +1,33 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for volume in resources %}
+{{ resource_spacer() }}
+resource "aws_ebs_volume" "{{ volume.VolumeId | strip_id_prefix | tf_resource_name }}" {
+  availability_zone = "{{ volume.AvailabilityZone }}"
+  size              = {{ volume.Size }}
+  type              = "{{ volume.VolumeType }}"
+
+  {% if volume.get('Iops') is defined and volume.Iops is not none and volume.VolumeType in ['io1', 'io2', 'gp3'] %}
+  iops              = {{ volume.Iops }}
+  {%  endif %}
+
+  {% if volume.get('Throughput') is defined and volume.Throughput is not none and volume.VolumeType == 'gp3' %}
+  throughput        = {{ volume.Throughput }}
+  {%  endif %}
+
+  {% if volume.get('Encrypted') %}
+  encrypted         = true
+  {% if volume.get('KmsKeyId') %}
+  kms_key_id        = "{{ volume.KmsKeyId }}"
+  {%  endif %}
+  {%  endif %}
+
+  {% if volume.get('SnapshotId') %}
+  snapshot_id       = "{{ volume.SnapshotId }}"
+  {%  endif %}
+
+  {{ render_common_tags(volume, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

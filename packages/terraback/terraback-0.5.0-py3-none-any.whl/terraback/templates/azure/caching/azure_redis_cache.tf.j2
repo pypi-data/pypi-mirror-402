@@ -1,0 +1,76 @@
+{% extends "common/base_resource.tf.j2" %}
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_redis_cache" "{{ resource.name.replace('-', '_').replace('.', '_').lower() }}" {
+  name                = "{{ resource.properties.name }}"
+  location            = "{{ resource.properties.location }}"
+  resource_group_name = "{{ resource.properties.resource_group_name }}"
+  capacity            = {{ resource.properties.capacity }}
+  family              = "{{ resource.properties.family }}"
+  sku_name            = "{{ resource.properties.sku_name }}"
+  
+  non_ssl_port_enabled = {{ resource.properties.non_ssl_port_enabled | default(false) | lower }}
+  minimum_tls_version = "{{ resource.properties.minimum_tls_version | default('1.2') }}"
+  
+  {% if resource.properties.public_network_access_enabled is defined %}
+  public_network_access_enabled = {{ resource.properties.public_network_access_enabled | lower }}
+  {% endif %}
+  
+  {% if resource.properties.subnet_id is defined and resource.properties.subnet_id %}
+  subnet_id = "{{ resource.properties.subnet_id }}"
+  {% endif %}
+  
+  {% if resource.properties.shard_count is defined %}
+  shard_count = {{ resource.properties.shard_count }}
+  {% endif %}
+  
+  {% if resource.properties.zones is defined %}
+  zones = {{ resource.properties.zones | to_terraform_collection('list') }}
+  {% endif %}
+  
+  {% if resource.properties.redis_configuration is defined %}
+  redis_configuration {
+    {% if resource.properties.redis_configuration.maxmemory_delta is defined %}
+    maxmemory_delta     = "{{ resource.properties.redis_configuration.maxmemory_delta }}"
+    {% endif %}
+    {% if resource.properties.redis_configuration.maxmemory_reserved is defined %}
+    maxmemory_reserved  = "{{ resource.properties.redis_configuration.maxmemory_reserved }}"
+    {% endif %}
+    {% if resource.properties.redis_configuration.maxmemory_policy is defined %}
+    maxmemory_policy    = "{{ resource.properties.redis_configuration.maxmemory_policy }}"
+    {% endif %}
+    {% if resource.properties.redis_configuration.rdb_backup_enabled is defined %}
+    rdb_backup_enabled            = {{ resource.properties.redis_configuration.rdb_backup_enabled | lower }}
+    {% endif %}
+    {% if resource.properties.redis_configuration.rdb_backup_frequency is defined %}
+    rdb_backup_frequency          = {{ resource.properties.redis_configuration.rdb_backup_frequency }}
+    {% endif %}
+    {% if resource.properties.redis_configuration.rdb_backup_max_snapshot_count is defined %}
+    rdb_backup_max_snapshot_count = {{ resource.properties.redis_configuration.rdb_backup_max_snapshot_count }}
+    {% endif %}
+    {% if resource.properties.redis_configuration.rdb_storage_connection_string is defined %}
+    rdb_storage_connection_string = "{{ resource.properties.redis_configuration.rdb_storage_connection_string }}"
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.properties.patch_schedule is defined %}
+  {% for schedule in resource.properties.patch_schedule %}
+  patch_schedule {
+    day_of_week        = "{{ schedule.day_of_week }}"
+    start_hour_utc     = {{ schedule.start_hour_utc }}
+    {% if schedule.maintenance_window is defined %}
+    maintenance_window = "{{ schedule.maintenance_window }}"
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.tags is defined and resource.properties.tags %}
+  tags = {{ resource.properties.tags | to_terraform_collection('map') }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

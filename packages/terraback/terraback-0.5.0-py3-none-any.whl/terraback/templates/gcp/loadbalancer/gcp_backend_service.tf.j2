@@ -1,0 +1,334 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for svc in resources %}
+{{ resource_spacer() }}
+{% if svc.service_type == "regional" %}
+resource "google_compute_region_backend_service" "{{ svc.name_sanitized }}" {
+{% else %}
+resource "google_compute_backend_service" "{{ svc.name_sanitized }}" {
+{% endif %}
+  name = "{{ svc.name }}"
+  {% if svc.service_type == "regional" %}
+  region = "{{ svc.region }}"
+  {% endif %}
+
+  {% if svc.description %}
+  description = "{{ svc.description }}"
+  {% endif %}
+
+  {% if svc.protocol %}
+  protocol = "{{ svc.protocol }}"
+  {% endif %}
+  {% if svc.port %}
+  port = {{ svc.port }}
+  {% endif %}
+  {% if svc.port_name %}
+  port_name = "{{ svc.port_name }}"
+  {% endif %}
+  {% if svc.timeout_sec %}
+  timeout_sec = {{ svc.timeout_sec }}
+  {% endif %}
+  {% if svc.enable_cdn %}
+  enable_cdn = {{ svc.enable_cdn | lower }}
+  {% endif %}
+  {% if svc.session_affinity %}
+  session_affinity = "{{ svc.session_affinity }}"
+  {% endif %}
+  {% if svc.affinity_cookie_ttl_sec %}
+  affinity_cookie_ttl_sec = {{ svc.affinity_cookie_ttl_sec }}
+  {% endif %}
+  {% if svc.load_balancing_scheme %}
+  load_balancing_scheme = "{{ svc.load_balancing_scheme }}"
+  {% endif %}
+  {% if svc.locality_lb_policy %}
+  locality_lb_policy = "{{ svc.locality_lb_policy }}"
+  {% endif %}
+  {% if svc.compression_mode %}
+  compression_mode = "{{ svc.compression_mode }}"
+  {% endif %}
+
+  {% if svc.service_type == "regional" and svc.network %}
+  network = "{{ svc.network }}"
+  {% endif %}
+
+  {% if svc.health_checks %}
+  health_checks = {{ svc.health_checks | tojson }}
+  {% endif %}
+
+  {% if svc.backends %}
+  {% for backend in svc.backends %}
+  backend {
+    {% if backend.group %}
+    group = "{{ backend.group }}"
+    {% endif %}
+    {% if backend.balancing_mode %}
+    balancing_mode = "{{ backend.balancing_mode }}"
+    {% endif %}
+    {% if backend.max_rate %}
+    max_rate = {{ backend.max_rate }}
+    {% endif %}
+    {% if backend.max_rate_per_instance %}
+    max_rate_per_instance = {{ backend.max_rate_per_instance }}
+    {% endif %}
+    {% if backend.max_rate_per_endpoint %}
+    max_rate_per_endpoint = {{ backend.max_rate_per_endpoint }}
+    {% endif %}
+    {% if backend.max_connections %}
+    max_connections = {{ backend.max_connections }}
+    {% endif %}
+    {% if backend.max_connections_per_instance %}
+    max_connections_per_instance = {{ backend.max_connections_per_instance }}
+    {% endif %}
+    {% if backend.max_connections_per_endpoint %}
+    max_connections_per_endpoint = {{ backend.max_connections_per_endpoint }}
+    {% endif %}
+    {% if backend.max_utilization %}
+    max_utilization = {{ backend.max_utilization }}
+    {% endif %}
+    {% if backend.capacity_scaler %}
+    capacity_scaler = {{ backend.capacity_scaler }}
+    {% endif %}
+    {% if backend.description %}
+    description = "{{ backend.description }}"
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if svc.connection_draining %}
+  connection_draining {
+    {% if svc.connection_draining.draining_timeout_sec %}
+    draining_timeout_sec = {{ svc.connection_draining.draining_timeout_sec }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if svc.cdn_policy and svc.service_type == "global" %}
+  cdn_policy {
+    {% if svc.cdn_policy.cache_mode %}
+    cache_mode = "{{ svc.cdn_policy.cache_mode }}"
+    {% endif %}
+    {% if svc.cdn_policy.default_ttl %}
+    default_ttl = {{ svc.cdn_policy.default_ttl }}
+    {% endif %}
+    {% if svc.cdn_policy.max_ttl %}
+    max_ttl = {{ svc.cdn_policy.max_ttl }}
+    {% endif %}
+    {% if svc.cdn_policy.client_ttl %}
+    client_ttl = {{ svc.cdn_policy.client_ttl }}
+    {% endif %}
+    {% if svc.cdn_policy.negative_caching %}
+    negative_caching = {{ svc.cdn_policy.negative_caching | lower }}
+    {% endif %}
+    {% if svc.cdn_policy.serve_while_stale %}
+    serve_while_stale = {{ svc.cdn_policy.serve_while_stale }}
+    {% endif %}
+    {% if svc.cdn_policy.signed_url_cache_max_age_sec %}
+    signed_url_cache_max_age_sec = {{ svc.cdn_policy.signed_url_cache_max_age_sec }}
+    {% endif %}
+
+    {% if svc.cdn_policy.cache_key_policy %}
+    cache_key_policy {
+      {% if svc.cdn_policy.cache_key_policy.include_protocol is not none %}
+      include_protocol = {{ svc.cdn_policy.cache_key_policy.include_protocol | lower }}
+      {% endif %}
+      {% if svc.cdn_policy.cache_key_policy.include_host is not none %}
+      include_host = {{ svc.cdn_policy.cache_key_policy.include_host | lower }}
+      {% endif %}
+      {% if svc.cdn_policy.cache_key_policy.include_query_string is not none %}
+      include_query_string = {{ svc.cdn_policy.cache_key_policy.include_query_string | lower }}
+      {% endif %}
+      {% if svc.cdn_policy.cache_key_policy.query_string_whitelist %}
+      query_string_whitelist = {{ svc.cdn_policy.cache_key_policy.query_string_whitelist | tojson }}
+      {% endif %}
+      {% if svc.cdn_policy.cache_key_policy.query_string_blacklist %}
+      query_string_blacklist = {{ svc.cdn_policy.cache_key_policy.query_string_blacklist | tojson }}
+      {% endif %}
+      {% if svc.cdn_policy.cache_key_policy.include_http_headers %}
+      include_http_headers = {{ svc.cdn_policy.cache_key_policy.include_http_headers | tojson }}
+      {% endif %}
+      {% if svc.cdn_policy.cache_key_policy.include_named_cookies %}
+      include_named_cookies = {{ svc.cdn_policy.cache_key_policy.include_named_cookies | tojson }}
+      {% endif %}
+    }
+    {% endif %}
+
+    {% if svc.cdn_policy.negative_caching_policy %}
+    {% for ncp in svc.cdn_policy.negative_caching_policy %}
+    negative_caching_policy {
+      {% if ncp.code %}
+      code = {{ ncp.code }}
+      {% endif %}
+      {% if ncp.ttl %}
+      ttl = {{ ncp.ttl }}
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if svc.iap and svc.service_type == "global" %}
+  iap {
+    {% if svc.iap.enabled is not none %}
+    enabled = {{ svc.iap.enabled | lower }}
+    {% endif %}
+    {% if svc.iap.oauth2_client_id %}
+    oauth2_client_id = "{{ svc.iap.oauth2_client_id }}"
+    {% endif %}
+    # oauth2_client_secret is managed outside of Terraform for security
+  }
+  {% endif %}
+
+  {% if svc.circuit_breakers and svc.service_type == "global" %}
+  circuit_breakers {
+    {% if svc.circuit_breakers.max_requests_per_connection %}
+    max_requests_per_connection = {{ svc.circuit_breakers.max_requests_per_connection }}
+    {% endif %}
+    {% if svc.circuit_breakers.max_connections %}
+    max_connections = {{ svc.circuit_breakers.max_connections }}
+    {% endif %}
+    {% if svc.circuit_breakers.max_pending_requests %}
+    max_pending_requests = {{ svc.circuit_breakers.max_pending_requests }}
+    {% endif %}
+    {% if svc.circuit_breakers.max_requests %}
+    max_requests = {{ svc.circuit_breakers.max_requests }}
+    {% endif %}
+    {% if svc.circuit_breakers.max_retries %}
+    max_retries = {{ svc.circuit_breakers.max_retries }}
+    {% endif %}
+    {% if svc.circuit_breakers.connect_timeout %}
+    connect_timeout {
+      {% if svc.circuit_breakers.connect_timeout.seconds %}
+      seconds = {{ svc.circuit_breakers.connect_timeout.seconds }}
+      {% endif %}
+      {% if svc.circuit_breakers.connect_timeout.nanos %}
+      nanos = {{ svc.circuit_breakers.connect_timeout.nanos }}
+      {% endif %}
+    }
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if svc.outlier_detection and svc.service_type == "global" %}
+  outlier_detection {
+    {% if svc.outlier_detection.consecutive_errors %}
+    consecutive_errors = {{ svc.outlier_detection.consecutive_errors }}
+    {% endif %}
+    {% if svc.outlier_detection.consecutive_gateway_failure %}
+    consecutive_gateway_failure = {{ svc.outlier_detection.consecutive_gateway_failure }}
+    {% endif %}
+    {% if svc.outlier_detection.enforcing_consecutive_errors %}
+    enforcing_consecutive_errors = {{ svc.outlier_detection.enforcing_consecutive_errors }}
+    {% endif %}
+    {% if svc.outlier_detection.enforcing_consecutive_gateway_failure %}
+    enforcing_consecutive_gateway_failure = {{ svc.outlier_detection.enforcing_consecutive_gateway_failure }}
+    {% endif %}
+    {% if svc.outlier_detection.enforcing_success_rate %}
+    enforcing_success_rate = {{ svc.outlier_detection.enforcing_success_rate }}
+    {% endif %}
+    {% if svc.outlier_detection.max_ejection_percent %}
+    max_ejection_percent = {{ svc.outlier_detection.max_ejection_percent }}
+    {% endif %}
+    {% if svc.outlier_detection.min_health_percent %}
+    min_health_percent = {{ svc.outlier_detection.min_health_percent }}
+    {% endif %}
+    {% if svc.outlier_detection.success_rate_minimum_hosts %}
+    success_rate_minimum_hosts = {{ svc.outlier_detection.success_rate_minimum_hosts }}
+    {% endif %}
+    {% if svc.outlier_detection.success_rate_request_volume %}
+    success_rate_request_volume = {{ svc.outlier_detection.success_rate_request_volume }}
+    {% endif %}
+    {% if svc.outlier_detection.success_rate_stdev_factor %}
+    success_rate_stdev_factor = {{ svc.outlier_detection.success_rate_stdev_factor }}
+    {% endif %}
+    {% if svc.outlier_detection.base_ejection_time %}
+    base_ejection_time {
+      {% if svc.outlier_detection.base_ejection_time.seconds %}
+      seconds = {{ svc.outlier_detection.base_ejection_time.seconds }}
+      {% endif %}
+      {% if svc.outlier_detection.base_ejection_time.nanos %}
+      nanos = {{ svc.outlier_detection.base_ejection_time.nanos }}
+      {% endif %}
+    }
+    {% endif %}
+    {% if svc.outlier_detection.interval %}
+    interval {
+      {% if svc.outlier_detection.interval.seconds %}
+      seconds = {{ svc.outlier_detection.interval.seconds }}
+      {% endif %}
+      {% if svc.outlier_detection.interval.nanos %}
+      nanos = {{ svc.outlier_detection.interval.nanos }}
+      {% endif %}
+    }
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if svc.consistent_hash and svc.service_type == "global" %}
+  consistent_hash {
+    {% if svc.consistent_hash.http_header_name %}
+    http_header_name = "{{ svc.consistent_hash.http_header_name }}"
+    {% endif %}
+    {% if svc.consistent_hash.minimum_ring_size %}
+    minimum_ring_size = {{ svc.consistent_hash.minimum_ring_size }}
+    {% endif %}
+    {% if svc.consistent_hash.http_cookie %}
+    http_cookie {
+      {% if svc.consistent_hash.http_cookie.name %}
+      name = "{{ svc.consistent_hash.http_cookie.name }}"
+      {% endif %}
+      {% if svc.consistent_hash.http_cookie.path %}
+      path = "{{ svc.consistent_hash.http_cookie.path }}"
+      {% endif %}
+      {% if svc.consistent_hash.http_cookie.ttl %}
+      ttl {
+        {% if svc.consistent_hash.http_cookie.ttl.seconds %}
+        seconds = {{ svc.consistent_hash.http_cookie.ttl.seconds }}
+        {% endif %}
+        {% if svc.consistent_hash.http_cookie.ttl.nanos %}
+        nanos = {{ svc.consistent_hash.http_cookie.ttl.nanos }}
+        {% endif %}
+      }
+      {% endif %}
+    }
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if svc.log_config %}
+  log_config {
+    {% if svc.log_config.enable is not none %}
+    enable = {{ svc.log_config.enable | lower }}
+    {% endif %}
+    {% if svc.log_config.sample_rate %}
+    sample_rate = {{ svc.log_config.sample_rate }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if svc.security_policy %}
+  security_policy = "{{ svc.security_policy }}"
+  {% endif %}
+  {% if svc.edge_security_policy and svc.service_type == "global" %}
+  edge_security_policy = "{{ svc.edge_security_policy }}"
+  {% endif %}
+
+  {% if svc.custom_request_headers %}
+  custom_request_headers = {{ svc.custom_request_headers | tojson }}
+  {% endif %}
+  {% if svc.custom_response_headers %}
+  custom_response_headers = {{ svc.custom_response_headers | tojson }}
+  {% endif %}
+
+  {% if svc.labels %}
+  labels = {{ svc.labels | tojson }}
+  {% endif %}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,76 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for flow_log in resources %}
+{{ resource_spacer() }}
+resource "aws_flow_log" "{{ flow_log.name_sanitized }}" {
+  {% if flow_log.get('vpc_id') %}
+  vpc_id = "{{ flow_log.vpc_id }}"
+  {% elif flow_log.get('resourceId') and flow_log.get('resourceType') == 'VPC' %}
+  vpc_id = "{{ flow_log.resourceId }}"
+  {% endif %}
+  
+  {% if flow_log.get('subnet_id') %}
+  subnet_id = "{{ flow_log.subnet_id }}"
+  {% elif flow_log.get('resourceId') and flow_log.get('resourceType') == 'Subnet' %}
+  subnet_id = "{{ flow_log.resourceId }}"
+  {% endif %}
+  
+  {% if flow_log.get('eni_id') %}
+  eni_id = "{{ flow_log.eni_id }}"
+  {% elif flow_log.get('resourceId') and flow_log.get('resourceType') == 'NetworkInterface' %}
+  eni_id = "{{ flow_log.resourceId }}"
+  {% endif %}
+  
+  {% if flow_log.get('transit_gateway_id') %}
+  transit_gateway_id = "{{ flow_log.transit_gateway_id }}"
+  {% endif %}
+  
+  {% if flow_log.get('transit_gateway_attachment_id') %}
+  transit_gateway_attachment_id = "{{ flow_log.transit_gateway_attachment_id }}"
+  {% endif %}
+
+  traffic_type = "{{ flow_log.trafficType | default('ALL') }}"
+  
+  {% if flow_log.get('iam_role_arn') or flow_log.get('deliverLogsPermissionArn') %}
+  iam_role_arn = "{{ flow_log.iam_role_arn | default(flow_log.deliverLogsPermissionArn) }}"
+  {% endif %}
+  
+  {% if flow_log.get('log_destination') or flow_log.get('logDestination') %}
+  log_destination      = "{{ flow_log.log_destination | default(flow_log.logDestination) }}"
+  log_destination_type = "{{ flow_log.log_destination_type | default(flow_log.logDestinationType | default('s3')) }}"
+  {% elif flow_log.get('log_group_name') or flow_log.get('logGroupName') %}
+  log_destination      = "{{ flow_log.log_group_name | default(flow_log.logGroupName) }}"
+  log_destination_type = "cloud-watch-logs"
+  {% endif %}
+  
+  {% if flow_log.get('log_format') or flow_log.get('logFormat') %}
+  log_format = "{{ flow_log.log_format | default(flow_log.logFormat) }}"
+  {% endif %}
+  
+  {% if flow_log.get('max_aggregation_interval') or flow_log.get('maxAggregationInterval') %}
+  max_aggregation_interval = {{ flow_log.max_aggregation_interval | default(flow_log.maxAggregationInterval) }}
+  {% endif %}
+  
+  {% if flow_log.get('destination_options') or flow_log.get('destinationOptions') %}
+  destination_options {
+    {% set dest_opts = flow_log.get('destination_options', flow_log.get('destinationOptions', {})) %}
+    
+    {% if dest_opts.get('file_format') or dest_opts.get('fileFormat') %}
+    file_format = "{{ dest_opts.file_format | default(dest_opts.fileFormat) }}"
+    {% endif %}
+    
+    {% if dest_opts.get('hive_compatible_partitions') is defined or dest_opts.get('hiveCompatiblePartitions') is defined %}
+    hive_compatible_partitions = {{ dest_opts.get('hive_compatible_partitions', dest_opts.get('hiveCompatiblePartitions', false)) | lower }}
+    {% endif %}
+    
+    {% if dest_opts.get('per_hour_partition') is defined or dest_opts.get('perHourPartition') is defined %}
+    per_hour_partition = {{ dest_opts.get('per_hour_partition', dest_opts.get('perHourPartition', false)) | lower }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {{ render_common_tags(flow_log, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

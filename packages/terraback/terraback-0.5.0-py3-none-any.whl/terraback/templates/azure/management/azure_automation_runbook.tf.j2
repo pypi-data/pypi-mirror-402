@@ -1,0 +1,85 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_automation_runbook" "{{ resource.name }}" {
+  name                    = "{{ resource.properties.name }}"
+  location                = "{{ resource.properties.location }}"
+  resource_group_name     = "{{ resource.properties.resource_group_name }}"
+  automation_account_name = "{{ resource.properties.automation_account_name }}"
+  log_verbose             = {{ resource.properties.log_verbose | default(false) | lower }}
+  log_progress            = {{ resource.properties.log_progress | default(false) | lower }}
+  runbook_type            = "{{ resource.properties.runbook_type }}"
+  
+  {% if resource.properties.description is defined %}
+  description = "{{ resource.properties.description }}"
+  {% endif %}
+  
+  {% if resource.properties.content is defined %}
+  content = <<EOF
+{{ resource.properties.content }}
+EOF
+  {% endif %}
+  
+  {% if resource.properties.publish_content_link is defined %}
+  publish_content_link {
+    uri = "{{ resource.properties.publish_content_link.uri }}"
+    {% if resource.properties.publish_content_link.version is defined %}
+    version = "{{ resource.properties.publish_content_link.version }}"
+    {% endif %}
+    {% if resource.properties.publish_content_link.hash is defined %}
+    hash {
+      algorithm = "{{ resource.properties.publish_content_link.hash.algorithm }}"
+      value     = "{{ resource.properties.publish_content_link.hash.value }}"
+    }
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.properties.draft is defined %}
+  draft {
+    {% if resource.properties.draft.edit_mode_enabled is defined %}
+    edit_mode_enabled = {{ resource.properties.draft.edit_mode_enabled | lower }}
+    {% endif %}
+    {% if resource.properties.draft.content_link is defined %}
+    content_link {
+      uri = "{{ resource.properties.draft.content_link.uri }}"
+      {% if resource.properties.draft.content_link.version is defined %}
+      version = "{{ resource.properties.draft.content_link.version }}"
+      {% endif %}
+      {% if resource.properties.draft.content_link.hash is defined %}
+      hash {
+        algorithm = "{{ resource.properties.draft.content_link.hash.algorithm }}"
+        value     = "{{ resource.properties.draft.content_link.hash.value }}"
+      }
+      {% endif %}
+    }
+    {% endif %}
+    {% if resource.properties.draft.parameters is defined %}
+    {% for param_name, param_config in resource.properties.draft.parameters.items() %}
+    parameters {
+      key      = "{{ param_name }}"
+      type     = "{{ param_config.type }}"
+      {% if param_config.mandatory is defined %}
+      mandatory = {{ param_config.mandatory | lower }}
+      {% endif %}
+      {% if param_config.position is defined %}
+      position = {{ param_config.position }}
+      {% endif %}
+      {% if param_config.default_value is defined %}
+      default_value = "{{ param_config.default_value }}"
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.properties.tags is defined %}
+  tags = {{ resource.properties.tags | tojson }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

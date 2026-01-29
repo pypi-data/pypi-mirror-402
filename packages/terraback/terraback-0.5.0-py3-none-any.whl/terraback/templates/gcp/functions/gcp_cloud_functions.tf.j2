@@ -1,0 +1,128 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% import "common/macros.j2" as macros %}
+{% block resources %}
+{% for function in resources %}
+{{ resource_spacer() }}
+resource "google_cloudfunctions2_function" "{{ function.name | replace('-', '_') }}" {
+  name        = "{{ function.name }}"
+  location    = "{{ function.location }}"
+  {% if function.description %}
+  description = "{{ function.description }}"
+  {% endif %}
+
+  {% if function.build_config %}
+  build_config {
+    runtime     = "{{ function.build_config.runtime }}"
+    entry_point = "{{ function.build_config.entry_point }}"
+    
+    {% if function.build_config.environment_variables %}
+    environment_variables = {
+      {% for key, value in function.build_config.environment_variables.items() %}
+      {{ key }} = "{{ value }}"{{ "," if not loop.last }}
+      {% endfor %}
+    }
+    {% endif %}
+    
+    {% if function.build_config.source.storage_source %}
+    source {
+      storage_source {
+        bucket = "{{ function.build_config.source.storage_source.bucket }}"
+        object = "{{ function.build_config.source.storage_source.object }}"
+        {% if function.build_config.source.storage_source.generation %}
+        generation = {{ function.build_config.source.storage_source.generation }}
+        {% endif %}
+      }
+    }
+    {% elif function.build_config.source.repo_source %}
+    source {
+      repo_source {
+        {% if function.build_config.source.repo_source.project_id %}
+        project_id = "{{ function.build_config.source.repo_source.project_id }}"
+        {% endif %}
+        repo_name = "{{ function.build_config.source.repo_source.repo_name }}"
+        {% if function.build_config.source.repo_source.branch_name %}
+        branch_name = "{{ function.build_config.source.repo_source.branch_name }}"
+        {% elif function.build_config.source.repo_source.tag_name %}
+        tag_name = "{{ function.build_config.source.repo_source.tag_name }}"
+        {% elif function.build_config.source.repo_source.commit_sha %}
+        commit_sha = "{{ function.build_config.source.repo_source.commit_sha }}"
+        {% endif %}
+      }
+    }
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if function.service_config %}
+  service_config {
+    max_instance_count = {{ function.service_config.max_instance_count }}
+    {% if function.service_config.min_instance_count > 0 %}
+    min_instance_count = {{ function.service_config.min_instance_count }}
+    {% endif %}
+    available_memory   = "{{ function.service_config.available_memory }}"
+    timeout_seconds    = {{ function.service_config.timeout_seconds }}
+    
+    {% if function.service_config.environment_variables %}
+    environment_variables = {
+      {% for key, value in function.service_config.environment_variables.items() %}
+      {{ key }} = "{{ value }}"{{ "," if not loop.last }}
+      {% endfor %}
+    }
+    {% endif %}
+    
+    ingress_settings               = "{{ function.service_config.ingress_settings }}"
+    all_traffic_on_latest_revision = true
+    {% if function.service_config.service_account_email %}
+    service_account_email          = "{{ function.service_config.service_account_email }}"
+    {% endif %}
+    
+    {% if function.service_config.vpc_connector %}
+    vpc_connector                   = "{{ function.service_config.vpc_connector }}"
+    {% if function.service_config.vpc_connector_egress_settings %}
+    vpc_connector_egress_settings   = "{{ function.service_config.vpc_connector_egress_settings }}"
+    {% endif %}
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if function.event_trigger %}
+  event_trigger {
+    {% if function.event_trigger.trigger_region %}
+    trigger_region = "{{ function.event_trigger.trigger_region }}"
+    {% endif %}
+    event_type     = "{{ function.event_trigger.event_type }}"
+    {% if function.event_trigger.pubsub_topic %}
+    pubsub_topic   = "{{ function.event_trigger.pubsub_topic }}"
+    {% endif %}
+    {% if function.event_trigger.service_account_email %}
+    service_account_email = "{{ function.event_trigger.service_account_email }}"
+    {% endif %}
+    retry_policy   = "{{ function.event_trigger.retry_policy }}"
+    
+    {% for filter in function.event_trigger.event_filters %}
+    event_filters {
+      attribute = "{{ filter.attribute }}"
+      value     = "{{ filter.value }}"
+      {% if filter.operator %}
+      operator  = "{{ filter.operator }}"
+      {% endif %}
+    }
+    {% endfor %}
+  }
+  {% endif %}
+  
+  {% if function.labels %}
+  labels = {
+    {% for key, value in function.labels.items() %}
+    {{ key }} = "{{ value }}"{{ "," if not loop.last }}
+    {% endfor %}
+  }
+  {% endif %}
+  
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

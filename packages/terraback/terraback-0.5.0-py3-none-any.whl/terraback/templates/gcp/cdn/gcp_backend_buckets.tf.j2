@@ -1,0 +1,54 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% import "common/macros.j2" as macros %}
+{% block resources %}
+{% for bucket in resources %}
+{{ resource_spacer() }}
+resource "google_compute_backend_bucket" "{{ bucket.name | replace('-', '_') }}" {
+  name        = "{{ bucket.name }}"
+  bucket_name = "{{ bucket.bucket_name }}"
+  {% if bucket.description %}
+  description = "{{ bucket.description }}"
+  {% endif %}
+  enable_cdn  = {{ bucket.enable_cdn | lower }}
+  
+  {% if bucket.cdn_policy %}
+  cdn_policy {
+    {% if bucket.cdn_policy.cache_mode %}
+    cache_mode        = "{{ bucket.cdn_policy.cache_mode }}"
+    {% endif %}
+    {% if bucket.cdn_policy.client_ttl %}
+    client_ttl        = {{ bucket.cdn_policy.client_ttl }}
+    {% endif %}
+    {% if bucket.cdn_policy.default_ttl %}
+    default_ttl       = {{ bucket.cdn_policy.default_ttl }}
+    {% endif %}
+    {% if bucket.cdn_policy.max_ttl %}
+    max_ttl           = {{ bucket.cdn_policy.max_ttl }}
+    {% endif %}
+    negative_caching  = {{ bucket.cdn_policy.negative_caching | lower }}
+    {% if bucket.cdn_policy.serve_while_stale %}
+    serve_while_stale = {{ bucket.cdn_policy.serve_while_stale }}
+    {% endif %}
+    
+    {% for policy in bucket.cdn_policy.negative_caching_policy %}
+    negative_caching_policy {
+      code = {{ policy.code }}
+      {% if policy.ttl %}
+      ttl  = {{ policy.ttl }}
+      {% endif %}
+    }
+    {% endfor %}
+  }
+  {% endif %}
+  
+  {% if bucket.custom_response_headers %}
+  custom_response_headers = {{ bucket.custom_response_headers | tojson }}
+  {% endif %}
+  
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

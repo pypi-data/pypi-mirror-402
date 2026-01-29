@@ -1,0 +1,62 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for queue in resources %}
+{{ resource_spacer() }}
+resource "google_cloud_tasks_queue" "{{ queue.name_sanitized }}" {
+  name     = "{{ queue.name }}"
+  location = "{{ queue.location }}"
+  
+  {% if queue.get('project') %}
+
+  {% endif %}
+
+  {% if queue.get('rate_limits') %}
+  rate_limits {
+    {% if queue.rate_limits.get('max_dispatches_per_second') %}
+    max_dispatches_per_second = {{ queue.rate_limits.max_dispatches_per_second }}
+    {% endif %}
+    
+    {% if queue.rate_limits.get('max_burst_size') %}
+    max_burst_size = {{ queue.rate_limits.max_burst_size }}
+    {% endif %}
+    
+    {% if queue.rate_limits.get('max_concurrent_dispatches') %}
+    max_concurrent_dispatches = {{ queue.rate_limits.max_concurrent_dispatches }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if queue.get('retry_config') %}
+  retry_config {
+    {% if queue.retry_config.get('max_attempts') %}
+    max_attempts = {{ queue.retry_config.max_attempts }}
+    {% endif %}
+    
+    {% if queue.retry_config.get('max_retry_duration') %}
+    max_retry_duration = "{{ queue.retry_config.max_retry_duration }}"
+    {% endif %}
+    
+    {% if queue.retry_config.get('min_backoff') %}
+    min_backoff = "{{ queue.retry_config.min_backoff }}"
+    {% endif %}
+    
+    {% if queue.retry_config.get('max_backoff') %}
+    max_backoff = "{{ queue.retry_config.max_backoff }}"
+    {% endif %}
+    
+    {% if queue.retry_config.get('max_doublings') %}
+    max_doublings = {{ queue.retry_config.max_doublings }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if queue.get('stackdriver_logging_config') %}
+  stackdriver_logging_config {
+    sampling_ratio = {{ queue.stackdriver_logging_config.sampling_ratio }}
+  }
+  {% endif %}
+
+  {{ render_gcp_labels(queue, indent=2) }}
+}
+
+{% endfor %}{% endblock %}

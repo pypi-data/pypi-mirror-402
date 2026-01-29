@@ -1,0 +1,150 @@
+{% extends 'common/base_resource.tf.j2' %}
+{% import 'common/macros.j2' as macros %}
+{% block resources %}
+{% for server in resources %}
+{{ resource_spacer() }}
+resource "azurerm_mssql_server" "{{ server.name_sanitized }}" {
+  name                         = "{{ server.name }}"
+  resource_group_name          = "{{ server.resource_group_name }}"
+  location                     = "{{ server.location }}"
+  version                      = "{{ server.version | default('12.0') }}"
+  
+  {% if server.administrator_login %}
+  administrator_login          = "{{ server.administrator_login }}"
+  administrator_login_password = var.sql_server_{{ server.name_sanitized }}_password
+  {% endif %}
+  
+  {% if server.connection_policy %}
+  connection_policy            = "{{ server.connection_policy }}"
+  {% endif %}
+  
+  {% if server.minimum_tls_version %}
+  minimum_tls_version          = "{{ server.minimum_tls_version }}"
+  {% endif %}
+  
+  {% if server.public_network_access_enabled is defined %}
+  public_network_access_enabled = {{ server.public_network_access_enabled | lower }}
+  {% endif %}
+  
+  {% if server.outbound_network_restriction_enabled is defined %}
+  outbound_network_restriction_enabled = {{ server.outbound_network_restriction_enabled | lower }}
+  {% endif %}
+  
+  {% if server.primary_user_assigned_identity_id %}
+  primary_user_assigned_identity_id = "{{ server.primary_user_assigned_identity_id }}"
+  {% endif %}
+  
+  {% if server.transparent_data_encryption_key_vault_key_id %}
+  transparent_data_encryption_key_vault_key_id = "{{ server.transparent_data_encryption_key_vault_key_id }}"
+  {% endif %}
+
+  {% if server.azuread_administrator %}
+  azuread_administrator {
+    login_username              = "{{ server.azuread_administrator.login_username }}"
+    object_id                   = "{{ server.azuread_administrator.object_id }}"
+    {% if server.azuread_administrator.tenant_id %}
+    tenant_id                   = "{{ server.azuread_administrator.tenant_id }}"
+    {% endif %}
+    {% if server.azuread_administrator.azuread_authentication_only is defined %}
+    azuread_authentication_only = {{ server.azuread_administrator.azuread_authentication_only | lower }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if server.identity_formatted %}
+  identity {
+    type = "{{ server.identity_formatted.type }}"
+    {% if server.identity_formatted.identity_ids %}
+    identity_ids = {{ server.identity_formatted.identity_ids | tojson }}
+    {% endif %}
+  }
+  {% elif server.identity %}
+  identity {
+    type = "{{ server.identity.type }}"
+  }
+  {% endif %}
+
+{{ macros.render_tags(server.tags) }}
+
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes = [
+      administrator_login_password
+    ]
+  }
+}
+
+{% if server.firewall_rules %}
+{% for rule in server.firewall_rules %}
+{{ resource_spacer() }}
+resource "azurerm_mssql_firewall_rule" "{{ server.name_sanitized }}_{{ rule.name | replace('-', '_') | replace('.', '_') | lower }}" {
+  name             = "{{ rule.name }}"
+  server_id        = azurerm_mssql_server.{{ server.name_sanitized }}.id
+  start_ip_address = "{{ rule.start_ip_address }}"
+  end_ip_address   = "{{ rule.end_ip_address }}"
+}
+{% endfor %}
+{% endif %}
+
+{% if server.virtual_network_rules %}
+{% for rule in server.virtual_network_rules %}
+{{ resource_spacer() }}
+resource "azurerm_mssql_virtual_network_rule" "{{ server.name_sanitized }}_{{ rule.name | replace('-', '_') | replace('.', '_') | lower }}" {
+  name      = "{{ rule.name }}"
+  server_id = azurerm_mssql_server.{{ server.name_sanitized }}.id
+  subnet_id = "{{ rule.subnet_id }}"
+  {% if rule.ignore_missing_vnet_service_endpoint is defined %}
+  ignore_missing_vnet_service_endpoint = {{ rule.ignore_missing_vnet_service_endpoint | lower }}
+  {% endif %}
+}
+{% endfor %}
+{% endif %}
+
+{% if server.extended_auditing_policy %}
+resource "azurerm_mssql_server_extended_auditing_policy" "{{ server.name_sanitized }}" {
+  server_id                               = azurerm_mssql_server.{{ server.name_sanitized }}.id
+  storage_endpoint                        = "{{ server.extended_auditing_policy.storage_endpoint }}"
+  {% if server.extended_auditing_policy.storage_account_access_key %}
+  storage_account_access_key              = var.storage_account_key
+  {% endif %}
+  {% if server.extended_auditing_policy.storage_account_access_key_is_secondary is defined %}
+  storage_account_access_key_is_secondary = {{ server.extended_auditing_policy.storage_account_access_key_is_secondary | lower }}
+  {% endif %}
+  {% if server.extended_auditing_policy.retention_in_days %}
+  retention_in_days                       = {{ server.extended_auditing_policy.retention_in_days }}
+  {% endif %}
+  {% if server.extended_auditing_policy.log_monitoring_enabled is defined %}
+  log_monitoring_enabled                  = {{ server.extended_auditing_policy.log_monitoring_enabled | lower }}
+  {% endif %}
+  enabled                                 = true
+}
+{% endif %}
+
+{% if server.threat_detection_policy %}
+resource "azurerm_mssql_server_security_alert_policy" "{{ server.name_sanitized }}" {
+  server_name         = azurerm_mssql_server.{{ server.name_sanitized }}.name
+  resource_group_name = azurerm_mssql_server.{{ server.name_sanitized }}.resource_group_name
+  state               = "{{ server.threat_detection_policy.state }}"
+  {% if server.threat_detection_policy.disabled_alerts %}
+  disabled_alerts     = {{ server.threat_detection_policy.disabled_alerts | tojson }}
+  {% endif %}
+  {% if server.threat_detection_policy.email_account_admins is defined %}
+  email_account_admins = {{ server.threat_detection_policy.email_account_admins | lower }}
+  {% endif %}
+  {% if server.threat_detection_policy.email_addresses %}
+  email_addresses      = {{ server.threat_detection_policy.email_addresses | tojson }}
+  {% endif %}
+  {% if server.threat_detection_policy.retention_days %}
+  retention_days       = {{ server.threat_detection_policy.retention_days }}
+  {% endif %}
+  {% if server.threat_detection_policy.storage_endpoint %}
+  storage_endpoint     = "{{ server.threat_detection_policy.storage_endpoint }}"
+  {% endif %}
+  {% if server.threat_detection_policy.storage_account_access_key %}
+  storage_account_access_key = var.storage_account_key
+  {% endif %}
+}
+{% endif %}
+
+{% endfor %}
+{% endblock %}

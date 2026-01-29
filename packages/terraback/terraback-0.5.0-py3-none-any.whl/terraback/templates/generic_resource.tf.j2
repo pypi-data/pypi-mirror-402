@@ -1,0 +1,40 @@
+{%- set resource_spacer = joiner('\n\n') %}
+{%- for resource in resources %}
+{{ resource_spacer() }}resource "{{ resource.terraform_type }}" "{{ resource.name_sanitized }}" {
+  # Import command:
+  # terraform import {{ resource.terraform_type }}.{{ resource.name_sanitized }} {{ resource.import_id }}
+  
+  {%- if resource.terraform_type.startswith('aws_') %}
+  # AWS Resource ID: {{ resource.id }}
+  {%- elif resource.terraform_type.startswith('azurerm_') %}
+  # Azure Resource ID: {{ resource.id }}
+  {%- elif resource.terraform_type.startswith('google_') %}
+  # GCP Resource ID: {{ resource.id }}
+  {%- endif %}
+  
+  {%- for field, value in resource.required_fields.items() if value %}
+  {%- if value is string %}
+  {{ field }} = "{{ value }}"
+  {%- elif value is number %}
+  {{ field }} = {{ value }}
+  {%- elif value is boolean %}
+  {{ field }} = {{ value | lower }}
+  {%- elif value is mapping %}
+  {{ field }} = {
+    {%- for k, v in value.items() %}
+    {{ k }} = "{{ v }}"
+    {%- endfor %}
+  }
+  {%- elif value is sequence and value %}
+  {{ field }} = [
+    {%- for item in value %}
+    "{{ item }}"{{ "," if not loop.last }}
+    {%- endfor %}
+  ]
+  {%- endif %}
+  {%- endfor %}
+  
+  # TODO: Add remaining configuration
+  # Full resource data available in Terraform state after import
+}
+{%- endfor %}

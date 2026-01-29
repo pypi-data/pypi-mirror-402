@@ -1,0 +1,123 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for integration in resources %}
+{{ resource_spacer() }}
+resource "aws_api_gateway_integration" "{{ integration.rest_api_id }}_{{ integration.resource_id }}_{{ integration.http_method | lower }}" {
+  rest_api_id = "{{ integration.rest_api_id }}"
+  resource_id = "{{ integration.resource_id }}"
+  http_method = "{{ integration.http_method }}"
+  {% set int_type = integration.type | default('MOCK') %}
+  type        = "{{ int_type }}"
+
+  {# integration_http_method is required for AWS, AWS_PROXY, HTTP, HTTP_PROXY types #}
+  {% if int_type in ['AWS', 'AWS_PROXY', 'HTTP', 'HTTP_PROXY'] %}
+  {% if integration.integration_http_method or integration.integrationHttpMethod or integration.httpMethod %}
+  integration_http_method = "{{ integration.integration_http_method or integration.integrationHttpMethod or integration.httpMethod }}"
+  {% elif int_type in ['AWS', 'AWS_PROXY'] %}
+  integration_http_method = "POST"
+  {% else %}
+  integration_http_method = "{{ integration.http_method }}"
+  {% endif %}
+  {% endif %}
+
+  {% if integration.get('uri') %}
+  uri = "{{ integration.uri }}"
+  {%  endif %}
+
+  {% if integration.get('connection_type') %}
+  connection_type = "{{ integration.connection_type }}"
+  {%  endif %}
+
+  {% if integration.get('connection_id') %}
+  connection_id = "{{ integration.connection_id }}"
+  {%  endif %}
+
+  {% if integration.get('vpc_link_id') %}
+  vpc_link_id = "{{ integration.vpc_link_id }}"
+  {%  endif %}
+
+  {% if integration.get('credentials') %}
+  credentials = "{{ integration.credentials }}"
+  {%  endif %}
+
+  {% if integration.get('request_templates') %}
+  request_templates = {
+    {% for content_type, template in integration.request_templates.items() %}
+    "{{ content_type }}" = "{{ template | replace('"', '\\"') }}"{{ "," if not loop.last }}
+    {% endfor %}
+  }
+  {%  endif %}
+
+  {% if integration.get('request_parameters') %}
+  request_parameters = {
+    {% for key, value in integration.request_parameters.items() %}
+    "{{ key }}" = "{{ value }}"{{ "," if not loop.last }}
+    {% endfor %}
+  }
+  {%  endif %}
+
+  {% if integration.get('passthrough_behavior') %}
+  passthrough_behavior = "{{ integration.passthrough_behavior }}"
+  {%  endif %}
+
+  {% if integration.get('content_handling') %}
+  content_handling = "{{ integration.content_handling }}"
+  {%  endif %}
+
+  {% if integration.get('timeout_milliseconds') %}
+  timeout_milliseconds = {{ integration.timeout_milliseconds }}
+  {%  endif %}
+
+  {% if integration.get('cache_key_parameters') %}
+  cache_key_parameters = {{ integration.cache_key_parameters | tojson }}
+  {%  endif %}
+
+  {% if integration.get('cache_namespace') %}
+  cache_namespace = "{{ integration.cache_namespace }}"
+  {%  endif %}
+
+  {% if integration.get('tls_config') %}
+  tls_config {
+    {% if integration.tls_config.get('insecure_skip_verification') is defined %}
+    insecure_skip_verification = {{ integration.tls_config.insecure_skip_verification | lower }}
+    {%  endif %}
+  }
+  {%  endif %}
+}
+
+{% if integration.get('response_parameters') %}
+{% for status_code, responses in integration.response_parameters.items() %}
+{{ resource_spacer() }}
+resource "aws_api_gateway_integration_response" "{{ integration.rest_api_id }}_{{ integration.resource_id }}_{{ integration.http_method | lower }}_{{ status_code }}" {
+  rest_api_id = "{{ integration.rest_api_id }}"
+  resource_id = "{{ integration.resource_id }}"
+  http_method = "{{ integration.http_method }}"
+  status_code = "{{ status_code }}"
+
+  {% if responses.get('response_templates') %}
+  response_templates = {
+    {% for content_type, template in responses.response_templates.items() %}
+    "{{ content_type }}" = "{{ template | replace('"', '\\"') }}"{{ "," if not loop.last }}
+    {% endfor %}
+  }
+  {%  endif %}
+
+  {% if responses.get('response_parameters') %}
+  response_parameters = {
+    {% for key, value in responses.response_parameters.items() %}
+    "{{ key }}" = "{{ value }}"{{ "," if not loop.last }}
+    {% endfor %}
+  }
+  {%  endif %}
+
+  {% if responses.get('content_handling') %}
+  content_handling = "{{ responses.content_handling }}"
+  {%  endif %}
+
+depends_on = [aws_api_gateway_integration.{{ integration.rest_api_id }}_{{ integration.resource_id }}_{{ integration.http_method | lower }}]
+}
+{% endfor %}
+{%  endif %}
+
+{% endfor %}
+{% endblock %}

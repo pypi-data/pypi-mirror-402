@@ -1,0 +1,57 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for db in resources %}
+{{ resource_spacer() }}
+resource "aws_db_instance" "{{ db.DBInstanceIdentifier | tf_resource_name }}" {
+  identifier           = "{{ db.DBInstanceIdentifier }}"
+  instance_class       = "{{ db.DBInstanceClass }}"
+  engine               = "{{ db.Engine }}"
+  engine_version       = "{{ db.EngineVersion }}"
+  allocated_storage    = {{ db.AllocatedStorage }}
+
+  username             = "{{ db.MasterUsername }}"
+  password             = "changeme"
+
+  skip_final_snapshot  = true
+
+  {% if db.DBSubnetGroup is defined and db.DBSubnetGroup %}
+  db_subnet_group_name = "{{ db.DBSubnetGroup.DBSubnetGroupName }}"
+  {%  endif %}
+
+  {% if db.get('VpcSecurityGroups') %}
+  vpc_security_group_ids = [
+    {% for sg in db.VpcSecurityGroups %}
+    "{{ sg.VpcSecurityGroupId }}"{{ "," if not loop.last }}
+    {% endfor %}
+  ]
+  {%  endif %}
+
+  {% if db.get('PubliclyAccessible') is not none %}
+  publicly_accessible = {{ db.PubliclyAccessible | lower }}
+  {%  endif %}
+
+  {% if db.get('MultiAZ') is not none %}
+  multi_az = {{ db.MultiAZ | lower }}
+  {%  endif %}
+
+  {% if db.get('StorageType') %}
+  storage_type = "{{ db.StorageType }}"
+  {%  endif %}
+
+  {% if db.get('BackupRetentionPeriod') is defined and db.BackupRetentionPeriod is not none %}
+  backup_retention_period = {{ db.BackupRetentionPeriod }}
+  {%  endif %}
+
+  {% if db.get('PreferredMaintenanceWindow') %}
+  maintenance_window = "{{ db.PreferredMaintenanceWindow }}"
+  {%  endif %}
+
+  {% if db.get('AutoMinorVersionUpgrade') is not none %}
+  auto_minor_version_upgrade = {{ db.AutoMinorVersionUpgrade | lower }}
+  {%  endif %}
+
+  {{ render_common_tags(db, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,127 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for func in resources %}
+{% if func.name_sanitized and func.name_sanitized != "unnamed_resource" %}
+{{ resource_spacer() }}
+# AWS Lambda Function: {{ func.FunctionName }}
+resource "aws_lambda_function" "{{ func.name_sanitized }}" {
+  function_name = "{{ func.FunctionName }}"
+  role          = "{{ func.Role }}"
+  {% if func.get('PackageType') == 'Image' %}
+  package_type  = "Image"
+  image_uri     = "{{ func.Code.ImageUri }}"
+  {% else %}
+  {% if func.get('PackageType') and func.PackageType != 'Zip' %}
+  package_type  = "{{ func.PackageType }}"
+  {% endif %}
+  handler       = "{{ func.Handler }}"
+  runtime       = "{{ func.Runtime }}"
+  {% endif %}
+  timeout       = {{ func.Timeout | safe_int }}
+  memory_size   = {{ func.MemorySize | safe_int }}
+
+  {% if func.get('Architectures') %}
+  architectures = [
+    {% for arch in func.Architectures %}
+    "{{ arch }}"{{ "," if not loop.last }}
+    {% endfor %}
+  ]
+  {% endif %}
+
+  {% if func.get('EphemeralStorage') and func.EphemeralStorage.get('Size') %}
+  ephemeral_storage {
+    size = {{ func.EphemeralStorage.Size }}
+  }
+  {% endif %}
+
+  {% for fs in func.get('FileSystemConfigs', []) %}
+  file_system_config {
+    arn              = "{{ fs.Arn }}"
+    local_mount_path = "{{ fs.LocalMountPath }}"
+  }
+  {% endfor %}
+
+  {% if func.get('CodeSigningConfigArn') %}
+  code_signing_config_arn = "{{ func.CodeSigningConfigArn }}"
+  {% endif %}
+
+  {% if func.get('PackageType') != 'Image' %}
+  # Deploy from S3 bucket (recommended) or placeholder zip
+  {% if func.get('Code') and func.Code.get('S3Bucket') %}
+  s3_bucket     = "{{ func.Code.S3Bucket }}"
+  s3_key        = "{{ func.Code.S3Key }}"
+  {% if func.Code.get('S3ObjectVersion') %}
+  s3_object_version = "{{ func.Code.S3ObjectVersion }}"
+  {% endif %}
+  {% else %}
+  # Placeholder deployment - update with actual code
+  filename         = "${path.module}/placeholder.zip"
+  source_code_hash = "placeholder-hash"
+  {% endif %}
+  {% endif %}
+
+  {% if func.get('Description') and func.Description | has_value %}
+  description   = "{{ func.Description | escape_quotes }}"
+  {% endif %}
+
+  {% if func.get('Environment') and func.Environment.get('Variables') and func.Environment.Variables | has_value %}
+  environment {
+    variables = {
+      {% for key, value in func.Environment.Variables.items() %}
+      "{{ key }}" = "{{ value | escape_quotes | replace('\n', '\\n') | replace('\r', '\\r') }}"{{ "," if not loop.last }}
+      {% endfor %}
+    }
+  }
+  {% endif %}
+
+  {% if func.get('VpcConfig') and func.VpcConfig.get('SubnetIds') and func.VpcConfig.SubnetIds | has_value %}
+  vpc_config {
+    subnet_ids         = [
+      {% for subnet_id in func.VpcConfig.SubnetIds %}
+      "{{ subnet_id }}"{{ "," if not loop.last }}
+      {% endfor %}
+    ]
+    security_group_ids = [
+      {% for sg_id in func.VpcConfig.get('SecurityGroupIds', []) %}
+      "{{ sg_id }}"{{ "," if not loop.last }}
+      {% endfor %}
+    ]
+  }
+  {% endif %}
+
+  {% if func.get('DeadLetterConfig') and func.DeadLetterConfig.get('TargetArn') %}
+  dead_letter_config {
+    target_arn = "{{ func.DeadLetterConfig.TargetArn }}"
+  }
+  {% endif %}
+
+  {% if func.get('TracingConfig') and func.TracingConfig.get('Mode') %}
+  tracing_config {
+    mode = "{{ func.TracingConfig.Mode }}"
+  }
+  {% endif %}
+
+  {% if func.get('Layers') and func.Layers | has_value %}
+  layers = [
+    {% for layer_arn in func.Layers %}
+    "{{ layer_arn }}"{{ "," if not loop.last }}
+    {% endfor %}
+  ]
+  {% endif %}
+
+  {% if func.get('ReservedConcurrentExecutions') is defined and func.ReservedConcurrentExecutions is not none %}
+  reserved_concurrent_executions = {{ func.ReservedConcurrentExecutions | safe_int }}
+  {% endif %}
+
+  {{ render_common_tags(func, indent=2) }}
+
+  lifecycle {
+    ignore_changes = [
+      filename,
+      source_code_hash,
+    ]
+  }
+}
+{% endif %}
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% import "common/macros.j2" as common_macros %}
+{% block resources %}
+{% for instance in resources %}
+
+# Import existing Filestore instance: {{ instance.name }}
+import {
+  to = google_filestore_instance.{{ instance.name_sanitized }}
+  id = "{{ instance.id }}"
+}
+
+{{ resource_spacer() }}
+resource "google_filestore_instance" "{{ instance.name_sanitized }}" {
+  name     = "{{ instance.name }}"
+  location = "{{ instance.location }}"
+  tier     = "{{ instance.tier }}"
+
+  {% if instance.description %}
+  description = "{{ instance.description }}"
+  {% endif %}
+
+  {% for file_share in instance.file_shares %}
+  file_shares {
+    name       = "{{ file_share.name }}"
+    capacity_gb = {{ file_share.capacity_gb }}
+    
+    {% if file_share.source_backup %}
+    source_backup = "{{ file_share.source_backup }}"
+    {% endif %}
+
+    {% for nfs_export in file_share.nfs_export_options %}
+    nfs_export_options {
+      ip_ranges   = {{ nfs_export.ip_ranges | tojson }}
+      access_mode = "{{ nfs_export.access_mode }}"
+      squash_mode = "{{ nfs_export.squash_mode }}"
+      {% if nfs_export.anon_uid %}
+      anon_uid    = {{ nfs_export.anon_uid }}
+      {% endif %}
+      {% if nfs_export.anon_gid %}
+      anon_gid    = {{ nfs_export.anon_gid }}
+      {% endif %}
+    }
+    {% endfor %}
+  }
+  {% endfor %}
+
+  {% for network in instance.networks %}
+  networks {
+    network           = "{{ network.network }}"
+    modes             = {{ network.modes | tojson }}
+    {% if network.reserved_ip_range %}
+    reserved_ip_range = "{{ network.reserved_ip_range }}"
+    {% endif %}
+    connect_mode      = "{{ network.connect_mode }}"
+  }
+  {% endfor %}
+
+{{ common_macros.render_map('labels', instance.labels, indent=2) }}
+
+{{ common_macros.render_depends_on(instance.depends_on, indent=2) }}
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

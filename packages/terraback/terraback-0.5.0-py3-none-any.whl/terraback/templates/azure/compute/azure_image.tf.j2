@@ -1,0 +1,74 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_image" "{{ resource.name }}" {
+  name                = "{{ resource.properties.name }}"
+  location            = "{{ resource.properties.location }}"
+  resource_group_name = "{{ resource.properties.resource_group_name }}"
+  
+  {% if resource.properties.source_virtual_machine_id is defined %}
+  source_virtual_machine_id = "{{ resource.properties.source_virtual_machine_id }}"
+  {% endif %}
+  
+  {% if resource.properties.os_disk is defined %}
+  os_disk {
+    {% if resource.properties.os_disk.os_type is defined %}
+    os_type = "{{ resource.properties.os_disk.os_type }}"
+    {% endif %}
+    {% if resource.properties.os_disk.os_state is defined %}
+    os_state = "{{ resource.properties.os_disk.os_state }}"
+    {% endif %}
+    {% if resource.properties.os_disk.blob_uri is defined %}
+    blob_uri = "{{ resource.properties.os_disk.blob_uri }}"
+    {% endif %}
+    {% if resource.properties.os_disk.managed_disk_id is defined %}
+    managed_disk_id = "{{ resource.properties.os_disk.managed_disk_id }}"
+    {% endif %}
+    {% if resource.properties.os_disk.caching is defined %}
+    caching = "{{ resource.properties.os_disk.caching }}"
+    {% endif %}
+    {% if resource.properties.os_disk.size_gb is defined %}
+    size_gb = {{ resource.properties.os_disk.size_gb }}
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.properties.data_disk is defined %}
+  {% for disk in resource.properties.data_disk %}
+  data_disk {
+    {% if disk.lun is defined %}
+    lun = {{ disk.lun }}
+    {% endif %}
+    {% if disk.blob_uri is defined %}
+    blob_uri = "{{ disk.blob_uri }}"
+    {% endif %}
+    {% if disk.managed_disk_id is defined %}
+    managed_disk_id = "{{ disk.managed_disk_id }}"
+    {% endif %}
+    {% if disk.caching is defined %}
+    caching = "{{ disk.caching }}"
+    {% endif %}
+    {% if disk.size_gb is defined %}
+    size_gb = {{ disk.size_gb }}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.zone_resilient is defined %}
+  zone_resilient = {{ resource.properties.zone_resilient | lower }}
+  {% endif %}
+  
+  {% if resource.properties.hyper_v_generation is defined %}
+  hyper_v_generation = "{{ resource.properties.hyper_v_generation }}"
+  {% endif %}
+  
+  {% if resource.properties.tags is defined %}
+  tags = {{ resource.properties.tags | tojson }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

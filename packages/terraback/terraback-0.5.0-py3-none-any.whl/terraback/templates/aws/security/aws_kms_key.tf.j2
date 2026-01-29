@@ -1,0 +1,68 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for key in resources %}
+{{ resource_spacer() }}
+resource "aws_kms_key" "{{ key.name_sanitized }}" {
+  {% if key.get('description') %}
+  description = "{{ key.description }}"
+  {% endif %}
+
+  {% if key.get('key_usage') %}
+  key_usage = "{{ key.key_usage }}"
+  {% elif key.get('keyUsage') %}
+  key_usage = "{{ key.keyUsage }}"
+  {% endif %}
+
+  {% if key.get('customer_master_key_spec') %}
+  customer_master_key_spec = "{{ key.customer_master_key_spec }}"
+  {% elif key.get('customerMasterKeySpec') %}
+  customer_master_key_spec = "{{ key.customerMasterKeySpec }}"
+  {% elif key.get('keySpec') %}
+  customer_master_key_spec = "{{ key.keySpec }}"
+  {% endif %}
+
+  {% if key.get('is_enabled') is defined %}
+  is_enabled = {{ key.is_enabled | lower }}
+  {% elif key.get('enabled') is defined %}
+  is_enabled = {{ key.enabled | lower }}
+  {% endif %}
+
+  {% if key.get('enable_key_rotation') is defined %}
+  enable_key_rotation = {{ key.enable_key_rotation | lower }}
+  {% elif key.get('keyRotationEnabled') is defined %}
+  enable_key_rotation = {{ key.keyRotationEnabled | lower }}
+  {% endif %}
+
+  {% if key.get('deletion_window_in_days') %}
+  deletion_window_in_days = {{ key.deletion_window_in_days }}
+  {% elif key.get('pendingDeletionWindowInDays') %}
+  deletion_window_in_days = {{ key.pendingDeletionWindowInDays }}
+  {% endif %}
+
+  {% if key.get('policy') %}
+  policy = jsonencode({{ key.policy | tojson }})
+  {% elif key.get('keyPolicy') %}
+  policy = jsonencode({{ key.keyPolicy | tojson }})
+  {% endif %}
+
+  {% if key.get('bypass_policy_lockout_safety_check') is defined %}
+  bypass_policy_lockout_safety_check = {{ key.bypass_policy_lockout_safety_check | lower }}
+  {% endif %}
+
+  {% if key.get('multi_region') is defined %}
+  multi_region = {{ key.multi_region | lower }}
+  {% elif key.get('multiRegion') is defined %}
+  multi_region = {{ key.multiRegion | lower }}
+  {% endif %}
+
+  {{ render_common_tags(key, indent=2) }}
+
+  {% if key.get('lifecycle_prevent_destroy', false) %}
+  lifecycle {
+    prevent_destroy = true
+  }
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,110 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_monitor_autoscale_setting" "{{ resource.name }}" {
+  name                = "{{ resource.properties.name }}"
+  resource_group_name = "{{ resource.properties.resource_group_name }}"
+  location            = "{{ resource.properties.location }}"
+  target_resource_id  = "{{ resource.properties.target_resource_id }}"
+  
+  {% if resource.properties.enabled is defined %}
+  enabled = {{ resource.properties.enabled | lower }}
+  {% endif %}
+  
+  {% for profile in resource.properties.profile %}
+  profile {
+    name = "{{ profile.name }}"
+    
+    capacity {
+      default = {{ profile.capacity.default }}
+      minimum = {{ profile.capacity.minimum }}
+      maximum = {{ profile.capacity.maximum }}
+    }
+    
+    {% for rule in profile.rule %}
+    rule {
+      metric_trigger {
+        metric_name        = "{{ rule.metric_trigger.metric_name }}"
+        metric_resource_id = "{{ rule.metric_trigger.metric_resource_id }}"
+        time_grain         = "{{ rule.metric_trigger.time_grain }}"
+        statistic          = "{{ rule.metric_trigger.statistic }}"
+        time_window        = "{{ rule.metric_trigger.time_window }}"
+        time_aggregation   = "{{ rule.metric_trigger.time_aggregation }}"
+        operator           = "{{ rule.metric_trigger.operator }}"
+        threshold          = {{ rule.metric_trigger.threshold }}
+        
+        {% if rule.metric_trigger.metric_namespace is defined %}
+        metric_namespace   = "{{ rule.metric_trigger.metric_namespace }}"
+        {% endif %}
+        
+        {% if rule.metric_trigger.dimensions is defined %}
+        {% for dimension in rule.metric_trigger.dimensions %}
+        dimensions {
+          name     = "{{ dimension.name }}"
+          operator = "{{ dimension.operator }}"
+          values   = {{ dimension.values | tojson }}
+        }
+        {% endfor %}
+        {% endif %}
+      }
+      
+      scale_action {
+        direction = "{{ rule.scale_action.direction }}"
+        type      = "{{ rule.scale_action.type }}"
+        value     = "{{ rule.scale_action.value }}"
+        cooldown  = "{{ rule.scale_action.cooldown }}"
+      }
+    }
+    {% endfor %}
+    
+    {% if profile.fixed_date is defined %}
+    fixed_date {
+      timezone = "{{ profile.fixed_date.timezone }}"
+      start    = "{{ profile.fixed_date.start }}"
+      end      = "{{ profile.fixed_date.end }}"
+    }
+    {% endif %}
+    
+    {% if profile.recurrence is defined %}
+    recurrence {
+      timezone = "{{ profile.recurrence.timezone }}"
+      days     = {{ profile.recurrence.days | tojson }}
+      hours    = {{ profile.recurrence.hours | tojson }}
+      minutes  = {{ profile.recurrence.minutes | tojson }}
+    }
+    {% endif %}
+  }
+  {% endfor %}
+  
+  {% if resource.properties.notification is defined %}
+  notification {
+    {% if resource.properties.notification.email is defined %}
+    email {
+      send_to_subscription_administrator    = {{ resource.properties.notification.email.send_to_subscription_administrator | default(false) | lower }}
+      send_to_subscription_co_administrator = {{ resource.properties.notification.email.send_to_subscription_co_administrator | default(false) | lower }}
+      custom_emails                         = {{ resource.properties.notification.email.custom_emails | default([]) | tojson }}
+    }
+    {% endif %}
+    
+    {% if resource.properties.notification.webhook is defined %}
+    {% for webhook in resource.properties.notification.webhook %}
+    webhook {
+      service_uri = "{{ webhook.service_uri }}"
+      {% if webhook.properties is defined %}
+      properties = {{ webhook.properties | tojson }}
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.properties.tags is defined %}
+  tags = {{ resource.properties.tags | tojson }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

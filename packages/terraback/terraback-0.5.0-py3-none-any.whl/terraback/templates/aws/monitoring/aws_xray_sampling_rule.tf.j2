@@ -1,0 +1,26 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for rule in resources %}
+{{ resource_spacer() }}
+resource "aws_xray_sampling_rule" "{{ rule.name_sanitized }}" {
+  rule_name      = "{{ rule.ruleName | default(rule.name) }}"
+  priority       = {{ rule.priority }}
+  version        = {{ rule.version | default(1) }}
+  reservoir_size = {{ rule.reservoirSize | default(1) }}
+  fixed_rate     = {{ rule.fixedRate | default(0.05) }}
+  url_path       = "{{ rule.uRLPath | default(rule.url_path | default('*')) }}"
+  host           = "{{ rule.host | default('*') }}"
+  http_method    = "{{ rule.hTTPMethod | default(rule.http_method | default('*')) }}"
+  service_type   = "{{ rule.serviceType | default(rule.service_type | default('*')) }}"
+  service_name   = "{{ rule.serviceName | default(rule.service_name | default('*')) }}"
+  resource_arn   = "{{ rule.resourceARN | default(rule.resource_arn | default('*')) }}"
+
+  {% if rule.get('attributes') %}
+  attributes = {{ rule.attributes | tojson }}
+  {% endif %}
+
+  {{ render_common_tags(rule, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for trail in resources %}
+{{ resource_spacer() }}
+resource "aws_cloudtrail" "{{ trail.name_sanitized }}" {
+  name                          = "{{ trail.Name }}"
+  s3_bucket_name                = "{{ trail.S3BucketName }}"
+  {%- if trail.get('S3KeyPrefix') %}
+  s3_key_prefix                 = "{{ trail.S3KeyPrefix }}"
+  {%- endif %}
+  {%- if trail.get('SnsTopicName') %}
+  sns_topic_name                = "{{ trail.SnsTopicName }}"
+  {%- endif %}
+  {%- if trail.get('SnsTopicARN') %}
+  sns_topic_name                = "{{ trail.SnsTopicARN.split(':')[-1] }}"
+  {%- endif %}
+  {%- if trail.get('IncludeGlobalServiceEvents') is defined %}
+  include_global_service_events = {{ trail.IncludeGlobalServiceEvents | lower }}
+  {%- endif %}
+  {%- if trail.get('IsMultiRegionTrail') is defined %}
+  is_multi_region_trail         = {{ trail.IsMultiRegionTrail | lower }}
+  {%- endif %}
+  {%- if trail.get('IsOrganizationTrail') is defined %}
+  is_organization_trail         = {{ trail.IsOrganizationTrail | lower }}
+  {%- endif %}
+  {%- if trail.get('IsLogging') is defined %}
+  enable_logging                = {{ trail.IsLogging | lower }}
+  {%- endif %}
+  {%- if trail.get('LogFileValidationEnabled') is defined %}
+  enable_log_file_validation    = {{ trail.LogFileValidationEnabled | lower }}
+  {%- endif %}
+  {%- if trail.get('KmsKeyId') %}
+  kms_key_id                    = "{{ trail.KmsKeyId }}"
+  {%- endif %}
+  {%- if trail.get('CloudWatchLogsLogGroupArn') %}
+  cloud_watch_logs_group_arn    = "{{ trail.CloudWatchLogsLogGroupArn }}"
+  {%- endif %}
+  {%- if trail.get('CloudWatchLogsRoleArn') %}
+  cloud_watch_logs_role_arn     = "{{ trail.CloudWatchLogsRoleArn }}"
+  {%- endif %}
+
+  {%- if trail.get('EventSelectors') %}
+  {%- for selector in trail.EventSelectors %}
+
+  event_selector {
+    {%- if selector.get('ReadWriteType') %}
+    read_write_type                  = "{{ selector.ReadWriteType }}"
+    {%- endif %}
+    {%- if selector.get('IncludeManagementEvents') is defined %}
+    include_management_events        = {{ selector.IncludeManagementEvents | lower }}
+    {%- endif %}
+
+    {%- if selector.get('DataResources') %}
+    {%- for data_resource in selector.DataResources %}
+    data_resource {
+      type   = "{{ data_resource.Type }}"
+      values = [
+        {%- for value in data_resource.get('Values', []) %}
+        "{{ value }}"{{ "," if not loop.last }}
+        {%- endfor %}
+      ]
+    }
+    {%- endfor %}
+    {%- endif %}
+  }
+  {%- endfor %}
+  {%- endif %}
+
+  {{ render_aws_tags(trail, 2) }}
+}
+
+{% endfor %}
+{% endblock %}

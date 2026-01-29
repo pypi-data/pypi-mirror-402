@@ -1,0 +1,42 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for proxy in resources %}
+{{ resource_spacer() }}
+resource "google_compute_target_ssl_proxy" "{{ proxy.name_sanitized }}" {
+  name = "{{ proxy.name }}"
+
+  {% if proxy.backend_service %}
+  backend_service = google_compute_backend_service.{{ proxy.backend_service.replace('-', '_').lower() }}.id
+  {% endif %}
+
+  {% if proxy.ssl_certificates %}
+  ssl_certificates = [
+    {% for cert in proxy.ssl_certificates %}
+    google_compute_ssl_certificate.{{ cert.replace('-', '_').lower() }}.id{{ "," if not loop.last else "" }}
+    {% endfor %}
+  ]
+  {% endif %}
+
+  {% if proxy.description %}
+  description = "{{ proxy.description }}"
+  {% endif %}
+
+  {% if proxy.ssl_policy %}
+  ssl_policy = google_compute_ssl_policy.{{ proxy.ssl_policy.replace('-', '_').lower() }}.id
+  {% endif %}
+
+  {% if proxy.proxy_header %}
+  proxy_header = "{{ proxy.proxy_header }}"
+  {% endif %}
+
+  {% if proxy.certificate_map %}
+  certificate_map = google_compute_certificate_map.{{ proxy.certificate_map.replace('-', '_').lower() }}.id
+  {% endif %}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

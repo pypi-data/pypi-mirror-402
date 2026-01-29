@@ -1,0 +1,199 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% from "aws/base_resource.tf.j2" import render_common_tags %}
+{% block resources %}
+{% for instance in resources %}
+{{ resource_spacer() }}
+resource "aws_instance" "{{ instance.name_sanitized }}" {
+  ami           = "{{ instance.ImageId }}"
+  instance_type = "{{ instance.InstanceType }}"
+
+  {% if instance.get('SubnetId') %}
+  subnet_id = "{{ instance.SubnetId }}"
+  {%  endif %}
+
+  {% if instance.get('SecurityGroups') %}
+  vpc_security_group_ids = [
+    {% for sg in instance.SecurityGroups %}
+    "{{ sg.GroupId }}"{{ "," if not loop.last }}
+    {% endfor %}
+  ]
+  {%  endif %}
+
+  {% if instance.get('PublicIpAddress') is not none %}
+  associate_public_ip_address = {{ (instance.get('PublicIpAddress') is not none) | lower }}
+  {%  endif %}
+
+  {% if instance.get('KeyName') %}
+  key_name = "{{ instance.KeyName }}"
+  {%  endif %}
+
+  {% if instance.get('IamInstanceProfile') %}
+  iam_instance_profile = "{{ instance.IamInstanceProfile.Arn.split('/')[-1] if instance.IamInstanceProfile.get('Arn') else instance.IamInstanceProfile.get('Id', '') }}"
+  {%  endif %}
+
+  {{ render_common_tags(instance, indent=2) }}
+
+  {% if instance.get('DisableApiTermination') is not none %}
+  disable_api_termination = {{ instance.get('DisableApiTermination', false) | lower }}
+  {%  endif %}
+
+  {% if instance.get('Placement') and instance.Placement.get('AvailabilityZone') %}
+  availability_zone = "{{ instance.Placement.AvailabilityZone }}"
+  {%  endif %}
+
+  {% if instance.get('Placement') and instance.Placement.get('Tenancy') and instance.Placement.Tenancy != 'default' %}
+  tenancy = "{{ instance.Placement.Tenancy }}"
+  {%  endif %}
+
+  {% if instance.get('Placement') and instance.Placement.get('HostId') %}
+  host_id = "{{ instance.Placement.HostId }}"
+  {%  endif %}
+
+  {% if instance.get('EbsOptimized') is not none %}
+  ebs_optimized = {{ instance.EbsOptimized | lower }}
+  {%  endif %}
+
+  {% if instance.get('SourceDestCheck') is not none %}
+  source_dest_check = {{ instance.SourceDestCheck | lower }}
+  {%  endif %}
+
+  {% if instance.get('Monitoring') and instance.Monitoring.get('State') == 'enabled' %}
+  monitoring = true
+  {%  endif %}
+
+  {% if instance.get('CpuOptions') %}
+  cpu_options {
+    {% if instance.CpuOptions.get('CoreCount') %}
+    core_count = {{ instance.CpuOptions.CoreCount }}
+    {%  endif %}
+    {% if instance.CpuOptions.get('ThreadsPerCore') %}
+    threads_per_core = {{ instance.CpuOptions.ThreadsPerCore }}
+    {%  endif %}
+  }
+  {%  endif %}
+
+  {% if instance.get('HibernationOptions') and instance.HibernationOptions.get('Configured') %}
+  hibernation = {{ instance.HibernationOptions.Configured | lower }}
+  {%  endif %}
+
+  {% if instance.get('BlockDeviceMappings') %}
+  {# Find the root device - it can be /dev/sda1, /dev/xvda, or custom #}
+  {% set root_device_name = instance.get('RootDeviceName', '/dev/sda1') %}
+  {% set root_devices = ['/dev/sda1', '/dev/xvda', root_device_name] %}
+  
+  {% for device in instance.BlockDeviceMappings %}
+  {% if device.DeviceName in root_devices %}
+  {% if device.get('Ebs') %}
+  root_block_device {
+    {% if device.Ebs.get('VolumeSize') %}
+    volume_size = {{ device.Ebs.VolumeSize }}
+    {% endif %}
+    {% if device.Ebs.get('VolumeType') %}
+    volume_type = "{{ device.Ebs.VolumeType }}"
+    {% endif %}
+    {% if device.Ebs.get('DeleteOnTermination') is not none %}
+    delete_on_termination = {{ device.Ebs.DeleteOnTermination | lower }}
+    {% endif %}
+    {% if device.Ebs.get('Encrypted') is not none %}
+    encrypted = {{ device.Ebs.Encrypted | lower }}
+    {% endif %}
+    {% if device.Ebs.get('KmsKeyId') %}
+    kms_key_id = "{{ device.Ebs.KmsKeyId }}"
+    {% endif %}
+    {% if device.Ebs.get('Iops') %}
+    iops = {{ device.Ebs.Iops }}
+    {% endif %}
+    {% if device.Ebs.get('Throughput') %}
+    throughput = {{ device.Ebs.Throughput }}
+    {% endif %}
+  }
+  {# Break after finding first root device #}
+  {% set _ = instance.update({'_root_device_found': True}) %}
+  {% endif %}
+  {% endif %}
+  {% endfor %}
+
+  {# Additional EBS devices (non-root) #}
+  {% for device in instance.BlockDeviceMappings %}
+  {% if device.DeviceName not in root_devices %}
+  {% if device.get('Ebs') %}
+  ebs_block_device {
+    device_name = "{{ device.DeviceName }}"
+    {% if device.Ebs.get('VolumeSize') %}
+    volume_size = {{ device.Ebs.VolumeSize }}
+    {% endif %}
+    {% if device.Ebs.get('VolumeType') %}
+    volume_type = "{{ device.Ebs.VolumeType }}"
+    {% endif %}
+    {% if device.Ebs.get('DeleteOnTermination') is not none %}
+    delete_on_termination = {{ device.Ebs.DeleteOnTermination | lower }}
+    {% endif %}
+    {% if device.Ebs.get('Encrypted') is not none %}
+    encrypted = {{ device.Ebs.Encrypted | lower }}
+    {% endif %}
+    {% if device.Ebs.get('KmsKeyId') %}
+    kms_key_id = "{{ device.Ebs.KmsKeyId }}"
+    {% endif %}
+    {% if device.Ebs.get('Iops') %}
+    iops = {{ device.Ebs.Iops }}
+    {% endif %}
+    {% if device.Ebs.get('Throughput') %}
+    throughput = {{ device.Ebs.Throughput }}
+    {% endif %}
+    {% if device.Ebs.get('SnapshotId') %}
+    snapshot_id = "{{ device.Ebs.SnapshotId }}"
+    {% endif %}
+  }
+  {% endif %}
+  {% endif %}
+  {% endfor %}
+  {% endif %}
+
+  {% if instance.get('NetworkInterfaces') %}
+  {% for ni in instance.NetworkInterfaces %}
+  network_interface {
+    device_index = {{ ni.get('DeviceIndex', 0) }}
+    network_interface_id = "{{ ni.NetworkInterfaceId }}"
+    {% if ni.get('DeleteOnTermination') is not none %}
+    delete_on_termination = {{ ni.DeleteOnTermination | lower }}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if instance.get('MetadataOptions') %}
+  metadata_options {
+    {% if instance.MetadataOptions.get('HttpEndpoint') %}
+    http_endpoint = "{{ instance.MetadataOptions.HttpEndpoint }}"
+    {% endif %}
+    {% if instance.MetadataOptions.get('HttpTokens') %}
+    http_tokens = "{{ instance.MetadataOptions.HttpTokens }}"
+    {% endif %}
+    {% if instance.MetadataOptions.get('HttpPutResponseHopLimit') %}
+    http_put_response_hop_limit = {{ instance.MetadataOptions.HttpPutResponseHopLimit }}
+    {% endif %}
+    {% if instance.MetadataOptions.get('HttpProtocolIpv6') %}
+    http_protocol_ipv6 = "{{ instance.MetadataOptions.HttpProtocolIpv6 }}"
+    {% endif %}
+    {% if instance.MetadataOptions.get('InstanceMetadataTags') %}
+    instance_metadata_tags = "{{ instance.MetadataOptions.InstanceMetadataTags }}"
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if instance.get('EnclaveOptions') %}
+  enclave_options {
+    enabled = {{ instance.EnclaveOptions.get('Enabled', false) | lower }}
+  }
+  {% endif %}
+
+  lifecycle {
+    ignore_changes = [
+      ami,
+      user_data,
+    ]
+  }
+}
+
+{% endfor %}
+{% endblock %}

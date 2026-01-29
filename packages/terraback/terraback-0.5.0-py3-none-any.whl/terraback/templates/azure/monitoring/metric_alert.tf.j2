@@ -1,0 +1,130 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_monitor_metric_alert" "{{ resource.name }}" {
+  name                = "{{ resource.properties.name }}"
+  resource_group_name = "{{ resource.properties.resource_group_name }}"
+  scopes              = {{ resource.properties.scopes | tojson }}
+  
+  {% if resource.properties.description is defined %}
+  description = "{{ resource.properties.description }}"
+  {% endif %}
+  
+  {% if resource.properties.enabled is defined %}
+  enabled = {{ resource.properties.enabled | lower }}
+  {% endif %}
+  
+  {% if resource.properties.auto_mitigate is defined %}
+  auto_mitigate = {{ resource.properties.auto_mitigate | lower }}
+  {% endif %}
+  
+  {% if resource.properties.frequency is defined %}
+  frequency = "{{ resource.properties.frequency }}"
+  {% endif %}
+  
+  {% if resource.properties.severity is defined %}
+  severity = {{ resource.properties.severity }}
+  {% endif %}
+  
+  {% if resource.properties.target_resource_type is defined %}
+  target_resource_type = "{{ resource.properties.target_resource_type }}"
+  {% endif %}
+  
+  {% if resource.properties.target_resource_location is defined %}
+  target_resource_location = "{{ resource.properties.target_resource_location }}"
+  {% endif %}
+  
+  {% if resource.properties.window_size is defined %}
+  window_size = "{{ resource.properties.window_size }}"
+  {% endif %}
+  
+  {% for criteria in resource.properties.criteria %}
+  criteria {
+    metric_namespace = "{{ criteria.metric_namespace }}"
+    metric_name      = "{{ criteria.metric_name }}"
+    aggregation      = "{{ criteria.aggregation }}"
+    operator         = "{{ criteria.operator }}"
+    threshold        = {{ criteria.threshold }}
+    
+    {% if criteria.skip_metric_validation is defined %}
+    skip_metric_validation = {{ criteria.skip_metric_validation | lower }}
+    {% endif %}
+    
+    {% if criteria.dimensions is defined %}
+    {% for dimension in criteria.dimensions %}
+    dimension {
+      name     = "{{ dimension.name }}"
+      operator = "{{ dimension.operator }}"
+      values   = {{ dimension.values | tojson }}
+    }
+    {% endfor %}
+    {% endif %}
+  }
+  {% endfor %}
+  
+  {% if resource.properties.dynamic_criteria is defined %}
+  {% for criteria in resource.properties.dynamic_criteria %}
+  dynamic_criteria {
+    metric_namespace         = "{{ criteria.metric_namespace }}"
+    metric_name              = "{{ criteria.metric_name }}"
+    aggregation              = "{{ criteria.aggregation }}"
+    operator                 = "{{ criteria.operator }}"
+    alert_sensitivity        = "{{ criteria.alert_sensitivity }}"
+    
+    {% if criteria.evaluation_total_count is defined %}
+    evaluation_total_count = {{ criteria.evaluation_total_count }}
+    {% endif %}
+    
+    {% if criteria.evaluation_failure_count is defined %}
+    evaluation_failure_count = {{ criteria.evaluation_failure_count }}
+    {% endif %}
+    
+    {% if criteria.ignore_data_before is defined %}
+    ignore_data_before = "{{ criteria.ignore_data_before }}"
+    {% endif %}
+    
+    {% if criteria.skip_metric_validation is defined %}
+    skip_metric_validation = {{ criteria.skip_metric_validation | lower }}
+    {% endif %}
+    
+    {% if criteria.dimensions is defined %}
+    {% for dimension in criteria.dimensions %}
+    dimension {
+      name     = "{{ dimension.name }}"
+      operator = "{{ dimension.operator }}"
+      values   = {{ dimension.values | tojson }}
+    }
+    {% endfor %}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.application_insights_web_test_location_availability_criteria is defined %}
+  application_insights_web_test_location_availability_criteria {
+    web_test_id           = "{{ resource.properties.application_insights_web_test_location_availability_criteria.web_test_id }}"
+    component_id          = "{{ resource.properties.application_insights_web_test_location_availability_criteria.component_id }}"
+    failed_location_count = {{ resource.properties.application_insights_web_test_location_availability_criteria.failed_location_count }}
+  }
+  {% endif %}
+  
+  {% if resource.properties.action is defined %}
+  {% for action in resource.properties.action %}
+  action {
+    action_group_id = "{{ action.action_group_id }}"
+    {% if action.webhook_properties is defined %}
+    webhook_properties = {{ action.webhook_properties | tojson }}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.tags is defined and resource.properties.tags %}
+  tags = {{ resource.properties.tags | tojson }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

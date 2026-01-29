@@ -1,0 +1,25 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for group in resources %}
+{{ resource_spacer() }}
+resource "aws_xray_group" "{{ group.name_sanitized }}" {
+  group_name        = "{{ group.groupName | default(group.name) }}"
+  filter_expression = "{{ group.filterExpression | default(group.filter_expression) }}"
+  
+  {% if group.get('insights_configuration') or group.get('insightsConfiguration') %}
+  {% set insights = group.get('insights_configuration', group.get('insightsConfiguration', {})) %}
+  insights_configuration {
+    insights_enabled      = {{ insights.get('insights_enabled', insights.get('insightsEnabled', false)) | lower }}
+    {% if insights.get('notifications_enabled') is defined %}
+    notifications_enabled = {{ insights.notifications_enabled | lower }}
+    {% elif insights.get('notificationsEnabled') is defined %}
+    notifications_enabled = {{ insights.notificationsEnabled | lower }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {{ render_common_tags(group, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

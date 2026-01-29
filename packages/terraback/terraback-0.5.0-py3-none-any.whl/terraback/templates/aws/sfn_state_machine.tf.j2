@@ -1,0 +1,35 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for machine in resources %}
+{{ resource_spacer() }}
+resource "aws_sfn_state_machine" "{{ machine.name_sanitized }}" {
+  name     = "{{ machine.get('name', machine.get('stateMachineName')) }}"
+  role_arn = "{{ machine.roleArn }}"
+  {# AWS returns definition as a JSON string - strip newlines and output as quoted string for Terraform #}
+  definition = {{ machine.definition | replace('\n', '') | replace('\r', '') | tojson }}
+  {%- if machine.get('type') %}
+  type = "{{ machine.type }}"
+  {%- endif %}
+
+  {%- if machine.get('loggingConfiguration') and machine.loggingConfiguration.get('level') %}
+
+  logging_configuration {
+    {%- if machine.loggingConfiguration.get('destinations') and machine.loggingConfiguration.destinations | length > 0 %}
+    log_destination        = "{{ machine.loggingConfiguration.destinations[0].get('cloudWatchLogsLogGroup', {}).get('logGroupArn', '') }}"
+    {%- endif %}
+    include_execution_data = {{ machine.loggingConfiguration.get('includeExecutionData', false) | lower }}
+    level                  = "{{ machine.loggingConfiguration.level }}"
+  }
+  {%- endif %}
+  {%- if machine.get('tracingConfiguration') and machine.tracingConfiguration.get('enabled') is defined %}
+
+  tracing_configuration {
+    enabled = {{ machine.tracingConfiguration.enabled | lower }}
+  }
+  {%- endif %}
+
+  {{ render_aws_tags(machine, 2) }}
+}
+
+{% endfor %}
+{% endblock %}

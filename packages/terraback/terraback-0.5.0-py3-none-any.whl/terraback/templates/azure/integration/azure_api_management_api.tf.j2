@@ -1,0 +1,97 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_api_management_api" "{{ resource.name }}" {
+  name                = "{{ resource.properties.name }}"
+  resource_group_name = "{{ resource.properties.resource_group_name }}"
+  api_management_name = "{{ resource.properties.api_management_name }}"
+  revision            = "{{ resource.properties.revision | default('1') }}"
+  
+  {% if resource.properties.display_name is defined %}
+  display_name = "{{ resource.properties.display_name }}"
+  {% endif %}
+  
+  {% if resource.properties.path is defined %}
+  path = "{{ resource.properties.path }}"
+  {% endif %}
+  
+  {% if resource.properties.protocols is defined and resource.properties.protocols and resource.properties.protocols | length > 0 %}
+  protocols = {{ resource.properties.protocols | tojson }}
+  {% endif %}
+  
+  {% if resource.properties.service_url is defined %}
+  service_url = "{{ resource.properties.service_url }}"
+  {% endif %}
+  
+  {% if resource.properties.description is defined %}
+  description = "{{ resource.properties.description }}"
+  {% endif %}
+  
+  {% if resource.properties.subscription_required is defined %}
+  subscription_required = {{ resource.properties.subscription_required | lower }}
+  {% endif %}
+  
+  {% if resource.properties.api_type is defined and resource.properties.api_type and resource.properties.api_type in ['graphql', 'http', 'soap', 'websocket'] %}
+  api_type = "{{ resource.properties.api_type }}"
+  {% endif %}
+  
+  {% if resource.properties.revision_description is defined and resource.properties.revision_description %}
+  revision_description = "{{ resource.properties.revision_description }}"
+  {% endif %}
+  
+  {% if resource.properties.version is defined and resource.properties.version %}
+  version = "{{ resource.properties.version }}"
+  {% endif %}
+  
+  {% if resource.properties.version_set_id is defined and resource.properties.version_set_id %}
+  version_set_id = "{{ resource.properties.version_set_id }}"
+  {% endif %}
+  
+  {% if resource.properties.subscription_key_parameter_names is defined and resource.properties.subscription_key_parameter_names and resource.properties.subscription_key_parameter_names.header is defined %}
+  subscription_key_parameter_names {
+    header = "{{ resource.properties.subscription_key_parameter_names.header }}"
+    query  = "{{ resource.properties.subscription_key_parameter_names.query }}"
+  }
+  {% endif %}
+  
+  {% if resource.properties.source_api_id is defined and resource.properties.source_api_id %}
+  source_api_id = "{{ resource.properties.source_api_id }}"
+  {% endif %}
+  
+  {% if resource.properties.import is defined and resource.properties.import and resource.properties.import.content_format is defined %}
+  import {
+    content_format = "{{ resource.properties.import.content_format }}"
+    content_value  = "{{ resource.properties.import.content_value }}"
+    
+    {% if resource.properties.import.wsdl_selector is defined %}
+    wsdl_selector {
+      service_name  = "{{ resource.properties.import.wsdl_selector.service_name }}"
+      endpoint_name = "{{ resource.properties.import.wsdl_selector.endpoint_name }}"
+    }
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.properties.oauth2_authorization is defined and resource.properties.oauth2_authorization and resource.properties.oauth2_authorization.authorization_server_name is defined %}
+  oauth2_authorization {
+    authorization_server_name = "{{ resource.properties.oauth2_authorization.authorization_server_name }}"
+    {% if resource.properties.oauth2_authorization.scope is defined %}
+    scope = "{{ resource.properties.oauth2_authorization.scope }}"
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.properties.openid_authentication is defined and resource.properties.openid_authentication and resource.properties.openid_authentication.openid_provider_name is defined %}
+  openid_authentication {
+    openid_provider_name = "{{ resource.properties.openid_authentication.openid_provider_name }}"
+    {% if resource.properties.openid_authentication.bearer_token_sending_methods is defined %}
+    bearer_token_sending_methods = {{ resource.properties.openid_authentication.bearer_token_sending_methods | tojson }}
+    {% endif %}
+  }
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

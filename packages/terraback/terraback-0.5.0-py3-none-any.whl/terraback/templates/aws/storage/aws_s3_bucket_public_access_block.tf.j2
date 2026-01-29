@@ -1,0 +1,17 @@
+{% extends "aws/base_resource.tf.j2" %}
+{# Terraform for S3 bucket public access block configuration #}
+{% block resources %}
+{% for bucket in resources %}
+{% if bucket.Name and bucket.name_sanitized and bucket.name_sanitized != "unnamed_resource" %}
+resource "aws_s3_bucket_public_access_block" "{{ bucket.name_sanitized }}" {
+  bucket = aws_s3_bucket.{{ bucket.name_sanitized }}.id
+
+  block_public_acls       = {{ bucket.get('BlockPublicAcls', false) | tf_bool }}
+  block_public_policy     = {{ bucket.get('BlockPublicPolicy', false) | tf_bool }}
+  ignore_public_acls      = {{ bucket.get('IgnorePublicAcls', false) | tf_bool }}
+  restrict_public_buckets = {{ bucket.get('RestrictPublicBuckets', false) | tf_bool }}
+}
+{% endif %}
+{% endfor %}
+{% endblock %}
+

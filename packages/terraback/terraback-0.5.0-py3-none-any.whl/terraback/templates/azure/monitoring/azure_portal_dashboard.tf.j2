@@ -1,0 +1,48 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_portal_dashboard" "{{ resource.name }}" {
+  name                = "{{ resource.properties.name }}"
+  resource_group_name = "{{ resource.properties.resource_group_name }}"
+  location            = "{{ resource.properties.location }}"
+  
+  {% if resource.properties.dashboard_properties is defined %}
+  dashboard_properties = jsonencode({
+    lenses = [
+      {% for lens in resource.properties.dashboard_properties.lenses %}
+      {
+        order = {{ lens.order }}
+        parts = [
+          {% for part in lens.parts %}
+          {
+            position = {
+              x        = {{ part.position.x }}
+              y        = {{ part.position.y }}
+              rowSpan  = {{ part.position.row_span }}
+              colSpan  = {{ part.position.col_span }}
+            }
+            {% if part.metadata is defined %}
+            metadata = {{ part.metadata }}
+            {% endif %}
+          }{% if not loop.last %},{% endif %}
+          {% endfor %}
+        ]
+      }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ]
+  })
+  {% else %}
+  dashboard_properties = jsonencode({
+    lenses = []
+  })
+  {% endif %}
+  
+  {% if resource.properties.tags is defined and resource.properties.tags %}
+  tags = {{ resource.properties.tags | tojson }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

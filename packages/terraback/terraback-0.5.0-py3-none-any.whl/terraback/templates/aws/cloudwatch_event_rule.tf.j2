@@ -1,0 +1,34 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for rule in resources %}
+{{ resource_spacer() }}
+resource "aws_cloudwatch_event_rule" "{{ rule.name_sanitized }}" {
+  name = "{{ rule.Name }}"
+  {%- if rule.get('Description') %}
+  description = "{{ rule.Description | escape_quotes }}"
+  {%- endif %}
+  {%- if rule.get('EventBusName') and rule.EventBusName != 'default' %}
+  event_bus_name = "{{ rule.EventBusName }}"
+  {%- endif %}
+  {%- if rule.get('ScheduleExpression') %}
+  schedule_expression = "{{ rule.ScheduleExpression }}"
+  {%- endif %}
+  {%- if rule.get('EventPattern') %}
+  {%- if rule.EventPattern is string %}
+  event_pattern = {{ rule.EventPattern | tojson }}
+  {%- else %}
+  event_pattern = jsonencode({{ rule.EventPattern | tojson }})
+  {%- endif %}
+  {%- endif %}
+  {%- if rule.get('State') %}
+  state = "{{ rule.State }}"
+  {%- endif %}
+  {%- if rule.get('RoleArn') %}
+  role_arn = "{{ rule.RoleArn }}"
+  {%- endif %}
+
+  {{ render_aws_tags(rule, 2) }}
+}
+
+{% endfor %}
+{% endblock %}

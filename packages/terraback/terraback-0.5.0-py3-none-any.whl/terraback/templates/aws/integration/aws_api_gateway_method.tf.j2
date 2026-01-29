@@ -1,0 +1,63 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for method in resources %}
+{{ resource_spacer() }}
+resource "aws_api_gateway_method" "{{ method.rest_api_id }}_{{ method.resource_id }}_{{ method.http_method | lower }}" {
+  rest_api_id   = "{{ method.rest_api_id }}"
+  resource_id   = "{{ method.resource_id }}"
+  http_method   = "{{ method.http_method }}"
+  {% if method.get('authorizationType') %}
+  authorization = "{{ method.authorizationType }}"
+  {% endif %}
+
+  {% if method.get('apiKeyRequired') is not none %}
+  api_key_required = {{ method.apiKeyRequired | tf_bool }}
+  {%  endif %}
+
+  {% if method.get('requestParameters') %}
+  request_parameters = {
+    {% for key, value in method.requestParameters.items() %}
+    "{{ key }}" = {{ value | tf_bool }}{{ "," if not loop.last }}
+    {% endfor %}
+  }
+  {%  endif %}
+
+  {% if method.get('requestModels') %}
+  request_models = {
+    {% for ctype, model in method.requestModels.items() %}
+    "{{ ctype }}" = "{{ model }}"{{ "," if not loop.last }}
+    {% endfor %}
+  }
+  {%  endif %}
+}
+
+{% if method.get('methodResponses') %}
+{% for status, resp in method.methodResponses.items() %}
+{{ resource_spacer() }}
+resource "aws_api_gateway_method_response" "{{ method.rest_api_id }}_{{ method.resource_id }}_{{ method.http_method | lower }}_{{ status }}" {
+  rest_api_id = "{{ method.rest_api_id }}"
+  resource_id = "{{ method.resource_id }}"
+  http_method = "{{ method.http_method }}"
+  status_code = "{{ status }}"
+
+  {% if resp.get('responseModels') %}
+  response_models = {
+    {% for ctype, model in resp.responseModels.items() %}
+    "{{ ctype }}" = "{{ model }}"{{ "," if not loop.last }}
+    {% endfor %}
+  }
+  {%  endif %}
+
+  {% if resp.get('responseParameters') %}
+  response_parameters = {
+    {% for key, value in resp.responseParameters.items() %}
+    "{{ key }}" = {{ value | tf_bool }}{{ "," if not loop.last }}
+    {% endfor %}
+  }
+  {%  endif %}
+}
+{% endfor %}
+{%  endif %}
+
+{% endfor %}
+{% endblock %}

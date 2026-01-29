@@ -1,0 +1,167 @@
+{% extends 'common/base_resource.tf.j2' %}
+{% import 'common/macros.j2' as macros %}
+{% block resources %}
+{% for db in resources %}
+{{ resource_spacer() }}
+resource "azurerm_mssql_database" "{{ db.name_sanitized }}" {
+  name                = "{{ db.name }}"
+  server_id           = "{{ db.server_id }}"
+  
+  {% if db.sku_name %}
+  sku_name            = "{{ db.sku_name }}"
+  {% elif db.edition %}
+  sku_name            = "{{ db.edition }}"
+  {% endif %}
+  
+  {% if db.max_size_gb %}
+  max_size_gb         = {{ db.max_size_gb }}
+  {% elif db.max_size_bytes %}
+  max_size_gb         = {{ (db.max_size_bytes / 1073741824) | int }}
+  {% endif %}
+  
+  {% if db.collation %}
+  collation           = "{{ db.collation }}"
+  {% endif %}
+  
+  {% if db.license_type %}
+  license_type        = "{{ db.license_type }}"
+  {% endif %}
+  
+  {% if db.read_replica_count %}
+  read_replica_count  = {{ db.read_replica_count }}
+  {% endif %}
+  
+  {% if db.read_scale is defined %}
+  {% if db.read_scale | string | lower == 'disabled' %}
+  read_scale          = false
+  {% elif db.read_scale | string | lower == 'enabled' %}
+  read_scale          = true
+  {% else %}
+  read_scale          = {{ db.read_scale | lower }}
+  {% endif %}
+  {% endif %}
+  
+  {% if db.zone_redundant is defined %}
+  zone_redundant      = {{ db.zone_redundant | lower }}
+  {% endif %}
+  
+  {% if db.auto_pause_delay_in_minutes %}
+  auto_pause_delay_in_minutes = {{ db.auto_pause_delay_in_minutes }}
+  {% endif %}
+  
+  {% if db.create_mode %}
+  create_mode         = "{{ db.create_mode }}"
+  {% if db.source_database_id %}
+  source_database_id  = "{{ db.source_database_id }}"
+  {% endif %}
+  {% if db.restore_point_in_time %}
+  restore_point_in_time = "{{ db.restore_point_in_time }}"
+  {% endif %}
+  {% if db.recover_database_id %}
+  recover_database_id = "{{ db.recover_database_id }}"
+  {% endif %}
+  {% if db.restore_dropped_database_id %}
+  restore_dropped_database_id = "{{ db.restore_dropped_database_id }}"
+  {% endif %}
+  {% endif %}
+  
+  {% if db.elastic_pool_id %}
+  elastic_pool_id     = "{{ db.elastic_pool_id }}"
+  {% endif %}
+  
+  {% if db.geo_backup_enabled is defined %}
+  geo_backup_enabled  = {{ db.geo_backup_enabled | lower }}
+  {% endif %}
+  
+  {% if db.ledger_enabled is defined %}
+  ledger_enabled      = {{ db.ledger_enabled | lower }}
+  {% endif %}
+  
+  {% if db.maintenance_configuration_name %}
+  maintenance_configuration_name = "{{ db.maintenance_configuration_name }}"
+  {% endif %}
+  
+  {% if db.min_capacity %}
+  min_capacity        = {{ db.min_capacity }}
+  {% endif %}
+  
+  {% if db.storage_account_type %}
+  storage_account_type = "{{ db.storage_account_type }}"
+  {% endif %}
+  
+  {% if db.transparent_data_encryption_enabled is defined %}
+  transparent_data_encryption_enabled = {{ db.transparent_data_encryption_enabled | lower }}
+  {% endif %}
+  
+  {% if db.transparent_data_encryption_key_vault_key_id %}
+  transparent_data_encryption_key_vault_key_id = "{{ db.transparent_data_encryption_key_vault_key_id }}"
+  {% endif %}
+  
+  {% if db.transparent_data_encryption_key_automatic_rotation_enabled is defined %}
+  transparent_data_encryption_key_automatic_rotation_enabled = {{ db.transparent_data_encryption_key_automatic_rotation_enabled | lower }}
+  {% endif %}
+
+  {% if db.threat_detection_policy %}
+  threat_detection_policy {
+    state                      = "{{ db.threat_detection_policy.state }}"
+    {% if db.threat_detection_policy.disabled_alerts %}
+    disabled_alerts            = {{ db.threat_detection_policy.disabled_alerts | tojson }}
+    {% endif %}
+    {% if db.threat_detection_policy.email_account_admins is defined %}
+    email_account_admins       = {{ db.threat_detection_policy.email_account_admins | lower }}
+    {% endif %}
+    {% if db.threat_detection_policy.email_addresses %}
+    email_addresses            = {{ db.threat_detection_policy.email_addresses | tojson }}
+    {% endif %}
+    {% if db.threat_detection_policy.retention_days %}
+    retention_days             = {{ db.threat_detection_policy.retention_days }}
+    {% endif %}
+    {% if db.threat_detection_policy.storage_endpoint %}
+    storage_endpoint           = "{{ db.threat_detection_policy.storage_endpoint }}"
+    {% endif %}
+    {% if db.threat_detection_policy.storage_account_access_key %}
+    storage_account_access_key = {{ db.threat_detection_policy.storage_account_access_key }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if db.short_term_retention_policy %}
+  short_term_retention_policy {
+    retention_days = {{ db.short_term_retention_policy.retention_days }}
+    {% if db.short_term_retention_policy.backup_interval_in_hours %}
+    backup_interval_in_hours = {{ db.short_term_retention_policy.backup_interval_in_hours }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if db.long_term_retention_policy %}
+  long_term_retention_policy {
+    {% if db.long_term_retention_policy.weekly_retention %}
+    weekly_retention  = "{{ db.long_term_retention_policy.weekly_retention }}"
+    {% endif %}
+    {% if db.long_term_retention_policy.monthly_retention %}
+    monthly_retention = "{{ db.long_term_retention_policy.monthly_retention }}"
+    {% endif %}
+    {% if db.long_term_retention_policy.yearly_retention %}
+    yearly_retention  = "{{ db.long_term_retention_policy.yearly_retention }}"
+    {% endif %}
+    {% if db.long_term_retention_policy.week_of_year %}
+    week_of_year      = {{ db.long_term_retention_policy.week_of_year }}
+    {% endif %}
+  }
+  {% endif %}
+
+{{ macros.render_tags(db.tags) }}
+
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes = [
+      create_mode,
+      restore_point_in_time
+    ]
+  }
+}
+
+{% endfor %}
+{% endblock %}
+

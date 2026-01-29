@@ -1,0 +1,29 @@
+{%- for network in resources %}
+
+# Import existing network: {{ network.name }}
+import {
+  to = google_compute_network.{{ network.name_sanitized }}
+  id = "{{ network.id or network.import_id }}"
+}
+
+resource "google_compute_network" "{{ network.name_sanitized }}" {
+  name                    = "{{ network.raw.name or network.name }}"
+  auto_create_subnetworks = {{ (network.raw.auto_create_subnetworks if network.raw else network.auto_create_subnetworks) | default(true) | lower }}
+  
+  {%- if (network.raw.description if network.raw else network.description) %}
+  description = "{{ network.raw.description if network.raw else network.description }}"
+  {%- endif %}
+  
+  {%- if (network.raw.routing_config if network.raw else network.routing_config) %}
+  routing_mode = "{{ (network.raw.routing_config.routing_mode if network.raw else network.routing_config.routing_mode) | default('REGIONAL') }}"
+  {%- endif %}
+  
+  {%- if (network.raw.mtu if network.raw else network.mtu) %}
+  mtu = {{ network.raw.mtu if network.raw else network.mtu }}
+  {%- endif %}
+  
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+{%- endfor %}
