@@ -1,0 +1,130 @@
+Metadata-Version: 2.4
+Name: reldo
+Version: 0.1.0
+Summary: Claude-powered code review orchestrator that coordinates specialized review agents
+Project-URL: Homepage, https://github.com/RasmusGodske/reldo
+Project-URL: Documentation, https://github.com/RasmusGodske/reldo#readme
+Project-URL: Repository, https://github.com/RasmusGodske/reldo
+Project-URL: Issues, https://github.com/RasmusGodske/reldo/issues
+Project-URL: Changelog, https://github.com/RasmusGodske/reldo/releases
+Author: Rasmus Godske
+Maintainer: Rasmus Godske
+License-Expression: MIT
+License-File: LICENSE
+Keywords: ai,anthropic,automation,claude,cli,code-review,command-line,developer-tools,orchestrator,review
+Classifier: Development Status :: 4 - Beta
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Software Development :: Quality Assurance
+Classifier: Topic :: Software Development :: Testing
+Classifier: Topic :: Utilities
+Classifier: Typing :: Typed
+Requires-Python: >=3.11
+Requires-Dist: claude-code-sdk>=0.0.25
+Provides-Extra: dev
+Requires-Dist: mypy>=1.0; extra == 'dev'
+Requires-Dist: pytest-asyncio>=0.23; extra == 'dev'
+Requires-Dist: pytest>=8.0; extra == 'dev'
+Requires-Dist: ruff>=0.1; extra == 'dev'
+Description-Content-Type: text/markdown
+
+# Reldo
+
+> "The librarian has reviewed your code."
+
+A Claude-powered code review orchestrator that coordinates specialized review agents.
+
+Named after the Varrock Palace librarian in RuneScape who researches and checks things against ancient tomes.
+
+## Installation
+
+```bash
+# From source (development)
+pip install -e .
+
+# Or with uv
+uv pip install -e .
+```
+
+## Usage
+
+### As a Library
+
+```python
+from reldo import Reldo, ReviewConfig
+from pathlib import Path
+
+# Load config from file
+config = ReviewConfig.from_file(Path(".claude/reldo.json"))
+reldo = Reldo(config=config)
+
+# Run a review - single prompt argument
+result = await reldo.review(
+    prompt="Review app/Models/User.php for backend conventions. Context: Added user registration."
+)
+
+print(result.text)
+print(f"Tokens used: {result.total_tokens}")
+```
+
+### As a CLI
+
+```bash
+# Basic review
+reldo review --prompt "Review app/Models/User.php"
+
+# With JSON output (for CI)
+reldo review --prompt "Review $(git diff --name-only HEAD)" --json --exit-code
+
+# With custom config
+reldo review --prompt "..." --config .claude/reldo.json
+```
+
+## Configuration
+
+Create `.claude/reldo.json`:
+
+```json
+{
+  "prompt": ".claude/reldo/orchestrator.md",
+  "allowed_tools": ["Read", "Glob", "Grep", "Bash", "Task"],
+  "agents": {
+    "backend-reviewer": {
+      "description": "Reviews PHP/Laravel code",
+      "prompt": ".claude/reldo/agents/backend-reviewer.md",
+      "tools": ["Read", "Glob", "Grep", "Bash"]
+    },
+    "frontend-reviewer": {
+      "description": "Reviews Vue/TypeScript code",
+      "prompt": ".claude/reldo/agents/frontend-reviewer.md",
+      "tools": ["Read", "Glob", "Grep", "Bash"]
+    }
+  }
+}
+```
+
+## CLI Reference
+
+```bash
+reldo review --prompt "..."     # Review prompt
+             --config PATH      # Config file (default: .claude/reldo.json)
+             --cwd PATH         # Working directory
+             --json             # Output as JSON
+             --verbose          # Verbose logging
+             --no-log           # Disable session logging
+             --exit-code        # Exit 1 if review fails (for CI)
+```
+
+## Documentation
+
+- [Product Requirements Document](docs/PRD.md)
+
+## License
+
+MIT
