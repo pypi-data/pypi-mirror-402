@@ -1,0 +1,107 @@
+name: Development Workflow
+
+on:
+  pull_request:
+    branches: [ development ]
+  push:
+    branches: [ development ]
+  # Allow this workflow to be called by other workflows
+  workflow_call:
+
+permissions:
+  contents: read
+  checks: none
+  pull-requests: none
+
+jobs:
+  lint:
+    name: Lint / Format / Type-check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.14'
+
+      - name: Cache UV
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-3.14-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-3.14-
+
+      - name: Sync dev dependencies
+        run: uv sync --locked --all-extras --dev --no-progress -q
+
+      - name: Lint / Format / Type-check
+        run: make lint
+
+  tests:
+    name: Run tests (matrix)
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      matrix:
+        python-version: [ '3.9', '3.10', '3.11', '3.12', '3.13', '3.14' ]
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache UV
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ matrix.python-version }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-${{ matrix.python-version }}-
+
+      - name: Sync dev dependencies
+        run: uv sync --locked --all-extras --dev --no-progress -q
+
+      - name: Run tests
+        run: uv run pytest
+
+  codecov:
+    name: Upload saved coverage to Codecov
+    runs-on: ubuntu-latest
+    needs: tests
+    steps:
+      # Codecov needs the full history to map commits correctly
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache UV
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-3.14-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-3.14-
+
+      - name: Sync dev dependencies
+        run: uv sync --locked --all-extras --dev --no-progress -q
+
+      - name: Run tests
+        run: uv run pytest
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
