@@ -1,0 +1,709 @@
+# inputless-engines
+
+AI/ML engines for behavioral pattern evolution and autonomous learning.
+
+## Purpose
+
+Provides core autonomous learning capabilities including genetic algorithms, self-modifying code, and meta-cognitive reasoning for behavioral pattern analysis.
+
+## Features
+
+- **Mutation Engine**: Genetic algorithms for pattern evolution
+- **Autonomous Mutation Engine**: Automatic evolution without explicit calls
+- **Metamorphic Code**: Self-modifying code structures
+- **Self-Reasoning Engine**: Meta-cognitive reasoning and analysis
+- **Fitness Evaluation**: Adaptive fitness functions
+- **Population Management**: Genetic algorithm population handling
+
+## Installation
+
+```bash
+pip install inputless-engines
+```
+
+## Dependencies
+
+- `numpy` - Numerical computing
+- `deap` - Distributed Evolutionary Algorithms
+- `scipy` - Scientific computing
+- `pydantic` - Data validation
+
+## Usage
+
+### Basic Mutation Engine
+
+```python
+from inputless_engines import MutationEngine, MetamorphicCode, SelfReasoningEngine
+
+# Initialize engines
+mutation_engine = MutationEngine(
+    population_size=100,
+    max_generations=50,
+    mutation_rate=0.1
+)
+
+metamorphic = MetamorphicCode(
+    max_generations=30,
+    self_modification_enabled=True
+)
+
+reasoning = SelfReasoningEngine(
+    strategy='deductive',
+    confidence_threshold=0.8
+)
+
+# Process events
+patterns = mutation_engine.evolve(events)
+modified_code = metamorphic.adapt_to_patterns(patterns)
+insights = reasoning.infer(patterns)
+```
+
+### Autonomous Mutations
+
+The `AutonomousMutationEngine` automatically evolves patterns without explicit calls:
+
+```python
+from inputless_engines import AutonomousMutationEngine
+
+# Initialize autonomous engine
+engine = AutonomousMutationEngine(
+    autonomous_enabled=True,
+    auto_evolution_interval=60.0,  # Evolve every 60 seconds
+    performance_threshold=0.7,      # Trigger if fitness < 0.7
+    min_events_for_evolution=100,   # Need 100 events before evolution
+)
+
+# Start autonomous evolution (runs in background thread)
+engine.start_autonomous_evolution()
+
+# Events are automatically processed and trigger evolution
+for event in stream_of_events:
+    engine.add_event(event)  # Autonomous evolution happens automatically
+
+# Register custom triggers
+def custom_condition():
+    return some_condition_is_met()
+
+engine.register_trigger(custom_condition)
+
+# Check status
+status = engine.get_autonomous_status()
+print(f"Running: {status['running']}")
+print(f"Last evolution: {status['last_evolution_time']}")
+
+# Stop when done
+engine.stop_autonomous_evolution()
+```
+
+**Autonomous Evolution Triggers:**
+- **Time-based**: Evolve at regular intervals (e.g., every 60 seconds)
+- **Performance-based**: Evolve when fitness drops below threshold
+- **Event-based**: Evolve when enough events accumulate
+- **Custom triggers**: Register your own conditions
+
+## Real-World Use Cases
+
+### Use Case 1: E-commerce Conversion Optimization
+
+Automatically evolve patterns to identify optimal user journeys that lead to conversions:
+
+```python
+from inputless_engines import AutonomousMutationEngine, MutationEngineConfig
+
+# Initialize autonomous engine for e-commerce
+engine = AutonomousMutationEngine(
+    config=MutationEngineConfig(
+        population_size=100,
+        max_generations=50,
+        mutation_rate=0.15,
+    ),
+    autonomous_enabled=True,
+    auto_evolution_interval=300.0,  # Evolve every 5 minutes
+    performance_threshold=0.75,
+    min_events_for_evolution=500,
+)
+
+# Start autonomous evolution
+engine.start_autonomous_evolution()
+
+# Stream events from your e-commerce platform
+def process_ecommerce_events():
+    for event in event_stream:
+        # Events like: page_view, product_view, add_to_cart, checkout_start, purchase
+        engine.add_event({
+            "type": event.type,
+            "timestamp": event.timestamp,
+            "sessionId": event.session_id,
+            "userId": event.user_id,
+            "metadata": {
+                "product_id": event.product_id,
+                "category": event.category,
+                "value": event.value,
+            }
+        })
+
+# Get evolved patterns for conversion optimization
+best_patterns = engine.get_best_patterns(n=10)
+for pattern in best_patterns:
+    print(f"Conversion pattern: {pattern.event_types}")
+    print(f"Fitness: {pattern.fitness:.3f}")
+    # Use these patterns to optimize user experience
+```
+
+### Use Case 2: User Frustration Detection
+
+Detect and respond to user frustration patterns in real-time:
+
+```python
+from inputless_engines import MutationEngine, MetamorphicCode, SelfReasoningEngine
+from inputless_engines.types import ReasoningStrategy, Premise
+
+# Initialize engines
+mutation_engine = MutationEngine(
+    population_size=50,
+    max_generations=30,
+    mutation_rate=0.1,
+)
+
+metamorphic = MetamorphicCode(
+    self_modification_enabled=True,
+    fitness_threshold=0.7,
+)
+
+reasoning = SelfReasoningEngine(
+    reasoning_strategy=ReasoningStrategy.ABDUCTIVE,
+    confidence_threshold=0.8,
+)
+
+# Collect behavioral events
+events = [
+    {"type": "rage_click", "timestamp": 1000, "sessionId": "s1"},
+    {"type": "rapid_back_navigation", "timestamp": 2000, "sessionId": "s1"},
+    {"type": "error_encountered", "timestamp": 3000, "sessionId": "s1"},
+]
+
+# Evolve patterns to detect frustration
+frustration_patterns = mutation_engine.evolve(behavioral_events=events)
+
+# Adapt code to better detect frustration
+adapted_code = metamorphic.adapt_to_patterns(frustration_patterns)
+
+# Reason about user state
+premises = [
+    Premise(
+        statement="User shows rage clicking behavior",
+        confidence=0.9,
+    ),
+    Premise(
+        statement="Multiple errors encountered",
+        confidence=0.85,
+    ),
+]
+
+conclusion = reasoning.infer(premises)
+
+if conclusion.confidence > 0.8:
+    print(f"⚠️ User frustration detected: {conclusion.statement}")
+    # Trigger proactive support intervention
+```
+
+### Use Case 3: Autonomous A/B Testing
+
+Continuously evolve and test UI variants automatically:
+
+```python
+from inputless_engines import AutonomousMutationEngine, MetamorphicCode
+
+# Autonomous mutation for variant generation
+variant_engine = AutonomousMutationEngine(
+    autonomous_enabled=True,
+    auto_evolution_interval=3600.0,  # Evolve every hour
+    performance_threshold=0.8,
+)
+
+# Metamorphic code for variant structure
+variant_code = MetamorphicCode(
+    self_modification_enabled=True,
+    max_generations=20,
+)
+
+# Start autonomous evolution
+variant_engine.start_autonomous_evolution()
+
+# Generate UI variants automatically
+def generate_ui_variant():
+    # Evolve code structure for new variant
+    evolved_code = variant_code.evolve()
+    
+    # Execute to generate variant configuration
+    variant_config = variant_code.execute({
+        "component": "checkout_button",
+        "base_config": {"color": "blue", "size": "medium"},
+    })
+    
+    return variant_config
+
+# Continuously generate and test variants
+for iteration in range(100):
+    variant = generate_ui_variant()
+    
+    # Deploy variant and collect results
+    results = deploy_and_test_variant(variant)
+    
+    # Feed results back to engine
+    for result in results:
+        variant_engine.add_event({
+            "type": "variant_result",
+            "variant_id": variant.id,
+            "conversion_rate": result.conversion_rate,
+            "click_rate": result.click_rate,
+        })
+    
+    # Engine automatically evolves based on results
+    best_variants = variant_engine.get_best_patterns(n=5)
+    print(f"Iteration {iteration}: Best variant fitness = {best_variants[0].fitness:.3f}")
+```
+
+### Use Case 4: Predictive User Behavior
+
+Predict user actions and optimize experiences proactively:
+
+```python
+from inputless_engines import MutationEngine, SelfReasoningEngine
+from inputless_engines.types import ReasoningStrategy, Premise
+
+# Initialize engines
+mutation_engine = MutationEngine(
+    population_size=200,
+    max_generations=100,
+    mutation_rate=0.12,
+)
+
+reasoning = SelfReasoningEngine(
+    reasoning_strategy=ReasoningStrategy.INDUCTIVE,
+    confidence_threshold=0.75,
+)
+
+# Historical user behavior data
+historical_events = load_historical_events()  # Load from database
+
+# Evolve patterns from history
+prediction_patterns = mutation_engine.evolve(behavioral_events=historical_events)
+
+# Get best predictive patterns
+best_patterns = mutation_engine.get_best_patterns(n=20)
+
+# Use patterns to predict current user behavior
+def predict_user_action(current_session_events):
+    # Match current events against evolved patterns
+    matching_patterns = [
+        p for p in best_patterns
+        if any(e["type"] in p.event_types for e in current_session_events)
+    ]
+    
+    if matching_patterns:
+        # Reason about likely next action
+        premises = [
+            Premise(
+                statement=f"User follows pattern: {p.event_types}",
+                confidence=p.fitness,
+            )
+            for p in matching_patterns[:5]
+        ]
+        
+        prediction = reasoning.infer(premises)
+        
+        return {
+            "predicted_action": prediction.statement,
+            "confidence": prediction.confidence,
+            "recommended_intervention": get_recommendation(prediction),
+        }
+    
+    return None
+
+# Real-time prediction
+current_events = get_current_session_events()
+prediction = predict_user_action(current_events)
+
+if prediction and prediction["confidence"] > 0.8:
+    print(f"🎯 Predicted: {prediction['predicted_action']}")
+    print(f"💡 Recommendation: {prediction['recommended_intervention']}")
+    # Proactively optimize user experience
+```
+
+### Use Case 5: Continuous Learning System
+
+Build a system that continuously learns and adapts without manual intervention:
+
+```python
+from inputless_engines import AutonomousMutationEngine, MetamorphicCode, SelfReasoningEngine
+from inputless_engines.types import MutationEngineConfig
+
+# Comprehensive autonomous learning system
+config = MutationEngineConfig(
+    population_size=150,
+    max_generations=75,
+    mutation_rate=0.1,
+    crossover_rate=0.8,
+    elitism=True,
+    elite_size=15,
+)
+
+# Autonomous mutation engine
+mutation_engine = AutonomousMutationEngine(
+    config=config,
+    autonomous_enabled=True,
+    auto_evolution_interval=1800.0,  # Every 30 minutes
+    performance_threshold=0.7,
+    min_events_for_evolution=1000,
+)
+
+# Metamorphic code for algorithm adaptation
+metamorphic = MetamorphicCode(
+    self_modification_enabled=True,
+    max_generations=50,
+    fitness_threshold=0.75,
+)
+
+# Reasoning engine for decision making
+reasoning = SelfReasoningEngine(
+    reasoning_strategy=ReasoningStrategy.DEDUCTIVE,
+    confidence_threshold=0.8,
+)
+
+# Start autonomous learning
+mutation_engine.start_autonomous_evolution()
+
+# Register custom trigger: evolve when new user segment detected
+def new_segment_trigger():
+    # Check if new user segment has emerged
+    recent_events = mutation_engine._event_buffer[-100:]
+    unique_segments = set(e.get("segment", "default") for e in recent_events)
+    return len(unique_segments) > 5  # More than 5 segments = new patterns
+
+mutation_engine.register_trigger(new_segment_trigger)
+
+# Continuous learning loop
+def continuous_learning_loop():
+    while True:
+        # Collect events from all sources
+        events = collect_events_from_sources()
+        
+        # Add to autonomous engine
+        mutation_engine.add_events_batch(events)
+        
+        # Periodically adapt code structure
+        if should_adapt_code():
+            patterns = mutation_engine.get_best_patterns(n=10)
+            metamorphic.adapt_to_patterns(patterns)
+        
+        # Get insights
+        status = mutation_engine.get_autonomous_status()
+        if status["last_evolution_time"]:
+            print(f"Last evolution: {status['last_evolution_time']}")
+            print(f"Buffer size: {status['event_buffer_size']}")
+        
+        time.sleep(60)  # Check every minute
+
+# Run continuous learning
+continuous_learning_loop()
+```
+
+### Use Case 6: Anomaly Detection and Response
+
+Detect anomalies and automatically evolve detection strategies:
+
+```python
+from inputless_engines import MutationEngine, SelfReasoningEngine
+from inputless_engines.types import ReasoningStrategy, Premise
+
+# Initialize engines
+mutation_engine = MutationEngine(
+    population_size=100,
+    max_generations=40,
+    mutation_rate=0.15,  # Higher mutation for anomaly detection
+)
+
+reasoning = SelfReasoningEngine(
+    reasoning_strategy=ReasoningStrategy.ABDUCTIVE,
+    confidence_threshold=0.85,
+)
+
+# Normal behavior patterns
+normal_events = load_normal_behavior()
+
+# Evolve normal patterns
+normal_patterns = mutation_engine.evolve(behavioral_events=normal_events)
+
+# Detect anomalies in real-time
+def detect_anomaly(current_events):
+    # Check if current events match normal patterns
+    matches = [
+        p for p in normal_patterns
+        if all(e["type"] in p.event_types for e in current_events)
+    ]
+    
+    if not matches or max(p.fitness for p in matches) < 0.5:
+        # Potential anomaly - reason about it
+        premises = [
+            Premise(
+                statement=f"Event sequence: {[e['type'] for e in current_events]}",
+                confidence=0.9,
+            ),
+            Premise(
+                statement="Does not match normal patterns",
+                confidence=1.0 - max(p.fitness for p in matches) if matches else 1.0,
+            ),
+        ]
+        
+        analysis = reasoning.analyze({
+            "type": "anomaly",
+            "description": "Unusual behavior pattern detected",
+            "data": current_events,
+        })
+        
+        return {
+            "is_anomaly": True,
+            "confidence": analysis["confidence"],
+            "explanation": analysis["best_hypothesis"],
+            "recommendations": analysis["recommendations"],
+        }
+    
+    return {"is_anomaly": False}
+
+# Real-time anomaly detection
+current_events = get_recent_events()
+anomaly_result = detect_anomaly(current_events)
+
+if anomaly_result["is_anomaly"]:
+    print(f"🚨 Anomaly detected: {anomaly_result['explanation']}")
+    print(f"💡 Recommendations: {anomaly_result['recommendations']}")
+    # Trigger security or support response
+```
+
+### Use Case 7: Personalization Engine
+
+Evolve personalized experiences for each user:
+
+```python
+from inputless_engines import AutonomousMutationEngine
+
+# Per-user autonomous engines
+user_engines = {}
+
+def get_user_engine(user_id: str) -> AutonomousMutationEngine:
+    """Get or create autonomous engine for user."""
+    if user_id not in user_engines:
+        engine = AutonomousMutationEngine(
+            autonomous_enabled=True,
+            auto_evolution_interval=600.0,  # Evolve every 10 minutes per user
+            performance_threshold=0.7,
+            min_events_for_evolution=50,  # Lower threshold for personalization
+        )
+        engine.start_autonomous_evolution()
+        user_engines[user_id] = engine
+    
+    return user_engines[user_id]
+
+# Personalize experience based on user behavior
+def personalize_for_user(user_id: str, event: dict):
+    engine = get_user_engine(user_id)
+    
+    # Add user's event
+    engine.add_event(event)
+    
+    # Get personalized patterns
+    patterns = engine.get_best_patterns(n=5)
+    
+    # Generate personalized recommendations
+    if patterns:
+        best_pattern = patterns[0]
+        return {
+            "recommended_content": get_content_for_pattern(best_pattern),
+            "ui_preferences": get_ui_for_pattern(best_pattern),
+            "next_action_hint": predict_next_action(best_pattern),
+        }
+    
+    return None
+
+# Use in application
+user_event = {
+    "type": "product_view",
+    "timestamp": time.time(),
+    "sessionId": "s123",
+    "userId": "user456",
+    "product_category": "electronics",
+}
+
+personalization = personalize_for_user("user456", user_event)
+if personalization:
+    apply_personalization(personalization)
+```
+
+## Complete Example: Full Integration
+
+```python
+from inputless_engines import (
+    AutonomousMutationEngine,
+    MetamorphicCode,
+    SelfReasoningEngine,
+    MutationEngineConfig,
+)
+from inputless_engines.types import ReasoningStrategy, Premise
+
+# Initialize complete system
+config = MutationEngineConfig(
+    population_size=100,
+    max_generations=50,
+    mutation_rate=0.1,
+    crossover_rate=0.7,
+)
+
+# Autonomous mutation engine
+mutation_engine = AutonomousMutationEngine(
+    config=config,
+    autonomous_enabled=True,
+    auto_evolution_interval=300.0,
+    performance_threshold=0.75,
+)
+
+# Metamorphic code for algorithm adaptation
+metamorphic = MetamorphicCode(
+    self_modification_enabled=True,
+    max_generations=30,
+)
+
+# Reasoning engine for insights
+reasoning = SelfReasoningEngine(
+    reasoning_strategy=ReasoningStrategy.DEDUCTIVE,
+    confidence_threshold=0.8,
+)
+
+# Start autonomous evolution
+mutation_engine.start_autonomous_evolution()
+
+# Main application loop
+def main_application_loop():
+    while True:
+        # Collect events
+        events = collect_events()
+        
+        # Add to autonomous engine
+        for event in events:
+            mutation_engine.add_event(event)
+        
+        # Get evolved patterns
+        patterns = mutation_engine.get_best_patterns(n=10)
+        
+        # Adapt code to patterns
+        adapted_code = metamorphic.adapt_to_patterns(patterns)
+        
+        # Generate insights
+        premises = [
+            Premise(
+                statement=f"Pattern detected: {p.event_types}",
+                confidence=p.fitness,
+            )
+            for p in patterns[:5]
+        ]
+        
+        insights = reasoning.infer(premises)
+        
+        # Use insights for optimization
+        if insights.confidence > 0.8:
+            apply_optimizations(insights)
+        
+        time.sleep(60)
+
+# Run application
+main_application_loop()
+```
+
+## Module Structure
+
+This module contains:
+- `mutation_engine.py` - Genetic algorithm engine
+- `autonomous_mutation.py` - Autonomous mutation engine (automatic evolution)
+- `metamorphic_code.py` - Self-modifying code system
+- `reasoning_engine.py` - Meta-cognitive reasoning
+- `genetic_operators.py` - Genetic operators
+- `fitness_functions.py` - Fitness function evaluator
+- `pattern_encoding.py` - Pattern encoding/decoding
+
+## Capabilities
+
+### Mutation Engine
+- Genetic algorithm implementation
+- Multiple selection methods (tournament, roulette, rank)
+- Crossover and mutation operators
+- Fitness evaluation and convergence detection
+
+### Metamorphic Code
+- Self-modifying code structures
+- Adaptive algorithm selection
+- Context-aware modifications
+- Performance optimization
+
+### Self-Reasoning Engine
+- Deductive, inductive, and abductive reasoning
+- Meta-cognitive analysis
+- Confidence scoring
+- Pattern validation
+
+## Exports
+
+- `MutationEngine` - Main mutation engine class
+- `AutonomousMutationEngine` - Autonomous mutation engine (automatic evolution)
+- `MetamorphicCode` - Metamorphic code system
+- `SelfReasoningEngine` - Reasoning engine
+- `GeneticOperators` - Genetic operators
+- `FitnessEvaluator` - Fitness evaluation
+
+## Examples
+
+See the example files for complete working examples:
+
+- `src/inputless_engines/example_usage.py` - Basic usage examples
+- `src/inputless_engines/example_autonomous.py` - Autonomous mutation examples
+
+Run examples:
+
+```bash
+cd packages/python-core/engines
+poetry install
+poetry run python -m inputless_engines.example_usage
+poetry run python -m inputless_engines.example_autonomous
+```
+
+## Performance Considerations
+
+### Mutation Engine
+- **Small datasets** (<10K events): `population_size=50`, `max_generations=30`
+- **Medium datasets** (10K-100K): `population_size=100`, `max_generations=50`
+- **Large datasets** (>100K): `population_size=200`, `max_generations=100`
+
+### Autonomous Evolution
+- **Real-time**: Use `auto_evolution_interval=60.0` (1 minute) for fast adaptation
+- **Batch processing**: Use `auto_evolution_interval=3600.0` (1 hour) for efficiency
+- **Event threshold**: Set `min_events_for_evolution` based on event frequency
+
+### Metamorphic Code
+- **Fast adaptation**: `max_generations=10-20` for quick changes
+- **Deep optimization**: `max_generations=50-100` for thorough evolution
+- **Self-modification**: Enable `self_modification_enabled=True` for autonomous adaptation
+
+## Best Practices
+
+1. **Start with Manual Evolution**: Use `MutationEngine` first to understand patterns
+2. **Enable Autonomous Gradually**: Start with longer intervals, then optimize
+3. **Monitor Performance**: Check `get_autonomous_status()` regularly
+4. **Use Custom Triggers**: Register domain-specific conditions
+5. **Combine Engines**: Use mutation + metamorphic + reasoning together for best results
+6. **Thread Safety**: Autonomous engine is thread-safe for concurrent event addition
+
+## Distribution
+
+**PyPI package**: `inputless-engines`  
+**Version**: 1.0.0+  
+**Registry**: PyPI
+
