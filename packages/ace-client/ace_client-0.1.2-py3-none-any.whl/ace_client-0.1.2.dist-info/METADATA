@@ -1,0 +1,95 @@
+Metadata-Version: 2.4
+Name: ace-client
+Version: 0.1.2
+Summary: CLI型AIエージェントACEをPythonから簡単に利用するためのラッパーライブラリ
+Project-URL: Homepage, https://github.com/kurusugawa-computer/ace-py
+Project-URL: Repository, https://github.com/kurusugawa-computer/ace-py
+Project-URL: Documentation, https://github.com/kurusugawa-computer/ace-py#readme
+Author: Kurusugawa Computer
+License: MIT
+License-File: LICENSE
+Keywords: ace,agent,ai,llm,mcp
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Typing :: Typed
+Requires-Python: >=3.12
+Requires-Dist: mcp>=1.0.0
+Requires-Dist: msgspec>=0.18.0
+Description-Content-Type: text/markdown
+
+# ace-py
+
+## 概要
+
+`ace-py` は来栖川電算の CLI 型 AI エージェント [ACE](https://github.com/kurusugawa-computer/ace) を
+Python から簡単に利用するためのラッパーライブラリです。
+
+## インストール
+
+リポジトリ名は `ace-py` ですが、PyPI上のパッケージ名は `ace-client` です。インストール時はパッケージ名にご注意ください。
+
+```bash
+pip install ace-client
+```
+
+または uv を使用する場合:
+
+```bash
+uv add ace-client
+```
+
+## 使用例
+
+簡単な使用例です。環境変数 `OPENAI_API_KEY` に API キーを入れて実行します。
+
+```python
+import asyncio
+import os
+
+import msgspec
+
+from ace_client import Ace
+
+
+class Response(msgspec.Struct):
+    answer: str
+
+
+async def main() -> None:
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        print("環境変数 OPENAI_API_KEY を設定してください", file=sys.stderr)
+        sys.exit(1)
+
+    ace = Ace(api_key=api_key)
+
+    try:
+        # 30秒のタイムアウトを設定してACEを呼び出す
+        # イベントをトリガーにしてキャンセルしたい場合はTaskGroup等を使用して明示的にキャンセルを呼び出してください
+        async with asyncio.timeout(30):
+            result = await ace.invoke(
+                config_path="example/simple.yaml",
+                agent_name="root",
+                input_data={"question": "今日の名古屋の天気は？"},
+            )
+            response = result.unmarshal(Response)
+            print(response.answer)
+
+    except Exception as e:
+        print(f"エラーが発生しました: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## ライセンス
+
+MIT License
