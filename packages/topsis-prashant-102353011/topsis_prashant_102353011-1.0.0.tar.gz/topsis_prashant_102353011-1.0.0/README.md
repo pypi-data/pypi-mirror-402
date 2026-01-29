@@ -1,0 +1,156 @@
+# TOPSIS Implementation in Python
+
+## 📌 Project Overview
+
+This project implements the **TOPSIS (Technique for Order Preference by
+Similarity to Ideal Solution)** method using Python.
+
+TOPSIS is a **Multi-Criteria Decision Making (MCDM)** technique used to
+rank alternatives based on their distance from the **ideal best** and
+**ideal worst** solutions.
+
+This project provides:
+
+-   A **command-line TOPSIS program**
+-   Support for **CSV** and **Excel (.xlsx)** files
+-   Robust **input validation** and **error handling**
+-   Ready-to-package structure for **PyPI**
+-   Scope for extension into a **web service**
+
+
+## 📊 Input File Format
+
+The input file must be a **CSV or Excel (.xlsx)** file with the
+following format:
+
+  Fund Name   P1     P2     P3    P4     P5
+  M1          0.84   0.71   6.7   42.1   12.59
+  M2          0.91   0.83   7.0   31.7   10.11
+
+### Rules
+
+-   The **first column** must contain **alternative names**
+-   From the **second column onward**, all values must be **numeric**
+-   A minimum of **3 columns** is required (1 alternative column + at
+    least 2 criteria)
+
+
+## ⚙️ Installation Requirements
+
+Install the required Python libraries:
+
+``` bash
+pip install pandas numpy openpyxl
+```
+
+## 🚀 How to Run the Program
+
+### Command Line Usage
+
+``` bash
+python topsis.py <InputFile> <Weights> <Impacts> <OutputFile>
+```
+
+### Example
+
+``` bash
+python topsis.py data.xlsx "1,1,1,1,1" "+,+,-,+,+" result.xlsx
+```
+
+## 📥 Parameters Explanation
+
+  Parameter    Description
+  InputFile    Input data file (`.csv` or `.xlsx`)
+  Weights      Comma-separated numeric values (e.g., `"1,1,1,1,1"`)
+  Impacts      Comma-separated impacts (`+` for benefit, `-` for cost)
+  OutputFile   Output file (`.csv` or `.xlsx`)
+
+
+## 📈 Output File
+
+The output file contains two additional columns:
+
+-   **Topsis Score**
+-   **Rank**
+
+Higher **TOPSIS Score** indicates a better alternative.
+
+## 🛑 Error Handling & Validations
+
+The program validates:
+
+-   Incorrect number of arguments
+-   File not found
+-   Less than 3 columns in input file
+-   Non-numeric values in criteria columns
+-   Mismatch between number of weights, impacts, and criteria
+-   Invalid impacts (must be `+` or `-`)
+-   Unsupported file formats
+
+Clear error messages are displayed for each case.
+
+## 🧠 TOPSIS Methodology (Brief)
+
+1.  Normalize the decision matrix\
+2.  Apply weights to the normalized matrix\
+3.  Determine ideal best and ideal worst\
+4.  Calculate distances from ideal solutions\
+5.  Compute TOPSIS score\
+6.  Rank alternatives
+
+
+## 📦 Packaging & PyPI
+
+This project can be packaged using `setuptools` and uploaded to PyPI
+using the naming convention:
+
+    Topsis-FirstName-RollNumber
+
+### Example
+
+    Topsis-Prashant-102353011
+
+Once uploaded, users can install it via:
+
+``` bash
+pip install Topsis-Prashant-102353011
+```
+
+## 🌐 Web Service (Extension)
+
+This project can be extended into a Flask-based web service where:
+
+-   Users upload the input file\
+-   Provide weights, impacts, and email ID\
+-   Receive the result file via email
+
+This allows the TOPSIS tool to be used as a lightweight online service.
+
+
+## 👤 Author
+
+**Prashant Gagneja**\
+TOPSIS Assignment -- Python & PyPI
+
+
+## 📜 License
+
+This project is licensed for **academic and educational use only**.
+
+
+## ⭐ Contributions
+
+Feel free to fork this repository, raise issues, and submit pull
+requests to improve functionality or add features such as:
+
+-   GUI or Web UI\
+-   Additional MCDM methods\
+-   Visualization of rankings
+
+
+## 📬 Contact
+
+For queries or enhancements, please contact:\
+**Prashant Gagneja**
+
+
