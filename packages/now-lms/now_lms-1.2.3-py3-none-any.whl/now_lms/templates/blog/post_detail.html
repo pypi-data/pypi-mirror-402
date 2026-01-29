@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="{{ current_locale() }}" class="h-100">
+    {% set current_theme = current_theme() %} {% from "macros/form_errors.j2" import render_field_errors, render_form_errors %}
+
+
+    <head>
+        {{ current_theme.headertags() }} {{ current_theme.local_style() }}
+        <title>{{ post.title }} - {{ config().sitio_web }}</title>
+
+        <style>
+            .post-cover-image {
+                width: 100%;
+                max-height: 500px;
+                object-fit: cover;
+                border-radius: 16px;
+                margin-bottom: 2rem;
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+            }
+
+            .post-header {
+                margin-bottom: 2rem;
+            }
+
+            .post-header h1 {
+                font-size: 2.5rem;
+                font-weight: 700;
+                margin-bottom: 1rem;
+                line-height: 1.2;
+            }
+
+            .post-meta {
+                display: flex;
+                align-items: center;
+                gap: 1rem;
+                color: #6c757d;
+                font-size: 0.95rem;
+                margin-bottom: 1rem;
+            }
+
+            .post-tags {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+                margin-bottom: 2rem;
+            }
+
+            .post-tag {
+                padding: 0.35rem 0.85rem;
+                border-radius: 20px;
+                background: #e9ecef;
+                color: #495057;
+                text-decoration: none;
+                font-size: 0.85rem;
+                font-weight: 500;
+                transition: all 0.2s ease;
+            }
+
+            .post-tag:hover {
+                background: var(--classic-primary, #667eea);
+                color: white;
+                text-decoration: none;
+            }
+
+            .blog-content {
+                font-size: 1.1rem;
+                line-height: 1.8;
+                color: #2c3e50;
+            }
+
+            .blog-content img {
+                max-width: 100%;
+                height: auto;
+                border-radius: 8px;
+                margin: 1.5rem 0;
+            }
+        </style>
+    </head>
+
+    <body>
+        {{ current_theme.navbar() }}
+
+        <main>
+            {{ current_theme.notify() }}
+
+            <div class="container">
+                <div class="row">
+                    <div class="col-md-8">
+                        <nav aria-label="breadcrumb">
+                            <ol class="breadcrumb">
+                                <li class="breadcrumb-item">
+                                    <a href="{{ url_for('blog.blog_index') }}">Blog</a>
+                                </li>
+                                <li class="breadcrumb-item active" aria-current="page">{{ post.title }}</li>
+                            </ol>
+                        </nav>
+
+                        <article>
+                            <!-- Cover Image -->
+                            {% if post.cover_image and blog_cover(post.id) %}
+                            <img
+                                src="{{ url_for('static', filename='/files/public/images/blog/' + post.id + '/' + blog_cover(post.id)) }}"
+                                alt="{{ post.title }}"
+                                class="post-cover-image"
+                            />
+                            {% endif %}
+
+                            <div class="post-header">
+                                <h1>{{ post.title }}</h1>
+
+                                <div class="post-meta">
+                                    <span>{{ _('Por') }} {{ post.author.nombre }} {{ post.author.apellido or '' }}</span>
+                                    <span>•</span>
+                                    <span>
+                                        {% if post.published_at %} {{ post.published_at.strftime('%d/%m/%Y') }} {% else %} {{
+                                        post.timestamp.strftime('%d/%m/%Y') }} {% endif %}
+                                    </span>
+                                    {% if post.view_count is defined and post.view_count is not none %}
+                                    <span>•</span>
+                                    <span>👁 <span id="view-count">{{ post.view_count }}</span> {{ _('vistas') }}</span>
+                                    {% endif %}
+                                </div>
+
+                                {% if post.tags %}
+                                <div class="post-tags">
+                                    {% for tag in post.tags %}
+                                    <a href="{{ url_for('blog.blog_index', tag=tag.slug) }}" class="post-tag">
+                                        {{ tag.name }}
+                                    </a>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="blog-content">{{ mkdown2html(post.content) | safe }}</div>
+
+                            {% if current_user.is_authenticated and (current_user.tipo == 'admin' or post.author_id ==
+                            current_user.usuario) %}
+                            <div class="mt-4 pt-3 border-top">
+                                <a
+                                    href="{{ url_for('blog.admin_edit_post', post_id=post.id) }}"
+                                    class="btn btn-outline-primary btn-sm"
+                                >
+                                    {{ _('Editar entrada') }}
+                                </a>
+                            </div>
+                            {% endif %}
+                        </article>
+
+                        <!-- Comments Section -->
+                        {% if post.allow_comments %}
+                        <section class="mt-5">
+                            <h3>{{ _('Comentarios') }} ({{ comments|length }})</h3>
+
+                            {% if current_user.is_authenticated and comment_form %}
+                            <div class="mb-4">
+                                <h4>{{ _('Agregar comentario') }}</h4>
+                                <form method="POST" action="{{ url_for('blog.add_comment', slug=post.slug) }}">
+                                    {{ comment_form.hidden_tag() }}
+                                    <div class="mb-3">
+                                        {{ comment_form.content.label(class="form-label") }} {{
+                                        comment_form.content(class="form-control", rows="4") }}
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">{{ _('Publicar comentario') }}</button>
+                                </form>
+                            </div>
+                            {% elif not current_user.is_authenticated %}
+                            <div class="alert alert-info">
+                                <a href="{{ url_for('user.inicio_sesion') }}">{{ _('Inicia sesión') }}</a> {{ _('para comentar.') }}
+                            </div>
+                            {% endif %} {% if comments %}
+                            <div class="comments-list">
+                                {% for comment in comments %}
+                                <div class="card mb-3">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div>
+                                                <strong>{{ comment.user.nombre }} {{ comment.user.apellido or '' }}</strong>
+                                                <small class="text-muted">
+                                                    {{ comment.timestamp.strftime('%d/%m/%Y a las %H:%M') }}
+                                                </small>
+                                            </div>
+
+                                            {% if current_user.is_authenticated %}
+                                            <div class="dropdown">
+                                                <button class="btn btn-link btn-sm" type="button" data-bs-toggle="dropdown">
+                                                    <i class="fas fa-ellipsis-v"></i>
+                                                </button>
+                                                <ul class="dropdown-menu">
+                                                    {% if current_user.usuario != comment.user_id %}
+                                                    <li>
+                                                        <form
+                                                            method="POST"
+                                                            action="{{ url_for('blog.flag_comment', comment_id=comment.id) }}"
+                                                            class="d-inline"
+                                                        >
+                                                            <button type="submit" class="dropdown-item">
+                                                                <i class="fas fa-flag"></i> {{ _('Marcar como inapropiado') }}
+                                                            </button>
+                                                        </form>
+                                                    </li>
+                                                    {% endif %} {% if current_user.tipo == 'admin' or post.author_id ==
+                                                    current_user.usuario %}
+                                                    <li>
+                                                        <form
+                                                            method="POST"
+                                                            action="{{ url_for('blog.ban_comment', comment_id=comment.id) }}"
+                                                            class="d-inline"
+                                                        >
+                                                            <button type="submit" class="dropdown-item text-warning">
+                                                                <i class="fas fa-ban"></i> {{ _('Banear') }}
+                                                            </button>
+                                                        </form>
+                                                    </li>
+                                                    <li>
+                                                        <form
+                                                            method="DELETE"
+                                                            action="{{ url_for('blog.delete_comment', comment_id=comment.id) }}"
+                                                            class="d-inline"
+                                                        >
+                                                            <button type="submit" class="dropdown-item text-danger">
+                                                                <i class="fas fa-trash"></i> {{ _('Eliminar') }}
+                                                            </button>
+                                                        </form>
+                                                    </li>
+                                                    {% endif %}
+                                                </ul>
+                                            </div>
+                                            {% endif %}
+                                        </div>
+
+                                        <div class="mt-2">{{ comment.content }}</div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </section>
+                        {% endif %}
+                    </div>
+
+                    <!-- Sidebar -->
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5>{{ _('Información del autor') }}</h5>
+                            </div>
+                            <div class="card-body">
+                                <h6>{{ post.author.nombre }} {{ post.author.apellido or '' }}</h6>
+                                {% if post.author.bio %}
+                                <p class="small">{{ post.author.bio }}</p>
+                                {% endif %}
+                                <a
+                                    href="{{ url_for('blog.blog_index', author=post.author_id) }}"
+                                    class="btn btn-outline-primary btn-sm"
+                                >
+                                    {{ _('Ver todas las entradas de este autor') }}
+                                </a>
+                            </div>
+                        </div>
+
+                        {% if post.tags %}
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h5>{{ _('Etiquetas relacionadas') }}</h5>
+                            </div>
+                            <div class="card-body">
+                                {% for tag in post.tags %}
+                                <a
+                                    href="{{ url_for('blog.blog_index', tag=tag.slug) }}"
+                                    class="badge bg-secondary text-decoration-none me-1 mb-1"
+                                >
+                                    {{ tag.name }}
+                                </a>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <!-- View counter script -->
+        <script>
+            // Increment view count when page loads
+            document.addEventListener('DOMContentLoaded', function() {
+                const postId = {{ post.id | tojson }};
+                fetch('/blog/count_view/' + postId, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                }).then(response => {
+                    return response.json();
+                }).then(data => {
+                    if (data.status === 'ok') {
+                        // Update view count display if element exists
+                        const viewCountElement = document.getElementById('view-count');
+                        if (viewCountElement) {
+                            viewCountElement.textContent = data.view_count;
+                        }
+                    }
+                }).catch(error => {
+                    console.log('Error updating view count:', error);
+                });
+            });
+        </script>
+        
+        {{ current_theme.footer() }}
+    </body>
+</html>
