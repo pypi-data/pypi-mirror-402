@@ -1,0 +1,44 @@
+Metadata-Version: 2.4
+Name: nautobot-broker-nats
+Version: 1.1.0
+Summary: Publish changes to NATS
+License-File: LICENSE
+Author: Eric Busto
+Author-email: ebusto@nvidia.com
+Requires-Python: >=3.11,<4.0
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Requires-Dist: dictdiffer (>=0.9.0,<0.10.0)
+Requires-Dist: nats-py (>=2.10.0,<3.0.0)
+Requires-Dist: nkeys (>=0.2.1,<0.3.0)
+Requires-Dist: orjson (>=3.10.15,<4.0.0)
+Description-Content-Type: text/markdown
+
+# Introduction
+This is an [event broker](https://docs.nautobot.com/projects/core/en/next/user-guide/platform-functionality/events/) for [Nautobot](https://github.com/nautobot/nautobot) that publishes events to [NATS](https://nats.io).
+
+# Configuration
+
+Add this to your nautobot_config.py:
+```
+connect = {}
+
+# Optional path to a credentials file.
+if "NATS_CRED" in os.environ:
+    connect["user_credentials"] = os.environ["NATS_CRED"]
+
+from nautobot.core.events import register_event_broker
+from nautobot_nats_broker import NATSEventBroker
+
+register_event_broker(
+    NATSEventBroker(
+        servers="nats-server-url",
+        stream="nautobot",
+        **connect,
+    )
+)
+```
+
