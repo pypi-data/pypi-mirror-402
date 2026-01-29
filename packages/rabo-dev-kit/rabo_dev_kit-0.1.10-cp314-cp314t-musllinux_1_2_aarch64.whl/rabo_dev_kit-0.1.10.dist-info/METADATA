@@ -1,0 +1,240 @@
+Metadata-Version: 2.4
+Name: rabo-dev-kit
+Version: 0.1.10
+Summary: A ROS2 development toolkit for data recording, topic synchronization and utilities
+Home-page: 
+Author: origin
+Author-email: origin <cmeng.gao@gmail.com>
+License: MIT
+Keywords: ros2,robotics,development,toolkit,synchronization
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Intended Audience :: Developers
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+Provides-Extra: ros2
+Requires-Dist: rclpy; extra == "ros2"
+Dynamic: author
+Dynamic: requires-python
+
+# Rabo Dev Kit
+
+A lightweight Python development toolkit for ROS2 (Robot Operating System 2) projects, providing utilities for data recording, topic synchronization, and configuration management.
+
+## Features
+
+- **DataRecorder**: Text-based logging utility for debugging and data collection
+- **SimpleSyncBridge**: Flexible ROS2 topic message routing and transformation
+- **Configuration Utilities**: Helper functions for environment-based configuration
+
+## Installation
+
+### From PyPI
+
+```bash
+pip install rabo-dev-kit
+```
+
+## Requirements
+
+- Python >= 3.6
+- ROS2 (rclpy)
+
+## Usage
+
+### 1. DataRecorder
+
+Record text data to temporary directories for debugging:
+
+```python
+from rabo_dev_kit import DataRecorder
+
+# Initialize recorder
+recorder = DataRecorder()
+
+# Log some text data
+recorder.log_text("sensor_data.txt", "Temperature: 25.3°C")
+
+# Append to existing file
+recorder.log_text("sensor_data.txt", "Humidity: 60%", mode='a')
+
+# Get file path
+path = recorder.get_file_path("sensor_data.txt")
+print(f"Data logged to: {path}")
+```
+
+**Environment Variables:**
+- `RDTP_SIM_LOG_PATH`: Custom log directory (default: `/tmp`)
+
+### 2. SimpleSyncBridge
+
+Route and transform ROS2 topic messages with frequency control:
+
+```python
+import rclpy
+from rabo_dev_kit.sync_bridge import SimpleSyncBridge, SyncRoute
+from std_msgs.msg import String, Int32
+
+# Initialize ROS2
+rclpy.init()
+
+# Create bridge node
+bridge = SimpleSyncBridge()
+
+# Define synchronization routes
+routes = [
+    SyncRoute(
+        source_topic='/input/data',
+        source_msg_type=String,
+        target_topic='/output/data',
+        target_msg_type=String,
+        frequency=10.0,  # 10 Hz
+        handler=lambda msg: process_message(msg)  # Optional transformation
+    ),
+    SyncRoute(
+        source_topic='/sensor/raw',
+        source_msg_type=Int32,
+        target_topic='/sensor/filtered',
+        target_msg_type=Int32,
+        frequency=5.0,  # 5 Hz
+    )
+]
+
+# Register routes
+bridge.batch_register(routes)
+
+# Start synchronization
+bridge.setup()
+
+# Spin
+rclpy.spin(bridge)
+
+# Cleanup
+bridge.destroy_node()
+rclpy.shutdown()
+```
+
+**SyncRoute Parameters:**
+- `source_topic`: Source ROS2 topic to subscribe to
+- `source_msg_type`: Message type of the source topic
+- `target_topic`: Target ROS2 topic to publish to (optional if handler is provided)
+- `target_msg_type`: Message type of the target topic (defaults to source type)
+- `frequency`: Publishing frequency in Hz (default: 10.0)
+- `handler`: Optional callable for message transformation
+- `enabled`: Enable/disable the route (default: True)
+
+**Message Transformation Example:**
+
+```python
+def transform_message(msg):
+    """Transform a String message to uppercase"""
+    new_msg = String()
+    new_msg.data = msg.data.upper()
+    return new_msg
+
+route = SyncRoute(
+    source_topic='/input',
+    source_msg_type=String,
+    target_topic='/output',
+    target_msg_type=String,
+    handler=transform_message
+)
+```
+
+### 3. Configuration Utilities
+
+```python
+from rabo_dev_kit import get_parameter_topic
+
+# Get ROS2 parameter topic from environment
+param_topic = get_parameter_topic()
+```
+
+**Environment Variables:**
+- `CONTROLLER_PARAMETER_TOPIC`: ROS2 parameter topic name
+
+## API Reference
+
+### DataRecorder
+
+#### Methods
+
+- `log_text(filename: str, content: str, mode: str = 'w') -> bool`
+  - Log text content to a file
+  - Returns: True if successful, False otherwise
+
+- `get_file_path(filename: str) -> str`
+  - Get the absolute path where the file will be saved
+  - Returns: Full file path
+
+### SimpleSyncBridge
+
+#### Methods
+
+- `register_sync_route(route: SyncRoute) -> bool`
+  - Register a single synchronization route
+  - Returns: True if successful, False otherwise
+
+- `batch_register(routes: List[SyncRoute]) -> int`
+  - Register multiple routes at once
+  - Returns: Number of successfully registered routes
+
+- `setup()`
+  - Initialize all subscriptions and publishers
+  - Must be called after registering routes
+
+## Development
+
+### Running Tests
+
+```bash
+# Install development dependencies
+pip install -e .[dev]
+
+# Run tests
+pytest tests/
+```
+
+### Building from Source
+
+```bash
+# Build distribution packages
+python -m build
+
+# The built packages will be in dist/
+```
+
+## Version History
+
+### 0.1.3 (Current)
+- Added SimpleSyncBridge for ROS2 topic synchronization
+- Improved .gitignore configuration
+- Enhanced documentation
+
+### 0.1.0
+- Initial release
+- DataRecorder utility
+- Basic configuration helpers
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Author
+
+**origin** (cmeng.gao@gmail.com)
+
+## Acknowledgments
+
+This toolkit is designed to simplify ROS2 development workflows and provide common utilities for robotics projects.
