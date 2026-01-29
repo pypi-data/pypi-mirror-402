@@ -1,0 +1,79 @@
+name: MPI Tests
+
+on:
+  schedule:
+    - cron: '0 2 * * 0'  # Weekly on Sunday 2 AM
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+
+jobs:
+  mpi-matrix:
+    strategy:
+      matrix:
+        mpi: [openmpi]
+        python-version: ['3.8', '3.10', '3.12']
+        nodes: [2, 4, 8]
+      fail-fast: false
+    
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install MPI (${{ matrix.mpi }})
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openmpi-bin libopenmpi-dev
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test,dill]"
+      
+      - name: Run tests with ${{ matrix.nodes }} nodes
+        run: mpiexec --oversubscribe -n ${{ matrix.nodes }} pytest --with-mpi tests/ -v
+      
+      # Note: Coverage disabled for MPI tests to avoid pytest-cov + MPI race conditions
+      # Coverage is collected in the main CI workflow
+
+  performance-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install MPI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openmpi-bin libopenmpi-dev
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test,dill]"
+      
+      - name: Run performance tests
+        run: mpiexec --oversubscribe -n 4 pytest --with-mpi tests/test_performance.py -v
+      
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            benchmark.json
+            .benchmarks/
+          retention-days: 30
