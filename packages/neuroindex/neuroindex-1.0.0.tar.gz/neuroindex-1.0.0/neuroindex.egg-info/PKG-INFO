@@ -1,0 +1,300 @@
+Metadata-Version: 2.4
+Name: neuroindex
+Version: 1.0.0
+Summary: Fast vector memory system for AI - FAISS search, SQLite persistence, LRU cache. Community Edition (10K docs, 384-dim).
+Author-email: Umeshkumar Pal <umeshkumarpal667@gmail.com>
+Maintainer-email: Umeshkumar Pal <umeshkumarpal667@gmail.com>
+License: MIT
+Project-URL: Homepage, https://github.com/Umeshkumar667/NeuroIndex
+Project-URL: Documentation, https://github.com/Umeshkumar667/NeuroIndex#readme
+Project-URL: Repository, https://github.com/Umeshkumar667/NeuroIndex
+Project-URL: Issues, https://github.com/Umeshkumar667/NeuroIndex/issues
+Project-URL: Changelog, https://github.com/Umeshkumar667/NeuroIndex/blob/main/CHANGELOG.md
+Project-URL: Upgrade, https://github.com/Umeshkumar667/NeuroIndex/issues
+Keywords: vector-database,embeddings,semantic-search,rag,retrieval-augmented-generation,memory,ai,machine-learning,nlp,faiss,chatbot,llm,local-first,vector-search,similarity-search
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Database
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Typing :: Typed
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: numpy>=1.23
+Requires-Dist: networkx>=3.0
+Requires-Dist: faiss-cpu>=1.7
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0; extra == "dev"
+Requires-Dist: pytest-xdist>=3.0; extra == "dev"
+Requires-Dist: hypothesis>=6.0; extra == "dev"
+Requires-Dist: black>=23.0; extra == "dev"
+Requires-Dist: isort>=5.0; extra == "dev"
+Requires-Dist: mypy>=1.0; extra == "dev"
+Requires-Dist: psutil>=5.9; extra == "dev"
+Provides-Extra: docs
+Requires-Dist: mkdocs>=1.5; extra == "docs"
+Requires-Dist: mkdocs-material>=9.0; extra == "docs"
+Requires-Dist: mkdocstrings[python]>=0.24; extra == "docs"
+Provides-Extra: all
+Requires-Dist: neuroindex[dev,docs]; extra == "all"
+Dynamic: license-file
+
+# 🧠 NeuroIndex
+
+[![Tests](https://github.com/Umeshkumar667/NeuroIndex/actions/workflows/tests.yml/badge.svg)](https://github.com/Umeshkumar667/NeuroIndex/actions/workflows/tests.yml)
+[![PyPI version](https://badge.fury.io/py/neuroindex.svg)](https://badge.fury.io/py/neuroindex)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
+**NeuroIndex** is a **production-ready vector memory system** for AI applications.
+
+> 🌟 **Community Edition** - Free & Open Source under MIT License
+
+## ✨ Features
+
+- ⚡ **FAISS vector search** - Fast similarity matching
+- 💾 **SQLite persistence** - Durable storage
+- 🔄 **LRU cache** - Frequently accessed items
+- 📊 **Built-in metrics** - Observability
+- 🔒 **Thread-safe** - Concurrent reads
+
+Perfect for **RAG systems**, **AI agents**, **chatbots**, and **semantic search**.
+
+---
+
+## 📦 Community Edition Limits
+
+| Feature | Community (Free) | Pro ($49/mo) |
+|---------|-----------------|--------------|
+| Documents | 10,000 max | **Unlimited** |
+| Embedding Dimension | 384 only | **Any dimension** |
+| Semantic Graph | ❌ | ✅ |
+| Batch Insert | ❌ | ✅ (15x faster) |
+| GPU Acceleration | ❌ | ✅ |
+| Index Rebuild | ❌ | ✅ |
+| Support | Community | Priority |
+
+
+---
+
+## 📦 Installation
+
+```bash
+pip install neuroindex
+```
+
+## 🚀 Quick Start
+
+```python
+from neuroindex import NeuroIndex
+import numpy as np
+
+# Create index
+ni = NeuroIndex(path="./memory", dim=384)
+
+# Your embedding function (use any 384-dim model)
+def embed(text: str) -> np.ndarray:
+    # Example: use sentence-transformers all-MiniLM-L6-v2
+    return np.random.rand(384).astype("float32")
+
+# Add documents
+ni.add_document(
+    text="Neural networks use embeddings for representation",
+    vector=embed("neural networks"),
+    metadata={"source": "textbook"}
+)
+
+ni.add_document(
+    text="FAISS enables fast vector similarity search",
+    vector=embed("vector search"),
+    metadata={"source": "documentation"}
+)
+
+# Search
+results = ni.search(query_vector=embed("how do neural networks work?"), k=5)
+
+for r in results:
+    print(f"[{r.similarity:.2%}] {r.text}")
+
+# Stats
+print(ni.get_stats())
+# {'version': '1.0.0-community', 'edition': 'Community', 'total_documents': 2, ...}
+
+# Close
+ni.close()
+```
+
+## 📖 API Reference
+
+### NeuroIndex
+
+```python
+class NeuroIndex:
+    def __init__(
+        self,
+        path: str = './neuroindex_data',  # Storage directory
+        dim: int = 384,                    # Embedding dimension (384 only in Community)
+        cache_size: int = 10000,           # LRU cache size
+        log_level: str = "INFO"            # Logging level
+    ): ...
+    
+    def add_document(
+        self,
+        text: str,                         # Document text
+        vector: np.ndarray,                # 384-dim embedding vector
+        metadata: dict = None              # Optional metadata
+    ) -> str:                              # Returns node_id
+        """Add a document. Max 10,000 in Community edition."""
+    
+    def search(
+        self,
+        query_vector: np.ndarray,          # Query embedding (384-dim)
+        k: int = 10,                       # Number of results
+        min_similarity: float = 0.0        # Minimum similarity threshold
+    ) -> List[SearchResult]:
+        """Search for similar documents using FAISS."""
+    
+    def search_text(
+        self,
+        text: str,                         # Query text
+        embed_fn: Callable,                # Embedding function
+        k: int = 5,
+        **kwargs
+    ) -> List[SearchResult]:
+        """Search using raw text."""
+    
+    def get_document(self, node_id: str) -> Optional[dict]:
+        """Get a document by ID."""
+    
+    def delete_document(self, node_id: str) -> bool:
+        """Delete a document."""
+    
+    def update_document(
+        self,
+        node_id: str,
+        text: str = None,
+        vector: np.ndarray = None,
+        metadata: dict = None
+    ) -> bool:
+        """Update an existing document."""
+    
+    def get_stats(self) -> dict:
+        """Get index statistics including limits."""
+    
+    def get_metrics(self) -> dict:
+        """Get performance metrics."""
+    
+    def close(self) -> None:
+        """Close and save all data."""
+```
+
+### SearchResult
+
+```python
+@dataclass
+class SearchResult:
+    node_id: str          # Unique document ID
+    text: str             # Document text
+    similarity: float     # Cosine similarity (0-1)
+    metadata: dict        # User metadata
+    source: str           # 'cache' or 'faiss'
+```
+
+### Exceptions
+
+```python
+from neuroindex import (
+    NeuroIndexError,        # Base exception
+    DimensionMismatchError, # Wrong embedding dimension (must be 384)
+    StorageError,           # Database/file errors
+    DocumentNotFoundError,  # Document doesn't exist
+    InvalidInputError,      # Invalid input parameters
+)
+```
+
+## 🏭 Production Readiness
+
+### ✅ Guarantees
+- **Deterministic results** - Same query, same results
+- **Persistent storage** - SQLite + FAISS index saved to disk
+- **Thread-safe** - Concurrent read operations supported
+- **Graceful failures** - Clear exceptions, no silent errors
+
+### ⚠️ Community Limitations
+- Max 10,000 documents
+- 384-dimension embeddings only
+- No semantic graph traversal
+- No batch insert
+- No GPU support
+- Single-writer (concurrent writes require external locking)
+
+## 📊 Benchmarks
+
+| Documents | Insert Time | Search (k=10) | Memory |
+|-----------|-------------|---------------|--------|
+| 1,000     | 0.8s        | 2ms           | 45MB   |
+| 5,000     | 4.2s        | 5ms           | 180MB  |
+| 10,000    | 8.5s        | 8ms           | 380MB  |
+
+*Benchmarked on Apple M1, 16GB RAM, dim=384*
+
+## ⭐ Upgrade to Pro
+
+Need more power? **NeuroIndex Pro** removes all limits:
+
+- ✅ **Unlimited documents**
+- ✅ **Any embedding dimension** (768, 1536, etc.)
+- ✅ **Semantic graph traversal** - Relationship-aware retrieval
+- ✅ **Batch insert** - 15x faster bulk operations
+- ✅ **GPU acceleration** - Use faiss-gpu
+- ✅ **Index rebuild** - Compact after deletions
+- ✅ **Priority support**
+
+### Pricing
+
+| Plan | Price | Features |
+|------|-------|----------|
+| **Community** | Free | 10K docs, 384-dim, FAISS only |
+| **Pro** | $49/mo | Unlimited, any dim, graph, GPU |
+| **Enterprise** | $149/mo | Pro + Cloud API + Dashboard |
+
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run with coverage
+pytest tests/ --cov=neuroindex --cov-report=html
+```
+
+## 🤝 Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## 🔗 Links
+
+- **GitHub**: https://github.com/Umeshkumar667/NeuroIndex
+- **PyPI**: https://pypi.org/project/neuroindex/
+- **Upgrade**: Contact umeshkumarpal667@gmail.com
+- **Issues**: https://github.com/Umeshkumar667/NeuroIndex/issues
+
+---
+
+Made with ❤️ by [Umeshkumar Pal](https://github.com/Umeshkumar667)
