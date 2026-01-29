@@ -1,0 +1,103 @@
+Metadata-Version: 2.4
+Name: nospoon-integrations
+Version: 0.2.2
+Summary: Cross-platform OAuth integrations SDK for NoSpoon applications
+Project-URL: Homepage, https://github.com/nospoonai/nospoon-integrations
+Project-URL: Documentation, https://github.com/nospoonai/nospoon-integrations#readme
+Project-URL: Repository, https://github.com/nospoonai/nospoon-integrations
+Project-URL: Issues, https://github.com/nospoonai/nospoon-integrations/issues
+Author-email: NoSpoon <dev@nospoon.ai>
+License-Expression: MIT
+Keywords: facebook,google,hubspot,integrations,linkedin,oauth,supabase
+Classifier: Development Status :: 3 - Alpha
+Classifier: Framework :: AsyncIO
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Typing :: Typed
+Requires-Python: >=3.9
+Requires-Dist: httpx>=0.25.0
+Requires-Dist: pydantic>=2.0.0
+Provides-Extra: all
+Requires-Dist: mypy>=1.0.0; extra == 'all'
+Requires-Dist: pytest-asyncio>=0.21.0; extra == 'all'
+Requires-Dist: pytest-cov>=4.0.0; extra == 'all'
+Requires-Dist: pytest>=7.0.0; extra == 'all'
+Requires-Dist: ruff>=0.1.0; extra == 'all'
+Requires-Dist: supabase>=2.0.0; extra == 'all'
+Requires-Dist: types-requests>=2.31.0; extra == 'all'
+Provides-Extra: dev
+Requires-Dist: mypy>=1.0.0; extra == 'dev'
+Requires-Dist: pytest-asyncio>=0.21.0; extra == 'dev'
+Requires-Dist: pytest-cov>=4.0.0; extra == 'dev'
+Requires-Dist: pytest>=7.0.0; extra == 'dev'
+Requires-Dist: ruff>=0.1.0; extra == 'dev'
+Requires-Dist: types-requests>=2.31.0; extra == 'dev'
+Provides-Extra: supabase
+Requires-Dist: supabase>=2.0.0; extra == 'supabase'
+Description-Content-Type: text/markdown
+
+# NoSpoon Integrations - Python SDK
+
+Cross-platform OAuth integrations SDK for NoSpoon applications.
+
+## Installation
+
+```bash
+pip install nospoon-integrations
+
+# With Supabase support
+pip install nospoon-integrations[supabase]
+```
+
+## Quick Start
+
+```python
+import os
+from nospoon_integrations import IntegrationClient, IntegrationClientConfig, ProviderConfig
+from nospoon_integrations.storage import SupabaseTokenStorage
+
+# Initialize storage
+storage = SupabaseTokenStorage(
+    supabase_url=os.environ["SUPABASE_URL"],
+    supabase_key=os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+)
+
+# Initialize client with providers
+integrations = IntegrationClient(IntegrationClientConfig(
+    storage=storage,
+    google=ProviderConfig(
+        client_id=os.environ["GOOGLE_CLIENT_ID"],
+        client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
+        scopes=["https://www.googleapis.com/auth/gmail.compose"],
+    ),
+    hubspot=ProviderConfig(
+        client_id=os.environ["HUBSPOT_CLIENT_ID"],
+        client_secret=os.environ["HUBSPOT_CLIENT_SECRET"],
+    ),
+))
+
+# Use providers
+auth_url = integrations.google.get_auth_url("https://myapp.com/callback")
+status = await integrations.google.get_connection_status(user_id)
+```
+
+## Providers
+
+- **Google** - Gmail API, OAuth
+- **HubSpot** - CRM contacts, OAuth
+- **Facebook** - Graph API, Pages
+- **LinkedIn** - Posts, OAuth
+
+## Documentation
+
+See the [main documentation](https://github.com/nospoon/integrations) for full usage details.
+
+## License
+
+MIT
