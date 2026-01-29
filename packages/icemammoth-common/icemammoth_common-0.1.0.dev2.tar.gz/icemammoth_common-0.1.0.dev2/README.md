@@ -1,0 +1,394 @@
+# icemammoth_common
+
+## 项目介绍
+
+icemammoth_common 是 icemammoth 项目的公共模块，用于提供通用的功能和工具。
+
+## 项目结构
+
+### 使用 src 目录布局
+
+src目录布局是python官方推荐的目录布局。布局配置方式如下:
+
+- 项目根目录下创建src目录
+- src目录下创建包名，比如src/icemammoth_common/
+- 在包名下创建**init**.py文件，并添加**version**变量，用于记录版本号。
+- 在包名下创建模块，比如src/icemammoth_common/utils.py
+
+### vscode编译报错
+
+- 需要在.vscode/settings.json文件中添加配置:
+
+```json
+{
+  "python.analysis.extraPaths": ["./src"]
+}
+```
+
+## 打本地包
+
+- 可以通过pyproject.toml和setup.py来指导如何打包。
+- 当根目录下同时存在pyproject.toml和setup.py时，pyproject.toml优先级高于setup.py。
+- 打本地包命令为：pip install .
+  - 但是需要注意, 这种方式生成的本地包, 在代码发生变化时, 需要重新打包。
+
+### 如何在文件变化时避免重新打包？
+
+- 很多文章介绍可以通过命令pip install -e . 来解决
+- 这个命令也会在/opt/homebrew/lib/python3.12/site-packages/下生成相应文件:
+  - **editable**.icemammoth_common-0.1.0.dev1.pth (文件)
+  - **editable\_**icemammoth_common_0_1_0_dev1_finder.py (文件)
+  - icemammoth_common-0.1.0.dev1.dist-info (目录)
+- 但是无法使用原有包名导入, 只能以使用**editable\_**icemammoth_common_0_1_0_dev1_finder. 进行导入, 破坏了原有包的名字。
+- 所以暂时不使用pip install -e ., 只能在每次文件变化时手动打包。
+
+## 使用 setup.py打包
+
+### setup.py 格式说明
+
+```python
+from setuptools import setup, find_packages
+
+# 读取 README 文件作为项目的长描述
+with open("README.md", "r", encoding="utf-8") as f:
+    long_description = f.read()
+
+# 读取依赖文件
+with open("requirements.txt", "r", encoding="utf-8") as f:
+    install_requires = f.read().splitlines()
+
+setup(
+    # 项目基本信息
+    name="mypackage",  # 包名称（必须唯一）
+    version="0.1.0",  # 版本号
+    author="Your Name",  # 作者
+    author_email="your.email@example.com",  # 作者邮箱
+    description="A small example package",  # 简短描述
+    long_description=long_description,  # 详细描述（通常从 README 文件读取）
+    long_description_content_type="text/markdown",  # 描述内容类型（Markdown）
+    url="https://github.com/yourusername/mypackage",  # 项目主页（通常是 GitHub 仓库地址）
+    license="MIT",  # 许可证类型
+    classifiers=[
+        # 项目分类（用于 PyPI）
+        "Development Status :: 3 - Alpha",  # 开发状态
+        "Intended Audience :: Developers",  # 目标用户
+        "License :: OSI Approved :: MIT License",  # 许可证
+        "Programming Language :: Python :: 3",  # 支持的 Python 版本
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Operating System :: OS Independent",  # 操作系统兼容性
+    ],
+    # 包的发现和管理
+    packages=find_packages(where="src"),  # 指定从 src 目录查找包, 如果find_packages()不指定参数，则默认从项目根目录开始查找, 会递归地查找所有包含 __init__.py 的目录，并将它们视为包。
+    package_dir={"": "src"},  # 将 src 目录作为包的根目录
+    include_package_data=True,  # 包含非代码文件（如数据文件）
+    python_requires=">=3.8",  # Python 版本要求
+    install_requires=install_requires,  # 依赖项（从 requirements.txt 读取）
+    # 入口点（可选）：定义命令行工具
+    entry_points={
+        "console_scripts": [
+            "mypackage-cli=mypackage.module1:main",  # 定义一个命令行工具
+        ],
+    },
+    # 测试配置（可选）
+    test_suite="test",  # 指定测试模块
+    tests_require=["pytest"],  # 测试依赖
+    # 其他元数据
+    keywords="example package",  # 关键字
+    project_urls={
+        "Bug Tracker": "https://github.com/yourusername/mypackage/issues",
+        "Documentation": "https://github.com/yourusername/mypackage/README.md",
+        "Source Code": "https://github.com/yourusername/mypackage",
+    },
+)
+```
+
+### find_packages()参数说明
+
+- find_packages() 是 setuptools 提供的一个非常实用的函数，用于自动发现项目中的 Python 包和子包。它会根据目录结构和 **init**.py 文件的存在来确定哪些目录应该被视为包。find_packages() 的主要作用是简化 setup.py 中的包管理，避免手动列出所有包的名称。
+- find_packages() 的参数及其作用
+- find_packages() 提供了多个参数，用于灵活地控制包的发现过程。以下是这些参数的详细说明：
+
+1. **where**
+
+   默认值：'.'（当前目录）
+
+   作用：指定从哪个目录开始搜索包。默认是从项目根目录开始。
+
+   示例：
+
+   > find_packages(where='src')
+
+   如果你的项目结构是：
+
+   ```tree
+   project_root/
+   ├── src/
+   │   ├── package1/
+   │   │   ├── __init__.py
+   │   │   └── module1.py
+   │   └── package2/
+   │       ├── __init__.py
+   │       └── module2.py
+   └── setup.py
+   ```
+
+   使用 find_packages(where='src') 会从 src 目录开始查找包，只会发现 package1 和 package2。
+
+1. **exclude**
+
+   默认值：None
+
+   作用：指定哪些目录或包应该被排除。可以是一个字符串或字符串列表，支持通配符（如 \*）。
+
+   示例：
+
+   > find_packages(exclude=['tests', 'tests.*'])
+
+   如果项目结构是：
+
+   ```tree
+   project_root/
+   ├── package1/
+   │   ├── __init__.py
+   │   └── module1.py
+   ├── package2/
+   │   ├── __init__.py
+   │   └── module2.py
+   ├── tests/
+   │   ├── __init__.py
+   │   └── test_module.py
+   └── setup.py
+   ```
+
+   使用 find_packages(exclude=['tests', 'tests.*']) 会排除 tests 目录及其所有子目录。
+
+1. **include**
+
+   默认值：None
+
+   作用：指定哪些目录或包应该被包含。可以是一个字符串或字符串列表，支持通配符（如 \*）。如果未指定，则默认包含所有找到的包。
+
+   示例：
+
+   > find_packages(include=['package1', 'package1.*'])
+
+   如果项目结构是：
+
+   ```tree
+   project_root/
+   ├── package1/
+   │   ├── __init__.py
+   │   └── subpackage/
+   │       ├── __init__.py
+   │       └── module.py
+   ├── package2/
+   │   ├── __init__.py
+   │   └── module2.py
+   └── setup.py
+   ```
+
+   使用 find_packages(include=['package1', 'package1.*']) 只会发现 package1 及其子包 subpackage，而忽略 package2。
+
+1. **namespace_packages**
+
+   默认值：None
+
+   作用：指定哪些包是命名空间包。命名空间包是一种特殊的包，用于支持包的分层结构。
+
+   示例：
+
+   > find_packages(namespace_packages=['namespace'])
+
+   如果项目结构是：
+
+   ```tree
+   project_root/
+   ├── namespace/
+   │   ├── package1/
+   │   │   ├── __init__.py
+   │   │   └── module1.py
+   │   └── package2/
+   │       ├── __init__.py
+   │       └── module2.py
+   └── setup.py
+   ```
+
+   使用 find_packages(namespace_packages=['namespace']) 会将 namespace 下的包视为命名空间包。
+
+1. **follow_symlinks**
+
+   默认值：False
+
+   作用：是否跟随符号链接。如果设置为 True，find_packages() 会递归地查找符号链接指向的目录。
+
+   示例：
+
+   > find_packages(follow_symlinks=True)
+
+   以下是一个综合使用 find_packages() 参数的 setup.py 示例：
+
+   ```python
+   from setuptools import setup, find_packages
+
+   setup(
+       name="your_project",
+       version="0.1",
+       packages=find_packages(
+           where='src',  # 从 src 目录开始查找
+           include=['package1', 'package1.*'],  # 只包含 package1 及其子包
+           exclude=['package1/tests', 'package1/tests.*'],  # 排除 package1 下的 tests 目录
+           namespace_packages=['namespace'],  # 指定命名空间包
+           follow_symlinks=True  # 跟随符号链接
+       ),
+       install_requires=[
+           # 依赖项
+       ],
+   )
+   ```
+
+1. **总结**
+
+   find_packages() 的参数提供了强大的灵活性，让你可以精确控制哪些包应该被安装。通过合理使用 where、include、exclude 等参数，你可以避免不必要的包被安装到 site-packages，同时确保项目结构清晰、易于维护。
+
+### package_dir()参数说明
+
+package_dir 是 setuptools 中 setup() 函数的一个参数，用于指定包的源代码目录与安装目录之间的映射关系。它的主要作用是告诉 setuptools 在哪里查找包的源代码，并如何将这些包安装到目标环境中。
+
+**package_dir 的作用**
+
+1. 指定包的源代码位置
+
+   默认情况下，setuptools 会从项目的根目录（即 setup.py 所在的目录）查找包。但如果你的项目结构中，源代码被放在了其他目录（如 src），package_dir 可以明确指定这些目录的位置。
+
+1. 控制包的安装路径
+   通过 package_dir，你可以将源代码目录映射到目标安装路径。这使得代码的组织更加灵活，同时避免了将源代码直接放在项目根目录下，从而保持项目结构的清晰。
+
+**参数格式**
+
+package_dir 的参数是一个字典，格式为：
+
+```python
+package_dir = {"<目标路径>": "<源代码路径>"}
+```
+
+- 目标路径：表示包在安装后应该被放置的目录结构。通常是一个空字符串 ""，表示项目的根目录。
+- 源代码路径：表示包的源代码实际存放的位置。
+
+**常见用法**
+
+1. 默认行为（不使用 package_dir）
+
+如果项目结构如下：
+
+```shell
+project_root/
+    ├── mypackage/
+    │   ├── __init__.py
+    │   └── module1.py
+    └── setup.py
+```
+
+在 setup.py 中不使用 package_dir：
+
+```python
+    from setuptools import setup, find_packages
+
+    setup(
+        name="mypackage",
+        version="0.1.0",
+        packages=find_packages(),
+    )
+```
+
+安装后，mypackage 会被安装到 site-packages 下：
+
+```tree
+site-packages/
+    └── mypackage/
+        ├── __init__.py
+        └── module1.py
+```
+
+1. 使用 package_dir 将源代码放在 src 目录
+
+如果项目结构如下：
+
+```tree
+    project_root/
+    ├── src/
+    │   └── mypackage/
+    │       ├── __init__.py
+    │       └── module1.py
+    └── setup.py
+```
+
+在 setup.py 中使用 package_dir：
+
+```python
+from setuptools import setup, find_packages
+
+setup(
+    name="mypackage",
+    version="0.1.0",
+    packages=find_packages(where="src"),  # 指定从 src 目录查找包
+    package_dir={"": "src"},  # 将 src 映射到根目录
+)
+```
+
+安装后，mypackage 会被安装到 site-packages 下：
+
+```shell
+site-packages/
+    └── mypackage/
+        ├── __init__.py
+        └── module1.py
+```
+
+1. 更复杂的目录映射
+
+假设你希望将源代码中的 src/subdir/ 映射到安装目录中的 mypackage/：
+
+```tree
+project_root/
+    ├── src/
+    │   └── subdir/
+    │       └── mypackage/
+    │           ├── __init__.py
+    │           └── module1.py
+    └── setup.py
+```
+
+在 setup.py 中：
+
+```python
+from setuptools import setup, find_packages
+
+setup(
+    name="mypackage",
+    version="0.1.0",
+    packages=find_packages(where="src/subdir"),  # 从 src/subdir 查找包
+    package_dir={"mypackage": "src/subdir/mypackage"},  # 映射关系
+)
+```
+
+安装后，mypackage 会被安装到 site-packages 下：
+
+```tree
+site-packages/
+    └── mypackage/
+        ├── __init__.py
+        └── module1.py
+```
+
+**总结**
+
+package_dir 的主要作用是：
+
+- 指定包的源代码位置，特别是当源代码不在项目根目录时。
+- 控制包的安装路径，使得安装后的目录结构符合预期。
+- 提高项目的灵活性和可维护性，例如将源代码放在 src 目录下，避免项目根目录过于杂乱。
+- 通过合理使用 package_dir，可以更好地组织项目结构，同时确保包的安装路径符合预期。
+
+//TODO 需要解决pip install . 的时候, 所有icemammoth_common下的包, test都会被放到/opt/homebrew/lib/python3.12/site-packages/下的问题
