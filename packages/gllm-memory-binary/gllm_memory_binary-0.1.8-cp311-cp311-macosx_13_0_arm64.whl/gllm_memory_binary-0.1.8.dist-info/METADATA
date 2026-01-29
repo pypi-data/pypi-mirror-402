@@ -1,0 +1,384 @@
+Metadata-Version: 2.2
+Name: gllm-memory-binary
+Version: 0.1.8
+Summary: A flexible memory system for Gen AI applications
+Author-email: Budi Kurniawan <budi.kurniawan1@gdplabs.id>
+Requires-Python: <3.14,>=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: gllm-core-binary<0.4.0,>=0.3.0
+Requires-Dist: gllm-inference-binary<0.6.0,>=0.5.0
+Requires-Dist: gllm-datastore-binary<0.6.0,>=0.5.0
+Requires-Dist: pydantic<3.0.0,>=2.11.4
+Requires-Dist: scipy<2.0.0,>=1.15.1
+Requires-Dist: python-dotenv<2.0.0,>=1.0.0
+Requires-Dist: python-json-logger<4.0.0,>=3.3.0
+Requires-Dist: pyyaml<7.0.0,>=6.0
+Requires-Dist: typing-extensions<5.0.0,>=4.8.0
+Requires-Dist: langchain-core<1.0.0,>=0.3.0
+Requires-Dist: langchain-community<1.0.0,>=0.3.0
+Requires-Dist: filetype<2.0.0,>=1.2.0
+Requires-Dist: python-magic<0.5.0,>=0.4.27; sys_platform != "win32"
+Requires-Dist: python-magic-bin<0.5.0,>=0.4.14; sys_platform == "win32"
+Provides-Extra: dev
+Requires-Dist: coverage<8.0.0,>=7.4.4; extra == "dev"
+Requires-Dist: httpx<1.0.0,>=0.28.0; extra == "dev"
+Requires-Dist: mypy<2.0.0,>=1.15.0; extra == "dev"
+Requires-Dist: pre-commit<4.0.0,>=3.7.0; extra == "dev"
+Requires-Dist: pytest<9.0.0,>=8.1.1; extra == "dev"
+Requires-Dist: pytest-asyncio<1.0.0,>=0.23.6; extra == "dev"
+Requires-Dist: pytest-cov<6.0.0,>=5.0.0; extra == "dev"
+Requires-Dist: ruff<1.0.0,>=0.6.7; extra == "dev"
+Provides-Extra: mem0ai
+Requires-Dist: mem0ai<2.0.0,>=0.1.117; extra == "mem0ai"
+
+# GLLM Memory
+
+## Description
+
+A flexible and extensible memory system for AI Agents with Mem0 Platform integration (both cloud and self-hosted), designed following SOLID principles and clean architecture patterns.
+
+## Prerequisites
+
+### Mandatory
+
+1. **Python 3.11+** — [Install here](https://www.python.org/downloads/)
+2. **pip** — [Install here](https://pip.pypa.io/en/stable/installation/)
+3. **uv** — [Install here](https://docs.astral.sh/uv/getting-started/installation/)
+4. **gcloud CLI** (for authentication) — [Install here](https://cloud.google.com/sdk/docs/install), then log in using:
+   ```bash
+   gcloud auth login
+   ```
+
+### Mem0 Configuration
+
+**Mem0 API Key**:
+- Get your API key from [https://app.mem0.ai/dashboard/api-keys](https://app.mem0.ai/dashboard/api-keys)
+- For self-hosted deployments, use your server's API key
+
+**Optional Self-Hosted Server**:
+- If using self-hosted Mem0, provide your server URL via `MEM0_HOST` environment variable
+
+Keep your API key secure and never commit it to version control.
+
+---
+
+## 📦 Installation
+
+### Install from Artifact Registry
+
+This requires authentication via the `gcloud` CLI.
+
+```bash
+uv pip install \
+  --extra-index-url "https://oauth2accesstoken:$(gcloud auth print-access-token)@glsdk.gdplabs.id/gen-ai-internal/simple/" \
+  gllm-memory
+```
+
+---
+
+## 🔧 Local Development Setup
+
+### Prerequisites
+
+1. **Python 3.11+** — [Install here](https://www.python.org/downloads/)
+2. **pip** — [Install here](https://pip.pypa.io/en/stable/installation/)
+3. **uv** — [Install here](https://docs.astral.sh/uv/getting-started/installation/)
+4. **gcloud CLI** — [Install here](https://cloud.google.com/sdk/docs/install), then log in using:
+   ```bash
+   gcloud auth login
+   ```
+5. **Git** — [Install here](https://git-scm.com/downloads)
+6. **Access** to the [GDP Labs SDK GitHub repository](https://github.com/GDP-ADMIN/gl-sdk)
+
+---
+
+### 1. Clone Repository
+
+```bash
+git clone git@github.com:GDP-ADMIN/gl-sdk.git
+cd gl-sdk/libs/gllm-memory
+```
+
+---
+
+### 2. Setup Authentication
+
+Set the following environment variables to authenticate with internal package indexes:
+
+```bash
+export UV_INDEX_GEN_AI_INTERNAL_USERNAME=oauth2accesstoken
+export UV_INDEX_GEN_AI_INTERNAL_PASSWORD="$(gcloud auth print-access-token)"
+export UV_INDEX_GEN_AI_USERNAME=oauth2accesstoken
+export UV_INDEX_GEN_AI_PASSWORD="$(gcloud auth print-access-token)"
+```
+
+---
+
+### 3. Quick Setup
+
+Run:
+
+```bash
+make setup
+```
+
+---
+
+### 4. Activate Virtual Environment
+
+```bash
+source .venv/bin/activate
+```
+
+---
+
+## 🚀 Quick Start
+
+### For Using the Library
+
+1. **Install the package**:
+   ```bash
+   uv pip install gllm-memory
+   ```
+
+2. **Set your Mem0 API key**:
+   ```bash
+   export MEM0_API_KEY="your_api_key_here"
+   ```
+
+3. **For Self-Hosted Mem0** (Optional):
+   ```bash
+   export MEM0_API_KEY="your_api_key_here"
+   export MEM0_HOST="https://your-mem0-server.com"
+   ```
+
+### For Development
+
+1. **Complete setup** (this will install all dependencies, setup pre-commit, and activate the environment):
+   ```bash
+   make setup
+   source .venv/bin/activate
+   ```
+
+2. **Set your Mem0 API key**:
+   ```bash
+   export MEM0_API_KEY="your_api_key_here"
+   ```
+
+3. **Run the basic usage example**:
+   ```bash
+   # Run the example (includes add, search, list, delete_by_user_query, and delete operations)
+   python examples/simple_usage.py
+   ```
+
+## Architecture
+
+The system follows a layered architecture below:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Application Layer                        │
+├─────────────────────────────────────────────────────────────┤
+│                    Memory Manager                           │
+├─────────────────────────────────────────────────────────────┤
+│                    Memory Client (Base)                     │
+├─────────────────────────────────────────────────────────────┤
+│                    Provider Layer (Mem0)                    │
+├─────────────────────────────────────────────────────────────┤
+│                    Mem0 Platform                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## 🌐 Self-Hosted Mem0 Support
+
+In addition to the cloud Mem0 Platform, this library supports **self-hosted Mem0 servers**. You can connect to your own Mem0 deployment by specifying a custom host:
+
+```python
+from gllm_memory import MemoryManager
+
+# Cloud usage (default)
+manager = MemoryManager(api_key="your-api-key")
+
+# Self-hosted usage
+manager = MemoryManager(
+    api_key="your-api-key",
+    host="https://your-mem0-server.com"
+)
+```
+
+**Environment Variables**:
+- `MEM0_API_KEY`: Your Mem0 API key
+- `MEM0_HOST`: Your self-hosted Mem0 server URL (optional, defaults to cloud)
+
+## Core API Methods
+
+The `MemoryManager` provides a simple, platform-agnostic interface for memory operations:
+
+### Available Methods
+
+- **`add(user_id, agent_id, messages, scopes, metadata, infer)`** - Add new memories from message objects
+- **`search(query, user_id, agent_id, scopes, metadata, threshold, top_k)`** - Search and retrieve memories by query (query is required)
+- **`list_memories(user_id, agent_id, scopes, metadata, keywords, page, page_size)`** - Get all memories with pagination and keywords filtering
+- **`update(memory_id, new_content, metadata, user_id, agent_id, scopes)`** - Update an existing memory by ID
+- **`delete(memory_ids, user_id, agent_id, scopes, metadata)`** - Delete memories by IDs or by user/agent identifiers
+- **`delete_by_user_query(query, user_id, agent_id, scopes, metadata, threshold, top_k)`** - Delete memories by query (query is required)
+
+### Method Details
+
+```python
+from gllm_memory import MemoryManager
+from gllm_inference.schema.message import Message
+from gllm_memory.enums import MemoryScope
+
+# Initialize
+memory_manager = MemoryManager()
+
+# Add memories using Message objects
+messages = [
+    Message.user("I love pizza and Italian food"),
+    Message.assistant("I'll remember that you love pizza and Italian food"),
+]
+await memory_manager.add(
+    user_id="user_123",
+    messages=messages,
+    scopes=[MemoryScope.USER],
+    metadata={"conversation_id": "chat_001"},  # Optional
+    infer=True  # Optional, defaults to True
+)
+
+# Retrieve memories (query is required)
+memories = await memory_manager.search(
+    query="What does the user like to eat?",
+    user_id="user_123",
+    scopes=[MemoryScope.USER],
+    metadata=None,  # Optional
+    threshold=0.3,  # Optional, defaults to 0.3
+    top_k=10  # Optional, defaults to 10
+)
+
+# List all memories with pagination and keywords filtering
+all_memories = await memory_manager.list_memories(
+    user_id="user_123",
+    scopes=[MemoryScope.USER],
+    metadata=None,  # Optional
+    keywords="food",  # Optional
+    page=1,  # Optional, defaults to 1
+    page_size=100  # Optional, defaults to 100
+)
+
+# Update an existing memory by ID
+updated_memory = await memory_manager.update(
+    memory_id="memory_uuid_123",
+    new_content="Updated memory content",  # Optional
+    metadata={"category": "updated_preferences"},  # Optional
+    user_id="user_123",
+    agent_id="agent_456",
+    scopes=[MemoryScope.USER, MemoryScope.ASSISTANT]  # Optional
+)
+
+# Delete memories by query (query is required)
+deleted = await memory_manager.delete_by_user_query(
+    query="food preferences",
+    user_id="user_123",
+    scopes=[MemoryScope.USER, MemoryScope.ASSISTANT],
+    metadata=None,  # Optional
+    threshold=0.3,  # Optional, defaults to 0.3
+    top_k=10  # Optional, defaults to 10
+)
+
+# Delete memories by identifiers
+delete_result = await memory_manager.delete(
+    memory_ids=None,  # Optional
+    user_id="user_123",
+    scopes=[MemoryScope.USER, MemoryScope.ASSISTANT],
+    metadata=None  # Optional
+)
+```
+
+### 🔧 Code Quality
+
+```bash
+# Format code with ruff
+ruff format gllm_memory/ tests/
+
+# Check code quality
+ruff check gllm_memory/ tests/
+
+# Fix auto-fixable issues
+ruff check gllm_memory/ tests/ --fix
+```
+
+---
+
+## Local Development Utilities
+
+The following Makefile commands are available for quick operations:
+
+### Install uv
+
+```bash
+make install-uv
+```
+
+### Install Pre-Commit
+
+```bash
+make install-pre-commit
+```
+
+### Install Dependencies
+
+```bash
+make install
+```
+
+### Update Dependencies
+
+```bash
+make update
+```
+
+### Run Tests
+
+```bash
+make test
+```
+
+---
+
+## Contributing
+
+Please refer to the [Python Style Guide](https://docs.google.com/document/d/1uRggCrHnVfDPBnG641FyQBwUwLoFw0kTzNqRm92vUwM/edit?usp=sharing)
+for information about code style, documentation standards, and SCA requirements.
+
+### Contributing Steps
+
+1. **Fork and clone** the repository
+2. **Set up development environment**:
+   ```bash
+   # Complete setup: installs uv, configures auth, installs packages, sets up pre-commit
+   make setup
+   ```
+
+3. **Activate virtual environment**:
+   ```bash
+   source .venv/bin/activate
+   ```
+
+4. **Run tests** to ensure everything works:
+   ```bash
+   make test
+   ```
+
+5. **Make your changes** and ensure tests pass:
+   ```bash
+   # Make your changes
+   # Ensure tests pass
+   make test
+   ```
+
+6. **Submit a pull request**:
+   ```bash
+   # Submit a pull request
+   git push origin your-branch
+   ```
