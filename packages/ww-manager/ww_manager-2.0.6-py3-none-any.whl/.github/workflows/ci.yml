@@ -1,0 +1,36 @@
+name: Code Quality
+
+# 触发条件：推送到 main 分支，或提交针对 main 分支的 Pull Request
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  lint-and-format:
+    name: Ruff Check & Format
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      # 直接安装 ruff，速度非常快
+      - name: Install Ruff
+        run: pip install ruff
+
+      # 1. 代码审查 (Lint)
+      # 检查是否有错误，如果有则流水线失败
+      - name: Run Ruff Linter
+        run: ruff check . --output-format=github
+
+      # 2. 格式检查 (Format)
+      # --check 参数表示只检查不修改。如果代码未格式化，流水线会失败
+      - name: Check Code Formatting
+        run: ruff format --check .
