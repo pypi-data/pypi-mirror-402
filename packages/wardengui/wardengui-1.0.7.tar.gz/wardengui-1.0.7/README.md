@@ -1,0 +1,347 @@
+# WardenGUI
+
+A terminal-based GUI for managing [Warden](https://warden.dev/) Docker development environments.
+
+![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+
+## Features
+
+- 🐳 **Interactive Menu** - Navigate and manage multiple Warden environments
+- 🔄 **Environment Switching** - Stop current and start new environments with one command
+- 📊 **Docker Stats** - View disk usage for images and volumes
+- 🔌 **SSH Access** - Quick shell access to running containers
+- 📋 **Log Streaming** - Follow container logs in real-time
+- 🏠 **Hosts File Check** - Windows hosts file validation
+- ⌨️ **Terminal Commands** - Run warden commands directly from the GUI
+
+## Installation
+
+### Quick Install (One-liner)
+
+**From PyPI (recommended):**
+```bash
+curl -sSL https://raw.githubusercontent.com/Genaker/WardenGUI/main/install.sh | bash
+```
+
+**From GitHub (latest dev version):**
+```bash
+curl -sSL https://raw.githubusercontent.com/Genaker/WardenGUI/main/install-git.sh | bash
+```
+
+The Git installer:
+- Clones repository to `~/.wardengui`
+- Creates launcher scripts in `~/.local/bin`
+- Easy to update with `cd ~/.wardengui && git pull`
+
+### From PyPI
+
+```bash
+pip install wardengui
+```
+
+### From Source
+
+```bash
+git clone https://github.com/Genaker/WardenGUI.git
+cd WardenGUI
+pip install -e .
+```
+
+### Upgrade to Latest Version
+
+```bash
+pip install --upgrade wardengui
+```
+
+Or force reinstall:
+
+```bash
+pip install --upgrade --force-reinstall wardengui
+```
+
+### Check Installed Version
+
+```bash
+pip show wardengui
+```
+
+### WSL / Linux Installation
+
+> ⚠️ **Note:** WardenGUI uses **only Python standard library** - no external dependencies! 
+> Using `--break-system-packages` is completely safe as it won't affect any system packages.
+
+**Option 1: Direct install (recommended)**
+```bash
+pip3 install --break-system-packages wardengui
+```
+
+**Option 2: Using pipx (isolated environment)**
+```bash
+sudo apt install pipx
+pipx ensurepath
+pipx install wardengui
+```
+
+**Option 3: User install without breaking system**
+```bash
+pip3 install --user wardengui
+```
+
+**Option 4: Virtual environment**
+```bash
+python3 -m venv ~/.wardengui-venv
+~/.wardengui-venv/bin/pip install wardengui
+~/.wardengui-venv/bin/wardengui
+```
+
+### Troubleshooting: Command Not Found
+
+If you see `wardengui: command not found` after installation, the scripts are installed in `~/.local/bin` which is not in your PATH.
+
+**Fix 1: Add to PATH (permanent)**
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+wardengui
+```
+
+**Fix 2: Run directly**
+```bash
+~/.local/bin/wardengui
+```
+
+**Fix 3: Use Python module**
+```bash
+python3 -m wardengui
+```
+
+## Usage
+
+```bash
+# Run with default settings (scans ~/ for projects)
+wardengui
+# or
+warden-gui
+
+# Specify projects directory
+wardengui -p /path/to/projects
+
+# Use 'down/up' instead of 'stop/start' (removes containers)
+wardengui --down
+```
+
+## Commands
+
+### Navigation
+| Command | Description |
+|---------|-------------|
+| `↑/↓` or `u/d` | Navigate menu |
+| `0-9` | Select environment by number |
+| `Enter` or `start` | Start selected environment |
+| `q` or `quit` | Exit |
+
+### Environment Commands
+| Command | Description |
+|---------|-------------|
+| `ssh` or `s` | SSH into running environment |
+| `log` | Follow all container logs |
+| `log nginx` | Follow specific service logs |
+| `ls` | List running containers |
+| `run <cmd>` | Run one-off command |
+| `port <svc>` | Show port bindings |
+| `help` or `?` | Show available commands |
+
+## Requirements
+
+- Python 3.8+
+- [Warden](https://warden.dev/) installed at `/opt/warden/bin/warden`
+- Docker running
+- WSL2 (on Windows)
+
+---
+
+## Building & Publishing
+
+### Step 1: Install Build Tools
+
+```bash
+pip install build twine
+```
+
+### Step 2: Clean Previous Builds
+
+```bash
+rm -rf build/ dist/ *.egg-info/
+```
+
+### Step 3: Build the Package
+
+```bash
+cd C:\Users\Yshytikov\WardenGUI
+python -m build
+```
+
+This creates:
+```
+dist/
+├── wardengui-1.0.0-py3-none-any.whl    # Wheel (binary)
+└── wardengui-1.0.0.tar.gz              # Source distribution
+```
+
+### Step 4: Test Locally
+
+```bash
+# Install locally in editable mode
+pip install -e .
+
+# Test the command works
+wardengui --help
+```
+
+### Step 5: Create PyPI Account
+
+1. Go to https://pypi.org/account/register/
+2. Create an account
+3. Go to Account Settings → API tokens
+4. Create a new API token (scope: entire account or project-specific)
+5. Save the token (starts with `pypi-`)
+
+### Step 6: Configure Twine
+
+Create `~/.pypirc` (or `C:\Users\YourName\.pypirc` on Windows):
+
+```ini
+[pypi]
+username = __token__
+password = pypi-YOUR_API_TOKEN_HERE
+```
+
+Or use environment variable:
+```bash
+export TWINE_PASSWORD=pypi-YOUR_API_TOKEN_HERE
+```
+
+### Step 7: Upload to TestPyPI (Optional - Recommended First)
+
+```bash
+# Upload to TestPyPI for testing
+twine upload --repository testpypi dist/*
+
+# Test install from TestPyPI
+pip install --index-url https://test.pypi.org/simple/ wardengui
+```
+
+### Step 8: Upload to PyPI
+
+```bash
+twine upload dist/*
+```
+
+### Step 9: Verify Installation
+
+```bash
+# Install from PyPI
+pip install wardengui
+
+# Run
+wardengui
+```
+
+---
+
+## Quick Build & Push Script
+
+Use the included `build_and_push.sh` script:
+
+```bash
+chmod +x build_and_push.sh
+./build_and_push.sh
+```
+
+This script will:
+1. Clean previous builds
+2. Build the package
+3. Check for errors
+4. Ask for confirmation before uploading to PyPI
+
+---
+
+## Version Bump
+
+Before publishing a new version, update version in `pyproject.toml`:
+
+```toml
+[project]
+version = "1.0.1"  # Increment this
+```
+
+---
+
+## Project Structure
+
+```
+wardengui/
+├── pyproject.toml          # Package configuration
+├── README.md               # This file
+├── LICENSE                 # MIT License
+├── .gitignore
+└── src/
+    └── wardengui/
+        ├── __init__.py     # Package init, exports
+        ├── manager.py      # WardenManager class (core logic)
+        └── cli.py          # CLI entry point (GUI)
+```
+
+## Configuration
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-p, --projects-root` | `~` | Root directory to scan for projects |
+| `-d, --down` | `false` | Use `env down/up` instead of `env stop/start` |
+
+## Screenshot
+
+```
+╔══════════════════════════════════════════════════════════════╗
+║               🐳 WARDEN ENVIRONMENT MANAGER                  ║
+╠══════════════════════════════════════════════════════════════╣
+║  Commands: 0-9=select │ ssh │ start │ up/down │ quit │ help  ║
+╚══════════════════════════════════════════════════════════════╝
+  📊 Environments: 3 │ 💾 Images: 38.18GB │ Volumes: 17.9GB
+
+  0. [lccoins] ○ STOPPED - app.lc.test
+  1. [api] ○ STOPPED - app.apitire.test
+▶ 2. [pei] ● RUNNING - app.peigenesis.test
+
+  q. [Exit]
+
+──────────────────────────────────────────────────────────────────
+  📋 PEI DETAILS
+──────────────────────────────────────────────────────────────────
+  📁 Path:        /home/user/pei-project
+  🌐 URL:         https://app.peigenesis.test/
+  🏠 Hosts:       ✅ 127.0.0.1 → app.peigenesis.test
+  💿 Volumes: 6                    🐳 Containers: 8/8 running
+    └─ applogs: 3.528GB            🟢 php-fpm
+    └─ appcode: 1.088GB            🟢 nginx
+──────────────────────────────────────────────────────────────────
+
+>
+```
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Author
+
+Yehor Shytikov
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
