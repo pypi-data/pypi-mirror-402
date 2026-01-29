@@ -1,0 +1,153 @@
+[build-system]
+requires = [
+    "setuptools>=42",
+    "setuptools_scm[toml]>=3.4.3",
+    "wheel",
+    "pyproject-flake8",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sgn-ligo"
+dynamic = ["version"]
+dependencies = [
+    "confluent-kafka",
+    "gwpy",
+    "h5py",
+    "igwn-ligolw",
+    "igwn-segments",
+    "lalsuite>=7.26",
+    "ligo-scald",
+    "scipy < 1.17",
+    "sgn >= 0.5",
+    "sgn-arrakis",
+    "sgn-ts >= 0.5",
+    "zlw",
+    "sympy",
+    "watchdog",
+    "pandas",
+]
+requires-python = ">=3.10"
+authors = [
+    { name = "Chad Hanna", email = "crh184@psu.edu" },
+    { name = "Yun-Jing Huang", email = "yzh5436@psu.edu" },
+    { name = "James Kennington", email = "jmk7376@psu.edu" },
+]
+description = "LIGO Extensions for the SGN Framework"
+readme = "README.md"
+license = "MPL-2.0"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://git.ligo.org/greg/sgn-ligo"
+Documentation = "https://docs.ligo.org/greg/sgn-ligo"
+Issues = "https://git.ligo.org/greg/sgn-ligo/issues"
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-freezer",
+    "pytest-markdown-docs",
+]
+docs = [
+    "mkdocs",
+    "mkdocstrings",
+    "mkdocstrings-python",
+    "mkdocs-material",
+    "pymdown-extensions",
+]
+lint = [
+    "black",
+    "flake8",
+    "flake8-bandit",
+    "flake8-black",
+    "flake8-bugbear",
+    "flake8-future-annotations",
+    "flake8-isort",
+    "flake8-logging-format",
+    "flake8-pyproject",
+    "isort",
+    "mypy",
+    "mypy-extensions",
+]
+dev = [
+    "sgn-ligo[docs]",
+    "sgn-ligo[lint]",
+    "sgn-ligo[test]",
+]
+
+[project.entry-points.sgn_elements]
+DevShmSource = "sgnligo.sources:DevShmSource"
+FrameReader = "sgnligo.sources:FrameReader"
+GWDataNoiseSource = "sgnligo.sources:GWDataNoiseSource"
+SimInspiralSource = "sgnligo.sources:SimInspiralSource"
+BitMask = "sgnligo.transforms:BitMask"
+HorizonDistanceTracker = "sgnligo.transforms.horizon:HorizonDistanceTracker"
+Latency = "sgnligo.transforms:Latency"
+Whiten = "sgnligo.transforms:Whiten"
+FrameSink = "sgnligo.sinks:FrameSink"
+InfluxSink = "sgnligo.sinks:InfluxSink"
+KafkaSink = "sgnligo.sinks:KafkaSink"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+sgnl = [
+    "py.typed",
+]
+
+[tool.setuptools_scm]
+write_to = "src/sgnligo/_version.py"
+
+[tool.coverage.paths]
+source = [
+    "src/sgnligo/",
+    "*/sgnligo/",
+]
+
+[tool.coverage.report]
+omit = ["_version.py", "tests/*", "examples/*", "setup.py", "*/__init__.py"]
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+ignore_missing_imports = true
+exclude = [
+    "build",
+    "docs",
+]
+
+[tool.pytest.ini_options]
+addopts = "-p no:warnings --cov-config=.coveragerc --cov=sgnligo --cov-report=term-missing --markdown-docs-syntax=superfences"
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = [
+    "E203",
+    "S101",
+]
+per-file-ignores = [
+    "__init__.py:F401",
+    "_version.py:BLK100",
+    "docs/conf.py:E501",
+    "tests/test_datasource.py:S108",
+    "tests/*.py:E731",
+]
+exclude = [
+    "build",
+    "docs",
+    "_version.py",
+]
+
+[project.scripts]
+sgn-ligo-ll-dq = "sgnligo.bin.ll_dq:main"
+sgn-ligo-plot-psd = "sgnligo.bin.plot_psd:main"
+sgn-ligo-gwistat = "sgnligo.bin.gwistat:main"
+sgn-ligo-fake-frames = "sgnligo.bin.fake_frames:main"
+sgn-ligo-coinc-to-html = "sgnligo.bin.coinc_to_html:main"
