@@ -1,0 +1,175 @@
+Metadata-Version: 2.4
+Name: snail-orbit-client
+Version: 0.11.0
+Summary: Type-safe Python client for Snail Orbit project management system with read operations and issue management
+Author-email: Snail Orbit Team <dev@snorbit.app>
+Keywords: api-client,project-management,snail-orbit,task-tracking
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.11
+Requires-Dist: httpx>=0.25.0
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: pyjwt[crypto]>=2.8.0
+Description-Content-Type: text/markdown
+
+# Snail Orbit Python Client
+
+Type-safe Python client for the Snail Orbit project management API.
+
+## Installation
+
+```bash
+uv add snail-orbit-client
+# or
+pip install snail-orbit-client
+```
+
+## Usage
+
+### Sync Client
+
+```python
+from snail_orbit_client import SnailOrbitClient
+
+client = SnailOrbitClient(
+    base_url='https://your-snail-orbit.example.com',
+    token='your-api-token'
+)
+
+# Get current user
+profile = client.auth.get_profile()
+print(f'Logged in as: {profile.name}')
+
+# List issues
+for issue in client.issues.list(q='priority:high and status:open'):
+    print(f'{issue.id_readable}: {issue.subject}')
+
+# Get specific issue
+issue = client.issues.get('issue-id')
+
+# Access custom fields
+priority_field = issue.fields.get('priority')
+if priority_field:
+    print(f'Priority: {priority_field.value}')
+```
+
+### Async Client
+
+```python
+import asyncio
+from snail_orbit_client import SnailOrbitAsyncClient
+
+async def main():
+    async with SnailOrbitAsyncClient(
+        base_url='https://your-snail-orbit.example.com',
+        token='your-api-token'
+    ) as client:
+        profile = await client.auth.get_profile()
+
+        async for issue in client.issues.list(q='status:open'):
+            print(f'{issue.id_readable}: {issue.subject}')
+
+asyncio.run(main())
+```
+
+## API Resources
+
+```python
+client.auth            # Authentication and profile
+client.users           # User operations
+client.projects        # Project operations
+client.issues          # Issue CRUD operations
+client.custom_fields   # Custom field definitions
+client.activity        # Activity tracking
+```
+
+### Issues
+
+```python
+client.issues.list(q=None, search=None)           # List/query issues
+client.issues.get(issue_id)                       # Get by ID
+client.issues.get_by_readable_id(readable_id)     # Get by readable ID (e.g., 'PRJ-123')
+client.issues.create(issue_data)                  # Create issue
+client.issues.update(issue_id, issue_data)        # Update issue
+
+# Comments
+client.issues.get_comments(issue_id)
+client.issues.create_comment(issue_id, comment_data)
+client.issues.update_comment(issue_id, comment_id, comment_data)
+client.issues.delete_comment(issue_id, comment_id)
+
+# Tags
+client.issues.add_tag(issue_id, tag_id)
+client.issues.remove_tag(issue_id, tag_id)
+```
+
+### Search and Filtering
+
+```python
+# Issue query language
+client.issues.list(q='priority:high and status:open')
+client.issues.list(q='assignee:me and project:myproject')
+
+# Text search
+client.issues.list(search='database bug')
+
+# Users and projects use filter parameter
+client.users.list(search='john', filter='is_active___eq:true')
+client.projects.list(filter='created_at___gte:2024-01-01')
+```
+
+## Configuration
+
+```python
+from snail_orbit_client import SnailOrbitClient, ClientConfig
+
+config = ClientConfig(
+    timeout=30.0,           # Request timeout in seconds
+    max_retries=3,          # Maximum retry attempts
+    retry_delay=1.0,        # Base delay between retries
+)
+
+client = SnailOrbitClient(
+    base_url='https://your-snail-orbit.example.com',
+    token='your-token',
+    config=config
+)
+```
+
+### JWT Authentication
+
+```python
+# JWT signing with service credentials
+client = SnailOrbitClient(
+    base_url='https://api.snail-orbit.com',
+    token=('key-id', 'secret', 'user-id')
+)
+```
+
+## Error Handling
+
+```python
+from snail_orbit_client.exceptions import (
+    SnailOrbitError,
+    AuthenticationError,
+    NotFoundError,
+    ValidationError,
+    RateLimitError,
+)
+
+try:
+    issue = client.issues.get('invalid-id')
+except NotFoundError:
+    print('Issue not found')
+except AuthenticationError:
+    print('Authentication failed')
+except ValidationError as e:
+    print(f'Validation errors: {e.validation_errors}')
+except RateLimitError as e:
+    print(f'Rate limited, retry after {e.retry_after}s')
+```
