@@ -1,0 +1,903 @@
+# LSMR Stock Picker
+
+**Leading Sector Mean Reversion** - 시장 주도 섹터 평균회귀 주식 선정 시스템
+
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-blue.svg)](https://postgresql.org)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://docker.com)
+
+## 📋 개요
+
+LSMR (Leading Sector Mean Reversion) Stock Picker는 **시장 주도 섹터의 대장주가 일시적인 과매도 상태에 진입했을 때 이를 식별하고 거래하는 퀀트 트레이딩 시스템**입니다.
+
+### 🎯 핵심 전략
+
+1. **시장 체제 분석**: KOSPI/KOSDAQ 지수 분석으로 시장 상황 판단 (상승장/하락장/박스권)
+2. **주도 섹터 식별**: 4-way 분석으로 상위 3개 주도 섹터 선정
+3. **평균회귀 신호**: Z-Score와 이격도를 활용한 매수 신호 생성
+4. **리스크 관리**: 동적 손절매 및 포지션 제한
+
+### 🏗️ 시스템 특징
+
+- **독립 실행형 백엔드**: 외부 플랫폼 의존성 없이 완전 자립 운영
+- **실시간 분석**: 한국투자증권 API 연동으로 실시간 시장 데이터 분석
+- **데이터 영속성**: PostgreSQL 데이터베이스로 모든 분석 결과 저장
+- **REST API**: FastAPI 기반 웹 API 제공
+- **자동화**: Cron 기반 스케줄링으로 일별 자동 분석
+
+## 🚀 빠른 시작
+
+### 1단계: 필수 요구사항 확인
+
+- **Python 3.11+**
+- **Docker & Docker Compose**
+- **한국투자증권 API 계정** (모의투자 또는 실전투자)
+
+### 2단계: 프로젝트 설치
+
+```bash
+# 프로젝트 디렉토리로 이동
+cd strategies/lsmr_stock_picker
+
+# Python 가상환경 생성 (권장)
+python -m venv venv
+source venv/bin/activate  # macOS/Linux
+# 또는 venv\Scripts\activate  # Windows
+
+# 의존성 설치
+pip install -r requirements.txt
+
+# 개발 모드로 설치
+pip install -e .
+```
+
+### 3단계: 환경 설정
+
+```bash
+# 환경 변수 파일 생성
+cp .env.example .env
+
+# .env 파일 편집 (필수!)
+nano .env  # 또는 원하는 에디터 사용
+```
+
+**⚠️ 중요**: `.env` 파일에서 다음 값들을 반드시 설정하세요:
+
+```bash
+# KIS API 자격 증명 (한국투자증권에서 발급)
+KIS_APP_KEY=your_app_key_here
+KIS_APP_SECRET=your_app_secret_here
+KIS_ACCOUNT_NUMBER=your_account_number_here
+KIS_ACCOUNT_TYPE=virtual  # "virtual" (모의투자) 또는 "real" (실전투자)
+
+# 데이터베이스 설정 (기본값 사용 가능)
+DATABASE_URL=postgresql://lsmr_user:lsmr_password@localhost:5432/lsmr_db
+```
+
+### 4단계: 데이터베이스 시작
+
+```bash
+# Docker로 PostgreSQL 시작
+docker-compose up -d
+
+# 데이터베이스 연결 확인 (약 10초 대기 후)
+docker exec lsmr_postgres pg_isready -U lsmr_user
+```
+
+### 5단계: 시스템 실행
+
+```bash
+# FastAPI 서버 시작
+python main.py
+
+# 또는 uvicorn 직접 사용
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 6단계: 시스템 확인
+
+브라우저에서 다음 URL들을 확인하세요:
+
+- **API 문서**: http://localhost:8000/docs
+- **시스템 상태**: http://localhost:8000/v1/health
+- **최신 분석 결과**: http://localhost:8000/v1/analysis/latest
+
+## 📊 사용법
+
+### 자동 분석 (권장)
+
+시스템 시작 시 **자동으로 전체 분석 워크플로우가 실행**됩니다:
+
+1. **시장 체제 분석** → KOSPI/KOSDAQ 지수 분석
+2. **섹터 분석** → 4-way 분석으로 주도 섹터 식별
+3. **종목 선정** → 평균회귀 신호 생성
+4. **결과 저장** → PostgreSQL 데이터베이스에 영구 저장
+
+```bash
+# 시스템 시작 (자동 분석 포함)
+python main.py
+```
+
+### 수동 분석
+
+API를 통해 언제든지 수동으로 분석을 실행할 수 있습니다:
+
+```bash
+# REST API로 분석 실행
+curl -X POST http://localhost:8000/v1/analysis/run
+
+# 또는 브라우저에서 API 문서 사용
+# http://localhost:8000/docs → POST /v1/analysis/run → Try it out
+```
+
+### 결과 조회
+
+```bash
+# 최신 분석 결과 조회
+curl http://localhost:8000/v1/analysis/latest
+
+# 과거 분석 이력 조회 (날짜 범위)
+curl "http://localhost:8000/v1/analysis/history?start_date=2024-01-01&end_date=2024-01-31"
+
+# 현재 시장 체제 조회
+curl http://localhost:8000/v1/market-regime/current
+
+# 주도 섹터 조회
+curl http://localhost:8000/v1/sectors/leading
+
+# 종목 후보 조회
+curl http://localhost:8000/v1/stocks/candidates
+```
+
+### 스케줄링 설정
+
+자동 일별 분석을 위한 스케줄링 설정:
+
+```bash
+# .env 파일에서 설정
+ANALYSIS_SCHEDULE=0 9 * * 1-5  # 평일 오전 9시
+SCHEDULE_ENABLED=true
+```
+
+## 🔧 고급 설정
+
+### 환경 변수 상세 설정
+
+`.env` 파일에서 설정 가능한 모든 옵션:
+
+```bash
+# === KIS API 설정 ===
+KIS_APP_KEY=your_app_key_here
+KIS_APP_SECRET=your_app_secret_here
+KIS_BASE_URL=https://openapi.koreainvestment.com:9443
+KIS_ACCOUNT_NUMBER=your_account_number_here
+KIS_ACCOUNT_TYPE=virtual  # "real" 또는 "virtual"
+
+# === 데이터베이스 설정 ===
+DATABASE_URL=postgresql://lsmr_user:lsmr_password@localhost:5432/lsmr_db
+
+# === 서버 설정 ===
+HOST=0.0.0.0
+PORT=8000
+ENVIRONMENT=development  # "development" 또는 "production"
+
+# === 로깅 설정 ===
+LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR
+
+# === 거래 파라미터 ===
+Z_SCORE_THRESHOLD=-2.0        # Z-Score 매수 신호 임계값
+DISPARITY_THRESHOLD=92.0      # 이격도 매수 신호 임계값 (%)
+MAX_STOCKS_PER_SECTOR=3       # 섹터당 최대 종목 수
+MAX_TOTAL_HOLDINGS=10         # 총 최대 보유 종목 수
+
+# === 리스크 관리 ===
+DEFAULT_TAKE_PROFIT=3.0       # 기본 익절 비율 (%)
+DEFAULT_STOP_LOSS=2.5         # 기본 손절 비율 (%)
+DAILY_LOSS_LIMIT=5.0          # 일일 손실 한도 (%)
+
+# === 자동화 설정 ===
+AUTO_RUN_ANALYSIS_ON_STARTUP=true     # 시작 시 자동 분석 실행
+ANALYSIS_SCHEDULE=0 9 * * 1-5          # Cron 표현식 (평일 오전 9시)
+SCHEDULE_ENABLED=true                  # 스케줄링 활성화
+SCHEDULE_MAX_RETRIES=3                 # 최대 재시도 횟수
+SCHEDULE_RETRY_DELAY=300               # 재시도 간격 (초)
+
+# === 모니터링 설정 ===
+HEALTH_BROADCAST_INTERVAL=5            # 건강 상태 브로드캐스트 간격 (초)
+```
+
+### 데이터베이스 설정 옵션
+
+**옵션 1: Docker 사용 (권장)**
+
+```bash
+# Docker Compose로 PostgreSQL 시작
+docker-compose up -d
+
+# 상태 확인
+docker-compose ps
+
+# 로그 확인
+docker logs lsmr_postgres
+
+# 중지
+docker-compose down
+```
+
+**옵션 2: 로컬 PostgreSQL 사용**
+
+```bash
+# macOS에서 PostgreSQL 설치
+brew install postgresql
+brew services start postgresql
+
+# 데이터베이스 및 사용자 생성
+psql postgres
+CREATE DATABASE lsmr_db;
+CREATE USER lsmr_user WITH PASSWORD 'lsmr_password';
+GRANT ALL PRIVILEGES ON DATABASE lsmr_db TO lsmr_user;
+\q
+
+# 스키마 생성
+export DATABASE_URL=postgresql://lsmr_user:lsmr_password@localhost:5432/lsmr_db
+python database/migrate.py
+```
+
+## 🎮 실행 방법
+
+### 1️⃣ 프로덕션 모드 (권장)
+
+완전한 시스템으로 실행하여 자동 분석 및 API 서비스 제공:
+
+```bash
+# 메인 애플리케이션 실행
+python main.py
+
+# 실행 시 자동으로 수행되는 작업:
+# 1. 환경 변수 검증
+# 2. 데이터베이스 연결 확인
+# 3. KIS API 인증
+# 4. 전체 분석 워크플로우 실행 (AUTO_RUN_ANALYSIS_ON_STARTUP=true인 경우)
+# 5. FastAPI 서버 시작
+# 6. 스케줄러 시작 (SCHEDULE_ENABLED=true인 경우)
+```
+
+**실행 후 확인사항:**
+- 콘솔에서 "시스템 시작 완료" 메시지 확인
+- http://localhost:8000/v1/health 에서 시스템 상태 확인
+- http://localhost:8000/docs 에서 API 문서 확인
+
+### 2️⃣ 개발 모드
+
+개발 및 디버깅을 위한 핫 리로드 모드:
+
+```bash
+# uvicorn으로 개발 서버 실행
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+# 또는 FastAPI CLI 사용
+fastapi dev main.py --host 0.0.0.0 --port 8000
+```
+
+### 3️⃣ 데모 모드
+
+시스템 기능을 빠르게 체험:
+
+```bash
+# 간단한 데모 실행
+python demo.py
+
+# 실행 내용:
+# - 시장 체제 분석 데모
+# - 섹터 필터 데모  
+# - 종목 선정 데모
+# - 리스크 관리 데모
+```
+
+### 4️⃣ 개별 컴포넌트 테스트
+
+각 분석 컴포넌트를 개별적으로 테스트:
+
+```bash
+# 시장 체제 분석
+python examples/market_regime_example.py
+
+# 섹터 필터 (4-way 분석)
+python examples/sector_filter_example.py
+
+# 종목 선정 (평균회귀 신호)
+python examples/stock_picker_example.py
+
+# 리스크 관리
+python examples/risk_manager_example.py
+
+# 오류 처리 예제
+python examples/error_handling_example.py
+```
+
+## 📡 API 사용법
+
+### REST API 엔드포인트
+
+시스템이 실행되면 다음 API들을 사용할 수 있습니다:
+
+#### 🏥 시스템 상태
+
+```bash
+# 시스템 건강 상태 확인
+GET /v1/health
+
+# 응답 예시:
+{
+  "status": "healthy",
+  "timestamp": "2024-01-16T10:30:00Z",
+  "version": "1.0.0",
+  "database": "connected",
+  "kis_api": "authenticated",
+  "uptime": "01:23:45"
+}
+```
+
+#### 📊 분석 결과
+
+```bash
+# 최신 분석 결과 조회
+GET /v1/analysis/latest
+
+# 과거 분석 이력 조회
+GET /v1/analysis/history?start_date=2024-01-01&end_date=2024-01-31
+
+# 수동 분석 실행
+POST /v1/analysis/run
+```
+
+#### 📈 시장 정보
+
+```bash
+# 현재 시장 체제 조회
+GET /v1/market-regime/current
+
+# 응답 예시:
+{
+  "regime": "bull",
+  "kospi_value": 2500.0,
+  "kosdaq_value": 850.0,
+  "analysis_date": "2024-01-16",
+  "risk_parameters": {
+    "take_profit_percent": 5.0,
+    "stop_loss_percent": 3.0
+  }
+}
+```
+
+#### 🏭 섹터 정보
+
+```bash
+# 주도 섹터 조회
+GET /v1/sectors/leading
+
+# 응답 예시:
+[
+  {
+    "sector_name": "반도체",
+    "rank": 1,
+    "combined_score": 85.5,
+    "price_momentum_score": 90.0,
+    "supply_demand_score": 85.0,
+    "breadth_score": 80.0,
+    "relative_strength_score": 87.0
+  }
+]
+```
+
+#### 📋 종목 정보
+
+```bash
+# 매수 후보 종목 조회
+GET /v1/stocks/candidates
+
+# 응답 예시:
+[
+  {
+    "ticker": "005930",
+    "stock_name": "삼성전자",
+    "sector": "반도체",
+    "z_score": -2.1,
+    "disparity_ratio": 91.5,
+    "signal_strength": 85.0,
+    "analysis_date": "2024-01-16"
+  }
+]
+```
+
+#### ⏰ 스케줄러
+
+```bash
+# 스케줄러 상태 조회
+GET /v1/scheduler/status
+
+# 스케줄러 시작/중지
+POST /v1/scheduler/start
+POST /v1/scheduler/stop
+```
+
+### WebSocket 실시간 통신
+
+```javascript
+// JavaScript 예시
+const ws = new WebSocket('ws://localhost:8000/ws');
+
+ws.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    console.log('실시간 데이터:', data);
+};
+
+// Python 예시
+import websockets
+import asyncio
+import json
+
+async def listen():
+    uri = "ws://localhost:8000/ws"
+    async with websockets.connect(uri) as websocket:
+        async for message in websocket:
+            data = json.loads(message)
+            print(f"실시간 데이터: {data}")
+
+asyncio.run(listen())
+```
+
+## 🧪 테스트
+
+### 단위 테스트
+
+```bash
+# 전체 테스트 실행
+pytest tests/ -v
+
+# 특정 모듈 테스트
+pytest tests/test_market_regime_analyzer.py -v
+pytest tests/test_sector_filter.py -v
+pytest tests/test_stock_picker.py -v
+pytest tests/test_risk_manager.py -v
+
+# 커버리지 포함 테스트
+pytest tests/ --cov=lsmr_stock_picker --cov-report=html
+
+# 속성 기반 테스트 (Property-Based Testing)
+pytest tests/ -k "property" -v
+```
+
+### 통합 테스트
+
+```bash
+# 시스템 전체 검증
+python test_system_validation.py
+
+# 간단한 검증 (Docker 기반)
+python test_simple_validation.py
+
+# 워크플로우 테스트
+python test_workflow_simple.py
+
+# 스케줄러 테스트
+python test_scheduler_simple.py
+```
+
+### 성능 테스트
+
+```bash
+# API 성능 테스트
+pytest tests/test_api_endpoints.py -v
+
+# 데이터베이스 성능 테스트
+pytest tests/test_database_performance.py -v
+```
+
+## 🔍 모니터링 및 로깅
+
+### 로그 파일 위치
+
+```bash
+# 메인 로그 파일
+tail -f logs/lsmr_stock_picker.log
+
+# 시스템 로그 (Docker)
+docker logs lsmr_postgres
+
+# 실시간 로그 모니터링
+tail -f logs/lsmr_stock_picker.log | grep ERROR
+```
+
+### 로그 레벨 설정
+
+```bash
+# .env 파일에서 설정
+LOG_LEVEL=DEBUG    # 상세한 디버그 정보
+LOG_LEVEL=INFO     # 일반 정보 (기본값)
+LOG_LEVEL=WARNING  # 경고 및 오류만
+LOG_LEVEL=ERROR    # 오류만
+```
+
+### 시스템 모니터링
+
+```bash
+# 시스템 상태 확인
+curl http://localhost:8000/v1/health
+
+# 데이터베이스 상태 확인
+docker exec lsmr_postgres pg_isready -U lsmr_user
+
+# 프로세스 모니터링
+ps aux | grep python
+ps aux | grep postgres
+```
+
+## 🛠️ 문제 해결
+
+### 자주 발생하는 문제
+
+#### 1. 데이터베이스 연결 오류
+
+```bash
+# 문제: "role lsmr_user does not exist"
+# 해결: Docker 컨테이너 재시작
+docker-compose down -v
+docker-compose up -d
+
+# 연결 확인
+docker exec lsmr_postgres pg_isready -U lsmr_user
+```
+
+#### 2. KIS API 인증 오류
+
+```bash
+# 문제: "API_AUTH_ERROR"
+# 해결: .env 파일의 KIS API 자격 증명 확인
+# - KIS_APP_KEY
+# - KIS_APP_SECRET  
+# - KIS_ACCOUNT_NUMBER
+# - KIS_ACCOUNT_TYPE (virtual/real)
+```
+
+#### 3. 포트 충돌
+
+```bash
+# 문제: "Port 8000 already in use"
+# 해결: 다른 포트 사용
+PORT=8001 python main.py
+
+# 또는 기존 프로세스 종료
+lsof -ti:8000 | xargs kill -9
+```
+
+#### 4. 메모리 부족
+
+```bash
+# 문제: 시스템 메모리 부족
+# 해결: Docker 메모리 제한 조정
+# docker-compose.yml에서 메모리 설정 추가
+```
+
+### 디버깅 모드
+
+```bash
+# 디버그 모드로 실행
+LOG_LEVEL=DEBUG python main.py
+
+# 특정 모듈 디버깅
+LOG_LEVEL=DEBUG python -c "
+from analyzers.market_regime_analyzer import MarketRegimeAnalyzer
+# 디버깅 코드
+"
+```
+
+### 로그 분석
+
+```bash
+# 오류 로그만 확인
+grep ERROR logs/lsmr_stock_picker.log
+
+# 특정 시간대 로그 확인
+grep "2024-01-16 10:" logs/lsmr_stock_picker.log
+
+# API 호출 로그 확인
+grep "KIS API" logs/lsmr_stock_picker.log
+```
+
+## 📚 문서 및 참고자료
+
+### 프로젝트 문서
+
+- **📋 시스템 검증 보고서**: [`SYSTEM_VALIDATION_REPORT.md`](SYSTEM_VALIDATION_REPORT.md)
+- **🚀 빠른 시작 가이드**: [`docs/QUICK_START_GUIDE.md`](docs/QUICK_START_GUIDE.md)
+- **🔧 워크플로우 가이드**: [`docs/WORKFLOW_GUIDE.md`](docs/WORKFLOW_GUIDE.md)
+- **⚠️ 오류 처리 가이드**: [`docs/ERROR_HANDLING_GUIDE.md`](docs/ERROR_HANDLING_GUIDE.md)
+
+### 설계 문서
+
+- **📐 전략 상세 스펙**: [`../../docs/specs/LSMR-spec.md`](../../docs/specs/LSMR-spec.md)
+- **🔗 공통 인터페이스 규격**: [`../../docs/specs/common_spec.md`](../../docs/specs/common_spec.md)
+- **🏗️ 설계 문서**: [`../../.kiro/specs/lsmr-stock-picker/design.md`](../../.kiro/specs/lsmr-stock-picker/design.md)
+- **📝 요구사항 문서**: [`../../.kiro/specs/lsmr-stock-picker/requirements.md`](../../.kiro/specs/lsmr-stock-picker/requirements.md)
+
+### 외부 참고자료
+
+- **한국투자증권 API**: [KIS Developers](https://apiportal.koreainvestment.com/)
+- **FastAPI 문서**: [FastAPI Documentation](https://fastapi.tiangolo.com/)
+- **PostgreSQL 문서**: [PostgreSQL Documentation](https://www.postgresql.org/docs/)
+
+## 🏗️ 시스템 아키텍처
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    LSMR Stock Picker                        │
+│                  독립 실행형 백엔드 시스템                      │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     FastAPI 서버                            │
+│  • REST API 엔드포인트                                        │
+│  • WebSocket 실시간 통신                                      │
+│  • 자동 분석 워크플로우 실행                                    │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   핵심 분석 엔진                              │
+│                                                             │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
+│  │  시장 체제 분석기  │  │   섹터 필터     │  │   종목 선정기    │ │
+│  │                │  │                │  │                │ │
+│  │ • KOSPI/KOSDAQ │  │ • 4-Way 분석   │  │ • Z-Score 계산 │ │
+│  │ • 20MA 기반    │  │ • 상위 3개 선정 │  │ • 이격도 계산   │ │
+│  │ • 리스크 매핑   │  │ • 종합 점수    │  │ • 매수 신호    │ │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
+│                              │                              │
+│                              ▼                              │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
+│  │   리스크 관리자   │  │   스케줄러      │  │   워크플로우     │ │
+│  │                │  │                │  │                │ │
+│  │ • 포지션 제한   │  │ • Cron 기반    │  │ • 자동 실행    │ │
+│  │ • 손절매 관리   │  │ • 일별 분석    │  │ • 오류 처리    │ │
+│  │ • 패닉 모드     │  │ • 재시도 로직   │  │ • 결과 저장    │ │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    데이터 계층                               │
+│                                                             │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
+│  │ 데이터베이스 관리자│  │   KIS API      │  │   데이터 모델    │ │
+│  │                │  │                │  │                │ │
+│  │ • PostgreSQL   │  │ • 실시간 데이터 │  │ • 시장 체제     │ │
+│  │ • 연결 관리     │  │ • 인증 관리    │  │ • 섹터 분석     │ │
+│  │ • 트랜잭션     │  │ • 속도 제한    │  │ • 종목 후보     │ │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    외부 시스템                               │
+│                                                             │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
+│  │ PostgreSQL DB  │  │   KIS API      │  │   Docker       │ │
+│  │                │  │                │  │                │ │
+│  │ • 데이터 영속성 │  │ • 시장 데이터   │  │ • 컨테이너화    │ │
+│  │ • 볼륨 마운트   │  │ • 거래 실행    │  │ • 격리된 환경   │ │
+│  │ • 자동 백업     │  │ • 실시간 피드   │  │ • 쉬운 배포     │ │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 데이터 흐름
+
+```
+1. 시장 데이터 수집 (KIS API)
+   ↓
+2. 시장 체제 분석 (KOSPI/KOSDAQ)
+   ↓
+3. 섹터 분석 (4-Way 분석)
+   ↓
+4. 종목 선정 (평균회귀 신호)
+   ↓
+5. 리스크 검증 (포지션 제한)
+   ↓
+6. 결과 저장 (PostgreSQL)
+   ↓
+7. API 응답 (REST/WebSocket)
+```
+
+## ✨ 주요 기능
+
+### 🎯 핵심 분석 기능
+
+- ✅ **시장 체제 분석**: KOSPI/KOSDAQ 지수의 20일 이동평균 기반 시장 상황 판단
+- ✅ **4-Way 섹터 필터**: 가격 모멘텀, 수급, 확산, 상대강도 종합 분석
+- ✅ **평균회귀 신호**: Z-Score(-2.0 이하) 및 이격도(92% 이하) 기반 매수 신호
+- ✅ **동적 리스크 관리**: 시장 체제별 손절매/익절 파라미터 자동 조정
+
+### 🏗️ 시스템 기능
+
+- ✅ **독립 실행형**: 외부 플랫폼 의존성 없이 완전 자립 운영
+- ✅ **실시간 API**: FastAPI 기반 REST API 및 WebSocket 실시간 통신
+- ✅ **데이터 영속성**: PostgreSQL 데이터베이스로 모든 분석 결과 영구 저장
+- ✅ **Docker 지원**: 컨테이너화된 데이터베이스 및 쉬운 배포
+- ✅ **자동화**: Cron 기반 스케줄링으로 일별 자동 분석 실행
+
+### 🔧 운영 기능
+
+- ✅ **환경 변수 관리**: `.env` 파일 기반 설정 관리
+- ✅ **자동 시작**: 시스템 시작 시 전체 워크플로우 자동 실행
+- ✅ **건강 모니터링**: CPU, 메모리, API 연결 상태 실시간 모니터링
+- ✅ **오류 처리**: 포괄적인 오류 분류, 재시도 로직, 안전한 로깅
+- ✅ **핫 리로드**: 중요하지 않은 파라미터의 런타임 변경 지원
+
+### 🧪 개발 기능
+
+- ✅ **단위 테스트**: pytest 기반 포괄적인 테스트 스위트
+- ✅ **속성 기반 테스트**: Hypothesis 프레임워크로 정확성 검증
+- ✅ **통합 테스트**: 전체 시스템 워크플로우 검증
+- ✅ **성능 테스트**: API 응답 시간 및 데이터베이스 성능 측정
+
+## 📁 프로젝트 구조
+
+```
+lsmr_stock_picker/
+├── 📁 analyzers/                    # 🧠 핵심 분석 엔진
+│   ├── market_regime_analyzer.py    #   📊 시장 체제 분석기
+│   ├── sector_filter.py             #   🏭 섹터 필터 (4-Way 분석)
+│   ├── stock_picker.py              #   📈 종목 선정기 (평균회귀)
+│   ├── risk_manager.py              #   ⚠️ 리스크 관리자
+│   ├── workflow.py                  #   🔄 분석 워크플로우
+│   └── scheduler.py                 #   ⏰ 자동 스케줄러
+│
+├── 📁 config/                       # ⚙️ 설정 관리
+│   └── settings.py                  #   🔧 시스템 설정
+│
+├── 📁 kis_api/                      # 🔌 KIS API 통합
+│   └── client.py                    #   📡 API 클라이언트
+│
+├── 📁 database/                     # 🗄️ 데이터베이스 계층
+│   ├── manager.py                   #   📊 데이터베이스 관리자
+│   ├── migrate.py                   #   🔄 마이그레이션 스크립트
+│   └── schema.sql                   #   📋 데이터베이스 스키마
+│
+├── 📁 models/                       # 📦 데이터 모델
+│   └── data_models.py               #   🏗️ 데이터 구조 정의
+│
+├── 📁 utils/                        # 🛠️ 유틸리티
+│   ├── logging.py                   #   📝 로깅 시스템
+│   └── error_handling.py            #   ⚠️ 오류 처리
+│
+├── 📁 examples/                     # 📚 예제 스크립트
+│   ├── market_regime_example.py     #   📊 시장 체제 분석 예제
+│   ├── sector_filter_example.py     #   🏭 섹터 필터 예제
+│   ├── stock_picker_example.py      #   📈 종목 선정 예제
+│   ├── risk_manager_example.py      #   ⚠️ 리스크 관리 예제
+│   └── error_handling_example.py    #   🐛 오류 처리 예제
+│
+├── 📁 tests/                        # 🧪 테스트 스위트
+│   ├── test_market_regime_analyzer.py
+│   ├── test_sector_filter.py
+│   ├── test_stock_picker.py
+│   ├── test_risk_manager.py
+│   ├── test_kis_client.py
+│   ├── test_database_manager.py
+│   ├── test_workflow.py
+│   ├── test_scheduler.py
+│   ├── test_api_endpoints.py
+│   ├── test_system_integration.py
+│   └── conftest.py                  #   🔧 테스트 설정
+│
+├── 📁 docs/                         # 📖 문서
+│   ├── QUICK_START_GUIDE.md         #   🚀 빠른 시작 가이드
+│   ├── WORKFLOW_GUIDE.md            #   🔄 워크플로우 가이드
+│   └── ERROR_HANDLING_GUIDE.md      #   ⚠️ 오류 처리 가이드
+│
+├── 📁 logs/                         # 📝 로그 파일
+│   └── lsmr_stock_picker.log        #   📊 메인 로그
+│
+├── 📁 data/                         # 💾 데이터 저장소
+│   └── postgres/                    #   🐘 PostgreSQL 데이터 (Docker 볼륨)
+│
+├── 📄 main.py                       # 🚀 FastAPI 메인 서버
+├── 📄 demo.py                       # 🎮 데모 스크립트
+├── 📄 docker-compose.yml            # 🐳 Docker Compose 설정
+├── 📄 requirements.txt              # 📦 Python 의존성
+├── 📄 pyproject.toml                # 🔧 프로젝트 메타데이터
+├── 📄 .env                          # 🔐 환경 변수 (git 제외)
+├── 📄 .env.example                  # 📋 환경 변수 템플릿
+├── 📄 .gitignore                    # 🚫 Git 제외 파일
+├── 📄 README.md                     # 📖 이 파일
+└── 📄 SYSTEM_VALIDATION_REPORT.md   # ✅ 시스템 검증 보고서
+```
+
+## 🤝 기여 및 개발
+
+### 개발 환경 설정
+
+```bash
+# 개발 의존성 설치
+pip install -r requirements-dev.txt
+
+# pre-commit 훅 설치
+pre-commit install
+
+# 코드 포맷팅
+black .
+isort .
+
+# 린팅
+flake8 .
+mypy .
+```
+
+### 테스트 실행
+
+```bash
+# 전체 테스트
+pytest tests/ -v --cov=lsmr_stock_picker
+
+# 특정 카테고리 테스트
+pytest tests/ -k "unit" -v          # 단위 테스트
+pytest tests/ -k "integration" -v   # 통합 테스트
+pytest tests/ -k "property" -v      # 속성 기반 테스트
+```
+
+### 새로운 기능 추가
+
+1. **분석기 추가**: `analyzers/` 디렉토리에 새로운 분석 모듈 추가
+2. **API 엔드포인트 추가**: `main.py`에 새로운 라우터 추가
+3. **데이터 모델 추가**: `models/data_models.py`에 새로운 데이터 구조 정의
+4. **테스트 추가**: `tests/` 디렉토리에 해당 테스트 파일 추가
+
+## 📄 라이선스 및 면책사항
+
+### 라이선스
+
+이 프로젝트는 **개인 사용 및 교육 목적**으로 개발되었습니다.
+
+### ⚠️ 면책사항
+
+- 이 시스템은 **교육 및 연구 목적**으로 개발된 프로토타입입니다
+- **실제 투자에 사용하기 전에 충분한 검증과 테스트가 필요**합니다
+- 투자 결정은 사용자의 책임이며, 개발자는 투자 손실에 대해 책임지지 않습니다
+- 한국투자증권 API 사용 시 해당 약관을 준수해야 합니다
+
+### 🔒 보안 주의사항
+
+- `.env` 파일에 포함된 API 키와 비밀번호를 절대 공유하지 마세요
+- 프로덕션 환경에서는 적절한 보안 설정을 적용하세요
+- 정기적으로 API 키를 갱신하세요
+
+---
+
+## 📞 지원 및 문의
+
+### 문제 신고
+
+시스템 사용 중 문제가 발생하면 다음 정보와 함께 문의해 주세요:
+
+1. **오류 메시지**: 정확한 오류 메시지
+2. **로그 파일**: `logs/lsmr_stock_picker.log` 파일의 관련 부분
+3. **환경 정보**: OS, Python 버전, Docker 버전
+4. **재현 단계**: 문제를 재현할 수 있는 단계
+
+### 개선 제안
+
+새로운 기능이나 개선사항에 대한 제안을 환영합니다:
+
+- 분석 알고리즘 개선
+- 새로운 리스크 관리 기능
+- API 엔드포인트 추가
+- 성능 최적화
+
+---
+
+**🎉 LSMR Stock Picker를 사용해 주셔서 감사합니다!**
+
+*Happy Trading! 📈*
