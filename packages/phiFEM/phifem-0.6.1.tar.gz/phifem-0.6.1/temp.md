@@ -1,0 +1,3 @@
+- Add a negative test testing stability by checking when the geometry is moved only by a little this change the results.
+- Use an Enum in the package to define the tags (instead of using something like 1, 2, 3 that might clash with user-defined variables)
+- Mixed bcs: encode the meshtag integer bits with their state according to the levelsets (1 bit for each levelset). This is working for 2 states (0 or 1), use a second integer to encore 3 states. Check `bitarray` python package.
