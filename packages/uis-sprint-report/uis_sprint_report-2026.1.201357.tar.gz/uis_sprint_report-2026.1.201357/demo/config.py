@@ -1,0 +1,12 @@
+CACHE_FILE              = ".cache"
+CHUNK_SIZE              = 500
+CHUNK_OVERLAP           = 0
+DEFAULT_API_BASE        = "https://gitlab.developers.cam.ac.uk/"
+DEFAULT_MODEL           = "mistral:latest"
+DEFAULT_COMMAND         = "report"
+DEFAULT_LABELS          = "team::Identity"
+DEFAULT_GROUP_ID        = 5
+DEFAULT_ITERATION_ID    = 383
+DEFAULT_PPTX_FILE_NAME  = "sprint_goals.pptx"
+MAX_TOKENS              = 1500
+MAX_ATTEMPTS            = 5
