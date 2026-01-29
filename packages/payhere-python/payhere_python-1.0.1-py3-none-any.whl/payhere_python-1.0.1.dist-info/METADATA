@@ -1,0 +1,270 @@
+Metadata-Version: 2.4
+Name: payhere-python
+Version: 1.0.1
+Summary: Unofficial Python SDK for PayHere Payment Gateway
+Author-email: Kavindu Harshitha <kavindu@apexkv.com>
+License: GNU GENERAL PUBLIC LICENSE
+        Version 3, 29 June 2007
+        
+        Copyright (C) 2026 Kavindu Harshitha (apexkv)
+        
+        This program is free software: you can redistribute it and/or modify
+        it under the terms of the GNU General Public License as published by
+        the Free Software Foundation, either version 3 of the License, or
+        (at your option) any later version.
+        
+        This program is distributed in the hope that it will be useful,
+        but WITHOUT ANY WARRANTY; without even the implied warranty of
+        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+        
+Project-URL: Homepage, https://github.com/apexkv/payhere-python
+Project-URL: Repository, https://github.com/apexkv/payhere-python
+Project-URL: Issues, https://github.com/apexkv/payhere-python/issues
+Keywords: payhere,payment,sdk,sri-lanka,python
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: GNU General Public License v3 (GPLv3)
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: requests
+Requires-Dist: pydantic
+Dynamic: license-file
+
+# 📦 PayHere Python SDK (Unofficial)
+
+Unofficial Python SDK for integrating with the PayHere payment gateway. This library simplifies the process of creating payment requests, verifying payment signatures, and handling responses from PayHere.
+
+## ⚠️ Disclaimer
+
+This is an **unofficial SDK** developed independently and is **not affiliated with PayHere (Pvt) Ltd**.
+
+Use at your own risk.
+Always test in **sandbox mode** before going live.
+
+## 🎯 Features
+
+-   Create payment hashes
+-   Verify webhook signatures
+-   Support for sandbox and production environments
+-   Easy-to-use API
+
+## 📥 Installation
+
+You can install the package via pip:
+
+```bash
+pip install payhere-python
+```
+
+## 🚀 Quick Start
+
+```python
+from payhere import PayHere, generate_payment_hash, verify_payment_signature
+
+
+# Initialize the PayHere client
+payhere = PayHere(
+    merchant_id="YOUR_MERCHANT_ID", # need for payment hash generation
+    merchant_secret="YOUR_MERCHANT_SECRET", # need for payment hash generation
+    app_id="YOUR_APP_ID", # not need for payment hash generation
+    app_secret="YOUR_APP_SECRET", # not need for payment hash generation
+    sandbox_enabled=True, # default is True
+    request_timeout=20 # default is 20 seconds
+)
+
+
+# Generate a payment hash can be done in 2 ways:
+"""
+Generate payment hash is required to create a payment request from the client side.
+(Do not create payment hash on the client side in production, always do it on the server side for security reasons.)
+"""
+
+# 1. Using the PayHere client instance
+payment_hash = payhere.generate_payment_hash(
+    order_id="ORDER123",
+    amount="1000.00",
+    currency="LKR"
+)
+
+# 2. Using the standalone function
+payment_hash = generate_payment_hash(
+    order_id="ORDER123",
+    amount="1000.00",
+    currency="LKR",
+    merchant_id="YOUR_MERCHANT_ID",
+    merchant_secret="YOUR_MERCHANT_SECRET"
+)
+
+# Verify payment signature. This can also be done in 2 ways:
+"""
+Verify payment signature is required to validate the data received from PayHere webhooks. They send the payment data along with a signature to ensure data integrity.
+"""
+
+# 1. Using the PayHere client instance
+is_valid = payhere.verify_payment_signature(data={
+        # all the data received from PayHere webhook with other fields
+        "merchant_id": "YOUR_MERCHANT_ID",
+        "order_id": "ORDER123",
+        "payhere_amount": "1000.00",
+        "payhere_currency": "LKR",
+        "status_code": "2",
+        "md5sig": "RECEIVED_SIGNATURE"
+    }
+)
+
+# 2. Using the standalone function
+is_valid = verify_payment_signature(data={
+        # all the data received from PayHere webhook with other fields
+        "merchant_id": "YOUR_MERCHANT_ID",
+        "order_id": "ORDER123",
+        "payhere_amount": "1000.00",
+        "payhere_currency": "LKR",
+        "status_code": "2",
+        "md5sig": "RECEIVED_SIGNATURE"
+    },
+    merchant_id="YOUR_MERCHANT_ID", # need for signature verification
+    merchant_secret="YOUR_MERCHANT_SECRET" # need for signature verification
+)
+
+# Retrieve payment/order details
+# app_id and app_secret are needed for this method
+# Make sure to handle exceptions properly in production code.
+try:
+    payment_details = payhere.get_payment_details(order_id="ORDER123")
+    print(payment_details)
+except PayHereError as e:
+    print(f"Error retrieving payment details: {str(e)}")
+
+
+# Process a refund
+# app_id and app_secret are needed for this method
+# there is 2 types of refunds available: full and partial
+# In production, you may need to contact PayHere support to enable refunds on your account.
+
+# 1. Full refund
+"""
+With this implementation, a full refund is processed for the entire amount of the original payment. even the fees charged by PayHere are included in the refund.
+"""
+
+try:
+    refund_response = payhere.refund_payment(
+        payment_id=156432454,
+        reason="Customer requested a full refund",
+        refund_type="full"
+    )
+    print(refund_response)
+except PayHereError as e:
+    print(f"Error processing refund: {str(e)}")
+
+
+# 2. Partial refund
+"""With this implementation, a partial refund is processed for a specified amount of the original payment. The fees charged by PayHere are not included in the refund.
+"""
+
+try:
+    refund_response = payhere.refund_payment(
+        payment_id=156432454,
+        reason="Customer requested a partial refund",
+        refund_type="partial",
+        amount=500.00  # specify the amount for partial refund
+    )
+    print(refund_response)
+except PayHereError as e:
+    print(f"Error processing refund: {str(e)}")
+```
+
+In production, you may need to contact PayHere support to enable refunds on your account.
+[support@payhere.lk](mailto:support@payhere.lk)
+
+## ✅ Supported PayHere API Endpoints
+
+-   Payment Details Retrieval
+-   Full Refund
+-   Partial Refund
+-   Payment Hash Generation
+-   Payment notify Signature Verification
+
+## 🚀 Guides to Integrate PayHere Sandbox for Development and Testing
+
+### Payhere Sandbox Account Setup Guide
+
+1. You can create a sandbox account for testing purposes by [https://sandbox.payhere.lk/](https://sandbox.payhere.lk/) website.
+2. Create a sandbox account there then you will redirect to sandbox dashboard.
+
+![PayHere Sandbox Dashboard](./images/01-dashboard.png)
+
+3. In sandbox Dashboard, there is a menu called [Integrations](https://sandbox.payhere.lk/merchant/domains).
+
+![PayHere Sandbox Integrations](./images/02-integrations.png)
+
+4. In Integrations you can create a new application by clicking `+ Add Domain/App` button. If your application is website choose **Domain** or if your application is mobile app choose **App**. For website domain you can use `localhost` for testing purpose.
+
+![PayHere Sandbox Add Domain/App](./images/03-new-app.png)
+
+**_Note: Do note put any server running port like localhost:3000. Just hostname_** 5. After create that you can see your Merchant Secret in table and Merchant ID in top of page
+
+![PayHere Sandbox Merchant ID and Secret](./images/04-merchant-data.png)
+
+6. Now you can use that Merchant ID and Merchant Secret in your application to test payments in sandbox environment.
+
+7. For App ID and App Secret you can go to [Settings](https://sandbox.payhere.lk/merchant/settings) menu in dashboard and create a new api key.
+
+![PayHere Sandbox Settings Page](./images/05-settings.png)
+
+8. For the api key you can give access that which api features does that key can access. For this SDK you need to enable **Payment Retrieval** access.
+   Remember to add `http://localhost` in the Allowed Origins for development
+
+![PayHere Sandbox Create API Key](./images/06-new-api-key.png)
+
+9. After create that you can see your App ID and App Secret in the api keys table. to see the app id and secret you need to click the View Credentials button.
+
+![PayHere Sandbox API Keys Table](./images/07-settings-with-data.png)
+
+### Checkout Flow
+
+![PayHere Checkout Flow](./images/checkout-flow.jpg)
+
+## 🔒 Security Notes
+
+-   Never expose `merchant_secret` in frontend
+-   Always generate `hash` in backend
+-   Use sandbox before production
+-   Validate PayHere webhooks
+
+## 📄 License
+
+This project is licensed under the GNU GPL v3 [LICENSE](LICENSE).
+
+You are free to use, modify, and distribute this software, including for commercial purposes,  
+as long as all derivative works remain open source and credit the original author.
+Please refer to the LICENSE file for more details.
+
+## 👨‍💻 Author
+
+-   Kavindu Harshitha (apexkv)
+-   GitHub: [apexkv](https://github.com/apexkv/)
+-   Website: [apexkv.com](https://apexkv.com/)
+-   Email: [kavindu@apexkv.com](mailto:kavindu@apexkv.com)
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit issues and pull requests.
+
+## 📚 Used Libraries
+
+-   [PayHere](https://www.payhere.lk/) - The payment gateway this SDK is built for.
+-   [Requests](https://docs.python-requests.org/en/latest/) - HTTP library used for making API requests.
+-   [Pydantic](https://pydantic.dev/) - Data validation and settings management using Python type annotations.
+
+## ⭐ Support the Project
+
+If this helps you:
+
+-   Star the repo
+-   Share with other devs
+-   Contribute improvements
+
+## ©️ Copyright
+
+> Copyright (c) 2026 Kavindu Harshitha(apexkv). Licensed under the GNU GPL v3.
