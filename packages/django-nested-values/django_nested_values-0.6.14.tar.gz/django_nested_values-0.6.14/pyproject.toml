@@ -1,0 +1,156 @@
+[project]
+name = "django-nested-values"
+version = "0.6.14"
+description = "Add .values_nested() to Django querysets for nested prefetch dictionaries"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.13"
+keywords = ["django", "orm", "nested", "values", "queryset", "prefetch_related"]
+authors = [{ name = "Oliver Haas", email = "ohaas@e1plus.de" }]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Framework :: Django",
+  "Framework :: Django :: 5.2",
+  "Framework :: Django :: 6.0",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Database",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
+]
+dependencies = ["django>=5.2"]
+
+[project.urls]
+Homepage = "https://github.com/oliverhaas/django-nested-values"
+Documentation = "https://oliverhaas.github.io/django-nested-values/"
+Repository = "https://github.com/oliverhaas/django-nested-values.git"
+
+[dependency-groups]
+dev = [
+  "django-stubs==5.2.8",
+  "mypy==1.19.1",
+  "pre-commit==4.5.1",
+  "pytest==9.0.2",
+  "pytest-cov==7.0.0",
+  "pytest-django==4.11.1",
+  "pytest-xdist==3.8.0",
+  "ruff==0.14.13",
+  "ty==0.0.12",
+]
+docs = ["mkdocs==1.6.1", "mkdocs-material==9.7.1", "mike==2.1.3"]
+
+[build-system]
+requires = ["hatchling==1.28.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["django_nested_values"]
+
+[tool.hatch.build.targets.sdist]
+include = ["django_nested_values"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+extend-exclude = ["docs"]
+
+[tool.ruff.lint]
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+explicit-preview-rules = true
+fixable = ["ALL"]
+ignore = [
+  "ANN401", # Any needed for AttrDict's dynamic attribute access
+  "COM812", # Conflicts with ruff-format
+  "E5",     # 120 char limit is sufficient
+  "SLF001", # Private member access needed for Django internals
+]
+preview = true
+select = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+  "ANN",     # Type annotations not required in tests
+  "ARG001",  # Pytest fixtures appear as unused arguments
+  "ARG002",
+  "D",       # Docstrings not required in tests
+  "ERA001",  # Commented code in models is explanatory
+  "N806",    # Dynamic class creation uses CamelCase variable names
+  "PLC0415", # Lazy imports in fixtures and test setup
+  "PLR0913", # Too many arguments in test fixtures
+  "PLR2004", # Magic values in tests are fine
+  "RUF012",  # Django model attributes don't need ClassVar
+  "S101",    # assert in tests
+  "S105",    # Hardcoded passwords in test settings
+]
+"benchmarks/**" = [
+  "ANN",     # Type annotations not required in benchmarks
+  "C901",    # Complex setup function
+  "D",       # Docstrings not required in benchmarks
+  "DJ008",   # __str__ not needed for benchmark models
+  "E402",    # Imports after django.setup() is required
+  "ERA001",  # Commented code is explanatory
+  "INP001",  # Benchmarks don't need __init__.py in namespace
+  "PERF401", # List comprehensions not always cleaner in benchmarks
+  "PLC0415", # Lazy imports after django.setup()
+  "PLR0913", # Too many arguments
+  "PLR0915", # Long setup function is fine
+  "PLR2004", # Magic values in benchmarks are fine
+  "RET504",  # Explicit return assignments improve readability
+  "RUF012",  # Django model attributes don't need ClassVar
+  "S105",    # Hardcoded passwords in benchmark settings
+  "S311",    # random is fine for benchmarks
+  "T201",    # print is fine in benchmarks
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+testpaths = ["tests"]
+markers = [
+  "unit: marks tests as unit tests",
+  "integration: marks tests as integration tests",
+]
+
+[tool.coverage.run]
+concurrency = ["thread"]
+branch = true
+source = ["django_nested_values"]
+omit = ["*/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+]
+
+[tool.mypy]
+python_version = "3.13"
+plugins = ["mypy_django_plugin.main"]
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_configs = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[tool.django-stubs]
+django_settings_module = "tests.settings"
+
+[tool.ty.rules]
+# Ignore warnings about unused type: ignore comments (mypy needs them but ty doesn't)
+unused-ignore-comment = "ignore"
