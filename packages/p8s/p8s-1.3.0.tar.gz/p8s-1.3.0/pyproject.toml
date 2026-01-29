@@ -1,0 +1,228 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "p8s"
+version = "1.3.0"
+description = "A batteries-included async Python framework combining Django's DX with FastAPI's performance"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Giuseppe Lapietra" }
+]
+keywords = [
+    "framework",
+    "fastapi",
+    "django",
+    "ai",
+    "llm",
+    "react",
+    "fullstack",
+    "async"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Topic :: Internet :: WWW/HTTP :: Site Management",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
+
+dependencies = [
+    # Core
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "starlette>=0.35.0",
+
+    # Database
+    "sqlmodel>=0.0.14",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "alembic>=1.13.0",
+    "asyncpg>=0.29.0",  # PostgreSQL async driver
+    "aiosqlite>=0.19.0",  # SQLite async driver
+
+    # Configuration
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+
+    # CLI
+    "typer[all]>=0.9.0",
+    "rich>=13.0.0",
+
+    # Utilities
+    "python-dotenv>=1.0.0",
+    "python-multipart>=0.0.6",
+    "aiofiles>=23.2.0",
+    "httpx>=0.25.0",
+
+    # Auth
+    "passlib[bcrypt]>=1.7.4",
+    "python-jose[cryptography]>=3.3.0",
+    "email-validator>=2.0.0",
+
+    # AI (Core)
+    "litellm>=1.20.0",
+    "instructor>=0.5.0",
+    "pgvector>=0.2.0",
+    "numpy>=1.26.0",
+]
+
+[project.optional-dependencies]
+ai = []  # Now part of core dependencies
+admin = [
+    "jinja2>=3.1.0",
+]
+tasks = [
+    "arq>=0.25.0",
+    "redis>=5.0.0",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "black>=24.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.8.0",
+    "pre-commit>=3.6.0",
+    "mkdocs-material>=9.5.0",
+]
+all = [
+    "p8s[ai,admin,tasks,dev]",
+]
+
+[project.scripts]
+p8s = "p8s.cli.main:app"
+
+[project.urls]
+About = "https://peppe37.github.io/p8s/about/"
+Documentation = "https://peppe37.github.io/p8s/"
+Repository = "https://github.com/Peppe37/p8s"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/p8s"]
+exclude = [
+    "**/.git",
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.pytest_cache",
+    "**/.mypy_cache",
+    "**/.ruff_cache",
+    "**/dist",
+    "**/.venv",
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/README.md",
+    "/LICENSE",
+]
+exclude = [
+    "**/.git",
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.pytest_cache",
+    "**/dist",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "C",   # flake8-comprehensions
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # function too complex (we have some complex functions)
+    "E741",  # ambiguous variable name (used in comprehensions)
+    "E721",  # type comparison (used in forms module)
+    "B027",  # empty method without abstract decorator
+    "B904",  # raise from (not always needed)
+    "B007",  # loop control variable not used
+    "B905",  # zip without strict parameter
+    "F841",  # local variable assigned but never used (some intentional)
+    "F401",  # imported but unused (intentional re-exports in __init__.py)
+    "W293",  # blank line contains whitespace (in HTML multiline strings)
+    "E711",  # comparison to None (used in SQLAlchemy WHERE clauses)
+    "B028",  # no stacklevel in warnings.warn
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["p8s"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+# =============================================================================
+# Semantic Release Configuration
+# Uses Conventional Commits (https://www.conventionalcommits.org/)
+#
+# Commit types:
+#   fix:    Bug fix → PATCH version (0.0.X)
+#   feat:   New feature → MINOR version (0.X.0)
+#   feat!:  Breaking change → MAJOR version (X.0.0)
+#   docs:   Documentation only
+#   chore:  Maintenance tasks
+#   ci:     CI/CD changes
+#   test:   Test changes
+#   refactor: Code refactoring
+# =============================================================================
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+version_variable = ["src/p8s/__init__.py:__version__"]
+branch = "main"
+upload_to_pypi = true
+upload_to_release = true
+build_command = "pip install build && python -m build"
+commit_message = "chore(release): v{version} [skip ci]"
+
+[tool.semantic_release.changelog]
+changelog_file = "CHANGELOG.md"
+exclude_commit_patterns = [
+    "^Merge.*",
+    "^chore\\(release\\):.*",
+]
+
+[tool.semantic_release.commit_parser_options]
+allowed_tags = [
+    "build",
+    "chore",
+    "ci",
+    "docs",
+    "feat",
+    "fix",
+    "perf",
+    "refactor",
+    "style",
+    "test",
+]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]
+
