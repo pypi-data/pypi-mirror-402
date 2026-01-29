@@ -1,0 +1,102 @@
+loader:
+  domino:
+    dataBase: Domino
+    dataBaseVersion: 1.0.0 # needs to be raised every time new data is added
+
+    filePath: ./datasets/recordings
+    copyRawDataToLocal: True
+    dataIsFinal: False # more recordings will be stored in the futur
+
+    dataset:
+      loaderName: RecordLoaderDomino
+      dataHandler:
+        type: allFromFolder
+        listFilter: acq
+        canReadRemote: True
+        basePath: .
+        extensions: [.edf, .txt, .erg]
+        force: False
+        idPattern: .*/(.*).edf
+        signal-path: "{recordId}/{recordId}.edf"
+        annotation-path: "{recordId}/{recordId}.txt"
+        metadata-path: "{recordId}/{recordId}.erg"
+
+    sourceChannels:
+      - name: E2:M1
+        type: eog
+      - name: E1:M2
+        type: eog
+      - name: E2:M2
+        type: eog
+      - name: F4:M1
+        type: eeg
+      - name: F3:M2
+        type: eeg
+      - name: C4:M1
+        type: eeg
+      - name: C3:M2
+        type: eeg
+      - name: O2:M1
+        type: eeg
+      - name: O1:M2
+        type: eeg
+      # chin ÈMG
+      - name: EMG1
+        type: emg
+      - name: EMG2
+        type: emg
+      - name: Chin
+        generated: True
+        type: emg
+      # Leg EMG
+      - name: PLMl
+        type: emg
+      - name: PLMr
+        type: emg
+      - name: Leg
+        generated: True
+        type: emg
+      - name: Lage
+        type: body
+        rename: Body
+      - name: Schnarch.
+        type: mic
+      - name: RIP Thora
+        type: effort
+      - name: RIP Abdom
+        type: effort
+      - name: SpO2
+        type: sao2
+
+      # - name: O1:M2
+      #   # generated: True
+      #   steps: [notchFilter, resampleFIR, scale, fftConvolution]
+      - name: M1:M2
+        generated: True
+        type: eeg
+      - name: O1
+        type: eeg
+      - name: M1
+        type: eeg
+      - name: M2
+        type: eeg
+
+    combineChannels:
+      - name: Chin
+        combineType: mean
+        type: emg
+        channel: [EMG1, EMG2]
+      - name: Leg
+        combineType: mean
+        type: emg
+        channel: [PLMl, PLMr]
+      - name: M1:M2
+        combineType: derived
+        type: eeg
+        channel: [M1, M2]
+
+    recordWriter: DominoAnnotationWriter
+
+useLoader: domino
+domino-path: datasets/Domino
+
