@@ -1,0 +1,343 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2022 OpenSynergy Indonesia
+     Copyright 2022 PT. Simetri Sinergi Indonesia
+     License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl). -->
+<odoo>
+<record id="hr_cash_advance_view_search" model="ir.ui.view">
+    <field name="name">hr.cash_advance search</field>
+    <field name="model">hr.cash_advance</field>
+    <field
+            name="inherit_id"
+            ref="ssi_transaction_mixin.mixin_transaction_view_search"
+        />
+    <field name="mode">primary</field>
+    <field name="arch" type="xml">
+        <data>
+            <xpath expr="//field[@name='company_id']" position="after">
+                <field name="employee_id" />
+                <field name="job_id" />
+                <field name="department_id" />
+                <field name="manager_id" />
+                <field name="date" />
+                <field name="date_due" />
+                <field name="type_id" />
+                <field name="currency_id" />
+                <field
+                        name="line_ids"
+                        string="Analytic Account"
+                        filter_domain="[('line_ids.analytic_account_id', 'ilike', self)]"
+                    />
+                <field
+                        name="line_ids"
+                        string="Customer Analytic Account"
+                        filter_domain="[('line_ids.analytic_account_id.partner_id', 'ilike', self)]"
+                    />
+                <field
+                        name="line_ids"
+                        string="Product"
+                        filter_domain="[('line_ids.product_id', 'ilike', self)]"
+                    />
+            </xpath>
+            <xpath expr="//filter[@name='grp_responsible']" position="after">
+                <filter
+                        name="grp_employee_id"
+                        string="Employee"
+                        context="{'group_by':'employee_id'}"
+                    />
+                <filter
+                        name="grp_job_id"
+                        string="Job"
+                        context="{'group_by':'job_id'}"
+                    />
+                <filter
+                        name="grp_manager_id"
+                        string="Manager"
+                        context="{'group_by':'manager_id'}"
+                    />
+                <filter name="grp_date" string="Date" context="{'group_by':'date'}" />
+                <filter
+                        name="grp_date_due"
+                        string="Date Due"
+                        context="{'group_by':'date_due'}"
+                    />
+                <filter
+                        name="grp_type_id"
+                        string="Type"
+                        context="{'group_by':'type_id'}"
+                    />
+                <filter
+                        name="grp_currency_id"
+                        string="Currency"
+                        context="{'group_by':'currency_id'}"
+                    />
+            </xpath>
+        </data>
+    </field>
+</record>
+
+<record id="hr_cash_advance_view_tree" model="ir.ui.view">
+    <field name="name">hr.cash_advance tree</field>
+    <field name="model">hr.cash_advance</field>
+    <field name="mode">primary</field>
+    <field name="inherit_id" ref="ssi_transaction_mixin.mixin_transaction_view_tree" />
+    <field name="arch" type="xml">
+        <data>
+            <xpath expr="//header" position="inside">
+                <button
+                        name="action_recompute_realization"
+                        type="object"
+                        string="Recompute Realization"
+                    />
+            </xpath>
+            <xpath expr="//field[@name='user_id']" position="after">
+                <field name="employee_id" />
+                <field name="department_id" optional="hide" />
+                <field
+                        name="manager_id"
+                        widget="many2one_avatar_employee"
+                        optional="hide"
+                    />
+                <field name="job_id" optional="hide" />
+                <field name="type_id" />
+                <field name="currency_id" />
+                <field name="date" />
+                <field name="date_due" />
+                <field name="amount_total" string="Total" sum="Total Cash Advance" />
+                <field
+                        name="amount_unrealized"
+                        string="Unrealized"
+                        sum="Total Unrealized Cash Advance"
+                    />
+                <field
+                        name="amount_unsettled"
+                        string="Unsettled"
+                        sum="Total Unsettled Cash Advance"
+                    />
+                <field name="realized" optional="hide" />
+                <field name="settled" optional="hide" />
+            </xpath>
+        </data>
+    </field>
+</record>
+
+<record id="hr_cash_advance_view_form" model="ir.ui.view">
+    <field name="name">hr.cash_advance form</field>
+    <field name="model">hr.cash_advance</field>
+    <field name="mode">primary</field>
+    <field name="inherit_id" ref="ssi_transaction_mixin.mixin_transaction_view_form" />
+    <field name="arch" type="xml">
+        <data>
+            <xpath expr="//header/field[@name='state']" position="before">
+                <button
+                        name="action_recompute_realization"
+                        type="object"
+                        string="Recompute Realization"
+                        class="oe_highlight"
+                        icon="fa-gear"
+                        attrs="{'invisible':[('state','not in',['open','done'])]}"
+                    />
+            </xpath>
+            <xpath expr="//field[@name='user_id']" position="after">
+                <field name="employee_id" />
+                <field name="department_id" readonly="1" force_save="1" />
+                <field
+                        name="manager_id"
+                        widget="many2one_avatar_employee"
+                        readonly="1"
+                        force_save="1"
+                    />
+                <field name="job_id" readonly="1" force_save="1" />
+
+            </xpath>
+            <xpath expr="//group[@name='header_right']" position="inside">
+                <field name="company_currency_id" invisible="1" />
+                <field name="currency_id" />
+                <field name="type_id" />
+                <field
+                        name="allowed_product_ids"
+                        widget="many2many_tags"
+                        invisible="1"
+                    />
+                <field
+                        name="allowed_product_category_ids"
+                        widget="many2many_tags"
+                        invisible="1"
+                    />
+                <field
+                        name="allowed_product_usage_ids"
+                        widget="many2many_tags"
+                        invisible="1"
+                    />
+                <field
+                        name="allowed_analytic_account_ids"
+                        widget="many2many_tags"
+                        invisible="1"
+                    />
+                <field
+                        name="allowed_pricelist_ids"
+                        widget="many2many_tags"
+                        invisible="1"
+                    />
+                <field
+                        name="pricelist_id"
+                        domain="[('id', 'in', allowed_pricelist_ids)]"
+                    />
+                <field name="date" />
+                <field name="duration_id" />
+                <field name="date_due" />
+            </xpath>
+            <xpath expr="//page[1]" position="before">
+                <page name="detail" string="Details">
+                    <field
+                            name="line_ids"
+                            context="{'default_currency_id': currency_id, 'default_pricelist_id': pricelist_id}"
+                        >
+                        <tree>
+                            <field name="currency_id" invisible="1" />
+                            <field name="date_expense" />
+                            <field name="product_id" />
+                            <field name="usage_id" optional="hide" />
+                            <field name="type_id" invisible="1" />
+                            <field name="account_id" optional="hide" />
+                            <field name="name" />
+                            <field
+                                    name="analytic_account_id"
+                                    domain="[('id', 'in', parent.allowed_analytic_account_ids)]"
+                                    optional="show"
+                                />
+                            <field name="price_unit" />
+                            <field name="uom_quantity" />
+                            <field name="uom_id" />
+                            <field name="price_subtotal" />
+                        </tree>
+                        <form>
+                            <field name="currency_id" invisible="1" />
+                            <field name="type_id" invisible="1" />
+                            <field
+                                    name="allowed_uom_ids"
+                                    widget="many2many_tags"
+                                    invisible="1"
+                                />
+                            <group name="detail_1" colspan="4" col="2">
+                                <group name="detail_1_1" colspan="1" col="2">
+                                    <field name="date_expense" />
+                                    <field
+                                            name="product_id"
+                                            domain="['|',('id','in',parent.allowed_product_ids),('categ_id','in',parent.allowed_product_category_ids)]"
+                                        />
+                                    <field name="name" />
+                                    <field
+                                            name="usage_id"
+                                            domain="[('id','in',parent.allowed_product_usage_ids)]"
+                                        />
+                                    <field name="account_id" />
+                                    <field
+                                            name="analytic_account_id"
+                                            domain="[('id', 'in', parent.allowed_analytic_account_ids)]"
+                                        />
+                                </group>
+                                <group name="detail_1_1" colspan="1" col="2">
+                                    <field name="pricelist_id" />
+                                    <label for="uom_quantity" />
+                                    <div>
+                                        <field name="uom_quantity" />
+                                        <field
+                                                name="uom_id"
+                                                domain="[('id','in',allowed_uom_ids)]"
+                                                attrs="{'required':[('product_id','!=',False)]}"
+                                                class="oe_inline"
+                                            />
+                                    </div>
+                                    <field name="quantity" invisible="1" />
+                                    <field name="price_unit" />
+                                    <field name="price_subtotal" />
+                                </group>
+                            </group>
+                            <notebook>
+                                <page
+                                        name="standard_price"
+                                        string="Standard Price"
+                                        attrs="{'invisible':[('pricelist_id','=',False)]}"
+                                    >
+                                    <group name="standard_price" colspan="4" col="2">
+                                        <group
+                                                name="standard_price_1"
+                                                string="Price Unit"
+                                                colspan="1"
+                                                col="2"
+                                            >
+                                            <field
+                                                    name="standard_price_unit"
+                                                    string="Sarndard"
+                                                />
+                                            <field
+                                                    name="standard_price_unit_diff"
+                                                    string="Diff."
+                                                />
+                                        </group>
+                                        <group
+                                                name="standard_price_2"
+                                                string="Price Subtotal"
+                                                colspan="1"
+                                                col="2"
+                                            >
+                                            <field
+                                                    name="standard_price_subtotal"
+                                                    string="Standard"
+                                                />
+                                            <field
+                                                    name="standard_price_subtotal_diff"
+                                                    string="Diff."
+                                                />
+                                        </group>
+                                    </group>
+                                </page>
+                                <page name="note" string="Notes">
+                                    <field name="note" />
+                                </page>
+                            </notebook>
+                        </form>
+                    </field>
+                    <group class="oe_subtotal_footer oe_right">
+
+                        <field name="amount_total" string="Total" />
+                        <field name="amount_unrealized" string="Unrealized" />
+                        <field name="amount_unsettled" string="Unsettled" />
+                    </group>
+                </page>
+                <page name="accounting" string="Accounting">
+                    <group name="accounting_1" colspan="4" col="2">
+                        <field name="journal_id" />
+                        <field name="cash_advance_account_id" />
+                        <field name="payable_account_id" />
+                    </group>
+                    <group name="accounting_2" colspan="4" col="2">
+                        <field name="move_id" />
+                        <field name="payable_move_line_id" />
+                        <field name="cash_advance_move_line_id" />
+                        <field name="realized" />
+                        <field name="settled" />
+                    </group>
+                </page>
+            </xpath>
+        </data>
+    </field>
+</record>
+
+<record id="hr_cash_advance_action" model="ir.actions.act_window">
+    <field name="name">Cash Advances</field>
+    <field name="type">ir.actions.act_window</field>
+    <field name="res_model">hr.cash_advance</field>
+    <field name="view_mode">tree,form</field>
+    <field name="search_view_id" ref="hr_cash_advance_view_search" />
+</record>
+
+<menuitem
+        id="hr_cash_advance_menu"
+        name="Cash Advances"
+        sequence="2"
+        parent="ssi_hr_expense.expense_menu"
+        groups="hr_cash_advance_viewer_group"
+        action="hr_cash_advance_action"
+    />
+</odoo>
