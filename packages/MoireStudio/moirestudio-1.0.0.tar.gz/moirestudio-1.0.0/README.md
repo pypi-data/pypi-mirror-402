@@ -1,0 +1,409 @@
+# MoireStudio
+
+MoireStudio is a general-purpose toolkit for **twisted / moiré electronic-structure calculations**.
+
+It integrates:
+
+- **Geometry**: commensurate-angle search, moiré supercell generation (POSCAR-based), moiré point visualization
+- **Relaxation**: in-plane and out-of-plane relaxation patterns and relaxed structures (analytic framework integrated)
+- **Tight-binding / Wannier**: twisted TB band structures from POSCAR or Wannier90-like models; dense and sparse workflows
+- **Continuum k·p**: generic and template-based (TBG / tTMD) continuum models; band structures and Chern numbers
+- **Reproducibility**: automatic run metadata logging (e.g., `outputs/metadata.json`) and standardized output files
+
+## Table of contents
+
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [Command-line interface](#command-line-interface)
+- [Input file: `input.json`](#input-file-inputjson)
+- [Modes & tasks](#modes--tasks)
+- [Examples](#examples)
+- [Outputs](#outputs)
+- [Parallelism & performance notes](#parallelism--performance-notes)
+- [How to cite](#how-to-cite)
+- [Troubleshooting](#troubleshooting)
+
+## Requirements
+
+- Python ≥ 3.9
+- Core dependencies: `numpy`, `scipy`, `matplotlib`
+
+For best performance, use a NumPy/SciPy build linked against optimized BLAS/LAPACK (e.g., MKL/OpenBLAS).
+
+## Installation
+
+### Option A: package install (recommended)
+
+From the repository root:
+
+```bash
+pip install moirestudio-1.0.0-py3-none-any.whl
+```
+
+### Option B: script execution
+
+If you keep a script-style layout, you can run:
+
+```bash
+python driver.py --input input.json
+```
+
+## Quick start
+
+1) Prepare an `input.json` in your working directory.
+2) Put required inputs under `./inputs` (default) or set `io.input_dir`.
+3) Run:
+
+```bash
+python driver.py --input input.json
+```
+
+The default output directory is `./outputs` (override with `io.output_dir`).
+
+## Command-line interface
+
+Typical commands:
+
+```bash
+python driver.py --input input.json
+python driver.py --input input.json --quiet
+python driver.py --input input.json --no-color
+python driver.py --version
+python driver.py --cite
+```
+
+## Input file: `input.json`
+
+MoireStudio uses a JSON file with **separate `mode` and `task` fields**.
+
+```json
+{
+  "mode": "struc | tb | kp | mono",
+  "task": "gen_struc | find_com | band | chern",
+  "theta_deg": 1.10,
+  "io": {},
+  "struc": {},
+  "relax": {},
+  "tb": {},
+  "kp": {}
+}
+```
+
+- `theta_deg` is a **top-level** key.
+- Only the blocks relevant to the selected `mode`/`task` are required.
+
+### Common IO keys (`io`)
+
+- `io.input_dir` (default `./inputs`)
+- `io.output_dir` (default `./outputs`)
+- `io.fig_band` (band figure filename; falls back to `io.figure`, then `<task>.pdf`)
+- `io.fig_moire` (default `moire_points.pdf`)
+- `io.show_plots` (default `false`)
+
+Heterobilayer helper keys (used when `struc.ihetero=true`):
+
+- `io.t_prefix`, `io.b_prefix`
+- `io.t_fermi_energy`, `io.b_fermi_energy`
+
+### Structure block (`struc`)
+
+Core selectors:
+
+- `struc.read_mode`: `"POSCAR"` or `"model"`
+- `struc.read_layer`: `"bilayer"` or `"monolayer"`
+- `struc.ihetero`: `true/false`
+
+POSCAR inputs:
+
+- `struc.pos_path` (default `io.input_dir`)
+- `struc.pos_prefix` (default `"POSCAR"`)
+
+Interlayer distance (angstrom):
+
+- Use `struc.d_0` (default 3.5), or
+- Provide `struc.d_AA` and `struc.d_AB` (if missing, falls back to `d_0`).
+
+Moiré supercell generation (`task="gen_struc"`):
+
+- `struc.zero_point` (default `[0,0]`)
+- `struc.lim` (default `20`)
+- `struc.search` (default `0`)
+- `struc.accurate` (default `0.01`)
+- `struc.if_gen_pos` (default `true`)
+- `struc.write_by_hand` (optional manual selection for Lm)
+
+Commensurate-angle scan (`task="find_com"`):
+
+- `struc.max_angle` (default `180`)
+- `struc.min_angle` (default `1`)
+- `struc.lim` (default `10`)
+- `struc.step` (default `0.01`)
+- `struc.accurate` (default `0.01`)
+
+### Relaxation block (`relax`)
+
+- `relax.irelax`: enable/disable relaxation
+- `relax.order_num`: harmonic order (default `0`)
+- `relax.kappa_parallel`: in-plane relaxation strength parameter
+- `relax.kappa_perp`: out-of-plane relaxation strength parameter
+- Optional pattern indices:
+  - `relax.u_in_idxs`
+  - `relax.u_out_idxs`
+
+### TB block (`tb`)
+
+Band / k-path:
+
+- `tb.k_path`: list of fractional k-points
+- `tb.nk`: number of k points along the path (default `121`)
+- `tb.labels`: labels for k nodes (optional)
+- `tb.ylim`: plot energy window (optional)
+
+Compute options:
+
+- `tb.cores` (default `1`)
+- `tb.isparse` (default `false`)
+- `tb.inter_coe` (default `1`)
+- `tb.isymmetry` (optional)
+- `tb.ioutwannier` (optional; dense only)
+
+Wannier-like model input:
+
+```json
+"tb": {
+  "wannier": {
+    "prefix": "wannier90",
+    "fermi_energy": 0.0
+  }
+}
+```
+
+If `fermi_energy` is omitted, MoireStudio may try reading `inputs/FERMI_ENERGY`; otherwise it defaults to `0`.
+
+### k·p block (`kp`)
+
+Two usage styles:
+
+1) **Template mode** (recommended for standard models)
+
+- `kp.system_name`: `"TBG"` or `"tTMD"`
+- `kp.lat_a`, `kp.valley_idx`
+- For tTMD: `kp.omega`, `kp.V`, `kp.psi`
+- For TBG: `kp.u1`, `kp.u2`
+
+2) **Generic mode** (fully explicit)
+
+- `kp.tr`: truncation shell (default `3`)
+- `kp.valley_pos`: fractional coordinates (default `[2/3, 1/3]`)
+- `kp.mono_lat`: 2x2 real-space lattice vectors
+- `kp.V_z`, `kp.m_z`: onsite terms
+- Specify **exactly one** of:
+  - `kp.hv_a` (Dirac-like 2-band), or
+  - `kp.mass: [mx, my]` (effective-mass 1-band)
+
+Couplings are specified in **amplitude + phase** form (phases in degrees):
+
+- Interlayer: `kp.inter_idxs`, `kp.inter_amps`, `kp.inter_phas`
+- Intralayer top: `kp.intra_t_idxs`, `kp.intra_t_amps`, `kp.intra_t_phas`
+- Intralayer bottom: `kp.intra_b_idxs`, `kp.intra_b_amps`, `kp.intra_b_phas`
+
+Band plotting:
+
+- `kp.k_path`, `kp.nk`, `kp.labels`, `kp.ylim`
+- `kp.fermi_shift`: number, or `"max"` / `"min"`
+
+Chern number (`task="chern"`):
+
+- `kp.n_mesh` (default `25`)
+- `kp.band_index` (default `1`)
+
+## Modes & tasks
+
+- `mode="struc"`:
+  - `task="gen_struc"`: generate moiré supercell (optionally relaxed) and write POSCAR
+  - `task="find_com"`: scan commensurate angles and write lists/plots
+
+- `mode="tb"`:
+  - `task="band"`: TB band structure from POSCAR or Wannier model
+
+- `mode="kp"`:
+  - `task="band"`: continuum k·p band structure
+  - `task="chern"`: Chern number on a k-mesh
+
+- `mode="mono"`:
+  - `task="band"`: monolayer band structure from a Wannier model
+
+## Examples
+
+### A) Geometry: generate moiré structure
+
+```json
+{
+  "mode": "struc",
+  "task": "gen_struc",
+  "theta_deg": 21.79,
+    "struc": {
+    "lim": 50,
+    "read_mode": "POSCAR",
+    "read_layer": "bilayer",
+    "ihetero": false,
+    "d_AA": 3.60,
+    "d_AB": 3.60,
+    "if_plot": false,
+    "zero_point": [0, 0]
+  }
+ }
+
+```
+
+### B) Geometry: scan commensurate angles
+
+```json
+{	
+	"mode":"struc",
+	"task": "find_com",      
+	"struc":{
+		"read_mode": "POSCAR",
+		"step": 0.01,
+		"lim":30,
+		"accurate":5e-3,
+		"max_angle": 23,
+		"min_angle": 1
+	}
+}
+```
+
+### C) TB: band structure
+
+```json
+{
+  "mode": "tb",
+  "task": "band",
+  "theta_deg": 21.79,
+  "io": {
+    "output_dir": "./outputs",
+    "input_dir": "./inputs",
+    "fig_band": "band.pdf"
+  },
+  "struc": {
+    "read_mode": "WANNIER",
+    "read_layer": "bilayer",
+    "bilayer_num": 2,
+    "ihetero": false,
+    "d_AA": 3.60,
+    "d_AB": 3.35,
+    "lim": 80,
+    "zero_point": [[0.0, 0.0],[0.0,0.0]],
+    "if_plot": false
+  },
+  "tb": {
+    "wannier": {
+      "prefix": "wannier90"
+    },
+    "cores": 1,
+    "isparse": false,
+    "k_path": [[0,0,0],[0.333333,0.333333,0],[0.5,0.0,0],[0,0,0]],
+    "nk": 121,
+    "labels": ["G","K","M","G"],
+    "ylim": [-3, 3]
+  }
+}
+
+```
+
+### D) k·p: generic band structure (Dirac-like)
+
+```json
+
+  {
+  "mode": "kp",
+  "task": "band",
+  "theta_deg": 1.05,
+  "io": { "output_dir": "./outputs", "fig_band": "kp_band.pdf" },
+  "kp": {
+    "tr": 5,
+    "valley_pos": [-0.6666667, -0.3333333],
+    "mono_lat": [[2.46, 0.0], [1.23, 2.130422493309719]],
+    "hv_a": 2135.4,
+    "valley_name": "K",
+    "inter_idxs": [[0,0],[1,0],[1,1]],
+    "inter_amps": [[[80,90],[90,80]], [[80,90],[90,80]], [[80,90],[90,80]]],
+    "inter_phas": [[[0,0],[0,0]], [[0,-120],[120,0]], [[0,120],[-120,0]]],
+    "k_path": [[0,0],[0.666666,0.333333],[0.5,0.5],[0,0]],
+    "nk": 201,
+    "labels": ["G","K","M","G"],
+    "ylim": [-200, 200]
+  }
+}
+```
+
+### E) k·p: Chern number
+
+```json
+{
+  "mode": "kp",
+  "task": "chern",
+  "theta_deg": 1.10,
+  "io": { "output_dir": "./outputs" },
+  "kp": {
+    "tr": 3,
+    "hv_a": 1.0,
+    "V_z": 0.0,
+    "m_z": 0.0,
+    "valley_pos": [0.6666667, 0.3333333],
+    "mono_lat": [[2.46, 0.0], [1.23, 2.13162820728]],
+    "inter_idxs": [[0,0]],
+    "inter_amps": [90],
+    "inter_phas": [0],
+    "intra_t_idxs": [],
+    "intra_t_amps": [],
+    "intra_t_phas": [],
+    "intra_b_idxs": [],
+    "intra_b_amps": [],
+    "intra_b_phas": [],
+    "n_mesh": 31,
+    "band_index": 1
+  },
+  "relax": { "irelax": false }
+}
+```
+
+## Outputs
+
+Typical outputs under `io.output_dir` (default `./outputs`):
+
+Band / k-path:
+
+- `BAND.dat` (k-distance vs energy; band-by-band blocks)
+- `band.txt` (raw eigenvalue arrays)
+- `k_vec.txt`, `k_dist.txt`, `k_node.txt`
+- `k_labels.txt`
+- band figure (e.g., `tb_band.pdf`, `kp_band.pdf`)
+
+Geometry:
+
+- `POSCAR` (generated/copy depending on task)
+- moiré points figure (e.g., `moire_points.pdf`)
+- `commensurate_angle.txt` and `comm_angles.pdf` (for `task="find_com"`)
+
+Reproducibility:
+
+- `metadata.json` (versions, BLAS backend, platform info, input hash, etc.)
+
+## Parallelism & performance notes
+
+- TB parallelism: set `tb.cores > 1`.
+- For batch jobs, set BLAS thread environment variables explicitly (e.g., `OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS`).
+- For large problems, consider sparse workflows (`tb.isparse=true`) where applicable.
+
+## How to cite
+
+- Method paper: **Phys. Rev. B 111, 075434 (2025)**, **arXiv:2509.13114**
+
+## Troubleshooting
+
+- **Unknown mode/task**: ensure `mode` ∈ `{struc, tb, kp, mono}` and `task` matches the selected mode.
+- **k·p error about `mass` vs `hv_a`**: you must specify **exactly one** of `kp.mass` or `kp.hv_a`.
+- **No plots**: set `io.show_plots=true`, or open the saved figure files under `outputs/`.
+- **Parallel issues on Windows**: try `tb.cores=1` first and then increase; prefer WSL for HPC-like usage.
