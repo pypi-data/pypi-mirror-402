@@ -1,0 +1,55 @@
+# Autogen
+
+Autogen is an automatic expression generator for second-quantized many-body expressions using Wick’s theorem, aimed at quantum chemistry derivations (including UCC-style algebra).
+
+Most documentation lives in [docs/index.md](docs/index.md).
+
+
+## Installation
+
+Install from PyPI:
+
+```bash
+pip install autogen-wick
+```
+
+Project name on PyPI: **autogen-wick**
+Python import: `import autogen`
+
+Or use the conda environment for development:
+
+```bash
+conda env create -f environment.yml
+conda activate autogen
+pytest -q
+```
+
+## Canonical imports
+
+Use these package paths:
+
+- `autogen.library`
+- `autogen.main_tools`
+- `autogen.pkg`
+
+## Common workflows
+
+- Debug workflow (writes LaTeX-ish output to `latex_output.txt` by default):
+	- `python debug.py`
+- Run fast tests:
+	- `pytest`
+- Run the slow CCSD integration test:
+	- `RUN_SLOW=1 pytest -k ccsd`
+
+## Build
+
+```bash
+conda run -n autogen python -m build
+```
+
+## Where to read next
+
+- Docs home: [docs/index.md](docs/index.md)
+- Concepts/definitions: [docs/concepts.md](docs/concepts.md)
+- API guide: [docs/api.md](docs/api.md)
+- Usage examples: [docs/usage.md](docs/usage.md)
