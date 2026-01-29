@@ -1,0 +1,88 @@
+name: tag
+
+on:
+  push:
+    tags:
+      - "*.*.*"
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Clone full tree, and checkout tag
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: "pip"
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.9.26"
+      - name: Build source dist and wheels
+        run: uv build
+      - name: Upload source dist and wheels to artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: dist
+          path: dist/
+          retention-days: 5
+          if-no-files-found: error
+
+  publish-pypi:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - name: Clone full tree, and checkout tag
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Download source dist and wheels from artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: dist
+          path: dist/
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: "pip"
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.9.26"
+      - name: Publish source dist and wheels to PyPI
+        run: uv publish
+
+  publish-github-release:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Clone and checkout tag
+        uses: actions/checkout@v6
+      - name: Download source dist and wheels from artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: dist
+          path: dist/
+      - name: Extract changelog
+        id: extract-changelog
+        uses: sean0x42/markdown-extract@v2
+        with:
+          file: CHANGELOG.md
+          pattern: ${{ github.ref_name }}
+          no-print-matched-heading: "true"
+      - name: Publish the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: ${{ steps.extract-changelog.outputs.markdown }}
+          files: dist/*
+          fail_on_unmatched_files: true
