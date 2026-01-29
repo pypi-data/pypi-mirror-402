@@ -1,0 +1,351 @@
+syntax = "proto3";
+
+//    Domains:
+//    RnD : 1000-1999
+//    Platform : 2000-2999
+//    Mobile : 3000-3999
+
+message Observations {
+  repeated DepthSequence lidars = 1;
+  repeated PoseSequence poses = 2;
+  repeated BBoxSequence bboxes = 3;
+  repeated SegmentationSequence segmentations = 4;
+  string date = 5;
+  string name = 6;
+}
+
+message BBoxSequence{
+
+}
+
+message SegmentationSequence{
+
+}
+
+message DepthSequence{
+  repeated DepthMap frames = 1;
+  Camera camera = 2;
+}
+
+message DepthMap{
+  int32 width = 1;
+  int32 height = 2;
+  message row{
+    repeated float row = 1;
+  }
+  repeated row map = 3;
+  bool is_row_wise = 4;
+  int32 frame_id = 5;
+  float timestamp = 6;
+  Units unit = 7;
+  float scale = 8;
+  repeated row confidence = 9;
+  enum Units{
+    mm = 0;
+    cm = 1;
+    meters = 2;
+    voxel = 3;
+    int8 = 4;
+    int16 = 5;
+    int32 = 6;
+  }
+}
+
+message Pose{
+  repeated Keypoint pose = 1;
+  int32 frame_id = 2;
+  float timestamp = 3;
+  PoseType pose_type = 4;
+  int32 id = 5;
+}
+
+message PoseSequence{
+  repeated Pose frames = 1;
+  PoseType algorithm = 2;
+  string source = 3;
+  Camera camera = 4;
+}
+
+message Camera{
+  message Intrinsics{
+
+    message Resolution{
+      int32 width = 1;
+      int32 height = 2;
+    }
+    message Size{
+      float width = 1;
+      float height = 2;
+      Unit unit = 3;
+    }
+    enum Unit{
+        MM=0;
+    }
+
+    Resolution resolution = 1;
+    Size pixel_size = 2;
+    repeated float distortion = 3;
+    float focal_length_x = 4;
+    float focal_length_y = 5;
+    float center_point_x = 6;
+    float center_point_y = 7;
+    float skew = 8;
+
+  }
+  string name = 1;
+  Intrinsics intrinsics = 2;
+  CoordinateSystem extrinsics = 3;
+  bool is_virtual = 4;
+  OdometrySequence odometry = 5;
+  Types type = 6;
+  enum Types{
+    RGB = 0;
+    LIDAR = 1;
+    RGBD=3;
+  }
+}
+
+message IMU{
+  float acc_x = 1;
+  float acc_y = 2;
+  float acc_z = 3;
+  float gyr_x = 4;
+  float gyr_y = 5;
+  float gyr_z = 6;
+  float mag_x = 7;
+  float mag_y = 8;
+  float mag_z = 9;
+  float grv_x = 10;
+  float grv_y = 11;
+  float grv_z = 12;
+}
+
+message OdometryInstance{
+  float timestamp = 1;
+  IMU imu = 2;
+  CoordinateSystem coordinate_system = 3;
+}
+
+message OdometrySequence{
+  repeated OdometryInstance trajectory = 1;
+  enum Source{
+    SLAM = 0;
+  }
+  Source source = 2;
+  string name = 3;
+}
+
+message CoordinateSystem{
+  Transform transform = 1;
+  bool is_origin = 2;
+  bool is_right_hand = 3;
+  enum Axis{
+    X = 0;
+    Y = 1;
+    Z = 2;
+    minusX = 3;
+    minusY = 4;
+    minusZ = 5;
+  }
+  Axis up_axis = 4;
+}
+
+message Keypoint{
+  JType joint = 1;
+  repeated float point = 2;
+  float confidence = 3;
+  JType to_joint = 4;
+  float contact_confidence = 5;
+  PointTypes point_type = 6;
+}
+
+message Translation
+{
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+
+message Orientation{
+  enum RotationType {
+    QUATERNION = 0;
+    MATRIX = 1;
+    EULER_XYZ = 2;
+    EULER_XZY = 3;
+    EULER_YXZ = 4;
+    EULER_YZX = 5;
+    EULER_ZXY = 6;
+    EULER_ZYX = 7;
+    EULER_XY = 8;
+    EULER_YX = 9;
+    EULER_XZ = 10;
+    EULER_ZX = 11;
+    EULER_YZ = 12;
+    EULER_ZY = 13;
+    EULER_X = 14;
+    EULER_Y = 15;
+    EULER_Z = 16;
+  }
+  RotationType rotationType = 1;
+  repeated float rotationValues = 2;
+}
+
+
+message Transform {
+  Translation translation = 1;
+  Orientation orientation = 2;
+}
+
+enum PointTypes{
+  XY = 0;
+  YX = 1;
+  XYZ = 2;
+  YXZ = 3;
+  XYDepth = 4;
+  DepthOnly = 5;
+}
+
+enum JType{
+  Nose = 0;
+  L_Eye = 1;
+  R_Eye = 2;
+  L_Ear = 3;
+  R_Ear = 4;
+  Head_Top = 5;
+  Head_Bottom = 6;
+  Head = 7;
+  Neck_Bottom = 8;
+  L_Shoulder = 9;
+  R_Shoulder = 10;
+  L_Elbow = 11;
+  R_Elbow = 12;
+  L_Wrist = 13;
+  R_Wrist = 14;
+  L_Hip = 15;
+  R_Hip = 16;
+  Mid_Hip = 17;
+  L_Knee = 18;
+  R_Knee = 19;
+  L_Ankle = 20;
+  R_Ankle = 21;
+  Pelvis = 22;
+  Spine = 23;
+  L_BaseBigToe = 24;
+  R_BaseBigToe = 25;
+  L_BigToe = 26;
+  R_BigToe = 27;
+  L_SmallToe = 28;
+  R_SmallToe = 29;
+  L_Hand = 30;
+  R_Hand = 31;
+  L_Heel = 32;
+  R_Heel = 33;
+  Chest = 34;
+  L_HandRoot = 35;
+  L_Thumb1CMC = 36;
+  L_Thumb2Knuckles = 37;
+  L_Thumb3IP = 38;
+  L_Thumb4FingerTip = 39;
+  L_Index1Knuckles = 40;
+  L_Index2PIP = 41;
+  L_Index3DIP = 42;
+  L_Index4FingerTip = 43;
+  L_Middle1Knuckles = 44;
+  L_Middle2PIP = 45;
+  L_Middle3DIP = 46;
+  L_Middle4FingerTip = 47;
+  L_Ring1Knuckles = 48;
+  L_Ring2PIP = 49;
+  L_Ring3DIP = 50;
+  L_Ring4FingerTip = 51;
+  L_Pinky1Knuckles = 52;
+  L_Pinky2PIP = 53;
+  L_Pinky3DIP = 54;
+  L_Pinky4FingerTip = 55;
+  R_HandRoot = 56;
+  R_Thumb1CMC = 57;
+  R_Thumb2Knuckles = 58;
+  R_Thumb3IP = 59;
+  R_Thumb4FingerTip = 60;
+  R_Index1Knuckles = 61;
+  R_Index2PIP = 62;
+  R_Index3DIP = 63;
+  R_Index4FingerTip = 64;
+  R_Middle1Knuckles = 65;
+  R_Middle2PIP = 66;
+  R_Middle3DIP = 67;
+  R_Middle4FingerTip = 68;
+  R_Ring1Knuckles = 69;
+  R_Ring2PIP = 70;
+  R_Ring3DIP = 71;
+  R_Ring4FingerTip = 72;
+  R_Pinky1Knuckles = 73;
+  R_Pinky2PIP = 74;
+  R_Pinky3DIP = 75;
+  R_Pinky4FingerTip = 76;
+  L_front_marker = 77;
+  L_infront_marker = 78;
+  L_outfront_marker = 79;
+  L_back_marker = 80;
+  L_inback_marker = 81;
+  L_outback_marker = 82;
+  R_front_marker = 83;
+  R_infront_marker = 84;
+  R_outfront_marker = 85;
+  R_back_marker = 86;
+  R_inback_marker = 87;
+  R_outback_marker = 88;
+  Mid_Eye = 89;
+  Mid_Shoulder = 90;
+  Mid_Ear = 91;
+  marker0 = 92;
+  marker1 = 93;
+  marker2 = 94;
+  marker3 = 95;
+  marker4 = 96;
+  marker5 = 97;
+  marker0_marker1 = 98;
+  marker0_marker2 = 99;
+  marker1_marker2 = 100;
+  SpineBend2 = 101;
+  LumbarSpine = 102;
+  ThoracicSpine = 103;
+  SpineMidHip = 104;
+  SpineMidShould = 105;
+  UNDEFINED2 = 1000;
+}
+
+enum PoseType{
+  None = 0;
+  COCO = 1;
+  MPII = 2;
+  OPENPOSE17 = 3;
+  OPENPOSE25 = 4;
+  POSETRACK18 = 5;
+  HM36 = 6;
+  MOVEAI_2D = 7;
+  MOVEAI_3D = 8;
+  MOVEAI_3D_Bone = 9;
+  HM36_3D_Bone = 10;
+  HM36_3D_BoneLength = 11;
+  MOVEAI_FeetMarkers = 12;
+  Kalman = 13;
+  POSETRACK17 = 14;
+  UNDEFINED = 15;
+  MIXAMO = 16;
+  OpenPose_LHand = 17;
+  OpenPose_RHand = 18;
+  COCO29 = 19;
+  COCO133 = 20;
+  FootPlanar = 21;
+  rigid_single_marker = 22;
+  rigid_two_markers = 23;
+  rigid_three_markers = 24;
+  rigid_four_markers = 25;
+  rigid_five_markers = 26;
+  rigid_six_markers = 27;
+  three_marker_dist = 28;
+  SpineBend = 29;
+  FootTrajectory = 30;
+}

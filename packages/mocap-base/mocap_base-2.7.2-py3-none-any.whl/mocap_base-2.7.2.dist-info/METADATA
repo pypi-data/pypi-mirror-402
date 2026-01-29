@@ -1,0 +1,119 @@
+Metadata-Version: 2.1
+Name: mocap-base
+Version: 2.7.2
+Summary: Base package for mocap pipeline
+Author: Move.ai
+Author-email: info@move.ai
+Requires-Python: >=3.10,<4.0
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Dist: easydict (>=1.10,<2.0)
+Requires-Dist: grpcio (>=1.56.2,<2.0.0)
+Requires-Dist: hiyapyco (>=0.5.1,<0.6.0)
+Requires-Dist: imageio (>=2.31.1,<3.0.0)
+Requires-Dist: mocap-settings (>=1.16.1,<2.0.0)
+Requires-Dist: numpy (>=1.24.3,<2.0.0)
+Requires-Dist: opencv-python (>=4.8,<5.0)
+Requires-Dist: protobuf (>=3.19.6,<4.0.0)
+Requires-Dist: pydantic (>=2.4,<3.0)
+Requires-Dist: pydantic-yaml (>=1.1.1,<2.0.0)
+Requires-Dist: scipy (>=1.10.1,<2.0.0)
+Requires-Dist: tqdm (>=4.66.1,<5.0.0)
+Description-Content-Type: text/markdown
+
+# mocap-base
+
+
+![wemake-python-styleguide](https://img.shields.io/badge/style-wemake-7F00FF.svg)
+![python3.10](https://img.shields.io/badge/python-3.10-blue)
+![Coverage](./coverage-badge.svg)
+[![Continuous Integration](https://github.com/move-ai/mocap-base/actions/workflows/continous_integration.yml/badge.svg)](https://github.com/move-ai/mocap-base/actions/workflows/continous_integration.yml)
+[![Release](https://github.com/move-ai/mocap-base/actions/workflows/release.yml/badge.svg)](https://github.com/move-ai/mocap-base/actions/workflows/release.yml)
+
+## Description
+
+
+
+   
+## Installation
+
+1. Install the latest [aws-cli2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+
+2. Configure your sso as below:
+
+```bash
+aws configure sso
+  name = moveai
+  start url = https://d-93676e215a.awsapps.com/start#
+  region = eu-west-1
+  registration scopes =
+  profile name: default
+aws sso login --profile <profile_name>
+```
+
+3. Install [poetry](https://python-poetry.org/docs/#installation):
+
+```bash
+pip install poetry
+```
+
+Run the following with your profile name:
+
+```bash
+export AWS_PIP_PASSWORD=`aws codeartifact get-authorization-token --profile <profile_name> --domain moveai --domain-owner 103680339861 --region eu-west-1 --query authorizationToken --output text`
+poetry config http-basic.move aws $AWS_PIP_PASSWORD
+poetry install
+```
+
+## Pre-commit for contribution
+
+After you perform `poetry install`, please perform the following command. This will allow the pre-commit checks to run each time you commit a new change to git.
+
+```poetry run pre-commit install```
+
+
+## Usage
+    # TODO: Add instructions in https://moveai.atlassian.net/browse/EGT-391
+
+## Tests
+
+From the repo root directory, run:
+
+```bash
+poetry run pytest
+
+```
+
+
+## Version control
+
+This repository follows a trunk-based development in git i.e. all changes are merged to main directly and all branches are created from main. For more info please see [this documentation](https://www.atlassian.com/continuous-delivery/continuous-integration/trunk-based-development).
+
+All PRs are merged to main directly and all branches are created from main. Only these branches are allowed to be merged to the main branch: feature/, hotfix/, bugfix/, dependabot/, cruft/
+
+Note:
+ - Direct pushes to main are not allowed (this is because of the enforced ruleset on github)
+ - All changes to be merged to main via a pull request
+ - A PR can't be merged until both `unittest` and `pre-commit` checks have been passed
+
+Please refer to [this](https://www.notion.so/moveai/SPIKE-Infrastructure-36ec9c8c8d114a84bfa0611be6e6f150#752e1d53eb814e2c8820ae3eef48141a) notion doc on the git flow used in this repository.
+
+
+## PyPi release
+
+An encrypted version of this package will be released on pypi automatically as part of the release workflow (`release.yml`). If this package doesn't need to be on pypi, please remove this job manually from `.github/workflows/release.yml`
+
+### Troubleshooting
+
+- If the pypi release workflow gets stuck, please make sure that another workflow (in another `mocap-*`) is not running. If another workflow is currently running, then please wait for it to be finished and then try again.
+- This is because the WIBU token can only be run on one instance at a time, each subsequent workflow should have a one hour difference between runs - this is a known limitation and would be fixed in a future version of the release workflow in `mocap-template`.
+
+### Encryption setup files
+
+We need the following files for the debianize release action to be able to create an accurate `.deb` release.
+
+1. protect.WibuCpsConf: contains the Wibu configuration to encrpyt the package correctly.
+2. CMakeLists.txt: contains a set of directives and instructions describing the project's source files and targets.
+3. resources/postinst_template: the post installation template for this project.
