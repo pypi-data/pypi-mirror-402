@@ -1,0 +1,164 @@
+# This workflow will upload a Python Package using Twine when a release is created
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
+
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build make-argocd-fly
+    runs-on: make-argocd-fly
+
+    steps:
+      - uses: actions/checkout@v4
+        # https://github.com/actions/checkout/issues/335
+      - name: Get tags
+        run: git fetch --tags origin
+      - if: ${{ runner.arch == 'arm64' }}
+        name: Set up Python
+        uses: deadsnakes/action@v3.1.0
+        with:
+          python-version: "3.11"
+      - if: ${{ runner.arch == 'amd64' }}
+        name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements.dev.txt ]; then pip install -r requirements.dev.txt; fi
+      - name: Build package
+        run: python -m build
+      - name: Store the distribution packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+  # `pypa/gh-action-pypi-publish` runs in docker, which does not work on self-hosted runners in kubernetes mode
+  publish-to-testpypi:
+    name: Publish make-argocd-fly to TestPyPI
+    needs:
+      - build
+    runs-on: make-argocd-fly
+
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/make-argocd-fly
+
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+      - if: ${{ runner.arch == 'arm64' }}
+        name: Set up Python
+        uses: deadsnakes/action@v3.1.0
+        with:
+          python-version: "3.11"
+      - if: ${{ runner.arch == 'amd64' }}
+        name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Clone Repository
+        run: git clone --depth 1 --branch v1.12.4 https://github.com/pypa/gh-action-pypi-publish.git
+      - name: Install pip packages
+        run: |
+          cd gh-action-pypi-publish
+          PIP_CONSTRAINT=requirements/runtime-prerequisites.txt pip install -r requirements/runtime-prerequisites.in
+          PIP_CONSTRAINT=requirements/runtime.txt pip install -r requirements/runtime.in
+      - name: Prepare scripts
+        run: |
+          sudo mkdir /app
+          sudo chown -R runner:runner /app
+          cp gh-action-pypi-publish/twine-upload.sh gh-action-pypi-publish/*.py /app
+          cp -r dist /app/dist
+          chmod +x /app/twine-upload.sh
+      - name: Publish package to TestPyPI
+        run: |
+          PYTHONPATH=/usr/lib/python3/site-packages \
+          INPUT_USER=__token__ \
+          INPUT_PASSWORD="" \
+          INPUT_VERBOSE=false \
+          INPUT_REPOSITORY_URL=https://test.pypi.org/legacy/ \
+          INPUT_PACKAGES_DIR=/app/dist \
+          INPUT_VERIFY_METADATA=true \
+          INPUT_SKIP_EXISTING=false \
+          INPUT_PRINT_HASH=false \
+          INPUT_ATTESTATIONS=false \
+          /app/twine-upload.sh
+
+  publish-to-pypi:
+    name: Publish make-argocd-fly to PyPI
+    needs:
+      - publish-to-testpypi
+    runs-on: make-argocd-fly
+
+    environment:
+      name: pypi
+      url: https://pypi.org/p/make-argocd-fly
+
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+      - if: ${{ runner.arch == 'arm64' }}
+        name: Set up Python
+        uses: deadsnakes/action@v3.1.0
+        with:
+          python-version: "3.11"
+      - if: ${{ runner.arch == 'amd64' }}
+        name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Clone Repository
+        run: git clone --depth 1 --branch v1.12.4 https://github.com/pypa/gh-action-pypi-publish.git
+      - name: Install pip packages
+        run: |
+          cd gh-action-pypi-publish
+          PIP_CONSTRAINT=requirements/runtime-prerequisites.txt pip install -r requirements/runtime-prerequisites.in
+          PIP_CONSTRAINT=requirements/runtime.txt pip install -r requirements/runtime.in
+      - name: Prepare scripts
+        run: |
+          sudo mkdir /app
+          sudo chown -R runner:runner /app
+          cp gh-action-pypi-publish/twine-upload.sh gh-action-pypi-publish/*.py /app
+          cp -r dist /app/dist
+          chmod +x /app/twine-upload.sh
+      - name: Publish package to PyPI
+        run: |
+          PYTHONPATH=/usr/lib/python3/site-packages \
+          INPUT_USER=__token__ \
+          INPUT_PASSWORD="" \
+          INPUT_VERBOSE=false \
+          INPUT_REPOSITORY_URL=https://upload.pypi.org/legacy/ \
+          INPUT_PACKAGES_DIR=/app/dist \
+          INPUT_VERIFY_METADATA=true \
+          INPUT_SKIP_EXISTING=false \
+          INPUT_PRINT_HASH=false \
+          INPUT_ATTESTATIONS=false \
+          /app/twine-upload.sh
