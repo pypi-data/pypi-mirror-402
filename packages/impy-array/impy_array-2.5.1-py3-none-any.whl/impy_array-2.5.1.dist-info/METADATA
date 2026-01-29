@@ -1,0 +1,219 @@
+Metadata-Version: 2.4
+Name: impy-array
+Version: 2.5.1
+Summary: Speed up coding/extending image analysis in Python.
+Project-URL: Download, https://github.com/hanjinliu/impy
+Author-email: Hanjin Liu <liuhanjin-sc@g.ecc.u-tokyo.ac.jp>
+License: BSD 3-Clause License
+        
+        Copyright (c) 2021, hanjinliu
+        All rights reserved.
+        
+        Redistribution and use in source and binary forms, with or without
+        modification, are permitted provided that the following conditions are met:
+        
+        1. Redistributions of source code must retain the above copyright notice, this
+           list of conditions and the following disclaimer.
+        
+        2. Redistributions in binary form must reproduce the above copyright notice,
+           this list of conditions and the following disclaimer in the documentation
+           and/or other materials provided with the distribution.
+        
+        3. Neither the name of the copyright holder nor the names of its
+           contributors may be used to endorse or promote products derived from
+           this software without specific prior written permission.
+        
+        THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+        AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+        IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+        DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+        FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+        DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+        SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+        CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+        OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+        OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+License-File: LICENSE
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: Implementation :: CPython
+Classifier: Programming Language :: Python :: Implementation :: PyPy
+Requires-Python: >=3.9
+Requires-Dist: dask>=2021.6.0
+Requires-Dist: numpy>=1.22
+Requires-Dist: pandas>=1.3
+Requires-Dist: scikit-image>=0.20.0
+Requires-Dist: scipy>=1.7
+Provides-Extra: all
+Requires-Dist: mrcfile; extra == 'all'
+Requires-Dist: napari>=0.4.17; extra == 'all'
+Requires-Dist: roifile; extra == 'all'
+Requires-Dist: tifffile; extra == 'all'
+Requires-Dist: zarr; extra == 'all'
+Provides-Extra: mrc
+Requires-Dist: mrcfile; extra == 'mrc'
+Provides-Extra: napari
+Requires-Dist: napari>=0.4.17; extra == 'napari'
+Provides-Extra: testing
+Requires-Dist: dask-image; extra == 'testing'
+Requires-Dist: mrcfile; extra == 'testing'
+Requires-Dist: pytest; extra == 'testing'
+Requires-Dist: roifile; extra == 'testing'
+Requires-Dist: tifffile; extra == 'testing'
+Requires-Dist: zarr; extra == 'testing'
+Provides-Extra: tiff
+Requires-Dist: tifffile; extra == 'tiff'
+Provides-Extra: zarr
+Requires-Dist: zarr; extra == 'zarr'
+Description-Content-Type: text/markdown
+
+[![BSD 3-Clause License](https://img.shields.io/pypi/l/impy-array.svg?color=green)](https://github.com/hanjinliu/impy/blob/main/LICENSE)
+[![Python package index download statistics](https://img.shields.io/pypi/dm/impy-array.svg)](https://pypistats.org/packages/impy-array)
+[![PyPI version](https://badge.fury.io/py/impy-array.svg)](https://badge.fury.io/py/impy-array)
+
+# impy
+
+`impy` is an all-in-one multi-dimensional image analysis library. The core array,
+`ImgArray`, is a subclass of `numpy.ndarray`, tagged with information such as:
+
+- image axes
+- scale of each axis
+- directory of the original image
+- and other image metadata
+
+## Documentation
+
+Documentation is available [here](https://hanjinliu.github.io/impy/).
+
+## Installation
+
+- use pip
+
+``` sh
+pip install impy-array
+pip install impy-array[tiff]    # with supports for reading/writing .tif files
+pip install impy-array[mrc]     # with supports for reading/writing .mrc files
+pip install impy-array[napari]  # viewer support
+pip install impy-array[all]     # install everything
+```
+
+- from source
+
+```
+git clone https://github.com/hanjinliu/impy
+```
+
+### Code as fast as you speak
+
+Almost all the functions, such as filtering, deconvolution, labeling, single molecule
+detection, and even those pure `numpy` functions, are aware of image metadata. They
+"know" which dimension corresponds to `"z"` axis, which axes they should iterate along
+or where to save the image. As a result, **your code will be very concise**:
+
+```python
+import impy as ip
+import numpy as np
+
+img = ip.imread("path/to/image.tif")   # Read images with metadata.
+img["z=3;t=0"].imshow()                # Plot image slice at z=3 and t=0.
+img["y=N//4:N//4*3"].imshow()          # `N` for the size of the axis.
+img_fil = img.gaussian_filter(sigma=2) # Paralell batch denoising. No more for loop!
+img_prj = np.max(img_fil, axis="z")    # Z-projection (numpy is aware of image axes!).
+img_prj.imsave("image_max.tif")        # Save in the same place. Don't spend time on searching for the directory!
+```
+
+### Supports many file formats
+
+`impy` automatically chooses the proper reader/writer according to the extension.
+
+- Tiff file (".tif", ".tiff")
+- LSM file (".lsm")
+- MRC file (".mrc", ".rec", ".st", ".map", ".map.gz")
+- Zarr file (".zarr")
+- ND2 file (".nd2")
+- Other image file (".png", ".jpg")
+
+### Lazy loading
+
+With the `lazy` submodule, you can easily make image processing workflows for large
+images.
+
+```python
+import impy as ip
+
+img = ip.lazy.imread("path/to/very-large-image.tif")
+out = img.gaussian_filter()
+out.imsave("image_filtered.tif")
+```
+
+### Switch between CPU and GPU
+
+`impy` can internally switches the functions between `numpy` and `cupy`.
+
+```python
+img.gaussian_filter()  # <- CPU
+with ip.use("cupy"):
+    img.gaussian_filter()  # <- GPU
+ip.Const["RESOURCE"] = "cupy"  # <- globally use GPU
+```
+
+### Seamless interface between `napari`
+
+[napari](https://github.com/napari/napari) is an interactive viewer for multi-dimensional
+images. `impy` has a **simple and efficient interface** with it, via the object `ip.gui`.
+Since `ImgArray` is tagged with image metadata, you don't have to care about axes or
+scales. Just run
+
+```python
+ip.gui.add(img)
+```
+
+### Extend your function for batch processing
+
+Already have a function for `numpy` and `scipy`? Decorate it with `@ip.bind`
+
+```python
+@ip.bind
+def imfilter(img, param=None):
+    # Your function here.
+    # Do something on a 2D or 3D image and return image, scalar or labels
+    return out
+```
+
+and it's ready for batch processing!
+
+```python
+img.imfilter(param=1.0)
+```
+
+### Command line usage
+
+`impy` also supports command-line-based image analysis. All methods of `ImgArray` are
+available from the command line, such as
+
+```shell
+impy path/to/image.tif ./output.tif --method gaussian_filter --sigma 2.0
+```
+
+which is equivalent to
+
+```python
+import impy as ip
+img = ip.imread("path/to/image.tif")
+out = img.gaussian_filter(sigma=2.0)
+out.imsave("./output.tif")
+```
+
+For more complex procedures, it is possible to send images directly to `IPython`
+
+```
+impy path/to/image.tif -i
+```
+
+```python
+thr = img.gaussian_filter().threshold()
+```
