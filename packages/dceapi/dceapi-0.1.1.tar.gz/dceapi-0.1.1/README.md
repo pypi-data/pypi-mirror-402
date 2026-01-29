@@ -1,0 +1,230 @@
+# dceapi-py
+
+[![PyPI version](https://img.shields.io/pypi/v/dceapi.svg)](https://pypi.org/project/dceapi/) [![Python Support](https://img.shields.io/pypi/pyversions/dceapi.svg)](https://pypi.org/project/dceapi/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Downloads](https://img.shields.io/pypi/dm/dceapi.svg)](https://pypi.org/project/dceapi/) [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black) [![Checked with mypy](https://img.shields.io/badge/mypy-checked-blue.svg)](http://mypy-lang.org/) [![GitHub issues](https://img.shields.io/github/issues/pseudocodes/dceapi-py.svg)](https://github.com/pseudocodes/dceapi-py/issues) [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/pseudocodes/dceapi-py/graphs/commit-activity)
+
+大连商品交易所 (DCE) API v1.0 Python SDK
+
+## 功能特性
+
+- 类型提示支持（Type Hints）
+- 自动 Token 管理和刷新
+- 完整的错误处理
+- 支持期货和期权交易类型
+- 支持中英文语言切换
+- 异步和同步请求支持
+
+## 安装
+
+```bash
+pip install dceapi
+```
+
+或从源码安装：
+
+```bash
+git clone https://github.com/pseudocodes/dceapi-py.git
+cd dceapi-py
+pip install -e .
+```
+
+## 快速开始
+
+### 环境变量配置
+
+```bash
+export DCE_API_KEY="your-api-key"
+export DCE_SECRET="your-secret"
+```
+
+### 基本使用
+
+```python
+import os
+from dceapi import Client, Config
+
+# 方法 1: 从环境变量创建客户端（推荐）
+client = Client.from_env()
+
+# 方法 2: 使用配置对象
+config = Config(
+    api_key="your-api-key",
+    secret="your-secret"
+)
+client = Client(config)
+
+# 获取当前交易日期
+trade_date = client.common.get_curr_trade_date()
+print(f"当前交易日期: {trade_date.trade_date}")
+
+# 获取品种列表
+varieties = client.common.get_variety_list(trade_type=1)  # 1=期货
+print(f"品种数量: {len(varieties)}")
+
+# 获取日行情
+from dceapi.models import QuotesRequest
+quotes_req = QuotesRequest(
+    variety_id="c",
+    trade_date="20240115",
+    trade_type="1"
+)
+quotes = client.market.get_day_quotes(quotes_req)
+for quote in quotes:
+    print(f"{quote.contract_id}: {quote.last_price}")
+```
+
+### 自定义配置
+
+```python
+from dceapi import Client, Config
+
+config = Config(
+    api_key="your-api-key",
+    secret="your-secret",
+    base_url="http://www.dce.com.cn",
+    timeout=30.0,
+    lang="zh",      # "zh" 或 "en"
+    trade_type=1    # 1=期货, 2=期权
+)
+
+client = Client(config)
+```
+
+### 错误处理
+
+```python
+from dceapi import Client, APIError, AuthError, NetworkError, ValidationError
+
+client = Client.from_env()
+
+try:
+    trade_date = client.common.get_curr_trade_date()
+except ValidationError as e:
+    print(f"验证错误: {e}")
+except AuthError as e:
+    print(f"认证错误: {e}")
+except APIError as e:
+    print(f"API 错误 {e.code}: {e.message}")
+except NetworkError as e:
+    print(f"网络错误: {e}")
+```
+
+## 项目结构
+
+```
+dceapi-py/
+├── src/
+│   └── dceapi/              # SDK 实现代码
+│       ├── __init__.py      # 包入口
+│       ├── client.py        # 客户端入口
+│       ├── config.py        # 配置管理
+│       ├── errors.py        # 错误类型定义
+│       ├── http.py          # HTTP 请求处理
+│       ├── models.py        # 数据模型
+│       ├── token.py         # Token 管理
+│       └── services/        # API 服务
+│           ├── __init__.py
+│           ├── common.py
+│           ├── news.py
+│           ├── market.py
+│           ├── trade.py
+│           ├── settle.py
+│           ├── member.py
+│           └── delivery.py
+├── examples/                # 使用示例
+│   ├── basic.py
+│   └── complete.py
+├── tests/                   # 测试
+├── pyproject.toml          # 项目配置
+├── setup.py                # 安装脚本
+└── README.md               # 文档
+```
+
+## API 服务
+
+### Common Service (通用服务)
+
+```python
+# 获取当前交易日期
+trade_date = client.common.get_curr_trade_date()
+
+# 获取品种列表
+varieties = client.common.get_variety_list(trade_type=1)
+```
+
+### News Service (资讯服务)
+
+```python
+from dceapi.models import GetArticleByPageRequest
+
+# 获取文章列表
+req = GetArticleByPageRequest(
+    column_id="244",  # 交易所公告
+    page_no=1,
+    page_size=10,
+    site_id=5
+)
+result = client.news.get_article_by_page(req)
+
+# 获取文章详情
+article = client.news.get_article_detail(article_id="12345")
+```
+
+### Market Service (行情服务)
+
+```python
+from dceapi.models import QuotesRequest, WeekQuotesRequest
+
+# 获取日行情
+req = QuotesRequest(variety_id="c", trade_date="20240115", trade_type="1")
+quotes = client.market.get_day_quotes(req)
+
+# 获取夜盘行情
+quotes = client.market.get_night_quotes(req)
+
+# 获取周行情
+req = WeekQuotesRequest(variety_code="c", year=2024, week=2)
+quotes = client.market.get_week_quotes(req)
+```
+
+## 开发
+
+### 安装开发依赖
+
+```bash
+pip install -e ".[dev]"
+```
+
+### 运行测试
+
+```bash
+pytest
+```
+
+### 代码格式化
+
+```bash
+black src/ tests/
+```
+
+### 类型检查
+
+```bash
+mypy src/
+```
+
+## 许可证
+
+MIT License
+
+## 相关项目
+
+- [dceapi-go](https://github.com/pseudocodes/dceapi-go) - Go SDK
+- [dceapi-rs](https://github.com/pseudocodes/dceapi-rs) - Rust SDK
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+## 支持
+
+如有问题，请提交 Issue 或联系维护者。
