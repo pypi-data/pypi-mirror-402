@@ -1,0 +1,10 @@
+"""Gymnasium Environment for the game Pickomino, Heckmeck in German."""
+
+from gymnasium.envs.registration import register  # pyright: ignore[reportUnknownVariableType]
+
+# Only register. Gymnasium loads the class with gym.make()
+register(
+    id="Pickomino-v0",
+    entry_point="pickomino_env.pickomino:PickominoEnv",
+    max_episode_steps=200,
+)
