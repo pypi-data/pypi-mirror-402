@@ -1,0 +1,257 @@
+apiVersion: batch.volcano.sh/v1alpha1
+kind: Job
+metadata:
+  annotations:
+    remark: ""
+  labels:
+    reclaimableByVolcano: "{{RECLAIMABLEBYVOLCANO}}"
+    app: {{APP_NAME}}-prefill
+  name: {{APP_NAME}}-prefill
+  namespace: {{NAMESPACE}}
+spec:
+  minAvailable: {{PREFILL_NODES}}
+  plugins:
+    env: []
+    pytorch:
+    - --master=master
+    - --worker=worker
+    - --port=30023
+    ssh: []
+    svc: []
+  priorityClassName: {{PRIORITYCLASSNAME}}
+  queue: {{QUEUE}}
+  schedulerName: volcano
+  tasks:
+  - minAvailable: 1
+    name: master
+    replicas: 1
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          app: {{APP_NAME}}-prefill
+          model: {{SERVED_MODEL_NAME}}
+          cluster: {{CLUSTER_NAME}}
+          north-job-type: serving
+      spec:
+        containers:
+        - args:
+          - --norc
+          - -c
+          - mkdir -p /gpfs/users/{{USER_NAME}}/tmp/.ips && echo `hostname -i` > /gpfs/users/{{USER_NAME}}/tmp/.ips/{{DEPLOYMENT_UUID}}-prefill-head.ip && {{PREFILL_CMDLINE}}
+          command:
+          - /bin/bash
+          env:
+          - name: PYTHONNOUSERSITE
+            value: "1"
+          - name: NCCL_IB_QPS_PER_CONNECTION
+            value: "2"
+          - name: NCCL_SOCKET_IFNAME
+            value: bond0
+          - name: NCCL_IB_TIMEOUT
+            value: "22"
+          - name: NCCL_IB_GID_INDEX
+            value: "3"
+          - name: NCCL_DEBUG
+            value: INFO
+          - name: CUDA_DEVICE_MAX_CONNECTIONS
+            value: "1"
+          - name: NCCL_NVLS_ENABLE
+            value: "0"
+          - name: SGLANG_DG_CACHE_DIR
+            value: "/gpfs/users/wangguoteng/.deep_geem_sglang/deep_gemm"
+          - name: SGL_JIT_DEEPGEMM_PRECOMPILE
+            value: "false"
+          - name: SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT
+            value: "3600"
+          - name: SGLANG_DISAGGREGATION_WAITING_TIMEOUT
+            value: "3600"
+          - name: USER
+            value: {{USER_NAME}}
+          - name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: north-llm-api-secret
+                key: REDIS_PASSWORD
+          - name: REDIS_HOST
+            valueFrom:
+              secretKeyRef:
+                name: north-llm-api-secret
+                key: REDIS_HOST
+          - name: REDIS_PORT
+            valueFrom:
+              secretKeyRef:
+                name: north-llm-api-secret
+                key: REDIS_PORT
+          - name: REDIS_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: north-llm-api-secret
+                key: REDIS_USERNAME
+          - name: JOB_NAME
+            value: {{APP_NAME}}-prefill
+          - name: DEPLOYMENT_UUID
+            value: {{DEPLOYMENT_UUID}}
+{%- if HAS_EXTRA_ENVS %}
+          {%- for key, value in EXTRA_ENVS.items() %}
+          - name: {{key}}
+            value: "{{value}}"
+          {%- endfor -%}
+{%- endif %}
+          image: {{PREFILL_IMAGE}}
+          imagePullPolicy: IfNotPresent
+          name: master
+          resources:
+            limits:
+              cpu: "0"
+              memory: 1500Gi
+              nvidia.com/{{GPU_TYPE}}: "{{GPUS_PER_POD}}"
+              rdma/hca_shared_devices: "1"
+            requests:
+              cpu: "0"
+              memory: 1500Gi
+          securityContext:
+            capabilities:
+              add:
+              - IPC_LOCK
+              - SYS_RESOURCE
+            privileged: true
+          volumeMounts:
+          - mountPath: /data
+            name: hostpath-0
+          - mountPath: /gpfs
+            name: hostpath-1
+          - mountPath: /dev/shm
+            name: emptydir-0
+        dnsPolicy: ClusterFirstWithHostNet
+        hostNetwork: true
+        restartPolicy: Never
+        volumes:
+        - hostPath:
+            path: /data
+          name: hostpath-0
+        - hostPath:
+            path: /gpfs
+          name: hostpath-1
+        - emptyDir:
+            medium: Memory
+            sizeLimit: 32Gi
+          name: emptydir-0
+{%- if PREFILL_NODES|int > 1 %}
+  - minAvailable: {{PREFILL_NODES - 1}}
+    name: worker
+    replicas: {{PREFILL_NODES - 1}}
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          app: {{APP_NAME}}-prefill
+          model: {{SERVED_MODEL_NAME}}
+          cluster: {{CLUSTER_NAME}}
+          north-job-type: serving
+      spec:
+        containers:
+        - args:
+          - --norc
+          - -c
+          - {{PREFILL_CMDLINE}}
+          command:
+          - /bin/bash
+          env:
+          - name: PYTHONNOUSERSITE
+            value: "1"
+          - name: NCCL_IB_QPS_PER_CONNECTION
+            value: "2"
+          - name: NCCL_SOCKET_IFNAME
+            value: bond0
+          - name: NCCL_IB_TIMEOUT
+            value: "22"
+          - name: NCCL_IB_GID_INDEX
+            value: "3"
+          - name: NCCL_DEBUG
+            value: INFO
+          - name: CUDA_DEVICE_MAX_CONNECTIONS
+            value: "1"
+          - name: NCCL_NVLS_ENABLE
+            value: "0"
+          - name: SGLANG_DG_CACHE_DIR
+            value: "/gpfs/users/wangguoteng/.deep_geem_sglang/deep_gemm"
+          - name: SGL_JIT_DEEPGEMM_PRECOMPILE
+            value: "false"
+          - name: SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT
+            value: "3600"
+          - name: SGLANG_DISAGGREGATION_WAITING_TIMEOUT
+            value: "3600"
+          - name: USER
+            value: {{USER_NAME}}
+          - name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: north-llm-api-secret
+                key: REDIS_PASSWORD
+          - name: REDIS_HOST
+            valueFrom:
+              secretKeyRef:
+                name: north-llm-api-secret
+                key: REDIS_HOST
+          - name: REDIS_PORT
+            valueFrom:
+              secretKeyRef:
+                name: north-llm-api-secret
+                key: REDIS_PORT
+          - name: REDIS_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: north-llm-api-secret
+                key: REDIS_USERNAME
+          - name: JOB_NAME
+            value: {{APP_NAME}}-prefill
+          - name: DEPLOYMENT_UUID
+            value: {{DEPLOYMENT_UUID}}
+{%- if HAS_EXTRA_ENVS %}
+          {%- for key, value in EXTRA_ENVS.items() %}
+          - name: {{key}}
+            value: "{{value}}"
+          {%- endfor -%}
+{%- endif %}
+          image: {{PREFILL_IMAGE}}
+          imagePullPolicy: IfNotPresent
+          name: worker
+          resources:
+            limits:
+              cpu: "0"
+              memory: 1500Gi
+              nvidia.com/{{GPU_TYPE}}: "{{GPUS_PER_POD}}"
+              rdma/hca_shared_devices: "1"
+            requests:
+              cpu: "0"
+              memory: 1500Gi
+          securityContext:
+            capabilities:
+              add:
+              - IPC_LOCK
+              - SYS_RESOURCE
+            privileged: true
+          volumeMounts:
+          - mountPath: /data
+            name: hostpath-0
+          - mountPath: /gpfs
+            name: hostpath-1
+          - mountPath: /dev/shm
+            name: emptydir-0
+        dnsPolicy: ClusterFirstWithHostNet
+        hostNetwork: true
+        restartPolicy: Never
+        volumes:
+        - hostPath:
+            path: /data
+          name: hostpath-0
+        - hostPath:
+            path: /gpfs
+          name: hostpath-1
+        - emptyDir:
+            medium: Memory
+            sizeLimit: 32Gi
+          name: emptydir-0
+{%- endif %}
+
