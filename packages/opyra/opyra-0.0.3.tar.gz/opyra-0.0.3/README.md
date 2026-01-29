@@ -1,0 +1,120 @@
+# Opyra
+
+**The "Buttery Smooth" Registry-Based ORM for Python.**
+
+Opyraa next-generation data layer built on top of **msgspec**. It unifies SQL (Postgres, SQLite) and NoSQL (MongoDB) under a single, ultra-fast, type-safe API using the **Registry Pattern**.
+
+It eliminates "Global State" and "Boilerplate Fatigue" by using explicit `Operation` registries and "Bound Instances" ("The Bloodline").
+
+[![PyPI version](https://badge.fury.io/py/opyra.svg)](https://badge.fury.io/py/opyra)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+---
+
+## 🚀 Why Opyra
+
+*   **Registry Pattern:** Explicitly register schemas with an `Operation` engine. No magic globals.
+*   **Bound Instances:** Objects know where they belong. `user.save()` just works because the user carries "The Bloodline" (the engine reference).
+*   **Dirty Tracking:** Automatic change detection. Calling `.save()` only updates what changed (efficient `UPDATE` vs `INSERT`).
+*   **Universal API:** Switch from SQLite to Postgres to Mongo without rewriting your model logic.
+*   **Blazing Fast:** Built on `msgspec` (faster than Pydantic/JSON) and native async drivers (`asyncpg`, `motor`).
+
+---
+
+## 📦 Installation
+
+```bash
+pip install opyra
+
+# Install drivers as needed:
+pip install opyra[postgres]  # installs asyncpg
+pip install opyra[mongo]     # installs motor
+pip install opyra[sqlite]    # installs aiosqlite
+```
+
+---
+
+## ⚡ Quickstart
+
+### 1. Define your Schema
+Inherit from `Table` (SQL) or `Document` (NoSQL). These are pure data structures (`msgspec.Struct`).
+
+```python
+from opyra import Table, Document
+
+class User(Table):
+    id: int
+    name: str
+    email: str
+```
+
+### 2. Initialize the Operation
+Create an engine and register your models. This is your "Database Context".
+
+```python
+from opyra import Operation
+
+op = Operation("postgres://user:pass@localhost:5432/mydb")
+op.register(User) 
+# Now available as 'op.user' (snake_case automation)
+```
+
+### 3. Use it!
+
+**Factory Access (Creating Data)**:
+Use `op.user(...)` to create a "Bound Instance".
+```python
+# Create alice attached to this engine
+alice = op.user(name="Alice", email="alice@example.com") 
+
+# Save detects this is a NEW record (no ID) -> INSERT
+await alice.save() 
+print(alice.id) # ID is auto-populated
+```
+
+**Repository Access (Querying Data)**:
+Use `op.user.find(...)` to search.
+```python
+# Find by ID
+user = await op.user.find(1)
+
+# Find by Template (Fluent API)
+users = await op.user(name="Alice").find()
+```
+
+**Dirty Tracking (Updating Data)**:
+Modify fields naturally. Opyracks changes.
+```python
+user.name = "Alice Wonder"
+# Save detects EXISTING record + Dirty Fields -> UPDATE users SET name='Alice Wonder' WHERE id=1
+await user.save()
+```
+
+---
+
+## 🏗️ Web Framework Integration
+
+Opyradesigned for dependency injection.
+
+```python
+# app.py
+op = Operation(os.getenv("DATABASE_URL"))
+op.register(User)
+op.register(Post)
+
+# Inject into your app
+app.keep('op', op)
+
+# handling request
+async def get_user(req, res, ctx):
+    op = ctx.peek('op')
+    user = await op.user.find(int(req.params['id']))
+    res.body = user
+```
+
+---
+
+## License
+
+MIT
