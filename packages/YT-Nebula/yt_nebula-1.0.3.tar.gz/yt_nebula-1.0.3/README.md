@@ -1,0 +1,29 @@
+# 🌌 YT-NEBULA
+
+**yt-nebula** is a terminal UI (TUI) for downloading YouTube music and videos with zero friction. Built for speed, privacy, and ease of use.
+
+## 🚀 Features
+* **One-click sync:** Just search, hit enter, and nebula does the rest.
+* **High-quality formats:** Choose between MP3 (Audio) and MP4 (Video).
+* **Automatic Metadata:** Every download includes thumbnails and song tags (Artist, Title).
+
+## 🛠️ Installation
+
+### 1. Prerequisites
+You **must** have `ffmpeg` installed on your system for audio conversion and video merging.
+
+* **Fedora/RHEL:** `sudo dnf install ffmpeg`
+* **Ubuntu/Debian:** `sudo apt install ffmpeg`
+* **Arch Linux:** `sudo pacman -S ffmpeg`
+
+### 2. Install Nebula
+Clone the repo and install it locally:
+
+```bash
+git clone https://github.com/andrestube/yt-nebula.git
+cd yt-nebula
+pip install .
+```
+
+## ⚖️ License
+MIT License - feel free to use and modify.
