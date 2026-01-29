@@ -1,0 +1,41 @@
+{% import 'common/macros.j2' as macros %}
+{% for plan in resources %}
+{% if not loop.first %}
+
+{% endif %}
+resource "azurerm_service_plan" "{{ plan.name_sanitized }}" {
+  name                = "{{ plan.name }}"
+  location            = "{{ plan.location }}"
+  resource_group_name = "{{ plan.resource_group_name }}"
+  
+  os_type = {% if plan.reserved is defined and plan.reserved is not none %}"{{ 'Linux' if plan.reserved else 'Windows' }}"{% elif plan.kind and 'linux' in plan.kind.lower() %}"Linux"{% elif plan.name and 'linux' in plan.name.lower() %}"Linux"{% elif plan.os_type and plan.os_type != "Windows" %}"{{ plan.os_type }}"{% else %}"Windows"{% endif %}
+  
+  {% if plan.maximum_elastic_worker_count %}
+  maximum_elastic_worker_count = {{ plan.maximum_elastic_worker_count }}
+  {% endif %}
+  
+  {% if plan.hosting_environment_profile and plan.hosting_environment_profile.id %}
+  app_service_environment_id = "{{ plan.hosting_environment_profile.id }}"
+  {% endif %}
+  
+  {% if plan.per_site_scaling is defined %}
+  per_site_scaling = {{ plan.per_site_scaling | lower }}
+  {% endif %}
+  
+  {% if plan.zone_redundant is defined %}
+  zone_redundant = {{ plan.zone_redundant | lower }}
+  {% endif %}
+  
+  {% if plan.sku_formatted %}
+  sku_name = "{{ plan.sku_formatted.size }}"
+  {% if plan.sku_formatted.capacity %}
+  worker_count = {{ plan.sku_formatted.capacity }}
+  {% endif %}
+  {% else %}
+  sku_name = "{{ plan.sku.size }}"
+  {% endif %}
+
+{{ macros.render_tags(plan.tags) }}
+}
+
+{% endfor %}

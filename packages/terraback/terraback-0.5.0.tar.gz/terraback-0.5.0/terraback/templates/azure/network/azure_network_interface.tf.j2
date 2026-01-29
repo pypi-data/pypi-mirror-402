@@ -1,0 +1,61 @@
+{% extends "common/base_resource.tf.j2" %}
+{% from "common/base_resource.tf.j2" import render_common_tags %}
+{% block resources %}
+{% for nic in resources %}
+{{ resource_spacer() }}
+resource "azurerm_network_interface" "{{ nic.name_sanitized }}" {
+  name                = "{{ nic.name }}"
+  location            = "{{ nic.location }}"
+  resource_group_name = "{{ nic.resource_group_name }}"
+
+  {% if nic.dns_servers %}
+  dns_servers = {{ nic.dns_servers | tojson }}
+  {%  endif %}
+
+  {% if nic.enable_ip_forwarding is not none %}
+  ip_forwarding_enabled = {{ nic.enable_ip_forwarding | lower }}
+  {%  endif %}
+
+  {% if nic.enable_accelerated_networking is not none %}
+  accelerated_networking_enabled = {{ nic.enable_accelerated_networking | lower }}
+  {%  endif %}
+
+  {% if nic.internal_dns_name_label %}
+  internal_dns_name_label = "{{ nic.internal_dns_name_label }}"
+  {%  endif %}
+
+  {% for ip_config in nic.ip_configuration %}
+  ip_configuration {
+    name                          = "{{ ip_config.name }}"
+    subnet_id                     = "{{ ip_config.subnet_id }}"
+    private_ip_address_allocation = "{{ ip_config.private_ip_address_allocation }}"
+    {% if ip_config.private_ip_address %}
+    private_ip_address            = "{{ ip_config.private_ip_address }}"
+    {%  endif %}
+    {% if ip_config.public_ip_address_id %}
+    public_ip_address_id          = "{{ ip_config.public_ip_address_id }}"
+    {%  endif %}
+    primary                       = {{ ip_config.primary | lower }}
+    {% if ip_config.private_ip_address_version %}
+    private_ip_address_version    = "{{ ip_config.private_ip_address_version }}"
+    {%  endif %}
+  }
+  {% endfor %}
+
+  {% if nic.tags %}
+  tags = {
+    {% for key, value in nic.tags.items() %}
+    "{{ key }}" = "{{ value }}"{{ "," if not loop.last }}
+    {% endfor %}
+  }
+  {%  endif %}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+
+
+{% endfor %}
+{% endblock %}

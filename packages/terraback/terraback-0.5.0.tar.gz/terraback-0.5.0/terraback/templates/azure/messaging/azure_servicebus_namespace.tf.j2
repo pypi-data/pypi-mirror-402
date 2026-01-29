@@ -1,0 +1,53 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_servicebus_namespace" "{{ resource.name }}" {
+  name                = "{{ resource.properties.name }}"
+  location            = "{{ resource.properties.location }}"
+  resource_group_name = "{{ resource.properties.resource_group_name }}"
+  sku                 = "{{ resource.properties.sku }}"
+  
+  {% if resource.properties.capacity is defined %}
+  capacity = {{ resource.properties.capacity }}
+  {% endif %}
+  
+  {% if resource.properties.local_auth_enabled is defined %}
+  local_auth_enabled = {{ resource.properties.local_auth_enabled | lower }}
+  {% endif %}
+  
+  {% if resource.properties.public_network_access_enabled is defined %}
+  public_network_access_enabled = {{ resource.properties.public_network_access_enabled | lower }}
+  {% endif %}
+  
+  {% if resource.properties.minimum_tls_version is defined and resource.properties.minimum_tls_version %}
+  minimum_tls_version = "{{ resource.properties.minimum_tls_version }}"
+  {% endif %}
+  
+  
+  {% if resource.properties.identity is defined and resource.properties.identity and resource.properties.identity.type is defined %}
+  identity {
+    type = "{{ resource.properties.identity.type }}"
+    {% if resource.properties.identity.identity_ids is defined %}
+    identity_ids = {{ resource.properties.identity.identity_ids | tojson }}
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.properties.customer_managed_key is defined and resource.properties.customer_managed_key and resource.properties.customer_managed_key.key_vault_key_id is defined %}
+  customer_managed_key {
+    key_vault_key_id = "{{ resource.properties.customer_managed_key.key_vault_key_id }}"
+    {% if resource.properties.customer_managed_key.identity_id is defined %}
+    identity_id      = "{{ resource.properties.customer_managed_key.identity_id }}"
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.properties.tags is defined and resource.properties.tags %}
+  tags = {{ resource.properties.tags | tojson }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

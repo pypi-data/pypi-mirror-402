@@ -1,0 +1,148 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_monitor_action_group" "{{ resource.name }}" {
+  name                = "{{ resource.properties.name }}"
+  resource_group_name = "{{ resource.properties.resource_group_name }}"
+  short_name          = "{{ resource.properties.short_name }}"
+  
+  {% if resource.properties.enabled is defined %}
+  enabled = {{ resource.properties.enabled | lower }}
+  {% endif %}
+  
+  {% if resource.properties.arm_role_receivers is defined %}
+  {% for receiver in resource.properties.arm_role_receivers %}
+  arm_role_receiver {
+    name                    = "{{ receiver.name }}"
+    role_id                 = "{{ receiver.role_id }}"
+    use_common_alert_schema = {{ receiver.use_common_alert_schema | default(false) | lower }}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.automation_runbook_receivers is defined %}
+  {% for receiver in resource.properties.automation_runbook_receivers %}
+  automation_runbook_receiver {
+    name                    = "{{ receiver.name }}"
+    automation_account_id   = "{{ receiver.automation_account_id }}"
+    runbook_name            = "{{ receiver.runbook_name }}"
+    webhook_resource_id     = "{{ receiver.webhook_resource_id }}"
+    is_global_runbook       = {{ receiver.is_global_runbook | default(false) | lower }}
+    service_uri             = "{{ receiver.service_uri }}"
+    use_common_alert_schema = {{ receiver.use_common_alert_schema | default(false) | lower }}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.azure_app_push_receivers is defined %}
+  {% for receiver in resource.properties.azure_app_push_receivers %}
+  azure_app_push_receiver {
+    name          = "{{ receiver.name }}"
+    email_address = "{{ receiver.email_address }}"
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.azure_function_receivers is defined %}
+  {% for receiver in resource.properties.azure_function_receivers %}
+  azure_function_receiver {
+    name                     = "{{ receiver.name }}"
+    function_app_resource_id = "{{ receiver.function_app_resource_id }}"
+    function_name            = "{{ receiver.function_name }}"
+    http_trigger_url         = "{{ receiver.http_trigger_url }}"
+    use_common_alert_schema  = {{ receiver.use_common_alert_schema | default(false) | lower }}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.email_receivers is defined %}
+  {% for receiver in resource.properties.email_receivers %}
+  email_receiver {
+    name                    = "{{ receiver.name }}"
+    email_address           = "{{ receiver.email_address }}"
+    use_common_alert_schema = {{ receiver.use_common_alert_schema | default(false) | lower }}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.event_hub_receivers is defined %}
+  {% for receiver in resource.properties.event_hub_receivers %}
+  event_hub_receiver {
+    name                    = "{{ receiver.name }}"
+    event_hub_namespace     = "{{ receiver.event_hub_namespace }}"
+    event_hub_name          = "{{ receiver.event_hub_name }}"
+    subscription_id         = "{{ receiver.subscription_id | default(resource.properties.subscription_id) }}"
+    use_common_alert_schema = {{ receiver.use_common_alert_schema | default(false) | lower }}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.itsm_receivers is defined %}
+  {% for receiver in resource.properties.itsm_receivers %}
+  itsm_receiver {
+    name                 = "{{ receiver.name }}"
+    workspace_id         = "{{ receiver.workspace_id }}"
+    connection_id        = "{{ receiver.connection_id }}"
+    ticket_configuration = "{{ receiver.ticket_configuration }}"
+    region               = "{{ receiver.region }}"
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.logic_app_receivers is defined %}
+  {% for receiver in resource.properties.logic_app_receivers %}
+  logic_app_receiver {
+    name                    = "{{ receiver.name }}"
+    resource_id             = "{{ receiver.resource_id }}"
+    callback_url            = "{{ receiver.callback_url }}"
+    use_common_alert_schema = {{ receiver.use_common_alert_schema | default(false) | lower }}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.sms_receivers is defined %}
+  {% for receiver in resource.properties.sms_receivers %}
+  sms_receiver {
+    name         = "{{ receiver.name }}"
+    country_code = "{{ receiver.country_code }}"
+    phone_number = "{{ receiver.phone_number }}"
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.voice_receivers is defined %}
+  {% for receiver in resource.properties.voice_receivers %}
+  voice_receiver {
+    name         = "{{ receiver.name }}"
+    country_code = "{{ receiver.country_code }}"
+    phone_number = "{{ receiver.phone_number }}"
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.webhook_receivers is defined %}
+  {% for receiver in resource.properties.webhook_receivers %}
+  webhook_receiver {
+    name                    = "{{ receiver.name }}"
+    service_uri             = "{{ receiver.service_uri }}"
+    use_common_alert_schema = {{ receiver.use_common_alert_schema | default(false) | lower }}
+    {% if receiver.aad_auth is defined %}
+    aad_auth {
+      object_id      = "{{ receiver.aad_auth.object_id }}"
+      identifier_uri = "{{ receiver.aad_auth.identifier_uri | default('') }}"
+      tenant_id      = "{{ receiver.aad_auth.tenant_id | default('') }}"
+    }
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.tags is defined and resource.properties.tags %}
+  tags = {{ resource.properties.tags | tojson }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

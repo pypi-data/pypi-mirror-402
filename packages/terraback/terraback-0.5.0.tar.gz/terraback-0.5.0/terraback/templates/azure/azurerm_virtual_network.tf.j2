@@ -1,0 +1,36 @@
+{%- for vnet in resources %}
+{% if vnet.name_sanitized and vnet.name_sanitized != "unnamed_resource" %}
+# Azure Virtual Network: {{ vnet.raw.name }}
+resource "azurerm_virtual_network" "{{ vnet.name_sanitized }}" {
+  # Import: terraform import azurerm_virtual_network.{{ vnet.name_sanitized }} {{ vnet.import_id }}
+
+  name                = "{{ vnet.raw.name }}"
+  location            = "{{ vnet.raw.location }}"
+  resource_group_name = "{{ vnet.raw.id.split('/')[4] }}"  # Extract RG from ID
+
+  {%- if vnet.raw.address_space and vnet.raw.address_space.address_prefixes %}
+  address_space = [
+    {%- for prefix in vnet.raw.address_space.address_prefixes %}
+    "{{ prefix }}"{{ "," if not loop.last }}
+    {%- endfor %}
+  ]
+  {%- endif %}
+
+  {%- if vnet.raw.dns_servers %}
+  dns_servers = [
+    {%- for dns in vnet.raw.dns_servers %}
+    "{{ dns }}"{{ "," if not loop.last }}
+    {%- endfor %}
+  ]
+  {%- endif %}
+
+  {%- if vnet.raw.tags %}
+  tags = {
+    {%- for key, value in vnet.raw.tags.items() %}
+    {{ key }} = "{{ value }}"
+    {%- endfor %}
+  }
+  {%- endif %}
+}
+{% endif %}
+{%- endfor %}

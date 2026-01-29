@@ -1,0 +1,37 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for method in resources %}
+{{ resource_spacer() }}
+resource "aws_api_gateway_method" "{{ method.name_sanitized }}" {
+  rest_api_id   = "{{ method.rest_api_id }}"
+  resource_id   = "{{ method.resource_id }}"
+  http_method   = "{{ method.http_method }}"
+  authorization = "{{ method.authorizationType | default(method.authorization) | default('NONE') }}"
+  
+  {% if method.authorizerId or method.authorizer_id %}
+  authorizer_id = "{{ method.authorizerId | default(method.authorizer_id) }}"
+  {% endif %}
+  
+  {% if method.authorizationScopes or method.authorization_scopes %}
+  authorization_scopes = {{ method.authorizationScopes | default(method.authorization_scopes) | tojson }}
+  {% endif %}
+  
+  {% if method.apiKeyRequired is defined or method.api_key_required is defined %}
+  api_key_required = {{ method.apiKeyRequired | default(method.api_key_required) | tf_bool }}
+  {% endif %}
+  
+  {% if method.requestModels or method.request_models %}
+  request_models = {{ method.requestModels | default(method.request_models) | tojson }}
+  {% endif %}
+  
+  {% if method.requestParameters or method.request_parameters %}
+  request_parameters = {{ method.requestParameters | default(method.request_parameters) | tojson }}
+  {% endif %}
+  
+  {% if method.requestValidatorId or method.request_validator_id %}
+  request_validator_id = "{{ method.requestValidatorId | default(method.request_validator_id) }}"
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

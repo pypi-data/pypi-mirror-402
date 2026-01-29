@@ -1,0 +1,41 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for deployment in resources %}
+{{ resource_spacer() }}
+resource "aws_api_gateway_deployment" "{{ deployment.name_sanitized }}" {
+  rest_api_id = "{{ deployment.rest_api_id or deployment.restApiId }}"
+  
+  {% if deployment.description %}
+  description = "{{ deployment.description }}"
+  {% endif %}
+  
+  {% if deployment.stage_name %}
+  stage_name = "{{ deployment.stage_name }}"
+  {% endif %}
+  
+  {% if deployment.stage_description %}
+  stage_description = "{{ deployment.stage_description }}"
+  {% endif %}
+  
+  {% if deployment.variables %}
+  variables = {{ deployment.variables | tojson }}
+  {% endif %}
+  
+  {% if deployment.method_hashes %}
+  # Ensure deployment happens after methods are created
+  triggers = {
+    redeployment = sha1(jsonencode([
+      {% for hash in deployment.method_hashes %}
+      "{{ hash }}",
+      {% endfor %}
+    ]))
+  }
+  {% endif %}
+  
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

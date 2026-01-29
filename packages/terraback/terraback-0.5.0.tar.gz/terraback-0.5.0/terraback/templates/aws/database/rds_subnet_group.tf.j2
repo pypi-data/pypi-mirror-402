@@ -1,0 +1,19 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for subnet_group in resources %}
+{{ resource_spacer() }}
+resource "aws_db_subnet_group" "{{ subnet_group.name_sanitized }}" {
+  name       = "{{ subnet_group.DBSubnetGroupName }}"
+  subnet_ids = [{% for subnet in subnet_group.Subnets %}
+  "{{ subnet.SubnetIdentifier }}"{{ "," if not loop.last }}{% endfor %}
+  ]
+
+  {% if subnet_group.DBSubnetGroupDescription %}
+  description = "{{ subnet_group.DBSubnetGroupDescription }}"
+  {% endif %}
+
+  {{ render_common_tags(subnet_group, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

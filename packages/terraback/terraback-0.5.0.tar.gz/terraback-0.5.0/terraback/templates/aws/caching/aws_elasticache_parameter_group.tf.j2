@@ -1,0 +1,24 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for pg in resources %}
+{{ resource_spacer() }}
+resource "aws_elasticache_parameter_group" "{{ pg.name_sanitized }}" {
+  family = "{{ pg.CacheParameterGroupFamily }}"
+  name   = "{{ pg.CacheParameterGroupName }}"
+
+  {% if pg.get('Description') %}
+  description = "{{ pg.Description }}"
+  {%  endif %}
+
+  {% for param in pg.get('parameters_formatted', []) %}
+  parameter {
+    name  = "{{ param.name }}"
+    value = "{{ param.value }}"
+  }
+  {% endfor %}
+
+  {{ render_common_tags(pg, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

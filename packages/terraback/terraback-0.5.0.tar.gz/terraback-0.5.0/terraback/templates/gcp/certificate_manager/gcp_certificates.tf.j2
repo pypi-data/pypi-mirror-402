@@ -1,0 +1,48 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% import "common/macros.j2" as macros %}
+{% block resources %}
+{% for cert in resources %}
+{{ resource_spacer() }}
+resource "google_certificate_manager_certificate" "{{ cert.name | replace('-', '_') }}" {
+  name        = "{{ cert.name }}"
+  {% if cert.description %}
+  description = "{{ cert.description }}"
+  {% endif %}
+  location    = "{{ cert.location }}"
+  
+  {% if cert.scope %}
+  scope       = "{{ cert.scope }}"
+  {% endif %}
+  
+  {% if cert.managed %}
+  managed {
+    domains = {{ cert.managed.domains | tojson }}
+    {% if cert.managed.dns_authorizations %}
+    dns_authorizations = {{ cert.managed.dns_authorizations | tojson }}
+    {% endif %}
+    {% if cert.managed.issuance_config %}
+    issuance_config = "{{ cert.managed.issuance_config }}"
+    {% endif %}
+  }
+  {% elif cert.self_managed %}
+  self_managed {
+    pem_certificate = file("${path.module}/certs/{{ cert.name }}.crt")
+    pem_private_key = file("${path.module}/certs/{{ cert.name }}.key")
+  }
+  {% endif %}
+  
+  {% if cert.labels %}
+  labels = {
+    {% for key, value in cert.labels.items() %}
+    {{ key }} = "{{ value }}"{{ "," if not loop.last }}
+    {% endfor %}
+  }
+  {% endif %}
+  
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,172 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for node_group in resources %}
+{{ resource_spacer() }}
+resource "aws_eks_node_group" "{{ node_group.name_sanitized }}" {
+  cluster_name    = "{{ node_group.clusterName }}"
+  node_group_name = "{{ node_group.nodeGroupName }}"
+  node_role_arn   = "{{ node_group.nodeRoleArn }}"
+  
+  {% if node_group.get('subnets') %}
+  subnet_ids = {{ node_group.subnets | tojson }}
+  {% elif node_group.get('subnet_ids') %}
+  subnet_ids = {{ node_group.subnet_ids | tojson }}
+  {% endif %}
+
+  {% if node_group.get('version') %}
+  version = "{{ node_group.version }}"
+  {% endif %}
+
+  {% if node_group.get('release_version') %}
+  release_version = "{{ node_group.release_version }}"
+  {% endif %}
+
+  {% if node_group.get('ami_type') %}
+  ami_type = "{{ node_group.ami_type }}"
+  {% endif %}
+
+  {% if node_group.get('capacity_type') %}
+  capacity_type = "{{ node_group.capacity_type }}"
+  {% endif %}
+
+  {% if node_group.get('disk_size') %}
+  disk_size = {{ node_group.disk_size }}
+  {% endif %}
+
+  {% if node_group.get('instance_types') %}
+  instance_types = {{ node_group.instance_types | tojson }}
+  {% endif %}
+
+  {% if node_group.get('labels') %}
+  labels = {{ node_group.labels | tojson }}
+  {% endif %}
+
+  {% if node_group.get('scaling_config') %}
+  scaling_config {
+    {% if node_group.scaling_config.get('desired_size') %}
+    desired_size = {{ node_group.scaling_config.desired_size }}
+    {% endif %}
+    {% if node_group.scaling_config.get('max_size') %}
+    max_size = {{ node_group.scaling_config.max_size }}
+    {% endif %}
+    {% if node_group.scaling_config.get('min_size') %}
+    min_size = {{ node_group.scaling_config.min_size }}
+    {% endif %}
+  }
+  {% elif node_group.get('scalingConfig') %}
+  scaling_config {
+    {% if node_group.scalingConfig.get('desiredSize') %}
+    desired_size = {{ node_group.scalingConfig.desiredSize }}
+    {% endif %}
+    {% if node_group.scalingConfig.get('maxSize') %}
+    max_size = {{ node_group.scalingConfig.maxSize }}
+    {% endif %}
+    {% if node_group.scalingConfig.get('minSize') %}
+    min_size = {{ node_group.scalingConfig.minSize }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if node_group.get('update_config') %}
+  update_config {
+    {% if node_group.update_config.get('max_unavailable') %}
+    max_unavailable = {{ node_group.update_config.max_unavailable }}
+    {% endif %}
+    {% if node_group.update_config.get('max_unavailable_percentage') %}
+    max_unavailable_percentage = {{ node_group.update_config.max_unavailable_percentage }}
+    {% endif %}
+  }
+  {% elif node_group.get('updateConfig') %}
+  update_config {
+    {% if node_group.updateConfig.get('maxUnavailable') %}
+    max_unavailable = {{ node_group.updateConfig.maxUnavailable }}
+    {% endif %}
+    {% if node_group.updateConfig.get('maxUnavailablePercentage') %}
+    max_unavailable_percentage = {{ node_group.updateConfig.maxUnavailablePercentage }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if node_group.get('remote_access') %}
+  remote_access {
+    {% if node_group.remote_access.get('ec2_ssh_key') %}
+    ec2_ssh_key = "{{ node_group.remote_access.ec2_ssh_key }}"
+    {% endif %}
+    {% if node_group.remote_access.get('source_security_group_ids') %}
+    source_security_group_ids = {{ node_group.remote_access.source_security_group_ids | tojson }}
+    {% endif %}
+  }
+  {% elif node_group.get('remoteAccess') %}
+  remote_access {
+    {% if node_group.remoteAccess.get('ec2SshKey') %}
+    ec2_ssh_key = "{{ node_group.remoteAccess.ec2SshKey }}"
+    {% endif %}
+    {% if node_group.remoteAccess.get('sourceSecurityGroups') %}
+    source_security_group_ids = {{ node_group.remoteAccess.sourceSecurityGroups | tojson }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if node_group.get('launch_template') %}
+  launch_template {
+    {% if node_group.launch_template.get('id') %}
+    id = "{{ node_group.launch_template.id }}"
+    {% endif %}
+    {% if node_group.launch_template.get('name') %}
+    name = "{{ node_group.launch_template.name }}"
+    {% endif %}
+    {% if node_group.launch_template.get('version') %}
+    version = "{{ node_group.launch_template.version }}"
+    {% endif %}
+  }
+  {% elif node_group.get('launchTemplate') %}
+  launch_template {
+    {% if node_group.launchTemplate.get('id') %}
+    id = "{{ node_group.launchTemplate.id }}"
+    {% endif %}
+    {% if node_group.launchTemplate.get('name') %}
+    name = "{{ node_group.launchTemplate.name }}"
+    {% endif %}
+    {% if node_group.launchTemplate.get('version') %}
+    version = "{{ node_group.launchTemplate.version }}"
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if node_group.get('taints') %}
+  {% for taint in node_group.taints %}
+  taint {
+    key    = "{{ taint.key }}"
+    value  = "{{ taint.value }}"
+    effect = "{{ taint.effect }}"
+  }
+  {% endfor %}
+  {% endif %}
+
+  {{ render_common_tags(node_group, indent=2) }}
+
+  {% if node_group.get('lifecycle_ignore_changes') %}
+  lifecycle {
+    ignore_changes = [
+      {% for change in node_group.lifecycle_ignore_changes %}
+      {{ change }}{{ "," if not loop.last }}
+      {% endfor %}
+    ]
+  }
+  {% else %}
+  lifecycle {
+    ignore_changes = [scaling_config[0].desired_size]
+  }
+  {% endif %}
+
+  depends_on = [
+    {% if node_group.get('iam_role_policy_attachments') %}
+    {% for attachment in node_group.iam_role_policy_attachments %}
+    aws_iam_role_policy_attachment.{{ attachment }},
+    {% endfor %}
+    {% endif %}
+  ]
+}
+
+{% endfor %}
+{% endblock %}

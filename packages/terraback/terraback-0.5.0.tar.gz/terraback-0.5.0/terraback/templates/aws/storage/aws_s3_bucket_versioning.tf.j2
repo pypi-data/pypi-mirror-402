@@ -1,0 +1,19 @@
+{% extends "aws/base_resource.tf.j2" %}
+{# Terraform for S3 bucket versioning configuration #}
+{% block resources %}
+{% for bucket in resources %}
+{% if bucket.Name and bucket.name_sanitized and bucket.name_sanitized != "unnamed_resource" %}
+resource "aws_s3_bucket_versioning" "{{ bucket.name_sanitized }}" {
+  bucket = aws_s3_bucket.{{ bucket.name_sanitized }}.id
+
+  versioning_configuration {
+    status = "{{ bucket.Status }}"
+    {% if bucket.get('MFADelete') %}
+    mfa_delete = "{{ bucket.MFADelete }}"
+    {% endif %}
+  }
+}
+{% endif %}
+{% endfor %}
+{% endblock %}
+

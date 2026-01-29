@@ -1,0 +1,46 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for disk in resources %}
+
+# Import existing disk: {{ disk.name }}
+import {
+  to = google_compute_disk.{{ disk.name_sanitized }}
+  id = "{{ disk.id }}"
+}
+
+{{ resource_spacer() }}
+resource "google_compute_disk" "{{ disk.name_sanitized }}" {
+  name     = "{{ disk.name }}"
+  type     = "{{ disk.type }}"
+  zone     = "{{ disk.zone }}"
+  size     = {{ disk.size_gb }}
+  project  = "{{ disk.project }}"
+  {% if disk.image %}
+  image    = "{{ disk.image }}"
+  {%  endif %}
+  {% if disk.labels %}
+  labels = {
+    {% for key, value in disk.labels.items() %}
+    "{{ key }}" = "{{ value }}"{{ "," if not loop.last }}
+    {% endfor %}
+  }
+  {%  endif %}
+
+  {% if disk.disk_encryption_key %}
+  disk_encryption_key {
+    {% if disk.disk_encryption_key.raw_key %}
+    raw_key = "{{ disk.disk_encryption_key.raw_key }}"
+    {%  endif %}
+    {% if disk.disk_encryption_key.kms_key_self_link %}
+    kms_key_self_link = "{{ disk.disk_encryption_key.kms_key_self_link }}"
+    {%  endif %}
+  }
+  {%  endif %}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for eip in resources %}
+{{ resource_spacer() }}
+resource "aws_eip" "{{ eip.AllocationId | strip_id_prefix | tf_resource_name }}" {
+  domain = "{{ eip.Domain }}"
+
+  {% if eip.get('InstanceId') %}
+  instance = "{{ eip.InstanceId }}"
+  {%  endif %}
+
+  {% if eip.get('NetworkInterfaceId') %}
+  network_interface = "{{ eip.NetworkInterfaceId }}"
+  {%  endif %}
+
+  {{ render_common_tags(eip, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

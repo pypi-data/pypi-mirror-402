@@ -1,0 +1,77 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_eventhub_namespace" "{{ resource.name }}" {
+  name                = "{{ resource.name }}"
+  location            = "{{ resource.location }}"
+  resource_group_name = "{{ resource.resource_group_name }}"
+  sku                 = "{{ resource.sku | default('Standard') }}"
+  
+  {% if resource.capacity is defined %}
+  capacity = {{ resource.capacity }}
+  {% endif %}
+  
+  {% if resource.auto_inflate_enabled is defined %}
+  auto_inflate_enabled = {{ resource.auto_inflate_enabled | lower }}
+  {% if resource.auto_inflate_enabled and resource.maximum_throughput_units is defined %}
+  maximum_throughput_units = {{ resource.maximum_throughput_units }}
+  {% endif %}
+  {% endif %}
+  
+  
+  {% if resource.network_rulesets is defined and resource.network_rulesets %}
+  {% set ruleset = resource.network_rulesets[0] %}
+  network_rulesets {
+    default_action                 = "{{ ruleset.default_action | default('Deny') }}"
+    trusted_service_access_enabled = {{ ruleset.trusted_service_access_enabled | default(false) | lower }}
+    
+    {% if ruleset.ip_rule is defined %}
+    {% for rule in ruleset.ip_rule %}
+    ip_rule {
+      ip_mask = "{{ rule.ip_mask }}"
+      {% if rule.action is defined %}
+      action  = "{{ rule.action }}"
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+    
+    {% if ruleset.virtual_network_rule is defined %}
+    {% for rule in ruleset.virtual_network_rule %}
+    virtual_network_rule {
+      subnet_id                                       = "{{ rule.subnet_id }}"
+      ignore_missing_virtual_network_service_endpoint = {{ rule.ignore_missing_virtual_network_service_endpoint | default(false) | lower }}
+    }
+    {% endfor %}
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.identity is defined and resource.identity and resource.identity.type is defined %}
+
+  
+  identity {
+
+  
+    type = "{{ resource.identity.type }}"
+    {% if resource.identity.identity_ids is defined %}
+    identity_ids = {{ resource.identity.identity_ids | tojson }}
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.encryption is defined and resource.encryption and resource.encryption.key_vault_key_id is defined %}
+  customer_managed_key {
+    key_vault_key_id = "{{ resource.encryption.key_vault_key_id }}"
+  }
+  {% endif %}
+  
+  {% if resource.tags is defined and resource.tags %}
+  tags = {{ resource.tags | tojson }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,126 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for svc in resources %}
+{{ resource_spacer() }}
+resource "google_compute_region_backend_service" "{{ svc.name_sanitized }}" {
+  name   = "{{ svc.name }}"
+  region = "{{ svc.region }}"
+
+  {% if svc.description %}
+  description = "{{ svc.description }}"
+  {% endif %}
+
+  {% if svc.protocol %}
+  protocol = "{{ svc.protocol }}"
+  {% endif %}
+  {% if svc.port %}
+  port = {{ svc.port }}
+  {% endif %}
+  {% if svc.port_name %}
+  port_name = "{{ svc.port_name }}"
+  {% endif %}
+  {% if svc.timeout_sec %}
+  timeout_sec = {{ svc.timeout_sec }}
+  {% endif %}
+  {% if svc.session_affinity %}
+  session_affinity = "{{ svc.session_affinity }}"
+  {% endif %}
+  {% if svc.affinity_cookie_ttl_sec %}
+  affinity_cookie_ttl_sec = {{ svc.affinity_cookie_ttl_sec }}
+  {% endif %}
+  {% if svc.load_balancing_scheme %}
+  load_balancing_scheme = "{{ svc.load_balancing_scheme }}"
+  {% endif %}
+  {% if svc.locality_lb_policy %}
+  locality_lb_policy = "{{ svc.locality_lb_policy }}"
+  {% endif %}
+
+  {% if svc.network %}
+  network = "{{ svc.network }}"
+  {% endif %}
+
+  {% if svc.health_checks %}
+  health_checks = {{ svc.health_checks | tojson }}
+  {% endif %}
+
+  {% if svc.backends %}
+  {% for backend in svc.backends %}
+  backend {
+    {% if backend.group %}
+    group = "{{ backend.group }}"
+    {% endif %}
+    {% if backend.balancing_mode %}
+    balancing_mode = "{{ backend.balancing_mode }}"
+    {% endif %}
+    {% if backend.max_rate %}
+    max_rate = {{ backend.max_rate }}
+    {% endif %}
+    {% if backend.max_rate_per_instance %}
+    max_rate_per_instance = {{ backend.max_rate_per_instance }}
+    {% endif %}
+    {% if backend.max_rate_per_endpoint %}
+    max_rate_per_endpoint = {{ backend.max_rate_per_endpoint }}
+    {% endif %}
+    {% if backend.max_connections %}
+    max_connections = {{ backend.max_connections }}
+    {% endif %}
+    {% if backend.max_connections_per_instance %}
+    max_connections_per_instance = {{ backend.max_connections_per_instance }}
+    {% endif %}
+    {% if backend.max_connections_per_endpoint %}
+    max_connections_per_endpoint = {{ backend.max_connections_per_endpoint }}
+    {% endif %}
+    {% if backend.max_utilization %}
+    max_utilization = {{ backend.max_utilization }}
+    {% endif %}
+    {% if backend.capacity_scaler %}
+    capacity_scaler = {{ backend.capacity_scaler }}
+    {% endif %}
+    {% if backend.description %}
+    description = "{{ backend.description }}"
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if svc.connection_draining %}
+  connection_draining {
+    {% if svc.connection_draining.draining_timeout_sec %}
+    draining_timeout_sec = {{ svc.connection_draining.draining_timeout_sec }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if svc.log_config %}
+  log_config {
+    {% if svc.log_config.enable is not none %}
+    enable = {{ svc.log_config.enable | lower }}
+    {% endif %}
+    {% if svc.log_config.sample_rate %}
+    sample_rate = {{ svc.log_config.sample_rate }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if svc.security_policy %}
+  security_policy = "{{ svc.security_policy }}"
+  {% endif %}
+
+  {% if svc.custom_request_headers %}
+  custom_request_headers = {{ svc.custom_request_headers | tojson }}
+  {% endif %}
+  {% if svc.custom_response_headers %}
+  custom_response_headers = {{ svc.custom_response_headers | tojson }}
+  {% endif %}
+
+  {% if svc.labels %}
+  labels = {{ svc.labels | tojson }}
+  {% endif %}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

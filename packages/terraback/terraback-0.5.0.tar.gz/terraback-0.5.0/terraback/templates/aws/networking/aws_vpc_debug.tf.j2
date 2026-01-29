@@ -1,0 +1,18 @@
+{% from "common/base_resource.tf.j2" import render_common_tags %}
+{% for vpc in resources %}
+# DEBUG: VPC data structure
+# EnableDnsSupport type: {{ vpc.get('EnableDnsSupport').__class__.__name__ if vpc.get('EnableDnsSupport') is not none else 'None' }}
+# EnableDnsSupport value: {{ vpc.get('EnableDnsSupport') }}
+# EnableDnsHostnames type: {{ vpc.get('EnableDnsHostnames').__class__.__name__ if vpc.get('EnableDnsHostnames') is not none else 'None' }}  
+# EnableDnsHostnames value: {{ vpc.get('EnableDnsHostnames') }}
+
+resource "aws_vpc" "{{ vpc.name_sanitized }}" {
+  cidr_block           = "{{ vpc.CidrBlock }}"
+  instance_tenancy     = "{{ vpc.InstanceTenancy }}"
+  enable_dns_support   = {{ 'true' if vpc.get('EnableDnsSupport', True) else 'false' }}
+  enable_dns_hostnames = {{ 'true' if vpc.get('EnableDnsHostnames', False) else 'false' }}
+
+  {{ render_common_tags(vpc, indent=2) }}
+}
+
+{% endfor %}

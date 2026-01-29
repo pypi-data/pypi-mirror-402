@@ -1,0 +1,30 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for doc in resources %}
+{{ resource_spacer() }}
+resource "aws_ssm_document" "{{ doc.name_sanitized }}" {
+  name            = "{{ doc.Name }}"
+  document_type   = "{{ doc.DocumentType }}"
+  document_format = "{{ doc.DocumentFormat }}"
+
+  content = <<DOC
+{{ doc.Content }}
+DOC
+
+  {% if doc.get('Description') %}
+  description = "{{ doc.Description }}"
+  {%  endif %}
+
+  {% if doc.get('TargetType') %}
+  target_type = "{{ doc.TargetType }}"
+  {%  endif %}
+
+  {% if doc.get('VersionName') %}
+  version_name = "{{ doc.VersionName }}"
+  {%  endif %}
+
+  {{ render_common_tags(doc, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,214 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for ca in resources %}
+{{ resource_spacer() }}
+resource "google_privateca_certificate_authority" "{{ ca.name_sanitized }}" {
+  certificate_authority_id = "{{ ca.certificate_authority_id }}"
+  location                 = "{{ ca.location }}"
+  
+  {% if ca.get('pool') %}
+  pool                     = "{{ ca.pool }}"
+  {% endif %}
+
+  {% if ca.get('project') %}
+
+  {% endif %}
+
+  {% if ca.get('type') %}
+  type                     = "{{ ca.type }}"
+  {% endif %}
+
+  {% if ca.get('tier') %}
+  tier                     = "{{ ca.tier }}"
+  {% endif %}
+
+  config {
+    subject_config {
+      subject {
+        {% if ca.config.subject_config.subject.get('organization') %}
+        organization = "{{ ca.config.subject_config.subject.organization }}"
+        {% endif %}
+        
+        {% if ca.config.subject_config.subject.get('common_name') %}
+        common_name = "{{ ca.config.subject_config.subject.common_name }}"
+        {% endif %}
+        
+        {% if ca.config.subject_config.subject.get('country_code') %}
+        country_code = "{{ ca.config.subject_config.subject.country_code }}"
+        {% endif %}
+        
+        {% if ca.config.subject_config.subject.get('locality') %}
+        locality = "{{ ca.config.subject_config.subject.locality }}"
+        {% endif %}
+        
+        {% if ca.config.subject_config.subject.get('organizational_unit') %}
+        organizational_unit = "{{ ca.config.subject_config.subject.organizational_unit }}"
+        {% endif %}
+        
+        {% if ca.config.subject_config.subject.get('postal_code') %}
+        postal_code = "{{ ca.config.subject_config.subject.postal_code }}"
+        {% endif %}
+        
+        {% if ca.config.subject_config.subject.get('province') %}
+        province = "{{ ca.config.subject_config.subject.province }}"
+        {% endif %}
+        
+        {% if ca.config.subject_config.subject.get('street_address') %}
+        street_address = "{{ ca.config.subject_config.subject.street_address }}"
+        {% endif %}
+      }
+      
+      {% if ca.config.subject_config.get('subject_alt_name') %}
+      subject_alt_name {
+        {% if ca.config.subject_config.subject_alt_name.get('dns_names') %}
+        dns_names = [
+          {% for dns in ca.config.subject_config.subject_alt_name.dns_names %}
+          "{{ dns }}"{{ "," if not loop.last }}
+          {% endfor %}
+        ]
+        {% endif %}
+        
+        {% if ca.config.subject_config.subject_alt_name.get('email_addresses') %}
+        email_addresses = [
+          {% for email in ca.config.subject_config.subject_alt_name.email_addresses %}
+          "{{ email }}"{{ "," if not loop.last }}
+          {% endfor %}
+        ]
+        {% endif %}
+        
+        {% if ca.config.subject_config.subject_alt_name.get('ip_addresses') %}
+        ip_addresses = [
+          {% for ip in ca.config.subject_config.subject_alt_name.ip_addresses %}
+          "{{ ip }}"{{ "," if not loop.last }}
+          {% endfor %}
+        ]
+        {% endif %}
+        
+        {% if ca.config.subject_config.subject_alt_name.get('uris') %}
+        uris = [
+          {% for uri in ca.config.subject_config.subject_alt_name.uris %}
+          "{{ uri }}"{{ "," if not loop.last }}
+          {% endfor %}
+        ]
+        {% endif %}
+      }
+      {% endif %}
+    }
+    
+    x509_config {
+      {% if ca.config.x509_config.get('ca_options') %}
+      ca_options {
+        {% if ca.config.x509_config.ca_options.get('is_ca') is not none %}
+        is_ca = {{ ca.config.x509_config.ca_options.is_ca | lower }}
+        {% endif %}
+        
+        {% if ca.config.x509_config.ca_options.get('max_issuer_path_length') is not none %}
+        max_issuer_path_length = {{ ca.config.x509_config.ca_options.max_issuer_path_length }}
+        {% endif %}
+        
+        {% if ca.config.x509_config.ca_options.get('non_ca') is not none %}
+        non_ca = {{ ca.config.x509_config.ca_options.non_ca | lower }}
+        {% endif %}
+        
+        {% if ca.config.x509_config.ca_options.get('zero_max_issuer_path_length') is not none %}
+        zero_max_issuer_path_length = {{ ca.config.x509_config.ca_options.zero_max_issuer_path_length | lower }}
+        {% endif %}
+      }
+      {% endif %}
+      
+      {% if ca.config.x509_config.get('key_usage') %}
+      key_usage {
+        base_key_usage {
+          {% if ca.config.x509_config.key_usage.base_key_usage.get('cert_sign') is not none %}
+          cert_sign = {{ ca.config.x509_config.key_usage.base_key_usage.cert_sign | lower }}
+          {% endif %}
+          
+          {% if ca.config.x509_config.key_usage.base_key_usage.get('crl_sign') is not none %}
+          crl_sign = {{ ca.config.x509_config.key_usage.base_key_usage.crl_sign | lower }}
+          {% endif %}
+          
+          {% if ca.config.x509_config.key_usage.base_key_usage.get('digital_signature') is not none %}
+          digital_signature = {{ ca.config.x509_config.key_usage.base_key_usage.digital_signature | lower }}
+          {% endif %}
+          
+          {% if ca.config.x509_config.key_usage.base_key_usage.get('key_agreement') is not none %}
+          key_agreement = {{ ca.config.x509_config.key_usage.base_key_usage.key_agreement | lower }}
+          {% endif %}
+          
+          {% if ca.config.x509_config.key_usage.base_key_usage.get('key_encipherment') is not none %}
+          key_encipherment = {{ ca.config.x509_config.key_usage.base_key_usage.key_encipherment | lower }}
+          {% endif %}
+        }
+        
+        extended_key_usage {
+          {% if ca.config.x509_config.key_usage.extended_key_usage.get('server_auth') is not none %}
+          server_auth = {{ ca.config.x509_config.key_usage.extended_key_usage.server_auth | lower }}
+          {% endif %}
+          
+          {% if ca.config.x509_config.key_usage.extended_key_usage.get('client_auth') is not none %}
+          client_auth = {{ ca.config.x509_config.key_usage.extended_key_usage.client_auth | lower }}
+          {% endif %}
+          
+          {% if ca.config.x509_config.key_usage.extended_key_usage.get('code_signing') is not none %}
+          code_signing = {{ ca.config.x509_config.key_usage.extended_key_usage.code_signing | lower }}
+          {% endif %}
+          
+          {% if ca.config.x509_config.key_usage.extended_key_usage.get('email_protection') is not none %}
+          email_protection = {{ ca.config.x509_config.key_usage.extended_key_usage.email_protection | lower }}
+          {% endif %}
+          
+          {% if ca.config.x509_config.key_usage.extended_key_usage.get('ocsp_signing') is not none %}
+          ocsp_signing = {{ ca.config.x509_config.key_usage.extended_key_usage.ocsp_signing | lower }}
+          {% endif %}
+          
+          {% if ca.config.x509_config.key_usage.extended_key_usage.get('time_stamping') is not none %}
+          time_stamping = {{ ca.config.x509_config.key_usage.extended_key_usage.time_stamping | lower }}
+          {% endif %}
+        }
+      }
+      {% endif %}
+    }
+  }
+
+  {% if ca.get('lifetime') %}
+  lifetime = "{{ ca.lifetime }}"
+  {% endif %}
+
+  key_spec {
+    {% if ca.key_spec.get('algorithm') %}
+    algorithm = "{{ ca.key_spec.algorithm }}"
+    {% endif %}
+    
+    {% if ca.key_spec.get('cloud_kms_key_version') %}
+    cloud_kms_key_version = "{{ ca.key_spec.cloud_kms_key_version }}"
+    {% endif %}
+  }
+
+  {% if ca.get('publishing_options') %}
+  publishing_options {
+    {% if ca.publishing_options.get('publish_ca_cert') is not none %}
+    publish_ca_cert = {{ ca.publishing_options.publish_ca_cert | lower }}
+    {% endif %}
+    
+    {% if ca.publishing_options.get('publish_crl') is not none %}
+    publish_crl = {{ ca.publishing_options.publish_crl | lower }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if ca.get('gcs_bucket') %}
+  gcs_bucket = "{{ ca.gcs_bucket }}"
+  {% endif %}
+
+  {% if ca.get('deletion_protection') is not none %}
+  deletion_protection = {{ ca.deletion_protection | lower }}
+  {% endif %}
+
+  {% if ca.get('desired_state') %}
+  desired_state = "{{ ca.desired_state }}"
+  {% endif %}
+
+  {{ render_gcp_labels(ca, indent=2) }}
+}
+
+{% endfor %}{% endblock %}

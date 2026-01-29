@@ -1,0 +1,19 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for policy in resources %}
+{{ resource_spacer() }}
+resource "aws_iam_policy" "{{ policy.PolicyName | tf_resource_name }}" {
+  name = "{{ policy.PolicyName }}"
+  path = "{{ policy.Path }}"
+  {% if policy.get('Description') %}
+  description = "{{ policy.Description | replace('"', '\\"') }}"
+  {% endif %}
+
+  policy = <<POLICY
+  {{ policy.PolicyDocument }}
+POLICY
+  {{ render_common_tags(policy, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

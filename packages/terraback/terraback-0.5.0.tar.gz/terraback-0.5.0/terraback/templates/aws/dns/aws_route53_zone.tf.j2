@@ -1,0 +1,33 @@
+{% from "common/base_resource.tf.j2" import render_common_tags %}
+{% for zone in resources %}
+{% set zone_name = zone.name_sanitized | default(zone.Name | terraform_name) %}
+{% if not zone_name or zone_name == "unnamed_resource" %}
+{% set zone_name = zone.Id | strip_id_prefix | terraform_name %}
+{% endif %}
+resource "aws_route53_zone" "{{ zone_name }}" {
+  name    = "{{ zone.Name }}"
+  {% if zone.get('Config', {}).get('Comment') %}
+  comment = "{{ zone.Config.Comment | escape_quotes }}"
+  {% endif %}
+
+  {% if zone.get('Config', {}).get('PrivateZone') %}
+  {% for vpc in zone.get('VPCs', []) %}
+  vpc {
+    vpc_id     = "{{ vpc.VPCId }}"
+    vpc_region = "{{ vpc.VPCRegion }}"
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if zone.get('DelegationSetId') and zone.DelegationSetId | has_value %}
+  delegation_set_id = "{{ zone.DelegationSetId }}"
+  {% endif %}
+
+  {{ render_common_tags(zone, indent=2) }}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}

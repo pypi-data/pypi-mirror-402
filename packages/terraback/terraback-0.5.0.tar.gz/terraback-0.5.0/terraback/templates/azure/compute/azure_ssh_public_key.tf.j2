@@ -1,0 +1,22 @@
+{% import 'common/macros.j2' as macros %}
+{% for ssh_key in resources %}
+{{ resource_spacer() }}
+resource "azurerm_ssh_public_key" "{{ ssh_key.name_sanitized }}" {
+  name                = "{{ ssh_key.name }}"
+  location            = "{{ ssh_key.location }}"
+  resource_group_name = "{{ ssh_key.resource_group_name }}"
+  
+  {% if ssh_key.public_key %}
+  public_key = "{{ ssh_key.public_key | sanitize_public_key }}"
+  {% else %}
+  public_key = var.vm_ssh_public_key
+  {% endif %}
+
+{{ macros.render_tags(ssh_key.tags) }}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}

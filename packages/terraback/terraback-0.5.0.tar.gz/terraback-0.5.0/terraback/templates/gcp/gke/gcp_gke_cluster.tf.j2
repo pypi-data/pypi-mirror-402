@@ -1,0 +1,195 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for cluster in resources %}
+{{ resource_spacer() }}
+resource "google_container_cluster" "{{ cluster.name_sanitized }}" {
+  name     = "{{ cluster.name }}"
+  location = "{{ cluster.location }}"
+  
+  {% if cluster.description %}
+  description = "{{ cluster.description }}"
+  {% endif %}
+  
+  {% if cluster.node_version %}
+  node_version = "{{ cluster.node_version }}"
+  {% endif %}
+  
+  {% if cluster.min_master_version %}
+  min_master_version = "{{ cluster.min_master_version }}"
+  {% endif %}
+  
+  {% if cluster.network %}
+  network = "{{ cluster.network }}"
+  {% endif %}
+  
+  {% if cluster.subnetwork %}
+  subnetwork = "{{ cluster.subnetwork }}"
+  {% endif %}
+  
+  {% if cluster.cluster_ipv4_cidr %}
+  cluster_ipv4_cidr = "{{ cluster.cluster_ipv4_cidr }}"
+  {% endif %}
+  
+  {% if cluster.default_max_pods_per_node %}
+  default_max_pods_per_node = {{ cluster.default_max_pods_per_node }}
+  {% endif %}
+  
+  {% if cluster.remove_default_node_pool is defined %}
+  remove_default_node_pool = {{ cluster.remove_default_node_pool | lower }}
+  {% endif %}
+  
+  {% if cluster.initial_node_count is defined %}
+  initial_node_count = {{ cluster.initial_node_count }}
+  {% endif %}
+  
+  {% if cluster.ip_allocation_policy %}
+  ip_allocation_policy {
+    {% if cluster.ip_allocation_policy.cluster_secondary_range_name %}
+    cluster_secondary_range_name  = "{{ cluster.ip_allocation_policy.cluster_secondary_range_name }}"
+    {% endif %}
+    {% if cluster.ip_allocation_policy.services_secondary_range_name %}
+    services_secondary_range_name = "{{ cluster.ip_allocation_policy.services_secondary_range_name }}"
+    {% endif %}
+    {% if cluster.ip_allocation_policy.cluster_ipv4_cidr_block %}
+    cluster_ipv4_cidr_block      = "{{ cluster.ip_allocation_policy.cluster_ipv4_cidr_block }}"
+    {% endif %}
+    {% if cluster.ip_allocation_policy.services_ipv4_cidr_block %}
+    services_ipv4_cidr_block     = "{{ cluster.ip_allocation_policy.services_ipv4_cidr_block }}"
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if cluster.master_auth %}
+  master_auth {
+    {% if cluster.master_auth.client_certificate_config %}
+    client_certificate_config {
+      issue_client_certificate = {{ cluster.master_auth.client_certificate_config.issue_client_certificate | lower }}
+    }
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if cluster.master_authorized_networks_config %}
+  master_authorized_networks_config {
+    {% for block in cluster.master_authorized_networks_config.cidr_blocks %}
+    cidr_blocks {
+      cidr_block   = "{{ block.cidr_block }}"
+      display_name = "{{ block.display_name | default('') }}"
+    }
+    {% endfor %}
+  }
+  {% endif %}
+  
+  {% if cluster.private_cluster_config %}
+  private_cluster_config {
+    {% if cluster.private_cluster_config.enable_private_nodes is defined %}
+    enable_private_nodes    = {{ cluster.private_cluster_config.enable_private_nodes | lower }}
+    {% endif %}
+    {% if cluster.private_cluster_config.enable_private_endpoint is defined %}
+    enable_private_endpoint = {{ cluster.private_cluster_config.enable_private_endpoint | lower }}
+    {% endif %}
+    {% if cluster.private_cluster_config.master_ipv4_cidr_block %}
+    master_ipv4_cidr_block  = "{{ cluster.private_cluster_config.master_ipv4_cidr_block }}"
+    {% endif %}
+    {% if cluster.private_cluster_config.enable_global_access is defined %}
+    master_global_access_config {
+      enabled = {{ cluster.private_cluster_config.enable_global_access | lower }}
+    }
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if cluster.workload_identity_config %}
+  workload_identity_config {
+    workload_pool = "{{ cluster.workload_identity_config.workload_pool }}"
+  }
+  {% endif %}
+  
+  {% if cluster.binary_authorization %}
+  binary_authorization {
+    enabled         = {{ cluster.binary_authorization.enabled | lower }}
+    evaluation_mode = "{{ cluster.binary_authorization.evaluation_mode | default('DISABLED') }}"
+  }
+  {% endif %}
+  
+  {% if cluster.addons_config %}
+  addons_config {
+    {% if cluster.addons_config.http_load_balancing %}
+    http_load_balancing {
+      disabled = {{ cluster.addons_config.http_load_balancing.disabled | lower }}
+    }
+    {% endif %}
+    {% if cluster.addons_config.horizontal_pod_autoscaling %}
+    horizontal_pod_autoscaling {
+      disabled = {{ cluster.addons_config.horizontal_pod_autoscaling.disabled | lower }}
+    }
+    {% endif %}
+    {% if cluster.addons_config.network_policy_config %}
+    network_policy_config {
+      disabled = {{ cluster.addons_config.network_policy_config.disabled | lower }}
+    }
+    {% endif %}
+    {% if cluster.addons_config.gce_persistent_disk_csi_driver_config %}
+    gce_persistent_disk_csi_driver_config {
+      enabled = {{ cluster.addons_config.gce_persistent_disk_csi_driver_config.enabled | lower }}
+    }
+    {% endif %}
+    {% if cluster.addons_config.gcp_filestore_csi_driver_config %}
+    gcp_filestore_csi_driver_config {
+      enabled = {{ cluster.addons_config.gcp_filestore_csi_driver_config.enabled | lower }}
+    }
+    {% endif %}
+    {% if cluster.addons_config.gcs_fuse_csi_driver_config %}
+    gcs_fuse_csi_driver_config {
+      enabled = {{ cluster.addons_config.gcs_fuse_csi_driver_config.enabled | lower }}
+    }
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if cluster.network_policy %}
+  network_policy {
+    enabled  = {{ cluster.network_policy.enabled | lower }}
+    provider = "{{ cluster.network_policy.provider | default('CALICO') }}"
+  }
+  {% endif %}
+  
+  {% if cluster.maintenance_policy %}
+  maintenance_policy {
+    {% if cluster.maintenance_policy.daily_maintenance_window %}
+    daily_maintenance_window {
+      start_time = "{{ cluster.maintenance_policy.daily_maintenance_window.start_time }}"
+    }
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if cluster.logging_service %}
+  logging_service = "{{ cluster.logging_service }}"
+  {% endif %}
+  
+  {% if cluster.monitoring_service %}
+  monitoring_service = "{{ cluster.monitoring_service }}"
+  {% endif %}
+  
+  {% if cluster.cluster_telemetry %}
+  cluster_telemetry {
+    type = "{{ cluster.cluster_telemetry.type }}"
+  }
+  {% endif %}
+  
+  {% if cluster.resource_labels %}
+  resource_labels = {
+    {% for key, value in cluster.resource_labels.items() %}
+    "{{ key }}" = "{{ value }}"{{ "," if not loop.last }}
+    {% endfor %}
+  }
+  {% endif %}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

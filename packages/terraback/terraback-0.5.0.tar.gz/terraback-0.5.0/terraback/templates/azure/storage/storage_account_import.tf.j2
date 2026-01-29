@@ -1,0 +1,85 @@
+{% extends "common/base_resource.tf.j2" %}
+{% from "common/base_resource.tf.j2" import render_common_tags %}
+{% block resources %}
+{% for account in resources %}
+# Import existing Storage Account: {{ account.name }}
+import {
+  to = azurerm_storage_account.{{ account.name_sanitized }}
+  id = "{{ account.id }}"
+}
+
+resource "azurerm_storage_account" "{{ account.name_sanitized }}" {
+  name                     = "{{ account.name }}"
+  resource_group_name      = "{{ account.resource_group_name }}"
+  location                 = "{{ account.location | normalize_location('azure') }}"
+  account_tier             = "{{ account.account_tier }}"
+  account_replication_type = "{{ account.account_replication_type }}"
+
+  {% if account.account_kind %}
+  account_kind             = "{{ account.account_kind }}"
+  {%  endif %}
+
+  {% if account.access_tier %}
+  access_tier              = "{{ account.access_tier }}"
+  {%  endif %}
+
+  {% if account.enable_https_traffic_only is defined %}
+  enable_https_traffic_only = {{ account.enable_https_traffic_only | lower }}
+  {%  endif %}
+
+  {% if account.min_tls_version %}
+  min_tls_version          = "{{ account.min_tls_version }}"
+  {%  endif %}
+
+  {% if account.allow_nested_items_to_be_public is defined %}
+  allow_nested_items_to_be_public = {{ account.allow_nested_items_to_be_public | lower }}
+  {%  endif %}
+
+  {% if account.shared_access_key_enabled is defined %}
+  shared_access_key_enabled = {{ account.shared_access_key_enabled | lower }}
+  {%  endif %}
+
+  {% if account.public_network_access_enabled is defined %}
+  public_network_access_enabled = {{ account.public_network_access_enabled | lower }}
+  {%  endif %}
+
+  {% if account.network_rules and account.network_rules.default_action and account.network_rules.default_action|lower != "allow" %}
+  network_rules {
+    default_action             = "{{ account.network_rules.default_action }}"
+    {% if account.network_rules.bypass %}
+    bypass                     = {{ account.network_rules.bypass | tojson }}
+    {%  endif %}
+    {% if account.network_rules.ip_rules %}
+    ip_rules                   = {{ account.network_rules.ip_rules | tojson }}
+    {%  endif %}
+    {% if account.network_rules.virtual_network_subnet_ids %}
+    virtual_network_subnet_ids = {{ account.network_rules.virtual_network_subnet_ids | tojson }}
+    {%  endif %}
+  }
+  {%  endif %}
+
+  {% if account.tags %}
+  tags = {
+    {% for key, value in account.tags.items() %}
+    "{{ key }}" = "{{ value }}"{{ "," if not loop.last }}
+    {% endfor %}
+  }
+  {%  endif %}
+
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes = [
+      # Ignore changes to encryption settings as they may be managed elsewhere
+      infrastructure_encryption_enabled,
+      blob_properties,
+      queue_properties,
+      table_properties,
+      file_properties,
+      # Ignore changes to network rules as they may have default values causing drift
+      network_rules
+    ]
+  }
+}
+
+{% endfor %}
+{% endblock %}

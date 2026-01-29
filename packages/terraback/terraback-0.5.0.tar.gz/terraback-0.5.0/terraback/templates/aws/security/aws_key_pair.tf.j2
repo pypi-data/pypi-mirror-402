@@ -1,0 +1,14 @@
+{% from "common/base_resource.tf.j2" import render_common_tags %}
+{% for key_pair in resources %}
+{% if key_pair.name_sanitized and key_pair.name_sanitized != "unnamed_resource" %}
+# AWS Key Pair: {{ key_pair.KeyName }}
+# NOTE: Using data source to reference existing key pair since public keys cannot be retrieved from AWS
+data "aws_key_pair" "{{ key_pair.name_sanitized }}" {
+  key_name = "{{ key_pair.KeyName }}"
+
+  {% if key_pair.KeyFingerprint %}
+  # Key fingerprint: {{ key_pair.KeyFingerprint }}
+  {% endif %}
+}
+{% endif %}
+{% endfor %}

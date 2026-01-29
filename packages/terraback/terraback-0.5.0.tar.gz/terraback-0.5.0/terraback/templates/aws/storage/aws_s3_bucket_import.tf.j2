@@ -1,0 +1,153 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% from "aws/base_resource.tf.j2" import render_common_tags %}
+{% block resources %}
+{% for bucket in resources %}
+# Import existing S3 Bucket: {{ bucket.Name }}
+import {
+  to = aws_s3_bucket.{{ bucket.name_sanitized }}
+  id = "{{ bucket.Name }}"
+}
+
+resource "aws_s3_bucket" "{{ bucket.name_sanitized }}" {
+  bucket = "{{ bucket.Name }}"
+  
+  {% if bucket.get('bucket_prefix') %}
+  bucket_prefix = "{{ bucket.bucket_prefix }}"
+  {% endif %}
+  
+  {% if bucket.get('force_destroy') is defined %}
+  force_destroy = {{ bucket.force_destroy | lower }}
+  {% endif %}
+  
+  {% if bucket.get('object_lock_enabled') is defined %}
+  object_lock_enabled = {{ bucket.object_lock_enabled | lower }}
+  {% endif %}
+
+  {{ render_common_tags(bucket, indent=2) }}
+
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes = [
+      # Ignore changes that are managed by separate resources
+      cors_rule,
+      website,
+      versioning,
+      logging,
+      lifecycle_rule,
+      replication_configuration,
+      server_side_encryption_configuration,
+      object_lock_configuration,
+      acceleration_status,
+      request_payer,
+      tags_all
+    ]
+  }
+}
+
+# Import bucket ACL if exists
+{% if bucket.get('acl') %}
+import {
+  to = aws_s3_bucket_acl.{{ bucket.name_sanitized }}
+  id = "{{ bucket.Name }}"
+}
+
+resource "aws_s3_bucket_acl" "{{ bucket.name_sanitized }}" {
+  bucket = aws_s3_bucket.{{ bucket.name_sanitized }}.id
+  acl    = "{{ bucket.acl }}"
+  
+  depends_on = [aws_s3_bucket_ownership_controls.{{ bucket.name_sanitized }}]
+}
+{% endif %}
+
+# Import bucket versioning if enabled
+{% if bucket.get('versioning', {}).get('status') %}
+import {
+  to = aws_s3_bucket_versioning.{{ bucket.name_sanitized }}
+  id = "{{ bucket.Name }}"
+}
+
+resource "aws_s3_bucket_versioning" "{{ bucket.name_sanitized }}" {
+  bucket = aws_s3_bucket.{{ bucket.name_sanitized }}.id
+  
+  versioning_configuration {
+    status = "{{ bucket.versioning.status }}"
+    {% if bucket.versioning.get('mfa_delete') %}
+    mfa_delete = "{{ bucket.versioning.mfa_delete }}"
+    {% endif %}
+  }
+}
+{% endif %}
+
+# Import bucket encryption if configured
+{% if bucket.get('server_side_encryption_configuration') %}
+import {
+  to = aws_s3_bucket_server_side_encryption_configuration.{{ bucket.name_sanitized }}
+  id = "{{ bucket.Name }}"
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "{{ bucket.name_sanitized }}" {
+  bucket = aws_s3_bucket.{{ bucket.name_sanitized }}.id
+
+  rule {
+    {% if bucket.server_side_encryption_configuration.get('bucket_key_enabled') is defined %}
+    bucket_key_enabled = {{ bucket.server_side_encryption_configuration.bucket_key_enabled | lower }}
+    {% endif %}
+    
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "{{ bucket.server_side_encryption_configuration.sse_algorithm | default('AES256') }}"
+      {% if bucket.server_side_encryption_configuration.get('kms_master_key_id') %}
+      kms_master_key_id = "{{ bucket.server_side_encryption_configuration.kms_master_key_id }}"
+      {% endif %}
+    }
+  }
+}
+{% endif %}
+
+# Import bucket public access block if configured
+{% if bucket.get('public_access_block') %}
+import {
+  to = aws_s3_bucket_public_access_block.{{ bucket.name_sanitized }}
+  id = "{{ bucket.Name }}"
+}
+
+resource "aws_s3_bucket_public_access_block" "{{ bucket.name_sanitized }}" {
+  bucket = aws_s3_bucket.{{ bucket.name_sanitized }}.id
+
+  block_public_acls       = {{ bucket.public_access_block.get('block_public_acls', true) | lower }}
+  block_public_policy     = {{ bucket.public_access_block.get('block_public_policy', true) | lower }}
+  ignore_public_acls      = {{ bucket.public_access_block.get('ignore_public_acls', true) | lower }}
+  restrict_public_buckets = {{ bucket.public_access_block.get('restrict_public_buckets', true) | lower }}
+}
+{% endif %}
+
+# Import bucket policy if exists
+{% if bucket.get('policy') %}
+import {
+  to = aws_s3_bucket_policy.{{ bucket.name_sanitized }}
+  id = "{{ bucket.Name }}"
+}
+
+resource "aws_s3_bucket_policy" "{{ bucket.name_sanitized }}" {
+  bucket = aws_s3_bucket.{{ bucket.name_sanitized }}.id
+  policy = jsonencode({{ bucket.policy | tojson }})
+}
+{% endif %}
+
+# Import bucket ownership controls if configured
+{% if bucket.get('ownership_controls') %}
+import {
+  to = aws_s3_bucket_ownership_controls.{{ bucket.name_sanitized }}
+  id = "{{ bucket.Name }}"
+}
+
+resource "aws_s3_bucket_ownership_controls" "{{ bucket.name_sanitized }}" {
+  bucket = aws_s3_bucket.{{ bucket.name_sanitized }}.id
+
+  rule {
+    object_ownership = "{{ bucket.ownership_controls.object_ownership | default('BucketOwnerEnforced') }}"
+  }
+}
+{% endif %}
+
+{% endfor %}
+{% endblock %}

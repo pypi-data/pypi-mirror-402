@@ -1,0 +1,47 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for workflow in resources %}
+{{ resource_spacer() }}
+resource "google_workflows_workflow" "{{ workflow.name_sanitized }}" {
+  name            = "{{ workflow.name }}"
+  
+  {% if workflow.get('region') %}
+  region          = "{{ workflow.region }}"
+  {% endif %}
+  
+  {% if workflow.get('project') %}
+
+  {% endif %}
+  
+  {% if workflow.get('description') %}
+  description     = "{{ workflow.description }}"
+  {% endif %}
+  
+  {% if workflow.get('service_account') %}
+  service_account = "{{ workflow.service_account }}"
+  {% endif %}
+
+  {% if workflow.get('call_log_level') %}
+  call_log_level  = "{{ workflow.call_log_level }}"
+  {% endif %}
+
+  {% if workflow.get('user_env_vars') %}
+  user_env_vars   = {
+    {% for key, value in workflow.user_env_vars.items() %}
+    {{ key }} = "{{ value }}"{{ "," if not loop.last }}
+    {% endfor %}
+  }
+  {% endif %}
+
+  source_contents = <<-EOT
+{{ workflow.source_contents | indent(4, True) }}
+  EOT
+
+  {% if workflow.get('crypto_key_name') %}
+  crypto_key_name = "{{ workflow.crypto_key_name }}"
+  {% endif %}
+
+  {{ render_gcp_labels(workflow, indent=2) }}
+}
+
+{% endfor %}{% endblock %}

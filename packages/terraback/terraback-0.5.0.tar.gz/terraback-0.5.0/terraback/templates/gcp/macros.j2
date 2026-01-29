@@ -1,0 +1,134 @@
+{# GCP-specific macros for Terraform templates #}
+
+{% macro render_labels(labels, indent=2) %}
+{% if labels %}
+{{ ' ' * indent }}labels = {
+{% for key, value in labels.items() %}
+{{ ' ' * (indent + 2) }}"{{ key }}" = "{{ value | replace('"', '\\"') }}"{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{% macro render_gcp_labels(resource, indent=2) %}
+{# GCP uses 'labels' instead of 'tags' #}
+{% if resource.get('labels') %}
+{{ render_labels(resource.labels, indent) }}
+{% elif resource.get('labels_formatted') %}
+{{ render_labels(resource.labels_formatted, indent) }}
+{% endif %}
+{% endmacro %}
+
+{% macro render_metadata(metadata, indent=2) %}
+{% if metadata %}
+{{ ' ' * indent }}metadata = {
+{% for key, value in metadata.items() %}
+{{ ' ' * (indent + 2) }}"{{ key }}" = "{{ value | replace('"', '\\"') }}"{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{% macro render_network_tags(tags, indent=2) %}
+{# GCP compute instances use 'tags' for network tags (different from labels) #}
+{% if tags %}
+{{ ' ' * indent }}tags = [
+{% for tag in tags %}
+{{ ' ' * (indent + 2) }}"{{ tag }}"{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * indent }}]
+{% endif %}
+{% endmacro %}
+
+{% macro render_service_account(service_account, indent=2) %}
+{% if service_account %}
+{{ ' ' * indent }}service_account {
+{{ ' ' * (indent + 2) }}email  = "{{ service_account.email }}"
+{{ ' ' * (indent + 2) }}scopes = [
+{% for scope in service_account.get('scopes', ['cloud-platform']) %}
+{{ ' ' * (indent + 4) }}"{{ scope }}"{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * (indent + 2) }}]
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{% macro render_timeouts(timeouts, indent=2) %}
+{% if timeouts %}
+{{ ' ' * indent }}timeouts {
+{% if timeouts.get('create') %}
+{{ ' ' * (indent + 2) }}create = "{{ timeouts.create }}"
+{% endif %}
+{% if timeouts.get('update') %}
+{{ ' ' * (indent + 2) }}update = "{{ timeouts.update }}"
+{% endif %}
+{% if timeouts.get('delete') %}
+{{ ' ' * (indent + 2) }}delete = "{{ timeouts.delete }}"
+{% endif %}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{% macro render_encryption_key(encryption_key, indent=2) %}
+{% if encryption_key %}
+{{ ' ' * indent }}encryption_key {
+{% if encryption_key.get('kms_key_self_link') %}
+{{ ' ' * (indent + 2) }}kms_key_self_link = "{{ encryption_key.kms_key_self_link }}"
+{% endif %}
+{% if encryption_key.get('kms_key_service_account') %}
+{{ ' ' * (indent + 2) }}kms_key_service_account = "{{ encryption_key.kms_key_service_account }}"
+{% endif %}
+{% if encryption_key.get('raw_key') %}
+{{ ' ' * (indent + 2) }}raw_key = "{{ encryption_key.raw_key }}"
+{% endif %}
+{% if encryption_key.get('sha256') %}
+{{ ' ' * (indent + 2) }}sha256 = "{{ encryption_key.sha256 }}"
+{% endif %}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{% macro render_iam_bindings(bindings, resource_type, resource_name, indent=2) %}
+{# Render separate IAM binding resources for GCP #}
+{% if bindings %}
+{% for binding in bindings %}
+resource "{{ resource_type }}_iam_binding" "{{ resource_name }}_{{ loop.index }}" {
+{{ ' ' * indent }}{{ resource_type.split('_')[-1] }} = {{ resource_type }}.{{ resource_name }}.id
+{{ ' ' * indent }}role    = "{{ binding.role }}"
+{{ ' ' * indent }}members = [
+{% for member in binding.members %}
+{{ ' ' * (indent + 2) }}"{{ member }}"{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * indent }}]
+
+{% if binding.get('condition') %}
+{{ ' ' * indent }}condition {
+{{ ' ' * (indent + 2) }}title       = "{{ binding.condition.title }}"
+{{ ' ' * (indent + 2) }}description = "{{ binding.condition.description }}"
+{{ ' ' * (indent + 2) }}expression  = "{{ binding.condition.expression }}"
+{{ ' ' * indent }}}
+{% endif %}
+}
+
+{% endfor %}
+{% endif %}
+{% endmacro %}
+
+{% macro render_import_friendly_lifecycle(ignore_fields=[], prevent_destroy=true, indent=2) %}
+{# Render a lifecycle block optimized for imports - only includes non-computed fields #}
+{% set filtered_fields = ignore_fields | filter_computed_fields_from_ignore_changes('gcp') %}
+{% if filtered_fields or prevent_destroy %}
+{{ ' ' * indent }}lifecycle {
+{% if filtered_fields %}
+{{ ' ' * (indent + 2) }}ignore_changes = [
+{% for field in filtered_fields %}
+{{ ' ' * (indent + 4) }}{{ field }}{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * (indent + 2) }}]
+{% endif %}
+{% if prevent_destroy %}
+{{ ' ' * (indent + 2) }}prevent_destroy = true
+{% endif %}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}

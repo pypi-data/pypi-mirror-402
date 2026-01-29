@@ -1,0 +1,14 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for igw in resources %}
+{{ resource_spacer() }}
+resource "aws_internet_gateway" "{{ igw.name_sanitized if igw.get('name_sanitized') else igw.InternetGatewayId | strip_id_prefix | tf_resource_name }}" {
+  {% if igw.get('Attachments') and igw.Attachments|length > 0 and igw.Attachments[0].get('VpcId') %}
+  vpc_id = "{{ igw.Attachments[0].VpcId }}"
+  {%  endif %}
+
+  {{ render_common_tags(igw, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_redis_enterprise_cluster" "{{ resource.name }}" {
+  name                = "{{ resource.properties.name }}"
+  resource_group_name = "{{ resource.properties.resource_group_name }}"
+  location            = "{{ resource.properties.location }}"
+  
+  sku_name = "{{ resource.properties.sku_name | default('Enterprise_E10-2') }}"
+  
+  {% if resource.properties.zones is defined %}
+  zones = {{ resource.properties.zones | tojson }}
+  {% endif %}
+  
+  {% if resource.properties.minimum_tls_version is defined %}
+  minimum_tls_version = "{{ resource.properties.minimum_tls_version }}"
+  {% endif %}
+  
+  {% if resource.properties.tags is defined %}
+  tags = {{ resource.properties.tags | tojson }}
+  {% endif %}
+{% endblock %}
+
+{% block additional_resources %}
+{% if resource.database is defined %}
+resource "azurerm_redis_enterprise_database" "{{ resource.name }}_db" {
+  name                = "{{ resource.database.name | default('default') }}"
+  redis_enterprise_cluster_id = azurerm_redis_enterprise_cluster.{{ resource.name }}.id
+  
+  {% if resource.database.client_protocol is defined %}
+  client_protocol = "{{ resource.database.client_protocol }}"
+  {% endif %}
+  
+  {% if resource.database.clustering_policy is defined %}
+  clustering_policy = "{{ resource.database.clustering_policy }}"
+  {% endif %}
+  
+  {% if resource.database.eviction_policy is defined %}
+  eviction_policy = "{{ resource.database.eviction_policy }}"
+  {% endif %}
+  
+  {% if resource.database.port is defined %}
+  port = {{ resource.database.port }}
+  {% endif %}
+  
+  {% if resource.database.module is defined %}
+  {% for module in resource.database.module %}
+  module {
+    name = "{{ module.name }}"
+    {% if module.args is defined %}
+    args = "{{ module.args }}"
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.database.linked_database_id is defined %}
+  linked_database_id = {{ resource.database.linked_database_id | tojson }}
+  {% endif %}
+  
+  {% if resource.database.linked_database_group_nickname is defined %}
+  linked_database_group_nickname = "{{ resource.database.linked_database_group_nickname }}"
+  {% endif %}
+}
+{% endif %}
+}
+
+{% endfor %}
+{% endblock %}

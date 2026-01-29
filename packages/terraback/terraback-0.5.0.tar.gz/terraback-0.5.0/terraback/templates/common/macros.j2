@@ -1,0 +1,70 @@
+{# Common macros for Terraform templates #}
+
+{% macro render_tags(tags, indent=2) %}
+{{ render_map('tags', tags, indent) }}
+{% endmacro %}
+
+{% macro render_tags_always(tags, indent=2) %}
+{{ ' ' * indent }}tags = {
+{% if tags %}
+{% for key, value in tags.items() %}
+{{ ' ' * (indent + 2) }}"{{ key }}" = "{{ value | replace('"', '\\"') }}"{{ ',' if not loop.last }}
+{% endfor %}
+{% endif %}
+{{ ' ' * indent }}}
+{% endmacro %}
+
+{% macro render_map(name, data, indent=2) %}
+{% if data %}
+{{ ' ' * indent }}{{ name }} = {
+{% for key, value in data.items() %}
+{{ ' ' * (indent + 2) }}"{{ key }}" = "{{ value | replace('"', '\\"') }}"{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{% macro render_list(items, indent=2) %}
+[
+{% for item in items %}
+{{ ' ' * (indent + 2) }}"{{ item }}"{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * indent }}]
+{% endmacro %}
+
+{% macro render_tag_list(tag_list, indent=2, key_attr='Key', value_attr='Value') %}
+{% if tag_list %}
+{{ ' ' * indent }}tags = {
+{% for tag in tag_list %}
+{{ ' ' * (indent + 2) }}"{{ tag[key_attr] }}" = "{{ tag[value_attr] | replace('"', '\\"') }}"{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{% macro render_json_list(objects, indent=2) %}
+[
+{% for obj in objects %}
+{{ ' ' * (indent + 2) }}{{ obj | tojson }}{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * indent }}]
+{% endmacro %}
+
+{% macro render_block_list(block_name, items, indent=2) %}
+{% for item in items %}
+{{ ' ' * indent }}{{ block_name }} {
+{{ caller(item, indent + 2, loop.index) }}
+{{ ' ' * indent }}}
+{% endfor %}
+{% endmacro %}
+
+{# Render a depends_on block if dependency list provided #}
+{% macro render_depends_on(dep_list, indent=2) %}
+{% if dep_list %}
+{{ ' ' * indent }}depends_on = [
+{% for dep in dep_list %}
+{{ ' ' * (indent + 2) }}{{ dep }}{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * indent }}]
+{% endif %}
+{% endmacro %}

@@ -1,0 +1,83 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for state_machine in resources %}
+{{ resource_spacer() }}
+resource "aws_sfn_state_machine" "{{ state_machine.name_sanitized }}" {
+  name     = "{{ state_machine.name | default(state_machine.stateMachineName) }}"
+  role_arn = "{{ state_machine.roleArn }}"
+
+  {# AWS returns definition as a JSON string - output it directly as a quoted string for Terraform #}
+  definition = {{ state_machine.definition | tojson }}
+
+  {% if state_machine.get('type') %}
+  type = "{{ state_machine.type }}"
+  {% endif %}
+
+  {% if state_machine.get('logging_configuration') or state_machine.get('loggingConfiguration') %}
+  logging_configuration {
+    {% set log_config = state_machine.get('logging_configuration', state_machine.get('loggingConfiguration', {})) %}
+    
+    {% if log_config.get('log_destination') or log_config.get('destinations') %}
+    log_destination        = "{{ log_config.get('log_destination', log_config.get('destinations', [{}])[0].get('cloudWatchLogsLogGroup', {}).get('logGroupArn', '')) }}"
+    {% endif %}
+    
+    {% if log_config.get('include_execution_data') is defined %}
+    include_execution_data = {{ log_config.include_execution_data | lower }}
+    {% elif log_config.get('includeExecutionData') is defined %}
+    include_execution_data = {{ log_config.includeExecutionData | lower }}
+    {% endif %}
+    
+    {% if log_config.get('level') %}
+    level = "{{ log_config.level }}"
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if state_machine.get('tracing_configuration') or state_machine.get('tracingConfiguration') %}
+  tracing_configuration {
+    {% set trace_config = state_machine.get('tracing_configuration', state_machine.get('tracingConfiguration', {})) %}
+    
+    {% if trace_config.get('enabled') is defined %}
+    enabled = {{ trace_config.enabled | lower }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if state_machine.get('publish') is defined %}
+  publish = {{ state_machine.publish | lower }}
+  {% endif %}
+
+  {{ render_common_tags(state_machine, indent=2) }}
+}
+
+{% if state_machine.get('create_alias') %}
+{% for alias in state_machine.get('aliases', []) %}
+{{ resource_spacer() }}
+resource "aws_sfn_alias" "{{ state_machine.name_sanitized }}_{{ alias.name_sanitized }}" {
+  name = "{{ alias.name }}"
+
+  routing_configuration {
+    {% for config in alias.routing_configuration %}
+    state_machine_version_arn = "{{ config.state_machine_version_arn }}"
+    weight                    = {{ config.weight }}
+    {% endfor %}
+  }
+
+  {% if alias.get('description') %}
+  description = "{{ alias.description }}"
+  {% endif %}
+}
+
+{% endfor %}
+{% endif %}
+
+{% if state_machine.get('create_activity') %}
+resource "aws_sfn_activity" "{{ state_machine.name_sanitized }}_activity" {
+  name = "{{ state_machine.name }}-activity"
+
+  {{ render_common_tags(state_machine, indent=2) }}
+}
+{% endif %}
+
+{% endfor %}
+{% endblock %}

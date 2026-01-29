@@ -1,0 +1,23 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% import "common/macros.j2" as macros %}
+{% block resources %}
+{% for role in resources %}
+{{ resource_spacer() }}
+resource "google_project_iam_custom_role" "{{ role.role_id | replace('-', '_') | replace('.', '_') }}" {
+  role_id     = "{{ role.role_id }}"
+  title       = "{{ role.title }}"
+  description = "{{ role.description }}"
+
+  {% if role.stage and role.stage != 'GA' %}
+  stage       = "{{ role.stage }}"
+  {% endif %}
+  
+  permissions = {{ role.permissions | tojson }}
+  
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

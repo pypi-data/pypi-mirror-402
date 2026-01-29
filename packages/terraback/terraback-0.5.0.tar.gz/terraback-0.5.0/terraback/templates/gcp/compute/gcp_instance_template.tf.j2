@@ -1,0 +1,169 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% import "common/macros.j2" as common_macros %}
+{% block resources %}
+{% for template in resources %}
+
+# Import existing instance template: {{ template.name }}
+import {
+  to = google_compute_instance_template.{{ template.name_sanitized }}
+  id = "{{ template.id }}"
+}
+
+{{ resource_spacer() }}
+resource "google_compute_instance_template" "{{ template.name_sanitized }}" {
+  name         = "{{ template.name }}"
+  {% if template.description %}
+  description  = "{{ template.description }}"
+  {% endif %}
+
+  {% if template.machine_type %}
+  machine_type = "{{ template.machine_type }}"
+  {% endif %}
+
+  {% if template.can_ip_forward %}
+  can_ip_forward = true
+  {% endif %}
+
+  {% if template.tags %}
+  tags = {{ template.tags | tojson }}
+  {% endif %}
+
+  {% if template.boot_disk %}
+  disk {
+    {% if template.boot_disk.source %}
+    source      = "{{ template.boot_disk.source }}"
+    {% endif %}
+    {% if template.boot_disk.device_name %}
+    device_name = "{{ template.boot_disk.device_name }}"
+    {% endif %}
+    boot        = true
+    auto_delete = {{ template.boot_disk.auto_delete | lower }}
+    mode        = "{{ template.boot_disk.mode }}"
+    type        = "{{ template.boot_disk.type }}"
+    interface   = "{{ template.boot_disk.interface }}"
+    
+    {% if template.boot_disk.initialize_params %}
+    disk_size_gb = {{ template.boot_disk.initialize_params.disk_size_gb }}
+    disk_type    = "{{ template.boot_disk.initialize_params.disk_type }}"
+    {% if template.boot_disk.initialize_params.source_image %}
+    source_image = "{{ template.boot_disk.initialize_params.source_image }}"
+    {% endif %}
+    {% if template.boot_disk.initialize_params.source_snapshot %}
+    source_snapshot = "{{ template.boot_disk.initialize_params.source_snapshot }}"
+    {% endif %}
+    {% if template.boot_disk.initialize_params.labels %}
+    disk_labels = {{ template.boot_disk.initialize_params.labels | tojson }}
+    {% endif %}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% for disk in template.attached_disks %}
+  disk {
+    {% if disk.source %}
+    source      = "{{ disk.source }}"
+    {% endif %}
+    {% if disk.device_name %}
+    device_name = "{{ disk.device_name }}"
+    {% endif %}
+    boot        = false
+    auto_delete = {{ disk.auto_delete | lower }}
+    mode        = "{{ disk.mode }}"
+    type        = "{{ disk.type }}"
+    interface   = "{{ disk.interface }}"
+    
+    {% if disk.initialize_params %}
+    disk_size_gb = {{ disk.initialize_params.disk_size_gb }}
+    disk_type    = "{{ disk.initialize_params.disk_type }}"
+    {% if disk.initialize_params.source_image %}
+    source_image = "{{ disk.initialize_params.source_image }}"
+    {% endif %}
+    {% if disk.initialize_params.source_snapshot %}
+    source_snapshot = "{{ disk.initialize_params.source_snapshot }}"
+    {% endif %}
+    {% if disk.initialize_params.labels %}
+    disk_labels = {{ disk.initialize_params.labels | tojson }}
+    {% endif %}
+    {% endif %}
+  }
+  {% endfor %}
+
+  {% for nic in template.network_interfaces %}
+  network_interface {
+    {% if nic.subnetwork %}
+    subnetwork = "{{ nic.subnetwork }}"
+    {% else %}
+    network = "{{ nic.network }}"
+    {% endif %}
+
+    {% for ac in nic.access_configs %}
+    access_config {
+      {% if ac.name %}
+      name = "{{ ac.name }}"
+      {% endif %}
+      {% if ac.nat_ip %}
+      nat_ip = "{{ ac.nat_ip }}"
+      {% endif %}
+      network_tier = "{{ ac.network_tier }}"
+    }
+    {% endfor %}
+  }
+  {% endfor %}
+
+{{ common_macros.render_map('metadata', template.metadata, indent=2) }}
+
+  {% if template.metadata_startup_script %}
+  metadata_startup_script = "{{ template.metadata_startup_script | replace('\\', '\\\\') | replace('"', '\\"') }}"
+  {% endif %}
+
+{{ common_macros.render_map('labels', template.labels, indent=2) }}
+
+  {% if template.scheduling %}
+  scheduling {
+    preemptible       = {{ template.scheduling.preemptible | lower }}
+    on_host_maintenance = "{{ template.scheduling.on_host_maintenance }}"
+    automatic_restart = {{ template.scheduling.automatic_restart | lower }}
+    provisioning_model = "{{ template.scheduling.provisioning_model }}"
+  }
+  {% endif %}
+
+  {% for accelerator in template.guest_accelerators %}
+  guest_accelerator {
+    type  = "{{ accelerator.type }}"
+    count = {{ accelerator.count }}
+  }
+  {% endfor %}
+
+  {% if template.min_cpu_platform %}
+  min_cpu_platform = "{{ template.min_cpu_platform }}"
+  {% endif %}
+
+  {% if template.shielded_instance_config %}
+  shielded_instance_config {
+    enable_secure_boot          = {{ template.shielded_instance_config.enable_secure_boot | lower }}
+    enable_vtpm                 = {{ template.shielded_instance_config.enable_vtpm | lower }}
+    enable_integrity_monitoring = {{ template.shielded_instance_config.enable_integrity_monitoring | lower }}
+  }
+  {% endif %}
+
+  {% if template.confidential_instance_config %}
+  confidential_instance_config {
+    enable_confidential_compute = {{ template.confidential_instance_config.enable_confidential_compute | lower }}
+  }
+  {% endif %}
+
+  {% for sa in template.service_accounts %}
+  service_account {
+    email  = "{{ sa.email }}"
+    scopes = {{ sa.scopes | tojson }}
+  }
+  {% endfor %}
+
+{{ common_macros.render_depends_on(template.depends_on, indent=2) }}
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

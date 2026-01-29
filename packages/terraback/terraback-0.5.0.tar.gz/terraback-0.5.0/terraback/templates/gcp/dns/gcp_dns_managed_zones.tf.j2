@@ -1,0 +1,75 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% import "common/macros.j2" as macros %}
+{% block resources %}
+{% for zone in resources %}
+{{ resource_spacer() }}
+resource "google_dns_managed_zone" "{{ zone.name | replace('-', '_') }}" {
+  name        = "{{ zone.name }}"
+  dns_name    = "{{ zone.dns_name }}"
+  description = "{{ zone.description }}"
+
+  {% if zone.visibility and zone.visibility != 'public' %}
+  visibility  = "{{ zone.visibility }}"
+  {% endif %}
+  
+  {% if zone.dnssec_config %}
+  dnssec_config {
+    kind          = "{{ zone.dnssec_config.kind | default('dns#managedZoneDnsSecConfig') }}"
+    state         = "{{ zone.dnssec_config.state }}"
+    {% if zone.dnssec_config.non_existence %}
+    non_existence = "{{ zone.dnssec_config.non_existence }}"
+    {% endif %}
+    
+    default_key_specs {
+      algorithm  = "rsasha256"
+      key_length = 2048
+      key_type   = "keySigning"
+      kind       = "dns#dnsKeySpec"
+    }
+    default_key_specs {
+      algorithm  = "rsasha256"
+      key_length = 1024
+      key_type   = "zoneSigning"
+      kind       = "dns#dnsKeySpec"
+    }
+  }
+  {% endif %}
+  
+  {% if zone.forwarding_config %}
+  forwarding_config {
+    {% for server in zone.forwarding_config.target_name_servers %}
+    target_name_servers {
+      ipv4_address    = "{{ server.ipv4_address }}"
+      {% if server.forwarding_path %}
+      forwarding_path = "{{ server.forwarding_path }}"
+      {% endif %}
+    }
+    {% endfor %}
+  }
+  {% endif %}
+  
+  {% if zone.private_visibility_config %}
+  private_visibility_config {
+    {% for network in zone.private_visibility_config.networks %}
+    networks {
+      network_url = "{{ network.network_url }}"
+    }
+    {% endfor %}
+  }
+  {% endif %}
+  
+  {% if zone.labels %}
+  labels = {
+    {% for key, value in zone.labels.items() %}
+    {{ key }} = "{{ value }}"{{ "," if not loop.last }}
+    {% endfor %}
+  }
+  {% endif %}
+  
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

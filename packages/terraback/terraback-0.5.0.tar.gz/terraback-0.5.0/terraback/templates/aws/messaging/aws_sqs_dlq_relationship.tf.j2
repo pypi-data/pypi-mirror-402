@@ -1,0 +1,160 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for dlq in resources %}
+{{ resource_spacer() }}
+resource "aws_sqs_queue" "{{ dlq.name_sanitized }}_dlq" {
+  name = "{{ dlq.queueName | default(dlq.name + '-dlq') }}"
+  
+  {% if dlq.get('delay_seconds') %}
+  delay_seconds = {{ dlq.delay_seconds }}
+  {% elif dlq.get('delaySeconds') %}
+  delay_seconds = {{ dlq.delaySeconds }}
+  {% endif %}
+  
+  {% if dlq.get('max_message_size') %}
+  max_message_size = {{ dlq.max_message_size }}
+  {% elif dlq.get('maximumMessageSize') %}
+  max_message_size = {{ dlq.maximumMessageSize }}
+  {% endif %}
+  
+  {% if dlq.get('message_retention_seconds') %}
+  message_retention_seconds = {{ dlq.message_retention_seconds }}
+  {% elif dlq.get('messageRetentionPeriod') %}
+  message_retention_seconds = {{ dlq.messageRetentionPeriod }}
+  {% else %}
+  message_retention_seconds = {{ 1209600 }}  # 14 days for DLQ
+  {% endif %}
+  
+  {% if dlq.get('receive_wait_time_seconds') %}
+  receive_wait_time_seconds = {{ dlq.receive_wait_time_seconds }}
+  {% elif dlq.get('receiveMessageWaitTimeSeconds') %}
+  receive_wait_time_seconds = {{ dlq.receiveMessageWaitTimeSeconds }}
+  {% endif %}
+  
+  {% if dlq.get('visibility_timeout_seconds') %}
+  visibility_timeout_seconds = {{ dlq.visibility_timeout_seconds }}
+  {% elif dlq.get('visibilityTimeout') %}
+  visibility_timeout_seconds = {{ dlq.visibilityTimeout }}
+  {% endif %}
+  
+  {% if dlq.get('fifo_queue') is defined %}
+  fifo_queue = {{ dlq.fifo_queue | lower }}
+  {% elif dlq.get('fifoQueue') is defined %}
+  fifo_queue = {{ dlq.fifoQueue | lower }}
+  {% elif dlq.get('queueName', dlq.get('name', '')).endswith('.fifo') %}
+  fifo_queue = true
+  {% endif %}
+  
+  {% if dlq.get('content_based_deduplication') is defined %}
+  content_based_deduplication = {{ dlq.content_based_deduplication | lower }}
+  {% elif dlq.get('contentBasedDeduplication') is defined %}
+  content_based_deduplication = {{ dlq.contentBasedDeduplication | lower }}
+  {% endif %}
+  
+  {% if dlq.get('kms_master_key_id') %}
+  kms_master_key_id = "{{ dlq.kms_master_key_id }}"
+  {% elif dlq.get('kmsMasterKeyId') %}
+  kms_master_key_id = "{{ dlq.kmsMasterKeyId }}"
+  {% endif %}
+  
+  {% if dlq.get('kms_data_key_reuse_period_seconds') %}
+  kms_data_key_reuse_period_seconds = {{ dlq.kms_data_key_reuse_period_seconds }}
+  {% elif dlq.get('kmsDataKeyReusePeriodSeconds') %}
+  kms_data_key_reuse_period_seconds = {{ dlq.kmsDataKeyReusePeriodSeconds }}
+  {% endif %}
+  
+  {% if dlq.get('deduplication_scope') %}
+  deduplication_scope = "{{ dlq.deduplication_scope }}"
+  {% elif dlq.get('deduplicationScope') %}
+  deduplication_scope = "{{ dlq.deduplicationScope }}"
+  {% endif %}
+  
+  {% if dlq.get('fifo_throughput_limit') %}
+  fifo_throughput_limit = "{{ dlq.fifo_throughput_limit }}"
+  {% elif dlq.get('fifoThroughputLimit') %}
+  fifo_throughput_limit = "{{ dlq.fifoThroughputLimit }}"
+  {% endif %}
+  
+  {% if dlq.get('sqs_managed_sse_enabled') is defined %}
+  sqs_managed_sse_enabled = {{ dlq.sqs_managed_sse_enabled | lower }}
+  {% elif dlq.get('sqsManagedSseEnabled') is defined %}
+  sqs_managed_sse_enabled = {{ dlq.sqsManagedSseEnabled | lower }}
+  {% endif %}
+
+  {{ render_common_tags(dlq, indent=2) }}
+}
+
+{% if dlq.get('source_queues') %}
+{% for source_queue in dlq.source_queues %}
+{{ resource_spacer() }}
+resource "aws_sqs_queue" "{{ source_queue.name_sanitized }}" {
+  name = "{{ source_queue.name }}"
+  
+  {% if source_queue.get('delay_seconds') %}
+  delay_seconds = {{ source_queue.delay_seconds }}
+  {% endif %}
+  
+  {% if source_queue.get('max_message_size') %}
+  max_message_size = {{ source_queue.max_message_size }}
+  {% endif %}
+  
+  {% if source_queue.get('message_retention_seconds') %}
+  message_retention_seconds = {{ source_queue.message_retention_seconds }}
+  {% endif %}
+  
+  {% if source_queue.get('receive_wait_time_seconds') %}
+  receive_wait_time_seconds = {{ source_queue.receive_wait_time_seconds }}
+  {% endif %}
+  
+  {% if source_queue.get('visibility_timeout_seconds') %}
+  visibility_timeout_seconds = {{ source_queue.visibility_timeout_seconds }}
+  {% endif %}
+  
+  {% if source_queue.get('fifo_queue') is defined %}
+  fifo_queue = {{ source_queue.fifo_queue | lower }}
+  {% elif source_queue.name.endswith('.fifo') %}
+  fifo_queue = true
+  {% endif %}
+  
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.{{ dlq.name_sanitized }}_dlq.arn
+    maxReceiveCount     = {{ source_queue.get('max_receive_count', 3) }}
+  })
+  
+  {% if source_queue.get('redrive_allow_policy') %}
+  redrive_allow_policy = jsonencode({{ source_queue.redrive_allow_policy | tojson }})
+  {% endif %}
+
+  {{ render_common_tags(source_queue, indent=2) }}
+}
+
+{% endfor %}
+{% endif %}
+
+{% if dlq.get('create_dlq_alarm', true) %}
+resource "aws_cloudwatch_metric_alarm" "{{ dlq.name_sanitized }}_dlq_messages" {
+  alarm_name          = "{{ dlq.name }}-dlq-messages"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = {{ dlq.get('alarm_evaluation_periods', 1) }}
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = {{ dlq.get('alarm_period', 300) }}
+  statistic           = "Average"
+  threshold           = {{ dlq.get('alarm_threshold', 0) }}
+  alarm_description   = "This metric monitors messages in the dead letter queue"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    QueueName = aws_sqs_queue.{{ dlq.name_sanitized }}_dlq.name
+  }
+
+  {% if dlq.get('alarm_actions') %}
+  alarm_actions = {{ dlq.alarm_actions | tojson }}
+  {% endif %}
+
+  {{ render_common_tags(dlq, indent=2) }}
+}
+{% endif %}
+
+{% endfor %}
+{% endblock %}

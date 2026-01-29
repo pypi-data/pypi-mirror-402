@@ -1,0 +1,129 @@
+{% import "common/macros.j2" as macros %}
+{% for resource in resources %}
+
+# Import existing cloud run service: {{ resource.name }}
+import {
+  to = google_cloud_run_service.{{ resource.name_sanitized }}
+  id = "{{ resource.import_id }}"
+}
+
+resource "google_cloud_run_service" "{{ resource.name_sanitized }}" {
+  name     = "{{ resource.name }}"
+  project  = "{{ resource.project }}"
+  location = "{{ resource.location }}"
+
+  template {
+    spec {
+      containers {
+        image = "{{ resource.container_image }}"
+{% if resource.container_ports %}
+{% for port in resource.container_ports %}
+        ports {
+          container_port = {{ port.container_port }}
+{% if port.name %}
+          name = "{{ port.name }}"
+{% endif %}
+        }
+{% endfor %}
+{% endif %}
+{% if resource.container_env_vars %}
+{% for env in resource.container_env_vars %}
+        env {
+          name = "{{ env.name }}"
+          value = "{{ env.value }}"
+        }
+{% endfor %}
+{% endif %}
+{% if resource.container_resources %}
+        resources {
+{% if resource.container_resources.limits %}
+          limits = {
+{% for key, value in resource.container_resources.limits.items() %}
+            {{ key }} = "{{ value }}"
+{% endfor %}
+          }
+{% endif %}
+{% if resource.container_resources.requests %}
+          requests = {
+{% for key, value in resource.container_resources.requests.items() %}
+            {{ key }} = "{{ value }}"
+{% endfor %}
+          }
+{% endif %}
+        }
+{% endif %}
+      }
+{% if resource.service_account %}
+      service_account_name = "{{ resource.service_account }}"
+{% endif %}
+{% if resource.timeout_seconds %}
+      timeout_seconds = {{ resource.timeout_seconds }}
+{% endif %}
+    }
+{% if resource.template_metadata %}
+    metadata {
+{% if resource.template_metadata.annotations %}
+      annotations = {
+{% for key, value in resource.template_metadata.annotations.items() %}
+        "{{ key }}" = "{{ value }}"
+{% endfor %}
+      }
+{% endif %}
+{% if resource.template_metadata.labels %}
+      labels = {
+{% for key, value in resource.template_metadata.labels.items() %}
+        "{{ key }}" = "{{ value }}"
+{% endfor %}
+      }
+{% endif %}
+    }
+{% endif %}
+  }
+
+{% if resource.traffic %}
+  traffic {
+{% for traffic in resource.traffic %}
+    percent         = {{ traffic.percent }}
+{% if traffic.revision_name %}
+    revision_name   = "{{ traffic.revision_name }}"
+{% else %}
+    latest_revision = true
+{% endif %}
+{% endfor %}
+  }
+{% endif %}
+
+{% if resource.metadata %}
+  metadata {
+{% if resource.metadata.annotations %}
+    annotations = {
+{% for key, value in resource.metadata.annotations.items() %}
+      "{{ key }}" = "{{ value }}"
+{% endfor %}
+    }
+{% endif %}
+{% if resource.metadata.labels %}
+    labels = {
+{% for key, value in resource.metadata.labels.items() %}
+      "{{ key }}" = "{{ value }}"
+{% endfor %}
+    }
+{% endif %}
+  }
+{% endif %}
+
+{% if resource.autogenerate_revision_name is defined %}
+  autogenerate_revision_name = {{ resource.autogenerate_revision_name | lower }}
+{% endif %}
+}
+
+{% if resource.iam_policy %}
+resource "google_cloud_run_service_iam_policy" "{{ resource.name_sanitized }}_policy" {
+  location    = google_cloud_run_service.{{ resource.name_sanitized }}.location
+  project     = google_cloud_run_service.{{ resource.name_sanitized }}.project
+  service     = google_cloud_run_service.{{ resource.name_sanitized }}.name
+  policy_data = "{{ resource.iam_policy | tojson | replace('"', '\\"') }}"
+}
+{% endif %}
+
+{% endfor %}

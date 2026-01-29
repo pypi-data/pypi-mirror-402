@@ -1,0 +1,30 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_dns_zone" "{{ resource.name }}" {
+  name                = "{{ resource.properties.name }}"
+  resource_group_name = "{{ resource.properties.resource_group_name }}"
+  
+  {% if resource.properties.soa_record is defined and resource.properties.soa_record and resource.properties.soa_record.email is defined %}
+  soa_record {
+    email         = "{{ resource.properties.soa_record.email }}"
+    expire_time   = {{ resource.properties.soa_record.expire_time | default(2419200) }}
+    minimum_ttl   = {{ resource.properties.soa_record.minimum_ttl | default(10) }}
+    refresh_time  = {{ resource.properties.soa_record.refresh_time | default(3600) }}
+    retry_time    = {{ resource.properties.soa_record.retry_time | default(300) }}
+    ttl           = {{ resource.properties.soa_record.ttl | default(3600) }}
+    {% if resource.properties.soa_record.host_name is defined %}
+    host_name     = "{{ resource.properties.soa_record.host_name }}"
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.properties.tags is defined and resource.properties.tags %}
+  tags = {{ resource.properties.tags | tojson }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,127 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for api in resources %}
+{{ resource_spacer() }}
+resource "google_api_gateway_api" "{{ api.name_sanitized }}" {
+  api_id       = "{{ api.api_id }}"
+  
+  {% if api.get('project') %}
+
+  {% endif %}
+  
+  {% if api.get('display_name') %}
+  display_name = "{{ api.display_name }}"
+  {% endif %}
+  
+  {% if api.get('managed_service') %}
+  managed_service = "{{ api.managed_service }}"
+  {% endif %}
+
+  {{ render_gcp_labels(api, indent=2) }}
+}
+
+{% if api.get('api_configs') %}
+{% for config in api.api_configs %}
+{{ resource_spacer() }}
+resource "google_api_gateway_api_config" "{{ api.name_sanitized }}_{{ config.name_sanitized }}" {
+  api           = google_api_gateway_api.{{ api.name_sanitized }}.api_id
+  api_config_id = "{{ config.api_config_id }}"
+  
+  {% if config.get('project') %}
+
+  {% endif %}
+  
+  {% if config.get('display_name') %}
+  display_name  = "{{ config.display_name }}"
+  {% endif %}
+
+  {% if config.get('openapi_documents') %}
+  {% for doc in config.openapi_documents %}
+  openapi_documents {
+    document {
+      path     = "{{ doc.document.path }}"
+      contents = base64encode(<<-EOT
+{{ doc.document.contents | indent(8, True) }}
+      EOT
+      )
+    }
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if config.get('grpc_services') %}
+  {% for service in config.grpc_services %}
+  grpc_services {
+    {% if service.get('file_descriptor_set') %}
+    file_descriptor_set {
+      path     = "{{ service.file_descriptor_set.path }}"
+      contents = base64encode("{{ service.file_descriptor_set.contents }}")
+    }
+    {% endif %}
+    
+    {% if service.get('source') %}
+    {% for source in service.source %}
+    source {
+      path     = "{{ source.path }}"
+      contents = "{{ source.contents }}"
+    }
+    {% endfor %}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if config.get('managed_service_configs') %}
+  {% for ms_config in config.managed_service_configs %}
+  managed_service_configs {
+    path     = "{{ ms_config.path }}"
+    contents = base64encode(<<-EOT
+{{ ms_config.contents | indent(6, True) }}
+    EOT
+    )
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if config.get('gateway_config') %}
+  gateway_config {
+    backend_config {
+      google_service_account = "{{ config.gateway_config.backend_config.google_service_account }}"
+    }
+  }
+  {% endif %}
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+{% endfor %}
+{% endif %}
+
+{% if api.get('gateways') %}
+{% for gateway in api.gateways %}
+{{ resource_spacer() }}
+resource "google_api_gateway_gateway" "{{ api.name_sanitized }}_{{ gateway.name_sanitized }}" {
+  gateway_id   = "{{ gateway.gateway_id }}"
+  api_config   = google_api_gateway_api_config.{{ api.name_sanitized }}_{{ gateway.api_config_name_sanitized }}.id
+  
+  {% if gateway.get('project') %}
+
+  {% endif %}
+  
+  {% if gateway.get('region') %}
+  region       = "{{ gateway.region }}"
+  {% endif %}
+  
+  {% if gateway.get('display_name') %}
+  display_name = "{{ gateway.display_name }}"
+  {% endif %}
+
+  {{ render_gcp_labels(gateway, indent=2) }}
+}
+
+{% endfor %}
+{% endif %}
+
+{% endfor %}{% endblock %}

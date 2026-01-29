@@ -1,0 +1,79 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_servicebus_queue" "{{ resource.name }}" {
+  name         = "{{ resource.properties.name }}"
+  namespace_id = "{{ resource.properties.namespace_id }}"
+  
+  {% if resource.properties.lock_duration is defined and resource.properties.lock_duration and resource.properties.lock_duration.startswith('PT') %}
+  lock_duration = "{{ resource.properties.lock_duration }}"
+  {% endif %}
+  
+  {% if resource.properties.max_message_size_in_kilobytes is defined and resource.properties.max_message_size_in_kilobytes >= 1024 %}
+  max_message_size_in_kilobytes = {{ resource.properties.max_message_size_in_kilobytes }}
+  {% endif %}
+  
+  {% if resource.properties.max_size_in_megabytes is defined %}
+  max_size_in_megabytes = {{ resource.properties.max_size_in_megabytes }}
+  {% endif %}
+  
+  {% if resource.properties.requires_duplicate_detection is defined %}
+  requires_duplicate_detection = {{ resource.properties.requires_duplicate_detection | lower }}
+  {% endif %}
+  
+  {% if resource.properties.requires_session is defined %}
+  requires_session = {{ resource.properties.requires_session | lower }}
+  {% endif %}
+  
+  {% if resource.properties.default_message_ttl is defined and resource.properties.default_message_ttl and (resource.properties.default_message_ttl.startswith('PT') or resource.properties.default_message_ttl.startswith('P')) %}
+  default_message_ttl = "{{ resource.properties.default_message_ttl }}"
+  {% endif %}
+  
+  {% if resource.properties.dead_lettering_on_message_expiration is defined %}
+  dead_lettering_on_message_expiration = {{ resource.properties.dead_lettering_on_message_expiration | lower }}
+  {% endif %}
+  
+  {% if resource.properties.duplicate_detection_history_time_window is defined and resource.properties.duplicate_detection_history_time_window and resource.properties.duplicate_detection_history_time_window.startswith('PT') %}
+  duplicate_detection_history_time_window = "{{ resource.properties.duplicate_detection_history_time_window }}"
+  {% endif %}
+  
+  {% if resource.properties.max_delivery_count is defined %}
+  max_delivery_count = {{ resource.properties.max_delivery_count }}
+  {% endif %}
+  
+  {% if resource.properties.status is defined %}
+  status = "{{ resource.properties.status }}"
+  {% endif %}
+  
+  
+  {% if resource.properties.auto_delete_on_idle is defined and resource.properties.auto_delete_on_idle and (resource.properties.auto_delete_on_idle.startswith('PT') or resource.properties.auto_delete_on_idle.startswith('P')) %}
+  auto_delete_on_idle = "{{ resource.properties.auto_delete_on_idle | regex_replace('\\.\\d+S$', 'S') }}"
+  {% endif %}
+  
+  
+  
+  {% if resource.properties.enable_batched_operations is defined %}
+  batched_operations_enabled = {{ resource.properties.enable_batched_operations | lower }}
+  {% endif %}
+  
+  {% if resource.properties.enable_partitioning is defined %}
+  partitioning_enabled = {{ resource.properties.enable_partitioning | lower }}
+  {% endif %}
+  
+  {% if resource.properties.enable_express is defined %}
+  express_enabled = {{ resource.properties.enable_express | lower }}
+  {% endif %}
+
+  {% if resource.properties.forward_to is defined and resource.properties.forward_to %}
+  forward_to = "{{ resource.properties.forward_to }}"
+  {% endif %}
+  
+  {% if resource.properties.forward_dead_lettered_messages_to is defined and resource.properties.forward_dead_lettered_messages_to %}
+  forward_dead_lettered_messages_to = "{{ resource.properties.forward_dead_lettered_messages_to }}"
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

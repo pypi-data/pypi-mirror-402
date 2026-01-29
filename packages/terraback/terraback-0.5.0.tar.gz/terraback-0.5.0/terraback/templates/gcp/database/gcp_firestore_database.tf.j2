@@ -1,0 +1,66 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for database in resources %}
+{{ resource_spacer() }}
+resource "google_firestore_database" "{{ database.name_sanitized }}" {
+  name        = "{{ database.name }}"
+  location_id = "{{ database.location_id }}"
+  type        = "{{ database.type | default('FIRESTORE_NATIVE') }}"
+
+
+  {% if database.get('concurrency_mode') %}
+  concurrency_mode = "{{ database.concurrency_mode }}"
+  {% endif %}
+
+  {% if database.get('app_engine_integration_mode') %}
+  app_engine_integration_mode = "{{ database.app_engine_integration_mode }}"
+  {% endif %}
+
+  {% if database.get('delete_protection_state') %}
+  delete_protection_state = "{{ database.delete_protection_state }}"
+  {% endif %}
+
+  {% if database.get('deletion_policy') %}
+  deletion_policy = "{{ database.deletion_policy }}"
+  {% endif %}
+
+  {% if database.get('point_in_time_recovery_enablement') %}
+  point_in_time_recovery_enablement = "{{ database.point_in_time_recovery_enablement }}"
+  {% endif %}
+
+  {{ render_gcp_labels(database, indent=2) }}
+}
+
+{% if database.get('indexes') %}
+{% for index in database.indexes %}
+{{ resource_spacer() }}
+resource "google_firestore_index" "{{ database.name_sanitized }}_{{ loop.index }}" {
+  project    = google_firestore_database.{{ database.name_sanitized }}.project
+  database   = google_firestore_database.{{ database.name_sanitized }}.name
+  collection = "{{ index.collection }}"
+
+  {% for field in index.fields %}
+  fields {
+    field_path = "{{ field.field_path }}"
+    {% if field.get('order') %}
+    order      = "{{ field.order }}"
+    {% endif %}
+    {% if field.get('array_config') %}
+    array_config = "{{ field.array_config }}"
+    {% endif %}
+  }
+  {% endfor %}
+
+  {% if index.get('query_scope') %}
+  query_scope = "{{ index.query_scope }}"
+  {% endif %}
+
+  {% if index.get('api_scope') %}
+  api_scope = "{{ index.api_scope }}"
+  {% endif %}
+}
+
+{% endfor %}
+{% endif %}
+
+{% endfor %}{% endblock %}

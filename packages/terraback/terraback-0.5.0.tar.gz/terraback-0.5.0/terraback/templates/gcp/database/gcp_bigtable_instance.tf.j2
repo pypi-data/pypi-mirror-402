@@ -1,0 +1,149 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for instance in resources %}
+{{ resource_spacer() }}
+resource "google_bigtable_instance" "{{ instance.name_sanitized }}" {
+  name         = "{{ instance.name }}"
+  
+
+  {% if instance.get('display_name') %}
+  display_name = "{{ instance.display_name }}"
+  {% endif %}
+
+  {% if instance.get('deletion_protection') is not none %}
+  deletion_protection = {{ instance.deletion_protection | lower }}
+  {% endif %}
+
+  {% for cluster in instance.clusters %}
+  cluster {
+    cluster_id   = "{{ cluster.cluster_id }}"
+    
+    {% if cluster.get('zone') %}
+    zone         = "{{ cluster.zone }}"
+    {% endif %}
+    
+    {% if cluster.get('num_nodes') %}
+    num_nodes    = {{ cluster.num_nodes }}
+    {% endif %}
+    
+    {% if cluster.get('storage_type') %}
+    storage_type = "{{ cluster.storage_type }}"
+    {% endif %}
+    
+    {% if cluster.get('kms_key_name') %}
+    kms_key_name = "{{ cluster.kms_key_name }}"
+    {% endif %}
+
+    {% if cluster.get('autoscaling_config') %}
+    autoscaling_config {
+      min_nodes      = {{ cluster.autoscaling_config.min_nodes }}
+      max_nodes      = {{ cluster.autoscaling_config.max_nodes }}
+      cpu_target     = {{ cluster.autoscaling_config.cpu_target }}
+      
+      {% if cluster.autoscaling_config.get('storage_target') %}
+      storage_target = {{ cluster.autoscaling_config.storage_target }}
+      {% endif %}
+    }
+    {% endif %}
+  }
+  {% endfor %}
+
+  {% if instance.get('instance_type') %}
+  instance_type = "{{ instance.instance_type }}"
+  {% endif %}
+
+  {{ render_gcp_labels(instance, indent=2) }}
+}
+
+{% if instance.get('tables') %}
+{% for table in instance.tables %}
+{{ resource_spacer() }}
+resource "google_bigtable_table" "{{ instance.name_sanitized }}_{{ table.name_sanitized }}" {
+  name          = "{{ table.name }}"
+  instance_name = google_bigtable_instance.{{ instance.name_sanitized }}.name
+  
+  {% if table.get('project') %}
+  {% endif %}
+
+  {% if table.get('split_keys') %}
+  split_keys    = [
+    {% for key in table.split_keys %}
+    "{{ key }}"{{ "," if not loop.last }}
+    {% endfor %}
+  ]
+  {% endif %}
+
+  {% if table.get('deletion_protection') %}
+  deletion_protection = "{{ table.deletion_protection }}"
+  {% endif %}
+
+  {% if table.get('change_stream_retention') %}
+  change_stream_retention = "{{ table.change_stream_retention }}"
+  {% endif %}
+
+  {% if table.get('column_families') %}
+  {% for family_name, family_config in table.column_families.items() %}
+  column_family {
+    family = "{{ family_name }}"
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if table.get('lifecycle_prevent_destroy', true) %}
+  lifecycle {
+    prevent_destroy = true
+  }
+  {% endif %}
+}
+
+{% if table.get('iam_bindings') %}
+{% for binding in table.iam_bindings %}
+{{ resource_spacer() }}
+resource "google_bigtable_table_iam_binding" "{{ instance.name_sanitized }}_{{ table.name_sanitized }}_{{ loop.index }}" {
+  instance = google_bigtable_instance.{{ instance.name_sanitized }}.name
+  table    = google_bigtable_table.{{ instance.name_sanitized }}_{{ table.name_sanitized }}.name
+  role     = "{{ binding.role }}"
+  members  = [
+    {% for member in binding.members %}
+    "{{ member }}"{{ "," if not loop.last }}
+    {% endfor %}
+  ]
+}
+
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+{% endif %}
+
+{% if instance.get('app_profiles') %}
+{% for profile in instance.app_profiles %}
+{{ resource_spacer() }}
+resource "google_bigtable_app_profile" "{{ instance.name_sanitized }}_{{ profile.name_sanitized }}" {
+  app_profile_id       = "{{ profile.app_profile_id }}"
+  instance             = google_bigtable_instance.{{ instance.name_sanitized }}.name
+  
+  {% if profile.get('description') %}
+  description          = "{{ profile.description }}"
+  {% endif %}
+  
+  {% if profile.get('multi_cluster_routing_use_any') is not none %}
+  multi_cluster_routing_use_any = {{ profile.multi_cluster_routing_use_any | lower }}
+  {% endif %}
+  
+  {% if profile.get('single_cluster_routing') %}
+  single_cluster_routing {
+    cluster_id                 = "{{ profile.single_cluster_routing.cluster_id }}"
+    allow_transactional_writes = {{ profile.single_cluster_routing.get('allow_transactional_writes', false) | lower }}
+  }
+  {% endif %}
+  
+  {% if profile.get('ignore_warnings') is not none %}
+  ignore_warnings = {{ profile.ignore_warnings | lower }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endif %}
+
+{% endfor %}{% endblock %}

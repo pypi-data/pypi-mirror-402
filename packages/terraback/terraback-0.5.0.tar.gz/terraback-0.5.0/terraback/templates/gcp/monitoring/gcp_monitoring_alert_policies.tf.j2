@@ -1,0 +1,60 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% import "common/macros.j2" as macros %}
+{% block resources %}
+{% for policy in resources %}
+{{ resource_spacer() }}
+resource "google_monitoring_alert_policy" "{{ policy.display_name | replace(' ', '_') | replace('-', '_') | lower }}" {
+  display_name = "{{ policy.display_name }}"
+  combiner     = "{{ policy.combiner }}"
+  enabled      = {{ policy.enabled | lower }}
+
+  {% for condition in policy.conditions %}
+  conditions {
+    display_name = "{{ condition.display_name }}"
+    
+    {% if condition.condition_threshold %}
+    condition_threshold {
+      filter          = "{{ condition.condition_threshold.filter }}"
+      duration        = "{{ condition.condition_threshold.duration }}s"
+      comparison      = "{{ condition.condition_threshold.comparison }}"
+      {% if condition.condition_threshold.threshold_value %}
+      threshold_value = {{ condition.condition_threshold.threshold_value }}
+      {% endif %}
+      
+      {% for agg in condition.condition_threshold.aggregations %}
+      aggregations {
+        alignment_period   = "{{ agg.alignment_period }}s"
+        per_series_aligner = "{{ agg.per_series_aligner }}"
+      }
+      {% endfor %}
+    }
+    {% endif %}
+  }
+  {% endfor %}
+  
+  {% if policy.documentation and policy.documentation.content %}
+  documentation {
+    content   = "{{ policy.documentation.content }}"
+    mime_type = "{{ policy.documentation.mime_type | default('text/markdown') }}"
+  }
+  {% endif %}
+  
+  {% if policy.notification_channels %}
+  notification_channels = {{ policy.notification_channels | tojson }}
+  {% endif %}
+  
+  {% if policy.labels %}
+  user_labels = {
+    {% for key, value in policy.labels.items() %}
+    {{ key }} = "{{ value }}"{{ "," if not loop.last }}
+    {% endfor %}
+  }
+  {% endif %}
+  
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

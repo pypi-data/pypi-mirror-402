@@ -1,0 +1,34 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_role_definition" "{{ resource.name }}" {
+  name        = "{{ resource.properties.name }}"
+  scope       = "{{ resource.properties.scope }}"
+  description = "{{ resource.properties.description | default('') }}"
+  
+  {% if resource.properties.permissions is defined %}
+  {% for permission in resource.properties.permissions %}
+  permissions {
+    actions          = {{ permission.actions | tojson }}
+    {% if permission.not_actions is defined %}
+    not_actions      = {{ permission.not_actions | tojson }}
+    {% endif %}
+    {% if permission.data_actions is defined %}
+    data_actions     = {{ permission.data_actions | tojson }}
+    {% endif %}
+    {% if permission.not_data_actions is defined %}
+    not_data_actions = {{ permission.not_data_actions | tojson }}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.assignable_scopes is defined %}
+  assignable_scopes = {{ resource.properties.assignable_scopes | tojson }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

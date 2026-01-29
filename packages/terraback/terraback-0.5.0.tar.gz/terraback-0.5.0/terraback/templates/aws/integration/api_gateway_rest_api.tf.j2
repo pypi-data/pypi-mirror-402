@@ -1,0 +1,37 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for api in resources %}
+{{ resource_spacer() }}
+resource "aws_api_gateway_rest_api" "{{ api.name_sanitized }}" {
+  name        = "{{ api.name }}"
+  
+  {% if api.description %}
+  description = "{{ api.description }}"
+  {% endif %}
+  
+  {% if api.minimum_compression_size is defined %}
+  minimum_compression_size = {{ api.minimum_compression_size }}
+  {% endif %}
+  
+  {% if api.api_key_source %}
+  api_key_source = "{{ api.api_key_source }}"
+  {% endif %}
+  
+  {% if api.endpoint_configuration %}
+  endpoint_configuration {
+    types = {{ api.endpoint_configuration.types | tojson }}
+    {% if api.endpoint_configuration.vpc_endpoint_ids %}
+    vpc_endpoint_ids = {{ api.endpoint_configuration.vpc_endpoint_ids | tojson }}
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if api.policy %}
+  policy = jsonencode({{ api.policy | tojson }})
+  {% endif %}
+
+  {{ render_common_tags(api, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

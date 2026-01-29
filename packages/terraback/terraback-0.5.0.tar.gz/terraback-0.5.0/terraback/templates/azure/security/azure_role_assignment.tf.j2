@@ -1,0 +1,37 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_role_assignment" "{{ resource.name }}" {
+  scope                = "{{ resource.properties.scope }}"
+  role_definition_id   = "{{ resource.properties.role_definition_id }}"
+  principal_id         = "{{ resource.properties.principal_id }}"
+  
+  {% if resource.properties.principal_type is defined %}
+  principal_type = "{{ resource.properties.principal_type }}"
+  {% endif %}
+  
+  {% if resource.properties.condition is defined and resource.properties.condition %}
+  condition = "{{ resource.properties.condition }}"
+  {% endif %}
+  
+  {% if resource.properties.condition_version is defined and resource.properties.condition_version %}
+  condition_version = "{{ resource.properties.condition_version }}"
+  {% endif %}
+  
+  {% if resource.properties.delegated_managed_identity_resource_id is defined and resource.properties.delegated_managed_identity_resource_id %}
+  delegated_managed_identity_resource_id = "{{ resource.properties.delegated_managed_identity_resource_id }}"
+  {% endif %}
+  
+  {% if resource.properties.description is defined and resource.properties.description %}
+  description = "{{ resource.properties.description }}"
+  {% endif %}
+  
+  {% if resource.properties.skip_service_principal_aad_check is defined %}
+  skip_service_principal_aad_check = {{ resource.properties.skip_service_principal_aad_check | lower }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

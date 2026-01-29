@@ -1,0 +1,52 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for detector in resources %}
+{{ resource_spacer() }}
+resource "aws_guardduty_detector" "{{ detector.name_sanitized }}" {
+  {% if detector.get('enable') is defined %}
+  enable = {{ detector.enable | lower }}
+  {% else %}
+  enable = true
+  {% endif %}
+
+  {% if detector.get('finding_publishing_frequency') or detector.get('findingPublishingFrequency') %}
+  finding_publishing_frequency = "{{ detector.finding_publishing_frequency | default(detector.findingPublishingFrequency) }}"
+  {% endif %}
+
+  {% if detector.get('datasources') or detector.get('dataSources') %}
+  datasources {
+    {% set ds = detector.get('datasources', detector.get('dataSources', {})) %}
+    
+    {% if ds.get('s3_logs') or ds.get('s3Logs') %}
+    s3_logs {
+      {% set s3_logs = ds.get('s3_logs', ds.get('s3Logs', {})) %}
+      enable = {{ s3_logs.get('enable', s3_logs.get('enabled', true)) | lower }}
+    }
+    {% endif %}
+    
+    {% if ds.get('kubernetes') %}
+    kubernetes {
+      audit_logs {
+        enable = {{ ds.kubernetes.get('audit_logs', {}).get('enable', true) | lower }}
+      }
+    }
+    {% endif %}
+    
+    {% if ds.get('malware_protection') or ds.get('malwareProtection') %}
+    malware_protection {
+      {% set mp = ds.get('malware_protection', ds.get('malwareProtection', {})) %}
+      scan_ec2_instance_with_findings {
+        ebs_volumes {
+          enable = {{ mp.get('scan_ec2_instance_with_findings', {}).get('ebs_volumes', {}).get('enable', mp.get('scanEc2InstanceWithFindings', {}).get('ebsVolumes', {}).get('enable', true)) | lower }}
+        }
+      }
+    }
+    {% endif %}
+  }
+  {% endif %}
+
+  {{ render_common_tags(detector, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for deployment in resources %}
+{{ resource_spacer() }}
+resource "google_deployment_manager_deployment" "{{ deployment.name_sanitized }}" {
+  name        = "{{ deployment.name }}"
+  
+  {% if deployment.get('description') %}
+  description = "{{ deployment.description }}"
+  {% endif %}
+
+  {% if deployment.get('project') %}
+
+  {% endif %}
+
+  target {
+    {% if deployment.target.get('config') %}
+    config {
+      content = <<-EOT
+{{ deployment.target.config.content | indent(8, True) }}
+      EOT
+    }
+    {% endif %}
+
+    {% if deployment.target.get('imports') %}
+    {% for import in deployment.target.imports %}
+    imports {
+      {% if import.get('name') %}
+      name    = "{{ import.name }}"
+      {% endif %}
+      
+      {% if import.get('content') %}
+      content = <<-EOT
+{{ import.content | indent(8, True) }}
+      EOT
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+  }
+
+  {% if deployment.get('preview') is not none %}
+  preview = {{ deployment.preview | lower }}
+  {% endif %}
+
+  {% if deployment.get('create_policy') %}
+  create_policy = "{{ deployment.create_policy }}"
+  {% endif %}
+
+  {% if deployment.get('delete_policy') %}
+  delete_policy = "{{ deployment.delete_policy }}"
+  {% endif %}
+
+  {{ render_gcp_labels(deployment, indent=2) }}
+}
+
+{% endfor %}{% endblock %}

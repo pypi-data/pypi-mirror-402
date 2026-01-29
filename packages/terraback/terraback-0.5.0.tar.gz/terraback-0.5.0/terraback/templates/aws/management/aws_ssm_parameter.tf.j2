@@ -1,0 +1,51 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% import "common/macros.j2" as macros %}
+{% block resources %}
+{% for parameter in resources %}
+{{ resource_spacer() }}
+resource "aws_ssm_parameter" "{{ parameter.name_sanitized }}" {
+  name = "{{ parameter.Name }}"
+  type = "{{ parameter.Type }}"
+
+  {% if parameter.Type != 'SecureString' and parameter.get('Value') %}
+  value = "{{ parameter.Value | replace('"', '\\"') }}"
+  {% else %}
+  value = var.parameter_value
+  {%  endif %}
+
+  {% if parameter.get('Description') %}
+  description = "{{ parameter.Description }}"
+  {%  endif %}
+
+  {% if parameter.get('KeyId') and parameter.is_secure %}
+  key_id = "{{ parameter.KeyId }}"
+  {%  endif %}
+
+  {% if parameter.get('AllowedPattern') %}
+  allowed_pattern = "{{ parameter.AllowedPattern }}"
+  {%  endif %}
+
+  tier = "{{ parameter.Tier }}"
+
+  {% if parameter.get('DataType') and parameter.DataType != 'text' %}
+  data_type = "{{ parameter.DataType }}"
+  {%  endif %}
+
+  {% if parameter.get('tags_formatted') or parameter.category or parameter.Tier %}
+  {% set tags_dict = parameter.get('tags_formatted', {}).copy() %}
+  {% if parameter.category %}{% set _ = tags_dict.update({'ParameterCategory': parameter.category}) %}{% endif %}
+  {% if parameter.Tier %}{% set _ = tags_dict.update({'ParameterTier': parameter.Tier}) %}{% endif %}
+  {{ macros.render_map('tags', tags_dict, 2) }}
+  {% endif %}
+
+  {% if parameter.is_secure %}
+  lifecycle {
+    ignore_changes = [
+      value,
+    ]
+  }
+  {%  endif %}
+}
+
+{% endfor %}
+{% endblock %}

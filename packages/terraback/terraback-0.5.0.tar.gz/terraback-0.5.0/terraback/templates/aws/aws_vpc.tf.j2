@@ -1,0 +1,35 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for vpc in resources %}
+{{ resource_spacer() }}
+resource "aws_vpc" "{{ vpc.name_sanitized }}" {
+  cidr_block           = "{{ vpc.CidrBlock }}"
+  instance_tenancy     = "{{ vpc.InstanceTenancy }}"
+  enable_dns_support   = {{ 'true' if vpc.get('EnableDnsSupport', True) else 'false' }}
+  enable_dns_hostnames = {{ 'true' if vpc.get('EnableDnsHostnames', False) else 'false' }}
+
+  {% if vpc.get('tags_formatted') %}
+  tags = {
+    {% for key, value in vpc.tags_formatted.items() %}
+    "{{ key }}" = "{{ value }}"{{ ',' if not loop.last }}
+    {% endfor %}
+  }
+  {% elif vpc.get('Tags') %}
+    {% if vpc.Tags is mapping %}
+  tags = {
+    {% for key, value in vpc.Tags.items() %}
+    "{{ key }}" = "{{ value }}"{{ ',' if not loop.last }}
+    {% endfor %}
+  }
+    {% else %}
+  tags = {
+    {% for tag in vpc.Tags %}
+    "{{ tag.Key }}" = "{{ tag.Value }}"{{ ',' if not loop.last }}
+    {% endfor %}
+  }
+    {% endif %}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,148 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% import "common/macros.j2" as macros %}
+{% block resources %}
+{% for instance in resources %}
+
+# Import existing instance: {{ instance.name }}
+import {
+  to = google_compute_instance.{{ instance.name_sanitized }}
+  id = "{{ instance.id }}"
+}
+
+{{ resource_spacer() }}
+resource "google_compute_instance" "{{ instance.name_sanitized }}" {
+  name         = "{{ instance.name }}"
+  zone         = "{{ instance.zone }}"
+  machine_type = "{{ instance.machine_type }}"
+
+  {% if instance.tags %}
+  tags = {{ instance.tags | tojson }}
+  {%  endif %}
+
+  {% if instance.boot_disk %}
+  boot_disk {
+    {% if instance.boot_disk.source %}
+    source      = "{{ instance.boot_disk.source }}"
+    {% endif %}
+    {% if instance.boot_disk.auto_delete is not none %}
+    auto_delete = {{ instance.boot_disk.auto_delete | lower }}
+    {% endif %}
+    {% if instance.boot_disk.device_name %}
+    device_name = "{{ instance.boot_disk.device_name }}"
+    {% endif %}
+    
+    {% if instance.boot_disk.initialize_params %}
+    initialize_params {
+      {% if instance.boot_disk.initialize_params.image %}
+      image = "{{ instance.boot_disk.initialize_params.image }}"
+      {% endif %}
+      {% if instance.boot_disk.initialize_params.size %}
+      size  = {{ instance.boot_disk.initialize_params.size }}
+      {% endif %}
+      {% if instance.boot_disk.initialize_params.type %}
+      type  = "{{ instance.boot_disk.initialize_params.type }}"
+      {% endif %}
+    }
+    {% endif %}
+  }
+  {%  endif %}
+
+  {% for disk in instance.attached_disks %}
+  attached_disk {
+    source      = "{{ disk.source }}"
+    device_name = "{{ disk.device_name }}"
+    mode        = "READ_WRITE"
+  }
+  {% endfor %}
+
+  {% for nic in instance.network_interfaces %}
+  network_interface {
+    {% if nic.subnetwork %}
+    subnetwork = "{{ nic.subnetwork }}"
+    {% else %}
+    network = "{{ nic.network }}"
+    {%  endif %}
+
+    {% for ac in nic.access_configs %}
+    access_config {
+      nat_ip = "{{ ac.nat_ip }}"
+      // Ephemeral IP
+    }
+    {% endfor %}
+  }
+  {% endfor %}
+
+{{ macros.render_map('metadata', instance.metadata, indent=2) }}
+
+{{ macros.render_map('labels', instance.labels, indent=2) }}
+
+  {% if instance.scheduling %}
+  scheduling {
+    {% if instance.scheduling.preemptible is not none %}
+    preemptible         = {{ instance.scheduling.preemptible | lower }}
+    {% endif %}
+    {% if instance.scheduling.on_host_maintenance %}
+    on_host_maintenance = "{{ instance.scheduling.on_host_maintenance }}"
+    {% endif %}
+    {% if instance.scheduling.automatic_restart is not none %}
+    automatic_restart   = {{ instance.scheduling.automatic_restart | lower }}
+    {% endif %}
+    {% if instance.scheduling.provisioning_model %}
+    provisioning_model  = "{{ instance.scheduling.provisioning_model }}"
+    {% endif %}
+    {% if instance.scheduling.instance_termination_action %}
+    instance_termination_action = "{{ instance.scheduling.instance_termination_action }}"
+    {% endif %}
+  }
+  {% endif %}
+
+  {% for accelerator in instance.guest_accelerators %}
+  guest_accelerator {
+    type  = "{{ accelerator.type }}"
+    count = {{ accelerator.count }}
+  }
+  {% endfor %}
+
+  {% if instance.min_cpu_platform %}
+  min_cpu_platform = "{{ instance.min_cpu_platform }}"
+  {% endif %}
+
+  {% if instance.shielded_instance_config %}
+  shielded_instance_config {
+    {% if instance.shielded_instance_config.enable_secure_boot is not none %}
+    enable_secure_boot = {{ instance.shielded_instance_config.enable_secure_boot | lower }}
+    {% endif %}
+    {% if instance.shielded_instance_config.enable_vtpm is not none %}
+    enable_vtpm = {{ instance.shielded_instance_config.enable_vtpm | lower }}
+    {% endif %}
+    {% if instance.shielded_instance_config.enable_integrity_monitoring is not none %}
+    enable_integrity_monitoring = {{ instance.shielded_instance_config.enable_integrity_monitoring | lower }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if instance.confidential_instance_config %}
+  confidential_instance_config {
+    enable_confidential_compute = {{ instance.confidential_instance_config.enable_confidential_compute | lower }}
+  }
+  {% endif %}
+
+  {% if instance.enable_display is not none %}
+  enable_display = {{ instance.enable_display | lower }}
+  {% endif %}
+
+  {% for sa in instance.service_accounts %}
+  service_account {
+    email  = "{{ sa.email }}"
+    scopes = {{ sa.scopes | tojson }}
+  }
+  {% endfor %}
+
+{{ macros.render_depends_on(instance.depends_on, indent=2) }}
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

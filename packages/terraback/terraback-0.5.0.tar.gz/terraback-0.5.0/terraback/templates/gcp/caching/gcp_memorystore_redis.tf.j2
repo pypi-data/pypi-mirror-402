@@ -1,0 +1,91 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for instance in resources %}
+{{ resource_spacer() }}
+resource "google_redis_instance" "{{ instance.name_sanitized }}" {
+  name           = "{{ instance.name }}"
+  tier           = "{{ instance.tier | default('STANDARD_HA') }}"
+  memory_size_gb = {{ instance.memory_size_gb }}
+  
+  {% if instance.get('display_name') %}
+  display_name   = "{{ instance.display_name }}"
+  {% endif %}
+
+  {% if instance.get('region') %}
+  region         = "{{ instance.region }}"
+  {% endif %}
+
+  {% if instance.get('location_id') %}
+  location_id    = "{{ instance.location_id }}"
+  {% endif %}
+
+  {% if instance.get('alternative_location_id') %}
+  alternative_location_id = "{{ instance.alternative_location_id }}"
+  {% endif %}
+
+  {% if instance.get('redis_version') %}
+  redis_version  = "{{ instance.redis_version }}"
+  {% endif %}
+
+  {% if instance.get('reserved_ip_range') %}
+  reserved_ip_range = "{{ instance.reserved_ip_range }}"
+  {% endif %}
+
+  {% if instance.get('connect_mode') %}
+  connect_mode   = "{{ instance.connect_mode }}"
+  {% endif %}
+
+  {% if instance.get('auth_enabled') is not none %}
+  auth_enabled   = {{ instance.auth_enabled | lower }}
+  {% endif %}
+
+  {% if instance.get('transit_encryption_mode') %}
+  transit_encryption_mode = "{{ instance.transit_encryption_mode }}"
+  {% endif %}
+
+  {% if instance.get('authorized_network') %}
+  authorized_network = "{{ instance.authorized_network }}"
+  {% endif %}
+
+  {% if instance.get('redis_configs') %}
+  redis_configs = {
+    {% for key, value in instance.redis_configs.items() %}
+    {{ key }} = "{{ value }}"{{ "," if not loop.last }}
+    {% endfor %}
+  }
+  {% endif %}
+
+  {% if instance.get('maintenance_policy') %}
+  maintenance_policy {
+    {% if instance.maintenance_policy.get('weekly_maintenance_window') %}
+    weekly_maintenance_window {
+      day = "{{ instance.maintenance_policy.weekly_maintenance_window.day }}"
+      
+      start_time {
+        hours   = {{ instance.maintenance_policy.weekly_maintenance_window.start_time.hours }}
+        minutes = {{ instance.maintenance_policy.weekly_maintenance_window.start_time.minutes }}
+        seconds = {{ instance.maintenance_policy.weekly_maintenance_window.start_time.seconds }}
+        nanos   = {{ instance.maintenance_policy.weekly_maintenance_window.start_time.nanos }}
+      }
+    }
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if instance.get('persistence_config') %}
+  persistence_config {
+    {% if instance.persistence_config.get('persistence_mode') %}
+    persistence_mode = "{{ instance.persistence_config.persistence_mode }}"
+    {% endif %}
+    
+    {% if instance.persistence_config.get('rdb_snapshot_period') %}
+    rdb_snapshot_period = "{{ instance.persistence_config.rdb_snapshot_period }}"
+    {% endif %}
+  }
+  {% endif %}
+
+  {{ render_gcp_labels(instance, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

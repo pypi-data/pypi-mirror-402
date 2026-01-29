@@ -1,0 +1,30 @@
+{% extends "common/base_resource.tf.j2" %}
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_nat_gateway" "{{ resource.name.replace('-', '_').replace('.', '_').lower() }}" {
+  name                = "{{ resource.properties.name }}"
+  location            = "{{ resource.properties.location }}"
+  resource_group_name = "{{ resource.properties.resource_group_name }}"
+  
+  {% if resource.properties.sku_name is defined %}
+  sku_name = "{{ resource.properties.sku_name }}"
+  {% endif %}
+  
+  {% if resource.properties.idle_timeout_in_minutes is defined %}
+  idle_timeout_in_minutes = {{ resource.properties.idle_timeout_in_minutes }}
+  {% endif %}
+  
+  {% if resource.properties.zones is defined and resource.properties.zones %}
+  zones = {{ resource.properties.zones | tojson }}
+  {% endif %}
+  
+  {# Note: public_ip_address_ids and public_ip_prefix_ids are handled via azurerm_nat_gateway_public_ip_association in v4.x #}
+  
+  {% if resource.properties.tags is defined and resource.properties.tags %}
+  tags = {{ resource.properties.tags | tojson }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

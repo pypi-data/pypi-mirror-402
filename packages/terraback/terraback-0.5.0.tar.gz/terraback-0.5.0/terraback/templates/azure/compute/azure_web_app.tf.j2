@@ -1,0 +1,374 @@
+{% import 'common/macros.j2' as macros %}
+{% for app in resources %}
+{# Determine if Windows or Linux based on kind or OS type #}
+{% set is_windows = true %}
+{% if app.kind and 'linux' in app.kind.lower() %}
+  {% set is_windows = false %}
+{% elif app.site_config and app.site_config.linux_fx_version %}
+  {% set is_windows = false %}
+{% endif %}
+{% set resource_type = 'azurerm_windows_web_app' if is_windows else 'azurerm_linux_web_app' %}
+resource "{{ resource_type }}" "{{ app.name_sanitized }}" {
+  name                = "{{ app.name }}"
+  location            = "{{ app.location }}"
+  resource_group_name = "{{ app.resource_group_name }}"
+  service_plan_id     = "{{ app.server_farm_id }}"
+  
+  {% if app.https_only is defined %}
+  https_only          = {{ app.https_only | lower }}
+  {% endif %}
+  
+  {% if app.enabled is defined %}
+  enabled             = {{ app.enabled | lower }}
+  {% endif %}
+  
+  {% if app.client_affinity_enabled is defined %}
+  client_affinity_enabled = {{ app.client_affinity_enabled | lower }}
+  {% endif %}
+  
+  {% if app.client_certificate_enabled is defined %}
+  client_certificate_enabled = {{ app.client_certificate_enabled | lower }}
+  {% endif %}
+  
+  {% if app.client_certificate_mode %}
+  client_certificate_mode = "{{ app.client_certificate_mode }}"
+  {% endif %}
+
+  {% if app.site_config %}
+  site_config {
+    {% if app.site_config.always_on is not none %}
+    always_on = {{ app.site_config.always_on | lower }}
+    {% endif %}
+    
+    {% if app.site_config.ftps_state %}
+    ftps_state = "{{ app.site_config.ftps_state }}"
+    {% endif %}
+    
+    {% if app.site_config.http2_enabled is not none %}
+    http2_enabled = {{ app.site_config.http2_enabled | lower }}
+    {% endif %}
+    
+    {% if app.site_config.minimum_tls_version %}
+    minimum_tls_version = "{{ app.site_config.minimum_tls_version }}"
+    {% endif %}
+    
+    {% if app.site_config.scm_minimum_tls_version %}
+    scm_minimum_tls_version = "{{ app.site_config.scm_minimum_tls_version }}"
+    {% endif %}
+    
+    {% if app.site_config.use_32_bit_worker is not none %}
+    use_32_bit_worker = {{ app.site_config.use_32_bit_worker | lower }}
+    {% endif %}
+    
+    {% if app.site_config.websockets_enabled is not none %}
+    websockets_enabled = {{ app.site_config.websockets_enabled | lower }}
+    {% endif %}
+    
+    {% if app.site_config.health_check_path %}
+    health_check_path = "{{ app.site_config.health_check_path }}"
+    {% endif %}
+    
+    {% if app.site_config.worker_count %}
+    worker_count = {{ app.site_config.worker_count }}
+    {% endif %}
+    
+    {% if is_windows %}
+    {# Windows-specific settings #}
+    {% if app.site_config.dotnet_framework_version %}
+    application_stack {
+      current_stack = "dotnet"
+      dotnet_version = "{{ app.site_config.dotnet_framework_version }}"
+    }
+    {% elif app.site_config.java_version %}
+    application_stack {
+      current_stack = "java"
+      java_version = "{{ app.site_config.java_version }}"
+      {% if app.site_config.java_container %}
+      java_container = "{{ app.site_config.java_container }}"
+      {% endif %}
+      {% if app.site_config.java_container_version %}
+      java_container_version = "{{ app.site_config.java_container_version }}"
+      {% endif %}
+    }
+    {% elif app.site_config.python_version %}
+    application_stack {
+      current_stack = "python"
+      python_version = "{{ app.site_config.python_version }}"
+    }
+    {% elif app.site_config.php_version %}
+    application_stack {
+      current_stack = "php"
+      php_version = "{{ app.site_config.php_version }}"
+    }
+    {% elif app.site_config.node_version %}
+    application_stack {
+      current_stack = "node"
+      node_version = "{{ app.site_config.node_version }}"
+    }
+    {% endif %}
+    {% else %}
+    {# Linux-specific settings #}
+    {% if app.site_config.linux_fx_version %}
+    application_stack {
+      {% set stack_parts = app.site_config.linux_fx_version.split('|') %}
+      {% if stack_parts|length == 2 %}
+        {% set runtime = stack_parts[0].lower() %}
+        {% set version = stack_parts[1] %}
+        {% if runtime == 'docker' %}
+      docker_image = "{{ version.split('/')[0] }}"
+      docker_image_tag = "{{ version.split(':')[1] if ':' in version else 'latest' }}"
+        {% elif runtime == 'dotnetcore' %}
+      dotnet_version = "{{ version }}"
+        {% elif runtime == 'node' %}
+      node_version = "{{ version }}"
+        {% elif runtime == 'python' %}
+      python_version = "{{ version }}"
+        {% elif runtime == 'php' %}
+      php_version = "{{ version }}"
+        {% elif runtime == 'java' %}
+      java_version = "{{ version.split('-')[0] }}"
+      java_server = "{{ version.split('-')[1] if '-' in version else 'JAVA' }}"
+      java_server_version = "{{ version.split('-')[2] if version.count('-') >= 2 else '11' }}"
+        {% elif runtime == 'ruby' %}
+      ruby_version = "{{ version }}"
+        {% endif %}
+      {% endif %}
+    }
+    {% endif %}
+    {% endif %}
+    
+    {% if app.site_config.ip_restriction %}
+    {% for restriction in app.site_config.ip_restriction %}
+    ip_restriction {
+      {% if restriction.ip_address %}
+      ip_address = "{{ restriction.ip_address }}"
+      {% endif %}
+      {% if restriction.service_tag %}
+      service_tag = "{{ restriction.service_tag }}"
+      {% endif %}
+      {% if restriction.virtual_network_subnet_id %}
+      virtual_network_subnet_id = "{{ restriction.virtual_network_subnet_id }}"
+      {% endif %}
+      {% if restriction.name %}
+      name = "{{ restriction.name }}"
+      {% endif %}
+      {% if restriction.priority %}
+      priority = {{ restriction.priority }}
+      {% endif %}
+      {% if restriction.action %}
+      action = "{{ restriction.action }}"
+      {% endif %}
+      {% if restriction.headers %}
+      headers = {{ restriction.headers | tojson }}
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+    
+    {% if app.site_config.scm_ip_restriction %}
+    {% for restriction in app.site_config.scm_ip_restriction %}
+    scm_ip_restriction {
+      {% if restriction.ip_address %}
+      ip_address = "{{ restriction.ip_address }}"
+      {% endif %}
+      {% if restriction.service_tag %}
+      service_tag = "{{ restriction.service_tag }}"
+      {% endif %}
+      {% if restriction.virtual_network_subnet_id %}
+      virtual_network_subnet_id = "{{ restriction.virtual_network_subnet_id }}"
+      {% endif %}
+      {% if restriction.name %}
+      name = "{{ restriction.name }}"
+      {% endif %}
+      {% if restriction.priority %}
+      priority = {{ restriction.priority }}
+      {% endif %}
+      {% if restriction.action %}
+      action = "{{ restriction.action }}"
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+    
+    {% if app.site_config.cors %}
+    cors {
+      allowed_origins = {{ app.site_config.cors.allowed_origins | tojson }}
+      {% if app.site_config.cors.support_credentials is not none %}
+      support_credentials = {{ app.site_config.cors.support_credentials | lower }}
+      {% endif %}
+    }
+    {% endif %}
+    
+    {% if app.site_config.default_documents %}
+    default_documents = {{ app.site_config.default_documents | tojson }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if app.app_settings_formatted %}
+  app_settings = {{ app.app_settings_formatted | tojson }}
+  {% elif app.app_settings %}
+  app_settings = {{ app.app_settings | tojson }}
+  {% endif %}
+
+  {% if app.connection_strings_formatted %}
+  {% for conn_str in app.connection_strings_formatted %}
+  connection_string {
+    name  = "{{ conn_str.name }}"
+    type  = "{{ conn_str.type }}"
+    value = "{{ conn_str.value }}"
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if app.auth_settings and app.auth_settings.enabled %}
+  auth_settings_v2 {
+    auth_enabled = true
+    {% if app.auth_settings.default_provider %}
+    default_provider = "{{ app.auth_settings.default_provider }}"
+    {% endif %}
+    {% if app.auth_settings.unauthenticated_action %}
+    unauthenticated_action = "{{ app.auth_settings.unauthenticated_action }}"
+    {% endif %}
+    {% if app.auth_settings.require_authentication is not none %}
+    require_authentication = {{ app.auth_settings.require_authentication | lower }}
+    {% endif %}
+    {% if app.auth_settings.require_https is not none %}
+    require_https = {{ app.auth_settings.require_https | lower }}
+    {% endif %}
+    
+    {% if app.auth_settings.active_directory_v2 %}
+    active_directory_v2 {
+      client_id = "{{ app.auth_settings.active_directory_v2.client_id }}"
+      tenant_auth_endpoint = "{{ app.auth_settings.active_directory_v2.tenant_auth_endpoint }}"
+      {% if app.auth_settings.active_directory_v2.client_secret_setting_name %}
+      client_secret_setting_name = "{{ app.auth_settings.active_directory_v2.client_secret_setting_name }}"
+      {% endif %}
+      {% if app.auth_settings.active_directory_v2.allowed_audiences %}
+      allowed_audiences = {{ app.auth_settings.active_directory_v2.allowed_audiences | tojson }}
+      {% endif %}
+    }
+    {% endif %}
+    
+    login {
+      {% if app.auth_settings.token_store_enabled is not none %}
+      token_store_enabled = {{ app.auth_settings.token_store_enabled | lower }}
+      {% endif %}
+      {% if app.auth_settings.preserve_url_fragments_for_logins is not none %}
+      preserve_url_fragments_for_logins = {{ app.auth_settings.preserve_url_fragments_for_logins | lower }}
+      {% endif %}
+      {% if app.auth_settings.allowed_external_redirect_urls %}
+      allowed_external_redirect_urls = {{ app.auth_settings.allowed_external_redirect_urls | tojson }}
+      {% endif %}
+    }
+  }
+  {% endif %}
+  
+  {% if app.identity %}
+  identity {
+    type = "{{ app.identity.type }}"
+    {% if app.identity.identity_ids %}
+    identity_ids = {{ app.identity.identity_ids | tojson }}
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if app.backup %}
+  backup {
+    name = "{{ app.backup.name }}"
+    enabled = {{ app.backup.enabled | lower }}
+    
+    {% if app.backup.storage_account_url %}
+    storage_account_url = "{{ app.backup.storage_account_url }}"
+    {% endif %}
+    
+    {% if app.backup.schedule %}
+    schedule {
+      frequency_interval = {{ app.backup.schedule.frequency_interval }}
+      frequency_unit = "{{ app.backup.schedule.frequency_unit }}"
+      {% if app.backup.schedule.keep_at_least_one_backup is not none %}
+      keep_at_least_one_backup = {{ app.backup.schedule.keep_at_least_one_backup | lower }}
+      {% endif %}
+      {% if app.backup.schedule.retention_period_days %}
+      retention_period_days = {{ app.backup.schedule.retention_period_days }}
+      {% endif %}
+      {% if app.backup.schedule.start_time %}
+      start_time = "{{ app.backup.schedule.start_time }}"
+      {% endif %}
+    }
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if app.storage_account %}
+  {% for storage in app.storage_account %}
+  storage_account {
+    name = "{{ storage.name }}"
+    type = "{{ storage.type }}"
+    account_name = "{{ storage.account_name }}"
+    share_name = "{{ storage.share_name }}"
+    access_key = var.storage_account_key
+    {% if storage.mount_path %}
+    mount_path = "{{ storage.mount_path }}"
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if app.logs %}
+  logs {
+    {% if app.logs.detailed_error_messages is not none %}
+    detailed_error_messages = {{ app.logs.detailed_error_messages | lower }}
+    {% endif %}
+    {% if app.logs.failed_request_tracing is not none %}
+    failed_request_tracing = {{ app.logs.failed_request_tracing | lower }}
+    {% endif %}
+    
+    {% if app.logs.application_logs %}
+    application_logs {
+      {% if app.logs.application_logs.file_system_level %}
+      file_system_level = "{{ app.logs.application_logs.file_system_level }}"
+      {% endif %}
+      
+      {% if app.logs.application_logs.azure_blob_storage %}
+      azure_blob_storage {
+        level = "{{ app.logs.application_logs.azure_blob_storage.level }}"
+        sas_url = "{{ app.logs.application_logs.azure_blob_storage.sas_url }}"
+        retention_in_days = {{ app.logs.application_logs.azure_blob_storage.retention_in_days }}
+      }
+      {% endif %}
+    }
+    {% endif %}
+    
+    {% if app.logs.http_logs %}
+    http_logs {
+      {% if app.logs.http_logs.azure_blob_storage %}
+      azure_blob_storage {
+        sas_url = "{{ app.logs.http_logs.azure_blob_storage.sas_url }}"
+        retention_in_days = {{ app.logs.http_logs.azure_blob_storage.retention_in_days }}
+      }
+      {% endif %}
+      
+      {% if app.logs.http_logs.file_system %}
+      file_system {
+        retention_in_days = {{ app.logs.http_logs.file_system.retention_in_days }}
+        retention_in_mb = {{ app.logs.http_logs.file_system.retention_in_mb }}
+      }
+      {% endif %}
+    }
+    {% endif %}
+  }
+  {% endif %}
+
+{{ macros.render_tags(app.tags) }}
+
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes = [
+      app_settings["WEBSITE_RUN_FROM_PACKAGE"],
+      app_settings["WEBSITE_ENABLE_SYNC_UPDATE_SITE"]
+    ]
+  }
+}
+
+{% endfor %}

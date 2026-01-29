@@ -1,0 +1,48 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_automation_account" "{{ resource.name }}" {
+  name                = "{{ resource.name }}"
+  location            = "{{ resource.location }}"
+  resource_group_name = "{{ resource.resource_group_name }}"
+  sku_name            = "{{ resource.sku_name | default('Basic') }}"
+  
+  {% if resource.public_network_access_enabled is defined %}
+  public_network_access_enabled = {{ resource.public_network_access_enabled | lower }}
+  {% endif %}
+  
+  {% if resource.local_authentication_enabled is defined %}
+  local_authentication_enabled = {{ resource.local_authentication_enabled | lower }}
+  {% endif %}
+  
+  {% if resource.identity is defined and resource.identity and resource.identity.type is defined %}
+
+  
+  identity {
+
+  
+    type = "{{ resource.identity.type }}"
+    {% if resource.identity.identity_ids is defined %}
+    identity_ids = {{ resource.identity.identity_ids | tojson }}
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.encryption is defined %}
+  encryption {
+    key_vault_key_id          = "{{ resource.encryption.key_vault_key_id }}"
+    {% if resource.encryption.user_assigned_identity_id is defined %}
+    user_assigned_identity_id = "{{ resource.encryption.user_assigned_identity_id }}"
+    {% endif %}
+  }
+  {% endif %}
+  
+  {% if resource.tags is defined %}
+  tags = {{ resource.tags | tojson }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for vpc in resources %}
+{{ resource_spacer() }}
+resource "aws_vpc" "{{ vpc.name_sanitized }}" {
+  cidr_block           = "{{ vpc.CidrBlock }}"
+  instance_tenancy     = "{{ vpc.InstanceTenancy }}"
+  enable_dns_support   = {{ 'true' if vpc.get('EnableDnsSupport', True) else 'false' }}
+  enable_dns_hostnames = {{ 'true' if vpc.get('EnableDnsHostnames', False) else 'false' }}
+
+  {{ render_common_tags(vpc, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

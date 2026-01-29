@@ -1,0 +1,30 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for proxy in resources %}
+{{ resource_spacer() }}
+resource "google_compute_target_tcp_proxy" "{{ proxy.name_sanitized }}" {
+  name = "{{ proxy.name }}"
+
+  {% if proxy.backend_service %}
+  backend_service = google_compute_backend_service.{{ proxy.backend_service.replace('-', '_').lower() }}.id
+  {% endif %}
+
+  {% if proxy.description %}
+  description = "{{ proxy.description }}"
+  {% endif %}
+
+  {% if proxy.proxy_header %}
+  proxy_header = "{{ proxy.proxy_header }}"
+  {% endif %}
+
+  {% if proxy.proxy_bind %}
+  proxy_bind = {{ proxy.proxy_bind | lower }}
+  {% endif %}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

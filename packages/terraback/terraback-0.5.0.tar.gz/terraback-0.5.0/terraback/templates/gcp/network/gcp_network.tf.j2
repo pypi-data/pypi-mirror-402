@@ -1,0 +1,27 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for network in resources %}
+
+# Import existing network: {{ network.name }}
+import {
+  to = google_compute_network.{{ network.name_sanitized }}
+  id = "{{ network.id }}"
+}
+
+{{ resource_spacer() }}
+resource "google_compute_network" "{{ network.name_sanitized }}" {
+  name                    = "{{ network.name }}"
+  {% if network.description %}
+  description             = "{{ network.description }}"
+  {%  endif %}
+  auto_create_subnetworks = {{ network.auto_create_subnetworks | lower }}
+  routing_mode            = "{{ network.routing_mode }}"
+  mtu                     = {{ network.mtu }}
+  
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

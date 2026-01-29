@@ -1,0 +1,49 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% import "common/macros.j2" as common_macros %}
+{% block resources %}
+{% for router in resources %}
+
+# Import existing router: {{ router.name }}
+import {
+  to = google_compute_router.{{ router.name_sanitized }}
+  id = "{{ router.id }}"
+}
+
+{{ resource_spacer() }}
+resource "google_compute_router" "{{ router.name_sanitized }}" {
+  name    = "{{ router.name }}"
+  region  = "{{ router.region }}"
+  network = "{{ router.network }}"
+
+  {% if router.description %}
+  description = "{{ router.description }}"
+  {% endif %}
+
+  {% if router.bgp %}
+  bgp {
+    asn            = {{ router.bgp.asn }}
+    advertise_mode = "{{ router.bgp.advertise_mode }}"
+    
+    {% if router.bgp.advertised_groups %}
+    advertised_groups = {{ router.bgp.advertised_groups | tojson }}
+    {% endif %}
+
+    {% for ip_range in router.bgp.advertised_ip_ranges %}
+    advertised_ip_ranges {
+      range       = "{{ ip_range.range }}"
+      {% if ip_range.description %}
+      description = "{{ ip_range.description }}"
+      {% endif %}
+    }
+    {% endfor %}
+  }
+  {% endif %}
+
+{{ common_macros.render_depends_on(router.depends_on, indent=2) }}
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

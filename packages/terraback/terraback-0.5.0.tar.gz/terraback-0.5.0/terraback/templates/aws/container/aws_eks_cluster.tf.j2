@@ -1,0 +1,193 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for cluster in resources %}
+{{ resource_spacer() }}
+resource "aws_eks_cluster" "{{ cluster.name_sanitized }}" {
+  name     = "{{ cluster.name }}"
+  role_arn = "{{ cluster.roleArn }}"
+
+  {% if cluster.get('version') %}
+  version = "{{ cluster.version }}"
+  {% endif %}
+
+  {% if cluster.get('enabled_cluster_log_types') %}
+  enabled_cluster_log_types = {{ cluster.enabled_cluster_log_types | tojson }}
+  {% endif %}
+
+  vpc_config {
+    {% if cluster.vpc_config.get('subnet_ids') %}
+    subnet_ids = {{ cluster.vpc_config.subnet_ids | tojson }}
+    {% elif cluster.get('resourcesVpcConfig', {}).get('subnetIds') %}
+    subnet_ids = {{ cluster.resourcesVpcConfig.subnetIds | tojson }}
+    {% endif %}
+
+    {% if cluster.vpc_config.get('security_group_ids') %}
+    security_group_ids = {{ cluster.vpc_config.security_group_ids | tojson }}
+    {% elif cluster.get('resourcesVpcConfig', {}).get('securityGroupIds') %}
+    security_group_ids = {{ cluster.resourcesVpcConfig.securityGroupIds | tojson }}
+    {% endif %}
+
+    {% if cluster.vpc_config.get('endpoint_private_access') is defined %}
+    endpoint_private_access = {{ cluster.vpc_config.endpoint_private_access | lower }}
+    {% elif cluster.get('resourcesVpcConfig', {}).get('endpointPrivateAccess') is defined %}
+    endpoint_private_access = {{ cluster.resourcesVpcConfig.endpointPrivateAccess | lower }}
+    {% endif %}
+
+    {% if cluster.vpc_config.get('endpoint_public_access') is defined %}
+    endpoint_public_access = {{ cluster.vpc_config.endpoint_public_access | lower }}
+    {% elif cluster.get('resourcesVpcConfig', {}).get('endpointPublicAccess') is defined %}
+    endpoint_public_access = {{ cluster.resourcesVpcConfig.endpointPublicAccess | lower }}
+    {% endif %}
+
+    {% if cluster.vpc_config.get('public_access_cidrs') %}
+    public_access_cidrs = {{ cluster.vpc_config.public_access_cidrs | tojson }}
+    {% elif cluster.get('resourcesVpcConfig', {}).get('publicAccessCidrs') %}
+    public_access_cidrs = {{ cluster.resourcesVpcConfig.publicAccessCidrs | tojson }}
+    {% endif %}
+  }
+
+  {% if cluster.get('encryption_config') %}
+  encryption_config {
+    {% if cluster.encryption_config.get('provider') %}
+    provider {
+      key_arn = "{{ cluster.encryption_config.provider.key_arn }}"
+    }
+    {% endif %}
+    {% if cluster.encryption_config.get('resources') %}
+    resources = {{ cluster.encryption_config.resources | tojson }}
+    {% endif %}
+  }
+  {% elif cluster.get('encryptionConfig') %}
+  {% for config in cluster.encryptionConfig %}
+  encryption_config {
+    {% if config.get('provider', {}).get('keyArn') %}
+    provider {
+      key_arn = "{{ config.provider.keyArn }}"
+    }
+    {% endif %}
+    {% if config.get('resources') %}
+    resources = {{ config.resources | tojson }}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if cluster.get('kubernetes_network_config') %}
+  kubernetes_network_config {
+    {% if cluster.kubernetes_network_config.get('service_ipv4_cidr') %}
+    service_ipv4_cidr = "{{ cluster.kubernetes_network_config.service_ipv4_cidr }}"
+    {% endif %}
+    {% if cluster.kubernetes_network_config.get('ip_family') %}
+    ip_family = "{{ cluster.kubernetes_network_config.ip_family }}"
+    {% endif %}
+  }
+  {% elif cluster.get('kubernetesNetworkConfig') %}
+  kubernetes_network_config {
+    {% if cluster.kubernetesNetworkConfig.get('serviceIpv4Cidr') %}
+    service_ipv4_cidr = "{{ cluster.kubernetesNetworkConfig.serviceIpv4Cidr }}"
+    {% endif %}
+    {% if cluster.kubernetesNetworkConfig.get('ipFamily') %}
+    ip_family = "{{ cluster.kubernetesNetworkConfig.ipFamily }}"
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if cluster.get('outpost_config') %}
+  outpost_config {
+    {% if cluster.outpost_config.get('outpost_arns') %}
+    outpost_arns = {{ cluster.outpost_config.outpost_arns | tojson }}
+    {% endif %}
+    {% if cluster.outpost_config.get('control_plane_instance_type') %}
+    control_plane_instance_type = "{{ cluster.outpost_config.control_plane_instance_type }}"
+    {% endif %}
+    {% if cluster.outpost_config.get('control_plane_placement') %}
+    control_plane_placement {
+      group_name = "{{ cluster.outpost_config.control_plane_placement.group_name }}"
+    }
+    {% endif %}
+  }
+  {% endif %}
+
+  {{ render_common_tags(cluster, indent=2) }}
+
+  depends_on = [
+    {% if cluster.get('log_group_dependency') %}
+    aws_cloudwatch_log_group.{{ cluster.log_group_dependency }},
+    {% endif %}
+    {% if cluster.get('iam_role_policy_attachments') %}
+    {% for attachment in cluster.iam_role_policy_attachments %}
+    aws_iam_role_policy_attachment.{{ attachment }},
+    {% endfor %}
+    {% endif %}
+  ]
+}
+
+{% if cluster.get('addons') %}
+{% for addon in cluster.addons %}
+{{ resource_spacer() }}
+resource "aws_eks_addon" "{{ cluster.name_sanitized }}_{{ addon.addonName | replace('-', '_') }}" {
+  cluster_name = aws_eks_cluster.{{ cluster.name_sanitized }}.name
+  addon_name   = "{{ addon.addonName }}"
+  
+  {% if addon.get('addonVersion') %}
+  addon_version = "{{ addon.addonVersion }}"
+  {% endif %}
+  
+  {% if addon.get('serviceAccountRoleArn') %}
+  service_account_role_arn = "{{ addon.serviceAccountRoleArn }}"
+  {% endif %}
+  
+  {% if addon.get('resolveConflicts') %}
+  resolve_conflicts = "{{ addon.resolveConflicts }}"
+  {% endif %}
+  
+  {% if addon.get('configurationValues') %}
+  configuration_values = jsonencode({{ addon.configurationValues | tojson }})
+  {% endif %}
+
+  {{ render_common_tags(addon, indent=2) }}
+}
+
+{% endfor %}
+{% endif %}
+
+{% if cluster.get('identity_provider_configs') %}
+{% for provider in cluster.identity_provider_configs %}
+{{ resource_spacer() }}
+resource "aws_eks_identity_provider_config" "{{ cluster.name_sanitized }}_{{ provider.name | replace('-', '_') }}" {
+  cluster_name = aws_eks_cluster.{{ cluster.name_sanitized }}.name
+
+  oidc {
+    identity_provider_config_name = "{{ provider.name }}"
+    issuer_url                   = "{{ provider.issuer_url }}"
+    client_id                    = "{{ provider.client_id }}"
+    
+    {% if provider.get('username_claim') %}
+    username_claim = "{{ provider.username_claim }}"
+    {% endif %}
+    
+    {% if provider.get('username_prefix') %}
+    username_prefix = "{{ provider.username_prefix }}"
+    {% endif %}
+    
+    {% if provider.get('groups_claim') %}
+    groups_claim = "{{ provider.groups_claim }}"
+    {% endif %}
+    
+    {% if provider.get('groups_prefix') %}
+    groups_prefix = "{{ provider.groups_prefix }}"
+    {% endif %}
+    
+    {% if provider.get('required_claims') %}
+    required_claims = {{ provider.required_claims | tojson }}
+    {% endif %}
+  }
+
+  {{ render_common_tags(provider, indent=2) }}
+}
+
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+{% endblock %}

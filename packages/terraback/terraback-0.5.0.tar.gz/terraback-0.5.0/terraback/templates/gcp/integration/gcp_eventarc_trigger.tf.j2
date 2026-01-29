@@ -1,0 +1,104 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for trigger in resources %}
+{{ resource_spacer() }}
+resource "google_eventarc_trigger" "{{ trigger.name_sanitized }}" {
+  name     = "{{ trigger.name }}"
+  location = "{{ trigger.location }}"
+  
+  {% if trigger.get('project') %}
+
+  {% endif %}
+
+  {% if trigger.get('service_account') %}
+  service_account = "{{ trigger.service_account }}"
+  {% endif %}
+
+  {% if trigger.get('channel') %}
+  channel = "{{ trigger.channel }}"
+  {% endif %}
+
+  {% for criteria in trigger.matching_criteria %}
+  matching_criteria {
+    attribute = "{{ criteria.attribute }}"
+    value     = "{{ criteria.value }}"
+    
+    {% if criteria.get('operator') %}
+    operator  = "{{ criteria.operator }}"
+    {% endif %}
+  }
+  {% endfor %}
+
+  destination {
+    {% if trigger.destination.get('cloud_run_service') %}
+    cloud_run_service {
+      service = "{{ trigger.destination.cloud_run_service.service }}"
+      
+      {% if trigger.destination.cloud_run_service.get('region') %}
+      region  = "{{ trigger.destination.cloud_run_service.region }}"
+      {% endif %}
+      
+      {% if trigger.destination.cloud_run_service.get('path') %}
+      path    = "{{ trigger.destination.cloud_run_service.path }}"
+      {% endif %}
+    }
+    {% endif %}
+    
+    {% if trigger.destination.get('cloud_function') %}
+    cloud_function = "{{ trigger.destination.cloud_function }}"
+    {% endif %}
+    
+    {% if trigger.destination.get('workflow') %}
+    workflow = "{{ trigger.destination.workflow }}"
+    {% endif %}
+    
+    {% if trigger.destination.get('gke') %}
+    gke {
+      cluster    = "{{ trigger.destination.gke.cluster }}"
+      location   = "{{ trigger.destination.gke.location }}"
+      namespace  = "{{ trigger.destination.gke.namespace }}"
+      service    = "{{ trigger.destination.gke.service }}"
+      
+      {% if trigger.destination.gke.get('path') %}
+      path       = "{{ trigger.destination.gke.path }}"
+      {% endif %}
+    }
+    {% endif %}
+    
+    {% if trigger.destination.get('http_endpoint') %}
+    http_endpoint {
+      uri = "{{ trigger.destination.http_endpoint.uri }}"
+    }
+    {% endif %}
+    
+    {% if trigger.destination.get('network_config') %}
+    network_config {
+      network_attachment = "{{ trigger.destination.network_config.network_attachment }}"
+    }
+    {% endif %}
+  }
+
+  {% if trigger.get('transport') %}
+  transport {
+    {% if trigger.transport.get('pubsub') %}
+    pubsub {
+      {% if trigger.transport.pubsub.get('topic') %}
+      topic = "{{ trigger.transport.pubsub.topic }}"
+      {% endif %}
+      
+      {% if trigger.transport.pubsub.get('subscription') %}
+      subscription = "{{ trigger.transport.pubsub.subscription }}"
+      {% endif %}
+    }
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if trigger.get('event_data_content_type') %}
+  event_data_content_type = "{{ trigger.event_data_content_type }}"
+  {% endif %}
+
+  {{ render_gcp_labels(trigger, indent=2) }}
+}
+
+{% endfor %}{% endblock %}

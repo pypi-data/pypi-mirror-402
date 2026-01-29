@@ -1,0 +1,45 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_log_analytics_workspace" "{{ resource.name_sanitized }}" {
+  name                = "{{ resource.properties.name }}"
+  location            = "{{ resource.properties.location }}"
+  resource_group_name = "{{ resource.properties.resource_group_name }}"
+  
+  {% if resource.properties.sku is defined %}
+  sku = "{{ resource.properties.sku }}"
+  {% endif %}
+  
+  {% if resource.properties.retention_in_days is defined %}
+  retention_in_days = {{ resource.properties.retention_in_days }}
+  {% endif %}
+  
+  {% if resource.properties.daily_quota_gb is defined %}
+  daily_quota_gb = {{ resource.properties.daily_quota_gb }}
+  {% endif %}
+  
+  {% if resource.properties.cmk_for_query_forced is defined %}
+  cmk_for_query_forced = {{ resource.properties.cmk_for_query_forced | lower }}
+  {% endif %}
+  
+  {% if resource.properties.internet_ingestion_enabled is defined %}
+  internet_ingestion_enabled = {{ resource.properties.internet_ingestion_enabled | lower }}
+  {% endif %}
+  
+  {% if resource.properties.internet_query_enabled is defined %}
+  internet_query_enabled = {{ resource.properties.internet_query_enabled | lower }}
+  {% endif %}
+  
+  {% if resource.properties.reservation_capacity_in_gb_per_day is defined %}
+  reservation_capacity_in_gb_per_day = {{ resource.properties.reservation_capacity_in_gb_per_day }}
+  {% endif %}
+  
+  {% if resource.properties.tags is defined and resource.properties.tags %}
+  tags = {{ resource.properties.tags | tojson }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

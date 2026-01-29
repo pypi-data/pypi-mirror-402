@@ -1,0 +1,125 @@
+{# Networking Component Macros #}
+{# Reusable components for networking-related configurations #}
+
+{% import "common/advanced_macros.j2" as macros %}
+
+{# ========== Security Group Rules ========== #}
+{% macro render_security_group_rule(rule, rule_type="ingress", indent=2) %}
+{{ ' ' * indent }}{{ rule_type }} {
+  {# Port configuration #}
+  {{ macros.render_number_field('from_port', rule.get('from_port', rule.get('FromPort', 0)), indent+2) }}
+  {{ macros.render_number_field('to_port', rule.get('to_port', rule.get('ToPort', 0)), indent+2) }}
+  
+  {# Protocol #}
+  {% set protocol = rule.get('protocol', rule.get('IpProtocol', '-1')) %}
+  {% if protocol == '-1' %}
+  protocol = "-1"
+  {% else %}
+  {{ macros.render_field('protocol', protocol, indent+2) }}
+  {% endif %}
+  
+  {# Source/Destination #}
+  {{ macros.render_list_field('cidr_blocks', rule.get('cidr_blocks', rule.get('CidrBlocks', [])), indent+2) }}
+  {{ macros.render_list_field('ipv6_cidr_blocks', rule.get('ipv6_cidr_blocks', rule.get('Ipv6CidrBlocks', [])), indent+2) }}
+  {{ macros.render_list_field('security_groups', rule.get('security_groups', rule.get('SecurityGroups', [])), indent+2) }}
+  {{ macros.render_list_field('prefix_list_ids', rule.get('prefix_list_ids', rule.get('PrefixListIds', [])), indent+2) }}
+  
+  {# Additional fields #}
+  {{ macros.render_bool_field('self', rule.get('self', rule.get('Self')), indent+2) }}
+  {{ macros.render_field('description', rule.get('description', rule.get('Description')), indent+2) }}
+{{ ' ' * indent }}}
+{% endmacro %}
+
+{# ========== VPC Configuration ========== #}
+{% macro render_vpc_config(vpc_config, indent=2) %}
+{% if vpc_config %}
+{{ ' ' * indent }}vpc_config {
+  {{ macros.render_list_field('subnet_ids', vpc_config.get('subnet_ids', vpc_config.get('SubnetIds', [])), indent+2) }}
+  {{ macros.render_list_field('security_group_ids', vpc_config.get('security_group_ids', vpc_config.get('SecurityGroupIds', [])), indent+2) }}
+  {{ macros.render_bool_field('assign_public_ip', vpc_config.get('assign_public_ip', vpc_config.get('AssignPublicIp')), indent+2) }}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{# ========== Network Interface ========== #}
+{% macro render_network_interface(interface, indent=2) %}
+{{ ' ' * indent }}network_interface {
+  {{ macros.render_field('device_index', interface.get('DeviceIndex', 0), indent+2, quote=false) }}
+  {{ macros.render_field('network_interface_id', interface.get('NetworkInterfaceId'), indent+2) }}
+  {{ macros.render_bool_field('delete_on_termination', interface.get('DeleteOnTermination'), indent+2) }}
+{{ ' ' * indent }}}
+{% endmacro %}
+
+{# ========== Subnet Configuration ========== #}
+{% macro render_subnet_config(subnet, indent=2) %}
+{{ macros.render_field('vpc_id', subnet.get('VpcId'), indent) }}
+{{ macros.render_field('cidr_block', subnet.get('CidrBlock'), indent) }}
+{{ macros.render_field('ipv6_cidr_block', subnet.get('Ipv6CidrBlock'), indent) }}
+{{ macros.render_field('availability_zone', subnet.get('AvailabilityZone'), indent) }}
+{{ macros.render_field('availability_zone_id', subnet.get('AvailabilityZoneId'), indent) }}
+{{ macros.render_bool_field('map_public_ip_on_launch', subnet.get('MapPublicIpOnLaunch'), indent) }}
+{{ macros.render_bool_field('assign_ipv6_address_on_creation', subnet.get('AssignIpv6AddressOnCreation'), indent) }}
+{% endmacro %}
+
+{# ========== Route Table Routes ========== #}
+{% macro render_route(route, indent=2) %}
+{{ ' ' * indent }}route {
+  {{ macros.render_field('cidr_block', route.get('DestinationCidrBlock'), indent+2) }}
+  {{ macros.render_field('ipv6_cidr_block', route.get('DestinationIpv6CidrBlock'), indent+2) }}
+  {{ macros.render_field('destination_prefix_list_id', route.get('DestinationPrefixListId'), indent+2) }}
+  
+  {# Route targets (only one should be specified) #}
+  {{ macros.render_field('gateway_id', route.get('GatewayId'), indent+2) }}
+  {{ macros.render_field('nat_gateway_id', route.get('NatGatewayId'), indent+2) }}
+  {{ macros.render_field('instance_id', route.get('InstanceId'), indent+2) }}
+  {{ macros.render_field('vpc_peering_connection_id', route.get('VpcPeeringConnectionId'), indent+2) }}
+  {{ macros.render_field('network_interface_id', route.get('NetworkInterfaceId'), indent+2) }}
+  {{ macros.render_field('transit_gateway_id', route.get('TransitGatewayId'), indent+2) }}
+  {{ macros.render_field('vpc_endpoint_id', route.get('VpcEndpointId'), indent+2) }}
+  {{ macros.render_field('egress_only_gateway_id', route.get('EgressOnlyInternetGatewayId'), indent+2) }}
+{{ ' ' * indent }}}
+{% endmacro %}
+
+{# ========== Load Balancer Target Group Health Check ========== #}
+{% macro render_health_check(health_check, indent=2) %}
+{% if health_check %}
+{{ ' ' * indent }}health_check {
+  {{ macros.render_bool_field('enabled', health_check.get('enabled', true), indent+2) }}
+  {{ macros.render_field('interval', health_check.get('interval', health_check.get('Interval', 30)), indent+2, quote=false) }}
+  {{ macros.render_field('path', health_check.get('path', health_check.get('Path', '/')), indent+2) }}
+  {{ macros.render_field('port', health_check.get('port', health_check.get('Port', 'traffic-port')), indent+2) }}
+  {{ macros.render_field('protocol', health_check.get('protocol', health_check.get('Protocol', 'HTTP')), indent+2) }}
+  {{ macros.render_field('timeout', health_check.get('timeout', health_check.get('Timeout', 5)), indent+2, quote=false) }}
+  {{ macros.render_field('healthy_threshold', health_check.get('healthy_threshold', health_check.get('HealthyThreshold', 3)), indent+2, quote=false) }}
+  {{ macros.render_field('unhealthy_threshold', health_check.get('unhealthy_threshold', health_check.get('UnhealthyThreshold', 3)), indent+2, quote=false) }}
+  {{ macros.render_field('matcher', health_check.get('matcher', health_check.get('Matcher', '200')), indent+2) }}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{# ========== Network ACL Rules ========== #}
+{% macro render_network_acl_rule(rule, rule_type="ingress", indent=2) %}
+{{ ' ' * indent }}{{ rule_type }} {
+  {{ macros.render_field('protocol', rule.get('Protocol', '-1'), indent+2) }}
+  {{ macros.render_field('rule_no', rule.get('RuleNumber', 100), indent+2, quote=false) }}
+  {{ macros.render_field('action', rule.get('RuleAction', 'allow'), indent+2) }}
+  {{ macros.render_field('cidr_block', rule.get('CidrBlock'), indent+2) }}
+  {{ macros.render_field('ipv6_cidr_block', rule.get('Ipv6CidrBlock'), indent+2) }}
+  {{ macros.render_field('from_port', rule.get('FromPort'), indent+2, quote=false) }}
+  {{ macros.render_field('to_port', rule.get('ToPort'), indent+2, quote=false) }}
+  {{ macros.render_field('icmp_type', rule.get('IcmpTypeCode', {}).get('Type'), indent+2, quote=false) }}
+  {{ macros.render_field('icmp_code', rule.get('IcmpTypeCode', {}).get('Code'), indent+2, quote=false) }}
+{{ ' ' * indent }}}
+{% endmacro %}
+
+{# ========== VPC Endpoint Configuration ========== #}
+{% macro render_vpc_endpoint_config(endpoint, indent=2) %}
+{{ macros.render_field('vpc_id', endpoint.get('VpcId'), indent) }}
+{{ macros.render_field('service_name', endpoint.get('ServiceName'), indent) }}
+{{ macros.render_field('vpc_endpoint_type', endpoint.get('VpcEndpointType', 'Gateway'), indent) }}
+{{ macros.render_list_field('route_table_ids', endpoint.get('RouteTableIds', []), indent) }}
+{{ macros.render_list_field('subnet_ids', endpoint.get('SubnetIds', []), indent) }}
+{{ macros.render_list_field('security_group_ids', endpoint.get('SecurityGroupIds', []), indent) }}
+{{ macros.render_bool_field('private_dns_enabled', endpoint.get('PrivateDnsEnabled'), indent) }}
+{{ macros.render_field('policy', endpoint.get('PolicyDocument'), indent) }}
+{% endmacro %}

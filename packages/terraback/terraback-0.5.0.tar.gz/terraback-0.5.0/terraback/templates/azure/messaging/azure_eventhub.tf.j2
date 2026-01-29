@@ -1,0 +1,49 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_eventhub" "{{ resource.name }}" {
+  name                = "{{ resource.properties.name }}"
+  namespace_name      = "{{ resource.properties.namespace_name }}"
+  resource_group_name = "{{ resource.properties.resource_group_name }}"
+  partition_count     = {{ resource.properties.partition_count | default(2) }}
+  message_retention   = {{ resource.properties.message_retention_in_days | default(1) }}
+  
+  {% if resource.properties.capture_description is defined %}
+  capture_description {
+    enabled = {{ resource.properties.capture_description.enabled | lower }}
+    
+    {% if resource.properties.capture_description.encoding is defined %}
+    encoding = "{{ resource.properties.capture_description.encoding }}"
+    {% endif %}
+    
+    {% if resource.properties.capture_description.interval_in_seconds is defined %}
+    interval_in_seconds = {{ resource.properties.capture_description.interval_in_seconds }}
+    {% endif %}
+    
+    {% if resource.properties.capture_description.size_limit_in_bytes is defined %}
+    size_limit_in_bytes = {{ resource.properties.capture_description.size_limit_in_bytes }}
+    {% endif %}
+    
+    {% if resource.properties.capture_description.skip_empty_archives is defined %}
+    skip_empty_archives = {{ resource.properties.capture_description.skip_empty_archives | lower }}
+    {% endif %}
+    
+    {% if resource.properties.capture_description.destination is defined %}
+    destination {
+      name                = "{{ resource.properties.capture_description.destination.name }}"
+      blob_container_name = "{{ resource.properties.capture_description.destination.blob_container_name }}"
+      storage_account_id  = "{{ resource.properties.capture_description.destination.storage_account_id }}"
+      
+      {% if resource.properties.capture_description.destination.archive_name_format is defined %}
+      archive_name_format = "{{ resource.properties.capture_description.destination.archive_name_format }}"
+      {% endif %}
+    }
+    {% endif %}
+  }
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

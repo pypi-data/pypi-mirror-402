@@ -1,0 +1,22 @@
+{% extends "gcp/base_resource.tf.j2" %}
+{% block resources %}
+{% for topic in resources %}
+
+# Import existing pubsub topic: {{ topic.name }}
+import {
+  to = google_pubsub_topic.{{ topic.name_sanitized }}
+  id = "projects/{{ topic.project }}/topics/{{ topic.name }}"
+}
+
+{{ resource_spacer() }}
+resource "google_pubsub_topic" "{{ topic.name_sanitized }}" {
+  name    = "{{ topic.name }}"
+  project = "{{ topic.project }}"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endblock %}

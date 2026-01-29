@@ -1,0 +1,142 @@
+{# AWS S3 Bucket Template - Using new standardized base #}
+{% extends "common/base_resource_v2.tf.j2" %}
+{% set provider = "aws" %}
+{% set resource_type = "aws_s3_bucket" %}
+
+{# S3-specific macros #}
+{% macro render_s3_lifecycle_rule(rule, indent=2) %}
+{{ ' ' * indent }}id      = "{{ rule.get('Id', 'rule-' + loop.index|string) }}"
+{{ ' ' * indent }}enabled = {{ rule.get('Status', 'Enabled') == 'Enabled' | tf_bool }}
+{{ macros.render_field('prefix', rule.get('Prefix'), indent=indent) }}
+
+{% if rule.get('Expiration') %}
+{{ ' ' * indent }}expiration {
+{{ macros.render_number_field('days', rule.Expiration.get('Days'), indent=indent+2) }}
+{{ macros.render_field('date', rule.Expiration.get('Date'), indent=indent+2) }}
+{{ ' ' * indent }}}
+{% endif %}
+
+{% if rule.get('Transition') %}
+{{ ' ' * indent }}transition {
+{{ macros.render_number_field('days', rule.Transition.get('Days'), indent=indent+2) }}
+{{ macros.render_field('date', rule.Transition.get('Date'), indent=indent+2) }}
+{{ macros.render_field('storage_class', rule.Transition.get('StorageClass'), indent=indent+2) }}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{% block resources %}
+{% for resource in resources %}
+  {# Resource validation #}
+  {% set resource_name = resource.get('name_sanitized', 'unnamed_resource') %}
+  {% if resource_name and resource_name != "unnamed_resource" and resource.get('Name') %}
+
+# {{ resource_type | replace('_', ' ') | title }}: {{ resource.get('Name') }}
+# Import command:
+# terraform import {{ resource_type }}.{{ resource_name }} {{ resource.get('Name') }}
+resource "{{ resource_type }}" "{{ resource_name }}" {
+  {{ macros.render_field('bucket', resource.get('Name'), indent=2) }}
+  
+  {# Handle force_destroy for easier cleanup in non-production environments #}
+  {% if resource.get('force_destroy') %}
+  {{ macros.render_bool_field('force_destroy', resource.get('force_destroy'), indent=2) }}
+  {% endif %}
+  
+  {# Tags #}
+  {{ macros.render_tags_universal(resource, indent=2, provider=provider) }}
+}
+
+{# S3 Bucket Server Side Encryption #}
+{% if resource.get('ServerSideEncryptionConfiguration') and resource.ServerSideEncryptionConfiguration.get('Rules') %}
+resource "aws_s3_bucket_server_side_encryption_configuration" "{{ resource_name }}" {
+  bucket = aws_s3_bucket.{{ resource_name }}.id
+
+  {% for rule in resource.ServerSideEncryptionConfiguration.Rules %}
+  rule {
+    {% if rule.get('ApplyServerSideEncryptionByDefault') %}
+    apply_server_side_encryption_by_default {
+      {{ macros.render_field('sse_algorithm', rule.ApplyServerSideEncryptionByDefault.get('SSEAlgorithm'), indent=6) }}
+      {{ macros.render_field('kms_master_key_id', rule.ApplyServerSideEncryptionByDefault.get('KMSMasterKeyID'), indent=6) }}
+    }
+    {% endif %}
+    {{ macros.render_bool_field('bucket_key_enabled', rule.get('BucketKeyEnabled'), indent=4) }}
+  }
+  {% endfor %}
+}
+{% endif %}
+
+{# S3 Bucket Lifecycle Configuration #}
+{% if resource.get('LifecycleConfiguration') and resource.LifecycleConfiguration.get('Rules') %}
+resource "aws_s3_bucket_lifecycle_configuration" "{{ resource_name }}" {
+  bucket = aws_s3_bucket.{{ resource_name }}.id
+
+  {% call(rule, indent, idx) macros.render_dynamic_block('rule', resource.LifecycleConfiguration.Rules, indent=2) %}
+{{ render_s3_lifecycle_rule(rule, indent) }}
+  {% endcall %}
+}
+{% endif %}
+
+{# S3 Bucket Logging #}
+{% if resource.get('LoggingConfiguration') %}
+resource "aws_s3_bucket_logging" "{{ resource_name }}" {
+  bucket = aws_s3_bucket.{{ resource_name }}.id
+
+  {{ macros.render_field('target_bucket', resource.LoggingConfiguration.get('TargetBucket'), indent=2) }}
+  {{ macros.render_field('target_prefix', resource.LoggingConfiguration.get('TargetPrefix'), indent=2) }}
+}
+{% endif %}
+
+{# S3 Bucket ACL #}
+{% if resource.get('Acl') and resource.Acl != 'private' %}
+resource "aws_s3_bucket_acl" "{{ resource_name }}" {
+  bucket = aws_s3_bucket.{{ resource_name }}.id
+  acl    = "{{ resource.Acl }}"
+}
+{% endif %}
+
+{# S3 Bucket CORS Configuration #}
+{% if resource.get('CorsConfiguration') and resource.CorsConfiguration.get('CorsRules') %}
+resource "aws_s3_bucket_cors_configuration" "{{ resource_name }}" {
+  bucket = aws_s3_bucket.{{ resource_name }}.id
+
+  {% for rule in resource.CorsConfiguration.CorsRules %}
+  cors_rule {
+    {{ macros.render_list_field('allowed_headers', rule.get('AllowedHeaders'), indent=4) }}
+    {{ macros.render_list_field('allowed_methods', rule.get('AllowedMethods'), indent=4) }}
+    {{ macros.render_list_field('allowed_origins', rule.get('AllowedOrigins'), indent=4) }}
+    {{ macros.render_list_field('expose_headers', rule.get('ExposeHeaders'), indent=4) }}
+    {{ macros.render_number_field('max_age_seconds', rule.get('MaxAgeSeconds'), indent=4) }}
+  }
+  {% endfor %}
+}
+{% endif %}
+
+{# S3 Bucket Website Configuration #}
+{% if resource.get('WebsiteConfiguration') %}
+resource "aws_s3_bucket_website_configuration" "{{ resource_name }}" {
+  bucket = aws_s3_bucket.{{ resource_name }}.id
+
+  {% if resource.WebsiteConfiguration.get('IndexDocument') %}
+  index_document {
+    suffix = "{{ resource.WebsiteConfiguration.IndexDocument.get('Suffix', 'index.html') }}"
+  }
+  {% endif %}
+
+  {% if resource.WebsiteConfiguration.get('ErrorDocument') %}
+  error_document {
+    key = "{{ resource.WebsiteConfiguration.ErrorDocument.get('Key', 'error.html') }}"
+  }
+  {% endif %}
+
+  {% if resource.WebsiteConfiguration.get('RedirectAllRequestsTo') %}
+  redirect_all_requests_to {
+    {{ macros.render_field('host_name', resource.WebsiteConfiguration.RedirectAllRequestsTo.get('HostName'), indent=4) }}
+    {{ macros.render_field('protocol', resource.WebsiteConfiguration.RedirectAllRequestsTo.get('Protocol'), indent=4) }}
+  }
+  {% endif %}
+}
+{% endif %}
+
+  {% endif %}
+{% endfor %}
+{% endblock %}

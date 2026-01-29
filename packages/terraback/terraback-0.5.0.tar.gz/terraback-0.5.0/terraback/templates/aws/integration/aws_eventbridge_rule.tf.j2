@@ -1,0 +1,298 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for rule in resources %}
+{{ resource_spacer() }}
+resource "aws_cloudwatch_event_rule" "{{ rule.name_sanitized }}" {
+  name = "{{ rule.name }}"
+  
+  {% if rule.get('description') %}
+  description = "{{ rule.description }}"
+  {% endif %}
+
+  {% if rule.get('event_bus_name') %}
+  event_bus_name = "{{ rule.event_bus_name }}"
+  {% elif rule.get('eventBusName') %}
+  event_bus_name = "{{ rule.eventBusName }}"
+  {% endif %}
+
+  {% if rule.get('schedule_expression') %}
+  schedule_expression = "{{ rule.schedule_expression }}"
+  {% elif rule.get('scheduleExpression') %}
+  schedule_expression = "{{ rule.scheduleExpression }}"
+  {% endif %}
+
+  {% if rule.get('event_pattern') %}
+  {% if rule.event_pattern is string %}
+  event_pattern = {{ rule.event_pattern | tojson }}
+  {% else %}
+  event_pattern = jsonencode({{ rule.event_pattern | tojson }})
+  {% endif %}
+  {% elif rule.get('eventPattern') %}
+  {% if rule.eventPattern is string %}
+  event_pattern = {{ rule.eventPattern | tojson }}
+  {% else %}
+  event_pattern = jsonencode({{ rule.eventPattern | tojson }})
+  {% endif %}
+  {% endif %}
+
+  {% if rule.get('state') %}
+  state = "{{ rule.state }}"
+  {% elif rule.get('is_enabled') is defined %}
+  state = "{{ 'ENABLED' if rule.is_enabled else 'DISABLED' }}"
+  {% endif %}
+
+  {% if rule.get('role_arn') %}
+  role_arn = "{{ rule.role_arn }}"
+  {% elif rule.get('roleArn') %}
+  role_arn = "{{ rule.roleArn }}"
+  {% endif %}
+
+  {{ render_common_tags(rule, indent=2) }}
+}
+
+{% if rule.get('targets') %}
+{% for target in rule.targets %}
+{{ resource_spacer() }}
+resource "aws_cloudwatch_event_target" "{{ rule.name_sanitized }}_{{ loop.index }}" {
+  rule      = aws_cloudwatch_event_rule.{{ rule.name_sanitized }}.name
+  arn       = "{{ target.arn }}"
+  
+  {% if target.get('target_id') %}
+  target_id = "{{ target.target_id }}"
+  {% elif target.get('id') %}
+  target_id = "{{ target.id }}"
+  {% else %}
+  target_id = "target-{{ loop.index }}"
+  {% endif %}
+
+  {% if target.get('event_bus_name') %}
+  event_bus_name = "{{ target.event_bus_name }}"
+  {% elif rule.get('event_bus_name') %}
+  event_bus_name = "{{ rule.event_bus_name }}"
+  {% elif rule.get('eventBusName') %}
+  event_bus_name = "{{ rule.eventBusName }}"
+  {% endif %}
+
+  {% if target.get('role_arn') %}
+  role_arn = "{{ target.role_arn }}"
+  {% elif target.get('roleArn') %}
+  role_arn = "{{ target.roleArn }}"
+  {% endif %}
+
+  {% if target.get('input') %}
+  input = jsonencode({{ target.input | tojson }})
+  {% endif %}
+
+  {% if target.get('input_path') %}
+  input_path = "{{ target.input_path }}"
+  {% elif target.get('inputPath') %}
+  input_path = "{{ target.inputPath }}"
+  {% endif %}
+
+  {% if target.get('input_transformer') or target.get('inputTransformer') %}
+  input_transformer {
+    {% set transformer = target.get('input_transformer', target.get('inputTransformer', {})) %}
+    
+    {% if transformer.get('input_paths') or transformer.get('inputPathsMap') %}
+    input_paths = {{ transformer.get('input_paths', transformer.get('inputPathsMap', {})) | tojson }}
+    {% endif %}
+    
+    {% if transformer.get('input_template') %}
+    input_template = "{{ transformer.input_template }}"
+    {% elif transformer.get('inputTemplate') %}
+    input_template = "{{ transformer.inputTemplate }}"
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if target.get('ecs_target') or target.get('ecsParameters') %}
+  ecs_target {
+    {% set ecs = target.get('ecs_target', target.get('ecsParameters', {})) %}
+    
+    {% if ecs.get('task_definition_arn') %}
+    task_definition_arn = "{{ ecs.task_definition_arn }}"
+    {% elif ecs.get('taskDefinitionArn') %}
+    task_definition_arn = "{{ ecs.taskDefinitionArn }}"
+    {% endif %}
+    
+    {% if ecs.get('task_count') %}
+    task_count = {{ ecs.task_count }}
+    {% elif ecs.get('taskCount') %}
+    task_count = {{ ecs.taskCount }}
+    {% endif %}
+    
+    {% if ecs.get('launch_type') %}
+    launch_type = "{{ ecs.launch_type }}"
+    {% elif ecs.get('launchType') %}
+    launch_type = "{{ ecs.launchType }}"
+    {% endif %}
+    
+    {% if ecs.get('platform_version') %}
+    platform_version = "{{ ecs.platform_version }}"
+    {% elif ecs.get('platformVersion') %}
+    platform_version = "{{ ecs.platformVersion }}"
+    {% endif %}
+    
+    {% if ecs.get('group') %}
+    group = "{{ ecs.group }}"
+    {% endif %}
+    
+    {% if ecs.get('network_configuration') or ecs.get('networkConfiguration') %}
+    network_configuration {
+      {% set net_config = ecs.get('network_configuration', ecs.get('networkConfiguration', {})) %}
+      
+      {% if net_config.get('subnets') %}
+      subnets = {{ net_config.subnets | tojson }}
+      {% elif net_config.get('awsvpcConfiguration', {}).get('subnets') %}
+      subnets = {{ net_config.awsvpcConfiguration.subnets | tojson }}
+      {% endif %}
+      
+      {% if net_config.get('security_groups') %}
+      security_groups = {{ net_config.security_groups | tojson }}
+      {% elif net_config.get('awsvpcConfiguration', {}).get('securityGroups') %}
+      security_groups = {{ net_config.awsvpcConfiguration.securityGroups | tojson }}
+      {% endif %}
+      
+      {% if net_config.get('assign_public_ip') is defined %}
+      assign_public_ip = {{ net_config.assign_public_ip | lower }}
+      {% elif net_config.get('awsvpcConfiguration', {}).get('assignPublicIp') %}
+      assign_public_ip = {{ ('true' if net_config.awsvpcConfiguration.assignPublicIp == 'ENABLED' else 'false') }}
+      {% endif %}
+    }
+    {% endif %}
+    
+    {% if ecs.get('placement_constraint') or ecs.get('placementConstraints') %}
+    {% for constraint in ecs.get('placement_constraint', ecs.get('placementConstraints', [])) %}
+    placement_constraint {
+      type       = "{{ constraint.type }}"
+      {% if constraint.get('expression') %}
+      expression = "{{ constraint.expression }}"
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if target.get('batch_target') or target.get('batchParameters') %}
+  batch_target {
+    {% set batch = target.get('batch_target', target.get('batchParameters', {})) %}
+    
+    job_definition = "{{ batch.get('job_definition', batch.get('jobDefinition')) }}"
+    job_name       = "{{ batch.get('job_name', batch.get('jobName')) }}"
+    
+    {% if batch.get('array_properties') or batch.get('arrayProperties') %}
+    array_properties {
+      {% if batch.get('array_properties', {}).get('size') %}
+      size = {{ batch.array_properties.size }}
+      {% elif batch.get('arrayProperties', {}).get('size') %}
+      size = {{ batch.arrayProperties.size }}
+      {% endif %}
+    }
+    {% endif %}
+    
+    {% if batch.get('job_attempts') %}
+    job_attempts = {{ batch.job_attempts }}
+    {% elif batch.get('retryStrategy', {}).get('attempts') %}
+    job_attempts = {{ batch.retryStrategy.attempts }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if target.get('kinesis_target') or target.get('kinesisParameters') %}
+  kinesis_target {
+    {% if target.get('kinesis_target', {}).get('partition_key_path') %}
+    partition_key_path = "{{ target.kinesis_target.partition_key_path }}"
+    {% elif target.get('kinesisParameters', {}).get('partitionKeyPath') %}
+    partition_key_path = "{{ target.kinesisParameters.partitionKeyPath }}"
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if target.get('sqs_target') or target.get('sqsParameters') %}
+  sqs_target {
+    {% if target.get('sqs_target', {}).get('message_group_id') %}
+    message_group_id = "{{ target.sqs_target.message_group_id }}"
+    {% elif target.get('sqsParameters', {}).get('messageGroupId') %}
+    message_group_id = "{{ target.sqsParameters.messageGroupId }}"
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if target.get('http_target') or target.get('httpParameters') %}
+  http_target {
+    {% set http = target.get('http_target', target.get('httpParameters', {})) %}
+    
+    {% if http.get('path_parameter_values') %}
+    path_parameter_values = {{ http.path_parameter_values | tojson }}
+    {% elif http.get('pathParameterValues') %}
+    path_parameter_values = {{ http.pathParameterValues | tojson }}
+    {% endif %}
+    
+    {% if http.get('query_string_parameters') %}
+    query_string_parameters = {{ http.query_string_parameters | tojson }}
+    {% elif http.get('queryStringParameters') %}
+    query_string_parameters = {{ http.queryStringParameters | tojson }}
+    {% endif %}
+    
+    {% if http.get('header_parameters') %}
+    header_parameters = {{ http.header_parameters | tojson }}
+    {% elif http.get('headerParameters') %}
+    header_parameters = {{ http.headerParameters | tojson }}
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if target.get('run_command_targets') or target.get('runCommandParameters') %}
+  {% for run_cmd in target.get('run_command_targets', [target.get('runCommandParameters', {})]) %}
+  run_command_targets {
+    key    = "{{ run_cmd.get('key', 'tag:Name') }}"
+    values = {{ run_cmd.get('values', []) | tojson }}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if target.get('dead_letter_config') or target.get('deadLetterConfig') %}
+  dead_letter_config {
+    arn = "{{ target.get('dead_letter_config', {}).get('arn', target.get('deadLetterConfig', {}).get('arn')) }}"
+  }
+  {% endif %}
+
+  {% if target.get('retry_policy') or target.get('retryPolicy') %}
+  retry_policy {
+    {% set retry = target.get('retry_policy', target.get('retryPolicy', {})) %}
+    
+    {% if retry.get('maximum_retry_attempts') %}
+    maximum_retry_attempts = {{ retry.maximum_retry_attempts }}
+    {% elif retry.get('maximumRetryAttempts') %}
+    maximum_retry_attempts = {{ retry.maximumRetryAttempts }}
+    {% endif %}
+    
+    {% if retry.get('maximum_event_age_in_seconds') %}
+    maximum_event_age_in_seconds = {{ retry.maximum_event_age_in_seconds }}
+    {% elif retry.get('maximumEventAgeInSeconds') %}
+    maximum_event_age_in_seconds = {{ retry.maximumEventAgeInSeconds }}
+    {% endif %}
+  }
+  {% endif %}
+}
+
+{% endfor %}
+{% endif %}
+
+{% if rule.get('permissions') %}
+{% for permission in rule.permissions %}
+{{ resource_spacer() }}
+resource "aws_lambda_permission" "{{ rule.name_sanitized }}_{{ loop.index }}" {
+  statement_id  = "{{ permission.get('statement_id', 'AllowExecutionFromEventBridge-' + rule.name_sanitized + '-' + loop.index|string) }}"
+  action        = "lambda:InvokeFunction"
+  function_name = "{{ permission.function_name }}"
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.{{ rule.name_sanitized }}.arn
+}
+
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+{% endblock %}

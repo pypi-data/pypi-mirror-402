@@ -1,0 +1,22 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for group in resources %}
+{{ resource_spacer() }}
+resource "aws_db_parameter_group" "{{ group.DBParameterGroupName | tf_resource_name }}" {
+  name        = "{{ group.DBParameterGroupName }}"
+  family      = "{{ group.DBParameterGroupFamily }}"
+  description = "{{ group.Description }}"
+
+  {% for param in group.get('Parameters', []) %}
+  parameter {
+    name         = "{{ param.ParameterName }}"
+    value        = "{{ param.ParameterValue }}"
+    apply_method = "{{ param.ApplyMethod | default('immediate') }}"
+  }
+  {% endfor %}
+
+  {{ render_common_tags(group, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

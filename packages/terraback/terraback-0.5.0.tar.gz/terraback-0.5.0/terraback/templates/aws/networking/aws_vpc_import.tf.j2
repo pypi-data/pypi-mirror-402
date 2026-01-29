@@ -1,0 +1,236 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% from "aws/base_resource.tf.j2" import render_common_tags %}
+{% block resources %}
+{% for vpc in resources %}
+# Import existing VPC: {{ vpc.vpcId | default(vpc.vpc_id) }}
+import {
+  to = aws_vpc.{{ vpc.name_sanitized }}
+  id = "{{ vpc.vpcId | default(vpc.vpc_id) }}"
+}
+
+resource "aws_vpc" "{{ vpc.name_sanitized }}" {
+  cidr_block = "{{ vpc.cidrBlock | default(vpc.cidr_block) }}"
+  
+  {% if vpc.get('instanceTenancy') or vpc.get('instance_tenancy') %}
+  instance_tenancy = "{{ vpc.instanceTenancy | default(vpc.instance_tenancy) }}"
+  {% endif %}
+  
+  {% if vpc.get('enableDnsSupport') is defined or vpc.get('enable_dns_support') is defined %}
+  enable_dns_support = {{ (vpc.enableDnsSupport | default(vpc.enable_dns_support)) | lower }}
+  {% endif %}
+  
+  {% if vpc.get('enableDnsHostnames') is defined or vpc.get('enable_dns_hostnames') is defined %}
+  enable_dns_hostnames = {{ (vpc.enableDnsHostnames | default(vpc.enable_dns_hostnames)) | lower }}
+  {% endif %}
+  
+  {% if vpc.get('enable_network_address_usage_metrics') is defined %}
+  enable_network_address_usage_metrics = {{ vpc.enable_network_address_usage_metrics | lower }}
+  {% endif %}
+  
+  {% if vpc.get('ipv4IpamPoolId') or vpc.get('ipv4_ipam_pool_id') %}
+  ipv4_ipam_pool_id = "{{ vpc.ipv4IpamPoolId | default(vpc.ipv4_ipam_pool_id) }}"
+  {% endif %}
+  
+  {% if vpc.get('ipv4NetmaskLength') or vpc.get('ipv4_netmask_length') %}
+  ipv4_netmask_length = {{ vpc.ipv4NetmaskLength | default(vpc.ipv4_netmask_length) }}
+  {% endif %}
+
+  {{ render_common_tags(vpc, indent=2) }}
+
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes = [
+      tags_all
+    ]
+  }
+}
+
+{% if vpc.get('subnets') %}
+{% for subnet in vpc.subnets %}
+# Import subnet: {{ subnet.subnetId | default(subnet.subnet_id) }}
+import {
+  to = aws_subnet.{{ subnet.name_sanitized }}
+  id = "{{ subnet.subnetId | default(subnet.subnet_id) }}"
+}
+
+resource "aws_subnet" "{{ subnet.name_sanitized }}" {
+  vpc_id     = aws_vpc.{{ vpc.name_sanitized }}.id
+  cidr_block = "{{ subnet.cidrBlock | default(subnet.cidr_block) }}"
+  
+  {% if subnet.get('availabilityZone') or subnet.get('availability_zone') %}
+  availability_zone = "{{ subnet.availabilityZone | default(subnet.availability_zone) }}"
+  {% endif %}
+  
+  {% if subnet.get('availabilityZoneId') or subnet.get('availability_zone_id') %}
+  availability_zone_id = "{{ subnet.availabilityZoneId | default(subnet.availability_zone_id) }}"
+  {% endif %}
+  
+  {% if subnet.get('mapPublicIpOnLaunch') is defined or subnet.get('map_public_ip_on_launch') is defined %}
+  map_public_ip_on_launch = {{ (subnet.mapPublicIpOnLaunch | default(subnet.map_public_ip_on_launch)) | lower }}
+  {% endif %}
+  
+  {% if subnet.get('assignIpv6AddressOnCreation') is defined or subnet.get('assign_ipv6_address_on_creation') is defined %}
+  assign_ipv6_address_on_creation = {{ (subnet.assignIpv6AddressOnCreation | default(subnet.assign_ipv6_address_on_creation)) | lower }}
+  {% endif %}
+  
+  {% if subnet.get('ipv6CidrBlock') or subnet.get('ipv6_cidr_block') %}
+  ipv6_cidr_block = "{{ subnet.ipv6CidrBlock | default(subnet.ipv6_cidr_block) }}"
+  {% endif %}
+  
+  {% if subnet.get('outpostArn') or subnet.get('outpost_arn') %}
+  outpost_arn = "{{ subnet.outpostArn | default(subnet.outpost_arn) }}"
+  {% endif %}
+
+  {{ render_common_tags(subnet, indent=2) }}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+{% endfor %}
+{% endif %}
+
+{% if vpc.get('internet_gateway') %}
+# Import Internet Gateway: {{ vpc.internet_gateway.internetGatewayId | default(vpc.internet_gateway.id) }}
+import {
+  to = aws_internet_gateway.{{ vpc.name_sanitized }}
+  id = "{{ vpc.internet_gateway.internetGatewayId | default(vpc.internet_gateway.id) }}"
+}
+
+resource "aws_internet_gateway" "{{ vpc.name_sanitized }}" {
+  vpc_id = aws_vpc.{{ vpc.name_sanitized }}.id
+
+  {{ render_common_tags(vpc.internet_gateway, indent=2) }}
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+{% endif %}
+
+{% if vpc.get('route_tables') %}
+{% for route_table in vpc.route_tables %}
+# Import Route Table: {{ route_table.routeTableId | default(route_table.id) }}
+import {
+  to = aws_route_table.{{ route_table.name_sanitized }}
+  id = "{{ route_table.routeTableId | default(route_table.id) }}"
+}
+
+resource "aws_route_table" "{{ route_table.name_sanitized }}" {
+  vpc_id = aws_vpc.{{ vpc.name_sanitized }}.id
+
+  {{ render_common_tags(route_table, indent=2) }}
+
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes = [
+      route
+    ]
+  }
+}
+
+{% if route_table.get('routes') %}
+{% for route in route_table.routes %}
+{% if route.get('destinationCidrBlock') or route.get('destination_cidr_block') %}
+# Import route in route table
+import {
+  to = aws_route.{{ route_table.name_sanitized }}_{{ loop.index }}
+  id = "{{ route_table.routeTableId | default(route_table.id) }}_{{ route.destinationCidrBlock | default(route.destination_cidr_block) }}"
+}
+
+resource "aws_route" "{{ route_table.name_sanitized }}_{{ loop.index }}" {
+  route_table_id         = aws_route_table.{{ route_table.name_sanitized }}.id
+  destination_cidr_block = "{{ route.destinationCidrBlock | default(route.destination_cidr_block) }}"
+  
+  {% if route.get('gatewayId') or route.get('gateway_id') %}
+  gateway_id = "{{ route.gatewayId | default(route.gateway_id) }}"
+  {% endif %}
+  
+  {% if route.get('natGatewayId') or route.get('nat_gateway_id') %}
+  nat_gateway_id = "{{ route.natGatewayId | default(route.nat_gateway_id) }}"
+  {% endif %}
+  
+  {% if route.get('networkInterfaceId') or route.get('network_interface_id') %}
+  network_interface_id = "{{ route.networkInterfaceId | default(route.network_interface_id) }}"
+  {% endif %}
+  
+  {% if route.get('vpcPeeringConnectionId') or route.get('vpc_peering_connection_id') %}
+  vpc_peering_connection_id = "{{ route.vpcPeeringConnectionId | default(route.vpc_peering_connection_id) }}"
+  {% endif %}
+  
+  {% if route.get('transitGatewayId') or route.get('transit_gateway_id') %}
+  transit_gateway_id = "{{ route.transitGatewayId | default(route.transit_gateway_id) }}"
+  {% endif %}
+}
+
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+{% endif %}
+
+{% if vpc.get('security_groups') %}
+{% for sg in vpc.security_groups %}
+# Import Security Group: {{ sg.groupId | default(sg.id) }}
+import {
+  to = aws_security_group.{{ sg.name_sanitized }}
+  id = "{{ sg.groupId | default(sg.id) }}"
+}
+
+resource "aws_security_group" "{{ sg.name_sanitized }}" {
+  name        = "{{ sg.groupName | default(sg.name) }}"
+  description = "{{ sg.description }}"
+  vpc_id      = aws_vpc.{{ vpc.name_sanitized }}.id
+
+  {{ render_common_tags(sg, indent=2) }}
+
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes = [
+      ingress,
+      egress
+    ]
+  }
+}
+
+{% if sg.get('ingress_rules') %}
+{% for rule in sg.ingress_rules %}
+import {
+  to = aws_security_group_rule.{{ sg.name_sanitized }}_ingress_{{ loop.index }}
+  id = "{{ sg.groupId | default(sg.id) }}_ingress_{{ rule.protocol }}_{{ rule.from_port }}_{{ rule.to_port }}_{{ rule.cidr_blocks[0] if rule.cidr_blocks else rule.source_security_group_id }}"
+}
+
+resource "aws_security_group_rule" "{{ sg.name_sanitized }}_ingress_{{ loop.index }}" {
+  type              = "ingress"
+  from_port         = {{ rule.from_port }}
+  to_port           = {{ rule.to_port }}
+  protocol          = "{{ rule.protocol }}"
+  security_group_id = aws_security_group.{{ sg.name_sanitized }}.id
+  
+  {% if rule.get('cidr_blocks') %}
+  cidr_blocks = {{ rule.cidr_blocks | tojson }}
+  {% endif %}
+  
+  {% if rule.get('ipv6_cidr_blocks') %}
+  ipv6_cidr_blocks = {{ rule.ipv6_cidr_blocks | tojson }}
+  {% endif %}
+  
+  {% if rule.get('source_security_group_id') %}
+  source_security_group_id = "{{ rule.source_security_group_id }}"
+  {% endif %}
+  
+  {% if rule.get('description') %}
+  description = "{{ rule.description }}"
+  {% endif %}
+}
+
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+{% endblock %}

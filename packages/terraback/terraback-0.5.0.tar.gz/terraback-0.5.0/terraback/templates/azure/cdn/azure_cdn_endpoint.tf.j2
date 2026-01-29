@@ -1,0 +1,118 @@
+{% extends "common/base_resource.tf.j2" %}
+{% block resources %}
+{% for resource in resources %}
+{{ resource_spacer() }}
+resource "azurerm_cdn_endpoint" "{{ resource.name.replace('-', '_').replace('.', '_').lower() }}" {
+  name                = "{{ resource.properties.name }}"
+  profile_name        = "{{ resource.properties.profile_name }}"
+  location            = "{{ resource.properties.location }}"
+  resource_group_name = "{{ resource.properties.resource_group_name }}"
+  
+  {% if resource.properties.is_http_allowed is defined %}
+  is_http_allowed = {{ resource.properties.is_http_allowed | lower }}
+  {% endif %}
+  
+  {% if resource.properties.is_https_allowed is defined %}
+  is_https_allowed = {{ resource.properties.is_https_allowed | lower }}
+  {% endif %}
+  
+  {% if resource.properties.is_compression_enabled is defined %}
+  is_compression_enabled = {{ resource.properties.is_compression_enabled | lower }}
+  {% endif %}
+  
+  {% if resource.properties.content_types_to_compress is defined %}
+  content_types_to_compress = {{ resource.properties.content_types_to_compress | to_terraform_collection('list') }}
+  {% endif %}
+  
+  {% if resource.properties.querystring_caching_behaviour is defined %}
+  querystring_caching_behaviour = "{{ resource.properties.querystring_caching_behaviour }}"
+  {% endif %}
+  
+  {% if resource.properties.optimization_type is defined and resource.properties.optimization_type %}
+  optimization_type = "{{ resource.properties.optimization_type }}"
+  {% endif %}
+  
+  {% if resource.properties.origin_host_header is defined %}
+  origin_host_header = "{{ resource.properties.origin_host_header }}"
+  {% endif %}
+  
+  {% if resource.properties.origin_path is defined %}
+  origin_path = "{{ resource.properties.origin_path }}"
+  {% endif %}
+  
+  {% if resource.properties.probe_path is defined %}
+  probe_path = "{{ resource.properties.probe_path }}"
+  {% endif %}
+  
+  {% for origin in resource.properties.origins %}
+  origin {
+    name      = "{{ origin.name }}"
+    host_name = "{{ origin.host_name }}"
+    {% if origin.http_port is defined %}
+    http_port = {{ origin.http_port }}
+    {% endif %}
+    {% if origin.https_port is defined %}
+    https_port = {{ origin.https_port }}
+    {% endif %}
+  }
+  {% endfor %}
+  
+  {% if resource.properties.geo_filters is defined %}
+  {% for filter in resource.properties.geo_filters %}
+  geo_filter {
+    relative_path = "{{ filter.relative_path }}"
+    action        = "{{ filter.action }}"
+    country_codes = {{ filter.country_codes | tojson }}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.delivery_rules is defined %}
+  {% for rule in resource.properties.delivery_rules %}
+  delivery_rule {
+    name  = "{{ rule.name }}"
+    order = {{ rule.order }}
+    
+    {% if rule.request_uri_conditions is defined %}
+    {% for condition in rule.request_uri_conditions %}
+    request_uri_condition {
+      operator         = "{{ condition.operator }}"
+      match_values     = {{ condition.match_values | tojson }}
+      {% if condition.negate_condition is defined %}
+      negate_condition = {{ condition.negate_condition | lower }}
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+    
+    {% if rule.cache_expiration_action is defined %}
+    cache_expiration_action {
+      behavior = "{{ rule.cache_expiration_action.behavior }}"
+      {% if rule.cache_expiration_action.duration is defined %}
+      duration = "{{ rule.cache_expiration_action.duration }}"
+      {% endif %}
+    }
+    {% endif %}
+    
+    {% if rule.modify_response_header_actions is defined %}
+    {% for action in rule.modify_response_header_actions %}
+    modify_response_header_action {
+      action = "{{ action.action }}"
+      name   = "{{ action.name }}"
+      {% if action.value is defined %}
+      value  = "{{ action.value }}"
+      {% endif %}
+    }
+    {% endfor %}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+  
+  {% if resource.properties.tags is defined and resource.properties.tags %}
+  tags = {{ resource.properties.tags | to_terraform_collection('map') }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

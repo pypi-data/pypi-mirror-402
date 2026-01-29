@@ -1,0 +1,21 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for sg in resources %}
+{{ resource_spacer() }}
+resource "aws_elasticache_subnet_group" "{{ sg.name_sanitized }}" {
+  name       = "{{ sg.CacheSubnetGroupName }}"
+  subnet_ids = [
+    {% for subnet_id in sg.get('subnet_ids', []) %}
+    "{{ subnet_id }}"{{ "," if not loop.last }}
+    {% endfor %}
+  ]
+
+  {% if sg.get('CacheSubnetGroupDescription') %}
+  description = "{{ sg.CacheSubnetGroupDescription }}"
+  {%  endif %}
+
+  {{ render_common_tags(sg, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

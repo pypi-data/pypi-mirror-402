@@ -1,0 +1,27 @@
+{% extends "common/base_resource.tf.j2" %}
+
+{% block resources %}
+{% for record in resources %}
+{{ resource_spacer() }}
+
+# Import existing DNS NS record: {{ record.name }}
+import {
+  to = azurerm_dns_ns_record.{{ record.name_sanitized }}
+  id = "{{ record.id }}"
+}
+
+resource "azurerm_dns_ns_record" "{{ record.name_sanitized }}" {
+  name                = "{{ record.properties.name }}"
+  zone_name           = "{{ record.properties.zone_name }}"
+  resource_group_name = "{{ record.properties.resource_group_name }}"
+  ttl                 = {{ record.properties.ttl | default(300) }}
+
+  records = {{ record.properties.records | default(['ns1.example.com', 'ns2.example.com']) | tojson }}
+
+  {% if record.properties.tags %}
+  tags = {{ record.properties.tags | tojson }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

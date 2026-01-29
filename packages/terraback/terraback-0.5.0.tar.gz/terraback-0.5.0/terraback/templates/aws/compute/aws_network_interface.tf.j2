@@ -1,0 +1,37 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for interface in resources %}
+{{ resource_spacer() }}
+resource "aws_network_interface" "{{ interface.name_sanitized }}" {
+  subnet_id = "{{ interface.SubnetId }}"
+  
+  {% if interface.PrivateIpAddresses %}
+  private_ips = {{ interface.PrivateIpAddresses | map(attribute='PrivateIpAddress') | list | tojson }}
+  {% elif interface.PrivateIpAddress %}
+  private_ips = ["{{ interface.PrivateIpAddress }}"]
+  {% endif %}
+  
+  {% if interface.Groups %}
+  security_groups = {{ interface.Groups | map(attribute='GroupId') | list | tojson }}
+  {% endif %}
+  
+  {% if interface.Description %}
+  description = "{{ interface.Description }}"
+  {% endif %}
+  
+  {% if interface.SourceDestCheck is defined %}
+  source_dest_check = {{ interface.SourceDestCheck | tf_bool }}
+  {% endif %}
+  
+  {% if interface.Attachment and interface.Attachment.DeviceIndex is defined %}
+  attachment {
+    instance     = "{{ interface.Attachment.InstanceId }}"
+    device_index = {{ interface.Attachment.DeviceIndex }}
+  }
+  {% endif %}
+  
+  {{ render_common_tags(interface, indent=2) }}
+}
+
+{% endfor %}
+{% endblock %}

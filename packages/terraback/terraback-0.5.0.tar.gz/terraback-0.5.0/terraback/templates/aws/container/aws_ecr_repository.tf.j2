@@ -1,0 +1,39 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for repo in resources %}
+{{ resource_spacer() }}
+resource "aws_ecr_repository" "{{ repo.name_sanitized }}" {
+  name = "{{ repo.repositoryName }}"
+  
+  image_tag_mutability = "{{ repo.imageTagMutability | upper }}"
+  
+  image_scanning_configuration {
+    scan_on_push = {{ repo.image_scanning_enabled | lower }}
+  }
+  
+  encryption_configuration {
+    encryption_type = "{{ repo.encryption_config_formatted.encryption_type | upper }}"
+    {% if repo.encryption_config_formatted.get('kms_key') %}
+    kms_key = "{{ repo.encryption_config_formatted.kms_key }}"
+    {%  endif %}
+  }
+  
+  {{ render_common_tags(repo, indent=2) }}
+}
+
+{% if repo.get('repository_policy') %}
+resource "aws_ecr_repository_policy" "{{ repo.name_sanitized }}" {
+  repository = aws_ecr_repository.{{ repo.name_sanitized }}.name
+  policy     = jsonencode({{ repo.repository_policy | safe }})
+}
+{%  endif %}
+
+{% if repo.get('lifecycle_policy') %}
+resource "aws_ecr_lifecycle_policy" "{{ repo.name_sanitized }}" {
+  repository = aws_ecr_repository.{{ repo.name_sanitized }}.name
+  policy     = jsonencode({{ repo.lifecycle_policy | safe }})
+}
+{%  endif %}
+
+{% endfor %}
+{% endblock %}

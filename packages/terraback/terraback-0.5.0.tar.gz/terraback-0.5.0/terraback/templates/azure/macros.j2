@@ -1,0 +1,180 @@
+{# Azure-specific macros for Terraform templates #}
+
+{% macro render_tags(tags, indent=2) %}
+{% if tags %}
+{{ ' ' * indent }}tags = {
+{% for key, value in tags.items() %}
+{{ ' ' * (indent + 2) }}"{{ key }}" = "{{ value | replace('"', '\\"') }}"{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{% macro render_azure_tags(resource, indent=2) %}
+{# Azure resources can have tags in different formats #}
+{% if resource.get('tags') %}
+{{ render_tags(resource.tags, indent) }}
+{% elif resource.get('tags_formatted') %}
+{{ render_tags(resource.tags_formatted, indent) }}
+{% elif resource.get('properties') and resource.properties.get('tags') %}
+{{ ' ' * indent }}tags = {{ resource.properties.tags | tojson }}
+{% endif %}
+{% endmacro %}
+
+{% macro render_sku(sku, indent=2) %}
+{% if sku %}
+{{ ' ' * indent }}sku {
+{{ ' ' * (indent + 2) }}name     = "{{ sku.name }}"
+{% if sku.get('tier') %}
+{{ ' ' * (indent + 2) }}tier     = "{{ sku.tier }}"
+{% endif %}
+{% if sku.get('capacity') %}
+{{ ' ' * (indent + 2) }}capacity = {{ sku.capacity }}
+{% endif %}
+{% if sku.get('family') %}
+{{ ' ' * (indent + 2) }}family   = "{{ sku.family }}"
+{% endif %}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{% macro render_identity(identity, indent=2) %}
+{% if identity %}
+{{ ' ' * indent }}identity {
+{{ ' ' * (indent + 2) }}type = "{{ identity.type }}"
+{% if identity.get('identity_ids') %}
+{{ ' ' * (indent + 2) }}identity_ids = [
+{% for id in identity.identity_ids %}
+{{ ' ' * (indent + 4) }}"{{ id }}"{{ ',' if not loop.last }}
+{% endfor %}
+{{ ' ' * (indent + 2) }}]
+{% endif %}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{% macro render_network_security_rules(rules, rule_type, indent=2) %}
+{% for rule in rules %}
+{{ ' ' * indent }}{{ rule_type }} {
+{{ ' ' * (indent + 2) }}name                       = "{{ rule.name }}"
+{{ ' ' * (indent + 2) }}priority                   = {{ rule.priority }}
+{{ ' ' * (indent + 2) }}direction                  = "{{ rule.direction }}"
+{{ ' ' * (indent + 2) }}access                     = "{{ rule.access }}"
+{{ ' ' * (indent + 2) }}protocol                   = "{{ rule.protocol }}"
+{% if rule.get('source_port_range') %}
+{{ ' ' * (indent + 2) }}source_port_range          = "{{ rule.source_port_range }}"
+{% elif rule.get('source_port_ranges') %}
+{{ ' ' * (indent + 2) }}source_port_ranges         = {{ rule.source_port_ranges | tojson }}
+{% endif %}
+{% if rule.get('destination_port_range') %}
+{{ ' ' * (indent + 2) }}destination_port_range     = "{{ rule.destination_port_range }}"
+{% elif rule.get('destination_port_ranges') %}
+{{ ' ' * (indent + 2) }}destination_port_ranges    = {{ rule.destination_port_ranges | tojson }}
+{% endif %}
+{% if rule.get('source_address_prefix') %}
+{{ ' ' * (indent + 2) }}source_address_prefix      = "{{ rule.source_address_prefix }}"
+{% elif rule.get('source_address_prefixes') %}
+{{ ' ' * (indent + 2) }}source_address_prefixes    = {{ rule.source_address_prefixes | tojson }}
+{% endif %}
+{% if rule.get('destination_address_prefix') %}
+{{ ' ' * (indent + 2) }}destination_address_prefix = "{{ rule.destination_address_prefix }}"
+{% elif rule.get('destination_address_prefixes') %}
+{{ ' ' * (indent + 2) }}destination_address_prefixes = {{ rule.destination_address_prefixes | tojson }}
+{% endif %}
+{% if rule.get('description') %}
+{{ ' ' * (indent + 2) }}description                = "{{ rule.description }}"
+{% endif %}
+{{ ' ' * indent }}}
+{% endfor %}
+{% endmacro %}
+
+{% macro render_ip_configuration(ip_configs, indent=2) %}
+{% for ip_config in ip_configs %}
+{{ ' ' * indent }}ip_configuration {
+{{ ' ' * (indent + 2) }}name                          = "{{ ip_config.name }}"
+{{ ' ' * (indent + 2) }}subnet_id                     = "{{ ip_config.subnet_id }}"
+{{ ' ' * (indent + 2) }}private_ip_address_allocation = "{{ ip_config.private_ip_address_allocation | default('Dynamic') }}"
+{% if ip_config.get('private_ip_address') %}
+{{ ' ' * (indent + 2) }}private_ip_address            = "{{ ip_config.private_ip_address }}"
+{% endif %}
+{% if ip_config.get('public_ip_address_id') %}
+{{ ' ' * (indent + 2) }}public_ip_address_id          = "{{ ip_config.public_ip_address_id }}"
+{% endif %}
+{% if ip_config.get('primary') is not none %}
+{{ ' ' * (indent + 2) }}primary                       = {{ ip_config.primary | lower }}
+{% endif %}
+{{ ' ' * indent }}}
+{% endfor %}
+{% endmacro %}
+
+{% macro render_storage_profile(storage_profile, indent=2) %}
+{% if storage_profile %}
+{{ ' ' * indent }}storage_profile {
+{% if storage_profile.get('storage_mb') %}
+{{ ' ' * (indent + 2) }}storage_mb            = {{ storage_profile.storage_mb }}
+{% endif %}
+{% if storage_profile.get('backup_retention_days') %}
+{{ ' ' * (indent + 2) }}backup_retention_days = {{ storage_profile.backup_retention_days }}
+{% endif %}
+{% if storage_profile.get('geo_redundant_backup_enabled') is not none %}
+{{ ' ' * (indent + 2) }}geo_redundant_backup_enabled = {{ storage_profile.geo_redundant_backup_enabled | lower }}
+{% endif %}
+{% if storage_profile.get('auto_grow_enabled') is not none %}
+{{ ' ' * (indent + 2) }}auto_grow_enabled     = {{ storage_profile.auto_grow_enabled | lower }}
+{% endif %}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{% macro render_threat_detection_policy(policy, indent=2) %}
+{% if policy %}
+{{ ' ' * indent }}threat_detection_policy {
+{{ ' ' * (indent + 2) }}state                      = "{{ policy.state | default('Enabled') }}"
+{% if policy.get('disabled_alerts') %}
+{{ ' ' * (indent + 2) }}disabled_alerts            = {{ policy.disabled_alerts | tojson }}
+{% endif %}
+{% if policy.get('email_account_admins') is not none %}
+{{ ' ' * (indent + 2) }}email_account_admins       = {{ policy.email_account_admins | lower }}
+{% endif %}
+{% if policy.get('email_addresses') %}
+{{ ' ' * (indent + 2) }}email_addresses            = {{ policy.email_addresses | tojson }}
+{% endif %}
+{% if policy.get('retention_days') %}
+{{ ' ' * (indent + 2) }}retention_days             = {{ policy.retention_days }}
+{% endif %}
+{% if policy.get('storage_account_access_key') %}
+{{ ' ' * (indent + 2) }}storage_account_access_key = "{{ policy.storage_account_access_key }}"
+{% endif %}
+{% if policy.get('storage_endpoint') %}
+{{ ' ' * (indent + 2) }}storage_endpoint           = "{{ policy.storage_endpoint }}"
+{% endif %}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{% macro render_diagnostic_settings(settings, indent=2) %}
+{% if settings %}
+{{ ' ' * indent }}diagnostic_settings {
+{% if settings.get('enabled') is not none %}
+{{ ' ' * (indent + 2) }}enabled = {{ settings.enabled | lower }}
+{% endif %}
+{% if settings.get('storage_account_id') %}
+{{ ' ' * (indent + 2) }}storage_account_id = "{{ settings.storage_account_id }}"
+{% endif %}
+{% if settings.get('eventhub_authorization_rule_id') %}
+{{ ' ' * (indent + 2) }}eventhub_authorization_rule_id = "{{ settings.eventhub_authorization_rule_id }}"
+{% endif %}
+{% if settings.get('log_analytics_workspace_id') %}
+{{ ' ' * (indent + 2) }}log_analytics_workspace_id = "{{ settings.log_analytics_workspace_id }}"
+{% endif %}
+{{ ' ' * indent }}}
+{% endif %}
+{% endmacro %}
+
+{% macro render_azure_location(location, indent=2) %}
+{{ ' ' * indent }}location = "{{ location }}"
+{% endmacro %}
+
+{% macro render_resource_group(rg_name, indent=2) %}
+{{ ' ' * indent }}resource_group_name = "{{ rg_name }}"
+{% endmacro %}

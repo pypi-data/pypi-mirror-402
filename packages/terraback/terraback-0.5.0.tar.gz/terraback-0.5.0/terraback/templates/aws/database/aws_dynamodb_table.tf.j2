@@ -1,0 +1,149 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for table in resources %}
+{{ resource_spacer() }}
+resource "aws_dynamodb_table" "{{ table.name_sanitized }}" {
+  name           = "{{ table.TableName }}"
+  billing_mode   = "{{ table.get('BillingModeSummary', {}).get('BillingMode', 'PAY_PER_REQUEST') }}"
+
+  {% if table.get('BillingModeSummary', {}).get('BillingMode') == 'PROVISIONED' or table.get('ProvisionedThroughput') %}
+  read_capacity  = {{ table.get('ProvisionedThroughput', {}).get('ReadCapacityUnits', 5) }}
+  write_capacity = {{ table.get('ProvisionedThroughput', {}).get('WriteCapacityUnits', 5) }}
+  {% endif %}
+
+  hash_key       = "{{ table.get('hash_key', table.get('KeySchema', [{}])[0].get('AttributeName', '')) }}"
+  {% if table.get('range_key') or (table.get('KeySchema', [])|length > 1) %}
+  range_key      = "{{ table.get('range_key', table.get('KeySchema', [{}])[1].get('AttributeName', '')) }}"
+  {% endif %}
+
+  {% if table.get('attributes') %}
+  {% for attr in table.attributes %}
+  attribute {
+    name = "{{ attr.name }}"
+    type = "{{ attr.type }}"
+  }
+  {% endfor %}
+  {% elif table.get('AttributeDefinitions') %}
+  {% for attr in table.AttributeDefinitions %}
+  attribute {
+    name = "{{ attr.AttributeName }}"
+    type = "{{ attr.AttributeType }}"
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if table.get('ttl') %}
+  ttl {
+    attribute_name = "{{ table.ttl.attribute_name }}"
+    enabled        = {{ table.ttl.enabled | lower }}
+  }
+  {% elif table.get('TimeToLiveDescription', {}).get('AttributeName') %}
+  ttl {
+    attribute_name = "{{ table.TimeToLiveDescription.AttributeName }}"
+    enabled        = {{ table.TimeToLiveDescription.get('Status', 'DISABLED') == 'ENABLED' | lower }}
+  }
+  {% endif %}
+
+  {% if table.get('global_secondary_indexes') or table.get('GlobalSecondaryIndexes') %}
+  {% for gsi in table.get('global_secondary_indexes', table.get('GlobalSecondaryIndexes', [])) %}
+  global_secondary_index {
+    name               = "{{ gsi.get('name', gsi.get('IndexName')) }}"
+    hash_key           = "{{ gsi.get('hash_key', gsi.get('KeySchema', [{}])[0].get('AttributeName', '')) }}"
+    {% if gsi.get('range_key') or (gsi.get('KeySchema', [])|length > 1) %}
+    range_key          = "{{ gsi.get('range_key', gsi.get('KeySchema', [{}])[1].get('AttributeName', '')) }}"
+    {% endif %}
+    {% if gsi.get('write_capacity') or gsi.get('ProvisionedThroughput') %}
+    write_capacity     = {{ gsi.get('write_capacity', gsi.get('ProvisionedThroughput', {}).get('WriteCapacityUnits', 5)) }}
+    read_capacity      = {{ gsi.get('read_capacity', gsi.get('ProvisionedThroughput', {}).get('ReadCapacityUnits', 5)) }}
+    {% endif %}
+    projection_type    = "{{ gsi.get('projection_type', gsi.get('Projection', {}).get('ProjectionType', 'ALL')) }}"
+    {% if gsi.get('non_key_attributes') or gsi.get('Projection', {}).get('NonKeyAttributes') %}
+    non_key_attributes = {{ (gsi.get('non_key_attributes', gsi.get('Projection', {}).get('NonKeyAttributes', []))) | tojson }}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if table.get('local_secondary_indexes') or table.get('LocalSecondaryIndexes') %}
+  {% for lsi in table.get('local_secondary_indexes', table.get('LocalSecondaryIndexes', [])) %}
+  local_secondary_index {
+    name               = "{{ lsi.get('name', lsi.get('IndexName')) }}"
+    range_key          = "{{ lsi.get('range_key', lsi.get('KeySchema', [{}])[-1].get('AttributeName', '')) }}"
+    projection_type    = "{{ lsi.get('projection_type', lsi.get('Projection', {}).get('ProjectionType', 'ALL')) }}"
+    {% if lsi.get('non_key_attributes') or lsi.get('Projection', {}).get('NonKeyAttributes') %}
+    non_key_attributes = {{ (lsi.get('non_key_attributes', lsi.get('Projection', {}).get('NonKeyAttributes', []))) | tojson }}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if table.get('stream_enabled') is defined or table.get('StreamSpecification') %}
+  stream_enabled   = {{ table.get('stream_enabled', table.get('StreamSpecification', {}).get('StreamEnabled', false)) | lower }}
+  {% if table.get('stream_view_type') or table.get('StreamSpecification', {}).get('StreamViewType') %}
+  stream_view_type = "{{ table.get('stream_view_type', table.get('StreamSpecification', {}).get('StreamViewType')) }}"
+  {% endif %}
+  {% endif %}
+
+  {% if table.get('server_side_encryption') or table.get('SSEDescription') %}
+  server_side_encryption {
+    enabled     = {{ table.get('server_side_encryption', {}).get('enabled', table.get('SSEDescription', {}).get('Status', 'DISABLED') == 'ENABLED') | lower }}
+    {% if table.get('server_side_encryption', {}).get('kms_key_arn') or table.get('SSEDescription', {}).get('KMSMasterKeyArn') %}
+    kms_key_arn = "{{ table.get('server_side_encryption', {}).get('kms_key_arn', table.get('SSEDescription', {}).get('KMSMasterKeyArn')) }}"
+    {% endif %}
+  }
+  {% endif %}
+
+  {% if table.get('replica') %}
+  {% for replica in table.replica %}
+  replica {
+    region_name = "{{ replica.region_name }}"
+    {% if replica.get('kms_key_arn') %}
+    kms_key_arn = "{{ replica.kms_key_arn }}"
+    {% endif %}
+    {% if replica.get('propagate_tags') is defined %}
+    propagate_tags = {{ replica.propagate_tags | lower }}
+    {% endif %}
+    {% if replica.get('point_in_time_recovery') is defined %}
+    point_in_time_recovery = {{ replica.point_in_time_recovery | lower }}
+    {% endif %}
+  }
+  {% endfor %}
+  {% endif %}
+
+  {% if table.get('restore_source_name') %}
+  restore_source_name = "{{ table.restore_source_name }}"
+  {% endif %}
+
+  {% if table.get('restore_date_time') %}
+  restore_date_time = "{{ table.restore_date_time }}"
+  {% endif %}
+
+  {% if table.get('restore_to_latest_time') is defined %}
+  restore_to_latest_time = {{ table.restore_to_latest_time | lower }}
+  {% endif %}
+
+  {% if table.get('point_in_time_recovery') or table.get('ContinuousBackupsDescription') %}
+  point_in_time_recovery {
+    enabled = {{ table.get('point_in_time_recovery', {}).get('enabled', table.get('ContinuousBackupsDescription', {}).get('PointInTimeRecoveryDescription', {}).get('PointInTimeRecoveryStatus', 'DISABLED') == 'ENABLED') | lower }}
+  }
+  {% endif %}
+
+  {% if table.get('table_class') or table.get('TableClassSummary', {}).get('TableClass') %}
+  table_class = "{{ table.get('table_class', table.get('TableClassSummary', {}).get('TableClass')) }}"
+  {% endif %}
+
+  {% if table.get('deletion_protection_enabled') is defined %}
+  deletion_protection_enabled = {{ table.deletion_protection_enabled | lower }}
+  {% endif %}
+
+  {{ render_common_tags(table, indent=2) }}
+
+  {% if table.get('lifecycle_prevent_destroy', true) %}
+  lifecycle {
+    prevent_destroy = true
+  }
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

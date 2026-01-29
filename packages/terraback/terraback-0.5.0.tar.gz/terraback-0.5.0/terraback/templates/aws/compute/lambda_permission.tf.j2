@@ -1,0 +1,22 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for permission in resources %}
+{{ resource_spacer() }}
+resource "aws_lambda_permission" "{{ permission.name_sanitized }}" {
+  statement_id  = "{{ permission.statement_id }}"
+  action        = "lambda:InvokeFunction"
+  function_name = "{{ permission.function_name }}"
+  principal     = "apigateway.amazonaws.com"
+  {% if permission.qualifier %}
+  qualifier     = "{{ permission.qualifier }}"
+  {% endif %}
+  {% if permission.source_arn %}
+  source_arn    = "{{ permission.source_arn }}"
+  {% endif %}
+  {% if permission.source_account %}
+  source_account = "{{ permission.source_account }}"
+  {% endif %}
+}
+
+{% endfor %}
+{% endblock %}

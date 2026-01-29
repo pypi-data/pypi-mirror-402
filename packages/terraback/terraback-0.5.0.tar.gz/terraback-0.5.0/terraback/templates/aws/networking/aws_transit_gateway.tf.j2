@@ -1,0 +1,226 @@
+{% extends "aws/base_resource.tf.j2" %}
+{% block resources %}
+{% for tgw in resources %}
+{{ resource_spacer() }}
+resource "aws_ec2_transit_gateway" "{{ tgw.name_sanitized }}" {
+  {% if tgw.get('description') %}
+  description = "{{ tgw.description }}"
+  {% endif %}
+
+  {% if tgw.get('amazon_side_asn') %}
+  amazon_side_asn = {{ tgw.amazon_side_asn }}
+  {% elif tgw.get('amazonSideAsn') %}
+  amazon_side_asn = {{ tgw.amazonSideAsn }}
+  {% endif %}
+
+  {% if tgw.get('default_route_table_association') is defined %}
+  default_route_table_association = "{{ 'enable' if tgw.default_route_table_association else 'disable' }}"
+  {% elif tgw.get('defaultRouteTableAssociation') %}
+  default_route_table_association = "{{ tgw.defaultRouteTableAssociation }}"
+  {% endif %}
+
+  {% if tgw.get('default_route_table_propagation') is defined %}
+  default_route_table_propagation = "{{ 'enable' if tgw.default_route_table_propagation else 'disable' }}"
+  {% elif tgw.get('defaultRouteTablePropagation') %}
+  default_route_table_propagation = "{{ tgw.defaultRouteTablePropagation }}"
+  {% endif %}
+
+  {% if tgw.get('dns_support') is defined %}
+  dns_support = "{{ 'enable' if tgw.dns_support else 'disable' }}"
+  {% elif tgw.get('dnsSupport') %}
+  dns_support = "{{ tgw.dnsSupport }}"
+  {% endif %}
+
+  {% if tgw.get('vpn_ecmp_support') is defined %}
+  vpn_ecmp_support = "{{ 'enable' if tgw.vpn_ecmp_support else 'disable' }}"
+  {% elif tgw.get('vpnEcmpSupport') %}
+  vpn_ecmp_support = "{{ tgw.vpnEcmpSupport }}"
+  {% endif %}
+
+  {% if tgw.get('multicast_support') is defined %}
+  multicast_support = "{{ 'enable' if tgw.multicast_support else 'disable' }}"
+  {% elif tgw.get('multicastSupport') %}
+  multicast_support = "{{ tgw.multicastSupport }}"
+  {% endif %}
+
+  {% if tgw.get('transit_gateway_cidr_blocks') %}
+  transit_gateway_cidr_blocks = {{ tgw.transit_gateway_cidr_blocks | tojson }}
+  {% elif tgw.get('transitGatewayCidrBlocks') %}
+  transit_gateway_cidr_blocks = {{ tgw.transitGatewayCidrBlocks | tojson }}
+  {% endif %}
+
+  {{ render_common_tags(tgw, indent=2) }}
+}
+
+{% if tgw.get('vpc_attachments') %}
+{% for attachment in tgw.vpc_attachments %}
+{{ resource_spacer() }}
+resource "aws_ec2_transit_gateway_vpc_attachment" "{{ tgw.name_sanitized }}_{{ attachment.name_sanitized }}" {
+  subnet_ids         = {{ attachment.subnet_ids | tojson }}
+  transit_gateway_id = aws_ec2_transit_gateway.{{ tgw.name_sanitized }}.id
+  vpc_id             = "{{ attachment.vpc_id }}"
+
+  {% if attachment.get('appliance_mode_support') is defined %}
+  appliance_mode_support = "{{ 'enable' if attachment.appliance_mode_support else 'disable' }}"
+  {% endif %}
+
+  {% if attachment.get('dns_support') is defined %}
+  dns_support = "{{ 'enable' if attachment.dns_support else 'disable' }}"
+  {% endif %}
+
+  {% if attachment.get('ipv6_support') is defined %}
+  ipv6_support = "{{ 'enable' if attachment.ipv6_support else 'disable' }}"
+  {% endif %}
+
+  {% if attachment.get('transit_gateway_default_route_table_association') is defined %}
+  transit_gateway_default_route_table_association = {{ attachment.transit_gateway_default_route_table_association | lower }}
+  {% endif %}
+
+  {% if attachment.get('transit_gateway_default_route_table_propagation') is defined %}
+  transit_gateway_default_route_table_propagation = {{ attachment.transit_gateway_default_route_table_propagation | lower }}
+  {% endif %}
+
+  {{ render_common_tags(attachment, indent=2) }}
+}
+
+{% endfor %}
+{% endif %}
+
+{% if tgw.get('route_tables') %}
+{% for route_table in tgw.route_tables %}
+{{ resource_spacer() }}
+resource "aws_ec2_transit_gateway_route_table" "{{ tgw.name_sanitized }}_{{ route_table.name_sanitized }}" {
+  transit_gateway_id = aws_ec2_transit_gateway.{{ tgw.name_sanitized }}.id
+
+  {{ render_common_tags(route_table, indent=2) }}
+}
+
+{% if route_table.get('routes') %}
+{% for route in route_table.routes %}
+{{ resource_spacer() }}
+resource "aws_ec2_transit_gateway_route" "{{ tgw.name_sanitized }}_{{ route_table.name_sanitized }}_{{ loop.index }}" {
+  destination_cidr_block         = "{{ route.destination_cidr_block }}"
+  transit_gateway_attachment_id  = "{{ route.transit_gateway_attachment_id }}"
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.{{ tgw.name_sanitized }}_{{ route_table.name_sanitized }}.id
+  
+  {% if route.get('blackhole') is defined %}
+  blackhole = {{ route.blackhole | lower }}
+  {% endif %}
+}
+
+{% endfor %}
+{% endif %}
+
+{% if route_table.get('associations') %}
+{% for association in route_table.associations %}
+{{ resource_spacer() }}
+resource "aws_ec2_transit_gateway_route_table_association" "{{ tgw.name_sanitized }}_{{ route_table.name_sanitized }}_{{ association.name_sanitized }}" {
+  transit_gateway_attachment_id  = "{{ association.transit_gateway_attachment_id }}"
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.{{ tgw.name_sanitized }}_{{ route_table.name_sanitized }}.id
+}
+
+{% endfor %}
+{% endif %}
+
+{% if route_table.get('propagations') %}
+{% for propagation in route_table.propagations %}
+{{ resource_spacer() }}
+resource "aws_ec2_transit_gateway_route_table_propagation" "{{ tgw.name_sanitized }}_{{ route_table.name_sanitized }}_{{ propagation.name_sanitized }}" {
+  transit_gateway_attachment_id  = "{{ propagation.transit_gateway_attachment_id }}"
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.{{ tgw.name_sanitized }}_{{ route_table.name_sanitized }}.id
+}
+
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+{% endif %}
+
+{% if tgw.get('peering_attachments') %}
+{% for peering in tgw.peering_attachments %}
+{{ resource_spacer() }}
+resource "aws_ec2_transit_gateway_peering_attachment" "{{ tgw.name_sanitized }}_{{ peering.name_sanitized }}" {
+  peer_account_id         = "{{ peering.peer_account_id | default(data.aws_caller_identity.current.account_id) }}"
+  peer_region             = "{{ peering.peer_region }}"
+  peer_transit_gateway_id = "{{ peering.peer_transit_gateway_id }}"
+  transit_gateway_id      = aws_ec2_transit_gateway.{{ tgw.name_sanitized }}.id
+
+  {{ render_common_tags(peering, indent=2) }}
+}
+
+{% if peering.get('create_accepter', false) %}
+resource "aws_ec2_transit_gateway_peering_attachment_accepter" "{{ tgw.name_sanitized }}_{{ peering.name_sanitized }}" {
+  transit_gateway_attachment_id = aws_ec2_transit_gateway_peering_attachment.{{ tgw.name_sanitized }}_{{ peering.name_sanitized }}.id
+
+  {{ render_common_tags(peering, indent=2) }}
+}
+{% endif %}
+
+{% endfor %}
+{% endif %}
+
+{% if tgw.get('connect_attachments') %}
+{% for connect in tgw.connect_attachments %}
+{{ resource_spacer() }}
+resource "aws_ec2_transit_gateway_connect" "{{ tgw.name_sanitized }}_{{ connect.name_sanitized }}" {
+  transport_attachment_id = "{{ connect.transport_attachment_id }}"
+  transit_gateway_id      = aws_ec2_transit_gateway.{{ tgw.name_sanitized }}.id
+
+  {% if connect.get('protocol') %}
+  protocol = "{{ connect.protocol }}"
+  {% endif %}
+
+  {{ render_common_tags(connect, indent=2) }}
+}
+
+{% if connect.get('peers') %}
+{% for peer in connect.peers %}
+{{ resource_spacer() }}
+resource "aws_ec2_transit_gateway_connect_peer" "{{ tgw.name_sanitized }}_{{ connect.name_sanitized }}_{{ peer.name_sanitized }}" {
+  peer_address                  = "{{ peer.peer_address }}"
+  inside_cidr_blocks           = {{ peer.inside_cidr_blocks | tojson }}
+  transit_gateway_connect_attachment_id = aws_ec2_transit_gateway_connect.{{ tgw.name_sanitized }}_{{ connect.name_sanitized }}.id
+
+  {% if peer.get('bgp_asn') %}
+  bgp_asn = "{{ peer.bgp_asn }}"
+  {% endif %}
+
+  {% if peer.get('transit_gateway_address') %}
+  transit_gateway_address = "{{ peer.transit_gateway_address }}"
+  {% endif %}
+
+  {{ render_common_tags(peer, indent=2) }}
+}
+
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+{% endif %}
+
+{% if tgw.get('multicast_domains') %}
+{% for domain in tgw.multicast_domains %}
+{{ resource_spacer() }}
+resource "aws_ec2_transit_gateway_multicast_domain" "{{ tgw.name_sanitized }}_{{ domain.name_sanitized }}" {
+  transit_gateway_id = aws_ec2_transit_gateway.{{ tgw.name_sanitized }}.id
+
+  {% if domain.get('static_sources_support') is defined %}
+  static_sources_support = "{{ 'enable' if domain.static_sources_support else 'disable' }}"
+  {% endif %}
+
+  {% if domain.get('igmpv2_support') is defined %}
+  igmpv2_support = "{{ 'enable' if domain.igmpv2_support else 'disable' }}"
+  {% endif %}
+
+  {% if domain.get('auto_accept_shared_associations') is defined %}
+  auto_accept_shared_associations = "{{ 'enable' if domain.auto_accept_shared_associations else 'disable' }}"
+  {% endif %}
+
+  {{ render_common_tags(domain, indent=2) }}
+}
+
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+{% endblock %}
