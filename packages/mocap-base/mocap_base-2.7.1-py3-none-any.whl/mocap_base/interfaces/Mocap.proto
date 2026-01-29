@@ -1,0 +1,267 @@
+syntax = "proto3";
+package Mocap;
+
+// services provided by the mocap machine for mocap session
+service DistMcMocapSession {
+    rpc RegisterCameraMachineService(Address) returns (ResponseStatus){};
+
+    rpc OpenObservationStream(stream ObservationStream) returns (Empty){};
+
+    rpc OpenTrackingStream(Empty) returns (stream TrackingStream) {};
+
+    rpc UpdateCameraDevices(UpdateCameraDevicesRequest) returns (UpdateCameraDevicesResponse) {};
+
+    //called by ObsAgent to retrieve calibration for extrinsic calib or mocap session.
+    rpc GetCameraCalibration(CameraCalibrationRequest) returns (CameraCalirationResponse) {};
+
+    rpc GetActorModel(ActorModelRequest) returns (ActorModelResponse) {};
+}
+
+
+service DistCam {
+    rpc Check(HealthCheckRequest) returns (HealthCheckResponse);
+
+    rpc RequestCameraFps(Empty) returns (Empty) {};
+    rpc RequestCameraLightness(Empty) returns (Empty) {};
+
+    rpc StartFrameStream(FrameStreamRequest) returns (FrameStreamResponse) {};
+    rpc StopFrameStream(FrameStreamRequest) returns (FrameStreamResponse) {};
+
+    rpc StartVideoRecord(StartVideoRecordRequest) returns(Empty) {};
+    rpc StopVideoRecord(Empty) returns(Empty) {};
+
+    rpc StartPreViewFrameImage(PreViewFrameImageRequest) returns (Empty){};
+    rpc StopPreviewFrameImage(PreViewFrameImageRequest) returns (Empty){};
+
+    rpc StartSess(SessRequest) returns (SessResponse){};
+
+    rpc UpdateIntrinsicCalibSettings(IntrinsicCalibSettings) returns (Empty) {};
+
+    rpc SetIntrinsicDetect(IntrinsicDetectRequest) returns (Empty){};
+
+    rpc UpdateExtrinsicCalibSettings(ExtrinsicCalibSettings) returns (Empty) {};
+
+    rpc UpdateMocapSettings(MocapSettings) returns (Empty) {};
+
+    rpc RemoveActorTracks(RemoveActorTracksRequest) returns (Empty) {};
+}
+
+
+message Empty {}
+
+message HealthCheckRequest {
+  string service = 1;
+}
+
+message HealthCheckResponse {
+  enum ServingStatus {
+    UNKNOWN = 0;
+    SERVING = 1;
+    NOT_SERVING = 2;
+    SERVICE_UNKNOWN = 3;
+  }
+  ServingStatus status = 1;
+}
+
+enum SessTypes {
+  BASIC = 0;
+  CALIB_INTRINSIC = 1;
+  CALIB_EXTRINSIC = 2;
+  MOCAP = 3;
+  NONE = 4;
+}
+
+message Address {
+    string ip = 1;
+    int32 port  = 2;
+}
+
+message ActorJoint {
+    int32 parentIdx = 1;
+    int32 jointType = 2;
+    //relative translation to parent.
+    float tx = 3;
+    float ty = 4;
+    float tz = 5;
+    //relative translation to parent.
+    float qx = 6;
+    float qy = 7;
+    float qz = 8;
+    float qw = 9;
+}
+
+message ActorModel{
+    int32 actorModelID = 1;
+    repeated ActorJoint joints = 2;
+    map<string, float> extraBlens = 3;
+}
+
+message CameraDevice {
+    uint32 cameraID=1;  //unique ID of camera.
+    string model=2;     //Flir, Optrack, etc
+    uint32 width=3;
+    uint32 height=4;
+    float  fps=5;         //configured FPS.
+    uint32 status = 6;
+}
+
+
+message CameraCalibration {
+    uint32 cameraID=1;
+    string cameraType=2;
+    uint32 width=3;
+    uint32 height=4;
+    repeated float dists=5;     //5x1: distortion coefficients
+    repeated float intrinsic=6; //3x3: K matrix
+    repeated float extrinsic=7; //3x4: Rt matrix.
+}
+
+message Pose2D {
+    uint32 formatID=1;            //pose keypoint format ID, COCO29, Chessboard14x15
+    repeated float keypoints=2;   //[(x,y), (x,y), ...]
+    repeated float scores=3;      //[score, score]
+    repeated float spineHeatmap=4;
+    repeated float cropTransform=5; //center, scale, rot. dim = 5
+}
+
+message Object2D {
+    uint32 classID=1; //human, ball, chessboard
+    float  score=2;
+    repeated float tlbr=3; //top, left, bottom, right
+    Pose2D pose=4;
+    optional int32 trackID=5; //if this object is a new observation from an exisiting track.
+    optional uint64 timestamp=6;
+    optional int32  labelPredID=7; //predicted actor ID
+    optional float  labelPredScore=8; //predicted actor score
+}
+
+message CameraImage {
+    int32 rows=1;
+    int32 cols=2;
+    int32 dataFormatID=3; //opencv format type: CV_8UC1, CV_8UC3, etc.
+    bytes imageData =4;
+}
+
+message SemanticFrame {
+    uint64    cameraServerID=1;
+    uint64    cameraID=2;
+    int64     timestamp=3;  //camera timestamp
+    float     fps=4;
+    float     detectionFps=5;
+    uint32    frameidx=6; //mainly for debugging
+    uint32    width=7;
+    uint32    height=8;
+    SessTypes session=9; //camera client session that generate this frame
+    repeated Object2D objects=10;
+    optional CameraImage image=11; //normally for preview
+    optional uint64 debugLatencyTimeMs=12; //for debugging latency
+}
+
+message TrackState {
+    int32 trackID=1;
+    int32 actorModelID=2;
+    int32 priorActorModelID=3;
+    int32 frameIndex=4;
+    int64 timestamp=5;  //timestamp of the state
+    bool  isEndTag=6;
+    repeated float jointLocations=7;  //Nx[x,y,z]
+    repeated float jointVelocities=8; //Nx[x,y,z]
+
+    repeated Object2D camObs=9;
+    repeated int64    camIDs=10;
+}
+
+message FrameImagePreviewRequest{
+    float scale=1;
+    int64 cameraID=2;
+}
+
+message ObservationStream{
+    repeated SemanticFrame frames=1;
+    uint64 dbg_clock=2;
+}
+
+message TrackingStream{
+    repeated TrackState states=1;
+}
+
+message TrackFrameRecords{
+   int32 trackID=1;
+   repeated TrackState frames=2; 
+   repeated CameraCalibration calibs=3;
+   ActorModel trackActorModel=4;
+}
+
+message ActorModelRequest{
+    int32 actorModelID = 1;
+}
+
+message ActorModelResponse{
+    ActorModel model = 1;
+}
+
+message CameraCalibrationRequest {
+    repeated int64 cameraIDs=1;
+}
+
+message CameraCalirationResponse {
+    repeated CameraCalibration calibs=1;
+}
+
+message FrameStreamRequest{}
+message FrameStreamResponse{}
+
+message IntrinsicDetectRequest{
+    repeated int64 cameraIDs=1;
+}
+
+message MocapRequest{}
+message MocapResponse{}
+
+message ResponseStatus{
+    string msg=1;
+}
+
+message UpdateCameraDevicesRequest{
+    repeated CameraDevice devices = 1;
+}
+
+message UpdateCameraDevicesResponse{}
+
+message SessRequest{
+    SessTypes stype = 1;
+}
+
+message SessResponse{}
+
+
+message PreViewFrameImageRequest{
+    uint64 cameraid = 1;
+    bool   status = 2;   //on or off
+    float  scale  = 3; //how much to down-scale
+    uint32 format = 4; //placeholder for furture idea to reduce image size
+}
+
+message  MocapSettings{
+    optional uint32 maxTrackingActors = 2;
+}
+
+message IntrinsicCalibSettings {
+    uint32 chessboard_width=1;
+    uint32 chessboard_height=2;
+    uint32 detect_interval_ms=3;
+    repeated uint64 camera_ids=4;
+}
+
+message ExtrinsicCalibSettings {
+    optional string detect_mode=1; //HUMAN, CHARUCO
+}
+
+
+message RemoveActorTracksRequest{
+    repeated uint64 track_ids=1;
+}
+
+message StartVideoRecordRequest{
+    string recordDir = 1;
+}
