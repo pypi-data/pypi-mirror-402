@@ -1,0 +1,107 @@
+# dotfiles-cli
+
+CLI tool to sync and manage dotfiles across machines. Works with [dotbot](https://github.com/anishathalye/dotbot).
+
+## Installation
+
+```bash
+# with uv (recommended)
+uvx dotfiles-cli
+
+# or install globally
+uv tool install dotfiles-cli
+
+# or with pip
+pip install dotfiles-cli
+```
+
+## Usage
+
+```bash
+# first time setup - clone and install dotfiles
+dotfiles install
+
+# sync: pull latest and run dotbot
+dotfiles sync
+
+# check status
+dotfiles status
+
+# update submodules only
+dotfiles update
+dotfiles update --remote  # fetch latest from remotes
+
+# push changes (handles submodules)
+dotfiles push                    # push main repo
+dotfiles push kickstart.nvim     # push submodule first
+
+# open in editor
+dotfiles edit
+```
+
+### Notes Sync
+
+Sync notes/docs across machines with GitHub as source of truth:
+
+```bash
+# clone notes repo (first time)
+dotfiles notes clone
+
+# check status
+dotfiles notes status
+
+# two-way sync (recommended)
+dotfiles notes sync
+
+# pull only (with optional hard reset)
+dotfiles notes pull
+dotfiles notes pull --hard  # discard local, reset to GitHub
+
+# push local changes
+dotfiles notes push -a -m "update notes"
+```
+
+## Configuration
+
+By default, dotfiles-cli expects:
+- dotfiles at `~/repos/.dotfiles`
+- notes at `~/repos/docs`
+
+Override with environment variables:
+
+```bash
+export DOTFILES_DIR=~/my-dotfiles
+export NOTES_DIR=~/my-notes
+```
+
+## Commands
+
+### Dotfiles
+
+| Command | Description |
+|---------|-------------|
+| `install` | Clone and setup dotfiles from scratch |
+| `sync` | Pull latest changes and run dotbot |
+| `status` | Show git status and submodule versions |
+| `update` | Update submodules |
+| `push` | Commit and push changes |
+| `edit` | Open dotfiles in $EDITOR |
+
+### Notes
+
+| Command | Description |
+|---------|-------------|
+| `notes clone` | Clone notes repository |
+| `notes status` | Show notes repo status |
+| `notes sync` | Two-way sync (stash, pull, push) |
+| `notes pull` | Pull from GitHub (--hard to reset) |
+| `notes push` | Commit and push to GitHub |
+
+## Platform Support
+
+- **Windows**: Uses `install-windows.conf.yaml`
+- **Linux/Mac**: Uses `install.conf.yaml`
+
+## License
+
+MIT
