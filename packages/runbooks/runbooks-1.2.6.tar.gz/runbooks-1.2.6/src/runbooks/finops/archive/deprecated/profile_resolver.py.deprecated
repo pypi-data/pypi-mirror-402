@@ -1,0 +1,233 @@
+#!/usr/bin/env python3
+"""
+AWS Profile Resolver with Hierarchical Priority - DEPRECATED
+
+⚠️ DEPRECATION NOTICE (Nov 23, 2025):
+This file has been DEPRECATED in favor of profile_resolver_v2.py which provides:
+- Intelligent Multi-Account Detection (Organizations API capability testing)
+- Graceful degradation (multi-account → single-account fallback)
+- Comprehensive validation with actionable error messages
+- Professional Rich CLI formatting
+
+Migration Guide:
+- Use: from runbooks.finops.profile_resolver_v2 import ProfileResolverV2
+- Old: resolve_aws_profile(explicit_profile='foo')
+- New: resolver = ProfileResolverV2(); context = resolver.resolve_mode(cli_flags={'profile': 'foo'}, env_vars=dict(os.environ))
+
+This file is preserved for historical reference only.
+DO NOT USE IN NEW CODE - Import profile_resolver_v2 instead.
+
+Original Implementation (217 lines):
+This module implemented a 3-tier hierarchy for AWS profile resolution:
+1. Explicit parameter (highest priority)
+2. Environment variable (AWS_PROFILE)
+3. ~/.aws/config default profile (lowest priority)
+
+Manager Requirement #1: AWS_PROFILE may come from ~/.aws/config < os.getenv < specific AWS_PROFILE
+"""
+
+import os
+import configparser
+from pathlib import Path
+from typing import Optional, List
+import boto3
+from runbooks.common.rich_utils import print_info, print_warning, print_error
+
+
+def get_aws_profiles() -> List[str]:
+    """
+    Parse ~/.aws/config and return list of available AWS profiles.
+
+    Returns:
+        List of available profile names
+    """
+    profiles = []
+    config_path = Path.home() / '.aws' / 'config'
+
+    if not config_path.exists():
+        print_warning(f"AWS config file not found at {config_path}")
+        return ['default']
+
+    try:
+        config = configparser.ConfigParser()
+        config.read(str(config_path))
+
+        # Check for default profile
+        if 'default' in config:
+            profiles.append('default')
+
+        # Get all other profiles (format: [profile name])
+        for section in config.sections():
+            if section.startswith('profile '):
+                profile_name = section.replace('profile ', '')
+                profiles.append(profile_name)
+
+        # If no profiles found, add default
+        if not profiles:
+            profiles.append('default')
+
+    except Exception as e:
+        print_error(f"Error parsing AWS config: {e}")
+        profiles = ['default']
+
+    return profiles
+
+
+def get_profile_source(profile: str) -> str:
+    """
+    Determine the source of the resolved AWS profile.
+
+    Args:
+        profile: The resolved profile name
+
+    Returns:
+        Human-readable source description
+    """
+    # Check if it matches explicit parameter (would need to be passed in)
+    env_profile = os.getenv('AWS_PROFILE')
+
+    if env_profile and env_profile == profile:
+        return "Environment Variable (AWS_PROFILE)"
+
+    config_profiles = get_aws_profiles()
+    if profile in config_profiles:
+        return "AWS Config File (~/.aws/config)"
+
+    return "Default Fallback"
+
+
+def resolve_aws_profile(explicit_profile: Optional[str] = None) -> str:
+    """
+    Hierarchical AWS profile resolution following enterprise standards.
+
+    Manager Requirement #1 Implementation:
+    Priority order (highest to lowest):
+    1. Explicit parameter - User-specified profile name
+    2. Environment variable - os.getenv('AWS_PROFILE')
+    3. Config file - ~/.aws/config default profile
+
+    Args:
+        explicit_profile: Explicitly specified profile name (highest priority)
+
+    Returns:
+        Resolved AWS profile name
+
+    Example:
+        >>> # Priority 1: Explicit parameter
+        >>> profile = resolve_aws_profile('custom-profile')
+        >>> print(profile)
+        'custom-profile'
+
+        >>> # Priority 2: Environment variable
+        >>> os.environ['AWS_PROFILE'] = 'env-profile'
+        >>> profile = resolve_aws_profile()
+        >>> print(profile)
+        'env-profile'
+
+        >>> # Priority 3: Config file default
+        >>> profile = resolve_aws_profile()
+        >>> print(profile)
+        'default'
+    """
+    # Priority 1: Explicit parameter (highest priority)
+    if explicit_profile:
+        print_info(f"Using explicit profile: {explicit_profile}")
+        return explicit_profile
+
+    # Priority 2: Environment variable
+    env_profile = os.getenv('AWS_PROFILE')
+    if env_profile:
+        print_info(f"Using environment profile: {env_profile}")
+        return env_profile
+
+    # Priority 3: ~/.aws/config default
+    config_path = Path.home() / '.aws' / 'config'
+    if config_path.exists():
+        try:
+            config = configparser.ConfigParser()
+            config.read(str(config_path))
+
+            # Check for [default] profile
+            if 'default' in config:
+                print_info("Using default profile from ~/.aws/config")
+                return 'default'
+
+            # Get first available profile as fallback
+            profiles = [s.replace('profile ', '') for s in config.sections() if s.startswith('profile ')]
+            if profiles:
+                print_info(f"Using first available profile from config: {profiles[0]}")
+                return profiles[0]
+
+        except Exception as e:
+            print_warning(f"Error reading AWS config: {e}")
+
+    # Ultimate fallback
+    print_info("Using default profile (fallback)")
+    return 'default'
+
+
+def validate_profile_exists(profile: str) -> bool:
+    """
+    Validate that the AWS profile exists and is accessible.
+
+    Args:
+        profile: AWS profile name to validate
+
+    Returns:
+        True if profile is valid and accessible, False otherwise
+    """
+    try:
+        session = boto3.Session(profile_name=profile)
+        # Try to get caller identity to validate credentials
+        sts = session.client('sts')
+        identity = sts.get_caller_identity()
+        print_info(f"Profile '{profile}' validated - Account: {identity['Account']}")
+        return True
+    except Exception as e:
+        print_error(f"Profile '{profile}' validation failed: {e}")
+        return False
+
+
+# For backward compatibility
+def get_current_account_id(profile: Optional[str] = None) -> str:
+    """
+    Get the AWS account ID for the specified or resolved profile.
+
+    Args:
+        profile: AWS profile name (optional)
+
+    Returns:
+        AWS account ID string
+
+    Raises:
+        Exception if unable to get account ID
+    """
+    profile = resolve_aws_profile(profile)
+
+    try:
+        session = boto3.Session(profile_name=profile)
+        sts = session.client('sts')
+        identity = sts.get_caller_identity()
+        return identity['Account']
+    except Exception as e:
+        print_error(f"Failed to get account ID for profile '{profile}': {e}")
+        raise
+
+
+if __name__ == "__main__":
+    # Test the profile resolution
+    print("\n=== AWS Profile Resolution Test ===\n")
+
+    # Test 1: Available profiles
+    profiles = get_aws_profiles()
+    print(f"Available profiles: {profiles}")
+
+    # Test 2: Resolution hierarchy
+    resolved = resolve_aws_profile()
+    source = get_profile_source(resolved)
+    print(f"Resolved profile: {resolved} (Source: {source})")
+
+    # Test 3: Validation
+    if validate_profile_exists(resolved):
+        account_id = get_current_account_id(resolved)
+        print(f"Account ID: {account_id}")
