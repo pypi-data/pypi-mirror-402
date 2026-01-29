@@ -1,0 +1,109 @@
+
+# Topsis-Tanya-102303077
+
+## Project Description
+
+**For:** Project-1 (UCS654 – Predictive Analytics)  
+**Submitted by:** Tanya Mediratta
+**Roll Number:** 102303077  
+
+**Topsis-Tanya-102303077** is a Python package designed to solve **Multiple Criteria Decision Making (MCDM)** problems using the **Technique for Order of Preference by Similarity to Ideal Solution (TOPSIS)** method.
+
+The package ranks multiple alternatives based on their relative distance from the ideal best and ideal worst solutions. It is implemented as a **command-line tool**, making it easy to use for real-world decision-making applications.
+
+---
+
+## Installation
+
+Install the package using `pip`:
+
+```bash
+pip install Topsis-Tanya-102303077
+```
+
+---
+
+## Usage
+
+Run the package from the command line by providing:
+
+- Input CSV file
+- Weights vector
+- Impacts vector
+- Output file name
+
+```bash
+topsis data.csv "1,1,1,2" "+,-,-,+" result.csv
+```
+
+If vectors contain spaces, they must be enclosed within double quotes (`" "`).
+
+---
+
+## Input Format
+
+- Input file must be in **CSV format**
+- First column contains **alternatives** (e.g., items, models, options)
+- Remaining columns contain **numeric criteria values**
+- Minimum of **three columns** required
+- No categorical values allowed in criteria columns
+
+---
+
+## Example
+
+### Sample Input File (`data.csv`)
+
+```csv
+Fund Name,P1,P2,P3,P4
+M1,0.67,0.45,6.5,42.6
+M2,0.60,0.36,3.6,53.3
+M3,0.82,0.67,3.8,63.1
+M4,0.60,0.36,3.5,69.2
+M5,0.76,0.58,4.8,43.0
+```
+
+### Command
+
+```bash
+topsis data.csv "1,1,1,2" "+,-,-,+" result.csv
+```
+
+---
+
+## Output
+
+The output CSV file contains:
+
+- Original input data
+- **TOPSIS Score** for each alternative
+- **Rank** based on TOPSIS score  
+  (Higher score indicates better rank)
+
+---
+
+## Features
+
+- Command-line based execution
+- Supports user-defined weights and impacts
+- Input validation and error handling
+- Ranks alternatives using TOPSIS method
+- Generates results in CSV format
+
+---
+
+## Notes
+
+- Number of weights must match number of criteria
+- Number of impacts must match number of criteria
+- Impacts must be either `+` or `-`
+- Input CSV must contain only numeric values (except first column)
+
+---
+
+## License
+
+[MIT License](https://opensource.org/licenses/MIT)
+```
+
+
