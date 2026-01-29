@@ -1,0 +1,423 @@
+Metadata-Version: 2.4
+Name: cph-classification
+Version: 0.1.0
+Summary: A generic, reusable PyTorch Lightning pipeline for classification tasks
+Author-email: chandra <chandra385123@gmail.com>
+License: MIT
+Project-URL: Homepage, https://github.com/imchandra11/cph-classification
+Project-URL: Documentation, https://github.com/imchandra11/cph-classification#readme
+Project-URL: Repository, https://github.com/imchandra11/cph-classification
+Project-URL: Issues, https://github.com/imchandra11/cph-classification/issues
+Keywords: classification,pytorch,lightning,machine-learning,deep-learning,tabular-data
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: lightning>=2.1.0
+Requires-Dist: torch>=2.0.0
+Requires-Dist: torchvision>=0.15.0
+Requires-Dist: Pillow>=9.0.0
+Requires-Dist: pandas>=2.0.0
+Requires-Dist: numpy>=1.24.0
+Requires-Dist: scikit-learn>=1.3.0
+Requires-Dist: joblib>=1.3.0
+Requires-Dist: onnx>=1.14.0
+Requires-Dist: onnxruntime<1.23.0,>=1.16.0
+Requires-Dist: onnxscript>=0.1.0
+Requires-Dist: torchmetrics>=1.0.0
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: jsonargparse[signatures]>=4.27.7
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: flake8>=6.0.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+Provides-Extra: jupyter
+Requires-Dist: jupyter>=1.0.0; extra == "jupyter"
+Requires-Dist: ipykernel>=6.25.0; extra == "jupyter"
+Provides-Extra: api
+Requires-Dist: fastapi>=0.104.0; extra == "api"
+Requires-Dist: uvicorn[standard]>=0.24.0; extra == "api"
+Requires-Dist: jinja2>=3.1.0; extra == "api"
+Requires-Dist: python-multipart>=0.0.6; extra == "api"
+Requires-Dist: pydantic>=2.0.0; extra == "api"
+Provides-Extra: all
+Requires-Dist: cph-classification[api,dev,jupyter]; extra == "all"
+Dynamic: license-file
+
+# cph-classification
+
+A generic, reusable PyTorch Lightning pipeline for training classification models on tabular data. This package provides a fully config-driven framework that can be used for any classification task by simply providing a YAML configuration file.
+
+## Features
+
+- 🚀 **Fully Config-Driven**: All settings (features, hyperparameters, paths) controlled via YAML files
+- 🔄 **Generic & Reusable**: Use the same codebase for any classification task (stress levels, sentiment, quality ratings, etc.)
+- 🤖 **Auto-Dimension Detection**: Automatically calculates input dimensions and number of classes from feature lists and target column
+- 📊 **Categorical Target Support**: Automatically handles both integer and categorical string targets (e.g., "good", "better", "best" or "yes", "no")
+- 🎯 **Production-Ready**: Exports models to ONNX format with preprocessors and label encoders for easy deployment
+- ⚡ **PyTorch Lightning**: Built on PyTorch Lightning for scalable, professional ML training
+- 📈 **Comprehensive Metrics**: Tracks Accuracy, F1-Score, Precision, and Recall (macro-averaged)
+
+## Installation
+
+Install from PyPI:
+
+```bash
+pip install cph-classification
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/imchandra11/cph-classification.git
+cd cph-classification
+pip install .
+```
+
+## Quick Start
+
+### 1. Install the Package
+
+```bash
+pip install cph-classification
+```
+
+### 2. Prepare Your Data
+
+Create a CSV file with your features and target column. For example, `data/myproject.csv`:
+
+```csv
+feature1,feature2,target
+value1,123.45,class_a
+value2,234.56,class_b
+...
+```
+
+### 3. Create Configuration File
+
+Create a YAML configuration file, e.g., `configs/myproject.yaml`:
+
+```yaml
+# My Classification Project Configuration
+seed_everything: true
+
+trainer:
+  callbacks:
+    - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        filename: "{epoch}-{val_loss:.2f}.best"
+        monitor: "val_loss"
+        mode: "min"
+        save_top_k: 1
+    - class_path: cph_classification.classification.callbacks.ONNXExportCallback
+      init_args:
+        output_dir: "models"
+        model_name: "my_model"
+        input_dim: null  # Auto-detected
+
+  logger:
+    class_path: lightning.pytorch.loggers.TensorBoardLogger
+    init_args:
+      save_dir: "lightning_logs"
+      name: "MyProjectTraining"
+
+  max_epochs: 30
+  accelerator: auto
+  devices: auto
+  precision: 16-mixed
+
+model:
+  class_path: cph_classification.classification.modelmodule.ModelModuleCLS
+  init_args:
+    lr: 0.0001
+    model:
+      class_path: cph_classification.classification.modelfactory.ClassificationModel
+      init_args:
+        input_dim: 0  # Auto-set from datamodule
+        num_classes: 0  # Auto-set from datamodule
+        hidden_layers: [128, 64, 32]
+        dropout_rates: [0.15, 0.1, 0.05]
+        activation: "relu"
+
+optimizer: 
+  class_path: torch.optim.Adam
+  init_args:
+    lr: 0.001
+    weight_decay: 0.00001
+
+data:
+  class_path: cph_classification.classification.datamodule.DataModuleCLS
+  init_args:
+    csv_path: "data/myproject.csv"
+    batch_size: 256
+    num_workers: 0
+    val_split: 0.2
+    random_seed: 42
+    categorical_cols:
+      - feature1
+    numeric_cols:
+      - feature2
+    target_col: "target"  # Can be integers or categorical strings
+    save_preprocessor: true
+    preprocessor_path: "models/preprocessor.joblib"
+
+fit:
+  ckpt_path: null   # Set to checkpoint path for resume training
+
+test:
+  ckpt_path: best   # Use "best" or "last" checkpoint
+```
+
+### 4. Run Training
+
+Train your model with a single command:
+
+```bash
+# Train and test (fit+test workflow)
+cph-classification --config configs/myproject.yaml
+
+# Or use standard Lightning CLI subcommands
+cph-classification fit --config configs/myproject.yaml
+cph-classification test --config configs/myproject.yaml
+```
+
+That's it! The model will be trained and saved to the path specified in your config file.
+
+## Configuration Guide
+
+### Data Configuration
+
+**Key Parameters:**
+- `csv_path`: Path to your CSV file
+- `batch_size`: Batch size for training (default: 256)
+- `val_split`: Validation split ratio (0.0 to 1.0, default: 0.2)
+- `categorical_cols`: List of categorical feature column names
+- `numeric_cols`: List of numeric feature column names
+- `target_col`: Name of the target column to predict (can be integers or strings)
+- `preprocessor_path`: Where to save/load the preprocessor
+
+**Preprocessing:**
+- Categorical columns: Automatically one-hot encoded (with `drop='first'`)
+- Numeric columns: Automatically standardized using StandardScaler
+- Target column: 
+  - If integers: Used as-is (converted to 0-indexed if needed)
+  - If strings: Automatically encoded to 0-indexed integers using LabelEncoder
+
+### Model Configuration
+
+**Key Parameters:**
+- `hidden_layers`: List of hidden layer sizes, e.g., `[128, 64, 32]`
+- `dropout_rates`: List of dropout rates matching hidden layers, e.g., `[0.15, 0.1, 0.05]`
+- `activation`: Activation function (`"relu"`, `"tanh"`, `"gelu"`, `"sigmoid"`, `"leaky_relu"`, `"elu"`)
+- `input_dim`: Automatically set from datamodule (set to `0` in config)
+- `num_classes`: Automatically set from datamodule (set to `0` in config)
+
+## Output Files
+
+After training, you'll find:
+
+1. **Models Directory** (`models/`):
+   - `my_model.onnx`: ONNX model for inference
+   - `preprocessor.joblib`: Fitted preprocessor for data transformation
+   - `label_encoder.joblib`: Label encoder (only if target was categorical strings)
+
+2. **Checkpoints** (`lightning_logs/MyProjectTraining/version_X/checkpoints/`):
+   - `epoch-X-val_loss=Y.best.ckpt`: Best model checkpoint (based on validation loss)
+   - `epoch-X.last.ckpt`: Last epoch checkpoint
+
+3. **Training Logs** (`lightning_logs/`):
+   - TensorBoard logs for visualization
+
+## Model Inference
+
+After training, use the exported ONNX model for predictions:
+
+```python
+import joblib
+import onnxruntime as ort
+import numpy as np
+import pandas as pd
+
+# Load preprocessor
+preprocessor = joblib.load("models/preprocessor.joblib")
+
+# Load label encoder (if target was categorical strings)
+label_encoder = joblib.load("models/label_encoder.joblib")  # Optional
+
+# Load ONNX model
+session = ort.InferenceSession("models/my_model.onnx")
+
+# Prepare input data
+input_data = pd.DataFrame({
+    'feature1': ['value1'],
+    'feature2': [123.45],
+})
+
+# Transform data
+feature_cols = ['feature1', 'feature2']
+transformed = preprocessor.transform(input_data[feature_cols])
+
+# Predict
+input_name = session.get_inputs()[0].name
+output = session.run(None, {input_name: transformed.astype(np.float32)})
+predicted_class_idx = np.argmax(output[0][0])
+
+# Decode back to original label (if label encoder exists)
+if label_encoder:
+    predicted_class = label_encoder.inverse_transform([predicted_class_idx])[0]
+    print(f"Predicted class: {predicted_class}")
+else:
+    print(f"Predicted class index: {predicted_class_idx}")
+```
+
+## Viewing Training Progress
+
+### TensorBoard
+
+```bash
+tensorboard --logdir lightning_logs
+```
+
+Then open `http://localhost:6006` in your browser.
+
+**Metrics Tracked:**
+- `train_loss`, `val_loss`, `test_loss`: CrossEntropyLoss
+- `train_acc`, `val_acc`, `test_acc`: Accuracy (macro-averaged)
+- `train_f1`, `val_f1`, `test_f1`: F1-Score (macro-averaged)
+- `train_precision`, `val_precision`, `test_precision`: Precision (macro-averaged)
+- `train_recall`, `val_recall`, `test_recall`: Recall (macro-averaged)
+
+## Examples
+
+### Example 1: Integer Target Labels
+
+If your target column contains integers (e.g., `1, 2, 3, 4, 5`):
+
+```yaml
+data:
+  init_args:
+    target_col: "stress_level"  # Contains: 1, 2, 3, 4, 5
+```
+
+The pipeline will automatically convert to 0-indexed labels if needed (`0, 1, 2, 3, 4`).
+
+### Example 2: Categorical String Targets
+
+If your target column contains categorical strings (e.g., `"low"`, `"medium"`, `"high"`):
+
+```yaml
+data:
+  init_args:
+    target_col: "quality"  # Contains: "low", "medium", "high"
+```
+
+The pipeline will automatically encode to integers (`0, 1, 2`) and save the label encoder for inference.
+
+### Example 3: Multiple Configuration Files
+
+You can use multiple config files for different environments:
+
+```bash
+# Main config + local overrides
+cph-classification --config configs/myproject.yaml --config configs/myproject.local.yaml
+```
+
+The local config will override values from the main config.
+
+## Advanced Usage
+
+### Resume Training
+
+```bash
+cph-classification fit \
+  --config configs/myproject.yaml \
+  --fit.ckpt_path "lightning_logs/MyProjectTraining/version_0/checkpoints/epoch-10.last.ckpt"
+```
+
+### Hyperparameter Tuning
+
+Override hyperparameters via command line or config files:
+
+```yaml
+# myproject.local.yaml
+model:
+  init_args:
+    lr: 0.0005
+data:
+  init_args:
+    batch_size: 512
+```
+
+### Custom Model Architecture
+
+```yaml
+model:
+  init_args:
+    model:
+      init_args:
+        hidden_layers: [256, 128, 64, 32]  # Deeper network
+        dropout_rates: [0.2, 0.15, 0.1, 0.05]
+        activation: "gelu"
+```
+
+## Requirements
+
+- Python >= 3.8
+- PyTorch >= 2.0.0
+- PyTorch Lightning >= 2.1.0
+- scikit-learn >= 1.3.0
+- Other dependencies are automatically installed with the package
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Author
+
+**chandra**
+- Email: chandra385123@gmail.com
+- GitHub: [@imchandra11](https://github.com/imchandra11)
+
+## Repository
+
+- GitHub: https://github.com/imchandra11/cph-classification
+- PyPI: https://pypi.org/project/cph-classification/
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Support
+
+For issues or questions:
+1. Check the configuration file syntax
+2. Verify CSV file format and column names
+3. Check target column type (integers or categorical strings)
+4. Review TensorBoard logs for training insights
+5. Open an issue on [GitHub](https://github.com/imchandra11/cph-classification/issues)
+
+## Citation
+
+If you use this package in your research, please cite:
+
+```bibtex
+@software{cph_classification,
+  title = {cph-classification: A Generic PyTorch Lightning Pipeline for Classification},
+  author = {chandra},
+  year = {2025},
+  url = {https://github.com/imchandra11/cph-classification}
+}
+```
