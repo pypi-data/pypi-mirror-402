@@ -1,0 +1,145 @@
+[project]
+name = "raja"
+version = "0.4.3"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Dr. Ernie Prabhakar", email = "ernest@quilt.bio" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.7.0",
+    "PyJWT>=2.8.0",
+    "fastapi>=0.110.0",
+    "mangum>=0.17.0",
+    "structlog>=24.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.7.0",
+    "poethepoet>=0.24.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-watch>=4.2.0",
+    "httpx>=0.27.0",
+    "ruff>=0.1.0",
+    "boto3-stubs[dynamodb,secretsmanager,verifiedpermissions]>=1.34.0",
+]
+
+aws = [
+    "aws-cdk-lib>=2.100.0",
+    "boto3>=1.34.0",
+    "constructs>=10.0.0",
+]
+
+test = [
+    "moto>=4.2.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "httpx>=0.27.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.17,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["infra/cdk.out", "infra/cdk.out*"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "B008",  # FastAPI dependency injection pattern (function calls in defaults)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--showlocals",
+]
+markers = [
+    "unit: Unit tests (no external dependencies)",
+    "integration: tests that require deployed AWS resources",
+    "hypothesis: tests that validate RAJA claims",
+    "slow: Slow-running tests",
+]
+
+[tool.poe.tasks]
+# Clean build artifacts and caches
+clean = { cmd = "bash -c 'rm -rf .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage dist build *.egg-info infra/cdk.out* && find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true'", help = "Remove build artifacts, caches, and CDK output" }
+
+# Quality checks - combine format + lint + typecheck
+check = { sequence = ["_format", "_lint-fix", "_typecheck"], help = "Format, lint, and typecheck" }
+
+# Testing
+test = { cmd = "pytest tests/ -v", help = "Run all tests" }
+test-unit = { cmd = "pytest tests/unit/ -v", help = "Run unit tests only" }
+test-cov = { cmd = "pytest tests/ --cov=src/raja --cov-report=html --cov-report=term", help = "Run tests with coverage" }
+coverage = { cmd = "pytest tests/ --cov=src/raja --cov-report=html --cov-report=term", help = "Run tests with coverage (alias for test-cov)" }
+test-docker = { shell = "cd infra && ./test-docker.sh ${action}", args = [{ name = "action", positional = true, default = "up" }], help = "Build and test Docker containers locally (args: up|logs|down|status)" }
+
+# Demo
+demo = { cmd = "pytest tests/integration/test_rajee_envoy_bucket.py -v -s", help = "Run RAJEE Envoy S3 proxy demonstration with verbose output" }
+
+# AWS deployment
+deploy = { sequence = ["_npx-verify", "_cdk-deploy", "load-policies", "compile-policies"], help = "Deploy CDK stack to AWS, then load and compile policies" }
+destroy = { sequence = ["_npx-verify", "_cdk-destroy"], help = "Destroy CDK stack" }
+load-policies = { cmd = "python scripts/load_policies.py", help = "Load Cedar policies to AVP" }
+compile-policies = { cmd = "python scripts/invoke_compiler.py", help = "Compile policies to scopes" }
+seed-test-data = { cmd = "python scripts/seed_test_data.py", help = "Seed integration test principals into DynamoDB" }
+
+# Docker image building
+build-envoy = { cmd = "bash scripts/build-envoy-image.sh", help = "Build Envoy container image locally" }
+build-envoy-push = { cmd = "bash scripts/build-envoy-image.sh --push", help = "Build and push Envoy image to ECR" }
+
+# Full workflow - clean + check + test + docker + deploy + integration test
+all = { sequence = ["clean", "check", "test-unit", "test-docker", "deploy", "test-integration"], help = "Full workflow: clean, check, test, docker test, deploy, load policies, compile, and run integration tests" }
+
+# Version management
+version = { script = "scripts.version:show_version", help = "Show current version" }
+bump = { cmd = "python scripts/version.py bump ${part}", args = [{ name = "part", positional = true, default = "patch" }], help = "Bump version and commit (args: patch|minor|major, default: patch)" }
+tag = { script = "scripts.version:create_tag", help = "Create and push release tag (runs checks first)" }
+
+# Integration test (kept separate as it requires deployed resources)
+test-integration = { cmd = "pytest tests/integration/ -v", help = "Run integration tests (requires deployed AWS resources)" }
+
+# Internal tasks (prefixed with _)
+_npx-verify = { cmd = "bash -lc 'command -v npx >/dev/null 2>&1 || { echo \"npx not found; install Node.js to use CDK tasks\"; exit 1; }'", help = "Internal: verify npx is available" }
+_format = { cmd = "ruff format src tests infra lambda_handlers", help = "Internal: format code" }
+_lint-fix = { cmd = "ruff check --fix src tests infra lambda_handlers", help = "Internal: fix lint issues" }
+_typecheck = { cmd = "mypy src", help = "Internal: run type checker" }
+_cdk-deploy = { shell = "cd infra && JSII_SILENCE_WARNING_UNTESTED_NODE_VERSION=1 npx cdk deploy RajeeEnvoyStack --require-approval never --progress bar --parameters RajeeEnvoyStack:AUTHDISABLED=false --outputs-file cdk-outputs-rajee.json --output cdk.out.deploy && JSII_SILENCE_WARNING_UNTESTED_NODE_VERSION=1 npx cdk deploy RajaAvpStack RajaServicesStack --require-approval never --progress bar --outputs-file cdk-outputs-services.json --output cdk.out.deploy && python ../scripts/merge_cdk_outputs.py cdk-outputs-rajee.json cdk-outputs-services.json cdk-outputs.json", help = "Internal: deploy CDK stacks in correct order" }
+_cdk-destroy = { cmd = "cd infra && JSII_SILENCE_WARNING_UNTESTED_NODE_VERSION=1 npx cdk destroy --all --force", help = "Internal: destroy CDK" }
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+strict_equality = true

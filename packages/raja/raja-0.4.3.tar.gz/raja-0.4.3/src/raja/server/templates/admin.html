@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>RAJA Admin</title>
+    <link rel="stylesheet" href="/static/admin.css" />
+  </head>
+  <body>
+    <header>
+      <div class="pill">S3 Validation Harness</div>
+      <h1>RAJA Admin</h1>
+      <p>Mint, verify, and enforce Resource Authorization JWTs for S3 without policy
+      evaluation or AWS calls.</p>
+    </header>
+    <main>
+      <section class="card" style="--delay: 0s;">
+        <h2>Issuer &amp; JWKS</h2>
+        <p>Live signing metadata for validation and key introspection.</p>
+        <div>
+          <label>Issuer</label>
+          <div class="status" id="issuer">Loading...</div>
+        </div>
+        <div>
+          <label>Audience</label>
+          <div class="status" id="audience">Loading...</div>
+        </div>
+        <div>
+          <label>JWKS</label>
+          <pre id="jwks">Loading...</pre>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="refresh-config">Refresh metadata</button>
+        </div>
+      </section>
+      <section class="card" style="--delay: 0.05s;">
+        <h2>Mint RAJ</h2>
+        <p>Create a short-lived authorization for a single S3 action and resource.</p>
+        <form id="mint-form">
+          <div class="field-row">
+            <div>
+              <label for="mint-subject">Subject (sub)</label>
+              <input id="mint-subject" name="subject" placeholder="User::alice" />
+            </div>
+            <div>
+              <label for="mint-audience">Audience (aud)</label>
+              <input id="mint-audience" name="audience" placeholder="raja-s3" />
+            </div>
+          </div>
+          <div class="field-row">
+            <div>
+              <label for="mint-bucket">Bucket</label>
+              <input id="mint-bucket" name="bucket" placeholder="my-bucket" />
+            </div>
+            <div>
+              <label for="mint-action">Action</label>
+              <select id="mint-action" name="action">
+                <option value="s3:GetObject">s3:GetObject</option>
+                <option value="s3:PutObject">s3:PutObject</option>
+                <option value="s3:ListBucket">s3:ListBucket</option>
+                <option value="s3:ListBucketMultipartUploads">s3:ListBucketMultipartUploads</option>
+                <option value="s3:ListMultipartUploadParts">s3:ListMultipartUploadParts</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div>
+              <label for="mint-key">Key (exact)</label>
+              <input id="mint-key" name="key" placeholder="reports/2024/summary.csv" />
+            </div>
+            <div>
+              <label for="mint-prefix">Prefix (starts with)</label>
+              <input id="mint-prefix" name="prefix" placeholder="reports/2024/" />
+            </div>
+          </div>
+          <div class="field-row">
+            <div>
+              <label for="mint-ttl">TTL (seconds)</label>
+              <input id="mint-ttl" name="ttl" type="number" min="60" placeholder="300" />
+            </div>
+          </div>
+          <div class="actions">
+            <button type="submit">Mint RAJ</button>
+          </div>
+        </form>
+        <div>
+          <label>Token</label>
+          <textarea id="mint-token" readonly placeholder="Your RAJ will appear here."></textarea>
+        </div>
+        <div>
+          <label>Claims</label>
+          <pre id="mint-claims">Waiting for mint.</pre>
+        </div>
+      </section>
+      <section class="card" style="--delay: 0.1s;">
+        <h2>Verify RAJ</h2>
+        <p>Confirm signature, issuer, audience, and expiration.</p>
+        <form id="verify-form">
+          <div>
+            <label for="verify-token">Token</label>
+            <textarea id="verify-token" name="token"
+              placeholder="Paste a RAJ to verify."></textarea>
+          </div>
+          <div>
+            <label for="verify-aud">Audience (aud)</label>
+            <input id="verify-aud" name="audience" placeholder="raja-s3" />
+          </div>
+          <div class="actions">
+            <button type="submit">Verify token</button>
+          </div>
+        </form>
+        <div>
+          <label>Verification result</label>
+          <pre id="verify-output">Waiting for token.</pre>
+        </div>
+      </section>
+      <section class="card" style="--delay: 0.15s;">
+        <h2>Simulate Enforcement</h2>
+        <p>Check Request ⊆ Authority and see why it fails.</p>
+        <form id="enforce-form">
+          <div>
+            <label for="enforce-token">Token</label>
+            <textarea id="enforce-token" name="token"
+              placeholder="Paste or use the minted RAJ."></textarea>
+          </div>
+          <div class="field-row">
+            <div>
+              <label for="enforce-aud">Audience (aud)</label>
+              <input id="enforce-aud" name="audience" placeholder="raja-s3" />
+            </div>
+            <div>
+              <label for="enforce-action">Action</label>
+              <select id="enforce-action" name="action">
+                <option value="s3:GetObject">s3:GetObject</option>
+                <option value="s3:PutObject">s3:PutObject</option>
+                <option value="s3:ListBucket">s3:ListBucket</option>
+                <option value="s3:ListBucketMultipartUploads">s3:ListBucketMultipartUploads</option>
+                <option value="s3:ListMultipartUploadParts">s3:ListMultipartUploadParts</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div>
+              <label for="enforce-bucket">Bucket</label>
+              <input id="enforce-bucket" name="bucket" placeholder="my-bucket" />
+            </div>
+            <div>
+              <label for="enforce-key">Key</label>
+              <input id="enforce-key" name="key" placeholder="reports/2024/summary.csv" />
+            </div>
+          </div>
+          <div class="actions">
+            <button type="submit">Simulate decision</button>
+          </div>
+        </form>
+        <div>
+          <label>Decision</label>
+          <pre id="enforce-output">Waiting for request.</pre>
+        </div>
+      </section>
+      <section class="card control-plane" style="--delay: 0.2s;">
+        <h2>Control Plane (Optional)</h2>
+        <p>Fetches live AWS control-plane data only when requested.</p>
+        <div class="actions">
+          <button class="secondary" id="load-control-plane">Load control-plane data</button>
+        </div>
+        <div>
+          <label>Principals</label>
+          <pre id="principals">Not loaded.</pre>
+        </div>
+        <div>
+          <label>Policies</label>
+          <pre id="policies">Not loaded.</pre>
+        </div>
+        <div>
+          <label>Audit Log</label>
+          <pre id="audit">Not loaded.</pre>
+        </div>
+      </section>
+    </main>
+    <script src="/static/admin.js"></script>
+  </body>
+</html>
