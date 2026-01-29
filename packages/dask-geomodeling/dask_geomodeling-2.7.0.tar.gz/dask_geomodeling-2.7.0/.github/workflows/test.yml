@@ -1,0 +1,95 @@
+name: PyPI
+
+# Run on PR requests. And on master itself.
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  TestLinux:
+    name: Python ${{ matrix.python }} (${{ matrix.gdal }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            python: "3.10"
+            numpy: "==1.23.*"
+            gdal: "pygdal==3.4.1.*"
+            pins: "scipy==1.11.* dask[delayed]==2022.* pandas==2.0.* geopandas==1.0.*"
+          - os: ubuntu-22.04
+            python: "3.11"
+            numpy: "==1.*"
+            gdal: "pygdal==3.4.1.*"
+            pins: "scipy==1.11.* dask[delayed]==2023.* pandas==2.0.* geopandas==1.0.*"
+          - os: ubuntu-22.04
+            python: "3.12"
+            numpy: "==1.*"
+            gdal: "pygdal==3.4.1.*"
+            pins: "scipy==1.13.* dask[delayed]==2024.* pandas==2.2.* geopandas==1.0.*"
+          - os: ubuntu-24.04
+            python: "3.13"
+            numpy: "==2.1.*"
+            gdal: "gdal==3.8.4.*"
+            pins: "scipy==1.16.* dask[delayed]==2025.* pandas==2.3.* geopandas==1.1.*"
+          - os: ubuntu-24.04
+            python: "3.14"
+            numpy: "==2.*"
+            gdal: "gdal==3.8.4.*"
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python }}
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install GDAL
+        run: |
+          sudo apt-get update && sudo apt-get install --yes --no-install-recommends libgdal-dev
+
+      - name: Install python dependencies
+        shell: bash
+        # NumPy is installed first because the pygdal build needs it.
+        run: |
+          uv pip install --system setuptools numpy${{ matrix.numpy }}
+          uv pip install --system ${{ matrix.gdal }} --no-build-isolation
+          uv pip install --system -e .[test,cityhash] ${{ matrix.pins }}
+          uv pip list
+
+      - name: Run tests
+        shell: bash
+        run: pytest dask_geomodeling
+
+  TestDockerDebianTrixie:
+    name: Debian Trixie (GDAL 3.10)
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.12-slim-trixie
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: |
+          apt-get update && apt-get install --yes --no-install-recommends \
+            build-essential \
+            libgdal-dev
+      - name: Install python dependencies
+        shell: bash
+        run: |
+          pip install --disable-pip-version-check --upgrade setuptools uv
+          uv pip install --system numpy
+          uv pip install --system gdal[numpy]==3.10.3 --no-build-isolation
+          uv pip install --system -e .[test,cityhash]
+          uv pip list
+      - name: Run tests
+        shell: bash
+        run: pytest dask_geomodeling
