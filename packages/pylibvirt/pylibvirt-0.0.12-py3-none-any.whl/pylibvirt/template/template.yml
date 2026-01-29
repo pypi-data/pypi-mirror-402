@@ -1,0 +1,80 @@
+provider:
+  uri: qemu+ssh://root@kimsuffi/system
+
+network:
+  - local:
+      mode: nat
+      domain: network
+      ip4_cidr: 192.168.2.0/24
+      dhcp_start: 192.168.2.100
+      dhcp_stop: 192.168.2.150
+
+storage:
+  - data:
+      pool_type: dir
+      path: /local/storage
+
+volume:
+  - debian_10:
+      disk_format: qcow2
+      capacity: 30
+      size_unit: G
+      pool: data
+      name: debian-10.qcow2
+
+  - test:
+      disk_format: qcow2
+      capacity: 30
+      size_unit: G
+      pool: data
+      clone: debian-10.qcow2
+      name: debian-10-2.qcow2
+
+domain:
+  - libvirt_yaml:
+      boot_order:
+        - cdrom
+        - hd
+      memory:
+        mem_unit: G
+        max_memory: 4
+      Os:
+        arch: x86_64
+        machine: q35
+        os_type: hvm
+      Feature: # Features list: https://libvirt.org/formatdomain.html#hypervisor-features
+        - acpi
+        - kvm:
+            hidden:
+              state: 'on'
+            poll-control:
+              state: 'on'
+      CpuDevice:
+        cpu_model: host
+        model_args:
+          fallback: allow
+        vcpu: 2
+        vcpu_args:
+          placement: static
+      GraphicDevice:
+        - spice_server:
+            graphic_type: spice
+      VideoDevice:
+        - screen:
+            model_type: qxl
+            ram: 66500
+      DiskDevice:
+        - disk:
+            volume: debian-10-2.qcow2
+            driver: qemu
+            bus: scsi
+            pool: data
+        - cdrom:
+            volume: debian-10.10.0-amd64-netinst.iso
+            pool: data
+
+      NetworkInterfaceDevice:
+        - default:
+            net_interface: default
+            net_type: network
+            model: e1000e
