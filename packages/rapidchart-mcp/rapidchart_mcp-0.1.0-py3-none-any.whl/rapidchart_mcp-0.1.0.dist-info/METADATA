@@ -1,0 +1,166 @@
+Metadata-Version: 2.1
+Name: rapidchart-mcp
+Version: 0.1.0
+Summary: MCP server for RapidChart - Generate diagrams from code in Cursor
+Author-email: RapidChart Team <hello@rapidchart.com>
+Project-URL: Homepage, https://rapidchart.com
+Project-URL: Repository, https://github.com/Samicostox/rapidchart-mcp
+Project-URL: Documentation, https://docs.rapidchart.com/mcp
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: mcp>=0.9.0
+Requires-Dist: httpx>=0.27.0
+Requires-Dist: pydantic>=2.0.0
+
+# RapidChart MCP Server
+
+Model Context Protocol (MCP) server for [RapidChart](https://rapidchart.com) - Generate and manage diagrams directly from Cursor IDE.
+
+## Features
+
+- 🎨 Generate diagrams from code (Class, ER, Sequence, Architecture, etc.)
+- 🔄 Update existing diagrams with new code
+- 📁 Organize diagrams in workspaces and folders
+- 🤖 Support for multiple AI models (GPT-5, Claude, Gemini)
+- 🔐 Secure Bearer token authentication
+- 💳 Respects your RapidChart credits and API keys
+
+## Installation
+
+```bash
+pip install rapidchart-mcp
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/Samicostox/rapidchart-mcp.git
+cd rapidchart-mcp
+pip install -e .
+```
+
+## Configuration
+
+### 1. Generate API Token
+
+1. Go to [RapidChart Settings](https://rapidchart.com/settings)
+2. Navigate to "API Tokens"
+3. Click "Generate New Token"
+4. Copy the token (starts with `rc_`)
+
+### 2. Configure Cursor
+
+Add to your Cursor MCP settings (`~/.cursor/mcp.json` or workspace `.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "rapidchart": {
+      "command": "python",
+      "args": ["-m", "rapidchart_mcp"],
+      "env": {
+        "RAPIDCHART_API_TOKEN": "rc_your_token_here",
+        "RAPIDCHART_API_URL": "https://fastuml-0bb6938ba599.herokuapp.com",
+        "RAPIDCHART_DEFAULT_TYPE": "general",
+        "RAPIDCHART_FEW_PROMPTS": "false",
+        "RAPIDCHART_GUIDELINES": "true"
+      }
+    }
+  }
+}
+```
+
+## Usage
+
+### In Cursor
+
+Once configured, you can use natural language:
+
+```
+User: "Generate a class diagram from src/models.py"
+→ Cursor reads the file and calls RapidChart MCP
+→ Returns diagram URL
+
+User: "List my available AI models"
+→ Shows models with your credit status
+
+User: "Update diagram abc123 with new code from src/models.py"
+→ Updates the diagram with context awareness
+```
+
+### Available Tools
+
+- `list_models` - Show available AI models and your credits
+- `list_workspaces` - List your workspaces
+- `list_folders` - List folders in a workspace
+- `list_diagrams` - Browse your diagrams
+- `create_diagram` - Generate diagram from code
+- `get_diagram` - Get specific diagram details
+- `update_diagram` - Update diagram with new code
+- `delete_diagram` - Delete a diagram
+- `move_diagram` - Move diagram to different folder/workspace
+
+## Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `RAPIDCHART_API_TOKEN` | ✅ Yes | - | Your RapidChart API token |
+| `RAPIDCHART_API_URL` | No | Production URL | API base URL |
+| `RAPIDCHART_DEFAULT_TYPE` | No | `general` | Default diagram type |
+| `RAPIDCHART_DEFAULT_MODEL` | No | Auto | Default AI model ID |
+| `RAPIDCHART_FEW_PROMPTS` | No | `false` | Enable multi-step thinking |
+| `RAPIDCHART_GUIDELINES` | No | `true` | Include diagram guidelines |
+| `RAPIDCHART_TIMEOUT` | No | `300` | Request timeout (seconds) |
+
+## Development
+
+```bash
+# Clone the repo
+git clone https://github.com/rapidchart/rapidchart-mcp.git
+cd rapidchart-mcp
+
+# Install in development mode
+pip install -e .
+
+# Run tests
+pytest
+
+# Run the server directly
+python -m rapidchart_mcp
+```
+
+## Known Issues
+
+### 503 Timeout on Diagram Creation
+
+**Symptom:** You get a `503 Service Unavailable` error, but the diagram is created successfully.
+
+**Cause:** Heroku has a 30-second router timeout. Complex diagrams can take 30-60+ seconds to generate.
+
+**Solution:**
+1. The diagram IS being created despite the error
+2. Run `list_diagrams` to see your newly created diagram
+3. This is a Heroku limitation, not a bug in RapidChart
+
+**Workaround:** Use simpler code or smaller diagrams for faster generation.
+
+---
+
+## License
+
+MIT
+
+## Support
+
+- 📧 Email: hello@rapidchart.com
+- 🐛 Issues: [GitHub Issues](https://github.com/Samicostox/rapidchart-mcp/issues)
+- 📖 Docs: [docs.rapidchart.com](https://docs.rapidchart.com)
+
