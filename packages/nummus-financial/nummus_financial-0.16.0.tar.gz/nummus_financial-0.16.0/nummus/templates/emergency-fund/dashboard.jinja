@@ -1,0 +1,42 @@
+<div>
+  {% set cf=ctx.currency_format %}
+  <a
+    href="{{ url_for('emergency_fund.page') }}"
+    hx-get="{{ url_for('emergency_fund.page') }}"
+    hx-target="#main"
+    hx-swap="innerHTML show:window:top"
+    hx-push-url="true"
+  >
+    <h1>Emergency fund</h1>
+    <h2>{{ cf(ctx.current, coarse=True) }}</h2>
+    <icon>chevron_forward</icon>
+  </a>
+  <div class="grow">
+    <canvas id="e-fund-chart-canvas-dashboard" hx-preserve></canvas>
+  </div>
+  <div>
+    <script>
+      // prettier-ignore
+      onLoad(() => {
+        emergencyFund.updateDashboard(JSON.parse('{{ ctx.chart | tojson }}'));
+      });
+    </script>
+  </div>
+  <div class="text-center text-sm">
+    {% if ctx.days is none %}
+      No spending found to estimate emergency budget.
+    {% elif ctx.delta_lower > 0 %}
+      <p>
+        Try to increase your fund to at least
+        {{ cf(ctx.target_lower, coarse=True) }}.
+      </p>
+    {% elif ctx.delta_upper > 0 %}
+      <p>
+        {{ cf(ctx.delta_upper, coarse=True) }} could be invested for potential
+        greater returns.
+      </p>
+    {% else %}
+      <p>You should be able to cover {{ ctx.days | days }} of expenses.</p>
+    {% endif %}
+  </div>
+</div>

@@ -1,0 +1,91 @@
+<div
+  hx-get="{{ url_for('assets.page', uri=asset.uri) }}"
+  hx-trigger="asset from:body, valuation from:body, account from:body"
+  hx-target="#main"
+>
+  <h1>{{ asset.name }}</h1>
+  <button
+    class="btn-tonal"
+    hx-get="{{ url_for('assets.asset', uri=asset.uri) }}"
+    hx-disabled-elt="this"
+    hx-target="#dialog"
+    hx-swap="innerHTML show:#dialog:top"
+    hx-push-url="#dialog"
+  >
+    <icon>edit</icon>Edit
+  </button>
+</div>
+{% set cf = asset.currency_format %}
+<div class="text-on-surface-variant flex flex-wrap items-center gap-2 text-sm">
+  <span>
+    {{ asset.category.pretty }}
+    {% if asset.ticker %}@{{ asset.ticker }}{% endif %}
+  </span>
+  <span class="ml-auto">
+    {% if asset.value_date %}
+      {{ cf(asset.value) }}
+      as of {{ asset.value_date }}
+    {% else %}
+      <span class="text-error">Asset has no valuations</span>
+    {% endif %}
+  </span>
+</div>
+<div id="asset-performance" class="mb-2">
+  {% include "assets/performance.jinja" %}
+</div>
+{% if asset.description %}
+  <div class="prose mx-auto">
+    <h3>About</h3>
+    {{ asset.description }}
+  </div>
+{% endif %}
+{% if asset.holdings %}
+  <h2>Today's holdings</h2>
+  <div
+    class="mx-auto grid w-full max-w-sm grid-cols-[repeat(3,minmax(0,auto))_24px] gap-x-2"
+    hx-target="#main"
+    hx-swap="innerHTML show:window:top"
+    hx-swap-oob="{{ oob }}"
+    hx-push-url="true"
+  >
+    <div
+      class="col-span-full grid grid-cols-subgrid py-1 pl-1 text-center font-bold"
+    >
+      <div class="grow">Name</div>
+      <div>Quantity</div>
+      <div>Value</div>
+    </div>
+    {% for account in asset.holdings %}
+      <a
+        class="hover:bg-surface-container-high odd:bg-surface-container col-span-full grid grid-cols-subgrid rounded py-1 pl-1"
+        href="{{ url_for('accounts.page', uri=account.uri) }}"
+        hx-get="{{ url_for('accounts.page', uri=account.uri) }}"
+        hx-disabled-elt="this"
+      >
+        <div>{{ account.name }}</div>
+        <div class="text-right">{{ account.qty | qty }}</div>
+        <div class="text-right">{{ cf(account.value) }}</div>
+        <icon>chevron_right</icon>
+      </a>
+    {% endfor %}
+  </div>
+{% endif %}
+{% with ctx = asset.table %}
+  {% include "assets/table-header.jinja" %}
+  {% if asset.ticker %}
+    <div class="text-center italic">
+      Asset is updated via ticker using web sources. Valuations cannot be
+      manually modified.
+    </div>
+  {% else %}
+    <div class="text-center italic">
+      Set ticker if possible to update asset using web sources.
+    </div>
+  {% endif %}
+  {% include "assets/table-filters.jinja" %}
+  {# Display query total if filtered #}
+  <div id="valuation-table" class="mx-auto max-w-sm">
+    {% include "assets/table-rows.jinja" %}
+  </div>
+  <div id="valuation-indicator">{% include "shared/spinner.jinja" %}</div>
+{% endwith %}
