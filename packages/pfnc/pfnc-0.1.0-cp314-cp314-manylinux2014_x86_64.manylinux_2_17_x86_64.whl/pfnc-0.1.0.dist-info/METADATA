@@ -1,0 +1,134 @@
+Metadata-Version: 2.4
+Name: pfnc
+Version: 0.1.0
+Summary: Parse and model GenICam PFNC pixel format designations and decode image buffers via extensible decoders.
+Project-URL: Homepage, https://www.data-spree.com/
+Project-URL: Documentation, https://github.com/dataspree/pfnc.git
+Project-URL: Repository, https://github.com/dataspree/pfnc.git
+Author-email: Data Spree GmbH <info@data-spree.com>
+License: MIT License
+        
+        Copyright (c) 2026 Data Spree GmbH
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+License-File: LICENSE.txt
+Keywords: binary-format,buffer-decoding,camera,dataspree,genicam,gig-e-vision,image-decoding,industrial-camera,machine-vision,numpy,parsing,pfnc,pixel-format
+Requires-Python: >=3.10
+Requires-Dist: numpy<3,>=1.24
+Requires-Dist: typing-extensions>=4
+Description-Content-Type: text/markdown
+
+# Data Spree PFNC Pixel Format
+
+Parse and model GenICam PFNC pixel format designations and decode image buffers via extensible decoders.
+We follow semantic versioning; breaking changes only occur in major versions.
+Every public symbol defined under `pfnc.*` is stable.
+
+![CI/CD](https://github.com/dataspree/dataspree-inspection/actions/workflows/ci.yml/badge.svg)
+[![pdm-managed](https://img.shields.io/badge/pdm-managed-blueviolet)](https://pdm.fming.dev)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
+
+## Introduction
+
+This library provides a structured representation of GenICam PFNC pixel format designations and a
+pluggable system for decoding image buffers into numpy arrays.
+
+It is intended for industrial camera and machine vision use cases where pixel formats are specified
+using PFNC strings (e.g. `RGB8`, `Mono12Packed`, `BayerRG10`) and need to be parsed, inspected, or decoded
+outside of a vendor-specific SDK.
+
+The focus of this project is:
+- correct parsing of PFNC designations
+- explicit modeling of pixel format properties
+- extensibility via registries (decoders, data types, components, packing, interface specifics)
+
+This is not a general-purpose image processing library.
+
+
+## Getting Started
+
+### Installation
+
+```bash
+pip install pfnc
+```
+or, when using pdm:
+```
+pdm add pfnc
+```
+
+
+### Basic Usage
+
+```python
+from dataspree.pfnc import PixelFormat
+
+pf = PixelFormat.from_designation("RGB8")
+
+image = pf.decode(
+    buffer,
+    width=256,
+    height=256,
+    copy=False,
+)
+```
+
+### Extending the library
+
+The library is designed to be extensible. You can register custom decoders or extend parsing behavior
+for additional PFNC variants.
+
+#### Registering a custom decoder
+
+```python
+from dataspree.pfnc import register_decoder, PixelFormatDecoder
+
+class MyDecoder(PixelFormatDecoder):
+    priority = 10
+
+    def supports(self, pixel_format) -> bool:
+        ...
+
+    def decode(self, data, width, height, *, copy=False):
+        ...
+
+register_decoder(MyDecoder)
+```
+
+
+#### Advanced extensions
+
+Advanced users may extend:
+
+- data types
+- components
+- packing rules
+- interface specifics
+
+These extension points are intentionally exposed.
+
+## Scope and limitations
+
+Parsing support covers common PFNC designations.
+
+Decoding support depends on available decoders.
+
+Not all packed or planar formats may be decodable out of the box.
+
+See the documentation for details on supported formats.
