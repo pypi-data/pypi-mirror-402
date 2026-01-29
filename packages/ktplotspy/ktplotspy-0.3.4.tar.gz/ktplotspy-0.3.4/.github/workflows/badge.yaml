@@ -1,0 +1,36 @@
+name: badge
+
+on:
+  push:
+    branches:
+      - "master"
+  create:
+    tags:
+      - "*"
+
+jobs:
+  master:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -l {0}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+      - name: Install package
+        run: |
+          pip install git+https://github.com/zktuong/ktplotspy.git
+      - id: version
+        name: Get version
+        run: |
+          echo "version=$(python -m pip show ktplotspy | grep Version | awk '{print $2}')" >> $GITHUB_OUTPUT
+      - name: version badge
+        uses: RubbaBoy/BYOB@v1.3.0
+        with:
+          NAME: version
+          LABEL: "version"
+          ICON: "github"
+          STATUS: ${{ steps.version.outputs.version}}
+          COLOR: green
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

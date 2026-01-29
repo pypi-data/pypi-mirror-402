@@ -1,0 +1,55 @@
+name: Code style checks
+
+on:
+  push:
+    branches:
+      - "master"
+  create:
+    tags:
+      - "*"
+  pull_request:
+    branches:
+      - "*"
+
+jobs:
+  black:
+    name: Check black compliance.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+
+      - name: Black
+        uses: psf/black@stable
+        with:
+          options: "--config pyproject.toml --check"
+          src: "."
+
+  docstring:
+    name: Check docstring compliance.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+
+      - name: Install interrogate
+        run: python -m pip install interrogate
+
+      - name: Run interrogate
+        run: interrogate .
+
+  pre-commit:
+    name: Check pre-commit compliance.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+      - uses: pre-commit/action@v3.0.1

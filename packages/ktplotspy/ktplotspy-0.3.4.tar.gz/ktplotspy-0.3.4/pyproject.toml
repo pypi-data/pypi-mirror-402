@@ -1,0 +1,117 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ktplotspy"
+dynamic = ["version"]
+description = "Python library for plotting Cellphonedb results. Ported from ktplots R package."
+authors = [
+    { name = "Kelvin Tuong", email = "26215587+zktuong@users.noreply.github.com" },
+]
+license = { file = "LICENSE" }
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+]
+keywords = [
+    "cellphonedb",
+    "cpdb",
+    "plot_cpdb",
+    "ktplots",
+    "ligand-receptor",
+    "interaction",
+]
+readme = { file = "README.rst", content-type = "text/x-rst" }
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=1.5.0",
+    "numpy>=1.0.0",
+    "plotnine>=0.13.0",
+    "seaborn>=0.12",
+    "requests>=2.28.0",
+    "pycirclize>=1.7.2",
+]
+
+[project.urls]
+homepage = "https://github.com/zktuong/ktplotspy"
+repository = "https://github.com/zktuong/ktplotspy"
+
+[project.optional-dependencies]
+test = ["anndata>=0.7.6,<0.11.5", "black", "pytest-cov"]
+docs = [
+    "scanpy",
+    "ipykernel",
+    "sphinx>=7",
+    "nbsphinx>=0.7.0",
+    "sphinx-autodoc-typehints>=2.0.0",
+    "sphinx_rtd_theme>=2.0.0",
+    "readthedocs-sphinx-ext>=1.0.0",
+    "recommonmark>=0.6.0",
+]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::plotnine.exceptions.PlotnineWarning",
+]
+testpaths = ["tests"]
+addopts = "--cov src/ktplotspy --cov-report=xml"
+
+[tool.interrogate]
+ignore-init-method = true
+ignore-init-module = true
+ignore-magic = true
+ignore-semiprivate = false
+ignore-private = false
+ignore-property-decorators = false
+ignore-module = true
+fail-under = 100.0
+ignore-regex = ["^get$", "^mock_.*", ".*BaseClass.*"]
+verbose = 1
+quiet = false
+whitelist-regex = []
+color = true
+exclude = ["test", "docs"]
+
+[tool.black]
+line-length = 140
+include = '\.pyi?$'
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools_scm]
+version_scheme = "guess-next-dev"
+local_scheme = "dirty-tag"
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64", "win-64"]
+
+[tool.pixi.pypi-dependencies]
+ktplotspy = { path = ".", editable = true }
+
+[tool.pixi.environments]
+default = ["py311"]
+docs = { features = ["py312", "docs"], solve-group = "py312" }
+test = { features = ["py312", "test"], solve-group = "py312" }
+py311 = ["py311", "docs", "test"]
+py312 = ["py312", "docs", "test"]
+py313 = ["py313", "docs", "test"]                              # until biopython is updated to >=1.85 on pypi
+
+[tool.pixi.tasks]
+test = "pytest"
+coverage = "coverage report"
+
+[tool.pixi.feature.py311.dependencies]
+python = "~=3.11.0"
+[tool.pixi.feature.py312.dependencies]
+python = "~=3.12.0"
+[tool.pixi.feature.py313.dependencies]
+python = "~=3.13.0"
