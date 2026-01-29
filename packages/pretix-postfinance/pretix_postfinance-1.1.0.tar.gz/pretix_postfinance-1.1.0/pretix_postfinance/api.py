@@ -1,0 +1,702 @@
+"""
+PostFinance Checkout API client.
+
+Provides a wrapper around the official PostFinance Checkout Python SDK
+for use with the pretix payment plugin.
+"""
+
+from __future__ import annotations
+
+import logging
+
+from postfinancecheckout import Configuration
+from postfinancecheckout.exceptions import ApiException
+from postfinancecheckout.models import (
+    CreationEntityState,
+    LineItemCreate,
+    PaymentMethodConfiguration,
+    Refund,
+    RefundCreate,
+    RefundType,
+    Space,
+    Transaction,
+    TransactionCompletion,
+    TransactionCompletionBehavior,
+    TransactionCreate,
+    TransactionState,
+    TransactionVoid,
+    WebhookListener,
+    WebhookListenerCreate,
+    WebhookUrl,
+    WebhookUrlCreate,
+)
+from postfinancecheckout.postfinancecheckout_sdk_exception import (
+    PostFinanceCheckoutSdkException,
+)
+from postfinancecheckout.service import (
+    PaymentMethodConfigurationsService,
+    RefundsService,
+    SpacesService,
+    TransactionsService,
+    WebhookEncryptionKeysService,
+    WebhookListenersService,
+    WebhookURLsService,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class PostFinanceError(Exception):
+    """Base exception for PostFinance API errors."""
+
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        error_code: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.message = message
+        self.status_code = status_code
+        self.error_code = error_code
+
+
+class PostFinanceClient:
+    """
+    Client for PostFinance Checkout API using the official SDK.
+
+    Provides a simplified interface to the PostFinance Checkout SDK
+    for common payment operations.
+
+    Attributes:
+        space_id: The PostFinance space ID.
+        user_id: The PostFinance user ID for authentication.
+        api_secret: The API secret (authentication key).
+    """
+
+    DEFAULT_TIMEOUT = 30  # seconds
+
+    def __init__(
+        self,
+        space_id: int,
+        user_id: int,
+        api_secret: str,
+    ) -> None:
+        """
+        Initialize the PostFinance API client.
+
+        Args:
+            space_id: The PostFinance space ID.
+            user_id: The PostFinance user ID for authentication.
+            api_secret: The API secret (authentication key).
+        """
+        self.space_id = space_id
+        self.user_id = user_id
+        self.api_secret = api_secret
+
+        self._configuration = Configuration(
+            user_id=user_id,
+            authentication_key=api_secret,
+            request_timeout=self.DEFAULT_TIMEOUT,
+        )
+        self._spaces_service = SpacesService(self._configuration)
+        self._transactions_service = TransactionsService(self._configuration)
+        self._refunds_service = RefundsService(self._configuration)
+        self._webhook_encryption_service = WebhookEncryptionKeysService(self._configuration)
+        self._payment_method_configs_service = PaymentMethodConfigurationsService(
+            self._configuration
+        )
+        self._webhook_url_service = WebhookURLsService(self._configuration)
+        self._webhook_listener_service = WebhookListenersService(self._configuration)
+
+    def get_space(self) -> Space:
+        """
+        Get details about the configured space.
+
+        This is useful for testing the connection and verifying credentials.
+
+        Returns:
+            The Space object with id, name, and other details.
+
+        Raises:
+            PostFinanceError: If the request fails or credentials are invalid.
+        """
+        try:
+            return self._spaces_service.get_spaces_id(id=self.space_id)
+        except ApiException as e:
+            logger.error("PostFinance API error getting space: %s", e)
+            raise PostFinanceError(
+                message=str(e),
+                status_code=e.status,
+                error_code=str(e.status),
+            ) from e
+        except PostFinanceCheckoutSdkException as e:
+            logger.error("PostFinance SDK error getting space: %s", e)
+            raise PostFinanceError(message=str(e)) from e
+
+    def get_payment_method_configurations(self) -> list[PaymentMethodConfiguration]:
+        """
+        Get all active payment method configurations for the space.
+
+        Returns:
+            List of PaymentMethodConfiguration objects that are active.
+
+        Raises:
+            PostFinanceError: If the request fails.
+        """
+        try:
+            response = self._payment_method_configs_service.get_payment_method_configurations(
+                space=self.space_id,
+                limit=100,
+            )
+            # Filter to only return active configurations
+            return [
+                config
+                for config in (response.data or [])
+                if config.state == CreationEntityState.ACTIVE
+            ]
+        except ApiException as e:
+            logger.error("PostFinance API error getting payment method configurations: %s", e)
+            raise PostFinanceError(
+                message=str(e),
+                status_code=e.status,
+                error_code=str(e.status),
+            ) from e
+        except PostFinanceCheckoutSdkException as e:
+            logger.error("PostFinance SDK error getting payment method configurations: %s", e)
+            raise PostFinanceError(message=str(e)) from e
+
+    def create_transaction(
+        self,
+        currency: str,
+        line_items: list[LineItemCreate],
+        success_url: str,
+        failed_url: str,
+        merchant_reference: str | None = None,
+        language: str | None = None,
+        completion_behavior: TransactionCompletionBehavior | None = None,
+        allowed_payment_method_configurations: list[int] | None = None,
+    ) -> Transaction:
+        """
+        Create a new payment transaction.
+
+        Args:
+            currency: The three-letter currency code (e.g., 'CHF', 'EUR').
+            line_items: List of LineItemCreate objects for the transaction.
+            success_url: URL to redirect to on successful payment.
+            failed_url: URL to redirect to on failed/cancelled payment.
+            merchant_reference: Optional merchant reference for this transaction.
+            language: Optional language code for the payment page (e.g., 'en-US').
+            completion_behavior: Optional transaction completion behavior.
+                COMPLETE_IMMEDIATELY for immediate capture,
+                COMPLETE_DEFERRED for manual capture.
+            allowed_payment_method_configurations: Optional list of payment method
+                configuration IDs to restrict which payment methods are available.
+                If not provided, all configured payment methods are available.
+
+        Returns:
+            The created Transaction object.
+
+        Raises:
+            PostFinanceError: If the request fails.
+        """
+        transaction_create = TransactionCreate(
+            currency=currency,
+            lineItems=line_items,
+            successUrl=success_url,
+            failedUrl=failed_url,
+            merchantReference=merchant_reference,
+            language=language,
+            completionBehavior=completion_behavior,
+            allowedPaymentMethodConfigurations=allowed_payment_method_configurations,
+        )
+
+        try:
+            return self._transactions_service.post_payment_transactions(
+                space=self.space_id,
+                transaction_create=transaction_create,
+            )
+        except ApiException as e:
+            logger.error("PostFinance API error creating transaction: %s", e)
+            raise PostFinanceError(
+                message=str(e),
+                status_code=e.status,
+                error_code=str(e.status),
+            ) from e
+        except PostFinanceCheckoutSdkException as e:
+            logger.error("PostFinance SDK error creating transaction: %s", e)
+            raise PostFinanceError(message=str(e)) from e
+
+    def get_payment_page_url(self, transaction_id: int) -> str:
+        """
+        Get the URL for the payment page for a transaction.
+
+        Args:
+            transaction_id: The ID of the transaction.
+
+        Returns:
+            The URL to redirect the customer to for payment.
+
+        Raises:
+            PostFinanceError: If the request fails.
+        """
+        try:
+            return self._transactions_service.get_payment_transactions_id_payment_page_url(
+                id=transaction_id,
+                space=self.space_id,
+            )
+        except ApiException as e:
+            logger.error("PostFinance API error getting payment page URL: %s", e)
+            raise PostFinanceError(
+                message=str(e),
+                status_code=e.status,
+                error_code=str(e.status),
+            ) from e
+        except PostFinanceCheckoutSdkException as e:
+            logger.error("PostFinance SDK error getting payment page URL: %s", e)
+            raise PostFinanceError(message=str(e)) from e
+
+    def get_transaction(self, transaction_id: int) -> Transaction:
+        """
+        Retrieve a transaction by its ID.
+
+        Args:
+            transaction_id: The ID of the transaction.
+
+        Returns:
+            The Transaction object.
+
+        Raises:
+            PostFinanceError: If the request fails.
+        """
+        try:
+            return self._transactions_service.get_payment_transactions_id(
+                id=transaction_id,
+                space=self.space_id,
+            )
+        except ApiException as e:
+            logger.error("PostFinance API error getting transaction: %s", e)
+            raise PostFinanceError(
+                message=str(e),
+                status_code=e.status,
+                error_code=str(e.status),
+            ) from e
+        except PostFinanceCheckoutSdkException as e:
+            logger.error("PostFinance SDK error getting transaction: %s", e)
+            raise PostFinanceError(message=str(e)) from e
+
+    def complete_transaction(self, transaction_id: int) -> TransactionCompletion:
+        """
+        Complete (capture) an authorized transaction.
+
+        This completes a transaction that is in the AUTHORIZED state,
+        capturing the authorized funds.
+
+        Args:
+            transaction_id: The ID of the transaction to complete.
+
+        Returns:
+            The TransactionCompletion object with completion details.
+
+        Raises:
+            PostFinanceError: If the request fails (e.g., transaction not
+                in AUTHORIZED state, already completed, etc.).
+        """
+        try:
+            return self._transactions_service.post_payment_transactions_id_complete_online(
+                id=transaction_id,
+                space=self.space_id,
+            )
+        except ApiException as e:
+            logger.error("PostFinance API error completing transaction: %s", e)
+            raise PostFinanceError(
+                message=str(e),
+                status_code=e.status,
+                error_code=str(e.status),
+            ) from e
+        except PostFinanceCheckoutSdkException as e:
+            logger.error("PostFinance SDK error completing transaction: %s", e)
+            raise PostFinanceError(message=str(e)) from e
+
+    def void_transaction(self, transaction_id: int) -> TransactionVoid:
+        """
+        Void an authorized transaction.
+
+        This voids a transaction that is in the AUTHORIZED state,
+        releasing the authorized funds back to the customer.
+
+        Args:
+            transaction_id: The ID of the transaction to void.
+
+        Returns:
+            The TransactionVoid object with void details.
+
+        Raises:
+            PostFinanceError: If the request fails (e.g., transaction not
+                in AUTHORIZED state, already voided, etc.).
+        """
+        try:
+            return self._transactions_service.post_payment_transactions_id_void_online(
+                id=transaction_id,
+                space=self.space_id,
+            )
+        except ApiException as e:
+            logger.error("PostFinance API error voiding transaction: %s", e)
+            raise PostFinanceError(
+                message=str(e),
+                status_code=e.status,
+                error_code=str(e.status),
+            ) from e
+        except PostFinanceCheckoutSdkException as e:
+            logger.error("PostFinance SDK error voiding transaction: %s", e)
+            raise PostFinanceError(message=str(e)) from e
+
+    def refund_transaction(
+        self,
+        transaction_id: int,
+        external_id: str,
+        merchant_reference: str | None = None,
+        amount: float | None = None,
+    ) -> Refund:
+        """
+        Create a refund for a completed transaction.
+
+        This creates a refund for a transaction that is in the COMPLETED or
+        FULFILL state. If no amount is specified, a full refund is created.
+
+        Args:
+            transaction_id: The ID of the transaction to refund.
+            external_id: A unique client-generated ID for this refund request.
+                Subsequent requests with the same ID will not execute again.
+            merchant_reference: Optional merchant reference for the refund.
+            amount: Optional refund amount. If not provided, a full refund
+                is created. For partial refunds, specify the amount to refund.
+
+        Returns:
+            The Refund object with refund details.
+
+        Raises:
+            PostFinanceError: If the request fails (e.g., transaction not
+                in a refundable state, already fully refunded, etc.).
+        """
+        refund_create = RefundCreate(
+            transaction=transaction_id,
+            externalId=external_id,
+            type=RefundType.MERCHANT_INITIATED_ONLINE,
+            merchantReference=merchant_reference,
+            amount=amount,
+        )
+
+        try:
+            return self._refunds_service.post_payment_refunds(
+                space=self.space_id,
+                refund_create=refund_create,
+            )
+        except ApiException as e:
+            logger.error("PostFinance API error creating refund: %s", e)
+            raise PostFinanceError(
+                message=str(e),
+                status_code=e.status,
+                error_code=str(e.status),
+            ) from e
+        except PostFinanceCheckoutSdkException as e:
+            logger.error("PostFinance SDK error creating refund: %s", e)
+            raise PostFinanceError(message=str(e)) from e
+
+    def get_refund(self, refund_id: int) -> Refund:
+        """
+        Retrieve a refund by its ID.
+
+        Args:
+            refund_id: The ID of the refund.
+
+        Returns:
+            The Refund object with refund details.
+
+        Raises:
+            PostFinanceError: If the request fails.
+        """
+        try:
+            return self._refunds_service.get_payment_refunds_id(
+                id=refund_id,
+                space=self.space_id,
+            )
+        except ApiException as e:
+            logger.error("PostFinance API error getting refund: %s", e)
+            raise PostFinanceError(
+                message=str(e),
+                status_code=e.status,
+                error_code=str(e.status),
+            ) from e
+        except PostFinanceCheckoutSdkException as e:
+            logger.error("PostFinance SDK error getting refund: %s", e)
+            raise PostFinanceError(message=str(e)) from e
+
+    def is_webhook_signature_valid(
+        self,
+        signature_header: str,
+        content: str,
+    ) -> bool:
+        """
+        Validate webhook signature using the SDK's encryption service.
+
+        Uses the X-Signature header and raw request body to verify that
+        the webhook payload was actually sent by PostFinance and hasn't
+        been tampered with.
+
+        Args:
+            signature_header: The value of the X-Signature HTTP header.
+            content: The raw request body as a string.
+
+        Returns:
+            True if the signature is valid, False otherwise.
+
+        Raises:
+            PostFinanceError: If there's an error validating the signature
+                (e.g., invalid header format, unknown key ID).
+        """
+        try:
+            result = self._webhook_encryption_service.is_content_valid(
+                signature_header=signature_header,
+                content_to_verify=content,
+            )
+            return bool(result)
+        except ApiException as e:
+            logger.error("PostFinance API error validating webhook signature: %s", e)
+            raise PostFinanceError(
+                message=str(e),
+                status_code=e.status,
+                error_code=str(e.status),
+            ) from e
+        except PostFinanceCheckoutSdkException as e:
+            logger.error("PostFinance SDK error validating webhook signature: %s", e)
+            raise PostFinanceError(message=str(e)) from e
+
+    def get_webhook_urls(self) -> list[WebhookUrl]:
+        """
+        Get all webhook URLs configured for this space.
+
+        Returns:
+            List of WebhookUrl objects.
+
+        Raises:
+            PostFinanceError: If the request fails.
+        """
+        try:
+            response = self._webhook_url_service.get_webhooks_urls(
+                space=self.space_id,
+                limit=100,
+            )
+            return response.data or []
+        except ApiException as e:
+            logger.error("PostFinance API error getting webhook URLs: %s", e)
+            raise PostFinanceError(
+                message=str(e),
+                status_code=e.status,
+                error_code=str(e.status),
+            ) from e
+        except PostFinanceCheckoutSdkException as e:
+            logger.error("PostFinance SDK error getting webhook URLs: %s", e)
+            raise PostFinanceError(message=str(e)) from e
+
+    def create_webhook_url(self, name: str, url: str) -> WebhookUrl:
+        """
+        Create a new webhook URL.
+
+        Args:
+            name: A name for this webhook URL configuration.
+            url: The URL where webhooks will be sent.
+
+        Returns:
+            The created WebhookUrl object.
+
+        Raises:
+            PostFinanceError: If the request fails.
+        """
+        webhook_url_create = WebhookUrlCreate(
+            name=name,
+            url=url,
+            state=CreationEntityState.ACTIVE,
+        )
+
+        try:
+            return self._webhook_url_service.post_webhooks_urls(
+                space=self.space_id,
+                webhook_url_create=webhook_url_create,
+            )
+        except ApiException as e:
+            logger.error("PostFinance API error creating webhook URL: %s", e)
+            raise PostFinanceError(
+                message=str(e),
+                status_code=e.status,
+                error_code=str(e.status),
+            ) from e
+        except PostFinanceCheckoutSdkException as e:
+            logger.error("PostFinance SDK error creating webhook URL: %s", e)
+            raise PostFinanceError(message=str(e)) from e
+
+    def get_webhook_listeners(self) -> list[WebhookListener]:
+        """
+        Get all webhook listeners configured for this space.
+
+        Returns:
+            List of WebhookListener objects.
+
+        Raises:
+            PostFinanceError: If the request fails.
+        """
+        try:
+            response = self._webhook_listener_service.get_webhooks_listeners(
+                space=self.space_id,
+                limit=100,
+            )
+            return response.data or []
+        except ApiException as e:
+            logger.error("PostFinance API error getting webhook listeners: %s", e)
+            raise PostFinanceError(
+                message=str(e),
+                status_code=e.status,
+                error_code=str(e.status),
+            ) from e
+        except PostFinanceCheckoutSdkException as e:
+            logger.error("PostFinance SDK error getting webhook listeners: %s", e)
+            raise PostFinanceError(message=str(e)) from e
+
+    def create_webhook_listener(
+        self,
+        name: str,
+        webhook_url_id: int,
+        entity_id: int,
+        entity_states: list[str],
+    ) -> WebhookListener:
+        """
+        Create a new webhook listener.
+
+        Args:
+            name: A name for this webhook listener.
+            webhook_url_id: The ID of the webhook URL to use.
+            entity_id: The entity type ID to listen for.
+                Common values: 1472041829003 (Transaction), 1472041816898 (Refund)
+            entity_states: List of entity state names to trigger on
+                (e.g., ["AUTHORIZED", "COMPLETED"]).
+
+        Returns:
+            The created WebhookListener object.
+
+        Raises:
+            PostFinanceError: If the request fails.
+        """
+        webhook_listener_create = WebhookListenerCreate(
+            name=name,
+            url=webhook_url_id,
+            entity=entity_id,
+            entityStates=entity_states,
+            state=CreationEntityState.ACTIVE,
+        )
+
+        try:
+            return self._webhook_listener_service.post_webhooks_listeners(
+                space=self.space_id,
+                webhook_listener_create=webhook_listener_create,
+            )
+        except ApiException as e:
+            logger.error("PostFinance API error creating webhook listener: %s", e)
+            raise PostFinanceError(
+                message=str(e),
+                status_code=e.status,
+                error_code=str(e.status),
+            ) from e
+        except PostFinanceCheckoutSdkException as e:
+            logger.error("PostFinance SDK error creating webhook listener: %s", e)
+            raise PostFinanceError(message=str(e)) from e
+
+    def setup_webhooks(self, webhook_url: str) -> dict[str, int | None]:
+        """
+        Set up webhooks for Transaction and Refund state changes.
+
+        This is a convenience method that:
+        1. Creates a webhook URL (or finds an existing one with the same URL)
+        2. Creates a webhook listener for Transaction state changes
+
+        Note: PostFinance does not support webhook listeners for Refund entities.
+        Refund state changes are tracked through the Transaction webhook instead.
+
+        Args:
+            webhook_url: The URL where webhooks will be sent.
+
+        Returns:
+            A dict with keys 'webhook_url_id' and 'transaction_listener_id'.
+
+        Raises:
+            PostFinanceError: If any API request fails.
+        """
+        # PostFinance entity IDs (these are fixed IDs in PostFinance's system)
+        TRANSACTION_ENTITY_ID = 1472041829003
+
+        # Transaction states we care about (all major state changes)
+        TRANSACTION_STATES = [
+            TransactionState.AUTHORIZED.value,
+            TransactionState.COMPLETED.value,
+            TransactionState.FULFILL.value,
+            TransactionState.FAILED.value,
+            TransactionState.DECLINE.value,
+            TransactionState.VOIDED.value,
+            TransactionState.CONFIRMED.value,
+            TransactionState.PROCESSING.value,
+        ]
+
+        result: dict[str, int | None] = {
+            "webhook_url_id": None,
+            "transaction_listener_id": None,
+        }
+
+        # Check if a webhook URL with this URL already exists
+        existing_urls = self.get_webhook_urls()
+        webhook_url_obj = None
+        for existing in existing_urls:
+            if existing.url == webhook_url and existing.state == CreationEntityState.ACTIVE:
+                webhook_url_obj = existing
+                logger.info("Found existing webhook URL with ID %s", existing.id)
+                break
+
+        # Create webhook URL if it doesn't exist
+        if not webhook_url_obj:
+            webhook_url_obj = self.create_webhook_url(
+                name="pretix PostFinance Plugin",
+                url=webhook_url,
+            )
+            logger.info("Created webhook URL with ID %s", webhook_url_obj.id)
+
+        if not webhook_url_obj.id:
+            raise PostFinanceError("Failed to get webhook URL ID")
+
+        result["webhook_url_id"] = webhook_url_obj.id
+
+        # Check existing listeners to avoid duplicates
+        existing_listeners = self.get_webhook_listeners()
+        has_transaction_listener = False
+
+        for listener in existing_listeners:
+            listener_url_id = listener.url.id if listener.url else None
+            if (
+                listener_url_id == webhook_url_obj.id
+                and listener.state == CreationEntityState.ACTIVE
+                and listener.entity == TRANSACTION_ENTITY_ID
+            ):
+                has_transaction_listener = True
+                result["transaction_listener_id"] = listener.id
+                logger.info("Found existing transaction listener with ID %s", listener.id)
+                break
+
+        # Create Transaction listener if it doesn't exist
+        if not has_transaction_listener:
+            transaction_listener = self.create_webhook_listener(
+                name="pretix Transaction Updates",
+                webhook_url_id=webhook_url_obj.id,
+                entity_id=TRANSACTION_ENTITY_ID,
+                entity_states=TRANSACTION_STATES,
+            )
+            result["transaction_listener_id"] = transaction_listener.id
+            logger.info("Created transaction listener with ID %s", transaction_listener.id)
+
+        return result
