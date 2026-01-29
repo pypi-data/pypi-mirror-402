@@ -1,0 +1,70 @@
+<p align="center">
+  <h1 align="center">Fast-SSIM</h1>
+  <p align="center">
+    Speed up your SSIM and PSNR calculations!
+    <br />
+  </p>
+</p>
+
+<br>
+
+## ℹ About
+
+This fork wraps the Fast-SSIM project in an easy to use package that can be readily installed via PyPI.
+To further accelerate processing, this version enables OpenMP multithreading and leverages AVX2/FMA hardware instructions.
+
+## Requirements
+
+- Python 3.9 or higher
+- An AVX2/FMA capable CPU (for older CPUs Fast-SSIM v1.0.2 can be used)
+
+## How to Install
+
+```
+pip install Fast-SSIM
+```
+
+## Usage
+
+The functionalities are explained in the following code snippet that is also provided in this repo:
+
+```python
+from skimage.io import imread
+
+import fast_ssim
+
+img1_path = r"test_images/0.jpg"
+img2_path = r"test_images/1.jpg"
+
+# Load the images into NumPy arrays
+img1 = imread(img1_path)
+img2 = imread(img2_path)
+
+ssim_score = fast_ssim.ssim(
+    img1, img2,
+    data_range=255
+)
+psnr_score = fast_ssim.psnr(
+    img1, img2,
+    data_range=255
+)
+
+print(f"SSIM Score: {ssim_score}")
+print(f"PSNR Score: {psnr_score}")
+```
+
+Output:
+```
+SSIM Score: 0.9886590838432312
+PSNR Score: 31.11587142944336
+```
+
+## Notes
+
+- The SSIM calculation uses sample covariance (and sample variance) for its statistics. This aligns with the default behavior of `scikit-image`'s `structural_similarity` function, where `use_sample_covariance` is True by default.
+
+- This implementation does not offer an option for applying a Gaussian filter to the images or local windows prior to the SSIM/PSNR calculation.
+
+## Original author
+
+Chen Yu / [@Chen Yu](https://github.com/chinue)
