@@ -1,0 +1,115 @@
+Metadata-Version: 2.4
+Name: toktak-config-fetcher
+Version: 1.0.0
+Summary: Config utility library to fetch configuration from AWS SSM/Secrets Manager and .env files
+Author-email: Toktak <g9@ggook.com>
+Project-URL: Homepage, https://gitlab.com/vodaplayvietnam/vti-project-template
+Project-URL: Repository, https://gitlab.com/vodaplayvietnam/vti-project-template
+Keywords: toktak,utils,config,aws,ssm,secrets-manager
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: python-dotenv>=1.0.1
+Requires-Dist: boto3>=1.42.5
+Provides-Extra: dev
+Requires-Dist: boto3-stubs[ssm]>=1.34.0; extra == "dev"
+Requires-Dist: boto3-stubs[secretsmanager]>=1.34.0; extra == "dev"
+Requires-Dist: boto3-stubs[stepfunctions]>=1.34.0; extra == "dev"
+Provides-Extra: test
+Requires-Dist: pytest>=8.0; extra == "test"
+Requires-Dist: pytest-cov>=4.0.0; extra == "test"
+Provides-Extra: linting
+Requires-Dist: flake8>=7.0.0; extra == "linting"
+Requires-Dist: flake8-bugbear>=24.0.0; extra == "linting"
+Requires-Dist: mccabe>=0.7.0; extra == "linting"
+Provides-Extra: security
+Requires-Dist: bandit[toml]>=1.7.0; extra == "security"
+Requires-Dist: pip-audit>=2.6.0; extra == "security"
+
+# Toktak Config Fetcher
+
+## Description
+
+A Python utility library for loading configuration from AWS Systems Manager (SSM) Parameter Store, AWS Secrets Manager, and `.env` files. Provides a unified interface with caching and TTL support.
+
+## Installation
+
+### From PyPI
+
+```bash
+pip install toktak-config-fetcher
+```
+
+### From source
+
+```bash
+git clone <repository-url>
+cd toktak_config_fetcher
+pip install .
+```
+
+## Usage
+
+```python
+from toktak_config_fetcher import preload_config, get_config, get_config_int
+
+# Preload all config from .env and AWS (optional)
+preload_config()  # Loads all keys from .env file
+
+# Or preload specific keys
+preload_config(["DATABASE_URL", "PORT", "API_KEY"])
+
+# Get string config (fetches from AWS if not cached, falls back to .env)
+database_url = get_config("DATABASE_URL", default_value="sqlite:///default.db")
+
+# Get integer config
+port = get_config_int("PORT", default_value=8080)
+```
+
+## Logic Flow
+
+1. Load all config from `.env` file.
+2. Fetch values from AWS for the keys found in `.env` file (if not in local mode).
+3. The values from AWS are stored in a cache.
+4. The cache has a `TTL` (Time to Live) of 300 seconds. If the TTL expires, values will be fetched from AWS again.
+5. The secret key must start with `SECRET_` prefix.
+6. In local mode (`DEPLOY_ENV=local`), only `.env` file values are used.
+7. In non-local mode, AWS values take priority over `.env` file values.
+
+## Environment Variables
+
+### Required Configuration
+
+1. **`REGION`**: The AWS Region. Default value is `ap-northeast-2`
+2. **`ORG`**: Organization name. Default value is `vodaplay`
+3. **`DEPLOY_ENV`**: The AWS Environment. Possible values: `local`, `dev`, `stg`, `prod`. Default is `local`
+4. **`APP_NAMESPACE`**: The group/namespace of this project. The config utils will combine `ORG`, `DEPLOY_ENV`, and `APP_NAMESPACE` to form the prefix for env key when getting config value from AWS
+
+### AWS Configuration
+
+Ensure your AWS credentials are configured via:
+- AWS credentials file (`~/.aws/credentials`)
+- Environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
+- IAM role (when running on EC2/ECS/Lambda)
+
+## AWS Path Structure
+
+- **SSM Parameters**: `/{ORG}/{DEPLOY_ENV}/{APP_NAMESPACE}/{key}` or `/{ORG}/{DEPLOY_ENV}/COMMON/{key}`
+- **Secrets**: `/{ORG}/{DEPLOY_ENV}/{SECRET_key}`
+
+## Development
+
+```bash
+# Install with development dependencies
+pip install -e ".[dev,test,linting]"
+
+# Run tests
+pytest
+
+# Run linting
+flake8 toktak_config_fetcher
+```
