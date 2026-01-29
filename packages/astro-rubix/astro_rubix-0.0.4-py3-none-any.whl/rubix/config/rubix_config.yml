@@ -1,0 +1,247 @@
+# TODO maybe split this into multiple files
+
+constants:
+  LSOL_TO_ERG: 3.828e33
+  MPC_TO_CM: 3.08568e24
+  KPC_TO_CM: 3.08568e21
+  MSUN_TO_GRAMS: 1.989e33
+  SPEED_OF_LIGHT: 299792.458
+  CM_TO_KPC: 3.24078e-22
+  CMS_TO_KMS: 1e-5
+  G_TO_MSOL: 5.02785e-34
+  GCM1_TO_MSOLKM1: 5.02785e-29
+  GCM3_TO_MSOLKM3: 5.02785e-28
+  GCM3_TO_MSOLKPC3: 1.477e31
+  G_CONSTANT_CGS: 6.67430e-11
+  G_IN_KPCMSOLKMS2: 4.3009e-6
+  S_TO_YR: 3.171e-8
+  MASS_OF_PROTON: 1.67262e-24 # grams
+  ADIABATIC_INDEX: 1.6666666666666667 # heat is contained
+  BOLTZMANN_CONSTANT: 1.38066e-16 # cm^2 g s^-2 K-1
+
+logger:
+  log_level: "DEBUG"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  log_file_path: null
+
+IllustrisAPI:
+  DEFAULT_FIELDS:
+    gas:
+      - Coordinates
+      - Density
+      - Masses
+      #- ParticleIDs
+      - GFM_Metallicity
+      - GFM_Metals
+      #- SubfindHsml
+      - StarFormationRate
+      - InternalEnergy
+      - Velocities
+      - ElectronAbundance
+    stars:
+      - Coordinates
+      - GFM_InitialMass
+      # - Masses
+      # - ParticleIDs
+      - GFM_Metallicity
+      - GFM_StellarFormationTime
+      - Velocities
+
+IllustrisHandler:
+  MAPPED_FIELDS:
+    PartType0:
+      Coordinates: coords
+      Density: density
+      Masses: mass
+      GFM_Metallicity: metallicity
+      GFM_Metals: metals
+      StarFormationRate: sfr
+      InternalEnergy: internal_energy
+      Velocities: velocity
+      ElectronAbundance: electron_abundance
+    PartType4:
+      Coordinates: coords
+      GFM_InitialMass: mass
+      GFM_Metallicity: metallicity
+      Velocities: velocity
+      GFM_StellarFormationTime: age # for this we convert SFT to age
+
+  MAPPED_PARTICLE_KEYS:
+    PartType4: stars
+    PartType0: gas
+    # Currently only PartType4 is supported
+
+  SIMULATION_META_KEYS:
+    name: SimulationName
+    snapshot: SnapshotNumber
+    redshift: Redshift
+    subhalo_id: CutoutID
+    api_request: CutoutRequest
+
+  GALAXY_SUBHALO_KEYS:
+    halfmassrad_stars: halfmassrad_stars
+
+  UNITS:
+    gas:
+      coords: cm
+      density: g/cm^3
+      mass: g
+      metallicity: ""
+      metals: ""
+      sfr: Msun/yr
+      internal_energy: erg/g
+      velocity: cm/s
+      electron_abundance: ""
+    stars:
+      coords: cm
+      mass: g
+      metallicity: ""
+      velocity: cm/s
+      age: Gyr
+    galaxy:
+      center: cm
+      halfmassrad_stars: cm
+      redshift: ""
+
+  ILLUSTRIS_DATA:
+    - Header
+    - SubhaloData
+    - PartType4
+    - PartType0
+
+#Defines the fields that are required and the units in which they are stored
+BaseHandler:
+  galaxy:
+    redshift: ""
+    center: "kpc"
+    halfmassrad_stars: "kpc"
+  particles:
+    stars:
+      coords: "kpc"
+      mass: "Msun"
+      velocity: "km/s"
+      metallicity: ""
+      age: "Gyr"
+    gas:
+      coords: "kpc"
+      density: "Msun/kpc^3"
+      mass: "Msun"
+      metallicity: ""
+      metals: ""
+      sfr: "Msun/yr"
+      internal_energy: "erg/g"
+      velocity: "km/s"
+      electron_abundance: ""
+      temperature: "K"
+
+ssp:
+  # units of the SSP grid that is used internally in the code
+  # if a given SSP has different units, they are converted to the ones listed below
+  units:
+    age: Gyr
+    metallicity: ""
+    wavelength: Angstrom
+    flux: Lsun/Angstrom
+  dust:
+    extinction_model: "Cardelli89"
+    Rv: 3.1
+    dust_to_gas_model: "broken power law fit" # fitting model for dust to gas ratio from Remy-Ruyer et al. 2014 Table 1
+    Xco: "Z" # Xco model used in Remy-Ruyer et al. 2014, either "MW" or "Z" see Table 1 in their paper
+    dust_grain_density: 3.5 # g/cm^3 #check this value
+  templates:
+    BruzualCharlot2003:
+      name: "Bruzual & Charlot (2003)"
+      format: "HDF5" # Format of the template
+      source: "https://www.bruzual.org/bc03/" # note: we end with a slash, so that in combination with the file_name, the full URL is formed
+      file_name: "BC03lr.h5" # File name of the template, stored in templates directory
+      # Define the Fields in the template and their units
+      # This is used to convert them to the required units
+      fields: # Fields in the template and their units
+        # Name defines the name of the key stored in the hdf5 file
+        age:
+          name: "age"
+          units: "Gyr" # Age of the template
+          in_log: false # If the field is stored in log scale
+        metallicity:
+          name: "metallicity"
+          units: "" # Metallicity of the template
+          in_log: false # If the field is stored in log scale
+        wavelength:
+          name: "wavelength"
+          units: "Angstrom" # Wavelength of the template
+          in_log: false # If the field is stored in log scale
+        flux:
+          name: "flux"
+          units: "Lsun/Angstrom" # Luminosity of the template
+          in_log: false # If the field is stored in log scale
+
+    Mastar_CB19_SLOG_1_5:
+      name: "Mastar Charlot & Bruzual (2019)"
+      # more information on how those models are synthesized: Appendix A of Sanchez et al. 2022
+      # https://arxiv.org/pdf/2206.07062
+      format: "PyPipe3D" # Format of the template
+      source: "https://ifs.astroscu.unam.mx/pyPipe3D/templates/" # note: we end with a slash, so that in combination with the file_name, the full URL is formed
+      file_name: "MaStar_CB19.slog_1_5.fits.gz" # File name of the template, stored in templates directory
+      # Define the Fields in the template and their units
+      # This is used to convert them to the required units
+      fields: # Fields in the template and their units
+        # Name defines the name of the key stored in the hdf5 file
+        age:
+          name: "age"
+          units: "Gyr" # Age of the template
+          in_log: false # If the field is stored in log scale
+        metallicity:
+          name: "metallicity"
+          units: "" # Metallicity of the template
+          in_log: false # If the field is stored in log scale
+        wavelength:
+          name: "wavelength"
+          units: "Angstrom" # Wavelength of the template
+          in_log: false # If the field is stored in log scale
+        flux:
+          name: "flux"
+          units: 'Lsun/Angstrom' # Luminosity of the template
+          in_log: false # If the field is stored in log scale
+
+
+    FSPS:
+    # The FSPS template makes use of pyFSPS
+    # Since switching between different supported stellar isochrone and spectral libraries in python-FSPS
+    # requires (re-)installing python-FSPS with specific compiler flags we do not add a dependence onto pyFSPS
+    # and leave the installation of it to the user. See here https://dfm.io/python-fsps/current/installation/
+    # for information on the install process.
+      name: "FSPS (Conroy et al. 2009)"
+      # more information on how those models are synthesized: https://github.com/cconroy20/fsps
+      # and https://dfm.io/python-fsps/current/
+      format: "fsps" # Format of the template
+      source: "load_from_file" # the source can be "load_from_file" or "rerun_from_scratch"
+      # "load_from_file" is the default and loads the template from a pre-existing file in h5 format specified by "file_name"
+      # if that file is not found, it will automatically run fsps and save the output to disk in h5 format under the "file_name" given.
+      # "rerun_from_scratch" # note: this is just meant for the case in which you really want to rerun your template library.
+      # You should be aware that fsps templates will silently be overwritten by this. Use with caution.
+      file_name: "fsps.h5" # File name of the template, stored in templates directory
+      # Define the Fields in the template and their units
+      # This is used to convert them to the required units
+      fields: # Fields in the template and their units
+        # Name defines the name of the key stored in the hdf5 file
+        age:
+          name: "age"
+          units: "Gyr" # Age of the template
+          in_log: true # If the field is stored in log scale
+        metallicity:
+          name: "metallicity"
+          units: "" # Metallicity of the template
+          in_log: true # If the field is stored in log scale
+        wavelength:
+          name: "wavelength"
+          units: "Angstrom" # Wavelength of the template
+          in_log: false # If the field is stored in log scale
+        flux:
+          name: "flux"
+          units: 'Lsun/Angstrom' # Luminosity of the template as per pyFSPS documentation
+          in_log: false # If the field is stored in log scale
+
+ifu:
+  # Configuration Related to IFU calculation
+  doppler:
+    velocity_direction: "z" # The velocity component used to calculate doppler shift
