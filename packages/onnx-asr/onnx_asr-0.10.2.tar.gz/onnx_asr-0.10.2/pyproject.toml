@@ -1,0 +1,163 @@
+[project]
+name = "onnx-asr"
+dynamic = ["version"]
+description = "A lightweight Python package for Automatic Speech Recognition using ONNX models"
+authors = [{ name = "Ilya Stupakov", email = "istupakov@gmail.com" }]
+keywords = ["asr", "speech-recognition", "speech-to-text", "onnx", "stt"]
+dependencies = [
+    "numpy>=1.21.6",
+    "typing-extensions>=4.15.0; python_version < '3.11'",
+]
+requires-python = ">=3.10"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Free Threading :: 2 - Beta",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Documentation = "https://istupakov.github.io/onnx-asr"
+"Release notes" = "https://github.com/istupakov/onnx-asr/releases"
+Issues = "https://github.com/istupakov/onnx-asr/issues"
+Source = "https://github.com/istupakov/onnx-asr"
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project.optional-dependencies]
+cpu = ["onnxruntime>=1.18.1"]
+gpu = ["onnxruntime-gpu>=1.18.1"]
+hub = ["huggingface-hub>=0.30.2"]
+
+[project.scripts]
+onnx-asr = "onnx_asr.cli:main"
+
+[dependency-groups]
+build = [
+    "hatch-vcs>=0.5.0",
+    "hatchling>=1.28.0",
+    "numpy>=2.2.6",
+    "onnx>=1.20.1",
+    "onnxscript>=0.5.7",
+    "torch>=2.9.1",
+    "torchaudio>=2.9.1",
+]
+dev = [
+    "ipykernel>=7.1.0",
+    "ipywidgets>=8.1.8",
+    "mypy>=1.19.1",
+    "ruff>=0.14.11",
+    "soundfile>=0.13.1",
+    { include-group = "docs" },
+    { include-group = "test-preprocessors" },
+]
+docs = [
+    "click<8.3",
+    "markdown-callouts>=0.4.0",
+    "mkdocs-material[imaging]>=9.7.1",
+    "mkdocstrings[python]>=1.0.0",
+]
+test = [
+    "huggingface-hub>=0.30.2",
+    "numpy>=1.21.6",
+    "onnxruntime>=1.18.1",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+]
+test-preprocessors = [
+    "kaldi-native-fbank>=1.22.3",
+    "lilcom<1.8.2",
+    "nemo-toolkit[asr]>=2.6.1",
+    "openai-whisper>=20250625",
+    { include-group = "build" },
+    { include-group = "test" },
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch" }
+torchaudio = { index = "pytorch" }
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build]
+only-packages = true
+
+[tool.hatch.build.targets.wheel.hooks.custom]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+pretty = true
+untyped_calls_exclude = "onnxruntime"
+exclude = ["^preprocessors.", "^tests.preprocessors."]
+
+[[tool.mypy.overrides]]
+module = ["onnxruntime.*"]
+follow_untyped_imports = true
+implicit_reexport = true
+
+[[tool.mypy.overrides]]
+module = ["preprocessors.*"]
+follow_imports = "silent"
+
+[tool.ruff]
+line-length = 130
+indent-width = 4
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "A001",
+    "A002",
+    "ANN204",
+    "ARG002",
+    "ARG004",
+    "D203",
+    "D213",
+    "COM812",
+    "PLR",
+    "PLW2901",
+    "S101",
+    "S105",
+    "SLF001",
+    "TC",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN", "D", "PGH003", "PLR0911", "PLR2004"]
+"preprocessors/*" = ["ANN", "D103", "F821", "N802", "N806"]
+"*.ipynb" = ["ANN", "D", "ERA", "RUF001", "T"]
+
+[tool.pytest]
+filterwarnings = [
+    "ignore::DeprecationWarning:onnxscript.*",
+    "ignore::DeprecationWarning:sys.*",
+]
+
+[tool.coverage.run]
+omit = ["tests/*", "hatch_build.py"]
