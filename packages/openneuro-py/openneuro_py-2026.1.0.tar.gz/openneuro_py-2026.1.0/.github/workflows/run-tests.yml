@@ -1,0 +1,63 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: Unit tests
+
+on:
+  # push:
+  #   branches: ['**']
+  pull_request:
+    branches: ['**']
+  create:
+    branches: [main]
+    tags: ['**']
+  # schedule:
+  #   - cron: "0 4 * * *"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+       # Adjust for min and max supported Python versions
+        python-version: ["3.13"]
+        os: [ubuntu-latest, windows-latest, macos-latest, macos-15-intel]
+        include:
+          - python-version: "3.10"
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - name: Install uv and set the python version
+      uses: astral-sh/setup-uv@v7
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install the project
+      run: uv sync --locked --all-extras --dev
+    # Test building & distribution
+    - name: Test building the distributions
+      run: uv build
+    - name: Check if package can be installed and imported
+      run: uv run --isolated --with . --no-project -- python -c "import openneuro"
+    - name: Check if CLI works
+      run: uv run --isolated --with . --no-project -- openneuro-py --help
+    # This is where the actual integration tests start
+    - name: Test CLI commands
+      run: |
+        uv run openneuro-py --help
+        uv run openneuro-py --version
+        uv run openneuro-py download --help
+        uv run openneuro-py login --help
+    - name: Test with pytest
+      env:
+        OPENNEURO_TEST_TOKEN: ${{ secrets.OPENNEURO_TEST_TOKEN }}
+      run: uv run pytest
