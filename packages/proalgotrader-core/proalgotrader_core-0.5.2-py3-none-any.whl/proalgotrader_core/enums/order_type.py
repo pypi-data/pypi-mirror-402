@@ -1,0 +1,6 @@
+from enum import Enum
+
+
+class OrderType(Enum):
+    LIMIT_ORDER = "LIMIT_ORDER"
+    MARKET_ORDER = "MARKET_ORDER"
