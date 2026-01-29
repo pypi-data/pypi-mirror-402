@@ -1,0 +1,119 @@
+# xhttpy
+
+统一的同步/异步 HTTP 客户端，一套 API 搞定所有场景。
+
+## 安装
+
+```bash
+pip install xhttpy
+```
+
+## 快速开始
+
+```python
+from xhttpy import SmartHTTP
+
+# 创建客户端
+client = SmartHTTP()
+
+# 同步请求
+resp = client.get("https://httpbin.org/get")
+print(resp.status_code, resp.json())
+
+resp = client.post("https://httpbin.org/post", json={"key": "value"})
+print(resp.json())
+```
+
+## 异步使用
+
+```python
+import asyncio
+from xhttpy import SmartHTTP
+
+async def main():
+    async with SmartHTTP() as client:
+        resp = await client.get("https://httpbin.org/get")
+        print(resp.status_code, await resp.json_async())
+        
+        resp = await client.post("https://httpbin.org/post", json={"key": "value"})
+        print(await resp.json_async())
+
+asyncio.run(main())
+```
+
+## 流式请求
+
+### 同步流式
+
+```python
+with client.stream("GET", "https://httpbin.org/stream/10") as resp:
+    for line in resp.iter_lines():
+        print(line)
+```
+
+### 异步流式
+
+```python
+async with client.stream("GET", "https://httpbin.org/stream/10") as resp:
+    async for line in resp.iter_lines():
+        print(line)
+```
+
+## 完整 API
+
+### 请求方法
+
+| 方法 | 说明 |
+|------|------|
+| `client.get(url, **kwargs)` | GET 请求 |
+| `client.post(url, **kwargs)` | POST 请求 |
+| `client.put(url, **kwargs)` | PUT 请求 |
+| `client.patch(url, **kwargs)` | PATCH 请求 |
+| `client.delete(url, **kwargs)` | DELETE 请求 |
+| `client.head(url, **kwargs)` | HEAD 请求 |
+| `client.options(url, **kwargs)` | OPTIONS 请求 |
+| `client.stream(method, url, **kwargs)` | 流式请求 |
+
+### 响应对象
+
+**同步代码使用：**
+
+| 属性/方法 | 说明 |
+|-----------|------|
+| `resp.status_code` | HTTP 状态码 |
+| `resp.headers` | 响应头字典 |
+| `resp.text` | 响应文本 |
+| `resp.json()` | JSON 解析 |
+| `resp.content` | 原始字节 |
+
+**异步代码使用：**
+
+| 属性/方法 | 说明 |
+|-----------|------|
+| `resp.status_code` | HTTP 状态码 |
+| `resp.headers` | 响应头字典 |
+| `await resp.text_async()` | 响应文本 |
+| `await resp.json_async()` | JSON 解析 |
+| `await resp.content_async()` | 原始字节 |
+
+### 客户端配置
+
+```python
+client = SmartHTTP(
+    base_url="https://api.example.com",  # 基础 URL（可省略路径前缀）
+    timeout=30.0,                         # 超时时间（秒）
+    headers={"Authorization": "Bearer xxx"},  # 默认请求头
+    backend="httpx",                      # 后端引擎：httpx 或 aiohttp
+)
+
+# 使用 base_url 后，请求时只需写相对路径
+resp = client.get("/users/1")  # 实际请求 https://api.example.com/users/1
+```
+
+## 设计理念
+
+- **统一接口**：同步和异步使用相同的方法名，唯一区别是 `await`
+- **简单规则**：同步用 `json()`，异步用 `await json_async()`
+- **自动检测**：自动检测运行环境，无需手动指定同步/异步模式
+- **流式支持**：`stream()` 方法同时支持 `with` 和 `async with`
+- **响应封装**：统一的 `SmartResponse` 屏蔽底层差异
