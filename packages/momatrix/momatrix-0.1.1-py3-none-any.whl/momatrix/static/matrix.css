@@ -1,0 +1,242 @@
+.momatrix-container {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background-color: var(--marimo-bg, white);
+    color: var(--marimo-text, black);
+    width: fit-content;
+}
+
+.momatrix-controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 8px;
+    justify-content: center; /* Center controls */
+    font-size: 12px; /* Smaller text */
+    opacity: 0.6; /* De-emphasize until interaction */
+    transition: opacity 0.2s;
+}
+
+.momatrix-controls:hover, .momatrix-controls:focus-within {
+    opacity: 1;
+}
+
+.momatrix-control-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.momatrix-control-group label {
+    font-size: 1em;
+    font-weight: normal;
+    color: var(--marimo-text-dim, #888); /* Use a dimmed color */
+}
+
+.momatrix-input-dim {
+    width: 32px; /* Smaller width */
+    padding: 0 2px;
+    border: none;
+    border-bottom: 1px solid var(--marimo-border, #ccc);
+    border-radius: 0; /* Square for minimal look */
+    background-color: transparent; /* No background */
+    color: var(--marimo-text, black);
+    text-align: center;
+    font-size: 1em;
+    height: 20px;
+}
+
+.momatrix-cell:focus, .momatrix-input-dim:focus {
+    outline: none;
+    border-color: var(--marimo-primary, #007bff);
+}
+
+.momatrix-input-dim:focus {
+    border-bottom-width: 2px;
+    margin-bottom: -1px; /* Prevent layout shift */
+}
+
+.momatrix-grid {
+    display: grid;
+    gap: 5px;
+    overflow: auto;
+    max-height: 400px;
+}
+
+.momatrix-cell {
+    width: 80px;
+    padding: 6px;
+    border: 1px solid #eee;
+    border-radius: 4px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    background-color: var(--marimo-input-bg, white);
+    color: var(--marimo-text, black);
+}
+
+.momatrix-cell:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+/* Dark mode handling if marimo variables aren't present or specific overrides needed */
+@media (prefers-color-scheme: dark) {
+    .momatrix-container {
+        border-color: #444;
+        background-color: #222;
+        color: #eee;
+    }
+    .momatrix-cell {
+        background-color: #333;
+        border-color: #555;
+        color: #eee;
+    }
+    .momatrix-input-dim {
+        color: #eee;
+        border-bottom-color: #555;
+    }
+}
+
+/* --- LaTeX Styles Support --- */
+
+/* When a style is active, treat the grid like a matrix wrapper */
+[class*="momatrix-style-"] .momatrix-grid {
+    position: relative;
+    padding: 0 10px; /* Space for brackets */
+    gap: 10px; /* More gap for readability */
+    overflow: visible; /* Brackets might stick out */
+    align-items: center;
+    justify-content: center;
+    display: inline-grid; /* Fit content */
+}
+
+/* Pseudo-elements for brackets */
+[class*="momatrix-style-"] .momatrix-grid::before,
+[class*="momatrix-style-"] .momatrix-grid::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    width: 8px;
+    height: 100%;
+    pointer-events: none;
+    border-style: solid;
+    border-color: var(--marimo-text, black);
+    border-width: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+    [class*="momatrix-style-"] .momatrix-grid::before,
+    [class*="momatrix-style-"] .momatrix-grid::after {
+        border-color: #eee;
+    }
+}
+
+/* Position brackets */
+[class*="momatrix-style-"] .momatrix-grid::before {
+    left: 0;
+}
+[class*="momatrix-style-"] .momatrix-grid::after {
+    right: 0;
+}
+
+/* pmatrix: Curved brackets */
+.momatrix-style-pmatrix .momatrix-grid::before {
+    border-left-width: 2px;
+    border-top-left-radius: 50% 10%;
+    border-bottom-left-radius: 50% 10%;
+    /* Subtle curvature tricks usually need SVG or images, 
+       but borders with radius is a decent CSS approximation for a prototype */
+    border-radius: 12px 0 0 12px; 
+    border-width: 2px 0 2px 2px;
+}
+.momatrix-style-pmatrix .momatrix-grid::after {
+    border-radius: 0 12px 12px 0;
+    border-width: 2px 2px 2px 0;
+}
+
+/* bmatrix: Square brackets */
+.momatrix-style-bmatrix .momatrix-grid::before {
+    border-left-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+}
+.momatrix-style-bmatrix .momatrix-grid::after {
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+}
+
+/* Bmatrix: Curly braces - hard to do perfectly with borders, using 'content' approximation if possible or border trick */
+/* For robust curly braces in CSS, usually images or specific fonts are used. 
+   We will try a border approximation similar to pmatrix but 'sharper' or just standard braces via content if layout allows.
+   Actually, let's use ::before/::after content with huge font size if we can center it, but grid height varies.
+   Let's stick to a visual approximation or just brackets for now to ensure robustness.
+   Let's use a "brace-like" border style.
+*/
+.momatrix-style-Bmatrix .momatrix-grid::before {
+    border-left-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-radius: 5px 0 0 5px; /* Slight curve */
+}
+.momatrix-style-Bmatrix .momatrix-grid::after {
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-radius: 0 5px 5px 0;
+}
+
+/* vmatrix: Vertical lines */
+.momatrix-style-vmatrix .momatrix-grid::before {
+    border-left-width: 2px;
+}
+.momatrix-style-vmatrix .momatrix-grid::after {
+    border-right-width: 2px;
+}
+
+/* Vmatrix: Double vertical lines */
+.momatrix-style-Vmatrix .momatrix-grid::before {
+    border-left-width: 4px;
+    border-style: double;
+}
+.momatrix-style-Vmatrix .momatrix-grid::after {
+    border-right-width: 4px;
+    border-style: double;
+}
+
+
+/* Input Styling in LaTeX Mode */
+[class*="momatrix-style-"] .momatrix-container {
+    border: none;
+    background: transparent;
+    padding: 0;
+}
+
+[class*="momatrix-style-"] .momatrix-cell {
+    border: 1px solid transparent; /* Reserve space to prevent layout shift */
+    background: transparent;
+    font-family: "KaTeX_Main", "Times New Roman", serif;
+    font-size: 1.1em;
+    padding: 2px;
+    width: 60px; /* Slightly narrower */
+}
+
+/* Show border/bg on focus or hover for editability cues */
+[class*="momatrix-style-"] .momatrix-cell:hover,
+[class*="momatrix-style-"] .momatrix-cell:focus {
+    border-color: #ddd;
+    background-color: var(--marimo-input-bg, white);
+}
+@media (prefers-color-scheme: dark) {
+    [class*="momatrix-style-"] .momatrix-cell:hover,
+    [class*="momatrix-style-"] .momatrix-cell:focus {
+        border-color: #555;
+        background-color: #333;
+    }
+}
