@@ -1,0 +1,220 @@
+Metadata-Version: 2.4
+Name: phiarchive
+Version: 2.0.0
+Summary: Phigros Cloud record and Local record tool Made by Teinxiction
+Author-email: Teinxiction <3136695361@qq.com>
+License: MIT
+Project-URL: Homepage, https://github.com/Teinxiction/PhiArchive
+Project-URL: Bug Tracker, https://github.com/Teinxiction/PhiArchive/issues
+Keywords: phigros,game,archive,crypto,decrypt,cloud-save
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Security :: Cryptography
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: requests>=2.28.0
+Requires-Dist: pycryptodome>=3.17.0
+Dynamic: license-file
+
+# PhiArchive
+PhiArchive(原TxGetScore-V2)将Phigros的查分逻辑变成了一个可调用的API，而不是一个网页应用
+```python
+PhiArchive 类使用说明
+==============
+
+基础用法:
+1. 创建实例: phi = PhiArchive()
+2. 设置云存档token: phi.set_session_token("your_token")
+3. 调用相应方法
+
+======================================================================
+云存档功能 (需要session token)
+======================================================================
+
+1. 获取用户信息:
+   user_info = phi.cloud_get_user_info()
+   返回: 包含nickname, username, email等的字典
+
+2. 获取存档摘要:
+   save_info = phi.cloud_get_save_info()
+   返回: 包含存档元数据的字典
+
+3. 获取用户信息和存档摘要(并发):
+   summary = phi.cloud_get_summary_and_name()
+   返回: 包含nickname, user_info, summary的字典
+
+4. 获取存档文件URL:
+   url = phi.cloud_get_save_url(summary_and_name)
+   参数: summary_and_name - cloud_get_summary_and_name()返回的字典
+   返回: 存档文件下载URL
+
+5. 下载并解密所有存档文件:
+   all_data = phi.cloud_get_all_files()
+   返回: 包含以下键的字典:
+     - gameRecord: 歌曲成绩数据(JSON字符串)
+     - gameKey: 解锁数据(JSON字符串)
+     - gameProgress: 游戏进度数据(JSON字符串)
+     - settings: 设置数据(JSON字符串)
+     - user: 用户数据(JSON字符串)
+     - nickname: 昵称
+     - summary: 存档摘要
+     - userInfo: 用户信息
+
+======================================================================
+本地存档加解密功能
+======================================================================
+
+1. 解密单个字符串:
+   decrypted, success = PhiArchive.local_decrypt_string("加密字符串")
+   返回: (解密后的字符串, 是否成功解密)
+
+2. 加密单个字符串:
+   encrypted = PhiArchive.local_encrypt_string("原始字符串")
+   返回: 加密后的字符串
+
+3. 解密XML存档文件:
+   skip_keys = phi.local_decrypt_xml("加密存档.xml", "解密后存档.xml")
+   参数:
+     - 输入文件路径
+     - 输出文件路径
+   返回: 需要跳过加密的键列表
+
+4. 加密XML存档文件:
+   phi.local_encrypt_xml("解密存档.xml", "加密后存档.xml", skip_keys)
+   参数:
+     - 输入文件路径
+     - 输出文件路径
+     - 跳过加密的键列表(通常来自local_decrypt_xml的返回值)
+
+======================================================================
+存档格式转换功能
+======================================================================
+
+1. 本地存档转云存档格式:
+   cloud_data = phi.local_to_cloud("本地存档.xml")
+   返回: 云存档格式数据字典
+   包含: gameRecord, gameKey, gameProgress, settings, user等
+
+2. 云存档转本地存档格式:
+   local_path = phi.cloud_to_local(cloud_data, "输出路径.xml")
+   参数:
+     - cloud_data: 云存档数据(cloud_get_all_files()返回的字典)
+     - 输出文件路径
+   返回: 生成的本地存档文件路径
+
+3. 解析本地存档为云存档格式(不加密):
+   cloud_format = phi.local_parse_to_cloud_format("解密后的本地存档.xml")
+   返回: 云存档格式数据字典
+
+4. 解析云存档为本地存档格式(不加密):
+   xml_content = phi.cloud_parse_to_local_format(cloud_data, "输出路径.xml")
+   参数:
+     - cloud_data: 云存档数据
+     - 输出文件路径
+   返回: 生成的XML文件路径
+
+======================================================================
+内部解密方法 (一般不需要直接调用)
+======================================================================
+
+1. 解密游戏记录: _cloud_decrypt_gameRecord(data_bytes)
+2. 解密解锁数据: _cloud_decrypt_gameKey(data_bytes)
+3. 解密游戏进度: _cloud_decrypt_gameProgress(data_bytes)
+4. 解密设置: _cloud_decrypt_settings(data_bytes)
+5. 解密用户数据: _cloud_decrypt_user(data_bytes)
+
+======================================================================
+常用工作流示例
+======================================================================
+
+# 示例1: 从手机备份存档转换为云存档格式
+1. 从手机获取存档文件: com.PigeonGames.Phigros.v2.playerprefs.xml
+2. 解密存档: skip_keys = phi.local_decrypt_xml("playerprefs.xml", "decrypted.xml")
+3. 转换为云存档格式: cloud_data = phi.local_to_cloud("playerprefs.xml")
+4. 保存: import json; json.dump(cloud_data, file)
+
+# 示例2: 从云存档恢复为本地存档
+1. 获取云存档: cloud_data = phi.cloud_get_all_files()
+2. 转换为本地格式: local_path = phi.cloud_to_local(cloud_data, "restored.xml")
+3. 将restored.xml复制到手机相应目录
+
+# 示例3: 修改本地存档后重新加密
+1. 解密存档: skip_keys = phi.local_decrypt_xml("original.xml", "decrypted.xml")
+2. 修改decrypted.xml文件内容
+3. 重新加密: phi.local_encrypt_xml("decrypted.xml", "modified.xml", skip_keys)
+
+======================================================================
+注意事项
+======================================================================
+
+1. 云存档功能需要有效的session token
+2. 本地存档加解密使用不同的AES密钥(与云存档不同)
+3. local_encrypt_xml需要skip_keys参数，来自local_decrypt_xml的返回值
+4. 转换过程中部分数据可能丢失，建议备份原始文件
+5. 存档文件路径需要正确设置读写权限
+
+======================================================================
+快速使用示例
+======================================================================
+
+# 简化的使用流程
+phi = PhiArchive()
+
+# 模式1: 获取云存档
+phi.set_session_token("your_token")
+cloud_data = phi.cloud_get_all_files()
+
+# 模式2: 解密本地存档
+skip_keys = phi.local_decrypt_xml("encrypted.xml", "decrypted.xml")
+
+# 模式3: 格式转换
+cloud_data = phi.local_to_cloud("local_save.xml")
+local_path = phi.cloud_to_local(cloud_data, "output.xml")
+
+======================================================================
+错误处理
+======================================================================
+
+所有方法可能抛出异常，建议使用try-except:
+try:
+    data = phi.cloud_get_all_files()
+except Exception as e:
+    print(f"错误: {e}")
+
+======================================================================
+数据格式说明
+======================================================================
+
+1. gameRecord格式:
+   {
+     "song_id": {
+       "EZ": {"score": 1000000, "acc": 100.0, "ifFC": true},
+       "HD": {"score": 1000000, "acc": 100.0, "ifFC": true},
+       ...
+     }
+   }
+
+2. local_parse_to_cloud_format返回格式:
+   {
+     "gameRecord": "JSON字符串",
+     "gameKey": "JSON字符串",
+     ...
+   }
+
+======================================================================
+保存和加载
+======================================================================
+
+# 保存云存档数据
+import json
+with open('cloud_backup.json', 'w', encoding='utf-8') as f:
+    json.dump(cloud_data, f, ensure_ascii=False, indent=2)
+
+# 加载云存档数据
+with open('cloud_backup.json', 'r', encoding='utf-8') as f:
+    cloud_data = json.load(f)
+```
