@@ -1,0 +1,238 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cihub"
+version = "1.0.16"
+description = "Centralized CI/CD orchestration hub for multi-repository pipelines"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Elastic License 2.0"}
+authors = [
+    {name = "jguida941"}
+]
+keywords = ["ci", "cd", "github-actions", "devops", "automation", "testing", "linting", "security"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Build Tools",
+]
+dependencies = [
+    "pyyaml>=6.0",
+    "jsonschema>=4.21.0",
+    "defusedxml>=0.7.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/jguida941/ci-cd-hub"
+Repository = "https://github.com/jguida941/ci-cd-hub"
+Documentation = "https://github.com/jguida941/ci-cd-hub/tree/main/docs"
+Issues = "https://github.com/jguida941/ci-cd-hub/issues"
+
+[project.optional-dependencies]
+dev = [
+    # Testing
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "pytest-benchmark>=5.0.0",
+    "pytest-xdist>=3.0",  # Parallel test execution
+    "hypothesis>=6.0",  # Property-based testing
+    "syrupy>=5.0.0",
+    "mutmut>=2.4.0",
+    # Linting & Formatting
+    "ruff>=0.8.0",
+    "black>=24.0",  # Optional formatter (CI parity)
+    "isort>=5.12.0",  # Import sorting (CI parity)
+    "yamllint>=1.33.0",
+    "zizmor>=1.0.0",  # Requires 1.x for proper SARIF level output
+    # Type Checking
+    "mypy>=1.8.0",
+    "types-PyYAML>=6.0",
+    "types-jsonschema>=4.0",
+    # Security
+    "bandit[toml]>=1.7.9",
+    "pip-audit>=2.7.0",
+    # Pre-commit
+    "pre-commit>=3.6.0",
+    # License compliance
+    "pip-licenses>=4.3.0",
+    # Wizard (needed for test_wizard_questions.py)
+    "questionary>=2.0.0",
+    "rich>=13.0.0",
+]
+ci = [
+    # See requirements/ci.txt for pinned CI versions
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "pytest-benchmark>=5.0.0",
+    "syrupy>=4.0.0",
+    "hypothesis>=6.0",
+    "mutmut>=2.4.0",
+    "ruff>=0.8.0",
+    "mypy>=1.8.0",
+    "yamllint>=1.33.0",
+    "types-PyYAML>=6.0",
+    "black>=24.0",
+    "isort>=5.12.0",
+    "bandit[toml]>=1.7.9",
+    "pip-audit>=2.7.0",
+    "semgrep>=1.90.0",
+    "zizmor>=1.0.0",  # Requires 1.x for proper SARIF level output
+    "pip-licenses>=4.3.0",
+]
+wizard = [
+    "questionary>=2.0.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+# DEPRECATED: hub-config and hub-report removed (use cihub CLI instead)
+# Removal date: 2026-02-01
+# - hub-config → cihub config show
+# - hub-report → cihub report dashboard
+cihub = "cihub.__main__:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["cihub*"]
+
+[tool.setuptools.package-data]
+cihub = [
+    "data/schema/*.json",
+    "data/config/*.yaml",
+    "data/config/repos/*.yaml",
+    "data/templates/**/*",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = ["_quarantine"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "S", "B", "I"]
+ignore = ["S101"]  # Allow assert in tests
+
+[tool.ruff.lint.per-file-ignores]
+# E402: Late imports are intentional to avoid circular dependencies
+"cihub/commands/report/__init__.py" = ["E402"]
+"cihub/services/ci_engine/__init__.py" = ["E402"]
+"cihub/commands/triage/__init__.py" = ["I001"]
+"cihub/services/triage_service.py" = ["I001"]
+# S603/S105/S106/S108: Security warnings are false positives in test code
+"tests/test_fix_command.py" = ["S603"]
+"tests/test_migrated_commands_contract.py" = ["S106"]
+"tests/test_output_context.py" = ["S105"]
+"tests/test_schema_contract.py" = ["S108"]
+"tests/test_services_ci.py" = ["B017"]
+"tests/**" = ["S102", "S105", "S106", "S108", "S603", "S607"]
+
+[tool.ruff.format]
+# Black-compatible formatting
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+exclude = "cihub/data/templates/scaffold/.*"
+
+[tool.black]
+line-length = 120
+target-version = ["py310"]
+extend-exclude = "_quarantine"
+
+[tool.isort]
+profile = "black"
+line_length = 120
+skip = ["_quarantine", ".venv", "cihub-cli/node_modules"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+markers = [
+    "hypothesis: hypothesis-based property tests (run with derandomize=True in CI/mutation)",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+
+[tool.coverage.run]
+source = ["cihub", "scripts"]
+omit = [
+    "scripts/debug_orchestrator.py",
+    "scripts/run_cli_integration.py",
+    # Utility scripts not executed via CLI - exclude from coverage
+    "scripts/check_test_drift.py",
+    "scripts/generate_test_readme.py",
+    "scripts/install.py",
+    "scripts/update_test_metrics.py",
+    # Note: cihub/wizard/validators.py is in mutation targets, so we measure coverage
+    # The rest of wizard uses interactive prompts and is hard to unit test
+    "cihub/wizard/questions/*",
+    "cihub/wizard/summary.py",
+    "cihub/wizard/core.py",
+    "cihub/wizard/styles.py",
+    "cihub/__main__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
+
+# Mutation testing: only modules with 95%+ test coverage and proper test
+# assertions are included. To add modules, ensure they can kill all mutants.
+[tool.mutmut]
+paths_to_mutate = [
+    "cihub/wizard/validators.py",
+    "cihub/ci_report.py",
+    "cihub/diagnostics/",
+    "cihub/exit_codes.py",
+    "cihub/commands/ci.py",
+    "cihub/services/ci_engine/",
+    "cihub/commands/check.py",
+]
+tests_dir = ["tests/"]
+also_copy = ["cihub/", "scripts/", "config/", "schema/", "templates/", ".github/", "pyproject.toml"]
+mutate_only_covered_lines = true
+# Configure pytest for mutation testing via CLI args
+# Note: mutmut 3.x uses pytest_add_cli_args, NOT test_command
+# - Use deterministic hypothesis profile (derandomize=True, fewer examples, database=None)
+# - Ignore triage tests (require specific fixtures that aren't available in mutmut subprocess)
+# - Ignore ALL test files with @given (hypothesis) decorators - hypothesis has fundamental
+#   incompatibility with mutmut's subprocess isolation. Tests pass in normal pytest but
+#   consistently fail in mutmut's clean test phase with truncated tracebacks.
+#   The hypothesis tests still run in unit tests, just not during mutation testing.
+pytest_add_cli_args = [
+    # On macOS, set PYTEST_SKIP_READLINE_WORKAROUND=1 if readline import segfaults.
+    "--hypothesis-profile=mutation",
+    "--ignore-glob=**/test_triage*.py",
+    "--ignore-glob=**/test_exec_utils.py",
+    "--ignore-glob=**/test_migrated_commands_contract.py",
+    "--ignore-glob=**/test_output_renderers.py",
+    "--ignore-glob=**/test_output_context.py",
+    "--ignore-glob=**/test_property_based.py",
+    "--ignore-glob=**/test_property_based_extended.py",
+    "--ignore-glob=**/test_utils_project.py",
+    "--ignore-glob=**/test_docs_stale.py",
+    "--ignore-glob=**/test_tool_helpers.py",
+    "--ignore-glob=**/test_commands_extended.py",
+    "--ignore-glob=**/test_cihub_cli.py",  # Uses capsys fixture (requires capture plugin)
+    "--ignore-glob=**/test_cli_command_matrix.py",  # Uses capsys fixture (requires capture plugin)
+    "--ignore-glob=**/test_cli_commands.py",  # Uses capsys fixture (requires capture plugin)
+]
