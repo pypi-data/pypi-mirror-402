@@ -1,0 +1,92 @@
+Metadata-Version: 2.4
+Name: Javis_agent
+Version: 1.1.3
+Summary: AI agent for coding assistant
+Author: Tran Anh Tai
+License: MIT
+Keywords: automation,fetch,llm,mcp,web
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Requires-Python: >=3.10
+Requires-Dist: anyio>=4.5
+Requires-Dist: click>=8.1.0
+Requires-Dist: faiss-cpu>=1.7.4
+Requires-Dist: httpx>=0.27
+Requires-Dist: langchain-community>=0.0.20
+Requires-Dist: langchain-huggingface
+Requires-Dist: langchain-openai>=0.0.5
+Requires-Dist: langchain>=0.1.0
+Requires-Dist: langgraph>=0.0.20
+Requires-Dist: mcp
+Requires-Dist: openai>=1.0.0
+Requires-Dist: pymupdf
+Requires-Dist: python-dotenv
+Requires-Dist: sentence-transformers
+Description-Content-Type: text/markdown
+
+# Javis Agent
+
+## Build local (dev mode)
+pip install -e .
+
+## Publish package without code
+### 1. Cài đặt PyArmor
+```bash
+cd /home/worker/src/codefun/deepl/javis_agent
+source venv/bin/activate
+pip install pyarmor
+```
+
+### 2. Obfuscate source code
+```bash
+# Tạo thư mục output cho code đã obfuscate
+pyarmor gen -O dist_obfuscated javis/
+
+# Kết quả: thư mục dist_obfuscated/ sẽ chứa code đã mã hóa
+```
+
+### 3. Cấu trúc thư mục sau khi obfuscate
+```
+javis_agent/
+├── pyproject.toml
+├── dist_obfuscated/
+│   └── javis/          # Code đã obfuscate
+│       ├── __init__.py
+│       ├── server.py
+│       └── ...
+```
+
+### 4. Sửa pyproject.toml để build từ code obfuscated
+Thêm vào pyproject.toml:
+
+```toml
+[tool.hatch.build.targets.wheel]
+packages = ["dist_obfuscated/javis"]
+```
+
+### 5. Build package
+```bash
+# Xóa dist cũ
+rm -rf dist
+
+# Install twine (if not)
+pip install build twine
+
+# build without code
+python -m build --wheel
+# python -m build: to both .whl and .tar.gz source, not recommend
+# Kết quả: dist/ sẽ có .whl và .tar.gz với code đã mã hóa
+
+### 6. Upload lên PyPI
+```bash
+twine upload dist/*
+```
+
+
+## User installation
+python3 -m venv venv
+source venv/bin/activate
+pip install javis-agent
