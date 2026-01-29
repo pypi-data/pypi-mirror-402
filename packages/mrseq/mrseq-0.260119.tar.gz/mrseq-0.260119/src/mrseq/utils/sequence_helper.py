@@ -1,0 +1,162 @@
+"""Helper functions for the creation of sequences."""
+
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version
+from typing import Literal
+
+import numpy as np
+import pypulseq as pp
+
+
+def round_to_raster(value: float, raster_time: float, method: Literal['floor', 'round', 'ceil'] = 'round') -> float:
+    """Round a value to the given raster time using the defined method.
+
+    Parameters
+    ----------
+    value
+        Value to be rounded.
+    raster_time
+        Raster time, e.g. gradient, rf or ADC raster time.
+    method
+        Rounding method. Options: "floor", "round", "ceil".
+
+    Returns
+    -------
+    rounded_value
+        Rounded value.
+    """
+    if method == 'floor':
+        return raster_time * np.floor(value / raster_time).item()
+    elif method == 'round':
+        return raster_time * np.round(value / raster_time).item()
+    elif method == 'ceil':
+        return raster_time * np.ceil(value / raster_time).item()
+    else:
+        raise ValueError(f'Unknown rounding method: {method}. Expected: "floor", "round" or "ceil".')
+
+
+def find_gx_flat_time_on_adc_raster(
+    n_readout: int,
+    adc_dwell_time: float,
+    grad_raster_time: float,
+    adc_raster_time: float,
+    max_m: int = 10000,
+    tol: float = 1e-9,
+):
+    """Return flat time of readout gradient on gradient raster with adc dwell time on adc raster.
+
+    For a given number of readout points n_readout we have:
+
+    gx_flat_time = n_readout * adc_dwell_time
+
+    In the following we try to find a pair of gx_flat_time and adc_dwell_time which full-fills the above
+    equation and the conditions that gx_flat_time is an integer multiple of the gradient raster time:
+
+    gx_flat_time = n_gx * grad_raster_time
+
+    and that adc_dwell_time is an integer multiple of the adc raster time:
+
+    adc_dwell_time = n_adc * adc_raster_time
+
+    Parameters
+    ----------
+    n_readout
+        Number of readout samples
+    adc_dwell_time
+        Ideal adc dwell time, does not have to be on adc raster
+    grad_raster_time
+        Gradient raster time
+    adc_raster_time
+        Adc raster time
+    max_m
+        Highest integer multiple to look for. max_m * adc_raster_time gives largest possible adc_dwell_time
+    tol
+        Tolerance of how close values have to be to an integer
+
+    Returns
+    -------
+    gx_flat_time
+        gx_flat_time on gradient raster
+    adc_dwell_time
+        Adc dwell time matching gx_flat_time / n_readout and on adc raster
+    """
+    raster_time_ratio = (n_readout * adc_raster_time) / grad_raster_time
+    start_m = int(max(np.floor(adc_dwell_time / adc_raster_time), 1))
+    # We look for smaller adc_dwell_times
+    adc_dwell_time_smaller: float | None = None
+    for m in np.arange(start_m, 1, -1):
+        k = m * raster_time_ratio
+        if np.isclose(k, np.round(k), atol=tol):  # Check if k is "close enough" to an integer
+            adc_dwell_time_smaller = float(m * adc_raster_time)
+            break
+    adc_dwell_time_larger: float | None = None
+    for n in range(start_m, max_m):
+        j = n * raster_time_ratio
+        if np.isclose(j, np.round(j), atol=tol):  # Check if j is "close enough" to an integer
+            adc_dwell_time_larger = float(n * adc_raster_time)
+            break
+    if adc_dwell_time_larger is None and adc_dwell_time_smaller is None:
+        raise ValueError('No adc_dwell_time found within search range.')
+
+    # Select value which is closer to original adc_dwell_time
+    if adc_dwell_time_smaller is None and adc_dwell_time_larger is not None:
+        adc_dwell_time = adc_dwell_time_larger
+    elif adc_dwell_time_larger is None and adc_dwell_time_smaller is not None:
+        adc_dwell_time = adc_dwell_time_smaller
+    elif adc_dwell_time_smaller is not None and adc_dwell_time_larger is not None:
+        if np.abs(adc_dwell_time - adc_dwell_time_smaller) < np.abs(adc_dwell_time - adc_dwell_time_larger):
+            adc_dwell_time = adc_dwell_time_smaller
+        else:
+            adc_dwell_time = adc_dwell_time_larger
+
+    return adc_dwell_time * n_readout, adc_dwell_time
+
+
+def _parse_version_tuple(v: str) -> tuple[int, ...]:
+    """Parse a version string into a tuple of integers."""
+    v = v.split('+', 1)[0]
+    v = v.split('-', 1)[0]
+    parts: list[int] = []
+    for token in v.split('.'):
+        if token.isdigit():
+            parts.append(int(token))
+        else:
+            digits = ''.join(ch for ch in token if ch.isdigit())
+            parts.append(int(digits) if digits else 0)
+    return tuple(parts)
+
+
+def _pypulseq_version_tuple() -> tuple[int, ...]:
+    """Return the version of PyPulseq as a tuple of integers."""
+    try:
+        return _parse_version_tuple(version('pypulseq'))
+    except PackageNotFoundError:
+        return (0,)
+
+
+def write_sequence(
+    seq: pp.Sequence,
+    filename: str,
+    create_signature: bool = True,
+    v141_compatibility: bool = True,
+    **kwargs,
+):
+    """Write a PyPulseq sequence to a *.seq file.
+
+    Parameters
+    ----------
+    seq
+        PyPulseq sequence object
+    filename
+        Name of the *.seq file
+    create_signature
+        Whether to create a signature in the *.seq file
+    v141_compatibility
+        Whether to use v1.4.1 compatibility mode
+    **kwargs
+        Additional keyword arguments passed to the PyPulseq write function
+    """
+    pypulseq_version = _pypulseq_version_tuple()
+    if pypulseq_version >= (1, 5, 0):
+        return seq.write(filename, create_signature=create_signature, v141_compat=v141_compatibility, **kwargs)
+    return seq.write(filename, create_signature=create_signature, **kwargs)

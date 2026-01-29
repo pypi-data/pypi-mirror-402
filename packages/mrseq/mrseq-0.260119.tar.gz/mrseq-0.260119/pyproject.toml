@@ -1,0 +1,141 @@
+[build-system]
+requires = ["setuptools>=42", "wheel", "setuptools-git-versioning>=2.0,<3"]
+build-backend = "setuptools.build_meta:__legacy__"
+
+[tool.setuptools-git-versioning]
+count_commits_from_version_file = true
+enabled = true
+version_file = "src/mrseq/VERSION"
+template = "{tag}{env:VERSIONSUFFIX:''}"
+dev_template = "{tag}{env:VERSIONSUFFIX:''}"
+dirty_template = "{tag}+dirty{sha}"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"mrseq" = ["VERSION"]
+
+[project]
+name = "mrseq"
+description = "(Py)Pulseq-based MRI sequences."
+readme = "README.md"
+requires-python = ">=3.10,<3.15"
+dynamic = ["version"]
+keywords = ["MRI, Pulseq, PyPulseq, pulse sequence"]
+authors = [
+    { name = "Patrick Schuenke", email = "patrick.schuenke@ptb.de" },
+    { name = "Christoph Kolbitsch", email = "christoph.kolbitsch@ptb.de" },
+]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3 :: Only",
+]
+
+dependencies = [
+    "numpy>=1.23,<3.0",
+    "matplotlib<4.0",
+    "pypulseq>=1.4.1",
+    "ismrmrd>=1.14.1",
+]
+
+[project.optional-dependencies]
+tests = [
+    "coverage",
+    "codecov",
+    "pre-commit",
+    "pytest",
+    "pytest-cov",
+    "pytest-xdist",
+]
+examples = ["mrzerocore>=0.4.3", "mrpro", "cmap", "jupyter-book<2.0"]
+dev = ["mrseq[tests, examples]"]
+
+[project.urls]
+"repository" = "https://github.com/PTB-MR/mrseq"
+
+# PyTest section
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    "error",
+    'ignore:WARNING! The sequence in memory uses "soft delay" extension, which is incompatible with the file format v1.4.1',
+]
+
+[tool.ruff]
+line-length = 120
+extend-exclude = ["__init__.py"]
+exclude = ["docs/**"]
+
+[tool.ruff.lint]
+select = [
+    "A",   # flake8-builtins
+    "ARG", # flake8-unused-arguments
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "COM", # flake8-commas
+    "D",   # pydocstyle
+    "E",   # pycodestyle errors
+    "F",   # Pyflakes
+    "FA",  # flake8-future-annotations
+    "I",   # isort
+    "RUF", # Ruff-specific rules
+    "S",   # flake8-bandit
+    "SIM", # flake8-simplify
+    "UP",  # pyupgrade
+    "PIE", # flake8-pie
+    "PTH", # flake8-use-pathlib
+    "Q",   # flake8-quotes
+    "W",   # pycodestyle warnings
+    "YTT", # flake8-2020
+]
+extend-select = [
+    "BLE001", #  blind exception
+]
+ignore = [
+    "N999",   #  invalid module name
+    "COM812", #  missing-trailing-comma (conflict with formatter)
+    "S101",   #  use of assert
+    "SIM108", #  if-else-block-instead-of-if-exp
+]
+
+[tool.typos.default.extend-words]
+arange = "arange" # torch.arange
+
+[tool.ruff.lint.isort]
+force-single-line = true
+
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "double"
+inline-quotes = "single"
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.format]
+quote-style = "single"
+skip-magic-trailing-comma = false
+
+[tool.typos.default]
+locale = "en-us"
+
+# MyPy section
+[tool.mypy]
+warn_return_any = false
+check_untyped_defs = true
+warn_no_return = true
+warn_unreachable = true
+exclude = ["docs"]
+enable_error_code = ["ignore-without-code"]
+warn_unused_ignores = true
+
+
+[[tool.mypy.overrides]]
+module = ["ismrmrd.*", "pypulseq.*"]
+ignore_missing_imports = true
