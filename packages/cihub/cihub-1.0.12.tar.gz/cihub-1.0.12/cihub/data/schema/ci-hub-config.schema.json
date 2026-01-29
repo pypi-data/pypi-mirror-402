@@ -1,0 +1,1279 @@
+{
+  "$id": "https://github.com/jguida941/ci-cd-hub/schema/ci-hub-config.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "language": {
+            "const": "java"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "java"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "language": {
+            "const": "python"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "python"
+        ]
+      }
+    }
+  ],
+  "definitions": {
+    "customTool": {
+      "description": "Custom tool definition (x- prefix). Allows extensibility for user-defined tools.",
+      "oneOf": [
+        { "type": "boolean" },
+        {
+          "type": "object",
+          "properties": {
+            "enabled": { "default": true, "type": "boolean" },
+            "command": { "type": "string", "description": "Command to run for this tool" },
+            "fail_on_error": { "default": true, "type": "boolean" },
+            "require_run_or_fail": { "default": false, "type": "boolean" }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "sharedSbomTool": {
+      "description": "SBOM generation tool (shared between Java and Python)",
+      "oneOf": [
+        { "type": "boolean" },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "default": false, "type": "boolean" },
+            "format": { "default": "cyclonedx", "type": "string" },
+            "require_run_or_fail": { "default": false, "type": "boolean" }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "sharedSemgrepTool": {
+      "description": "Semgrep SAST tool (shared between Java and Python)",
+      "oneOf": [
+        { "type": "boolean" },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "default": false, "type": "boolean" },
+            "fail_on_findings": { "default": false, "type": "boolean" },
+            "max_findings": { "default": 0, "minimum": 0, "type": "integer" },
+            "require_run_or_fail": { "default": false, "type": "boolean" }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "cihubConfig": {
+      "additionalProperties": false,
+      "description": "CLI behavior toggles used by workflows and triage (debug/verbose/context/triage bundle).",
+      "properties": {
+        "debug": { "default": false, "type": "boolean" },
+        "verbose": { "default": false, "type": "boolean" },
+        "debug_context": { "default": false, "type": "boolean" },
+        "emit_triage": { "default": false, "type": "boolean" }
+      },
+      "type": "object"
+    },
+    "hubCi": {
+      "oneOf": [
+        { "type": "boolean" },
+        {
+          "additionalProperties": false,
+          "description": "Configuration for hub's own CI pipeline (hub-production-ci.yml)",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "thresholds": {
+              "additionalProperties": false,
+              "description": "Quality gate thresholds for hub CI",
+              "properties": {
+                "coverage_min": {
+                  "default": 70,
+                  "maximum": 100,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "mutation_score_min": {
+                  "default": 70,
+                  "maximum": 100,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "overrides": {
+                  "additionalProperties": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "coverage_min": { "maximum": 100, "minimum": 0, "type": "integer" },
+                      "mutation_score_min": { "maximum": 100, "minimum": 0, "type": "integer" },
+                      "note": { "type": "string" }
+                    },
+                    "type": "object"
+                  },
+                  "default": {},
+                  "description": "Per-module threshold overrides for hub CI metrics.",
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            },
+            "tools": {
+              "additionalProperties": false,
+              "description": "Tools enabled for hub-production-ci.yml",
+              "properties": {
+                "actionlint": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "bandit": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "bandit_fail_high": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "bandit_fail_medium": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "bandit_fail_low": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "dependency_review": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "gitleaks": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "license_check": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "mutmut": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "mypy": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "pip_audit": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "pytest": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "ruff": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "scorecard": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "syntax": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "trivy": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "validate_configs": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "validate_templates": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "verify_matrix_keys": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "yamllint": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "zizmor": {
+                  "default": true,
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "javaTools": {
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-[a-zA-Z0-9_-]+$": { "$ref": "#/definitions/customTool" }
+      },
+      "properties": {
+        "checkstyle": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "config_file": { "type": ["string", "null"] },
+                "enabled": { "default": true, "type": "boolean" },
+                "fail_on_violation": { "default": true, "type": "boolean" },
+                "max_errors": { "default": 0, "minimum": 0, "type": "integer" },
+                "require_run_or_fail": { "default": true, "type": "boolean" }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "codeql": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "default": false, "type": "boolean" },
+                "fail_on_error": { "default": true, "type": "boolean" },
+                "languages": { "default": ["java"], "items": { "type": "string" }, "type": "array" },
+                "require_run_or_fail": { "default": true, "type": "boolean" }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "docker": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "compose_file": { "default": "docker-compose.yml", "type": "string" },
+                "dockerfile": { "default": "Dockerfile", "type": "string" },
+                "enabled": { "default": false, "type": "boolean" },
+                "fail_on_error": { "default": true, "type": "boolean" },
+                "fail_on_missing_compose": { "default": false, "type": "boolean" },
+                "health_endpoint": { "default": "/actuator/health", "type": "string" },
+                "health_timeout": { "default": 300, "type": "integer" },
+                "require_run_or_fail": { "default": false, "type": "boolean" }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "jacoco": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "default": true, "type": "boolean" },
+                "min_coverage": { "default": 70, "maximum": 100, "minimum": 0, "type": "integer" },
+                "require_run_or_fail": { "default": true, "type": "boolean" }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "jqwik": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "default": false, "type": "boolean" },
+                "require_run_or_fail": { "default": false, "type": "boolean" }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "owasp": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "default": true, "type": "boolean" },
+                "fail_on_cvss": { "default": 7, "maximum": 10, "minimum": 0, "type": "integer" },
+                "require_run_or_fail": { "default": false, "type": "boolean" },
+                "use_nvd_api_key": { "default": true, "type": "boolean" }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "pitest": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "default": true, "type": "boolean" },
+                "min_mutation_score": { "default": 70, "maximum": 100, "minimum": 0, "type": "integer" },
+                "require_run_or_fail": { "default": false, "type": "boolean" },
+                "threads": { "default": 4, "type": "integer" },
+                "timeout_multiplier": { "default": 2, "type": "integer" }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "pmd": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "default": true, "type": "boolean" },
+                "fail_on_violation": { "default": false, "type": "boolean" },
+                "max_violations": { "default": 0, "minimum": 0, "type": "integer" },
+                "require_run_or_fail": { "default": false, "type": "boolean" }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "semgrep": { "$ref": "#/definitions/sharedSemgrepTool" },
+        "sbom": { "$ref": "#/definitions/sharedSbomTool" },
+        "spotbugs": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "effort": { "default": "max", "enum": ["min", "default", "max"], "type": "string" },
+                "enabled": { "default": true, "type": "boolean" },
+                "fail_on_error": { "default": true, "type": "boolean" },
+                "max_bugs": { "default": 0, "minimum": 0, "type": "integer" },
+                "require_run_or_fail": { "default": true, "type": "boolean" },
+                "threshold": { "default": "medium", "enum": ["low", "medium", "high"], "type": "string" }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "trivy": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "default": false, "type": "boolean" },
+                "fail_on_critical": { "default": false, "type": "boolean" },
+                "fail_on_cvss": { "default": 7, "maximum": 10, "minimum": 0, "type": "integer" },
+                "fail_on_high": { "default": false, "type": "boolean" },
+                "require_run_or_fail": { "default": true, "type": "boolean" }
+              },
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "pythonTools": {
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-[a-zA-Z0-9_-]+$": { "$ref": "#/definitions/customTool" }
+      },
+      "properties": {
+        "bandit": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "fail_on_high": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "fail_on_low": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "fail_on_medium": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "require_run_or_fail": {
+                  "default": true,
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "black": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "fail_on_format_issues": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "max_issues": {
+                  "default": 0,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "require_run_or_fail": {
+                  "default": false,
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "codeql": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "fail_on_error": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "languages": {
+                  "default": ["python"],
+                  "items": { "type": "string" },
+                  "type": "array"
+                },
+                "require_run_or_fail": {
+                  "default": true,
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "docker": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "compose_file": { "default": "docker-compose.yml", "type": "string" },
+                "enabled": { "default": false, "type": "boolean" },
+                "fail_on_error": { "default": true, "type": "boolean" },
+                "fail_on_missing_compose": { "default": false, "type": "boolean" },
+                "health_endpoint": { "default": "/actuator/health", "type": "string" },
+                "health_timeout": { "default": 300, "type": "integer" },
+                "require_run_or_fail": { "default": false, "type": "boolean" }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "hypothesis": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "default": true, "type": "boolean" },
+                "require_run_or_fail": { "default": false, "type": "boolean" }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "isort": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "default": true, "type": "boolean" },
+                "fail_on_issues": { "default": false, "type": "boolean" },
+                "max_issues": { "default": 0, "minimum": 0, "type": "integer" },
+                "require_run_or_fail": { "default": false, "type": "boolean" }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "mutmut": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "default": false, "type": "boolean" },
+                "min_mutation_score": { "default": 70, "maximum": 100, "minimum": 0, "type": "integer" },
+                "min_score": {
+                  "default": 70,
+                  "description": "DEPRECATED: alias for min_mutation_score (will be removed in a future schema version)",
+                  "maximum": 100,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "require_run_or_fail": { "default": false, "type": "boolean" },
+                "timeout_minutes": { "default": 15, "type": "integer" }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "mypy": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "default": false, "type": "boolean" },
+                "require_run_or_fail": { "default": false, "type": "boolean" }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "pip_audit": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "default": true, "type": "boolean" },
+                "fail_on_vuln": { "default": true, "type": "boolean" },
+                "require_run_or_fail": { "default": true, "type": "boolean" }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "pytest": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "default": true, "type": "boolean" },
+                "fail_fast": { "default": false, "type": "boolean" },
+                "min_coverage": { "default": 70, "maximum": 100, "minimum": 0, "type": "integer" },
+                "args": {
+                  "oneOf": [
+                    { "type": "string" },
+                    { "type": "array", "items": { "type": "string" } }
+                  ]
+                },
+                "env": {
+                  "type": "object",
+                  "additionalProperties": { "type": "string" }
+                },
+                "require_run_or_fail": { "default": true, "type": "boolean" }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "ruff": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "default": true, "type": "boolean" },
+                "fail_on_error": { "default": true, "type": "boolean" },
+                "max_errors": { "default": 0, "minimum": 0, "type": "integer" },
+                "require_run_or_fail": { "default": true, "type": "boolean" }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "sbom": { "$ref": "#/definitions/sharedSbomTool" },
+        "semgrep": { "$ref": "#/definitions/sharedSemgrepTool" },
+        "trivy": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "default": false, "type": "boolean" },
+                "fail_on_critical": { "default": false, "type": "boolean" },
+                "fail_on_cvss": { "default": 7, "maximum": 10, "minimum": 0, "type": "number" },
+                "fail_on_high": { "default": false, "type": "boolean" },
+                "require_run_or_fail": { "default": true, "type": "boolean" }
+              },
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "reports": {
+      "additionalProperties": false,
+      "properties": {
+        "badges": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "branch": {
+                  "default": "main",
+                  "type": "string"
+                },
+                "enabled": {
+                  "default": true,
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "codecov": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "fail_ci_on_error": {
+                  "default": false,
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "github_summary": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "include_metrics": {
+                  "default": true,
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "retention_days": {
+          "default": 30,
+          "maximum": 365,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "thresholds": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage_min": {
+          "default": 70,
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_black_issues": {
+          "default": 0,
+          "maximum": 1000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_checkstyle_errors": {
+          "default": 0,
+          "maximum": 1000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_critical_vulns": {
+          "default": 0,
+          "maximum": 1000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_high_vulns": {
+          "default": 0,
+          "maximum": 1000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_isort_issues": {
+          "default": 0,
+          "maximum": 1000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_pip_audit_vulns": {
+          "default": 0,
+          "maximum": 1000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_pmd_violations": {
+          "default": 0,
+          "maximum": 1000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_ruff_errors": {
+          "default": 0,
+          "maximum": 1000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_semgrep_findings": {
+          "default": 0,
+          "maximum": 1000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_spotbugs_bugs": {
+          "default": 0,
+          "maximum": 1000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mutation_score_min": {
+          "default": 70,
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "owasp_cvss_fail": {
+          "default": 7,
+          "maximum": 10,
+          "minimum": 0,
+          "type": "number"
+        },
+        "trivy_cvss_fail": {
+          "default": 7,
+          "maximum": 10,
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "description": "Schema for .ci-hub.yml files in connected repositories",
+  "properties": {
+    "_metadata": {
+      "description": "Profile metadata for wizard display (internal use)",
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "cache_sentinel": {
+      "oneOf": [
+        { "type": "boolean" },
+        {
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "canary": {
+      "oneOf": [
+        { "type": "boolean" },
+        {
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "chaos": {
+      "oneOf": [
+        { "type": "boolean" },
+        {
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "dr_drill": {
+      "oneOf": [
+        { "type": "boolean" },
+        {
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "egress_control": {
+      "oneOf": [
+        { "type": "boolean" },
+        {
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "extra_tests": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "command"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "gates": {
+      "additionalProperties": false,
+      "description": "Gate policies for require_run_or_fail behavior",
+      "properties": {
+        "require_run_or_fail": {
+          "default": false,
+          "description": "Global default: fail CI if configured tool didn't run",
+          "type": "boolean"
+        },
+        "tool_defaults": {
+          "additionalProperties": false,
+          "description": "Per-tool require_run_or_fail defaults",
+          "properties": {
+            "pytest": { "type": "boolean", "default": true },
+            "ruff": { "type": "boolean", "default": true },
+            "bandit": { "type": "boolean", "default": true },
+            "pip_audit": { "type": "boolean", "default": true },
+            "mypy": { "type": "boolean", "default": false },
+            "black": { "type": "boolean", "default": false },
+            "isort": { "type": "boolean", "default": false },
+            "mutmut": { "type": "boolean", "default": false },
+            "hypothesis": { "type": "boolean", "default": false },
+            "semgrep": { "type": "boolean", "default": false },
+            "trivy": { "type": "boolean", "default": true },
+            "codeql": { "type": "boolean", "default": true },
+            "docker": { "type": "boolean", "default": false },
+            "sbom": { "type": "boolean", "default": false },
+            "jacoco": { "type": "boolean", "default": true },
+            "checkstyle": { "type": "boolean", "default": true },
+            "spotbugs": { "type": "boolean", "default": true },
+            "pmd": { "type": "boolean", "default": false },
+            "owasp": { "type": "boolean", "default": true },
+            "pitest": { "type": "boolean", "default": false },
+            "jqwik": { "type": "boolean", "default": false }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "hub_ci": {
+      "$ref": "#/definitions/hubCi"
+    },
+    "java": {
+      "additionalProperties": false,
+      "properties": {
+        "build_tool": {
+          "default": "maven",
+          "enum": [
+            "maven",
+            "gradle"
+          ],
+          "type": "string"
+        },
+        "distribution": {
+          "default": "temurin",
+          "enum": [
+            "temurin",
+            "corretto",
+            "zulu",
+            "microsoft"
+          ],
+          "type": "string"
+        },
+        "tools": {
+          "$ref": "#/definitions/javaTools"
+        },
+        "version": {
+          "default": "21",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "kyverno": {
+      "oneOf": [
+        { "type": "boolean" },
+        {
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "language": {
+      "description": "Primary language of the repository",
+      "enum": [
+        "java",
+        "python"
+      ],
+      "type": "string"
+    },
+    "notifications": {
+      "additionalProperties": false,
+      "properties": {
+        "email": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "recipients_env": {
+                  "default": "CIHUB_EMAIL_TO",
+                  "type": "string"
+                },
+                "smtp_from_env": {
+                  "default": "SMTP_FROM",
+                  "type": "string"
+                },
+                "smtp_host_env": {
+                  "default": "SMTP_HOST",
+                  "type": "string"
+                },
+                "smtp_password_env": {
+                  "default": "SMTP_PASSWORD",
+                  "type": "string"
+                },
+                "smtp_port_env": {
+                  "default": "SMTP_PORT",
+                  "type": "string"
+                },
+                "smtp_starttls_env": {
+                  "default": "SMTP_STARTTLS",
+                  "type": "string"
+                },
+                "smtp_user_env": {
+                  "default": "SMTP_USER",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          ]
+        },
+        "slack": {
+          "oneOf": [
+            { "type": "boolean" },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "on_failure": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "on_success": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "webhook_env": {
+                  "default": "CIHUB_SLACK_WEBHOOK_URL",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "python": {
+      "additionalProperties": false,
+      "properties": {
+        "tools": {
+          "$ref": "#/definitions/pythonTools"
+        },
+        "version": {
+          "default": "3.12",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "repo": {
+      "additionalProperties": false,
+      "properties": {
+        "default_branch": {
+          "default": "main",
+          "type": "string"
+        },
+        "dispatch_enabled": {
+          "default": true,
+          "description": "Allow orchestrator dispatch (default true)",
+          "type": "boolean"
+        },
+        "dispatch_workflow": {
+          "default": "hub-ci.yml",
+          "description": "Workflow file to dispatch to (hub-ci.yml for single-language, hub-java-ci.yml or hub-python-ci.yml for monorepos)",
+          "enum": [
+            "hub-ci.yml",
+            "hub-java-ci.yml",
+            "hub-python-ci.yml",
+            ""
+          ],
+          "type": "string"
+        },
+        "force_all_tools": {
+          "default": false,
+          "description": "Force-enable all tools for this repo (overrides tool.enabled toggles)",
+          "type": "boolean"
+        },
+        "language": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "repo_side_execution": {
+          "default": false,
+          "description": "Enable workflow generation INTO target repos (opt-in, requires explicit --apply)",
+          "type": "boolean"
+        },
+        "run_group": {
+          "default": "full",
+          "description": "Grouping label for selective runs (e.g., full, fixtures, smoke)",
+          "enum": [
+            "full",
+            "fixtures",
+            "smoke",
+            "security",
+            "compliance"
+          ],
+          "type": "string"
+        },
+        "subdir": {
+          "description": "Optional subdirectory within the repo",
+          "pattern": "^(?!/)(?!.*\\.\\.).+$",
+          "type": "string"
+        },
+        "use_central_runner": {
+          "default": true,
+          "description": "Use central runner mode (hub clones and executes) vs distributed mode (dispatch to target repo workflow)",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "owner",
+        "name"
+      ],
+      "type": "object"
+    },
+    "cihub": {
+      "$ref": "#/definitions/cihubConfig"
+    },
+    "install": {
+      "description": "How cihub should be installed in CI workflows",
+      "oneOf": [
+        { "type": "string", "enum": ["pypi", "git", "local"] },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "source": {
+              "default": "pypi",
+              "description": "Install source: pypi (from PyPI, default), git (from git URL), local (editable checkout)",
+              "enum": ["pypi", "git", "local"],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "reports": {
+      "$ref": "#/definitions/reports"
+    },
+    "harden_runner": {
+      "description": "StepSecurity harden-runner configuration for workflow security hardening",
+      "oneOf": [
+        { "type": "boolean" },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "policy": {
+              "default": "audit",
+              "description": "Harden-runner policy: audit (log only), block (deny unauthorized), or disabled",
+              "enum": ["audit", "block", "disabled"],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "runner_isolation": {
+      "oneOf": [
+        { "type": "boolean" },
+        {
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "supply_chain": {
+      "oneOf": [
+        { "type": "boolean" },
+        {
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "telemetry": {
+      "oneOf": [
+        { "type": "boolean" },
+        {
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "thresholds": {
+      "$ref": "#/definitions/thresholds"
+    },
+    "thresholds_profile": {
+      "description": "Named threshold preset (coverage-gate, security, compliance). Explicit thresholds override the profile.",
+      "enum": [
+        "coverage-gate",
+        "security",
+        "compliance"
+      ],
+      "type": "string"
+    },
+    "version": {
+      "default": "1.0",
+      "description": "Config schema version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "repo",
+    "language"
+  ],
+  "title": "CI/CD Hub Repository Configuration",
+  "type": "object"
+}
