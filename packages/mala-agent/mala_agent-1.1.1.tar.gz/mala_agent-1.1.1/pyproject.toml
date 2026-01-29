@@ -1,0 +1,530 @@
+[project]
+name = "mala-agent"
+version = "1.1.1"
+description = "Agent SDK orchestrator for parallel issue processing"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+authors = [{ name = "Charlie You" }]
+keywords = ["agent", "sdk", "orchestrator", "ai", "automation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "claude-agent-sdk",
+    "typer>=0.9.0",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0",
+    "questionary>=2.0.0",
+    "tabulate>=0.9.0",
+]
+
+[project.urls]
+Repository = "https://github.com/charlieyou/mala"
+
+[project.scripts]
+mala = "src.cli.main:app"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0", "pytest-asyncio>=0.24.0", "pytest-cov>=5.0.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+artifacts = ["src/scripts/*.sh"]
+include = ["src/domain/validation/presets/*.yaml"]
+
+[tool.ty.src]
+# Exclude test fixtures (standalone test projects with their own structure)
+exclude = ["tests/fixtures/*"]
+
+[tool.ty.environment]
+root = ["."]
+
+[tool.ty.rules]
+# Set all ty rules to error level for strictest checking
+possibly-unresolved-reference = "error"
+unresolved-reference = "error"
+unresolved-import = "error"
+invalid-type-form = "error"
+invalid-type-variable-constraints = "error"
+invalid-legacy-type-variable = "error"
+invalid-syntax-in-forward-annotation = "error"
+invalid-attribute-access = "error"
+invalid-assignment = "error"
+invalid-declaration = "error"
+invalid-parameter-default = "error"
+invalid-argument-type = "error"
+invalid-return-type = "error"
+unresolved-attribute = "error"
+missing-argument = "error"
+too-many-positional-arguments = "error"
+unknown-argument = "error"
+parameter-already-assigned = "error"
+conflicting-declarations = "error"
+conflicting-metaclass = "error"
+cyclic-class-definition = "error"
+duplicate-base = "error"
+inconsistent-mro = "error"
+invalid-base = "error"
+unsupported-base = "error"
+unsupported-operator = "error"
+not-iterable = "error"
+non-subscriptable = "error"
+invalid-context-manager = "error"
+invalid-raise = "error"
+invalid-exception-caught = "error"
+call-non-callable = "error"
+invalid-overload = "error"
+invalid-super-argument = "error"
+
+[tool.ruff.lint]
+extend-select = [
+    "ANN",   # flake8-annotations - require type annotations
+    "TCH",   # flake8-type-checking - proper TYPE_CHECKING imports
+    "PYI",   # flake8-pyi - type stub best practices
+    "UP",    # pyupgrade - modern type syntax
+    "FA",    # flake8-future-annotations - use future annotations
+    "RUF",   # Ruff-specific rules including type issues
+]
+
+[tool.ruff.lint.flake8-annotations]
+allow-star-arg-any = false
+suppress-none-returning = false
+suppress-dummy-args = false
+mypy-init-return = true
+
+[tool.ruff.lint.flake8-type-checking]
+strict = true
+runtime-evaluated-base-classes = []
+runtime-evaluated-decorators = []
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+# Minimal output flags to reduce token usage:
+# -q: quiet mode (only failures + summary)
+# --tb=short: shorter tracebacks
+# --no-header: skip header
+# --disable-warnings: hide warnings
+addopts = "--strict-markers -m 'unit or integration' -q --tb=short --no-header --disable-warnings"
+markers = [
+    "unit: fast, isolated tests (default)",
+    "integration: tests that exercise multiple components or real tools locally",
+    "e2e: end-to-end tests that require real CLI/API auth",
+    "flaky_sdk: SDK tests that depend on LLM behavior and may be flaky (reruns up to 2 times)",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=5.0.0",
+    "pytest-rerunfailures>=16.1",
+    "pytest-xdist>=3.8.0",
+    "import-linter>=2.0",
+]
+
+# =============================================================================
+# Import Linter Configuration
+# =============================================================================
+# Enforces architectural boundaries between layers.
+# Run with: uv run lint-imports (or: uvx --from import-linter lint-imports)
+#
+# Architecture:
+#   cli -> orchestration -> pipeline -> domain -> infra -> core
+#
+# Contract categories:
+# - Layered Architecture: enforces layer ordering
+# - SDK/Typer confinement: external packages restricted to specific layers
+# - Module isolation: hooks, telemetry, clients, tools boundaries
+# - Leaf modules: models, log_events have no src imports
+# - Aspirational contracts (commented out): future refactoring targets
+# =============================================================================
+
+[tool.importlinter]
+root_packages = ["src"]
+include_external_packages = true
+
+# -----------------------------------------------------------------------------
+# Contract 1: Layered Architecture
+# -----------------------------------------------------------------------------
+# Enforces that higher layers cannot import from lower layers.
+# This replaces most of the old layer-specific contracts.
+
+[[tool.importlinter.contracts]]
+name = "Layered Architecture"
+type = "layers"
+layers = [
+    "src.cli",
+    "src.orchestration",
+    "src.pipeline",
+    "src.domain",
+    "src.infra",
+    "src.core",
+]
+
+# -----------------------------------------------------------------------------
+# Contract 14: CLI cannot bypass orchestration
+# -----------------------------------------------------------------------------
+# CLI should go through orchestration layer, not directly to pipeline/domain.
+
+[[tool.importlinter.contracts]]
+name = "CLI cannot bypass orchestration"
+type = "forbidden"
+source_modules = ["src.cli"]
+forbidden_modules = ["src.pipeline", "src.domain"]
+allow_indirect_imports = true
+
+# -----------------------------------------------------------------------------
+# Contract 11: Domain subpackages independent
+# -----------------------------------------------------------------------------
+# Domain concepts should not depend on each other (except validation which is shared).
+
+[[tool.importlinter.contracts]]
+name = "Domain subpackages independent"
+type = "independence"
+modules = [
+    "src.domain.deadlock",
+    "src.domain.lifecycle",
+]
+
+# -----------------------------------------------------------------------------
+# Contract 12: Infra clients isolated
+# -----------------------------------------------------------------------------
+# Client wrappers should not depend on IO, hooks, or telemetry abstractions.
+
+[[tool.importlinter.contracts]]
+name = "Infra clients isolated"
+type = "forbidden"
+source_modules = ["src.infra.clients"]
+forbidden_modules = ["src.infra.io", "src.infra.hooks", "src.infra.telemetry"]
+
+# -----------------------------------------------------------------------------
+# Contract 13: Agent runtime pure
+# -----------------------------------------------------------------------------
+# Runtime should only depend on core + low-level infra (hooks, mcp, tools.env).
+
+[[tool.importlinter.contracts]]
+name = "Agent runtime pure"
+type = "forbidden"
+source_modules = ["src.infra.agent_runtime"]
+forbidden_modules = ["src.pipeline", "src.domain", "src.orchestration", "src.infra.clients"]
+
+# -----------------------------------------------------------------------------
+# Contract 14: SDK confined to infra
+# -----------------------------------------------------------------------------
+# External SDKs (anthropic) and their wrappers should only be
+# imported by CLI/orchestration/infra layers. Pipeline/domain/core cannot
+# import either SDKs or their wrappers directly.
+
+[[tool.importlinter.contracts]]
+name = "SDK confined to infra"
+type = "forbidden"
+source_modules = [
+    "src.pipeline",
+    "src.domain",
+    "src.core",
+]
+forbidden_modules = [
+    "anthropic",
+    "claude_agent_sdk",
+    "src.infra.clients.anthropic_client",
+]
+
+# -----------------------------------------------------------------------------
+# Contract 11: Only CLI imports typer
+# -----------------------------------------------------------------------------
+# typer is only for CLI argument parsing.
+
+[[tool.importlinter.contracts]]
+name = "Only CLI imports typer"
+type = "forbidden"
+source_modules = [
+    "src.orchestration",
+    "src.pipeline",
+    "src.domain",
+    "src.infra",
+    "src.core",
+]
+forbidden_modules = ["typer"]
+
+# -----------------------------------------------------------------------------
+# Contract 12: Pipeline modules acyclic
+# -----------------------------------------------------------------------------
+# No circular imports within pipeline modules.
+
+[[tool.importlinter.contracts]]
+name = "Pipeline modules acyclic"
+type = "independence"
+modules = [
+    "src.pipeline.agent_session_runner",
+    "src.pipeline.gate_runner",
+    "src.pipeline.review_runner",
+    "src.pipeline.run_coordinator",
+]
+
+# -----------------------------------------------------------------------------
+# Contract 13: Hooks isolated
+# -----------------------------------------------------------------------------
+# Hook modules should not import from pipeline/domain/orchestration layers.
+
+[[tool.importlinter.contracts]]
+name = "Hooks isolated"
+type = "forbidden"
+source_modules = ["src.infra.hooks"]
+forbidden_modules = [
+    "src.pipeline",
+    "src.domain",
+    "src.orchestration",
+]
+
+# -----------------------------------------------------------------------------
+# Contract 14: Telemetry abstraction pure
+# -----------------------------------------------------------------------------
+# Telemetry module should only contain protocols and null implementations.
+
+[[tool.importlinter.contracts]]
+name = "Telemetry abstraction pure"
+type = "forbidden"
+source_modules = ["src.infra.telemetry"]
+forbidden_modules = [
+    "src.infra.clients",
+]
+
+# -----------------------------------------------------------------------------
+# Contract 11: Validation result minimal
+# -----------------------------------------------------------------------------
+# Validation result should not directly import heavy dependencies.
+# Layers would allow domain->infra, but this needs stricter isolation.
+# TYPE_CHECKING imports for type annotations are allowed via indirect imports.
+
+[[tool.importlinter.contracts]]
+name = "Validation result minimal"
+type = "forbidden"
+source_modules = ["src.domain.validation.result"]
+forbidden_modules = [
+    "src.infra.tools",
+    "src.infra.io.config",
+    "src.infra.io.log_output",
+]
+allow_indirect_imports = true
+
+# -----------------------------------------------------------------------------
+# Contract 12: Models is leaf
+# -----------------------------------------------------------------------------
+# Models should only contain data classes with no internal dependencies.
+# Leaf modules: constraint is no-src-imports (stdlib is allowed).
+
+[[tool.importlinter.contracts]]
+name = "Models is leaf"
+type = "forbidden"
+source_modules = ["src.core.models"]
+forbidden_modules = [
+    "src.cli",
+    "src.orchestration",
+    "src.pipeline",
+    "src.domain",
+    "src.infra",
+    "src.core.log_events",
+]
+
+# -----------------------------------------------------------------------------
+# Contract 13: Log events is leaf
+# -----------------------------------------------------------------------------
+# Log events are pure data structures.
+# Leaf modules: constraint is no-src-imports (stdlib is allowed).
+
+[[tool.importlinter.contracts]]
+name = "Log events is leaf"
+type = "forbidden"
+source_modules = ["src.core.log_events"]
+forbidden_modules = [
+    "src.cli",
+    "src.orchestration",
+    "src.pipeline",
+    "src.domain",
+    "src.infra",
+    "src.core.models",
+]
+
+# -----------------------------------------------------------------------------
+# Strict Additions: Expected to Pass
+# -----------------------------------------------------------------------------
+
+[[tool.importlinter.contracts]]
+name = "Domain does not import infra"
+type = "forbidden"
+source_modules = ["src.domain"]
+forbidden_modules = ["src.infra"]
+
+[[tool.importlinter.contracts]]
+name = "Pipeline does not import infra.clients"
+type = "forbidden"
+source_modules = ["src.pipeline"]
+forbidden_modules = ["src.infra.clients"]
+
+[[tool.importlinter.contracts]]
+name = "IO does not import clients"
+type = "forbidden"
+source_modules = ["src.infra.io"]
+forbidden_modules = ["src.infra.clients"]
+
+[[tool.importlinter.contracts]]
+name = "IO does not import hooks"
+type = "forbidden"
+source_modules = ["src.infra.io"]
+forbidden_modules = ["src.infra.hooks"]
+
+[[tool.importlinter.contracts]]
+name = "Only session_log_parser imports core.log_events"
+type = "forbidden"
+source_modules = ["src"]
+forbidden_modules = ["src.core.log_events"]
+allow_indirect_imports = true
+ignore_imports = [
+    "src.infra.io.session_log_parser -> src.core.log_events",
+]
+
+[[tool.importlinter.contracts]]
+name = "Infra clients do not import IO, hooks, or telemetry"
+type = "forbidden"
+source_modules = ["src.infra.clients"]
+forbidden_modules = [
+    "src.infra.io",
+    "src.infra.hooks",
+    "src.infra.telemetry",
+]
+
+[[tool.importlinter.contracts]]
+name = "Infra hooks do not import clients, IO, or telemetry"
+type = "forbidden"
+source_modules = ["src.infra.hooks"]
+forbidden_modules = [
+    "src.infra.clients",
+    "src.infra.io",
+    "src.infra.telemetry",
+]
+
+[[tool.importlinter.contracts]]
+name = "Hooks do not import agent runtime"
+type = "forbidden"
+source_modules = ["src.infra.hooks"]
+forbidden_modules = ["src.infra.agent_runtime"]
+
+[[tool.importlinter.contracts]]
+name = "Infra tools do not import clients"
+type = "forbidden"
+source_modules = ["src.infra.tools"]
+forbidden_modules = ["src.infra.clients"]
+
+[[tool.importlinter.contracts]]
+name = "Infra telemetry does not import other infra subpackages"
+type = "forbidden"
+source_modules = ["src.infra.telemetry"]
+forbidden_modules = [
+    "src.infra.clients",
+    "src.infra.io",
+    "src.infra.hooks",
+    "src.infra.tools",
+]
+
+[[tool.importlinter.contracts]]
+name = "Tool name extractor is leaf"
+type = "forbidden"
+source_modules = ["src.core.tool_name_extractor"]
+forbidden_modules = [
+    "src.cli",
+    "src.orchestration",
+    "src.pipeline",
+    "src.domain",
+    "src.infra",
+    "src.core.models",
+    "src.core.log_events",
+]
+
+[[tool.importlinter.contracts]]
+name = "Issue manager is leaf"
+type = "forbidden"
+source_modules = ["src.infra.issue_manager"]
+forbidden_modules = [
+    "src.cli",
+    "src.orchestration",
+    "src.pipeline",
+    "src.domain",
+    "src.infra.clients",
+    "src.infra.io",
+    "src.infra.hooks",
+    "src.infra.telemetry",
+]
+
+[[tool.importlinter.contracts]]
+name = "Only infra.tools.env imports dotenv"
+type = "forbidden"
+source_modules = ["src"]
+forbidden_modules = ["dotenv"]
+allow_indirect_imports = true
+ignore_imports = [
+    "src.infra.tools.env -> dotenv",
+]
+
+[[tool.importlinter.contracts]]
+name = "Only domain.validation imports yaml"
+type = "forbidden"
+source_modules = ["src"]
+forbidden_modules = ["yaml"]
+allow_indirect_imports = true
+ignore_imports = [
+    "src.domain.validation.** -> yaml",
+]
+
+[[tool.importlinter.contracts]]
+name = "Only infra.clients import anthropic"
+type = "forbidden"
+source_modules = ["src"]
+forbidden_modules = ["anthropic"]
+allow_indirect_imports = true
+ignore_imports = [
+    "src.infra.clients.** -> anthropic",
+]
+
+# -----------------------------------------------------------------------------
+# Hardening Contracts: Expected to Fail Until Refactors
+# -----------------------------------------------------------------------------
+# These contracts define desired architectural boundaries but currently fail.
+
+[[tool.importlinter.contracts]]
+name = "Only orchestration.factory imports infra.clients"
+type = "forbidden"
+source_modules = [
+    "src.orchestration.cli_support",
+    "src.orchestration.deadlock_handler",
+    "src.orchestration.orchestrator",
+    "src.orchestration.orchestrator_state",
+    "src.orchestration.orchestration_wiring",
+    "src.orchestration.review_tracking",
+    "src.orchestration.run_config",
+    "src.orchestration.types",
+]
+forbidden_modules = ["src.infra.clients"]
+
+[[tool.importlinter.contracts]]
+name = "No claude_agent_sdk outside infra SDK boundary"
+type = "forbidden"
+source_modules = ["src"]
+forbidden_modules = ["claude_agent_sdk"]
+allow_indirect_imports = true
+ignore_imports = [
+    "src.infra.sdk_adapter -> claude_agent_sdk",
+    "src.infra.sdk_transport -> claude_agent_sdk",
+    "src.infra.epic_verifier -> claude_agent_sdk",
+    "src.infra.tools.locking_mcp -> claude_agent_sdk",
+]
