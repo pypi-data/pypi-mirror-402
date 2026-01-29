@@ -1,0 +1,73 @@
+# pas-tui
+
+A professional, hotkey-driven TUI system for Python CLIs. 
+
+This is part of the [PAS Toolkit](https://github.com/nextoken/pas) which will be open-sourced in the future, but can be used independently.
+
+## Installation
+
+```bash
+pip install pas-tui
+```
+
+## Features
+- Numerical index padding (01, 02, etc.)
+- Automatic hotkey mapping (1-9, q for Quit, b for Back)
+- Rich-formatted output
+- Cross-platform clipboard support
+
+## Usage
+
+### High-Level Menu Class (Recommended)
+
+The `Menu` class provides a declarative way to build interactive loops with callback support, encapsulating headers and state.
+
+```python
+from pas_tui import Menu
+
+def run_setup():
+    print("Running setup...")
+
+def main():
+    # 1. Initialize with title
+    menu = Menu("Project Manager", style="bold green")
+    
+    # 2. Add items with direct callback support or return values
+    menu.add_item("Setup Project", run_setup)
+    menu.add_item("View Dashboard", "view_dash")
+    
+    # 3. Add standard navigation
+    menu.add_back_item() 
+    menu.add_quit_item()
+    
+    # 4. Start the interactive loop
+    selection = menu.run()
+    
+    if selection == "view_dash":
+        print("Opening dashboard...")
+
+if __name__ == "__main__":
+    main()
+```
+
+### Low-Level Interactive Menus
+
+### Confirmation Prompts
+
+```python
+from pas_tui import prompt_yes_no
+
+if prompt_yes_no("Do you want to proceed with the deletion?", default=False):
+    print("Deleting...")
+else:
+    print("Aborted.")
+```
+
+### Clipboard Support
+
+```python
+from pas_tui import copy_to_clipboard
+
+if copy_to_clipboard("Hello from pas-tui!"):
+    print("Copied to clipboard!")
+```
