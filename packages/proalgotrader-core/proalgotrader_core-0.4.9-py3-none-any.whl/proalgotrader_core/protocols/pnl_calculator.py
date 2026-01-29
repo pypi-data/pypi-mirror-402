@@ -1,0 +1,49 @@
+from typing import Protocol
+
+
+class PnlCalculatorProtocol(Protocol):
+    """Protocol for PnL calculation functionality."""
+
+    @property
+    def net_pnl(self) -> float: ...
+
+    @property
+    def realized_pnl(self) -> float: ...
+
+    @property
+    def unrealized_pnl(self) -> float: ...
+
+    @property
+    def profit(self) -> float: ...
+
+    @property
+    def loss(self) -> float: ...
+
+    @property
+    def realized_profit(self) -> float: ...
+
+    @property
+    def realized_loss(self) -> float: ...
+
+    @property
+    def unrealized_profit(self) -> float: ...
+
+    @property
+    def unrealized_loss(self) -> float: ...
+
+    @property
+    def net_pnl_percentage(self) -> float: ...
+
+    @property
+    def profit_percentage(self) -> float: ...
+
+    @property
+    def loss_percentage(self) -> float: ...
+
+    @property
+    def realized_pnl_percentage(self) -> float: ...
+
+    @property
+    def unrealized_pnl_percentage(self) -> float: ...
+
+    def invalidate_cache(self) -> None: ...
