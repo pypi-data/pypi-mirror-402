@@ -1,0 +1,236 @@
+# SeedOS LangChain Integration
+
+SeedOS Memory를 LangChain의 ChatMessageHistory로 사용할 수 있게 해주는 패키지입니다.
+
+**버전**: 0.2.0  
+**최신 업데이트**: 2026-01-21
+
+## 주요 기능
+
+- ✅ LangChain `BaseChatMessageHistory` 완전 구현
+- ✅ 블록 체인 연결 (prev_hash 자동 관리)
+- ✅ 재시도 로직 및 에러 핸들링
+- ✅ 의미 기반 검색 지원
+- ✅ Identity 기반 메모리 필터링
+- ✅ 다중 에이전트 메모리 공유
+
+## 설치
+
+```bash
+pip install seedos-langchain
+```
+
+또는 개발 버전:
+
+```bash
+cd integrations/langchain
+pip install -e .
+```
+
+## 사용법
+
+### 기본 사용
+
+```python
+from seedos_langchain import SeedOSMemory
+from langchain.agents import AgentExecutor, create_react_agent
+from langchain_openai import ChatOpenAI
+
+# SeedOS Memory 초기화
+memory = SeedOSMemory(
+    agent_id="user_123",
+    api_url="http://localhost:8000"
+)
+
+# LangChain 에이전트 생성
+llm = ChatOpenAI(temperature=0)
+agent = create_react_agent(llm, tools, system_prompt)
+
+# 메모리와 함께 에이전트 실행
+executor = AgentExecutor(
+    agent=agent,
+    tools=tools,
+    memory=memory  # ← SeedOS 메모리 사용
+)
+
+# 대화 실행
+response = executor.invoke({
+    "input": "3개월 전에 물었던 대출 건 어떻게 됐어?"
+})
+```
+
+### API 키 사용
+
+```python
+memory = SeedOSMemory(
+    agent_id="user_123",
+    api_url="https://api.seedos.io",
+    api_key="your-api-key-here"
+)
+```
+
+### 세션 관리
+
+```python
+# 세션별로 메모리 분리
+memory_session1 = SeedOSMemory(
+    agent_id="user_123",
+    session_id="session_001"
+)
+
+memory_session2 = SeedOSMemory(
+    agent_id="user_123",
+    session_id="session_002"
+)
+```
+
+## 예제
+
+모든 예제는 `examples/` 디렉토리에 있습니다.
+
+### 예제 1: 간단한 대화 기록
+
+```python
+from seedos_langchain import SeedOSMemory
+from langchain_core.messages import HumanMessage, AIMessage
+
+memory = SeedOSMemory(agent_id="user_123")
+
+# 메시지 추가
+memory.add_message(HumanMessage(content="안녕하세요"))
+memory.add_message(AIMessage(content="안녕하세요! 무엇을 도와드릴까요?"))
+
+# 메시지 조회
+messages = memory.messages
+for msg in messages:
+    print(f"{type(msg).__name__}: {msg.content}")
+```
+
+### 예제 2: LangChain 에이전트와 통합
+
+```python
+from seedos_langchain import SeedOSMemory
+from langchain.agents import AgentExecutor, create_react_agent
+from langchain_openai import ChatOpenAI
+from langchain.tools import Tool
+
+# 도구 정의
+def search_memory(query: str) -> str:
+    """SeedOS에서 메모리 검색"""
+    # 실제 구현 필요
+    return "검색 결과..."
+
+tools = [
+    Tool(
+        name="search_memory",
+        func=search_memory,
+        description="SeedOS 메모리에서 검색"
+    )
+]
+
+# 메모리 초기화
+memory = SeedOSMemory(agent_id="user_123")
+
+# 에이전트 생성
+llm = ChatOpenAI(temperature=0)
+agent = create_react_agent(llm, tools, system_prompt="당신은 도움이 되는 AI입니다.")
+
+executor = AgentExecutor(
+    agent=agent,
+    tools=tools,
+    memory=memory
+)
+
+# 실행
+response = executor.invoke({
+    "input": "지난번 대화 내용을 요약해줘"
+})
+print(response["output"])
+```
+
+### 예제 3: 메모리 요약
+
+```python
+from seedos_langchain import SeedOSMemory
+
+memory = SeedOSMemory(agent_id="user_123")
+
+# 메모리 요약 정보
+summary = memory.get_memory_summary()
+print(f"총 메시지 수: {summary['message_count']}")
+print(f"사용자 메시지: {summary['human_messages']}")
+print(f"AI 메시지: {summary['ai_messages']}")
+```
+
+## API 참조
+
+### SeedOSMemory
+
+#### `__init__(agent_id, api_url, api_key, session_id)`
+
+- `agent_id` (str): 에이전트/사용자 고유 ID (필수)
+- `api_url` (str): SeedOS API 서버 URL (기본값: "http://localhost:8000")
+- `api_key` (str, optional): API 인증 키
+- `session_id` (str, optional): 세션 ID (기본값: agent_id)
+
+#### `messages` (property)
+
+저장된 메시지 목록을 반환합니다.
+
+#### `add_message(message)`
+
+새 메시지를 추가합니다.
+
+- `message` (BaseMessage): LangChain 메시지 객체
+
+#### `clear()`
+
+메시지 기록을 삭제합니다 (캐시만 클리어, 실제 블록은 삭제하지 않음).
+
+#### `get_memory_summary()`
+
+메모리 요약 정보를 반환합니다.
+
+## 예제 실행
+
+```bash
+# 예제 1: 기본 사용
+python examples/basic_usage.py
+
+# 예제 2: AI 에이전트 메모리
+python examples/02_agent_memory.py
+
+# 예제 3: 다중 에이전트 메모리 공유
+python examples/03_multi_agent_memory.py
+
+# 예제 4: 의미 기반 검색
+python examples/04_semantic_search.py
+
+# 예제 5: Identity 기반 필터링
+python examples/05_identity_filtering.py
+```
+
+## 요구사항
+
+- Python 3.9+
+- langchain >= 0.1.0
+- langchain-core >= 0.1.0
+- requests >= 2.28.0
+
+## 변경 사항
+
+자세한 변경 사항은 [CHANGELOG.md](CHANGELOG.md)를 참고하세요.
+
+### v0.2.0 (2026-01-21)
+- prev_hash 연결 개선
+- 재시도 로직 추가
+- 5개 예제 추가
+- 에러 핸들링 강화
+
+## 라이선스
+
+MIT License
+
+## 기여
+
+기여를 환영합니다! 이슈나 PR을 통해 참여해주세요.
