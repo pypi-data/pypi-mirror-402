@@ -1,0 +1,136 @@
+Metadata-Version: 2.4
+Name: vibe-agent
+Version: 0.0.2
+Summary: A Vibe Coding flavored AI Agent SDK based on OpenAI.
+Author-email: Your Name <your.email@example.com>
+License: MIT
+Project-URL: Homepage, https://github.com/yourusername/vibe-agent
+Project-URL: Bug Tracker, https://github.com/yourusername/vibe-agent/issues
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: openai>=1.0.0
+Requires-Dist: pydantic>=2.0.0
+Dynamic: license-file
+
+# VibeAgent
+
+[English](#english) | [中文](#中文)
+
+---
+
+## English
+
+VibeAgent is a lightweight, flexible LLM (Large Language Model) application framework designed to simplify the interaction between developers and AI models. It supports the OpenAI protocol and provides powerful features such as automatic tool schema generation and local caching.
+
+### Core Features
+
+- **Inference Layer**: Easily call LLMs compatible with the OpenAI API.
+- **Dialogue Management**: Automatically handle multi-turn conversations and tool call loops.
+- **Auto-Tool Conversion**: Register Python functions directly as tools. VibeAgent automatically generates the required JSON Schema using LLMs.
+- **Local Caching**: Cache generated tool schemas locally to save costs and improve performance.
+- **Flexible Configuration**: Supports both object-oriented configuration (`ChatConfig`) and direct parameter passing.
+
+### Quick Start
+
+#### Installation
+
+```bash
+pip install vibe-agent
+```
+
+#### Basic Usage
+
+```python
+import asyncio
+from vibe_agent.infer_layer import Inferrer
+from vibe_agent.dialogue_layer import DialogueManager
+
+async def main():
+    # Initialize Inferrer
+    inferrer = Inferrer(
+        server_base_url="https://openrouter.ai/api/v1",
+        server_apikey="your-api-key"
+    )
+    
+    # Initialize Dialogue Manager
+    dm = DialogueManager(inferrer=inferrer)
+
+    # Define a simple Python function as a tool
+    def get_weather(city: str):
+        """Get the current weather for a city."""
+        return f"The weather in {city} is sunny."
+
+    # Register tool (Auto-generates schema and caches it)
+    await dm.register_tools([get_weather], model="google/gemini-3-flash-preview")
+
+    # Start chatting
+    messages = [{"role": "user", "content": "What's the weather like in New York?"}]
+    response = await dm.chat(messages=messages, model="google/gemini-3-flash-preview")
+    
+    print(response.choices[0].message.content)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+---
+
+## 中文
+
+VibeAgent 是一个轻量级、灵活的 LLM（大语言模型）应用框架，旨在简化开发者与 AI 模型之间的交互。它支持 OpenAI 协议，并提供自动工具 Schema 生成和本地缓存等强大功能。
+
+### 核心特性
+
+- **推理层 (Inference Layer)**：轻松调用兼容 OpenAI API 的大语言模型。
+- **对话管理 (Dialogue Management)**：自动处理多轮对话和工具调用循环。
+- **自动工具转换**：直接将 Python 函数注册为工具。VibeAgent 会利用 LLM 自动生成所需的 JSON Schema。
+- **本地缓存**：本地缓存生成的工具 Schema，节省成本并提升性能。
+- **灵活配置**：同时支持面向对象的配置 (`ChatConfig`) 和直接参数传递。
+
+### 快速上手
+
+#### 安装
+
+```bash
+pip install vibe-agent
+```
+
+#### 基础用法
+
+```python
+import asyncio
+from vibe_agent.infer_layer import Inferrer
+from vibe_agent.dialogue_layer import DialogueManager
+
+async def main():
+    # 初始化推理器
+    inferrer = Inferrer(
+        server_base_url="https://openrouter.ai/api/v1",
+        server_apikey="your-api-key"
+    )
+    
+    # 初始化对话管理器
+    dm = DialogueManager(inferrer=inferrer)
+
+    # 定义一个简单的 Python 函数作为工具
+    def get_weather(city: str):
+        """获取指定城市的天气。"""
+        return f"{city}的天气晴朗。"
+
+    # 注册工具（自动生成 Schema 并缓存）
+    await dm.register_tools([get_weather], model="google/gemini-3-flash-preview")
+
+    # 开始对话
+    messages = [{"role": "user", "content": "纽约的天气怎么样？"}]
+    response = await dm.chat(messages=messages, model="google/gemini-3-flash-preview")
+    
+    print(response.choices[0].message.content)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### License
+
+MIT
