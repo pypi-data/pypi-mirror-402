@@ -1,0 +1,497 @@
+# 交易日历Python接口
+
+## 项目简介
+
+这是一个封装了**深交所交易日历API**的Python接口，用于便捷查询中国A股市场的交易日信息。开发者可以通过简洁的API灵活地查询指定日期是否为交易日、获取下一个/上一个交易日、查询指定月份或日期范围内的所有交易日等。
+
+## 核心功能
+
+- ✅ **交易日判断**：检查指定日期是否为A股交易日
+- ✅ **前后交易日查询**：获取指定日期的前一个或后一个交易日
+- ✅ **月度交易日查询**：获取指定月份的所有交易日列表
+- ✅ **日期范围查询**：获取指定日期范围内的所有交易日
+- ✅ **自动缓存机制**：减少API请求，提升查询效率
+- ✅ **灵活配置**：支持自定义缓存目录和过期时间
+- ✅ **异常处理**：完善的错误捕获和提示机制
+- ✅ **多格式支持**：支持字符串日期和datetime对象作为参数
+
+## API限制说明
+
+⚠️ **重要限制**：该接口依赖深交所的公开API，**仅支持查询当前系统月份**的交易日信息。
+- 例如：如果当前是1月份，只能查询1月份的交易日
+- 到了2月份，自动切换为查询2月份的交易日
+- 无法查询过去或未来其他月份的交易日信息
+
+这个限制是由深交所API本身决定的，目的是确保用户获取的总是最新的当前月份交易日信息。
+
+## 快速开始
+
+### 安装依赖
+
+```bash
+pip install requests
+```
+
+### 最简示例
+
+```python
+# 查询当前日期是否为交易日
+from trading_calendar import TradingCalendar
+from datetime import datetime
+
+# 创建交易日历对象
+tc = TradingCalendar()
+
+# 检查今天是否为交易日
+today = datetime.now()
+is_trading_today = tc.is_trading_day(today)
+print(f"今天({today.strftime('%Y-%m-%d')})是交易日: {is_trading_today}")
+```
+
+## 详细使用指南
+
+### 1. 导入并初始化
+
+```python
+from trading_calendar import TradingCalendar
+
+# 初始化交易日历对象（使用默认缓存配置）
+tc = TradingCalendar()
+
+# 自定义缓存配置
+tc = TradingCalendar(cache_dir='./my_cache', cache_expire_hours=48)
+```
+
+### 2. 检查指定日期是否为交易日
+
+支持两种日期格式：字符串日期（YYYY-MM-DD）和datetime对象。
+
+⚠️ **注意**：只能查询当前月份的日期，查询其他月份会抛出ValueError异常。
+
+```python
+# 使用字符串日期（推荐）
+date_str = "2026-01-05"  # 当前月份的日期
+is_trading = tc.is_trading_day(date_str)
+print(f"{date_str} 是交易日: {is_trading}")
+
+# 使用datetime对象
+from datetime import datetime
+date_obj = datetime(2026, 1, 5)  # 当前月份的日期
+is_trading = tc.is_trading_day(date_obj)
+print(f"{date_obj.strftime('%Y-%m-%d')} 是交易日: {is_trading}")
+
+# 检查今天是否为交易日（实用示例）
+today = datetime.now()
+is_trading_today = tc.is_trading_day(today)
+if is_trading_today:
+    print(f"今天({today.strftime('%Y-%m-%d')})是交易日，可以进行股票交易")
+else:
+    print(f"今天({today.strftime('%Y-%m-%d')})不是交易日，休息一天吧")
+```
+
+### 3. 获取下一个交易日
+
+```python
+date_str = "2026-01-05"
+next_day = tc.get_next_trading_day(date_str)
+print(f"{date_str} 的下一个交易日: {next_day.strftime('%Y-%m-%d')}")
+
+# 实用示例：获取今天之后的下一个交易日
+today = datetime.now()
+next_trading_day = tc.get_next_trading_day(today)
+print(f"今天({today.strftime('%Y-%m-%d')})之后的下一个交易日: {next_trading_day.strftime('%Y-%m-%d')}")
+```
+
+### 4. 获取上一个交易日
+
+```python
+date_str = "2026-01-05"
+prev_day = tc.get_previous_trading_day(date_str)
+print(f"{date_str} 的上一个交易日: {prev_day.strftime('%Y-%m-%d')}")
+
+# 实用示例：获取今天之前的上一个交易日
+today = datetime.now()
+prev_trading_day = tc.get_previous_trading_day(today)
+print(f"今天({today.strftime('%Y-%m-%d')})之前的上一个交易日: {prev_trading_day.strftime('%Y-%m-%d')}")
+```
+
+### 5. 获取指定月份的所有交易日
+
+```python
+year = 2026
+month = 1
+trading_days = tc.get_trading_days_in_month(year, month)
+print(f"{year}年{month}月的交易日数量: {len(trading_days)}")
+print("交易日列表:")
+for day in trading_days:
+    print(f"  - {day.strftime('%Y-%m-%d')}")
+
+# 实用示例：获取当前月份的所有交易日
+today = datetime.now()
+current_month_trading_days = tc.get_trading_days_in_month(today.year, today.month)
+print(f"\n当前月份({today.year}年{today.month}月)的交易日数量: {len(current_month_trading_days)}")
+```
+
+### 6. 获取指定日期范围内的所有交易日
+
+```python
+start_date = "2026-01-01"
+end_date = "2026-01-31"
+trading_days = tc.get_trading_days_between(start_date, end_date)
+print(f"{start_date} 到 {end_date} 的交易日数量: {len(trading_days)}")
+
+# 打印所有交易日
+print("该日期范围内的交易日:")
+for day in trading_days:
+    print(f"  - {day.strftime('%Y-%m-%d')}")
+
+# 实用示例：获取本月剩余交易日
+today = datetime.now()
+month_end = datetime(today.year, today.month + 1, 1) - timedelta(days=1)
+remaining_trading_days = tc.get_trading_days_between(today, month_end)
+print(f"\n本月剩余交易日数量: {len(remaining_trading_days)}")
+```
+
+## API参考手册
+
+### TradingCalendar类
+
+#### 构造函数：__init__(cache_dir='./cache', cache_expire_hours=24)
+
+**功能**：初始化交易日历对象
+
+**参数**：
+- `cache_dir` (str)：缓存文件存储目录，默认值为'./cache'
+- `cache_expire_hours` (int)：缓存有效期（小时），默认值为24
+
+**示例**：
+```python
+# 默认配置
+tc = TradingCalendar()
+
+# 自定义配置
+tc = TradingCalendar(cache_dir='./my_cache', cache_expire_hours=48)
+```
+
+#### is_trading_day(date)
+
+**功能**：检查指定日期是否为交易日
+
+**参数**：
+- `date` (str/datetime)：要检查的日期，可以是字符串（格式：YYYY-MM-DD）或datetime对象
+
+**返回值**：
+- `bool`：True表示是交易日，False表示非交易日
+
+**异常**：
+- 日期格式错误时抛出ValueError
+- 网络或API错误时抛出Exception
+
+#### get_next_trading_day(date)
+
+**功能**：获取指定日期之后的第一个交易日
+
+**参数**：
+- `date` (str/datetime)：基准日期，可以是字符串（格式：YYYY-MM-DD）或datetime对象
+
+**返回值**：
+- `datetime`：下一个交易日的日期对象
+
+**异常**：
+- 日期格式错误时抛出ValueError
+- 30天内找不到交易日时抛出ValueError
+- 网络或API错误时抛出Exception
+
+#### get_previous_trading_day(date)
+
+**功能**：获取指定日期之前的第一个交易日
+
+**参数**：
+- `date` (str/datetime)：基准日期，可以是字符串（格式：YYYY-MM-DD）或datetime对象
+
+**返回值**：
+- `datetime`：上一个交易日的日期对象
+
+**异常**：
+- 日期格式错误时抛出ValueError
+- 30天内找不到交易日时抛出ValueError
+- 网络或API错误时抛出Exception
+
+#### get_trading_days_in_month(year, month)
+
+**功能**：获取指定月份的所有交易日
+
+**参数**：
+- `year` (int)：年份（如2026）
+- `month` (int)：月份（1-12）
+
+**返回值**：
+- `list[datetime]`：交易日日期对象列表，按时间顺序排列
+
+**异常**：
+- 月份范围错误时抛出ValueError
+- 网络或API错误时抛出Exception
+
+#### get_trading_days_between(start_date, end_date)
+
+**功能**：获取指定日期范围内的所有交易日
+
+**参数**：
+- `start_date` (str/datetime)：开始日期，可以是字符串（格式：YYYY-MM-DD）或datetime对象
+- `end_date` (str/datetime)：结束日期，可以是字符串（格式：YYYY-MM-DD）或datetime对象
+
+**返回值**：
+- `list[datetime]`：交易日日期对象列表，按时间顺序排列
+
+**说明**：
+- 支持开始日期大于结束日期的情况，会自动调整顺序
+- 包含开始日期和结束日期（如果它们是交易日）
+
+**异常**：
+- 日期格式错误时抛出ValueError
+- 网络或API错误时抛出Exception
+
+## 高级功能详解
+
+### 缓存机制
+
+该接口内置了智能缓存机制，用于减少对深交所API的请求次数，提升查询效率并避免对API服务器造成过大压力。
+
+**缓存特点**：
+- 默认缓存目录：`./cache`
+- 默认有效期：24小时
+- 缓存文件命名：`calendar_YYYY_MM.json`（如：`calendar_2026_01.json`）
+- 自动更新：缓存过期后会自动重新从API获取数据
+- 容错处理：缓存文件损坏时会自动重新获取数据
+
+**缓存工作原理**：
+1. 第一次查询某月份数据时，从API获取并保存到缓存
+2. 后续查询同一月份数据时，先检查缓存是否有效
+3. 缓存有效则直接使用缓存数据，否则重新从API获取
+
+### 缓存管理
+
+#### 查看缓存目录
+```python
+import os
+cache_dir = './cache'
+if os.path.exists(cache_dir):
+    cache_files = os.listdir(cache_dir)
+    print(f"缓存文件列表: {cache_files}")
+```
+
+#### 手动清除缓存
+```python
+import shutil
+cache_dir = './cache'
+if os.path.exists(cache_dir):
+    shutil.rmtree(cache_dir)
+    print("缓存已清除")
+```
+
+### 自定义配置
+
+可以通过初始化参数灵活配置交易日历对象：
+
+```python
+# 自定义缓存目录和过期时间
+tc = TradingCalendar(
+    cache_dir='./my_trading_cache',   # 自定义缓存目录
+    cache_expire_hours=72             # 缓存有效期72小时
+)
+```
+
+## 完整示例代码
+
+以下是一个综合性的示例，展示了该接口的主要功能和最佳实践：
+
+```python
+# -*- coding: utf-8 -*-
+"""
+交易日历接口完整示例
+展示所有主要功能的使用方法和最佳实践
+"""
+
+from trading_calendar import TradingCalendar
+from datetime import datetime, timedelta
+
+
+def main():
+    print("=" * 50)
+    print("交易日历接口示例")
+    print("=" * 50)
+    
+    # 1. 初始化交易日历对象
+    print("\n1. 初始化交易日历对象...")
+    tc = TradingCalendar(cache_dir='./trading_cache', cache_expire_hours=48)
+    print("   ✓ 初始化完成")
+    
+    # 2. 检查当前日期是否为交易日
+    print("\n2. 检查当前日期是否为交易日...")
+    today = datetime.now()
+    is_trading_today = tc.is_trading_day(today)
+    print(f"   今天({today.strftime('%Y-%m-%d')})是交易日: {is_trading_today}")
+    
+    # 3. 获取前后交易日
+    print("\n3. 获取前后交易日...")
+    next_day = tc.get_next_trading_day(today)
+    prev_day = tc.get_previous_trading_day(today)
+    print(f"   下一个交易日: {next_day.strftime('%Y-%m-%d')}")
+    print(f"   上一个交易日: {prev_day.strftime('%Y-%m-%d')}")
+    
+    # 4. 获取当月交易日
+    print(f"\n4. 获取{today.year}年{today.month}月的交易日...")
+    current_month_days = tc.get_trading_days_in_month(today.year, today.month)
+    print(f"   当月交易日数量: {len(current_month_days)}")
+    print("   交易日列表:")
+    for day in current_month_days[:5]:  # 只显示前5个
+        print(f"     - {day.strftime('%Y-%m-%d')}")
+    if len(current_month_days) > 5:
+        print(f"     ... 等{len(current_month_days) - 5}个交易日")
+    
+    # 5. 获取日期范围内的交易日
+    print("\n5. 获取指定日期范围内的交易日...")
+    start_date = today - timedelta(days=30)  # 过去30天
+    end_date = today
+    date_range_days = tc.get_trading_days_between(start_date, end_date)
+    print(f"   {start_date.strftime('%Y-%m-%d')} 到 {end_date.strftime('%Y-%m-%d')} 的交易日数量: {len(date_range_days)}")
+    
+    # 6. 实际应用示例：计算本月剩余交易日
+    print("\n6. 实际应用示例...")
+    # 获取本月最后一天
+    if today.month == 12:
+        month_end = datetime(today.year + 1, 1, 1) - timedelta(days=1)
+    else:
+        month_end = datetime(today.year, today.month + 1, 1) - timedelta(days=1)
+    
+    remaining_days = tc.get_trading_days_between(today, month_end)
+    print(f"   本月剩余交易日数量: {len(remaining_days)}")
+    if remaining_days:
+        print(f"   本月剩余交易日: {', '.join(day.strftime('%Y-%m-%d') for day in remaining_days)}")
+    
+    print("\n" + "=" * 50)
+    print("示例执行完成")
+    print("=" * 50)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print(f"\n执行过程中发生错误: {str(e)}")
+        print("请检查网络连接或API是否可用")
+```
+
+### 运行示例
+
+```bash
+python trading_calendar.py
+```
+
+**输出示例**：
+```
+==================================================
+交易日历接口示例
+==================================================
+
+1. 初始化交易日历对象...
+   ✓ 初始化完成
+
+2. 检查当前日期是否为交易日...
+   今天(2026-01-18)是交易日: False
+
+3. 获取前后交易日...
+   下一个交易日: 2026-01-19
+   上一个交易日: 2026-01-16
+
+4. 获取2026年1月的交易日...
+   当月交易日数量: 20
+   交易日列表:
+     - 2026-01-05
+     - 2026-01-06
+     - 2026-01-07
+     - 2026-01-08
+     - 2026-01-09
+     ... 等15个交易日
+
+5. 获取指定日期范围内的交易日...
+   2025-12-19 到 2026-01-18 的交易日数量: 16
+
+6. 实际应用示例...
+   本月剩余交易日数量: 12
+   本月剩余交易日: 2026-01-19, 2026-01-20, 2026-01-21, 2026-01-22, 2026-01-23, 2026-01-26, 2026-01-27, 2026-01-28, 2026-01-29, 2026-01-30
+
+==================================================
+示例执行完成
+==================================================
+```
+
+## 注意事项与最佳实践
+
+### 使用限制
+1. **数据来源**：该接口使用的是深交所的公开API，数据与深交所官方保持一致
+2. **查询范围**：**仅支持查询当前系统月份**的交易日信息（核心限制）
+3. **API频率**：请勿频繁调用API，建议使用内置的缓存机制减少请求次数
+4. **数据更新**：节假日安排可能会有调整，请定期清除缓存以获取最新数据
+
+### 最佳实践
+1. **合理使用缓存**：根据实际需求调整缓存有效期，平衡数据新鲜度和性能
+2. **异常处理**：始终使用try-except语句捕获可能的异常
+3. **日期格式**：优先使用YYYY-MM-DD格式的字符串日期或datetime对象
+4. **批量查询**：对于大量日期查询，建议先获取日期范围数据再进行处理
+5. **定期维护**：定期检查和清理缓存目录，避免占用过多磁盘空间
+
+## 错误处理与故障排除
+
+### 常见错误类型
+
+| 错误类型 | 可能原因 | 解决方案 |
+|---------|---------|---------|
+| `ModuleNotFoundError: No module named 'requests'` | 未安装requests库 | 执行`pip install requests` |
+| `ValueError: 无法查询YYYY年MM月的数据。深交所API仅支持查询当前月份` | 查询了非当前月份的日期 | 只能查询当前系统月份的日期 |
+| `ValueError: 无法找到日期 XXXX-XX-XX 的交易信息` | 日期格式错误或日期不存在 | 检查日期格式是否为YYYY-MM-DD |
+| `ValueError: 无法在30天内找到下一个交易日` | 查询范围超出API支持范围 | 尝试查询更近的日期 |
+| `Exception: 获取日历数据失败: ...` | 网络连接问题或API错误 | 检查网络连接或稍后重试 |
+
+### 异常处理示例
+
+```python
+try:
+    # 尝试获取下一个交易日
+    next_day = tc.get_next_trading_day("2026-01-05")
+    print(f"下一个交易日: {next_day.strftime('%Y-%m-%d')}")
+except ValueError as e:
+    # 处理日期格式错误或查询范围错误
+    print(f"日期错误: {str(e)}")
+except ConnectionError as e:
+    # 处理网络连接错误
+    print(f"网络错误: {str(e)}")
+except Exception as e:
+    # 处理其他未知错误
+    print(f"发生未知错误: {str(e)}")
+```
+
+### 故障排除步骤
+
+1. **检查网络连接**：确保能够访问互联网和深交所网站
+2. **验证日期格式**：确保使用YYYY-MM-DD格式的日期字符串
+3. **清除缓存**：删除缓存目录后重新尝试
+4. **查看API状态**：检查深交所API是否正常响应
+5. **检查依赖**：确保已正确安装requests库
+
+## 更新日志
+
+### v1.0.0 (2026-01-18)
+- ✅ 初始版本发布
+- ✅ 封装深交所交易日历API
+- ✅ 支持查询指定日期是否为交易日
+- ✅ 支持获取前后交易日
+- ✅ 支持查询月度交易日和日期范围交易日
+- ✅ 内置智能缓存机制
+- ✅ 完善的错误处理机制
+- ✅ 详细的使用文档和示例
+
+## 作者
+
+作者：忍冬
+
