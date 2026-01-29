@@ -1,0 +1,22 @@
+[Unit]
+Description=RTPProxy media relay
+Documentation=man:rtpproxy(8)
+Requires=rtpproxy.socket
+After=network.target rtpproxy.socket
+
+[Service]
+Type=notify
+User=rtpproxy
+Group=rtpproxy
+EnvironmentFile=-/etc/sysconfig/rtpproxy
+Sockets=rtpproxy.socket
+PIDFile=/run/rtpproxy/rtpproxy.pid
+RuntimeDirectory=rtpproxy
+RuntimeDirectoryMode=0755
+ExecStart=/usr/bin/rtpproxy -f -s systemd: -p /run/rtpproxy/rtpproxy.pid $OPTIONS
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+
+[Install]
+Also=rtpproxy.socket
+WantedBy=multi-user.target

@@ -1,0 +1,31 @@
+#!/bin/sh
+
+# PROVIDE: rtpproxy
+# REQUIRE: DAEMON
+# BEFORE: kamailio opensips
+# KEYWORD: shutdown
+#
+# Add the following lines to /etc/rc.conf to enable RTPProxy:
+#
+# rtpproxy_enable="YES"
+#
+
+. /etc/rc.subr
+
+name=rtpproxy
+rcvar=rtpproxy_enable
+load_rc_config ${name}
+
+: ${rtpproxy_enable:="NO"}
+: ${rtpproxy_ctrl_socket:="unix:/var/run/rtpproxy.sock"}
+: ${rtpproxy_laddr:="0.0.0.0"}
+: ${rtpproxy_paddr:="0.0.0.0"}
+: ${rtpproxy_usr:="rtpproxy"}
+: ${rtpproxy_grp:="rtpproxy"}
+
+command="%%PREFIX%%/bin/rtpproxy"
+pidfile="/var/run/rtpproxy.pid"
+command_args="-u ${rtpproxy_usr}:${rtpproxy_grp} -A ${rtpproxy_paddr} -l ${rtpproxy_laddr} \
+  -s ${rtpproxy_ctrl_socket} -p ${pidfile}"
+
+run_rc_command "$1"
