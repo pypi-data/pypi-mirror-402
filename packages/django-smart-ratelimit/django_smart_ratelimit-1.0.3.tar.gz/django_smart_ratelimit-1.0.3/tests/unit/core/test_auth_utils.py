@@ -1,0 +1,341 @@
+"""
+Tests for auth_utils module.
+"""
+
+from unittest.mock import Mock
+
+from django.contrib.auth.models import AnonymousUser, User
+from django.http import HttpRequest
+from django.test import TestCase
+
+from django_smart_ratelimit import (
+    get_client_info,
+    get_user_info,
+    get_user_role,
+    has_permission,
+    is_authenticated_user,
+    is_staff_user,
+    is_superuser,
+    should_bypass_rate_limit,
+)
+from django_smart_ratelimit.auth_utils import is_internal_request
+
+
+class AuthUtilsTests(TestCase):
+    """Tests for authentication utilities."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.user = User.objects.create_user(
+            username="testuser",
+            email="test@example.com",
+            password="testpass123",
+            is_staff=False,
+            is_superuser=False,
+        )
+
+        self.staff_user = User.objects.create_user(
+            username="staffuser",
+            email="staff@example.com",
+            password="testpass123",
+            is_staff=True,
+            is_superuser=False,
+        )
+
+        self.superuser = User.objects.create_user(
+            username="superuser",
+            email="super@example.com",
+            password="testpass123",
+            is_staff=True,
+            is_superuser=True,
+        )
+
+    def test_is_authenticated_user_with_authenticated_user(self):
+        """Test is_authenticated_user with authenticated user."""
+        request = HttpRequest()
+        request.user = self.user
+
+        self.assertTrue(is_authenticated_user(request))
+
+    def test_is_authenticated_user_with_anonymous_user(self):
+        """Test is_authenticated_user with anonymous user."""
+        request = HttpRequest()
+        request.user = AnonymousUser()
+
+        self.assertFalse(is_authenticated_user(request))
+
+    def test_is_authenticated_user_no_user_attribute(self):
+        """Test is_authenticated_user with no user attribute."""
+        request = HttpRequest()
+        # No user attribute
+
+        self.assertFalse(is_authenticated_user(request))
+
+    def test_get_user_info_authenticated(self):
+        """Test get_user_info with authenticated user."""
+        request = HttpRequest()
+        request.user = self.user
+
+        info = get_user_info(request)
+
+        self.assertIsNotNone(info)
+        self.assertEqual(info["id"], self.user.id)
+        self.assertEqual(info["username"], self.user.username)
+        self.assertFalse(info["is_staff"])
+        self.assertFalse(info["is_superuser"])
+
+    def test_get_user_info_staff(self):
+        """Test get_user_info with staff user."""
+        request = HttpRequest()
+        request.user = self.staff_user
+
+        info = get_user_info(request)
+
+        self.assertIsNotNone(info)
+        self.assertTrue(info["is_staff"])
+        self.assertFalse(info["is_superuser"])
+
+    def test_get_user_info_superuser(self):
+        """Test get_user_info with superuser."""
+        request = HttpRequest()
+        request.user = self.superuser
+
+        info = get_user_info(request)
+
+        self.assertIsNotNone(info)
+        self.assertTrue(info["is_staff"])
+        self.assertTrue(info["is_superuser"])
+
+    def test_get_user_info_anonymous(self):
+        """Test get_user_info with anonymous user."""
+        request = HttpRequest()
+        request.user = AnonymousUser()
+
+        info = get_user_info(request)
+
+        self.assertIsNone(info)
+
+    def test_get_client_info_basic(self):
+        """Test get_client_info with basic request."""
+        request = HttpRequest()
+        request.META = {
+            "REMOTE_ADDR": "127.0.0.1",
+            "HTTP_USER_AGENT": "TestAgent/1.0",
+        }
+
+        info = get_client_info(request)
+
+        self.assertIsInstance(info, dict)
+        self.assertEqual(info["ip"], "127.0.0.1")
+        self.assertEqual(info["user_agent"], "TestAgent/1.0")
+
+    def test_get_client_info_with_forwarded_for(self):
+        """Test get_client_info with X-Forwarded-For header."""
+        request = HttpRequest()
+        request.META = {
+            "REMOTE_ADDR": "10.0.0.1",
+            "HTTP_X_FORWARDED_FOR": "192.168.1.1, 10.0.0.1",
+            "HTTP_USER_AGENT": "TestAgent/1.0",
+        }
+
+        info = get_client_info(request)
+
+        self.assertEqual(info["ip"], "10.0.0.1")  # Returns REMOTE_ADDR
+        self.assertEqual(
+            info["forwarded_for"], "192.168.1.1, 10.0.0.1"
+        )  # Available in forwarded_for
+
+    def test_get_client_info_with_real_ip(self):
+        """Test get_client_info with X-Real-IP header."""
+        request = HttpRequest()
+        request.META = {
+            "REMOTE_ADDR": "10.0.0.1",
+            "HTTP_X_REAL_IP": "192.168.1.1",
+            "HTTP_USER_AGENT": "TestAgent/1.0",
+        }
+
+        info = get_client_info(request)
+
+        self.assertEqual(info["ip"], "10.0.0.1")  # Returns REMOTE_ADDR
+        self.assertEqual(info["real_ip"], "192.168.1.1")  # Available in real_ip
+
+    def test_get_permission_info_authenticated(self):
+        """Test get_permission_info with authenticated user."""
+        request = HttpRequest()
+        request.user = self.user
+
+        # Test has_permission instead
+        result = has_permission(request, "test.permission")
+        self.assertIsInstance(result, bool)
+
+    def test_get_permission_info_anonymous(self):
+        """Test get_permission_info with anonymous user."""
+        request = HttpRequest()
+        request.user = AnonymousUser()
+
+        # Test has_permission instead
+        result = has_permission(request, "test.permission")
+        self.assertFalse(result)
+
+    def test_is_staff_user_with_staff(self):
+        """Test is_staff_user with staff user."""
+        request = HttpRequest()
+        request.user = self.staff_user
+
+        self.assertTrue(is_staff_user(request))
+
+    def test_is_staff_user_with_regular_user(self):
+        """Test is_staff_user with regular user."""
+        request = HttpRequest()
+        request.user = self.user
+
+        self.assertFalse(is_staff_user(request))
+
+    def test_is_staff_user_with_anonymous(self):
+        """Test is_staff_user with anonymous user."""
+        request = HttpRequest()
+        request.user = AnonymousUser()
+
+        self.assertFalse(is_staff_user(request))
+
+    def test_has_permission_authenticated(self):
+        """Test has_permission with authenticated user."""
+        request = HttpRequest()
+        request.user = self.user
+
+        # Mock permission check
+        self.user.has_perm = Mock(return_value=True)
+
+        result = has_permission(request, "test.permission")
+
+        self.assertTrue(result)
+
+    def test_has_permission_anonymous(self):
+        """Test has_permission with anonymous user."""
+        request = HttpRequest()
+        request.user = AnonymousUser()
+
+        result = has_permission(request, "test.permission")
+
+        self.assertFalse(result)
+
+    def test_get_user_role_variants(self):
+        """Test get_user_role with different user types."""
+        req = HttpRequest()
+        req.user = AnonymousUser()
+        self.assertEqual(get_user_role(req), "anonymous")
+
+        req.user = self.user
+        self.assertEqual(get_user_role(req), "user")
+
+        req.user = self.staff_user
+        self.assertEqual(get_user_role(req), "staff")
+
+        req.user = self.superuser
+        self.assertEqual(get_user_role(req), "superuser")
+
+    def test_is_superuser_helper(self):
+        """Test is_superuser helper function."""
+        req = HttpRequest()
+        req.user = self.superuser
+        self.assertTrue(is_superuser(req))
+        req.user = self.user
+        self.assertFalse(is_superuser(req))
+
+    def test_should_bypass_rate_limit(self):
+        """Test should_bypass_rate_limit with different configurations."""
+        req = HttpRequest()
+        req.user = self.superuser
+        self.assertTrue(should_bypass_rate_limit(req, bypass_superuser=True))
+
+        req.user = self.staff_user
+        self.assertTrue(should_bypass_rate_limit(req, bypass_staff=True))
+        self.assertFalse(should_bypass_rate_limit(req, bypass_staff=False))
+
+        req.user = AnonymousUser()
+        self.assertFalse(should_bypass_rate_limit(req))
+
+    def test_is_internal_request_defaults(self):
+        """Test is_internal_request with default settings."""
+        request = HttpRequest()
+        request.META["REMOTE_ADDR"] = "127.0.0.1"
+        self.assertTrue(is_internal_request(request))
+
+        request.META["REMOTE_ADDR"] = "10.0.0.5"
+        self.assertTrue(is_internal_request(request))
+
+        request.META["REMOTE_ADDR"] = "8.8.8.8"
+        self.assertFalse(is_internal_request(request))
+
+    def test_is_internal_request_custom_ips(self):
+        """Test is_internal_request with custom IP list."""
+        request = HttpRequest()
+        request.META["REMOTE_ADDR"] = "1.2.3.4"
+        self.assertTrue(is_internal_request(request, internal_ips=["1.2.3.4"]))
+
+        request.META["REMOTE_ADDR"] = "5.6.7.8"
+        self.assertFalse(is_internal_request(request, internal_ips=["1.2.3.4"]))
+
+    def test_is_internal_request_cidr(self):
+        """Test is_internal_request with CIDR notation."""
+        request = HttpRequest()
+        request.META["REMOTE_ADDR"] = "192.168.1.50"
+        self.assertTrue(is_internal_request(request, internal_ips=["192.168.0.0/16"]))
+
+    def test_is_internal_request_cidr_ipv4(self):
+        """Test CIDR matching for IPv4 addresses."""
+        request = HttpRequest()
+        internal_ips = ["10.0.0.0/8"]
+
+        # Inside range
+        request.META["REMOTE_ADDR"] = "10.0.0.1"
+        self.assertTrue(is_internal_request(request, internal_ips))
+
+        request.META["REMOTE_ADDR"] = "10.255.255.255"
+        self.assertTrue(is_internal_request(request, internal_ips))
+
+        # Outside range
+        request.META["REMOTE_ADDR"] = "11.0.0.1"
+        self.assertFalse(is_internal_request(request, internal_ips))
+
+    def test_is_internal_request_cidr_ipv6(self):
+        """Test CIDR matching for IPv6 addresses."""
+        request = HttpRequest()
+        internal_ips = ["fc00::/7"]
+
+        # Inside range
+        request.META["REMOTE_ADDR"] = "fc00::1"
+        self.assertTrue(is_internal_request(request, internal_ips))
+
+        # Outside range
+        request.META["REMOTE_ADDR"] = "2001:db8::1"
+        self.assertFalse(is_internal_request(request, internal_ips))
+
+    def test_is_internal_request_edge_cases(self):
+        """Test boundary IPs in CIDR ranges."""
+        request = HttpRequest()
+        internal_ips = ["192.168.1.0/24"]
+
+        # Network address
+        request.META["REMOTE_ADDR"] = "192.168.1.0"
+        self.assertTrue(is_internal_request(request, internal_ips))
+
+        # Broadcast address
+        request.META["REMOTE_ADDR"] = "192.168.1.255"
+        self.assertTrue(is_internal_request(request, internal_ips))
+
+        # Just outside
+        request.META["REMOTE_ADDR"] = "192.168.2.0"
+        self.assertFalse(is_internal_request(request, internal_ips))
+
+    def test_is_internal_request_invalid_ip(self):
+        """Test is_internal_request with invalid IP address."""
+        request = HttpRequest()
+        request.META["REMOTE_ADDR"] = "invalid-ip"
+        self.assertFalse(is_internal_request(request))
+
+    def test_is_internal_request_no_remote_addr(self):
+        """Test is_internal_request when REMOTE_ADDR is missing."""
+        request = HttpRequest()
+        # No REMOTE_ADDR
+        self.assertFalse(is_internal_request(request))
