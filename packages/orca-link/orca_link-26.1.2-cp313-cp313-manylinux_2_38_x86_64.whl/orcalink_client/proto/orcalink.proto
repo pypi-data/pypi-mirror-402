@@ -1,0 +1,314 @@
+syntax = "proto3";
+
+package orca;
+
+// ============================================================
+// 枚举定义
+// ============================================================
+
+// 频道类型
+enum ChannelType {
+    CHANNEL_TYPE_UNSPECIFIED = 0;
+    CHANNEL_TYPE_POS = 1;               // 位置/姿态数据
+    CHANNEL_TYPE_FORCE = 2;             // 力/扭矩数据
+    CHANNEL_TYPE_GENERIC = 10;          // 通用数据频道
+}
+
+// 数据类型
+enum DataType {
+    DATA_TYPE_UNSPECIFIED = 0;
+    DATA_TYPE_POSITION = 1;             // 位置/姿态
+    DATA_TYPE_FORCE = 2;                // 力/扭矩
+    DATA_TYPE_VELOCITY = 3;             // 速度
+    DATA_TYPE_TEMPERATURE = 4;          // 温度
+    DATA_TYPE_PRESSURE = 5;             // 压强
+    DATA_TYPE_CUSTOM = 100;             // 自定义类型
+}
+
+// 帧类型
+enum FrameType {
+    FRAME_TYPE_UNSPECIFIED = 0;
+    FRAME_TYPE_IFRAME = 1;              // I帧：完整状态
+    FRAME_TYPE_PFRAME = 2;              // P帧：增量/残差
+}
+
+// 更新模式
+enum UpdateMode {
+    UPDATE_MODE_FULL = 0;               // 完整值
+    UPDATE_MODE_DELTA = 1;              // 残差值
+    UPDATE_MODE_REPLACE = 2;            // 替换值
+}
+
+// ============================================================
+// 统一数据模型：对象 + 数据类型 + 数值
+// ============================================================
+
+// 位置/姿态数值
+// 四元数顺序：[w, x, y, z]（与 MuJoCo 一致，Hamilton 约定）
+message PositionValue {
+    double x = 1;                       // X 坐标（米）
+    double y = 2;                       // Y 坐标（米）
+    double z = 3;                       // Z 坐标（米）
+    double qw = 4;                      // 四元数 W（标量部分，MuJoCo 约定 w 在前）
+    double qx = 5;                      // 四元数 X
+    double qy = 6;                      // 四元数 Y
+    double qz = 7;                      // 四元数 Z
+}
+
+// 力/扭矩数值
+message ForceValue {
+    double fx = 1;                      // 力 X（牛顿）
+    double fy = 2;                      // 力 Y（牛顿）
+    double fz = 3;                      // 力 Z（牛顿）
+    double tx = 4;                      // 扭矩 X（牛顿·米）
+    double ty = 5;                      // 扭矩 Y（牛顿·米）
+    double tz = 6;                      // 扭矩 Z（牛顿·米）
+}
+
+// 速度数值
+message VelocityValue {
+    double vx = 1;                      // 线速度 X（米/秒）
+    double vy = 2;                      // 线速度 Y（米/秒）
+    double vz = 3;                      // 线速度 Z（米/秒）
+    double wx = 4;                      // 角速度 X（弧度/秒）
+    double wy = 5;                      // 角速度 Y（弧度/秒）
+    double wz = 6;                      // 角速度 Z（弧度/秒）
+}
+
+// 标量数值（用于温度、压强等）
+message ScalarValue {
+    double value = 1;                   // 数值
+    string unit = 2;                    // 单位（可选，如 "K", "Pa"）
+}
+
+// 自定义数值
+message CustomValue {
+    string type_name = 1;               // 自定义类型名称
+    bytes data = 2;                     // 序列化的数据
+}
+
+// 统一数据单元：对象 + 数据类型 + 数值
+message DataUnit {
+    string object_id = 1;               // 对象标识符
+    DataType data_type = 2;             // 数据类型
+    
+    // 数值（根据 data_type 选择）
+    oneof value {
+        PositionValue position = 10;
+        ForceValue force = 11;
+        VelocityValue velocity = 12;
+        ScalarValue scalar = 13;
+        CustomValue custom = 14;
+    }
+}
+
+// ============================================================
+// I帧/P帧 数据结构
+// ============================================================
+
+// 数据帧（支持 I帧和 P帧）
+message DataFrame {
+    FrameType frame_type = 1;           // 帧类型
+    uint64 sequence = 2;                // 帧序列号
+    uint64 reference_sequence = 3;      // P帧参考的帧序列（仅 P帧使用）
+    UpdateMode update_mode = 4;         // 更新模式
+    int64 timestamp = 5;                // 客户端时间戳（微秒）
+    int64 server_timestamp = 6;         // 服务器时间戳（微秒）
+    
+    repeated DataUnit units = 10;       // 数据单元列表
+}
+
+
+// ============================================================
+// 频道配置与信息
+// ============================================================
+
+message ChannelConfig {
+    uint32 channel_id = 1;
+    ChannelType channel_type = 2;
+    DataType data_type = 3;             // 频道承载的数据类型
+}
+
+message ChannelInfo {
+    uint32 channel_id = 1;
+    ChannelType channel_type = 2;
+    DataType data_type = 3;
+    uint32 publisher_count = 4;
+    uint32 subscriber_count = 5;
+    uint32 queue_size = 6;
+}
+
+// ============================================================
+// 会话管理
+// ============================================================
+
+// 加入会话请求（新版：支持频道注册）
+message JoinSessionRequest {
+    uint32 session_id = 1;                    // 会话 ID
+    string client_name = 2;                   // 客户端名称
+    repeated ChannelConfig publish_channels = 3;   // 要发布的频道
+    repeated ChannelConfig subscribe_channels = 4; // 要订阅的频道
+    
+    // NEW: 同步参数（服务端中央流控）
+    float update_rate_hz = 10;              // 客户端的同步周期（Hz）
+    float speed_ratio_threshold = 11;       // 速度比阈值
+    uint32 expected_clients = 12;           // 预期客户端数量
+    uint32 flow_control_window_size = 13;  // 流控窗口大小（判定触发阈值）
+    
+    // NEW: 耦合模式一致性检查
+    string coupling_mode = 14;              // 耦合模式："force_position" 或 "spring_constraint"
+    
+    // NEW: 控制模式配置
+    string control_mode = 20;               // 控制模式："sync" 或 "async"
+    uint32 sync_window_size = 21;          // 同步窗口大小（仅sync模式，1~3）
+}
+
+// 加入会话响应
+message JoinSessionResponse {
+    bool success = 1;
+    uint32 session_id = 2;
+    uint32 client_count = 3;
+    repeated uint32 registered_channels = 4;
+    string error = 5;
+    
+    // NEW: 会话同步参数
+    bool session_ready = 10;                // 会话是否就绪
+    float update_rate_hz = 11;              // 会话统一的同步周期
+    float speed_ratio_threshold = 12;       // 会话统一的速度比阈值
+    repeated string connected_clients = 13; // 已连接的客户端列表
+    uint32 flow_control_window_size = 14;  // 会话统一的窗口大小
+    
+    // NEW: 耦合模式一致性检查结果
+    string coupling_mode = 15;              // 会话统一的耦合模式（如果不匹配则握手失败）
+    
+    // NEW: 会话控制模式
+    string control_mode = 20;               // 会话统一的控制模式
+    uint32 sync_window_size = 21;          // 会话统一的同步窗口大小
+}
+
+// ============================================================
+// 发布请求/响应（新版：支持 I帧/P帧）
+// ============================================================
+
+message PublishFrameRequest {
+    uint32 session_id = 1;
+    uint32 channel_id = 2;
+    string client_name = 3;  // 发布客户端名称
+    DataFrame frame = 4;
+}
+
+message PublishFrameResponse {
+    bool success = 1;
+    uint64 sequence = 2;
+    uint32 queue_size = 3;
+    uint32 subscriber_count = 4;
+    string error = 5;
+    uint64 remote_acked_sequence = 6;  // 对方最后的 ACK 序列号（新增）
+    FlowControlAction flow_control = 7;  // NEW: 流控动作
+}
+
+// ============================================================
+// 订阅请求/响应（新版）
+// ============================================================
+
+message SubscribeFrameRequest {
+    uint32 session_id = 1;
+    uint32 channel_id = 2;
+    string client_name = 3;  // 订阅客户端名称
+    uint32 max_count = 4;               // 最大返回数量（0 = 全部）
+    bool request_iframe = 5;            // 请求 I帧同步
+}
+
+message SubscribeFrameResponse {
+    bool success = 1;
+    repeated DataFrame frames = 2;
+    uint32 remaining_count = 3;
+    string error = 4;
+    uint64 remote_acked_sequence = 5;  // 对方最后的 ACK 序列号（新增）
+}
+
+
+// ============================================================
+// 频道信息查询
+// ============================================================
+
+message GetChannelInfoRequest {
+    uint32 session_id = 1;
+    uint32 channel_id = 2;              // 0 = 查询所有频道
+}
+
+message GetChannelInfoResponse {
+    bool success = 1;
+    repeated ChannelInfo channels = 2;
+    string error = 3;
+}
+
+// ============================================================
+// I帧请求（用于同步）
+// ============================================================
+
+message RequestIFrameRequest {
+    uint32 session_id = 1;
+    uint32 channel_id = 2;
+}
+
+message RequestIFrameResponse {
+    bool success = 1;
+    string error = 2;
+}
+
+// ============================================================
+// ACK 确认机制（用于流控）
+// ============================================================
+
+// ACK 消息：接收端确认已收到数据
+message AckMessage {
+    uint32 session_id = 1;                  // 会话 ID
+    uint32 channel_id = 2;                  // 频道 ID
+    string client_name = 3;                 // 接收客户端名称
+    uint64 acked_sequence = 4;              // 确认收到的最高序列号
+    uint32 received_count = 5;              // 本批次收到的数据条数
+    int64 timestamp = 6;                    // 客户端时间戳（微秒）
+}
+
+// NEW: 流控动作定义（服务端中央流控）
+message FlowControlAction {
+    enum ActionType {
+        CONTINUE = 0;           // 继续执行
+        PAUSE_CYCLES = 1;       // 暂停 N 个周期
+    }
+    
+    ActionType action = 1;
+    uint32 pause_cycles = 2;    // 暂停的周期数
+    string reason = 3;          // 原因（用于日志）
+}
+
+message SendAckRequest {
+    AckMessage ack = 1;
+}
+
+message SendAckResponse {
+    bool success = 1;
+    string error = 2;
+}
+
+// ============================================================
+// gRPC 服务定义
+// ============================================================
+
+service OrcaForwarder {
+    // 会话管理
+    rpc JoinSession (JoinSessionRequest) returns (JoinSessionResponse);
+    
+    // 发布/订阅接口：支持 I帧/P帧
+    rpc PublishFrame (PublishFrameRequest) returns (PublishFrameResponse);
+    rpc SubscribeFrame (SubscribeFrameRequest) returns (SubscribeFrameResponse);
+    rpc RequestIFrame (RequestIFrameRequest) returns (RequestIFrameResponse);
+    
+    // 频道信息查询
+    rpc GetChannelInfo (GetChannelInfoRequest) returns (GetChannelInfoResponse);
+    
+    // 流控 ACK 确认
+    rpc SendAck (SendAckRequest) returns (SendAckResponse);
+}
+

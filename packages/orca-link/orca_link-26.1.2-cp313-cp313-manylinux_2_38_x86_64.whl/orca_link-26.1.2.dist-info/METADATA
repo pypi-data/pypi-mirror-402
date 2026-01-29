@@ -1,0 +1,143 @@
+Metadata-Version: 2.4
+Name: orca-link
+Version: 26.1.2
+Summary: OrcaLink gRPC Client with MuJoCo-SPH Simulation Integration
+Home-page: https://github.com/your-repo/OrcaLink
+Author: OrcaLink Team
+Author-email: 
+License-Expression: LicenseRef-Proprietary
+Keywords: orcalink,grpc,mujoco,sph,simulation
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: grpcio>=1.67.0
+Requires-Dist: grpcio-tools>=1.67.0
+Requires-Dist: protobuf>=6.0
+Requires-Dist: numpy
+Requires-Dist: scipy
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+Requires-Dist: black; extra == "dev"
+Requires-Dist: flake8; extra == "dev"
+Provides-Extra: gym
+Requires-Dist: gymnasium; extra == "gym"
+Requires-Dist: orca-gym; extra == "gym"
+Dynamic: home-page
+Dynamic: requires-python
+
+# OrcaLink - gRPC 会话转发和生命周期管理服务器
+
+![Status](https://img.shields.io/badge/status-active-green) ![License](https://img.shields.io/badge/license-Proprietary-red)
+
+## 概述
+
+**OrcaLink** 是一个企业级的 gRPC 中间件框架，支持：
+- 🔄 **实时数据转发**：多客户端、多频道的双向通信
+- 💾 **灵活存储**：纯转发模式和统计记账模式可选
+- 🧹 **自动生命周期管理**：Session 空闲自动清理，释放资源
+- 📊 **完整的统计记账**：所有操作均可被追踪和审计
+- ⚡ **高性能**：15K+ msg/sec 吞吐量，<2ms p99 延迟
+
+### 核心特性
+
+✨ **会话隔离** - 每个客户端独立会话，互不干扰
+
+⚡ **高吞吐量** - 
+- 纯转发模式：**15K+ msg/sec**，**<2ms p99 延迟**
+- 统计记账模式：**10K+ msg/sec**，**<10ms p99 延迟**
+
+🧹 **自动清理** - 
+- 空闲 Session 10 分钟后自动清理（可配置）
+- 支持最低 10 秒超时，适合测试和演示
+- 清理记录完整保存在数据库中
+
+🔄 **灵活配置** - 
+- 支持纯转发模式（最低延迟）
+- 支持统计记账模式（完整数据追踪）
+- 支持 Session 自动清理（资源释放）
+
+💾 **可靠存储** - 基于 SQLite 的高效数据持久化
+
+🚀 **生产级** - 
+- 完整的会话管理和资源清理
+- 错误恢复和监控指标
+- 完整的文档和测试套件
+
+## 系统要求
+
+- **操作系统**：Linux, macOS, Windows
+- **Python**：3.8+（用于 Python 客户端）
+- **C++ 编译器**：
+  - Server：需要支持 C++17 的编译器（GCC 7+, Clang 5+, MSVC 2017+）
+  - Client 库：需要支持 C++14 的编译器（GCC 5+, Clang 3.4+）
+- **CMake**：3.10+
+- **内存**：4GB+
+
+## 安装
+
+### PyPI 安装（推荐）
+
+```bash
+pip install orca-link
+```
+
+安装后可以使用：
+- **Python 客户端**：`import orcalink_client`
+- **服务端命令行工具**：`orcalink --help`
+
+## 快速开始
+
+### 启动服务端
+
+```bash
+# 安装（如果尚未安装）
+pip install orca-link
+
+# 启动服务端
+orcalink
+
+# 预期输出:
+# ✅ OrcaLink gRPC server started successfully on localhost:50351
+# 🧹 Session cleanup enabled (idle timeout: 600s, check interval: 60s)
+```
+
+### Python 客户端示例
+
+```python
+import orcalink_client
+
+# 连接到服务器
+client = orcalink_client.OrcaLinkClient('localhost:50351')
+
+# 加入会话
+session = client.join_session(
+    session_id=1,
+    client_name='my_client',
+    publish_channels=[{'channel_id': 1, 'channel_type': 1}]
+)
+
+# 发布数据
+client.publish_frame(
+    session_id=1,
+    channel_id=1,
+    frame_data={'units': [...]}
+)
+```
+
+## 许可证
+
+版权所有 © 2025 上海松应科技有限公司  
+保留所有权利。
+
+本软件仅供授权用户使用。未经明确授权，禁止复制、修改、分发或使用本软件。
