@@ -1,0 +1,1 @@
+"""Rich Tree CLI package."""
