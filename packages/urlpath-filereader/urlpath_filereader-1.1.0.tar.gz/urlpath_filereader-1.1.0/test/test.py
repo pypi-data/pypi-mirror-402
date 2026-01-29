@@ -1,0 +1,1 @@
+from urlpath_filereader import detect_encoding
