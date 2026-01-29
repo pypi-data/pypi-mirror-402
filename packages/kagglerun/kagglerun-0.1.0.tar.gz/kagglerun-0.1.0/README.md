@@ -1,0 +1,375 @@
+# KaggleRun
+
+[![PyPI version](https://badge.fury.io/py/kagglerun.svg)](https://pypi.org/project/kagglerun/)
+[![Downloads](https://static.pepy.tech/badge/kagglerun/month)](https://pepy.tech/project/kagglerun)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+
+**Execute Python on Kaggle's FREE H100 GPUs from your terminal. No browser needed.**
+
+Perfect for AI coding agents like Claude Code, Cursor, and Cline.
+
+```bash
+pip install kagglerun
+kagglerun --url <your-kaggle-url> "import torch; print(torch.cuda.get_device_name(0))"
+# Output: NVIDIA H100 80GB HBM3
+```
+
+---
+
+## Why KaggleRun?
+
+| Feature | KaggleRun | Kaggle Web | Colab | RunPod |
+|---------|-----------|------------|-------|--------|
+| No browser needed | **Yes** | No | No | No |
+| CLI-native | **Yes** | No | No | Partial |
+| AI agent ready (MCP) | **Yes** | No | No | No |
+| Free H100 GPU | **Yes** | Yes | No | No |
+| Real-time output | **Yes** | Yes | Yes | Yes |
+| Cost | **$0** | $0 | $0-10/mo | $0.50+/hr |
+
+**KaggleRun bridges your local terminal to Kaggle's free GPU infrastructure.**
+
+---
+
+## Quick Start
+
+### 1. Get Your Kaggle Jupyter URL
+
+1. Go to [kaggle.com/code](https://www.kaggle.com/code) and create a new notebook
+2. Enable GPU: **Settings** → **Accelerator** → **GPU T4 x2** or **GPU P100**
+3. Click the **"..."** menu → **"Copy VS Code Server URL"**
+4. Add `/proxy` to the end of the URL
+
+Your URL looks like:
+```
+https://kkb-production.jupyter-proxy.kaggle.net/k/123456/eyJ.../proxy
+```
+
+### 2. Install & Run
+
+```bash
+# Install
+pip install kagglerun
+
+# Set URL (optional - avoids --url each time)
+export KAGGLE_JUPYTER_URL="https://your-url-here/proxy"
+
+# Execute code
+kagglerun "print('Hello from H100!')"
+
+# Run a Python file
+kagglerun train.py
+
+# Check GPU
+kagglerun --gpu-info
+```
+
+---
+
+## Features
+
+### CLI Commands
+
+```bash
+# Execute inline code
+kagglerun "import torch; print(torch.cuda.is_available())"
+
+# Execute a local Python file
+kagglerun my_training_script.py
+
+# Get GPU information
+kagglerun --gpu-info
+
+# Get system information (Python, PyTorch, CUDA)
+kagglerun --system-info
+
+# List files in /kaggle/working/
+kagglerun --list-files
+
+# Upload a file
+kagglerun --upload data.csv
+
+# Download a file
+kagglerun --download results.csv --output ./local_results.csv
+
+# Read a remote file
+kagglerun --read output.txt
+
+# Test connection
+kagglerun --test
+```
+
+### Python API
+
+```python
+from kagglerun import KaggleExecutor
+
+# Connect
+executor = KaggleExecutor("https://your-kaggle-url/proxy")
+
+# Execute code
+result = executor.execute("""
+import torch
+print(f"CUDA available: {torch.cuda.is_available()}")
+print(f"Device: {torch.cuda.get_device_name(0)}")
+""")
+print(result['output_text'])
+
+# Run ML training
+result = executor.execute("""
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.datasets import make_classification
+
+X, y = make_classification(n_samples=10000, n_features=20)
+clf = RandomForestClassifier(n_estimators=100, n_jobs=-1)
+clf.fit(X, y)
+print(f"Score: {clf.score(X, y):.4f}")
+""")
+
+# Save file to Kaggle
+executor.save_text("config.json", '{"epochs": 10}')
+
+# Download trained model
+model_bytes = executor.download_file("model.pkl")
+with open("local_model.pkl", "wb") as f:
+    f.write(model_bytes)
+```
+
+### MCP Server (For AI Agents)
+
+KaggleRun includes a Model Context Protocol (MCP) server, allowing AI assistants like Claude Code to execute code on Kaggle GPUs as a native tool.
+
+**Setup in Claude Code:**
+
+1. Install with MCP support:
+   ```bash
+   pip install kagglerun[mcp]
+   ```
+
+2. Add to your Claude Code MCP settings (`~/.claude/mcp_settings.json`):
+   ```json
+   {
+     "mcpServers": {
+       "kagglerun": {
+         "command": "python",
+         "args": ["-m", "kagglerun.mcp_server"],
+         "env": {
+           "KAGGLE_JUPYTER_URL": "https://your-kaggle-url/proxy"
+         }
+       }
+     }
+   }
+   ```
+
+3. Claude can now use these tools:
+   - `execute_python` - Run code on GPU
+   - `get_gpu_info` - Check GPU status
+   - `list_files` - Browse remote files
+   - `save_file` / `read_file` - File operations
+   - `download_file` - Get files locally
+
+**Example conversation with Claude:**
+
+> You: "Train a ResNet18 on CIFAR-10 using the Kaggle GPU"
+>
+> Claude: *Uses execute_python tool to run training on H100*
+
+---
+
+## Use Cases
+
+### 1. ML Model Training
+```python
+result = executor.execute("""
+import torch
+import torch.nn as nn
+from torchvision import models
+
+model = models.resnet50(pretrained=True).cuda()
+x = torch.randn(32, 3, 224, 224).cuda()
+
+with torch.cuda.amp.autocast():
+    output = model(x)
+
+print(f"Output shape: {output.shape}")
+print(f"GPU Memory: {torch.cuda.memory_allocated()/1e9:.2f} GB")
+""")
+```
+
+### 2. Large Language Model Inference
+```python
+result = executor.execute("""
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
+
+model_name = "microsoft/phi-2"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16).cuda()
+
+prompt = "The benefits of open source AI are"
+inputs = tokenizer(prompt, return_tensors="pt").to("cuda")
+outputs = model.generate(**inputs, max_new_tokens=50)
+print(tokenizer.decode(outputs[0]))
+""", timeout=300)
+```
+
+### 3. Data Processing at Scale
+```python
+result = executor.execute("""
+import pandas as pd
+import numpy as np
+
+# Generate large dataset
+df = pd.DataFrame(np.random.randn(1_000_000, 100))
+df.columns = [f'feature_{i}' for i in range(100)]
+
+# Process
+result = df.describe()
+print(result)
+
+# Save
+df.to_parquet('/kaggle/working/processed.parquet')
+print("Saved to /kaggle/working/processed.parquet")
+""")
+
+# Download result
+data = executor.download_file("processed.parquet")
+```
+
+### 4. Kaggle Competition Submissions
+```python
+# Upload your solution
+executor.upload_file("submission.csv")
+
+# Or generate on Kaggle
+result = executor.execute("""
+import pandas as pd
+
+# Your prediction code here
+predictions = [0.1, 0.9, 0.3, ...]
+
+submission = pd.DataFrame({
+    'id': range(len(predictions)),
+    'target': predictions
+})
+submission.to_csv('/kaggle/working/submission.csv', index=False)
+print("Submission ready!")
+""")
+```
+
+---
+
+## API Reference
+
+### `KaggleExecutor`
+
+```python
+executor = KaggleExecutor(
+    base_url: str,           # Kaggle Jupyter proxy URL
+    verbose: bool = True,    # Print status messages
+    timeout: int = 120,      # Default execution timeout (seconds)
+    on_output: Callable = None  # Callback for streaming output
+)
+```
+
+**Methods:**
+
+| Method | Description |
+|--------|-------------|
+| `execute(code, timeout, wait_idle)` | Execute Python code |
+| `run_file(filepath, timeout)` | Execute local .py file |
+| `upload_file(local_path, remote_name)` | Upload file to /kaggle/working/ |
+| `save_text(filename, content)` | Save text to remote file |
+| `read_file(remote_path)` | Read remote text file |
+| `download_file(remote_path)` | Download file as bytes |
+| `list_files(path)` | List directory contents |
+| `get_gpu_info()` | Get GPU information |
+| `get_system_info()` | Get Python/PyTorch info |
+| `test_connection()` | Test API connectivity |
+| `interrupt_kernel()` | Stop current execution |
+
+### Convenience Function
+
+```python
+from kagglerun import connect
+
+executor = connect("https://your-url/proxy")  # Raises ConnectionError if fails
+```
+
+---
+
+## How It Works
+
+```
+┌──────────────────┐     REST API      ┌───────────────────┐
+│   Your Terminal  │ ◄──────────────► │  Kaggle Jupyter   │
+│   or AI Agent    │                   │     Server        │
+│                  │     WebSocket     │                   │
+│  kagglerun       │ ◄══════════════► │  Python Kernel    │
+│                  │   (real-time)     │  (H100 GPU)       │
+└──────────────────┘                   └───────────────────┘
+```
+
+1. **REST API** - Kernel management (create, list, interrupt)
+2. **WebSocket** - Real-time code execution and output streaming
+3. **Base64** - Binary file transfer (models, datasets)
+
+---
+
+## Limitations
+
+- **Session duration**: Kaggle notebooks timeout after ~12 hours of inactivity
+- **JWT expiration**: URL tokens expire periodically; get a fresh URL if disconnected
+- **GPU quota**: Kaggle limits GPU hours (~30h/week for free accounts)
+- **File persistence**: Files in `/kaggle/working/` persist only during session
+
+---
+
+## Troubleshooting
+
+### "Connection failed"
+- Ensure your Kaggle notebook is running (green "Running" status)
+- Check that your URL ends with `/proxy`
+- Get a fresh URL if token expired
+
+### "Kernel is busy"
+- KaggleRun auto-interrupts busy kernels
+- Use `--timeout` for long-running code
+- Check if notebook is running other code
+
+### "No GPU available"
+- Enable GPU in Kaggle: Settings → Accelerator → GPU
+- Check GPU quota at kaggle.com/me/quota
+
+---
+
+## Contributing
+
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+```bash
+# Development setup
+git clone https://github.com/kagglerun/kagglerun
+cd kagglerun
+pip install -e ".[dev]"
+pytest tests/ -v
+```
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+## Acknowledgments
+
+- [Kaggle](https://kaggle.com) for free GPU access
+- [Jupyter](https://jupyter.org) for the notebook protocol
+- [Anthropic](https://anthropic.com) for MCP specification
+
+---
+
+**Star this repo if it helps your ML workflow!**
