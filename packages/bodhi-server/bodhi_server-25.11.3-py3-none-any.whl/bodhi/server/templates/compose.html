@@ -1,0 +1,116 @@
+<%inherit file="master.html"/>
+
+<%block name="pagetitle">
+${ compose.release.name } ${ compose.request.description }
+&mdash; Fedora Updates System
+</%block>
+
+<div class="subheader">
+  <div class="container py-4">
+    <div class="row">
+      <div class="col-md-6 col-md-offset-3">
+        <h3 class="fw-bold m-0"><a href="${request.route_url('collection_composes')}">Composes</a>
+          <span class="text-muted">/</span> 
+          ${ compose.release.long_name } ${ compose.request.description } compose
+          % if compose.security:
+            <span class="fa fa-shield text-danger" title="This compose contains security updates." data-toggle="tooltip"></span>
+          % endif
+        </h3>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container pt-2">
+  <!-- Tab panes -->
+  <div class="tab-content">
+    <div class="tab-pane active" id="details" role="tabpanel">
+      <div class="row">
+        <div class="col-md-9">
+
+          <div class="pt-3">
+            <h4>Updates <span class="badge badge-secondary">${len(compose.updates)}</span></h4>
+            <div>
+                <div class="list-group">
+                    % for update in compose.updates:
+                      ${self.fragments.update(update, display_karma=False)}
+                    % endfor
+                  </div>
+            </div>
+
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card">
+            <div class="card-body">
+
+              % if compose.content_type:
+              <div class="pb-1">
+                <div>
+                  <strong>Content type</strong>
+                </div>
+                <div>
+                  ${ compose.content_type.description | n }
+                </div>
+              </div>
+              % endif
+
+              <div class="pb-1">
+                <div>
+                  <strong>State</strong>
+                </div>
+                <div>
+                    <div class="ms-auto fw-bold text-${self.fragments.compose_status_context(compose.state.value)}"> ${compose.state.description}</div>
+                </div>
+              </div>
+
+              % if compose.error_message:
+              <div class="pb-1">
+                <div>
+                  <strong>Error message</strong>
+                </div>
+                <div>
+                  ${ compose.error_message | n }
+                </div>
+              </div>
+              % endif
+
+              <div class="pb-1">
+                <div>
+                  <strong>Dates</strong>
+                </div>
+                <div>
+                  <table class="table table-sm">
+                    <tr>
+                      <td>submitted</td>
+                      <td class="text-muted">
+                        <span data-toggle='tooltip' title='${ (compose.date_created).strftime("%Y-%m-%d %H:%M:%S")} (UTC)'>${self.util.age(compose.date_created) }</span>
+                      </td>
+                    </tr>
+
+                    % if compose.state_date:
+                    <tr>
+                      <td>last state transition</td>
+                      <td class="text-muted">
+                        <span data-toggle='tooltip' title='${ (compose.state_date).strftime("%Y-%m-%d %H:%M:%S")} (UTC)'>${self.util.age(compose.state_date) }</span>
+                      </td>
+                    </tr>
+                    % endif
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+  </div>
+
+
+<div class="row">
+
+</div>
+</div> <!-- end container -->
