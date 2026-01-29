@@ -1,0 +1,75 @@
+import os
+from pathlib import Path
+
+# AnkiConnect ID and GitHub URL
+ADDON_ID = "2055492159"
+DOWNLOAD_URL = "https://github.com/FooSoft/anki-connect/releases/latest/download/AnkiConnect.zip"
+# Fallback if specific release needed, usually "AnkiConnect.zip" is in assets.
+# Actually, FooSoft/anki-connect releases often just have source code.
+# Let's check a known stable download or standard AnkiWeb link (harder to script).
+# Better to use the source code from master if no built artifact,
+# BUT AnkiConnect source IS the addon.
+# Let's try downloading the repo zip.
+REPO_ZIP_URL = "https://github.com/FooSoft/anki-connect/archive/refs/heads/master.zip"
+
+
+def install_ankiconnect():
+    # We now mount 'arete_ankiconnect' via Docker volume, so we DO NOT install the official addon.
+    # This prevents port 8765 conflicts.
+
+    # Clean up official addon if it exists to avoid conflicts
+    official_addon_path = (
+        Path(__file__).parent.parent / "docker/anki_data/.local/share/Anki2/addons21/2055492159"
+    )
+    if official_addon_path.exists():
+        print(f"Removing official AnkiConnect to avoid conflict: {official_addon_path}")
+        try:
+            import shutil
+
+            shutil.rmtree(official_addon_path)
+        except Exception as e:
+            print(f"Warning: Failed to remove official addon: {e}")
+
+    # Seed 'prefs21.db' to skip First Run Wizard
+    # The container runs as user 1000 (abc), mapping $HOME to /config (which is docker/anki_data)
+    # Location: docker/anki_data/.local/share/Anki2/prefs21.db
+    fixture_path = Path(__file__).parent.parent / "tests/fixtures/anki/prefs21.db"
+    if fixture_path.exists():
+        print("Seeding Anki preferences (bypassing wizard)...")
+        anki_base = Path(__file__).parent.parent / "docker/anki_data"
+        prefs_dir = anki_base / ".local/share/Anki2"
+        prefs_dir.mkdir(parents=True, exist_ok=True)
+
+        import shutil
+
+        shutil.copy(fixture_path, prefs_dir / "prefs21.db")
+        print(f"Copied {fixture_path.name} to {prefs_dir}")
+    else:
+        print(f"⚠️ Warning: Fixture {fixture_path} not found. Anki may show setup wizard.")
+
+    # Create collection.media directory for media files
+    media_dir = (
+        Path(__file__).parent.parent / "docker/anki_data/.local/share/Anki2/User 1/collection.media"
+    )
+    media_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Created media directory: {media_dir}")
+
+    # Ensure permissive permissions for Docker user (uid 1000)
+    print("Fixing permissions...")
+    start_dir = Path(__file__).parent.parent / "docker/anki_data"
+    for root, dirs, files in os.walk(start_dir):
+        for d in dirs:
+            try:
+                os.chmod(os.path.join(root, d), 0o777)
+            except OSError:
+                pass
+        for f in files:
+            try:
+                os.chmod(os.path.join(root, f), 0o666)
+            except OSError:
+                pass
+    print("Permissions set to 777/666 for anki_data.")
+
+
+if __name__ == "__main__":
+    install_ankiconnect()

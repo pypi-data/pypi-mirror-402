@@ -1,0 +1,163 @@
+[project]
+name = "arete"
+version = "2.0.1"
+description = "A robust, fast, and feature-rich CLI for syncing Obsidian vault to Anki."
+readme = "README.md"
+license = "GPL-3.0"
+authors = [
+    { name = "Adam Nguyen", email = "AdanatoNw@gmail.com" }
+]
+requires-python = ">=3.12"
+keywords = ["obsidian", "anki", "sync", "spaced-repetition"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Education",
+]
+dependencies = [
+    "pyyaml>=6.0.3",
+    "tqdm>=4.67.1",
+    "requests>=2.31.0",
+    "markdown>=3.10",
+    "httpx>=0.28.1",
+    "pydantic>=2.12.5",
+    "pydantic-settings[toml]>=2.12.0",
+    "typer[all]>=0.21.0",
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "watchdog>=4.0.0",
+    "anki==24.4.1",
+    "python-ulid>=3.0.0",
+]
+
+[project.optional-dependencies]
+agent = [
+    "mcp>=1.0.0",
+    "atomic-agents>=2.6.0",
+    "instructor>=1.0.0",
+    "openai>=1.0.0",
+    "google-generativeai>=0.8.0",
+]
+
+[project.urls]
+Repository = "https://github.com/Adanato/Arete"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "ruff>=0.5.0",
+    "pre-commit>=3.5.0",
+    "rust-just>=1.46.0",
+    "ty>=0.0.8",
+    "pytest-asyncio>=1.3.0",
+    "respx>=0.22.0",
+    "pytest-cov>=7.0.0",
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.5.0",
+    "import-linter>=2.1.0",
+    "pyright>=1.1.408",
+    "build>=1.4.0",
+    "coverage-badge>=1.1.2",
+]
+
+[tool.importlinter]
+root_package = "arete"
+
+[[tool.importlinter.contracts]]
+name = "Domain Driven Architecture Layers"
+type = "layers"
+layers = [
+    "interface",
+    "application",
+    "infrastructure",
+    "domain",
+]
+containers = ["arete"]
+
+[[tool.importlinter.contracts]]
+name = "Application level isolation"
+type = "forbidden"
+source_modules = ["arete.application"]
+forbidden_modules = ["arete.infrastructure.adapters"]
+
+[[tool.importlinter.contracts]]
+name = "Domain isolation"
+type = "forbidden"
+source_modules = ["arete.domain"]
+forbidden_modules = ["arete.infrastructure", "arete.application", "arete.interface"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/arete"]
+exclude = ["mock_vault", "docker", "obsidian-plugin", "docs"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["mock_vault", "docker", "obsidian-plugin", "docs"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [
+    "docker/anki_data",
+    "ankiconnect",
+    "anki-plugin",
+    "arete_ankiconnect",
+    "tests/fixtures",
+    "obsidian-plugin",
+]
+
+[tool.ruff.lint]
+# E: pycodestyle errors
+# F: Pyflakes
+# I: isort
+# B: flake8-bugbear
+# C4: flake8-comprehensions
+# UP: pyupgrade
+# W: pycodestyle warnings
+# C90: mccabe complexity
+select = ["E", "F", "I", "B", "C4", "UP", "W", "TID252", "C90"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["E501"]
+# Ignore complexity for high-level orchestration modules temporarily
+"src/arete/interface/cli.py" = ["C901"]
+"src/arete/application/pipeline.py" = ["C901"]
+"src/arete/application/parser.py" = ["C901"]
+"src/arete/application/vault_service.py" = ["C901"]
+"src/arete/application/graph_resolver.py" = ["C901"]
+"src/arete/application/utils/text.py" = ["C901"]
+"src/arete/infrastructure/adapters/anki_connect.py" = ["C901"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[project.scripts]
+arete = "arete.main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+omit = ["tests/*"]
+
+[tool.ty]
+
+[[tool.ty.overrides]]
+include = ["tests/fixtures/anki/**"]
+rules = { unresolved-import = "ignore" }
