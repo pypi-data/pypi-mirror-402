@@ -1,0 +1,225 @@
+Metadata-Version: 2.4
+Name: sgnllai
+Version: 0.1.1
+Summary: SGN pipeline for GW superevent creation with GraceDB integration
+Author-email: Chad Hanna <crh184@psu.edu>
+License: MPL-2.0
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: sgn-skig>=0.1
+Requires-Dist: sgn>=0.5
+Requires-Dist: sgn-ts>=0.5
+Requires-Dist: sgn-ligo>=0.2
+Requires-Dist: ligo-gracedb>=2.0
+Requires-Dist: ligo.skymap>=2.5
+Requires-Dist: astropy>=7.0
+Requires-Dist: matplotlib>=3.0
+Provides-Extra: test
+Requires-Dist: pytest; extra == "test"
+Requires-Dist: pytest-cov; extra == "test"
+Requires-Dist: pytest-asyncio; extra == "test"
+Provides-Extra: lint
+Requires-Dist: black; extra == "lint"
+Requires-Dist: flake8; extra == "lint"
+Requires-Dist: flake8-bandit; extra == "lint"
+Requires-Dist: flake8-black; extra == "lint"
+Requires-Dist: flake8-bugbear; extra == "lint"
+Requires-Dist: flake8-future-annotations; extra == "lint"
+Requires-Dist: flake8-isort; extra == "lint"
+Requires-Dist: flake8-logging-format; extra == "lint"
+Requires-Dist: flake8-pyproject; extra == "lint"
+Requires-Dist: isort; extra == "lint"
+Requires-Dist: mypy; extra == "lint"
+Requires-Dist: mypy-extensions; extra == "lint"
+Requires-Dist: typing_extensions; extra == "lint"
+Provides-Extra: dev
+Requires-Dist: sgnllai[lint]; extra == "dev"
+Requires-Dist: sgnllai[test]; extra == "dev"
+
+# SGN-LLAI
+
+SGN pipelines for gravitational wave event processing with GraceDB integration.
+
+## Quick Start
+
+**Prerequisites:** [sgn-sdk](https://github.com/ligo/sgn-sdk) running with Kafka, GraceDB, InfluxDB, and Grafana.
+
+```bash
+# 1. Install
+pip install -e .
+
+# 2. Create Kafka topics
+make topics-reset
+
+# 3. Set up Grafana dashboards
+make grafana-setup
+
+# 4. Run pipeline (Terminal 1)
+make run
+
+# 5. Publish mock events (Terminal 2)
+make publish
+
+# 6. Run Bayestar (Terminal 3)
+make run-bayestar
+```
+
+**Verify:**
+- GraceDB: http://127.0.0.1:8080 (events G######, superevents S######)
+- Grafana: http://localhost:3000 (login: admin/sgnl)
+
+For all available commands: `make help`
+
+## Pipelines
+
+### Superevent Pipeline (`make run`)
+
+Clusters GW events by GPS time and creates superevents in GraceDB:
+
+```
+MockGWEventSource → Kafka → SuperEventCreator → Kafka (superevents)
+                                   │           → Kafka (skipped)
+                                   ↓
+                              GraceDB API
+                                   │
+                                   ↓
+                          ScaldMetricsSink → InfluxDB → Grafana
+```
+
+### Bayestar Pipeline (`make run-bayestar`)
+
+Generates sky localization maps for superevents:
+
+```
+Kafka (superevents) → BayestarProcessor → GraceDB (skymap upload)
+                             │
+                             ↓
+                     ScaldMetricsSink → InfluxDB → Grafana
+```
+
+Run both pipelines together:
+```bash
+# Terminal 1
+make run
+
+# Terminal 2
+make run-bayestar
+
+# Terminal 3
+make publish
+```
+
+## Configuration
+
+Override defaults with make arguments:
+
+```bash
+make run KAFKA_SERVER=localhost:9092
+make publish PUBLISH_RATE=10.0
+```
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `KAFKA_SERVER` | `127.0.0.1:9196` | Kafka bootstrap server |
+| `GRACEDB_URL` | `http://127.0.0.1:8080/api/` | GraceDB API URL |
+| `PUBLISH_RATE` | `20.0` | Seconds between mock events |
+| `INFLUXDB_HOST` | `localhost` | InfluxDB host |
+| `INFLUXDB_PORT` | `8086` | InfluxDB port |
+| `INFLUXDB_DB` | `sgnllai_metrics` | InfluxDB database |
+| `GRAFANA_URL` | `http://localhost:3000` | Grafana URL |
+| `GRAFANA_AUTH` | `admin:sgnl` | Grafana credentials |
+
+Bayestar-specific:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BAYESTAR_WORKERS` | `4` | Parallel localization workers |
+| `BAYESTAR_F_LOW` | `30.0` | Low frequency cutoff (Hz) |
+| `BAYESTAR_WAVEFORM` | `IMRPhenomD` | Waveform approximant |
+
+## Kafka Topics
+
+| Topic | Description |
+|-------|-------------|
+| `gw-event-topic` | Input: raw GW event candidates |
+| `gw-superevent-topic` | Output: superevents (uploaded to GraceDB) |
+| `gw-skipped-topic` | Output: events skipped (lower SNR) |
+
+```bash
+make topics        # create
+make topics-reset  # delete and recreate
+make topics-list   # list all
+```
+
+Monitor topics:
+```bash
+make listen-events   # input
+make listen-supers   # superevents
+make listen-skipped  # skipped
+```
+
+## Output Formats
+
+### Superevents (`gw-superevent-topic`)
+
+On creation:
+```json
+{
+  "action": "created",
+  "superevent_id": "S241009abc",
+  "preferred_event": "G123456",
+  "t_0": 1412546713.52,
+  "gw_events": ["G123456"],
+  "g_event": {"graceid": "G123456", "snr": 12.5, "pipeline": "gstlal"}
+}
+```
+
+On update (higher SNR arrived):
+```json
+{
+  "action": "updated",
+  "superevent_id": "S241009abc",
+  "preferred_event": "G123457",
+  "previous_preferred": "G123456",
+  "gw_events": ["G123456", "G123457"],
+  "g_event": {"graceid": "G123457", "snr": 15.0, "pipeline": "pycbc"}
+}
+```
+
+### Skipped Events (`gw-skipped-topic`)
+
+```json
+{
+  "gpstime": 1412546713.60,
+  "pipeline": "spiir",
+  "snr": 10.0,
+  "reason": "lower_snr",
+  "superevent_id": "S241009abc",
+  "preferred_snr": 12.5
+}
+```
+
+## Development
+
+```bash
+make test       # run tests
+make lint       # run linter
+make format     # format code
+make all        # all checks
+```
+
+## Troubleshooting
+
+```bash
+# Reset Kafka topics
+make topics-reset
+
+# Check sgn-sdk services
+cd ../sgn-sdk && docker compose ps
+
+# Restart if needed
+docker compose down && docker compose up -d
+```

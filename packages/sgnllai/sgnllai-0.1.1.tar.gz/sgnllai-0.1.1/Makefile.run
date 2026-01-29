@@ -1,0 +1,199 @@
+# SGN-LLAI Runtime Targets
+#
+# This file is included by the main Makefile.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Kafka
+KAFKA_SERVER ?= 127.0.0.1:9196
+INPUT_TOPIC ?= gw-event-topic
+SUPERS_TOPIC ?= gw-superevent-topic
+SKIPPED_TOPIC ?= gw-skipped-topic
+
+# GraceDB
+GRACEDB_URL ?= http://127.0.0.1:8080/api/
+
+# InfluxDB
+INFLUXDB_HOST ?= localhost
+INFLUXDB_PORT ?= 8086
+INFLUXDB_DB ?= sgnllai_metrics
+
+# Delayed Upload (for skipped events)
+DELAY_SECONDS ?= 30.0
+
+# Grafana
+GRAFANA_URL ?= http://localhost:3000
+GRAFANA_AUTH ?= admin:sgnl
+GRAFANA_INFLUXDB_URL ?= http://influxdb:8086
+GRAFANA_DIR ?= grafana
+
+# Dashboard files
+DASHBOARD_SUPEREVENT ?= $(GRAFANA_DIR)/superevent_dashboard.json
+DASHBOARD_BAYESTAR ?= $(GRAFANA_DIR)/bayestar_dashboard.json
+DASHBOARD_PUBLISHER ?= $(GRAFANA_DIR)/publisher_dashboard.json
+
+# Publisher
+PUBLISH_RATE ?= 60.0
+
+# Bayestar
+BAYESTAR_WORKERS ?= 4
+BAYESTAR_F_LOW ?= 30.0
+BAYESTAR_WAVEFORM ?= IMRPhenomD
+BAYESTAR_OUTPUT_DIR ?= /tmp/bayestar
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Help
+# ─────────────────────────────────────────────────────────────────────────────
+
+.PHONY: help-run
+help-run:
+	@echo
+	@echo 'Pipelines:'
+	@echo '  make run              superevent pipeline'
+	@echo '  make run-bayestar     Bayestar sky localization'
+	@echo '  make publish          mock event publisher'
+	@echo
+	@echo 'Kafka:'
+	@echo '  make topics           create topics'
+	@echo '  make topics-reset     delete and recreate'
+	@echo '  make listen-supers    watch superevent output'
+	@echo '  make listen-events    watch input events'
+	@echo '  make listen-skipped   watch skipped events'
+	@echo
+	@echo 'Grafana:'
+	@echo '  make grafana-setup    full setup (datasource + dashboards)'
+	@echo '  make grafana-import   import all dashboards'
+	@echo
+	@echo 'Configuration: make run KAFKA_SERVER=host:port GRACEDB_URL=...'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pipelines
+# ─────────────────────────────────────────────────────────────────────────────
+
+.PHONY: run
+run:
+	@echo "Superevent pipeline: $(KAFKA_SERVER) → GraceDB $(GRACEDB_URL)"
+	@echo "  Delayed upload: enabled ($(DELAY_SECONDS)s delay)"
+	sgn-superevent \
+		--kafka-server $(KAFKA_SERVER) \
+		--input-topic $(INPUT_TOPIC) \
+		--supers-topic $(SUPERS_TOPIC) \
+		--skipped-topic $(SKIPPED_TOPIC) \
+		--gracedb-url $(GRACEDB_URL) \
+		--influxdb-host $(INFLUXDB_HOST) \
+		--influxdb-port $(INFLUXDB_PORT) \
+		--influxdb-db $(INFLUXDB_DB) \
+		--enable-delayed-upload \
+		--delay-seconds $(DELAY_SECONDS)
+
+.PHONY: run-bayestar
+run-bayestar:
+	@echo "Bayestar pipeline: $(SUPERS_TOPIC) → GraceDB $(GRACEDB_URL)"
+	sgn-bayestar \
+		--kafka-server $(KAFKA_SERVER) \
+		--input-topic $(SUPERS_TOPIC) \
+		--gracedb-url $(GRACEDB_URL) \
+		--num-workers $(BAYESTAR_WORKERS) \
+		--f-low $(BAYESTAR_F_LOW) \
+		--waveform $(BAYESTAR_WAVEFORM) \
+		--output-dir $(BAYESTAR_OUTPUT_DIR) \
+		--influxdb-host $(INFLUXDB_HOST) \
+		--influxdb-port $(INFLUXDB_PORT) \
+		--influxdb-db $(INFLUXDB_DB)
+
+.PHONY: publish
+publish:
+	@echo "Publisher: $(INPUT_TOPIC) @ $(PUBLISH_RATE)s"
+	sgn-mock-publisher \
+		--kafka-server $(KAFKA_SERVER) \
+		--topic $(INPUT_TOPIC) \
+		--event-cadence $(PUBLISH_RATE) \
+		--influxdb-host $(INFLUXDB_HOST) \
+		--influxdb-port $(INFLUXDB_PORT) \
+		--influxdb-db $(INFLUXDB_DB) \
+		--verbose
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Kafka Topics
+# ─────────────────────────────────────────────────────────────────────────────
+
+.PHONY: topics
+topics:
+	@echo "Creating topics: $(INPUT_TOPIC), $(SUPERS_TOPIC), $(SKIPPED_TOPIC)"
+	@docker exec kafka kafka-topics --bootstrap-server localhost:9092 \
+		--create --if-not-exists --topic $(INPUT_TOPIC) \
+		--partitions 1 --replication-factor 1 2>/dev/null || true
+	@docker exec kafka kafka-topics --bootstrap-server localhost:9092 \
+		--create --if-not-exists --topic $(SUPERS_TOPIC) \
+		--partitions 1 --replication-factor 1 2>/dev/null || true
+	@docker exec kafka kafka-topics --bootstrap-server localhost:9092 \
+		--create --if-not-exists --topic $(SKIPPED_TOPIC) \
+		--partitions 1 --replication-factor 1 2>/dev/null || true
+
+.PHONY: topics-list
+topics-list:
+	@docker exec kafka kafka-topics --bootstrap-server localhost:9092 --list
+
+.PHONY: topics-delete
+topics-delete:
+	@docker exec kafka kafka-topics --bootstrap-server localhost:9092 \
+		--delete --topic $(INPUT_TOPIC) 2>/dev/null || true
+	@docker exec kafka kafka-topics --bootstrap-server localhost:9092 \
+		--delete --topic $(SUPERS_TOPIC) 2>/dev/null || true
+	@docker exec kafka kafka-topics --bootstrap-server localhost:9092 \
+		--delete --topic $(SKIPPED_TOPIC) 2>/dev/null || true
+
+.PHONY: topics-reset
+topics-reset: topics-delete
+	@sleep 3
+	@$(MAKE) -f Makefile.run topics
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Monitoring
+# ─────────────────────────────────────────────────────────────────────────────
+
+.PHONY: listen-events
+listen-events:
+	@docker exec kafka kafka-console-consumer \
+		--bootstrap-server localhost:9092 --topic $(INPUT_TOPIC) --from-beginning
+
+.PHONY: listen-supers
+listen-supers:
+	@docker exec kafka kafka-console-consumer \
+		--bootstrap-server localhost:9092 --topic $(SUPERS_TOPIC) --from-beginning
+
+.PHONY: listen-skipped
+listen-skipped:
+	@docker exec kafka kafka-console-consumer \
+		--bootstrap-server localhost:9092 --topic $(SKIPPED_TOPIC) --from-beginning
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Grafana
+# ─────────────────────────────────────────────────────────────────────────────
+
+.PHONY: grafana-setup
+grafana-setup: grafana-datasource grafana-import
+	@echo "Grafana setup complete: $(GRAFANA_URL)"
+
+.PHONY: grafana-datasource
+grafana-datasource:
+	sgn-grafana-datasource \
+		--grafana-url $(GRAFANA_URL) \
+		--grafana-auth $(GRAFANA_AUTH) \
+		--influxdb-url $(GRAFANA_INFLUXDB_URL) \
+		--database $(INFLUXDB_DB)
+
+.PHONY: grafana-import
+grafana-import: grafana-dashboards
+	sgn-grafana-import $(DASHBOARD_SUPEREVENT) --grafana-url $(GRAFANA_URL) --grafana-auth $(GRAFANA_AUTH)
+	sgn-grafana-import $(DASHBOARD_BAYESTAR) --grafana-url $(GRAFANA_URL) --grafana-auth $(GRAFANA_AUTH)
+	sgn-grafana-import $(DASHBOARD_PUBLISHER) --grafana-url $(GRAFANA_URL) --grafana-auth $(GRAFANA_AUTH)
+
+.PHONY: grafana-dashboards
+grafana-dashboards:
+	@mkdir -p $(GRAFANA_DIR)
+	sgn-superevent --enable-delayed-upload --export-dashboard $(DASHBOARD_SUPEREVENT)
+	sgn-bayestar --export-dashboard $(DASHBOARD_BAYESTAR)
+	sgn-mock-publisher --export-dashboard $(DASHBOARD_PUBLISHER)

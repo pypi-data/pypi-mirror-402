@@ -1,0 +1,141 @@
+[build-system]
+requires = [
+    "setuptools>=61.0",
+    "setuptools_scm[toml]>=3.4.3",
+    "wheel",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sgnllai"
+dynamic = ["version"]
+description = "SGN pipeline for GW superevent creation with GraceDB integration"
+requires-python = ">=3.11"  # ligo.skymap >= 2.5 requires Python >= 3.11
+authors = [
+    { name = "Chad Hanna", email = "crh184@psu.edu" },
+]
+readme = "README.md"
+license = { text = "MPL-2.0" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "sgn-skig >= 0.1",  # General infrastructure (metrics, Kafka, InfluxDB, Grafana)
+    "sgn >= 0.5",
+    "sgn-ts >= 0.5",
+    "sgn-ligo >= 0.2",
+    "ligo-gracedb >= 2.0",
+    "ligo.skymap >= 2.5",  # 2.5+ uses igwn-ligolw (required for SNR time series encoding)
+    "astropy >= 7.0",  # 7.0+ required for numpy 2.0 compatibility
+    "matplotlib >= 3.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-asyncio",
+]
+lint = [
+    "black",
+    "flake8",
+    "flake8-bandit",
+    "flake8-black",
+    "flake8-bugbear",
+    "flake8-future-annotations",
+    "flake8-isort",
+    "flake8-logging-format",
+    "flake8-pyproject",
+    "isort",
+    "mypy",
+    "mypy-extensions",
+    "typing_extensions",
+]
+dev = [
+    "sgnllai[lint]",
+    "sgnllai[test]",
+]
+
+[project.scripts]
+sgn-superevent = "sgnllai.bin.run_superevent:main"
+sgn-bayestar = "sgnllai.bin.run_bayestar:main"
+sgn-mock-publisher = "sgnllai.bin.run_mock_publisher:main"
+# sgn-grafana-datasource and sgn-grafana-import are now in sgn-skig
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools_scm]
+write_to = "src/sgnllai/_version.py"
+
+[tool.coverage.paths]
+source = [
+    "src/sgnllai/",
+    "*/sgnllai/",
+]
+
+[tool.coverage.run]
+concurrency = ["multiprocessing", "thread"]
+parallel = true
+sigterm = true
+
+[tool.coverage.report]
+precision = 1
+show_missing = true
+omit = [
+    "tests/*",
+    "*/__init__.py",
+]
+exclude_also = [
+    "^\\s*\\.\\.\\.\\s*$",
+    "class \\w+\\(Protocol\\):",
+    "if TYPE_CHECKING:",
+]
+
+[tool.isort]
+profile = "black"
+skip_glob = [
+    "build/*",
+    "dist/*",
+    "*/__init__.py",
+    "*/_version.py",
+]
+
+[tool.black]
+line-length = 88
+extend-exclude = "_version.py"
+
+[tool.mypy]
+ignore_missing_imports = true
+check_untyped_defs = false
+disable_error_code = ["annotation-unchecked"]
+exclude = [
+    "build",
+]
+
+[tool.pytest.ini_options]
+addopts = "-p no:warnings --cov=sgnllai --cov-report=term-missing"
+norecursedirs = ["build", "dist"]
+testpaths = ["tests"]
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = [
+    "E203",
+    "S101",
+    "S311",
+    "S603",
+    "G003",  # Allow string ops in logging (f-string false positives)
+    "G004",  # Allow f-strings in logging
+]
+per-file-ignores = [
+    "__init__.py:E402,F401",
+    "tests/*.py:E731",
+]
+exclude = [
+    "build",
+    "_version.py",
+]
