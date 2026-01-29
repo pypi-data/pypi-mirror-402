@@ -1,0 +1,169 @@
+# Copyright 2025 Softwell S.r.l. - SPDX-License-Identifier: Apache-2.0
+# ruff: noqa: SIM118, SIM102
+"""UrlResolver - resolver that loads content from an HTTP URL."""
+
+from __future__ import annotations
+
+import re
+from typing import Any
+from urllib.parse import urlencode
+
+import httpx
+
+from ..bag import Bag
+from ..resolver import BagResolver
+
+
+class UrlResolver(BagResolver):
+    """Resolver that fetches content from an HTTP URL.
+
+    Supports all HTTP methods and can convert responses to Bag automatically.
+    Uses httpx.AsyncClient for async HTTP operations.
+
+    Parameters (class_args):
+        url: The URL to fetch (first positional argument).
+
+    Parameters (class_kwargs):
+        cache_time: Cache duration in seconds. Default 300.
+        read_only: If True, value is not stored in node._value. Default True.
+            Independent from cache_time (internal cache).
+        url: The URL to fetch (can also be passed as kwarg).
+        method: HTTP method (get, post, put, delete, patch). Default 'get'.
+        qs: Query string parameters as Bag or dict. None values are filtered out.
+        body: Request body as Bag (for POST/PUT/PATCH). Converted via as_dict().
+        timeout: Request timeout in seconds. Default 30.
+        as_bag: If True, parse response as Bag based on content-type. Default False.
+
+    Returns:
+        If as_bag=True or read_only=False: Bag parsed from JSON/XML response.
+        Otherwise: bytes (raw response content).
+
+    Example:
+        >>> # Simple GET
+        >>> resolver = UrlResolver('https://api.example.com/data')
+        >>> data = resolver()  # returns bytes
+        >>>
+        >>> # GET with query params, parse as Bag
+        >>> resolver = UrlResolver('https://api.example.com/users',
+        ...                        qs={'page': 1, 'limit': 10}, as_bag=True)
+        >>> users = resolver()  # returns Bag
+        >>>
+        >>> # POST with body
+        >>> body = Bag({'name': 'John', 'email': 'john@example.com'})
+        >>> resolver = UrlResolver('https://api.example.com/users',
+        ...                        method='post', body=body, as_bag=True)
+    """
+
+    class_kwargs = {
+        "cache_time": 300,
+        "read_only": True,
+        "retry_policy": {
+            "max_attempts": 3,
+            "delay": 1.0,
+            "backoff": 2.0,
+            "jitter": True,
+            "on": (ConnectionError, TimeoutError, OSError, httpx.TimeoutException),
+        },
+        "url": None,
+        "method": "get",
+        "qs": None,
+        "body": None,
+        "timeout": 5,
+        "as_bag": False,
+    }
+    class_args = ["url"]
+
+    async def async_load(self) -> Any:
+        """Fetch URL content and optionally parse as Bag.
+
+        Builds the full URL with query string, makes the HTTP request,
+        and returns the response based on configuration.
+
+        Dynamic parameters (via get_item kwargs):
+            _body: Request body (overrides constructor body).
+            arg_0, arg_1, ...: Path parameters to substitute {placeholders}.
+            Other kwargs: Query string parameters (merged with constructor qs).
+
+        Returns:
+            bytes: Raw response content (default).
+            Bag: If as_bag=True or read_only=False, parses response based
+                on content-type (application/json or application/xml).
+
+        Raises:
+            httpx.HTTPStatusError: If response status is 4xx or 5xx.
+            ValueError: If read_only=False and response cannot be converted to Bag.
+        """
+        url = self._kw["url"]
+        method = self._kw["method"]
+        qs = self._kw["qs"]
+        body: Bag | dict | None = self._kw["body"]
+        timeout = self._kw["timeout"]
+
+        # Extract dynamic parameters from _kw (passed via get_item kwargs)
+        # _body overrides constructor body
+        if "_body" in self._kw:
+            body = self._kw["_body"]
+
+        # Collect path args (arg_0, arg_1, ...) and extra qs params
+        path_args = []
+        extra_qs = {}
+        for key, value in self._kw.items():
+            if key.startswith("arg_") and value is not None:
+                try:
+                    idx = int(key[4:])
+                    while len(path_args) <= idx:
+                        path_args.append(None)
+                    path_args[idx] = value
+                except ValueError:
+                    pass
+            elif key not in self.class_kwargs and key not in self.internal_params and not key.startswith("_"):
+                # Extra kwarg → query string parameter
+                if value is not None:
+                    extra_qs[key] = value
+
+        # Substitute path parameters {placeholder} with arg_0, arg_1, ...
+        if path_args and "{" in url:
+            placeholders = re.findall(r"\{([^}]+)\}", url)
+            for i, placeholder in enumerate(placeholders):
+                if i < len(path_args) and path_args[i] is not None:
+                    url = url.replace(f"{{{placeholder}}}", str(path_args[i]))
+
+        # Merge query string: constructor qs + extra kwargs
+        merged_qs = {}
+        if qs:
+            merged_qs.update(self._qs_to_dict(qs))
+        merged_qs.update(extra_qs)
+
+        # Build URL with query string (filter None values)
+        if merged_qs:
+            separator = "&" if "?" in url else "?"
+            url = f"{url}{separator}{urlencode(merged_qs)}"
+
+        async with httpx.AsyncClient() as client:
+            request_method = getattr(client, method)
+            kwargs = {"timeout": timeout}
+
+            if body is not None:
+                if isinstance(body, Bag):
+                    kwargs["json"] = body.as_dict()
+                else:
+                    kwargs["json"] = body
+
+            response = await request_method(url, **kwargs)
+            response.raise_for_status()
+
+            # Return raw content - base class _finalize_result handles as_bag conversion
+            return response.content
+
+    def _qs_to_dict(self, qs) -> dict:
+        """Convert query string parameter source to dict, filtering None values.
+
+        Args:
+            qs: Query string parameters as Bag or dict.
+
+        Returns:
+            dict: Parameters with None values removed.
+        """
+        if isinstance(qs, Bag):
+            return {k: qs[k] for k in qs.keys() if qs[k] is not None}
+        return {k: v for k, v in qs.items() if v is not None}
