@@ -1,0 +1,106 @@
+# py12306
+
+Python client for China Railway (12306) — query stations, trains, tickets, and transfers.
+
+## Install
+
+```bash
+pip install py12306
+```
+
+## CLI
+
+```bash
+# Ticket search
+uvx py12306 tickets --date 2026-01-25 --from 北京南 --to 上海虹桥 \
+    --trains G --sort duration --limit 5
+
+# Transfer search
+uvx py12306 transfers --date 2026-01-25 --from 成都 --to 杭州 \
+    --trains G --limit 3
+
+# Train stops
+uvx py12306 stops G1 --date 2026-01-25
+
+# Station lookup
+uvx py12306 stations 北京
+```
+
+### Options
+
+**tickets**
+| Option | Description |
+|--------|-------------|
+| `--date` | Travel date (YYYY-MM-DD) |
+| `--from/--to` | Station or city name |
+| `--trains` | Filter: G/D/C/Z/T/K |
+| `--depart-after/--depart-before` | Hour range (0-23) |
+| `--sort` | `depart`, `arrive`, `duration` |
+| `--limit` | Max results |
+
+**transfers**
+| Option | Description |
+|--------|-------------|
+| `--date` | Travel date (YYYY-MM-DD) |
+| `--from/--to` | Station or city name |
+| `--via` | Transfer station (optional, auto-detected) |
+| `--trains` | Filter: G/D/C/Z/T/K |
+| `--min-wait/--max-wait` | Transfer time in minutes |
+| `--sort` | `duration`, `depart`, `arrive` |
+| `--limit` | Max results |
+
+## Python API
+
+```python
+from py12306 import (
+    load_stations,
+    get_station_by_name,
+    get_stations_in_city,
+    get_train_stops,
+    get_tickets,
+    get_transfers,
+)
+
+# Station lookup
+station = get_station_by_name("北京南")
+stations = get_stations_in_city("北京")
+
+# Train stops
+train = get_train_stops(train="G1", date="2026-01-25")
+for stop in train.stops:
+    print(f"{stop.station} {stop.arrive}-{stop.depart}")
+
+# Tickets
+tickets = get_tickets(
+    date="2026-01-25",
+    src="VNP",
+    dst="AOH",
+    trains="G",
+    sort="duration",
+    limit=5,
+)
+
+# Transfers
+transfers = get_transfers(
+    date="2026-01-25",
+    src="ICW",
+    dst="HGH",
+    trains="G",
+    limit=5,
+)
+```
+
+## Train Types
+
+| Code | Type |
+|------|------|
+| G | 高铁 (High-speed, 300-350 km/h) |
+| D | 动车 (EMU, 200-250 km/h) |
+| C | 城际 (Intercity) |
+| Z | 直达 (Direct express) |
+| T | 特快 (Express) |
+| K | 快速 (Fast) |
+
+## License
+
+MIT
