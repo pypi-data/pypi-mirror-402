@@ -1,0 +1,114 @@
+# Full Configuration Example
+#
+# This example shows ALL available configuration options with their default values.
+# Use this as a reference when customizing your setup.
+#
+# You don't need to specify every option - only include the ones you want to change
+# from their defaults. The configuration system uses deep merging, so any missing
+# values will automatically use the defaults shown here.
+
+[tool.structure-lint]
+# Master switch to enable/disable entire linter
+enabled = true
+
+# Directories to search for source files (relative to project root)
+# Supports Python (.py) and TypeScript (.ts, .tsx) files
+# This applies to ALL validators (line_limits, one_per_file, structure)
+# The tool automatically excludes: .venv/, __pycache__/, .git/, node_modules/
+search_paths = ["src"]
+
+[tool.structure-lint.validators]
+# Control which validators are enabled
+structure = false      # Opt-in (default: disabled) - enforces folder structure
+line_limits = true     # Default: enabled - enforces max lines per file
+one_per_file = true    # Default: enabled - enforces single definition per file
+
+[tool.structure-lint.one_per_file]
+# TypeScript folder-specific rules
+# These control which folders enforce the one-per-file rule for TypeScript files
+ts_fun_in_functions = true   # Enforce 1 function per TS file in _functions folders
+ts_fun_in_components = true  # Enforce 1 function per TS file in _components folders
+ts_fun_in_hooks = true       # Enforce 1 function per TS file in _hooks folders
+ts_cls_in_classes = true     # Enforce 1 class per TS file in _classes folders
+
+# Python folder-specific rules
+# These control which folders enforce the one-per-file rule for Python files
+py_fun_in_functions = true   # Enforce 1 function per PY file in _functions folders
+py_cls_in_classes = true     # Enforce 1 class per PY file in _classes folders
+
+# File exclusion patterns (glob patterns for files to skip)
+# TypeScript declaration files are excluded by default
+excluded_patterns = ["*.d.ts"]
+
+[tool.structure-lint.line_limits]
+# Maximum number of lines allowed per file (Python and TypeScript)
+max_lines = 150
+
+[tool.structure-lint.structure]
+
+# Maximum depth of feature folder nesting
+# Depth counts from base folder children (depth 0) downward
+# Example: src/features/auth/login/ = depth 1
+folder_depth = 2
+
+# Standard folders that can appear inside feature/module directories
+# These represent common code organization patterns and cannot have subdirectories
+# Includes _components and _hooks for TypeScript/React projects
+standard_folders = ["_types", "_functions", "_constants", "_tests", "_errors", "_classes", "_components", "_hooks"]
+
+# Files allowed in any directory, even those that normally shouldn't contain files
+# Includes index.ts/index.tsx for TypeScript barrel exports (similar to __init__.py)
+# Note: Non-source files (like README.md, .gitkeep) are automatically ignored
+files_allowed_anywhere = ["__init__.py", "index.ts", "index.tsx"]
+
+# Folder name patterns to ignore during structure validation
+# Supports wildcards (e.g., *.egg-info matches my_package.egg-info)
+# These are typically cache, build, or tool-generated directories
+ignored_folders = [
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".hypothesis",
+    ".tox",
+    ".coverage",
+    "*.egg-info"
+]
+
+# ============================================================================
+# Usage Examples:
+# ============================================================================
+#
+# With this full default configuration, your project structure should look like:
+#
+# project/
+# ├── pyproject.toml          (contains this configuration)
+# ├── src/
+# │   └── features/           (base folder)
+# │       ├── authentication/ (feature directory at depth 0)
+# │       │   ├── _types/     (standard folder - Python/TypeScript types)
+# │       │   ├── _functions/ (standard folder - functions)
+# │       │   ├── _constants/ (standard folder - constants)
+# │       │   ├── _tests/     (standard folder - tests)
+# │       │   ├── _components/(standard folder - React components, TypeScript)
+# │       │   ├── _hooks/     (standard folder - React hooks, TypeScript)
+# │       │   └── oauth/      (feature folder at depth 1)
+# │       │       ├── _types/
+# │       │       └── google/ (depth 2)
+# │       │           └── _types/
+# │       └── reporting/      (another feature at depth 0)
+# │           └── ...
+#
+# ============================================================================
+# Customization Tips:
+# ============================================================================
+#
+# 1. Start minimal - only specify what you want to change from defaults
+# 2. Use comments to document why you chose specific values
+# 3. Adjust line_limits.max_lines based on your team's preferences
+# 4. Customize standard_folders to match your architecture (e.g., MVC)
+# 5. Only include directories you want validated in search_paths
+# 6. Adjust folder_depth for deeper or shallower nesting limits
+# 7. Disable validators you don't want with false
+# 8. Use one_per_file options to customize folder-aware rules for each language
+#
