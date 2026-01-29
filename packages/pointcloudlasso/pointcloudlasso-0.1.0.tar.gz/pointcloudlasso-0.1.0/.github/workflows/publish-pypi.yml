@@ -1,0 +1,205 @@
+name: Build and Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      pypi_target:
+        description: 'PyPI target'
+        required: true
+        default: 'testpypi'
+        type: choice
+        options:
+          - testpypi
+          - pypi
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYPI_TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.pypi_target || 'pypi' }}
+
+jobs:
+  # Fast-fail: Run tests before building the full matrix
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          args: --out dist
+          sccache: true
+          manylinux: 'off'
+          working-directory: py
+
+      - name: Install and test
+        run: |
+          uv pip install --system pytest numpy shapely
+          uv pip install --system py/dist/*.whl
+          cp -r py/tests /tmp/tests
+          pytest /tmp/tests/ -v
+
+  # Linux: manylinux container has all Python versions
+  linux:
+    name: Linux ${{ matrix.target }}
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [ x86_64, aarch64 ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --find-interpreter
+          sccache: true
+          manylinux: auto
+          working-directory: py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-${{ matrix.target }}
+          path: py/dist
+
+  # Windows: matrix over Python versions
+  windows:
+    name: Windows py${{ matrix.python }}
+    needs: test
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: [ '3.10', '3.11', '3.12', '3.13' ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: x64
+          args: --release --out dist
+          sccache: true
+          working-directory: py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-windows-py${{ matrix.python }}
+          path: py/dist
+
+  # macOS: matrix over Python versions and architectures
+  macos:
+    name: macOS ${{ matrix.target }} py${{ matrix.python }}
+    needs: test
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [ aarch64-apple-darwin, x86_64-apple-darwin ]
+        python: [ '3.10', '3.11', '3.12', '3.13' ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist
+          sccache: true
+          working-directory: py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-${{ matrix.target }}-py${{ matrix.python }}
+          path: py/dist
+
+  sdist:
+    name: Source distribution
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+          working-directory: py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-sdist
+          path: py/dist
+
+  publish:
+    name: Publish to ${{ github.event_name == 'workflow_dispatch' && inputs.pypi_target || 'pypi' }}
+    needs: [ linux, windows, macos, sdist ]
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event_name == 'workflow_dispatch' && inputs.pypi_target || 'pypi' }}
+      url: ${{ github.event_name == 'workflow_dispatch' && inputs.pypi_target == 'testpypi' && 'https://test.pypi.org/p/pointcloudlasso' || 'https://pypi.org/p/pointcloudlasso' }}
+    permissions:
+      id-token: write
+    steps:
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: wheels-*
+          merge-multiple: true
+
+      - name: List packages
+        run: ls -lh dist/
+
+      - name: Publish to TestPyPI
+        if: env.PYPI_TARGET == 'testpypi'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          repository-url: https://test.pypi.org/legacy/
+
+      - name: Publish to PyPI
+        if: env.PYPI_TARGET == 'pypi'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+
+      - name: Summary
+        run: |
+          echo "## 🚀 Published to ${{ env.PYPI_TARGET }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Packages:**" >> $GITHUB_STEP_SUMMARY
+          ls -1 dist/ | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ env.PYPI_TARGET }}" == "testpypi" ]; then
+            echo "**Install:** \`pip install -i https://test.pypi.org/simple/ pointcloudlasso\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Install:** \`pip install pointcloudlasso\`" >> $GITHUB_STEP_SUMMARY
+          fi
