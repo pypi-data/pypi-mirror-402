@@ -1,0 +1,166 @@
+# Sample config file for the rpi2home-assistant utility
+# Written by Francesco Montorsi, Feb 2024.
+
+mqtt_broker:
+  # the IP or FQDN of the server hosting the MQTT broker:
+  host: 192.168.1.5
+
+  # the port of the MQTT broker; defaults to 1883
+  #port:
+
+  # in case the connection with the broker drops, a reconnection will be attempted each X msec:
+  reconnection_period_msec: 1500
+
+  # in case your broker has authentication turned on, please provide user/pw
+  # TODO: password is cleartext right now, which is insecure
+  #user: 
+  #password:
+
+home_assistant:
+  # how often should this software re-publish the status of all inputs / outputs inside MQTT?
+  # note that this software will publish the status of an input/output even if it didn't change
+  # since previous update; the reason is to reset the expire timer associated typically
+  # inside HomeAssistant for each MQTT sensor (see the "expire_after" property).
+  publish_period_msec: 3000
+
+  # this is the default topic prefix used for all entries listed below in the 'i2c_optoisolated_inputs',
+  # 'gpio_inputs' and 'outputs' sections
+  default_topic_prefix: rpi2home-assistant
+
+  # MQTT discovery messages feature
+  discovery_messages:
+    # if you choose to disable discovery messages, then you need to provide a MQTT configuration
+    # to HomeAssistant inside its configuration.yaml, see https://www.home-assistant.io/integrations/mqtt/
+    # section "Configuration of MQTT components via YAML"
+    enable: true
+
+    # this is the MQTT topic prefix for discovery messages; it needs to coincide with the MQTT discovery
+    # topic prefix used by your HomeAssistant, see https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery
+    topic_prefix: homeassistant
+
+    # the node_id must be a unique identifier of this specific instance of this software; it will be
+    # prefixed to each and every entity exposed into HomeAssistant, so this should be a short string.
+    # If empty, it defaults to the hostname of the system.
+    # See https://www.home-assistant.io/integrations/mqtt/#naming-of-mqtt-entities for more info.
+    node_id: rpi2home-assistant
+
+# stats printed on stdout each N secs; set N=0 to disable periodic stat printing:
+log_stats_every: 30
+
+#
+# ** Opto-isolated Inputs Configuration **
+#
+# These inputs are those sampled by the Sequent Microsystem 16ch-optoinsulated board; they are exposed as binary_sensors
+# into Home Assistant.
+# More details:
+# - the inputs are numbered 1-based, just like in the silk-screen printing on the board itself
+# - the MQTT topics published will be in the form "<default_topic_prefix>/<name>", where <default_topic_prefix> is
+#   configured by 'home_assistant.default_topic_prefix'
+# - to improve security/robustness it's suggested to set the "<entry>.home_assistant.expire_after" property;
+#   rpi2home-assistant will continuously update (send messages on) the MQTT topics for opto-isolated inputs 
+#   at the frequency configured by 'home_assistant.publish_period_msec'. Thus it's suggested to set the "expire_after"
+#   to 2x or 3x times the value of the 'home_assistant.publish_period_msec' key.
+# - the key '<entry>.home_assistant.platform' can only accept the value "binary_sensor" so far 
+#   and since it's the default value, it can be omitted
+# - Home Assistant MQTT discovery messages are automatically published if 'home_assistant.discovery_messages.enable' is
+#   set to 'true'
+i2c_optoisolated_inputs:
+  - name: opto_input_1
+    description: Opto-isolated Input for Sensor XYZ
+    input_num: 1
+    active_low: true
+    mqtt:
+      topic: overriden_topic_name
+      payload_on: "ON"
+      payload_off: "OFF"
+    home_assistant:
+      platform: binary_sensor
+      device_class: motion
+      expire_after: 30
+      icon: mdi:motion-sensor
+    filter:
+      # this means that any transition 0->1 or 1->0 shorter than 6secs will be ignored
+      # it also means that the sensor changes will appear to HomeAssistant with a delay
+      # of the same amount of seconds
+      stability_threshold_sec: 6
+  - name: opto_input_2
+    description: Opto-isolated Input for Sensor BCD
+    input_num: 2
+    active_low: true
+    mqtt:
+      #topic defaults to 'home/<name>'
+      payload_on: "ON"
+      payload_off: "OFF"
+    home_assistant:
+      platform: binary_sensor
+      device_class: tamper
+      expire_after: 30
+      icon: mdi:check-circle
+
+#
+# ** GPIO Inputs Configuration **
+#
+# These inputs are those sampled by the Raspberry directly using its own GPIO pins (3.3V compatible).
+# A fundamental difference with 'i2c_optoisolated_inputs' is that the MQTT topics configured
+# for these GPIO inputs are updated with a message only when the GPIO transition from "inactive -> active"
+# is detected. If no "inactive -> active" transitions are detected, no MQTT messages are published.
+# Another fundamental difference is that these GPIOs do not create any HomeAssistant entity.
+# The MQTT topic will be in the form "<topic>" and will receive the configured "<payload>".
+gpio_inputs:
+  - name: radio_channel_a
+    description: Radio Channel A
+    gpio: 27
+    active_low: false
+    mqtt:
+      topic: alarmo/command
+      payload: ARM_AWAY
+    # NO 'home_assistant' dictionary here... reason is that the 'gpio_inputs' do not produce any
+    # HomeAssistant entity. They just trigger the publish of a particular payload on a particular topic... 
+    # at least so far
+
+#
+# ** Output Channels Configuration **
+#
+# These outputs channels are just Raspberry GPIO pins configured as outputs.
+# They are exposed as 'switch' or 'button' entities into Home Assistant.
+# More details:
+# - the 'active_low=false' property indicates that when the <payload_on> is received over MQTT, then the
+#   GPIO pin should be driven HIGH (3.3V); when the <payload_off> (or nothing) is received over MQTT, then the
+#   GPIO pin should be driven LOW (ground). The 'active_low=true' property inverts the behavior;
+# - the MQTT topic subscribed will be in the form "<default_topic_prefix>/<name>", where <default_topic_prefix> is
+#   configured by 'home_assistant.default_topic_prefix'
+# - the MQTT topic "<default_topic_prefix>/<output name>/state" is automatically updated after confirming that the output 
+#   GPIO pin has successfully changed status
+# - Home Assistant MQTT discovery messages are automatically published if 'home_assistant.discovery_messages.enable=true'
+# - The '<entry>.home_assistant.platform' key can be either 'switch' (the default) or 'button'. 
+#   In case 'button' is chosen and the '<entry>.mqtt.payload_on' message is received over MQTT, then the GPIO output 
+#   is turned ON (respecting 'active_low' property) and 500msec later it is turned OFF (momentary press).
+#   In case 'switch' is chosen, then whenever the '<entry>.mqtt.payload_on' message is received, the GPIO output is turned ON
+#   (respecting 'active_low' property) and whenever the '<entry>.mqtt.payload_off' message is received, the GPIO output is turned OFF.
+outputs:
+  - name: alarm_siren
+    description: Alarm Siren
+    gpio: 20
+    active_low: true
+    mqtt:
+      topic: non-default-mqtt-topic
+      state_topic: non-default-mqtt-topic-state
+      payload_on: "ON"
+      payload_off: "OFF"
+    home_assistant:
+      platform: switch # only 'switch' and 'button' are supported
+      device_class: switch # could be 'outlet'
+      icon: mdi:alarm-bell
+  - name: int_alarm_siren
+    description: Internal Alarm Siren
+    gpio: 21
+    active_low: true
+    mqtt:
+      #topic defaults to '<default_topic_prefix>/<name>'
+      #state_topic defaults to '<default_topic_prefix>/<name>/state'
+      payload_on: "ON"
+      payload_off: "OFF"
+    home_assistant:
+      platform: switch # only 'switch' and 'button' are supported
+      device_class: switch # could be 'outlet'
+      icon: mdi:alarm-bell

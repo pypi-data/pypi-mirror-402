@@ -1,0 +1,66 @@
+# Config file used by both:
+#  * the docker-compose to start the rpi2home-assistant container
+#  * the pytest test-containers to run integration tests in CI/CD
+
+mqtt_broker:
+  host: overridden_via_env_variable
+
+home_assistant:
+  # NOTE: the publish-period is checked by integration tests: 500msec -> 2Hz publish frequency
+  publish_period_msec: 500
+  discovery_messages:
+    # the default node_id is the hostname which changes for each container instance, so to ease integration
+    # tests we use instead a fixed node_id
+    node_id: integration-test-instance
+
+# disable logging stats during integration tests
+log_stats_every: 0
+
+# --disable-hw is provided when running integration tests, 
+# still we need a few entries for each type of input and output
+# to be able to test MQTT publish/subscribe operations
+
+i2c_optoisolated_inputs:
+  - name: opto_input_1
+    input_num: 1
+    active_low: true
+    home_assistant:
+      device_class: door
+  - name: opto_input_2
+    input_num: 2
+    active_low: true
+    home_assistant:
+      device_class: opening
+
+gpio_inputs:
+  - name: gpio_input_1
+    gpio: 1
+    active_low: false
+    mqtt:
+      topic: gpio1
+      payload: HEY
+  - name: gpio_input_4
+    gpio: 4
+    active_low: false
+    mqtt:
+      topic: gpio4
+      payload: BYEBYE
+
+outputs:
+  - name: output_1
+    gpio: 20
+    active_low: true
+    home_assistant:
+      device_class: switch
+    mqtt:
+      payload_on: "ON"
+      payload_off: "OFF"
+  - name: output_2
+    gpio: 21
+    active_low: true
+    home_assistant:
+      device_class: switch
+      icon: mdi:alarm-bell
+    mqtt:
+      payload_on: "ON"
+      payload_off: "OFF"
