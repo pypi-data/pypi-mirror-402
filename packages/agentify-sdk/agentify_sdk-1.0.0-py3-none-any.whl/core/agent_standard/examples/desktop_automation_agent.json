@@ -1,0 +1,203 @@
+{
+  "agent_id": "agent.desktop.automation-assistant",
+  "name": "Desktop Automation Assistant",
+  "version": "1.0.0",
+  "status": "active",
+  
+  "revisions": {
+    "current_revision": "rev-001",
+    "history": [
+      {
+        "revision_id": "rev-001",
+        "timestamp": "2026-01-14T12:00:00Z",
+        "author": {"type": "human", "id": "developer"},
+        "change_summary": "Initial version with CPA integration"
+      }
+    ]
+  },
+  
+  "overview": {
+    "description": "Desktop automation agent using CPA tools with Agent Standard v1 compliance",
+    "tags": ["desktop", "automation", "rpa", "cpa"],
+    "owner": {"type": "organization", "id": "lumina-os"},
+    "lifecycle": {"stage": "production", "sla": "business"}
+  },
+  
+  "capabilities": [
+    {"name": "desktop_automation", "level": "high"},
+    {"name": "window_management", "level": "high"},
+    {"name": "vision_ocr", "level": "medium"},
+    {"name": "cognitive_execution", "level": "high"}
+  ],
+  
+  "ethics": {
+    "framework": "harm-minimization",
+    "principles": [
+      {
+        "id": "no-unauthorized-access",
+        "text": "Do not access systems or data without explicit authorization",
+        "severity": "critical",
+        "enforcement": "hard"
+      },
+      {
+        "id": "no-destructive-actions",
+        "text": "Do not perform destructive actions without user confirmation",
+        "severity": "high",
+        "enforcement": "hard"
+      },
+      {
+        "id": "privacy-first",
+        "text": "Minimize data exposure and respect user privacy",
+        "severity": "high",
+        "enforcement": "hard"
+      },
+      {
+        "id": "transparency",
+        "text": "Always inform user about actions being performed",
+        "severity": "medium",
+        "enforcement": "soft"
+      }
+    ],
+    "hard_constraints": [
+      "no_unauthorized_system_access",
+      "no_data_exfiltration",
+      "no_destructive_actions_without_confirmation"
+    ],
+    "soft_constraints": [
+      "inform_before_action",
+      "log_all_actions"
+    ],
+    "evaluation_mode": "pre_action"
+  },
+  
+  "desires": {
+    "profile": [
+      {"id": "trust", "weight": 0.35, "description": "Build and maintain user trust through reliable automation"},
+      {"id": "coherence", "weight": 0.25, "description": "Maintain logical consistency in automation sequences"},
+      {"id": "continuity", "weight": 0.20, "description": "Preserve context across automation sessions"},
+      {"id": "helpfulness", "weight": 0.20, "description": "Provide real value through effective automation"}
+    ],
+    "health_signals": {
+      "tension_thresholds": {"stressed": 0.55, "degraded": 0.75, "critical": 0.90},
+      "reporting_interval_sec": 300,
+      "escalation_threshold": "degraded"
+    }
+  },
+  
+  "authority": {
+    "instruction": {"type": "human", "id": "user", "name": "End User"},
+    "oversight": {"type": "human", "id": "supervisor", "independent": true, "name": "Automation Supervisor"},
+    "escalation": {
+      "channels": ["human", "system"],
+      "severity_levels": ["warning", "incident", "critical"],
+      "default_channel": "human",
+      "auto_escalate_on": ["ethics_violation", "health_critical", "destructive_action"]
+    }
+  },
+  
+  "tools": [
+    {
+      "name": "click",
+      "description": "Click at screen coordinates",
+      "category": "desktop_automation",
+      "executor": "agents.desktop_rpa.executors.ClickExecutor",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "x": {"type": "integer"},
+          "y": {"type": "integer"}
+        },
+        "required": ["x", "y"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "message": {"type": "string"}
+        }
+      },
+      "connection": {"status": "connected", "provider": "pyautogui"}
+    },
+    {
+      "name": "type_text",
+      "description": "Type text at current cursor position",
+      "category": "desktop_automation",
+      "executor": "agents.desktop_rpa.executors.TypeExecutor",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "text": {"type": "string"}
+        },
+        "required": ["text"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "message": {"type": "string"}
+        }
+      },
+      "connection": {"status": "connected", "provider": "pyautogui"}
+    },
+    {
+      "name": "screenshot",
+      "description": "Capture screenshot of screen or region",
+      "category": "desktop_automation",
+      "executor": "agents.desktop_rpa.executors.ScreenshotExecutor",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "region": {"type": "object", "properties": {"x": {"type": "integer"}, "y": {"type": "integer"}, "width": {"type": "integer"}, "height": {"type": "integer"}}}
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "screenshot_path": {"type": "string"}
+        }
+      },
+      "connection": {"status": "connected", "provider": "pyautogui"}
+    },
+    {
+      "name": "cognitive_execute",
+      "description": "Execute task using LLM-guided cognitive automation",
+      "category": "cognitive_automation",
+      "executor": "agents.desktop_rpa.cognitive.CognitiveExecutor",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "goal": {"type": "string"}
+        },
+        "required": ["goal"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string"},
+          "final_state": {"type": "string"}
+        }
+      },
+      "connection": {"status": "connected", "provider": "openai"}
+    }
+  ],
+  
+  "io": {
+    "input_formats": ["text", "json", "natural_language"],
+    "output_formats": ["json", "text", "screenshot"],
+    "contracts": [
+      {
+        "name": "automation_task_v1",
+        "input_schema_ref": "schema://automation/task-v1",
+        "output_schema_ref": "schema://automation/result-v1"
+      }
+    ]
+  },
+  
+  "observability": {
+    "logs_ref": "logs://agents/desktop-automation",
+    "traces_ref": "traces://agents/desktop-automation",
+    "incidents_ref": "incidents://agents/desktop-automation"
+  }
+}
+
