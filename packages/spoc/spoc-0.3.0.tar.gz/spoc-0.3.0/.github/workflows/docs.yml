@@ -1,0 +1,37 @@
+name: Update Docs
+
+on:
+  workflow_dispatch: # Allows manual triggering
+  release:
+    types: [published] # Automatically triggers on new release
+
+permissions:
+  contents: write # Grants write permissions to push changes to the repository
+
+jobs:
+  update_docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install Dependencies
+        run: uv sync --group docs
+
+      - name: Update mkdocs.yml with Latest Tag
+        run: |
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          cd docs
+          sed -i "s|repo_url: https://github.com/${{ github.repository }}/.*|repo_url: https://github.com/${{ github.repository }}/tree/${TAG_NAME}|" mkdocs.yml
+
+      - name: Deploy MkDocs
+        working-directory: docs
+        run: uv run mkdocs gh-deploy --force
