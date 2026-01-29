@@ -1,0 +1,112 @@
+import os
+import requests
+import hashlib
+from pathlib import Path
+from tqdm import tqdm
+import pandas as pd
+from {{ package_name }}.config import get_config
+
+def get_cache_dir(local: bool = False) -> Path:
+    """
+    Get the directory for storing data.
+    
+    Args:
+        local: If True, returns <project_root>/data. 
+               If False, returns ~/.cache/pypro/data (Global Cache).
+    """
+    if local:
+        # Project Root Strategy:
+        # This script is likely in src/pkg/data_loader.py or src/pkg/utils/data_loader.py
+        # We assume project root is grandparents of this file until we hit pyproject.toml ideally
+        # But simple fallback: 3 levels up from src/pkg/data_loader.py is root
+        current_file = Path(__file__).resolve()
+        # src/pkg/data_loader.py -> parent=pkg -> parent=src -> parent=root
+        # Verify structure:
+        # if in src/pkg/utils/data_loader.py -> 4 levels
+        # Let's try to detect root marker
+        root = current_file.parent
+        while not (root / "pyproject.toml").exists():
+            if root.parent == root: # hit filesystem root
+                 # Fallback to cwd if running from notebook
+                 return Path.cwd() / "data"
+            root = root.parent
+        
+        data_dir = root / "data"
+    else:
+        # Global Cache Strategy
+        data_dir = Path.home() / ".cache" / "pypro" / "data"
+
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir
+
+def download_file(url: str, filename: str = None, local: bool = False, force: bool = False) -> Path:
+    """
+    Download a file from a URL.
+    
+    Args:
+        url: Source URL.
+        filename: Target filename. If None, derived from URL.
+        local: If True, downloads to project 'data/' folder. If False, uses Global Cache.
+        force: If True, redownload even if exists.
+        
+    Returns:
+        Path to the downloaded file.
+    """
+    target_dir = get_cache_dir(local=local)
+    
+    if not filename:
+        filename = url.split("/")[-1]
+        
+    target_path = target_dir / filename
+    
+    if target_path.exists() and not force:
+        print(f"Using cached file: {target_path}")
+        return target_path
+        
+    print(f"Downloading {url} to {target_path}...")
+    
+    try:
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
+        
+        total_size = int(response.headers.get('content-length', 0))
+        block_size = 1024 # 1 Kibibyte
+        
+        with open(target_path, "wb") as f, tqdm(
+            desc=filename,
+            total=total_size,
+            unit='iB',
+            unit_scale=True,
+            unit_divisor=1024,
+        ) as bar:
+            for data in response.iter_content(block_size):
+                size = f.write(data)
+                bar.update(size)
+                
+        print("Download complete.")
+        return target_path
+    except Exception as e:
+        print(f"Failed to download: {e}")
+        if target_path.exists():
+            target_path.unlink() # Clean up partial file
+        raise
+
+def load_csv(key_or_url: str, local: bool = False, **kwargs) -> pd.DataFrame:
+    """
+    Load a CSV file.
+    
+    Args:
+        key_or_url: Config key ('iris') OR direct URL.
+        local: If True, ensures file is in local 'data/' folder.
+    """
+    # 1. Check if it's a config key
+    urls_config = get_config("data_urls", {})
+    url = urls_config.get(key_or_url, key_or_url)
+    
+    # 2. Check if it's a URL
+    if url.startswith("http"):
+        path = download_file(url, local=local)
+        return pd.read_csv(path, **kwargs)
+    
+    # 3. Assume local path (pass through)
+    return pd.read_csv(url, **kwargs)
