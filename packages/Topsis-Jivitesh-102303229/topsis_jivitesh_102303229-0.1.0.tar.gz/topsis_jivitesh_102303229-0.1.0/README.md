@@ -1,0 +1,34 @@
+# Topsis-Jivitesh-102303229
+
+This project is a Python implementation of the TOPSIS (Technique for Order Preference by Similarity to Ideal Solution) method.  
+
+
+The package is designed to be easy to use and understand, while following standard Python packaging practices.
+
+## Installation
+
+Install the package using pip:
+pip install Topsis-Jivitesh-102303229
+
+## Usage
+
+After installation, the TOPSIS method can be executed directly from the terminal:
+topsis data.xlsx "1,1,1,2,1" "+,+,-,+,+" output.csv
+
+## Input File
+
+The input file can be in CSV or Excel format.
+The first column should contain the names of the alternatives.
+All remaining columns must contain numeric values representing criteria.
+Weights and impacts must be provided as comma-separated values.
+
+## Output
+
+The program generates an output CSV file containing:
+Topsis Score for each alternative
+Rank, where Rank 1 represents the best alternative
+
+## Author
+
+Jivitesh Singh 
+102303229
