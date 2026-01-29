@@ -1,0 +1,156 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ceil-dlp"
+version = "1.3.2"
+description = "Data Loss Prevention plugin for LiteLLM: Block and mask PII in LLM requests with zero infrastructure overhead."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "hayder", email = "hayder@alumni.harvard.edu" }]
+keywords = [
+    "dlp",
+    "pii",
+    "litellm",
+    "security",
+    "privacy",
+    "llm",
+    "ai",
+    "artificial intelligence",
+    "data loss prevention",
+    "data protection",
+    "data security",
+    "data privacy",
+    "ai security",
+    "ai privacy",
+    "compliance",
+    "hipaa",
+    "pci-dss",
+    "gdpr",
+    "ccpa",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+dependencies = [
+    "litellm[proxy]>=1.0.0",
+    "pyyaml>=6.0",
+    "presidio-analyzer>=2.2.0",
+    "presidio-image-redactor>=0.0.50",
+    "pillow>=10.0.0",
+    "python-json-logger>=2.0.0",
+    "spacy>=3.7.0",
+    "typer>=0.9.0",
+    "pip>=24.0",
+    "pypdfium2>=4.0.0",                   # PDF text/image extraction and manipulation
+    "python-doctr>=0.7.0",                # OCR engine for better accuracy on complex documents
+    "spacy-huggingface-pipelines>=0.0.1", # Required for transformer-based NER models
+    "transformers>=4.20.0",               # Required for transformer-based NER models
+    "gliner>=0.2.0",                      # Required for GLiNER-based NER (ner_strength=3)
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.0.0",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+    "types-PyYAML>=6.0.0",
+    "types-setuptools>=69.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/dorcha-inc/ceil-dlp"
+Documentation = "https://github.com/dorcha-inc/ceil-dlp#readme"
+Repository = "https://github.com/dorcha-inc/ceil-dlp"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ceil_dlp*"]
+
+[project.scripts]
+ceil-dlp = "ceil_dlp.cli:main"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "ARG", # flake8-unused-arguments
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by ruff format)
+    "B008",   # do not perform function calls in argument defaults
+    "ARG001", # unused function argument (for interface compatibility)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ceil_dlp"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+strict_equality = true
+show_error_codes = true
+exclude = ["build/", "dist/", "examples/"]
+
+[[tool.mypy.overrides]]
+module = "litellm.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "PIL.*",
+    "presidio_image_redactor.*",
+    "pypdfium2.*",
+    "doctr.*",
+    "doctr.io.*",
+    "doctr.models.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = ["-v", "--strict-markers", "--tb=short"]
+markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
+filterwarnings = [
+    # Suppress spacy/PIL internal deprecation warnings (not actionable for us)
+    "ignore::DeprecationWarning:pydicom.pixel_data_handlers.util",
+    "ignore:builtin type SwigPyPacked:DeprecationWarning",
+    "ignore:builtin type SwigPyObject:DeprecationWarning",
+    "ignore:builtin type swigvarlink:DeprecationWarning",
+    # Suppress HuggingFace Hub resume_download deprecation (external library issue)
+    "ignore:`resume_download` is deprecated:FutureWarning:huggingface_hub",
+    # Suppress Transformers sentencepiece tokenizer conversion warning (external library issue)
+    "ignore:The sentencepiece tokenizer:UserWarning:transformers",
+]

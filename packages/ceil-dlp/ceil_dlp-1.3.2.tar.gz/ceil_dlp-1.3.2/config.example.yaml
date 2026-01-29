@@ -1,0 +1,170 @@
+# ceil-dlp Configuration Example
+# This file demonstrates all available configuration options for ceil-dlp
+# Copy this file and customize it for your environment
+
+# Mode: Controls how ceil-dlp handles detected sensitive data
+# - observe: Log detections but don't block or mask (useful for testing)
+# - enforce: Block and mask based on policy actions (default)
+#   To mask without blocking, set policies to action: "mask" instead of "block"
+mode: enforce
+
+# Default Policy (optional): Apply to all PII types that don't have explicit policies
+# If not specified, PII types without explicit policies are treated as "observe"
+# Uncomment to mask all detected PII by default:
+# default_policy:
+#   action: mask  # block | mask | whistledown
+#   enabled: true
+
+# An overview of the different actions:
+# - block: Reject the request entirely if this PII type is detected
+# - mask: Replace the PII with [REDACTED_TYPE] tags (e.g., [REDACTED_EMAIL]) before sending to the LLM.
+# - whistledown: Replace the PII in the prompt with consistent tokens (e.g., PERSON_1, EMAIL_2) before sending to the LLM.
+#                These tokens are swapped back in the response to maintain conversational coherence.
+# - observe: Log the detection but don't modify the request
+
+# Policies: Define how each PII type is handled. Explicit policies override default_policy.
+policies:
+  # High-risk items - block by default (recommended)
+  credit_card:
+    action: block # block | mask
+    enabled: true
+    # Optional: Model-specific rules
+    # If models.allow is specified, these models bypass this policy
+    # If models.block is specified, only these models are affected
+    # If models is omitted, policy applies to all models
+    # models:
+    #   allow:
+    #     - "ollama/.*"  # Allow credit cards for all ollama models
+    #   block:
+    #     - "openai/.*"  # Block credit cards for all OpenAI models
+
+  ssn:
+    action: block
+    enabled: true
+
+  api_key:
+    action: block
+    enabled: true
+    # Example: Allow API keys for specific trusted models
+    # models:
+    #   allow:
+    #     - "ollama/qwen3:0.6b"
+    #     - "self-hosted/.*"
+
+  pem_key:
+    action: block
+    enabled: true
+
+  jwt_token:
+    action: block
+    enabled: true
+
+  # Medium-risk items - mask by default (recommended)
+  email:
+    action: mask # block | mask
+    enabled: true
+    # Example: Block emails for external models, mask for local models
+    # models:
+    #   block:
+    #     - "openai/.*"
+    #     - "anthropic/.*"
+    #   allow:
+    #     - "ollama/.*"
+
+  phone:
+    action: mask
+    enabled: true
+
+  # Additional PII types supported by Presidio
+  # These are detected by Presidio and can be configured similarly
+  person:
+    action: whistledown
+    enabled: true
+    # Whistledown mode is a good choice for person names as it preserves context
+    # while protecting identity. Each person gets a consistent token (PERSON_1, PERSON_2)
+    # throughout the conversation, and the LLM's response is automatically
+    # converted back to the original names for the user.
+
+  location:
+    action: whistledown
+    enabled: true
+
+  ip_address:
+    action: mask
+    enabled: true
+
+  url:
+    action: mask
+    enabled: true
+
+  date_time:
+    action: mask
+    enabled: true
+
+  iban:
+    action: block
+    enabled: true
+
+  crypto:
+    action: block
+    enabled: true
+
+  us_driver_license:
+    action: block
+    enabled: true
+
+  us_passport:
+    action: block
+    enabled: true
+
+  uk_nhs:
+    action: block
+    enabled: true
+
+  uk_nino:
+    action: block
+    enabled: true
+
+  medical_license:
+    action: block
+    enabled: true
+# Audit logging (optional)
+# Path to log file for audit trail of all detections and actions
+# If not specified, uses CEIL_DLP_AUDIT_LOG environment variable
+# If neither is set, audit logging is disabled
+# audit_log_path: /var/log/ceil-dlp/audit.log
+
+# OCR Strength (optional)
+# Controls how many OCR models to use in the ensemble for image redaction
+# - 1: Use only light docTR OCR (fastest, good for simple documents)
+# - 2: Use light docTR + Tesseract OCR (balanced speed/accuracy)
+# - 3: Use all three models including heavy docTR (slowest, most accurate, default)
+# ocr_strength: 3
+
+# NER Strength (optional)
+# Controls which NER model to use for person name and entity detection
+# - 1: Use en_core_web_lg (fastest, good accuracy)
+# - 2: Use spaCy + transformer ensemble (balanced speed/accuracy)
+# - 3: Use spaCy + transformer + GLiNER ensemble (best coverage, slower, default)
+# Higher values improve person name detection but are slower
+# ner_strength: 3
+
+# PII types to detect (optional)
+# If specified, only these types will be detected
+# If not specified or empty, all enabled types are detected
+# enabled_pii_types:
+#   - credit_card
+#   - ssn
+#   - email
+#   - phone
+#   - api_key
+#   - pem_key
+#   - jwt_token
+
+# Model matching patterns
+# Patterns support regex matching:
+# - "ollama/qwen3:0.6b" - exact match
+# - "ollama/qwen.*" - matches any qwen model
+# - "ollama/.*" - matches all ollama models
+# - "openai/.*" - matches all OpenAI models
+# - "self-hosted/.*" - matches all self-hosted models
