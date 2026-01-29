@@ -1,0 +1,256 @@
+# .github/workflows/build.yml
+name: Build Wheels
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build-wheels-linux-x86_64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Get VTK version from pyproject.toml
+        id: vtk
+        run: |
+          VTK_VERSION=$(grep 'vtk_version' pyproject.toml | sed 's/.*"\([0-9.]*\)".*/\1/')
+          echo "version=$VTK_VERSION" >> $GITHUB_OUTPUT
+          echo "VTK_VERSION=$VTK_VERSION" >> $GITHUB_ENV
+      - name: Cache VTK
+        id: cache-vtk
+        uses: actions/cache@v4
+        with:
+          path: vtk-cache
+          key: vtk-${{ steps.vtk.outputs.version }}-linux-x86_64-v1
+      - name: Download and prepare VTK
+        if: steps.cache-vtk.outputs.cache-hit != 'true'
+        run: ./.github/scripts/download_vtk.sh linux x86_64 ./vtk-cache
+      - name: Build manylinux2014 x86_64 wheels
+        env:
+          CIBW_BUILD: ${{ github.event_name == 'pull_request' && 'cp310-* cp313-*' || '' }}
+          CIBW_ARCHS_LINUX: x86_64
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
+          VTK_VERSION: ${{ steps.vtk.outputs.version }}
+        uses: pypa/cibuildwheel@v3.0
+      - name: Upload wheels as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-x86_64
+          path: wheelhouse/*.whl
+          retention-days: 30
+      - name: Report wheel sizes
+        shell: bash
+        run: |
+          echo "## Wheel Sizes for Linux x86_64" >> $GITHUB_STEP_SUMMARY
+          echo "| Wheel | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|------|" >> $GITHUB_STEP_SUMMARY
+          for wheel in wheelhouse/*.whl; do
+            if [ -f "$wheel" ]; then
+              size=$(du -h "$wheel" | cut -f1)
+              name=$(basename "$wheel")
+              echo "| $name | $size |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total wheelhouse size:** $(du -sh wheelhouse/ | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+  build-wheels-linux-aarch64:
+    runs-on: ubuntu-24.04-arm # Native ARM runner (no QEMU needed)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Get VTK version from pyproject.toml
+        id: vtk
+        run: |
+          VTK_VERSION=$(grep 'vtk_version' pyproject.toml | sed 's/.*"\([0-9.]*\)".*/\1/')
+          echo "version=$VTK_VERSION" >> $GITHUB_OUTPUT
+          echo "VTK_VERSION=$VTK_VERSION" >> $GITHUB_ENV
+      - name: Cache VTK
+        id: cache-vtk
+        uses: actions/cache@v4
+        with:
+          path: vtk-cache
+          key: vtk-${{ steps.vtk.outputs.version }}-linux-aarch64-v1
+      - name: Download and prepare VTK
+        if: steps.cache-vtk.outputs.cache-hit != 'true'
+        run: ./.github/scripts/download_vtk.sh linux aarch64 ./vtk-cache
+      - name: Build manylinux_2_28 aarch64 wheels
+        env:
+          CIBW_BUILD: ${{ github.event_name == 'pull_request' && 'cp310-* cp313-*' || '' }}
+          CIBW_ARCHS_LINUX: aarch64
+          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
+          VTK_VERSION: ${{ steps.vtk.outputs.version }}
+        uses: pypa/cibuildwheel@v3.0
+      - name: Upload wheels as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-aarch64
+          path: wheelhouse/*.whl
+          retention-days: 30
+      - name: Report wheel sizes
+        shell: bash
+        run: |
+          echo "## Wheel Sizes for Linux aarch64" >> $GITHUB_STEP_SUMMARY
+          echo "| Wheel | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|------|" >> $GITHUB_STEP_SUMMARY
+          for wheel in wheelhouse/*.whl; do
+            if [ -f "$wheel" ]; then
+              size=$(du -h "$wheel" | cut -f1)
+              name=$(basename "$wheel")
+              echo "| $name | $size |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total wheelhouse size:** $(du -sh wheelhouse/ | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+  build-wheels-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Get VTK version from pyproject.toml
+        id: vtk
+        shell: bash
+        run: |
+          VTK_VERSION=$(grep 'vtk_version' pyproject.toml | sed 's/.*"\([0-9.]*\)".*/\1/')
+          echo "version=$VTK_VERSION" >> $GITHUB_OUTPUT
+          echo "VTK_VERSION=$VTK_VERSION" >> $GITHUB_ENV
+      - name: Build wheels
+        env:
+          CIBW_BUILD: ${{ github.event_name == 'pull_request' && 'cp310-* cp313-*' || '' }}
+          VTK_VERSION: ${{ steps.vtk.outputs.version }}
+        uses: pypa/cibuildwheel@v3.0
+      - name: Upload wheels as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-windows
+          path: wheelhouse/*.whl
+          retention-days: 30
+      - name: Report wheel sizes
+        shell: bash
+        run: |
+          echo "## Wheel Sizes for Windows" >> $GITHUB_STEP_SUMMARY
+          echo "| Wheel | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|------|" >> $GITHUB_STEP_SUMMARY
+          for wheel in wheelhouse/*.whl; do
+            if [ -f "$wheel" ]; then
+              size=$(du -h "$wheel" | cut -f1)
+              name=$(basename "$wheel")
+              echo "| $name | $size |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total wheelhouse size:** $(du -sh wheelhouse/ | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+  build-wheels-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Get VTK version from pyproject.toml
+        id: vtk
+        run: |
+          VTK_VERSION=$(grep 'vtk_version' pyproject.toml | sed 's/.*"\([0-9.]*\)".*/\1/')
+          echo "version=$VTK_VERSION" >> $GITHUB_OUTPUT
+          echo "VTK_VERSION=$VTK_VERSION" >> $GITHUB_ENV
+      - name: Cache VTK
+        id: cache-vtk
+        uses: actions/cache@v4
+        with:
+          path: vtk-cache
+          key: vtk-${{ steps.vtk.outputs.version }}-macos-arm64-v1
+      - name: Download and prepare VTK
+        if: steps.cache-vtk.outputs.cache-hit != 'true'
+        run: ./.github/scripts/download_vtk.sh macos arm64 ./vtk-cache
+      - name: Build wheels
+        env:
+          CIBW_BUILD: ${{ github.event_name == 'pull_request' && 'cp310-* cp313-*' || '' }}
+          VTK_VERSION: ${{ steps.vtk.outputs.version }}
+        uses: pypa/cibuildwheel@v3.0
+      - name: Upload wheels as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos
+          path: wheelhouse/*.whl
+          retention-days: 30
+      - name: Report wheel sizes
+        shell: bash
+        run: |
+          echo "## Wheel Sizes for macOS" >> $GITHUB_STEP_SUMMARY
+          echo "| Wheel | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|------|" >> $GITHUB_STEP_SUMMARY
+          for wheel in wheelhouse/*.whl; do
+            if [ -f "$wheel" ]; then
+              size=$(du -h "$wheel" | cut -f1)
+              name=$(basename "$wheel")
+              echo "| $name | $size |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total wheelhouse size:** $(du -sh wheelhouse/ | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+  build-sdist:
+    needs:
+      [
+        build-wheels-linux-x86_64,
+        build-wheels-linux-aarch64,
+        build-wheels-windows,
+        build-wheels-macos,
+      ]
+    runs-on: ubuntu-latest
+    name: Build source distribution
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Build source distribution
+        run: uv build --sdist
+
+      - name: Upload sdist as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          retention-days: 30
+
+  publish-to-pypi:
+    needs:
+      [
+        build-wheels-linux-x86_64,
+        build-wheels-linux-aarch64,
+        build-wheels-windows,
+        build-wheels-macos,
+        build-sdist,
+      ]
+    runs-on: ubuntu-latest
+    name: Publish to PyPI
+    if: github.event_name == 'release' && github.event.action == 'published'
+
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mmgpy
+
+    permissions:
+      id-token: write # For trusted publishing
+      actions: read
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
