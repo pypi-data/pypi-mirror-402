@@ -1,0 +1,699 @@
+Metadata-Version: 2.1
+Name: onedrive-skill
+Version: 0.1.1
+Summary: A Python skill for connecting to Microsoft OneDrive via Graph API
+Home-page: https://github.com/lucapaone76/onedrive-connect
+Author: lucapaone76
+Author-email: lucapaone@gmail.com
+License: MIT
+Project-URL: Homepage, https://github.com/lucapaone76/onedrive-connect
+Project-URL: Repository, https://github.com/lucapaone76/onedrive-connect
+Project-URL: Issues, https://github.com/lucapaone76/onedrive-connect/issues
+Keywords: onedrive,microsoft,graph-api,llm,skill
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Provides-Extra: dev
+Provides-Extra: auth
+
+# OneDrive Connect - LLM Skill
+
+A Python project to provide a skill (in the sense of the standard skills now available for LLMs) to connect to personal Microsoft OneDrive. Authentication tokens are injected via environment variables or secrets for security.
+
+**✨ Compliant with LLM Agent Skills Best Practices ✨**
+
+## Quick Links
+
+- 📋 [Installation Guide](#installation) - Detailed setup instructions
+- 📦 [Requirements](REQUIREMENTS.md) - Dependencies and system requirements
+- 🔐 [Authentication Setup](#authentication-setup) - Azure AD configuration
+- 📖 [API Reference](#api-reference) - Complete method documentation
+- 💡 [Usage Examples](#usage) - Code samples and demos
+- 🛡️ [Safety Features](#safety-features) - Security and confirmations
+- 📄 [Skill Specification](SKILL.md) - Complete skill documentation
+- 📝 [Changelog](CHANGELOG.md) - Version history and release notes
+
+## LLM Skills Compliance
+
+This skill follows best practices for LLM agent skills:
+
+- **Structured Metadata**: Provides `skill_manifest.json` with detailed capability descriptions
+- **Safety Levels**: Clear categorization (read-only, write, destructive)
+- **User Consent**: Required confirmations for destructive operations
+- **Discoverable**: Implements `get_skill_metadata()` for runtime introspection
+- **Type-Safe**: Full type hints for all public APIs
+- **Well-Documented**: Comprehensive docstrings and usage examples
+
+For more on LLM agent skills standards, see the [skill manifest](skill_manifest.json).
+
+## Features
+
+- 🔐 Secure authentication via environment variables
+- 📁 List files and folders in OneDrive
+- ⬆️ Upload files to OneDrive
+- ⬇️ Download files from OneDrive
+- 🔍 Search for files across OneDrive
+- 📂 Create and manage folders
+- 🗑️ Delete items
+- 🤖 LLM-friendly skill interface
+- ⚠️ **User confirmation for destructive operations**
+- 📋 **Skill metadata for LLM discovery**
+- 🛡️ **Safety mechanisms and cancellation support**
+
+## Safety Features
+
+This skill implements industry-standard safety features for LLM agent skills:
+
+- **User Confirmation Required**: Destructive operations (delete, overwrite) require explicit user confirmation
+- **Clear Warnings**: Operations that modify or delete data display clear warnings
+- **Cancellation Support**: Users can cancel any operation before execution
+- **Skill Metadata**: Provides structured metadata for LLM discovery and capability assessment
+- **Safe Defaults**: Operations default to safe behaviors (e.g., rename on conflict)
+
+## Installation
+
+### Prerequisites
+
+- Python 3.8 or higher
+- pip (Python package installer)
+- An Azure AD application with Microsoft Graph API permissions (see [Authentication Setup](#authentication-setup))
+
+### Method 1: Install from source (Recommended for development)
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/lucapaone76/onedrive-connect.git
+   cd onedrive-connect
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Install the package in development mode (optional):**
+   ```bash
+   pip install -e .
+   ```
+
+4. **Verify installation:**
+   ```bash
+   python -c "from onedrive_skill import OneDriveSkill; print('Installation successful!')"
+   ```
+
+### Method 2: Install from PyPI
+
+```bash
+pip install onedrive-skill
+```
+
+**Package is now available on PyPI:** https://pypi.org/project/onedrive-skill/
+
+**With authentication helper dependencies:**
+```bash
+pip install onedrive-skill[auth]
+```
+
+This installs additional packages (msal, python-dotenv) needed for the authentication helper script.
+
+### Method 3: Install with development dependencies
+
+For contributing or running tests:
+
+```bash
+git clone https://github.com/lucapaone76/onedrive-connect.git
+cd onedrive-connect
+pip install -e ".[dev]"
+```
+
+This installs the package along with development tools (pytest, black, ruff).
+
+### Virtual Environment (Recommended)
+
+It's recommended to use a virtual environment to avoid dependency conflicts:
+
+```bash
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# On Linux/Mac:
+source venv/bin/activate
+# On Windows:
+venv\Scripts\activate
+
+# Install the package
+pip install -r requirements.txt
+```
+
+### Docker Installation (Alternative)
+
+If you prefer using Docker:
+
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY . .
+ENV ONEDRIVE_ACCESS_TOKEN=""
+
+CMD ["python", "example_usage.py"]
+```
+
+Build and run:
+```bash
+docker build -t onedrive-skill .
+docker run -e ONEDRIVE_ACCESS_TOKEN="your_token" onedrive-skill
+```
+
+For detailed requirements and dependencies, see [REQUIREMENTS.md](REQUIREMENTS.md).
+
+## Using with Claude (Claude.ai or Claude Code CLI)
+
+This skill can be integrated with Claude for AI-powered OneDrive management. Here's how to set it up:
+
+### Step 1: Install the Package
+
+```bash
+pip install onedrive-skill
+```
+
+### Step 2: Get Your OneDrive Access Token
+
+Follow the [Authentication Setup](#authentication-setup) section below to obtain your access token.
+
+**Quick Summary for Personal OneDrive:**
+1. Register an app in Azure Portal (takes 5 minutes)
+2. Configure permissions: `Files.ReadWrite` and `User.Read`
+3. Generate an access token using the [authentication helper script](#quick-authentication-with-helper-script)
+4. Set the token as an environment variable
+
+### Step 3: Set Environment Variable
+
+Set your access token before running Claude:
+
+```bash
+# On Linux/Mac:
+export ONEDRIVE_ACCESS_TOKEN="your_access_token_here"
+
+# On Windows (PowerShell):
+$env:ONEDRIVE_ACCESS_TOKEN="your_access_token_here"
+
+# On Windows (Command Prompt):
+set ONEDRIVE_ACCESS_TOKEN=your_access_token_here
+```
+
+### Step 4: Use with Claude
+
+Once installed and configured, you can use this skill with Claude:
+
+**Example prompts to use with Claude:**
+- "List all files in my OneDrive root folder"
+- "Search for all PDF files containing 'invoice' in my OneDrive"
+- "Upload this document to my OneDrive Documents folder"
+- "Create a new folder called 'Project Reports' in OneDrive"
+- "Show me all files in my OneDrive Photos folder"
+
+**In Python code with Claude:**
+```python
+from onedrive_skill import OneDriveSkill
+
+# Initialize the skill (reads ONEDRIVE_ACCESS_TOKEN from environment)
+skill = OneDriveSkill()
+
+# Claude can now use these methods:
+files = skill.list_files()  # List files in root
+results = skill.search("budget")  # Search for files
+```
+
+### Step 5: Security Notes for Claude Usage
+
+⚠️ **Important Security Considerations:**
+- Access tokens typically expire after 1 hour
+- For continuous use, implement token refresh (see [Token Refresh](#token-refresh) below)
+- Never share or commit your access tokens
+- Use environment variables or secure secret management
+- Consider setting up a dedicated Azure AD app for Claude usage
+
+## Authentication Setup
+
+This skill uses the Microsoft Graph API to connect to OneDrive. You need to obtain an access token from Azure AD. Follow these steps carefully:
+
+### Step 1: Register an Application in Azure AD
+
+**For Personal Microsoft/OneDrive Accounts:**
+
+1. **Go to Azure Portal**
+   - Visit [Azure Portal](https://portal.azure.com/)
+   - Sign in with your Microsoft account (the one that has OneDrive)
+
+2. **Navigate to App Registrations**
+   - Search for "Azure Active Directory" in the search bar
+   - Click on **Azure Active Directory** (or **Microsoft Entra ID**)
+   - In the left menu, click **App registrations**
+
+3. **Create New Registration**
+   - Click **+ New registration** at the top
+   - Fill in the details:
+     - **Name**: `OneDrive Skill for Claude` (or any name you prefer)
+     - **Supported account types**: Select **"Accounts in any organizational directory and personal Microsoft accounts"**
+     - **Redirect URI**: Select **"Public client/native (mobile & desktop)"** and enter: `http://localhost`
+   - Click **Register**
+
+4. **Save Your Application (client) ID**
+   - After registration, you'll see the **Overview** page
+   - Copy the **Application (client) ID** - you'll need this later
+   - Example: `12345678-1234-1234-1234-123456789abc`
+
+### Step 2: Configure API Permissions
+
+1. **Add Permissions**
+   - In your app registration, click **API permissions** in the left menu
+   - Click **+ Add a permission**
+   - Select **Microsoft Graph**
+   - Select **Delegated permissions**
+
+2. **Select Required Permissions**
+   - Search for and select:
+     - ✅ `Files.ReadWrite` - Read and write access to your files
+     - ✅ `Files.ReadWrite.All` - (Optional) Access to all files you can access
+     - ✅ `User.Read` - Sign in and read user profile
+   - Click **Add permissions**
+
+3. **Grant Consent** (Important!)
+   - Click **Grant admin consent for [Your Directory]** button
+   - If you don't see this button, that's OK - you'll consent during authentication
+   - Click **Yes** to confirm
+
+### Step 3: Generate Access Token
+
+Now you need to get an access token. There are two methods:
+
+#### Method A: Quick Authentication with Helper Script (Recommended)
+
+Use the included authentication helper script:
+
+1. **Install MSAL library**:
+   ```bash
+   pip install msal
+   ```
+
+2. **Run the authentication helper**:
+   ```bash
+   python auth_helper.py
+   ```
+
+   The script is included in this repository and will:
+   - Guide you through the authentication process
+   - Open a browser for you to sign in
+   - Display your access token and refresh token
+   - Optionally save tokens to a `.env` file
+
+3. **Follow the prompts**:
+   - Enter your Application (client) ID when asked
+   - A browser window will open for you to sign in
+   - Sign in with your Microsoft account
+   - Grant the requested permissions
+   - Choose whether to save the tokens to `.env` file
+
+**Example output:**
+```
+✅ Authentication successful!
+📋 Your Tokens:
+Access Token: eyJ0eXAiOiJKV1QiLCJhbGc...
+⏰ Access token expires in: 60 minutes
+
+Save tokens to .env file? (y/n): y
+✅ Tokens saved to /path/to/.env
+```
+
+#### Method B: Manual MSAL Authentication
+
+Create a Python script with this code:
+
+```python
+from msal import PublicClientApplication
+import json
+
+# Your Application (client) ID from Step 1
+CLIENT_ID = "YOUR_CLIENT_ID_HERE"
+
+# Create the MSAL application
+app = PublicClientApplication(
+    client_id=CLIENT_ID,
+    authority="https://login.microsoftonline.com/common"
+)
+
+# Required scopes (permissions)
+scopes = ["Files.ReadWrite", "User.Read", "offline_access"]
+
+# Interactive authentication - will open a browser
+print("Opening browser for authentication...")
+result = app.acquire_token_interactive(scopes=scopes)
+
+if "access_token" in result:
+    print("\n✅ Authentication successful!")
+    print(f"\n📋 Access Token:\n{result['access_token']}\n")
+
+    if "refresh_token" in result:
+        print(f"🔄 Refresh Token:\n{result['refresh_token']}\n")
+
+    # Save to file for convenience
+    with open(".env", "w") as f:
+        f.write(f"ONEDRIVE_ACCESS_TOKEN={result['access_token']}\n")
+        if "refresh_token" in result:
+            f.write(f"ONEDRIVE_REFRESH_TOKEN={result['refresh_token']}\n")
+
+    print("✅ Tokens saved to .env file")
+    print("\nℹ️ Access tokens expire after 1 hour.")
+    print("ℹ️ Use the refresh token to get a new access token without re-authenticating.")
+else:
+    print("\n❌ Authentication failed!")
+    print(f"Error: {result.get('error')}")
+    print(f"Description: {result.get('error_description')}")
+```
+
+**Run the script:**
+```bash
+python your_auth_script.py
+```
+
+### Step 4: Set Environment Variable
+
+After obtaining your access token, set it as an environment variable:
+
+**On Linux/Mac:**
+```bash
+export ONEDRIVE_ACCESS_TOKEN="your_access_token_here"
+
+# To make it permanent, add to ~/.bashrc or ~/.zshrc:
+echo 'export ONEDRIVE_ACCESS_TOKEN="your_access_token_here"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**On Windows (PowerShell):**
+```powershell
+$env:ONEDRIVE_ACCESS_TOKEN="your_access_token_here"
+
+# To make it permanent (user level):
+[System.Environment]::SetEnvironmentVariable('ONEDRIVE_ACCESS_TOKEN', 'your_access_token_here', 'User')
+```
+
+**On Windows (Command Prompt):**
+```cmd
+set ONEDRIVE_ACCESS_TOKEN=your_access_token_here
+
+# To make it permanent:
+setx ONEDRIVE_ACCESS_TOKEN "your_access_token_here"
+```
+
+**Or use a `.env` file** (recommended for development):
+
+```bash
+# Create .env file
+echo "ONEDRIVE_ACCESS_TOKEN=your_access_token_here" > .env
+
+# The Python library can load this automatically
+pip install python-dotenv
+```
+
+Then in your Python code:
+```python
+from dotenv import load_dotenv
+load_dotenv()  # Loads .env file
+
+from onedrive_skill import OneDriveSkill
+skill = OneDriveSkill()  # Automatically uses token from environment
+```
+
+### Token Refresh
+
+Access tokens expire after **1 hour**. To avoid re-authenticating every hour, use refresh tokens:
+
+```python
+from msal import PublicClientApplication
+
+CLIENT_ID = "your_client_id"
+app = PublicClientApplication(client_id=CLIENT_ID, authority="https://login.microsoftonline.com/common")
+
+# Use refresh token to get new access token
+refresh_token = "your_refresh_token"
+scopes = ["Files.ReadWrite", "User.Read"]
+
+result = app.acquire_token_by_refresh_token(
+    refresh_token=refresh_token,
+    scopes=scopes
+)
+
+if "access_token" in result:
+    new_access_token = result["access_token"]
+    # Update your environment variable with the new token
+    import os
+    os.environ["ONEDRIVE_ACCESS_TOKEN"] = new_access_token
+```
+
+**⚠️ Security Notes:**
+- Never commit your `.env` file or access tokens to version control!
+- Add `.env` to your `.gitignore` file
+- Store refresh tokens securely - they don't expire quickly
+- Rotate tokens regularly for security
+- Consider using a secret management service in production
+
+## Usage
+
+### Basic Usage with OneDriveClient
+
+```python
+from onedrive_skill import OneDriveClient
+
+# Initialize client (uses ONEDRIVE_ACCESS_TOKEN from environment)
+client = OneDriveClient()
+
+# Or provide token explicitly
+client = OneDriveClient(access_token="your_token")
+
+# Get user information
+user = client.get_user_info()
+print(f"Logged in as: {user['displayName']}")
+
+# List files in root
+items = client.list_root_items()
+for item in items:
+    print(f"- {item['name']}")
+
+# Upload a file
+with open("example.txt", "rb") as f:
+    result = client.upload_file("Documents/example.txt", f.read())
+    print(f"Uploaded: {result['name']}")
+
+# Download a file
+content = client.download_file(item_id="FILE_ID")
+with open("downloaded.txt", "wb") as f:
+    f.write(content)
+
+# Search for files
+results = client.search_items("quarterly report")
+for item in results:
+    print(f"Found: {item['name']}")
+```
+
+### Using the OneDriveSkill (LLM-Friendly Interface)
+
+```python
+from onedrive_skill import OneDriveSkill
+
+# Initialize skill
+skill = OneDriveSkill()
+
+# Get skill metadata (useful for LLM discovery)
+metadata = skill.get_skill_metadata()
+print(f"Skill: {metadata['name']} v{metadata['version']}")
+
+# List files (returns formatted string)
+print(skill.list_files())
+# Output:
+# - [File] document.docx (12345 bytes)
+# - [Folder] Photos (0 bytes)
+# - [File] report.pdf (98765 bytes)
+
+# Search for items
+print(skill.search("budget"))
+# Output:
+# Found 3 item(s):
+# - [File] budget_2024.xlsx (ID: ABC123)
+# - [File] budget_proposal.docx (ID: DEF456)
+# - [Folder] Budget Archive (ID: GHI789)
+
+# Upload content (with confirmation)
+content = b"Hello, OneDrive!"
+result = skill.upload_content("test.txt", content)
+# User will be prompted:
+# ⚠️  CONFIRMATION REQUIRED ⚠️
+# You are about to upload a file to: test.txt
+# File size: 17 bytes
+# WARNING: This will OVERWRITE any existing file at this path!
+# Do you want to proceed? (yes/no):
+print(result)
+# Output: ✅ File uploaded successfully: test.txt (ID: XYZ999)
+
+# Delete item (with confirmation - DESTRUCTIVE)
+result = skill.delete_item("ABC123", "budget_2024.xlsx")
+# User will be prompted:
+# ⚠️  DESTRUCTIVE OPERATION ⚠️
+# You are about to PERMANENTLY DELETE: budget_2024.xlsx
+# Item ID: ABC123
+# This action CANNOT be undone!
+# Do you want to proceed? (yes/no):
+print(result)
+# If cancelled: ❌ Deletion cancelled by user for: budget_2024.xlsx
+# If confirmed: ✅ Item deleted successfully: budget_2024.xlsx
+```
+
+### Using Custom Confirmation Handler
+
+For integration with LLM systems or custom UI, provide your own confirmation handler:
+
+```python
+def custom_confirmation(message: str) -> bool:
+    """Custom handler that integrates with your UI/LLM system."""
+    # Display message in your UI
+    # Get user's response through your preferred method
+    # Return True to proceed, False to cancel
+    return get_user_response(message)
+
+skill = OneDriveSkill(confirmation_callback=custom_confirmation)
+```
+
+### Running the Example
+
+```bash
+# Set your access token
+export ONEDRIVE_ACCESS_TOKEN="your_token"
+
+# Run the example
+python example_usage.py
+```
+
+## API Reference
+
+### OneDriveClient
+
+Main client for interacting with OneDrive via Microsoft Graph API.
+
+**Methods:**
+- `get_user_info()` - Get authenticated user information
+- `list_root_items()` - List items in root directory
+- `list_items(folder_path)` - List items in a specific folder
+- `get_item_info(item_id)` - Get information about an item
+- `download_file(item_id)` - Download a file
+- `upload_file(file_path, content, overwrite)` - Upload a file
+- `create_folder(folder_name, parent_path)` - Create a new folder
+- `delete_item(item_id)` - Delete an item
+- `search_items(query)` - Search for items
+
+### OneDriveSkill
+
+Simplified skill interface for LLM integration with safety features.
+
+**Constructor:**
+- `OneDriveSkill(access_token, confirmation_callback)` - Initialize with optional custom confirmation handler
+
+**Methods:**
+- `get_skill_metadata()` - Get skill metadata for LLM discovery
+- `list_files(folder_path)` - List files with formatted output (read-only)
+- `get_file_content(item_id)` - Download file content (read-only)
+- `upload_content(file_path, content, require_confirmation)` - Upload file with status message (requires confirmation by default)
+- `create_folder(folder_name, parent_path, conflict_behavior)` - Create folder with configurable conflict resolution
+- `delete_item(item_id, item_name, require_confirmation)` - Delete item (requires confirmation by default, DESTRUCTIVE)
+- `search(query)` - Search with formatted results (read-only)
+
+**Safety Levels:**
+- 🟢 **Read-only**: `list_files`, `get_file_content`, `search`
+- 🟡 **Write**: `create_folder`
+- 🔴 **Destructive** (requires confirmation): `upload_content` (overwrites), `delete_item`
+
+## Security Considerations
+
+1. **Never hardcode access tokens** in your code
+2. **Use environment variables** or secure secret management systems
+3. **Rotate tokens regularly** - access tokens expire and should be refreshed
+4. **Limit API permissions** to only what's necessary
+5. **Use `.gitignore`** to prevent committing sensitive files
+6. **Consider using refresh tokens** for long-lived applications
+
+## Development
+
+### Installing Development Dependencies
+
+```bash
+pip install -e ".[dev]"
+```
+
+### Running Tests
+
+```bash
+pytest
+```
+
+### Code Formatting
+
+```bash
+black onedrive_skill/
+ruff check onedrive_skill/
+```
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Troubleshooting
+
+### "No access token provided" Error
+
+Make sure you've set the `ONEDRIVE_ACCESS_TOKEN` environment variable:
+
+```bash
+export ONEDRIVE_ACCESS_TOKEN="your_token"
+```
+
+### "401 Unauthorized" Error
+
+Your access token may have expired. Generate a new token and update the environment variable.
+
+### "403 Forbidden" Error
+
+Check that your application has the necessary API permissions in Azure AD and that admin consent has been granted if required.
+
+## Related Links
+
+- [Microsoft Graph API Documentation](https://docs.microsoft.com/en-us/graph/)
+- [OneDrive API Reference](https://docs.microsoft.com/en-us/graph/api/resources/onedrive)
+- [Azure AD App Registration](https://docs.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app)
+
+## Documentation
+
+This project includes comprehensive documentation:
+
+- **[README.md](README.md)** - Main documentation with quick start and usage
+- **[SKILL.md](SKILL.md)** - Complete skill specification and API reference
+- **[REQUIREMENTS.md](REQUIREMENTS.md)** - Dependencies and system requirements
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history and release notes
+- **[skill_manifest.json](skill_manifest.json)** - Machine-readable skill metadata
+
+
