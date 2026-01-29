@@ -1,0 +1,349 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: {{APP_NAME}}
+  name: {{APP_NAME}}
+  namespace: {{NAMESPACE}}
+spec:
+  replicas: {{REPLICAS}}
+  selector:
+    matchLabels:
+      app: {{APP_NAME}}
+  template:
+    metadata:
+      labels:
+        app: {{APP_NAME}}
+        model: {{SERVED_MODEL_NAME}}
+        cluster: {{CLUSTER_NAME}}
+        north-job-type: serving
+      annotations:
+        reclaimableByVolcano: "{{RECLAIMABLEBYVOLCANO}}"
+        k8s.v1.cni.cncf.io/networks: network-operator/ens108np0@ens108np0,network-operator/ens109np0@ens109np0,network-operator/ens110np0@ens110np0,network-operator/ens111np0@ens111np0,network-operator/ens112np0@ens112np0,network-operator/ens113np0@ens113np0,network-operator/ens114np0@ens114np0,network-operator/ens115np0@ens115np0,network-operator/multi-route
+    spec:
+{%- if IS_ROUTER == 'true' %}
+      serviceAccountName: sglang-router
+{%- endif %}
+      priorityClassName: {{PRIORITYCLASSNAME}}
+{%- if GPUS_PER_POD|int == 0 %}
+      nodeSelector:
+        cpu_node: "true"
+{%- endif %}
+{%- if GPUS_PER_POD|int > 0 %}
+      initContainers:
+      - name: drop-cache
+        image: {{IMAGE}}
+        command:
+          - /bin/bash
+          - -c
+          - |
+            sync;
+            echo 1 > /proc/sys/vm/drop_caches;
+            echo "Cache dropped successfully";
+        securityContext:
+          privileged: true
+          runAsNonRoot: false
+          runAsUser: 0
+          runAsGroup: 0
+          capabilities:
+              add:
+              - IPC_LOCK
+              - SYS_RESOURCE
+              - SYS_PTRACE
+{%- endif %}
+      containers:
+      - command:
+        - /bin/bash
+        - --norc
+        - -c
+        - set -o pipefail {%- if USE_PRIVILEGED_POD == 'true' -%} && source /gpfs/shared_data/qiji/sunpeng/nvidia_vis_devs_to_cuda_vis_devs.sh {%- endif -%} && {{CMDLINE}} 2>&1 | tee -a /var/log/vllm.log; echo $? > /var/log/exit
+        image: {{IMAGE}}
+        imagePullPolicy: IfNotPresent
+        name: server
+        env:
+        - name: PYTHONNOUSERSITE
+          value: "1"
+        - name: HF_MODULES_CACHE
+          value: "/tmp/hf_cache"
+        - name: HF_HOME
+          value: "/tmp/hf_home"
+        - name: TRITON_CACHE_DIR
+          value: "/tmp/triton"
+        - name: VLLM_CACHE_ROOT
+          value: "/tmp/vllm"
+        - name: VLLM_CONFIG_ROOT
+          value: "/tmp/vllm_config"
+        - name: NCCL_CUMEM_ENABLE
+          value: "0"
+        - name: REDIS_HOST
+          valueFrom:
+            secretKeyRef:
+              name: north-llm-api-secret
+              key: REDIS_HOST
+        - name: REDIS_PORT
+          valueFrom:
+            secretKeyRef:
+              name: north-llm-api-secret
+              key: REDIS_PORT
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: north-llm-api-secret
+              key: REDIS_PASSWORD
+        - name: REDIS_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: north-llm-api-secret
+              key: REDIS_USERNAME
+        - name: NLA_UPDATE_WEIGHTS_TIMEOUT
+          value: "600"
+{%- if HAS_EXTRA_ENVS %}
+        {%- for key, value in EXTRA_ENVS.items() %}
+        - name: {{key}}
+          value: "{{value}}"
+        {%- endfor -%}
+{%- endif %}
+
+{%- if GPUS_PER_POD|int > 0 %}  # if gpus > 0, it is vllm deployment
+        ports:
+        - containerPort: 8000
+          protocol: TCP
+        resources:
+          limits:
+            memory: "{{(GPUS_PER_POD|int * (1400 / 8))|round|int}}Gi"
+            nvidia.com/{{GPU_TYPE}}: "{{GPUS_PER_POD}}"
+{%- if USE_HOST_NETWORK == 'true' %}
+            rdma/hca_shared_devices: "1"
+{%- elif NEED_INFRAWAVE_RDMA == 'true' %}
+            infrawaves.com/rdma: "8"
+{%- endif %}
+          requests:
+{%- if NEED_INFRAWAVE_RDMA == 'true' %}
+            infrawaves.com/rdma: "8"
+{%- endif %}
+            memory: "{{(GPUS_PER_POD|int * (1400 / 8))|round|int}}Gi"
+            nvidia.com/{{GPU_TYPE}}: "{{GPUS_PER_POD}}"
+{%- else %} # 0 gpus is north-llm-api development
+{%- if IS_ROUTER == 'true' %}
+        ports:
+        - containerPort: 38848
+          protocol: TCP
+{%- endif %}
+        resources:
+          limits:
+            cpu: "64"
+            memory: "64Gi"
+          requests:
+            cpu: "64"
+            memory: "64Gi"
+{%- endif %}
+        securityContext:
+{%- if USE_PRIVILEGED_POD == 'true' %}
+            privileged: true
+{%- endif %}
+            capabilities:
+              add:
+              - IPC_LOCK
+              - SYS_RESOURCE
+              - SYS_PTRACE
+        volumeMounts:
+        - mountPath: /dev/shm
+          name: dshm
+{% if NAMESPACE == 'qiji' %}
+        - name: log-collector-config
+          mountPath: /usr/local/container/filebeat-7.12.0/etc/
+          readOnly: true
+        - name: shared-log-path
+          mountPath: /var/log
+        - name: log-collector-data
+          mountPath: /usr/local/container/filebeat-7.12.0/data
+{%- endif %}
+        - name: tmp-dir
+          mountPath: /tmp
+{{VOLUMEMOUNTS}}
+{%- if GPUS_PER_POD|int > 0 %}  # if gpus > 0, it is vllm deployment
+        - mountPath: /data
+          name: local-data
+{%- endif %}
+{%- if BACKEND in ['sglang', 'vllm'] %}
+      - name: nla-sidecar
+        image: harbor.local.clusters/bp/nla-sidecar:v0.2.3
+        imagePullPolicy: IfNotPresent
+        env:
+          # 主容器与 sidecar 同 Pod，使用 Pod IP 作为上报 IP
+          - name: NLA_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+
+          # API Key（如果提供）
+{%- if API_KEY %}
+          - name: NLA_MAIN_CONTAINER_API_KEY
+            value: "{{API_KEY}}"
+{%- endif %}
+
+          # 主容器对外端口
+          - name: NLA_PORT
+            value: "8000"
+
+          # Redis 连接（与主容器一致）
+          - name: REDIS_HOST
+            valueFrom:
+              secretKeyRef:
+                name: north-llm-api-secret
+                key: REDIS_HOST
+          - name: REDIS_PORT
+            valueFrom:
+              secretKeyRef:
+                name: north-llm-api-secret
+                key: REDIS_PORT
+          - name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: north-llm-api-secret
+                key: REDIS_PASSWORD
+          - name: REDIS_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: north-llm-api-secret
+                key: REDIS_USERNAME
+
+          # 业务标识
+          - name: NLA_MODEL_NAME
+            value: "{{SERVED_MODEL_NAME}}"
+          - name: NLA_MODEL_VERSION
+            value: "v1.0.0"
+          - name: NLA_REGISTER_INTERVAL_SEC
+            value: "5"
+          - name: NLA_API_COMPAT
+            value: "{{PROTOCOL}}"
+
+          # sidecar 自身健康服务配置
+          - name: NLA_HEALTH_PORT
+            value: "18080"
+          - name: NLA_HEALTH_PATH
+            value: "/health"
+
+{%- if READINESS_PATH %}
+        readinessProbe:
+          httpGet:
+            path: {{READINESS_PATH}}
+            port: 18080
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 2
+          successThreshold: 1
+          failureThreshold: 3
+{%- endif %}
+
+{%- if LIVENESS_PATH %}
+        livenessProbe:
+          httpGet:
+            path: {{LIVENESS_PATH}}
+            port: 18080
+            scheme: HTTP
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 6
+{%- endif %}
+
+        resources:
+          limits:
+            memory: "512Mi"
+          requests:
+            memory: "512Mi"
+{%- endif %}
+{% if NAMESPACE == 'qiji' %}
+      - name: logcollector
+        image: harbor.local.clusters/bp/volces/logcollector:20241231-2
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/bash
+        args:
+          - -c
+          - bash /root/check_filebeat.sh
+        resources:
+          limits:
+            cpu: '1'
+            memory: 2Gi
+          requests:
+            cpu: '1'
+            memory: 2Gi
+        volumeMounts:
+          - name: log-collector-config
+            mountPath: /usr/local/container/filebeat-7.12.0/etc/
+            readOnly: true
+          - name: shared-log-path
+            mountPath: /var/log
+          - name: log-collector-data
+            mountPath: /usr/local/container/filebeat-7.12.0/data
+          - name: log-collector-logs
+            mountPath: /usr/local/container/filebeat-7.12.0/logs
+        env:
+          - name: "LOG_COLLECTOR_ENV_TAGS"
+            value: "__pod_name__|__pod_ip__|__namespace__|__node_name__|__node_ip__"
+          - name: "__pod_name__"
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: "__pod_ip__"
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: "__namespace__"
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: "__job_name__"
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['jobname']
+          - name: "__node_name__"
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          - name: "__node_ip__"
+            valueFrom:
+              fieldRef:
+                fieldPath: status.hostIP
+          - name: MAX_MEM
+            valueFrom:
+             resourceFieldRef:
+               containerName: logcollector
+               resource: limits.memory
+{%- endif %}
+      tolerations:
+      - key: "north.serving"
+        operator: "Exists"
+        effect: "NoSchedule"
+      restartPolicy: Always
+      terminationGracePeriodSeconds: {{TERMINATIONGRACEPERIODSECONDS}}
+      hostNetwork: {{USE_HOST_NETWORK}}
+      volumes:
+{{VOLUMES}}
+{%- if GPUS_PER_POD|int > 0 %}  # if gpus > 0, it is vllm deployment
+      - name: local-data
+        hostPath:
+          path: /data
+          type: Directory
+{%- endif %}
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: "32Gi"
+{% if NAMESPACE == 'qiji' %}
+      - name: log-collector-config
+        configMap:
+          defaultMode: 420
+          name: north-serving-log-collector-config
+      - name: shared-log-path
+        emptyDir: { }
+      - name: log-collector-data
+        emptyDir: { }
+      - name: log-collector-logs
+        emptyDir: { }
+{%- endif %}
+      - name: tmp-dir
+        emptyDir: { }
