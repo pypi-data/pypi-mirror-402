@@ -1,0 +1,637 @@
+Metadata-Version: 2.4
+Name: inputless-ingestion
+Version: 1.0.2
+Summary: Document processing and knowledge extraction for Inputless Analytics SDK
+Author: Inputless Team
+Author-email: team@inputless.io
+Requires-Python: >=3.11,<3.14
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Requires-Dist: Pillow (>=10.0.0,<11.0.0)
+Requires-Dist: PyPDF2 (>=3.0.0,<4.0.0)
+Requires-Dist: aiofiles (>=23.2.1,<24.0.0)
+Requires-Dist: anthropic (>=0.30.0,<0.31.0)
+Requires-Dist: chardet (>=5.2.0,<6.0.0)
+Requires-Dist: langchain (>=0.3.0,<0.4.0)
+Requires-Dist: neo4j (>=5.15.0,<6.0.0)
+Requires-Dist: nltk (>=3.8.0,<4.0.0)
+Requires-Dist: openai (>=1.12.0,<2.0.0)
+Requires-Dist: opencv-python (>=4.8.0,<5.0.0)
+Requires-Dist: openpyxl (>=3.1.0,<4.0.0)
+Requires-Dist: pandas (>=2.1.0,<3.0.0)
+Requires-Dist: pdfplumber (>=0.10.0,<0.11.0)
+Requires-Dist: pytesseract (>=0.3.10,<0.4.0)
+Requires-Dist: python-docx (>=1.1.0,<2.0.0)
+Requires-Dist: python-pptx (>=0.6.23,<0.7.0)
+Requires-Dist: scikit-learn (>=1.3.0,<2.0.0)
+Requires-Dist: spacy (>=3.7.0,<4.0.0)
+Requires-Dist: textblob (>=0.17.1,<0.18.0)
+Description-Content-Type: text/markdown
+
+# inputless-ingestion
+
+Document processing and knowledge extraction package for the Inputless Analytics SDK.
+
+## Purpose
+
+This package provides comprehensive document processing capabilities including:
+- Multi-format file processing (PDF, DOCX, TXT, images)
+- OCR text extraction from scanned documents and images
+- NLP analysis and entity recognition
+- AI-powered knowledge extraction using LLMs
+- Integration with Neo4j graph database for document relationships
+
+## Installation
+
+```bash
+pip install inputless-ingestion
+```
+
+## Installation with Poetry
+
+```bash
+cd packages/python-core/ingestion
+poetry install
+```
+
+## Dependencies
+
+### Required
+- **Document Processing**: PyPDF2, pdfplumber, python-docx, python-pptx, openpyxl, pandas
+- **OCR**: pytesseract, Pillow, opencv-python
+- **NLP**: spacy, nltk, textblob, scikit-learn
+- **AI/LLM**: openai, anthropic, langchain
+- **Graph Database**: neo4j
+- **File Handling**: chardet, aiofiles
+
+### Optional
+- **easyocr**: For advanced OCR (requires torch, not installed by default)
+- **python-magic**: For MIME type detection (requires system libmagic library)
+- **inputless_graph**: For graph database integration (optional dependency)
+
+## Usage
+
+### Basic Document Processing
+
+```python
+from inputless_ingestion import DocumentProcessor
+
+# Initialize processor
+processor = DocumentProcessor()
+
+# Process a document
+document_data = await processor.process_file("document.pdf")
+
+print(f"Extracted text: {document_data['text'][:200]}...")
+print(f"File metadata: {document_data['metadata']}")
+```
+
+### OCR Processing
+
+```python
+from inputless_ingestion import OCREngine
+
+# Initialize OCR engine
+ocr_engine = OCREngine()
+
+# Process image with OCR
+text = ocr_engine.process_image("scanned_document.jpg")
+print(f"OCR text: {text}")
+```
+
+### NLP Analysis
+
+```python
+from inputless_ingestion import NLPProcessor
+
+# Initialize NLP processor
+nlp_processor = NLPProcessor()
+
+# Extract entities
+entities = nlp_processor.extract_entities(document_text)
+print(f"Found entities: {entities}")
+
+# Extract topics
+topics = nlp_processor.extract_topics(document_text)
+print(f"Document topics: {topics}")
+```
+
+### AI Knowledge Extraction
+
+```python
+from inputless_ingestion import AIKnowledgeExtractor
+
+# Initialize AI extractor
+ai_extractor = AIKnowledgeExtractor(llm_provider="openai")
+
+# Extract structured knowledge
+knowledge = ai_extractor.extract_knowledge(document_text, "legal_document")
+print(f"AI insights: {knowledge}")
+```
+
+### Graph Integration
+
+```python
+from inputless_ingestion import DocumentGraphIntegration
+from inputless_graph import Neo4jRepository
+
+# Initialize graph integration
+neo4j_repo = Neo4jRepository()
+graph_integration = DocumentGraphIntegration(neo4j_repo)
+
+# Create document node in Neo4j
+document_id = graph_integration.create_document_node(document_data)
+
+# Create entity relationships
+graph_integration.create_entity_nodes(document_id, entities)
+
+# Find similar documents
+similar_docs = graph_integration.find_similar_documents(document_id)
+```
+
+## Features
+
+### Supported File Formats
+
+- **PDF**: Text extraction + OCR for scanned PDFs
+- **Microsoft Word**: `.doc`, `.docx` - Native text extraction
+- **Rich Text**: `.rtf` - Formatted text extraction
+- **Plain Text**: `.txt` - Direct text processing
+- **Markdown**: `.md` - Structured text with metadata
+- **Excel**: `.xls`, `.xlsx` - Cell data + formulas
+- **CSV**: `.csv` - Tabular data processing
+- **PowerPoint**: `.ppt`, `.pptx` - Slide content + notes
+- **Images**: `.jpg`, `.png`, `.tiff`, `.bmp` - OCR processing
+- **HTML**: `.html`, `.htm` - Web page content
+- **XML**: `.xml` - Structured data extraction
+- **JSON**: `.json` - Data structure analysis
+
+### OCR Capabilities
+
+- **Tesseract Integration**: High-quality text recognition
+- **Image Preprocessing**: Automatic image enhancement for better OCR
+- **Multi-language Support**: Support for multiple languages
+- **Batch Processing**: Process multiple images/documents
+- **Confidence Scoring**: OCR confidence metrics
+
+### NLP Features
+
+- **Entity Recognition**: Extract people, organizations, locations, dates
+- **Topic Modeling**: LDA-based topic extraction
+- **Sentiment Analysis**: Document sentiment classification
+- **Keyword Extraction**: TF-IDF based key term identification
+- **Text Classification**: Document type classification
+
+### AI-Powered Analysis
+
+- **LLM Integration**: OpenAI GPT-4 and Anthropic Claude support
+- **Knowledge Extraction**: Structured information extraction
+- **Document Summarization**: AI-generated summaries
+- **Insight Generation**: Business-relevant insights
+- **Relationship Discovery**: Find connections between concepts
+
+### Graph Database Integration
+
+- **Document Nodes**: Store documents as graph nodes
+- **Entity Relationships**: Connect entities across documents
+- **Similarity Graph**: Find similar documents
+- **Knowledge Graph**: Build comprehensive knowledge bases
+- **Graph RAG**: LLM-powered graph queries
+
+## Module Structure
+
+```
+src/
+├── __init__.py
+├── file_processor.py      # Main processing orchestrator
+├── ocr_engine.py         # OCR processing
+├── nlp_processor.py      # NLP analysis
+├── ai_extractor.py       # AI knowledge extraction
+├── graph_integration.py  # Neo4j integration
+└── extractors/           # Format-specific extractors
+    ├── __init__.py
+    ├── pdf_extractor.py
+    ├── docx_extractor.py
+    ├── image_extractor.py
+    └── text_extractor.py
+```
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# OCR Configuration
+TESSERACT_PATH=/usr/local/bin/tesseract
+OCR_LANGUAGE=eng
+
+# LLM Configuration
+OPENAI_API_KEY=your-openai-key
+ANTHROPIC_API_KEY=your-anthropic-key
+
+# Neo4j Configuration
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=password
+```
+
+### Configuration File
+
+```python
+# config.py
+OCR_CONFIG = {
+    'language': 'eng',
+    'config': '--psm 6',
+    'preprocessing': True
+}
+
+NLP_CONFIG = {
+    'model': 'en_core_web_sm',
+    'max_entities': 100,
+    'topic_count': 5
+}
+
+LLM_CONFIG = {
+    'provider': 'openai',
+    'model': 'gpt-4',
+    'temperature': 0.3,
+    'max_tokens': 2000
+}
+```
+
+## Complete Examples
+
+### Full Document Processing Pipeline
+
+```python
+import asyncio
+from inputless_ingestion import (
+    DocumentProcessor,
+    NLPProcessor,
+    AIKnowledgeExtractor,
+    DocumentGraphIntegration
+)
+from inputless_graph import Neo4jRepository, Neo4jConfig
+
+async def complete_pipeline(file_path: str):
+    """Complete document processing pipeline with all features"""
+    
+    # 1. Process document (includes OCR, NLP, AI if enabled)
+    processor = DocumentProcessor(
+        enable_ocr=True,
+        enable_nlp=True,
+        enable_ai=True
+    )
+    document_data = await processor.process_file(
+        file_path,
+        extract_entities=True,
+        extract_topics=True,
+        extract_ai_insights=True
+    )
+    
+    # 2. Additional NLP processing if needed
+    nlp_processor = NLPProcessor()
+    entities = await nlp_processor.extract_entities(document_data.text)
+    topics = await nlp_processor.extract_topics(document_data.text)
+    sentiment = await nlp_processor.analyze_sentiment(document_data.text)
+    keywords = await nlp_processor.extract_keywords(document_data.text)
+    
+    # 3. AI knowledge extraction
+    ai_extractor = AIKnowledgeExtractor(llm_provider="openai")
+    ai_knowledge = await ai_extractor.extract_knowledge(
+        document_data.text,
+        document_type=document_data.metadata.file_type
+    )
+    summary = await ai_extractor.summarize(document_data.text)
+    
+    # 4. Store in graph database (optional)
+    try:
+        config = Neo4jConfig(
+            uri="bolt://localhost:7687",
+            user="neo4j",
+            password="password"
+        )
+        neo4j_repo = Neo4jRepository(config)
+        graph_integration = DocumentGraphIntegration(neo4j_repo)
+        
+        document_id = graph_integration.create_document_node(document_data)
+        graph_integration.create_entity_nodes(document_id, entities)
+        graph_integration.create_topic_nodes(document_id, topics)
+        
+        similar_docs = graph_integration.find_similar_documents(document_id)
+        
+        neo4j_repo.close()
+    except ImportError:
+        print("Graph integration not available (inputless_graph not installed)")
+    
+    return {
+        'document': document_data,
+        'entities': entities,
+        'topics': topics,
+        'sentiment': sentiment,
+        'keywords': keywords,
+        'ai_knowledge': ai_knowledge,
+        'summary': summary
+    }
+
+# Usage
+result = asyncio.run(complete_pipeline("contract.pdf"))
+print(f"Processed document with {len(result['entities'])} entities")
+```
+
+### Processing Different File Types
+
+```python
+import asyncio
+from inputless_ingestion import DocumentProcessor
+
+async def process_various_formats():
+    processor = DocumentProcessor()
+    
+    # PDF document
+    pdf_data = await processor.process_file("document.pdf")
+    print(f"PDF: {len(pdf_data.text)} characters")
+    
+    # Word document
+    docx_data = await processor.process_file("document.docx")
+    print(f"DOCX: {len(docx_data.text)} characters")
+    
+    # Text file
+    txt_data = await processor.process_file("document.txt")
+    print(f"TXT: {len(txt_data.text)} characters")
+    
+    # Image with OCR
+    image_data = await processor.process_file("scanned_document.jpg")
+    print(f"Image OCR: {len(image_data.text)} characters")
+    print(f"OCR Confidence: {image_data.ocr_confidence}")
+
+asyncio.run(process_various_formats())
+```
+
+### Error Handling
+
+```python
+import asyncio
+from inputless_ingestion import DocumentProcessor
+from inputless_ingestion.exceptions import (
+    UnsupportedFileTypeError,
+    OCRProcessingError,
+    NLPProcessingError,
+    ProcessingError
+)
+
+async def safe_process(file_path: str):
+    processor = DocumentProcessor()
+    
+    try:
+        result = await processor.process_file(file_path)
+        return result
+    except UnsupportedFileTypeError as e:
+        print(f"Unsupported file type: {e}")
+    except OCRProcessingError as e:
+        print(f"OCR failed: {e}")
+    except NLPProcessingError as e:
+        print(f"NLP processing failed: {e}")
+    except ProcessingError as e:
+        print(f"Processing error: {e}")
+    except FileNotFoundError:
+        print(f"File not found: {file_path}")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+
+asyncio.run(safe_process("document.pdf"))
+```
+
+## Performance Considerations
+
+- **Async Processing**: All I/O operations are asynchronous
+- **Batch Operations**: Process multiple documents efficiently
+- **Caching**: Cache processed results to avoid reprocessing
+- **Memory Management**: Stream large documents to avoid memory issues
+- **GPU Acceleration**: Use GPU for OCR when available
+
+## Error Handling
+
+```python
+from inputless_ingestion.exceptions import (
+    UnsupportedFileTypeError,
+    OCRProcessingError,
+    NLPProcessingError,
+    GraphIntegrationError
+)
+
+try:
+    result = await processor.process_file("document.pdf")
+except UnsupportedFileTypeError:
+    print("File type not supported")
+except OCRProcessingError:
+    print("OCR processing failed")
+except NLPProcessingError:
+    print("NLP processing failed")
+```
+
+## Testing
+
+```bash
+# Install dependencies
+poetry install
+
+# Run all tests
+poetry run pytest tests/
+
+# Run with coverage
+poetry run pytest --cov=inputless_ingestion tests/
+
+# Run specific test file
+poetry run pytest tests/test_file_processor.py
+
+# Run with verbose output
+poetry run pytest tests/ -v
+```
+
+### Test Coverage
+
+The module includes comprehensive unit tests:
+- `test_file_processor.py` - Document processing tests
+- `test_ocr_engine.py` - OCR engine tests
+- `test_nlp_processor.py` - NLP processing tests
+- `test_ai_extractor.py` - AI extraction tests
+- `test_graph_integration.py` - Graph integration tests
+- `test_extractors/` - Format-specific extractor tests
+
+## Distribution
+
+This package is distributed via PyPI as `inputless-ingestion`.
+
+```bash
+# Install from PyPI
+pip install inputless-ingestion
+
+# Install development version
+pip install git+https://github.com/vesperxs/InputlessSDK.git
+```
+
+---
+
+## API Reference
+
+### DocumentProcessor
+
+Main orchestrator for document processing.
+
+```python
+processor = DocumentProcessor(
+    enable_ocr=True,              # Enable OCR processing
+    enable_nlp=True,              # Enable NLP processing
+    enable_ai=True,              # Enable AI extraction
+    ocr_confidence_threshold=0.7  # OCR confidence threshold
+)
+
+# Process single file
+document_data = await processor.process_file(
+    file_path,
+    extract_entities=True,
+    extract_topics=True,
+    extract_ai_insights=True
+)
+
+# Batch process
+results = await processor.process_batch(
+    file_paths,
+    max_concurrent=5
+)
+```
+
+### OCREngine
+
+OCR text extraction from images.
+
+```python
+ocr = OCREngine(
+    language="eng",           # Language code
+    provider="tesseract",     # "tesseract", "easyocr", or "auto"
+    enable_preprocessing=True  # Image preprocessing
+)
+
+result = await ocr.process_image(image_path)
+result = await ocr.process_with_confidence(image_path, min_confidence=0.8)
+```
+
+### NLPProcessor
+
+Natural language processing and analysis.
+
+```python
+nlp = NLPProcessor(
+    model="en_core_web_sm",  # spaCy model
+    max_entities=100,        # Max entities to extract
+    num_topics=5             # Number of topics
+)
+
+entities = await nlp.extract_entities(text)
+topics = await nlp.extract_topics(text, num_topics=5)
+sentiment = await nlp.analyze_sentiment(text)
+keywords = await nlp.extract_keywords(text, num_keywords=10)
+classification = await nlp.classify_text(text)
+```
+
+### AIKnowledgeExtractor
+
+AI-powered knowledge extraction using LLMs.
+
+```python
+ai = AIKnowledgeExtractor(
+    llm_provider="openai",  # "openai" or "anthropic"
+    model="gpt-4",           # Model name
+    temperature=0.3          # Temperature for generation
+)
+
+knowledge = await ai.extract_knowledge(text, document_type="legal")
+summary = await ai.summarize(text, max_length=200)
+insights = await ai.extract_insights(text)
+```
+
+### DocumentGraphIntegration
+
+Neo4j graph database integration (optional).
+
+```python
+from inputless_graph import Neo4jRepository, Neo4jConfig
+
+config = Neo4jConfig(uri="bolt://localhost:7687", user="neo4j", password="pass")
+repo = Neo4jRepository(config)
+graph = DocumentGraphIntegration(repo)
+
+document_id = graph.create_document_node(document_data)
+entity_ids = graph.create_entity_nodes(document_id, entities)
+topic_ids = graph.create_topic_nodes(document_id, topics)
+similar = graph.find_similar_documents(document_id, limit=10)
+```
+
+## Data Models
+
+### DocumentData
+
+```python
+class DocumentData(BaseModel):
+    text: str
+    metadata: DocumentMetadata
+    entities: Optional[List[Entity]] = None
+    topics: Optional[List[Topic]] = None
+    ai_insights: Optional[Dict[str, Any]] = None
+    ocr_confidence: Optional[float] = None
+```
+
+### DocumentMetadata
+
+```python
+class DocumentMetadata(BaseModel):
+    file_path: str
+    file_type: str
+    file_size: int
+    mime_type: str
+    encoding: Optional[str] = None
+    title: Optional[str] = None
+    author: Optional[str] = None
+    created_date: Optional[str] = None
+    page_count: Optional[int] = None
+```
+
+### OCRResult
+
+```python
+class OCRResult(BaseModel):
+    text: str
+    confidence: float
+    language: str
+    provider: str
+```
+
+### Entity
+
+```python
+class Entity(BaseModel):
+    text: str
+    label: str
+    start: int
+    end: int
+    confidence: float
+```
+
+### Topic
+
+```python
+class Topic(BaseModel):
+    topic_id: int
+    keywords: List[str]
+    weight: float
+```
+
+---
+
+**Version**: 1.0.0  
+**Status**: ✅ Implementation Complete  
+**Last Updated**: January 2024
+
