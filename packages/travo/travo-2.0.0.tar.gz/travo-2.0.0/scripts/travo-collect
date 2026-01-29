@@ -1,0 +1,19 @@
+#!/usr/bin/env python
+
+import sys
+import urllib
+from travo.gitlab import GitLab
+
+url = sys.argv[1]
+
+temp = urllib.parse.urlparse(url)
+path = temp.path[1:]
+server = urllib.parse.urlunparse(temp[:2] + ("", "", "", ""))
+
+gitlab = GitLab(server)
+gitlab.login()
+project = gitlab.get_project(path)
+forks = project.get_forks(recursive=True)
+for fork in forks:
+    if fork.owner is not None and fork.owner.username is not None:
+        gitlab.git(["clone", fork.http_url_to_repo, fork.owner.username])

@@ -1,0 +1,206 @@
+.rules:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - travo/**/*
+        - .gitlab-ci.yml
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"
+      when: never
+    - if: $CI_COMMIT_BRANCH
+      changes:
+        - travo/**/*
+        - .gitlab-ci.yml
+
+.junit-coverage:
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+.dependent-test:
+  stage: test
+  script:
+    - pip install .[test]
+    - curl --retry 10 --retry-all-errors --url http://gitlab/api/v4/projects
+    - python build_tools/create_basic_gitlab.py
+    - pytest travo --junitxml=report.xml
+  artifacts:
+    when: always
+    expire_in: 2 mos 1 day
+    reports:
+      junit:
+        - report.xml
+    # old python and windows tests are for checking compatibility; no
+    # need to waste energy running them if the 3.10 tests fails.
+    # Also parallel runs currently tend to fail due to reaching the
+    # rate limit of the test gitlab instance.
+  needs: [tests_python312]
+
+.test_scripts:
+  script:
+    - pip install .[all]
+    - pip install pytest-cov
+    - curl --retry 10 --retry-all-errors --url http://gitlab/api/v4/projects
+    - python build_tools/create_basic_gitlab.py
+    - mypy
+    - pytest travo --cov --cov-report term --cov-report xml:coverage.xml --junitxml=report.xml
+
+.services:
+  services:
+    - name: gitlab/gitlab-ce:latest
+      alias: gitlab
+
+.variables:
+  variables:
+    GITLAB_HTTPS: "false"              # ensure that plain http does not work
+    GITLAB_ROOT_PASSWORD: "dr0w554p!&ew=]gdS"  # to access the api with user root:password
+    GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://gitlab'
+
+stages:
+  - .pre
+  - build
+  - test
+  - pages
+  - deploy
+
+build-wheel:
+    image: python:3.13
+    stage: build
+    before_script:
+      - pip install hatch
+    script:
+      - hatch build
+      - wheelname=`ls dist/travo-*-py3-none-any.whl`
+      - pip install $wheelname
+      - python -c "import travo"
+    artifacts:
+      expire_in: 2 mos 1 day
+      paths:
+        - dist
+    rules:
+      - if: $CI_PROJECT_PATH == "travo-cr/travo" && $CI_COMMIT_BRANCH == "master"
+
+pre-commit:
+  image: python:3.13
+  stage: .pre
+  extends:
+    - .rules
+  before_script:
+    - pip install pre-commit
+    - pip install ruff==0.8.2
+  script:
+    - set -x
+    - pre-commit clean
+    - pre-commit install
+    - pre-commit run --all-files
+
+tests_wheel:
+    image: python:3.14
+    stage: test
+    extends:
+      - .services
+      - .variables
+    script:
+      - wheelname=`ls dist/travo-*-py3-none-any.whl`
+      - pip install $wheelname[test]
+      - pip install pytest-cov
+      - curl --retry 10 --retry-all-errors --url http://gitlab/api/v4/projects
+      - python build_tools/create_basic_gitlab.py
+      - pytest travo --junitxml=report.xml
+    rules:
+      - if: $CI_PROJECT_PATH == "travo-cr/travo" && $CI_COMMIT_BRANCH == "master"
+
+tests_python314:
+    image: python:3.14
+    stage: test
+    extends:
+      - .rules
+      - .services
+      - .variables
+      - .test_scripts
+      - .junit-coverage
+    coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
+
+tests_python312:
+    image: python:3.12
+    stage: test
+    extends:
+      - .rules
+      - .services
+      - .variables
+      - .test_scripts
+      - .junit-coverage
+    needs: [tests_python314]
+
+tests_python310:
+    image: python:3.10
+    extends:
+      - .rules
+      - .services
+      - .variables
+      - .dependent-test
+    allow_failure: true
+
+docs:
+  image: python:3.13
+  stage: pages
+  script:
+    - pip install .[doc]
+    - cd docs; make html
+  artifacts:
+    expire_in: 2 mos 1 day
+    paths:
+      - docs/build/html
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - docs/**/*
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+      changes:
+        - docs/**/*
+
+pages:
+  image: python:3.13
+  stage: pages
+  script:
+    - pip install .[doc]
+    - cd docs; make html
+    - mv build/html/ ../public/
+  artifacts:
+    expire_in: 2 mos 1 day
+    paths:
+      - public
+  rules:
+    - if: $CI_PROJECT_PATH == "travo-cr/travo" && $CI_COMMIT_BRANCH == "master"
+
+publish:
+  image: python:3.13
+  stage: deploy
+  rules:
+    - if: $CI_PROJECT_PATH == "travo-cr/travo" && $CI_COMMIT_BRANCH == "master"
+      when: manual
+  environment:
+    name: release
+  id_tokens:
+    PYPI_ID_TOKEN:
+      # Use "testpypi" if uploading to TestPyPI
+      aud: pypi
+  before_script:
+    - apt update && apt install -y jq
+    - python -m pip install -U hatch id
+  script:
+    - echo "Publish travo on pypi"
+    # Retrieve the OIDC token from GitLab CI/CD, and exchange it for a PyPI API token
+    - oidc_token=$(python -m id PYPI)
+    # Replace "https://pypi.org/*" with "https://test.pypi.org/*" if uploading to TestPyPI
+    - resp=$(curl -X POST https://pypi.org/_/oidc/mint-token -d "{\"token\":\"${oidc_token}\"}")
+    - api_token=$(jq --raw-output '.token' <<< "${resp}")
+
+    - HATCH_INDEX_USER=__token__ HATCH_INDEX_AUTH="${api_token}" hatch publish

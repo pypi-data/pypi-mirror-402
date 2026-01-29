@@ -1,0 +1,230 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "travo"
+description = 'Management tools for gitlab-based assignment workflows'
+dynamic = [
+    "version"
+]
+authors = [
+  { name = "Pierre Thomas Froidevaux"},
+  { name = "Alexandre Blondin-Massé"},
+  { name = "Jean Privat"},
+  { name = "Nicolas M. Thiéry"},
+  { name = "Chiara Marmo"},
+  { name = "Jérémy Neveu"},
+]
+
+maintainers = [
+  { name = "Nicolas M. Thiéry", email = "Nicolas.Thiery@universite-paris-saclay.fr"},
+  { name = "Chiara Marmo", email = "chiara.marmo@universite-paris-saclay.fr"},
+]
+readme = "README.md"
+license = {text = "CC"}
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Information Technology",
+  "Topic :: Scientific/Engineering",
+  "Programming Language :: Python :: 3",
+]  # classifiers list: https://pypi.python.org/pypi?%3Aaction=list_classifiers
+
+requires-python = ">=3.10"
+
+dependencies = [
+  "colorlog",
+  "deprecation",
+  "typing_utils",
+  "pytest",
+  "requests",
+  "tqdm",
+  "anybadge",
+  "i18nice[YAML]",
+]
+
+[project.optional-dependencies]
+# feature dependency groups
+
+# Jupyter course
+jupyter = [
+    "nbgrader",
+    "numpy",
+    "pandas",
+    "ipylab",
+    "ipywidgets",
+    "ipydatagrid",
+    "jupytext>=1.11.2",
+]
+
+# tests
+test = [
+    "pytest",
+    "mypy",
+    "nbgrader",
+    "types-requests",
+    "types-setuptools",
+    "types-toml",
+    "ipydatagrid",
+    "python-gitlab",
+    "tox-docker",
+]
+
+# documentation
+doc = [
+    "sphinx",
+    "numpydoc",
+    "sphinx-autoapi",
+    "docutils<0.22",
+    "myst-parser>=0.13.1",
+    "sphinx-rtd-theme",
+    "sphinx-copybutton>0.2.9",
+    "nbconvert",
+    "myst_nb",
+    "jupytext>=1.11.2",
+    "ipykernel",
+    "numpy",
+    "pandas",
+    "pytest",
+    "sphinx-tabs",
+    "sphinx-togglebutton",
+]
+
+# all optional dependencies
+all = [
+    "travo[jupyter]",
+    "travo[test]",
+    "travo[doc]"
+]
+
+[project.urls]
+homepage = "https://travo-cr.gitlab.io/travo/"
+documentation = "https://travo-cr.gitlab.io/travo/"
+repository = "https://gitlab.com/travo-cr/travo.git/"
+changelog = "https://travo-cr.gitlab.io/travo/changelog.html"
+
+[project.scripts]
+travo = "travo.console_scripts:travo"
+travo-echo-travo-token = "travo.console_scripts:travo_echo_travo_token"
+
+[tool.hatch.version]
+# development configuration
+# source = "vcs"
+# release configuration
+path = "travo/__init__.py"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "travo/_version.py"
+
+[tool.pytest.ini_options]
+addopts = "--doctest-modules --doctest-continue-on-failure"
+doctest_optionflags = "NORMALIZE_WHITESPACE IGNORE_EXCEPTION_DETAIL ELLIPSIS"
+
+# Workaround
+#
+# By default, mypy assigns treats each script as a module named
+# __main__. This prevents checking several scripts at once. The usual
+# workaround is to use the option `scripts_are_modules`. Then the
+# script is treated as a module bearing its name. But then there is a
+# conflict between the script travo and the module travo.
+#
+# To work around this, we have a symbolic link travo-py -> travo, and
+# we only check scripts containing a '-' in their names ...
+[tool.mypy]
+files = "*.py, travo/*.py, scripts/*-*, build_tools/*.py"
+warn_return_any = "True"
+warn_unused_configs = "True"
+disallow_untyped_defs = "True"
+disallow_untyped_calls = "True"
+disallow_incomplete_defs = "True"
+check_untyped_defs = "True"
+no_implicit_optional = "True"
+scripts_are_modules = "True"
+
+[tool.ruff]
+# Same as Black.
+line-length = 88
+indent-width = 4
+
+# Assume Python 3.13
+target-version = "py313"
+
+[tool.ruff.lint]
+# Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
+# Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
+# McCabe complexity (`C901`) by default.
+select = ["E4", "E7", "E9", "F"]
+ignore = []
+
+# Allow fix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+
+# Enable auto-formatting of code examples in docstrings. Markdown,
+# reStructuredText code/literal blocks and doctests are all supported.
+#
+# This is currently disabled by default, but it is planned for this
+# to be opt-out in the future.
+docstring-code-format = false
+
+# Set the line length limit used when formatting code snippets in
+# docstrings.
+#
+# This only has an effect when the `docstring-code-format` setting is
+# enabled.
+docstring-code-line-length = "dynamic"
+
+[tool.coverage.run]
+omit = ["travo/tests/*"]
+
+[tool.tox]
+legacy_tox_ini = """
+    [tox]
+    envlist =
+        py314
+        py313
+
+    [docker:gitlab]
+    image = gitlab/gitlab-ce:latest
+    environment =
+        GITLAB_ROOT_PASSWORD=dr0w554p!&ew=]gdS
+    healthcheck_cmd = curl --retry 10 --retry-all-errors http://localhost/api/v4/projects
+
+    [testenv]
+    # install pytest in the virtualenv where commands will be executed
+    deps =
+        pytest
+        pytest-cov
+        mypy
+        nbgrader
+        types-requests
+        types-setuptools
+        types-toml
+        ipydatagrid
+        python-gitlab
+
+    docker =
+        gitlab
+
+    commands_pre =
+        python build_tools/create_basic_gitlab.py
+    commands =
+        mypy
+        pytest {posargs:travo} --cov --cov-report term --cov-report xml:coverage.xml --junitxml=report.xml
+"""
