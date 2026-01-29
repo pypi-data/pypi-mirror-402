@@ -1,0 +1,2 @@
+class ConfigHandlerError(Exception):
+    pass
