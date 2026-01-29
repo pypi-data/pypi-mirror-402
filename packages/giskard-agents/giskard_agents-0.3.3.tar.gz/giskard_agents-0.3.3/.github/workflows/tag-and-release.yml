@@ -1,0 +1,85 @@
+name: Tag and Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  packages: read
+  id-token: write
+  
+jobs:
+  tag-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          fetch-tags: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read version from pyproject.toml
+        id: get_version
+        run: |
+          VERSION_NUMBER=$(grep '^version\s*=' pyproject.toml | head -1 | cut -d '"' -f2)
+          VERSION_NAME="v${VERSION_NUMBER}"
+          printf 'version_number=%s\n' "$VERSION_NUMBER" >> "$GITHUB_OUTPUT"
+          printf 'version_name=%s\n' "$VERSION_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Check if tag exists
+        env:
+          VERSION_NAME: ${{ steps.get_version.outputs.version_name }}
+        run: |
+          if git rev-parse "refs/tags/$VERSION_NAME" >/dev/null 2>&1; then
+            echo "Tag $VERSION_NAME already exists. Skipping."
+            exit 0
+          fi
+
+      - name: Configure git
+        run: |
+          git config --global user.name 'BotReleaser'
+          git config --global user.email 'bot.releaser@users.noreply.github.com'
+
+      - name: Create and push tag
+        env:
+          VERSION_NAME: ${{ steps.get_version.outputs.version_name }}
+        run: |
+          git tag "$VERSION_NAME"
+          git push origin "$VERSION_NAME"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-extras --dev
+
+      - name: Build package
+        run: uv build
+
+      - name: Verify artifacts exist
+        run: |
+          ls -l dist
+          shopt -s nullglob
+          files=(dist/*.tar.gz dist/*.whl)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No distribution files found in dist/"
+            exit 1
+          fi
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Create GitHub Release
+        env:
+          VERSION_NAME: ${{ steps.get_version.outputs.version_name }}
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
+        with:
+          tag_name: ${{ env.VERSION_NAME }}
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          files: |
+            dist/*.tar.gz
+            dist/*.whl
