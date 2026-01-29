@@ -1,0 +1,13 @@
+[Unit]
+Description=Cronitor WebPing
+
+[Service]
+Type=oneshot
+ExecStart=/bin/picard
+ExecStartPre=/usr/bin/env curl --silent --show-error --connect-timeout 5 --max-time 10 --retry 5 --retry-delay 1 --retry-connrefused --retry-all-errors https://cronitor.link/p/abc-123/nightly-job/run
+ExecStopPost=/usr/bin/env bash -ec '\
+    if [ "$SERVICE_RESULT" = success ]; then\
+        /usr/bin/env curl --silent --show-error --connect-timeout 5 --max-time 10 --retry 5 --retry-delay 1 --retry-connrefused --retry-all-errors https://cronitor.link/p/abc-123/nightly-job/complete;\
+    else\
+        /usr/bin/env curl --silent --show-error --connect-timeout 5 --max-time 10 --retry 5 --retry-delay 1 --retry-connrefused --retry-all-errors https://cronitor.link/p/abc-123/nightly-job/fail;\
+    fi'
