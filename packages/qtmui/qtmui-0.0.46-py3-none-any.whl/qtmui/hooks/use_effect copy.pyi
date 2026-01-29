@@ -1,0 +1,8 @@
+import inspect
+from typing import Callable, List, Optional
+from PySide6.QtCore import QTimer, QObject
+from .use_state import State
+from ._effect_context import register_effect
+from ._effect_runner import _EffectRunner
+def useEffect(callback: Callable, dependencies: List[State]): ...
+def useLayoutEffect(callback: Callable, dependencies: List[State]): ...

@@ -1,0 +1,13 @@
+from typing import Dict
+from PySide6.QtCore import QObject, QPoint, QSize, QPropertyAnimation, QParallelAnimationGroup, QAbstractAnimation, QTimer
+from PySide6.QtWidgets import QWidget
+from PySide6.QtGui import QColor
+from .anim_effect import AnimEffect
+from .motion_variant import parse_sx
+from .motion_variant import compile_variant_timeline
+from .anim_easing_curve_type import chooseEasing
+class AnimationController:
+    def __init__(self, widget: QWidget, variants: Dict, parent): ...
+    def apply_initial(self, variants): ...
+    def play(self, delay_ms: int): ...
+    def onDestroy(self): ...
