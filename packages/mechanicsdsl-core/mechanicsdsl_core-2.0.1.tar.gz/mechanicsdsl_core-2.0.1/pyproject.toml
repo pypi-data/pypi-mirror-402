@@ -1,0 +1,169 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mechanicsdsl-core"
+version = "2.0.1"
+description = "A Domain-Specific Language and Transpiler for Classical Mechanics"
+authors = [
+  { name="Noah Parsons", email="nomapa223@gmail.com" },
+]
+readme = "README.md"
+requires-python = ">=3.9"
+license = {file = "LICENSE"}
+keywords = [
+    "physics", "simulation", "mechanics", "dsl", "lagrangian",
+    "hamiltonian", "code-generation", "scientific-computing",
+    "embedded", "raspberry-pi", "arm", "gpu", "cuda"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Education",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: C++",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: Compilers",
+    "Topic :: System :: Emulators",
+    "Topic :: System :: Hardware",
+]
+dependencies = [
+    "numpy>=1.20.0",
+    "scipy>=1.7.0",
+    "sympy>=1.8",
+    "matplotlib>=3.4.0",
+    "tqdm>=4.60.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-cov", "hypothesis>=6.0"]
+codegen = ["pybind11"]
+jit = ["numba>=0.56.0"]
+typing = ["mypy", "types-setuptools"]
+# New v1.6.0 optional dependencies
+jax = ["jax>=0.4.0", "jaxlib>=0.4.0", "diffrax>=0.4.0"]
+jax-gpu = ["jax[cuda12]>=0.4.0", "diffrax>=0.4.0"]
+server = ["fastapi>=0.100.0", "uvicorn>=0.22.0", "websockets>=11.0"]
+jupyter = ["ipywidgets>=8.0.0", "ipython>=8.0.0"]
+lsp = ["pygls>=1.0.0", "lsprotocol>=2023.0.0"]
+openmao = ["openmdao>=3.25.0"]
+embedded = ["RPi.GPIO>=0.7.0; platform_machine == 'aarch64' or platform_machine == 'armv7l'"]
+arm = ["numpy>=1.20.0"]  # ARM-optimized builds
+dev = [
+    "pytest",
+    "pytest-cov",
+    "hypothesis>=6.0",
+    "mypy",
+    "types-setuptools",
+    "black",
+    "flake8",
+    "isort",
+    "bandit",
+]
+all = [
+    "numba>=0.56.0", 
+    "pybind11", 
+    "hypothesis>=6.0", 
+    "mypy",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.22.0",
+    "ipywidgets>=8.0.0",
+    "pygls>=1.0.0",
+]
+
+[project.scripts]
+mechanicsdsl = "mechanics_dsl.cli:main"
+
+[project.urls]
+"Repository" = "https://github.com/MechanicsDSL/mechanicsdsl"
+"Documentation" = "https://mechanicsdsl.readthedocs.io"
+"Bug Tracker" = "https://github.com/MechanicsDSL/mechanicsdsl/issues"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "gpu_required: marks tests that require GPU/CUDA (deselect with '-m \"not gpu_required\"')",
+    "physics_validation: marks tests that validate physics correctness",
+    "performance: marks performance/benchmark tests",
+    "integration: marks integration tests",
+    "numba_required: marks tests that require numba JIT compiler",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+[tool.coverage.run]
+omit = [
+    "*/jupyter/*",
+    "*/lsp/*",
+    "*/server/*",
+    "*/protocols.py",
+    "*/validators.py",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311", "py312", "py313"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.flake8]
+max-line-length = 150
+extend-ignore = [
+    "E501",  # Line too long - Black handles this mostly
+    "E722",  # Bare except - sometimes necessary
+    "E741",  # Ambiguous variable name 'l' - physics uses l for length
+    "E731",  # Lambda expressions - they're fine
+    "W291",  # Trailing whitespace - formatting tools handle
+    "W293",  # Blank line whitespace - formatting tools handle
+    "F541",  # f-string missing placeholders - often intentional
+]
+per-file-ignores = [
+    "__init__.py:F401",  # Unused imports in __init__.py are for re-export
+    "parser/core.py:F401,F811",  # Parser has intentional redefinitions
+]
+
+[tool.mypy]
+python_version = "3.9"
+ignore_missing_imports = true
+warn_return_any = false
+warn_unused_configs = true
+# Disable strict checking - this is a physics library, not a web app
+disable_error_code = [
+    "no-redef",
+    "no-any-return", 
+    "misc",
+    "assignment",
+    "arg-type",
+    "var-annotated",
+    "attr-defined",
+    "union-attr",
+    "return-value",
+    "call-arg",
+    "abstract",
+    "override",
+    "operator",
+    "return",
+]
