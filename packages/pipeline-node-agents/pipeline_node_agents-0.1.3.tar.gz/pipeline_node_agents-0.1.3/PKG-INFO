@@ -1,0 +1,213 @@
+Metadata-Version: 2.4
+Name: pipeline_node_agents
+Version: 0.1.3
+Summary: A lightweight Python framework for building modular AI pipelines with function nodes and agent nodes.
+Author: Sergei Ovsiannikov
+Author-email: a12230165@unet.univie.ac.at
+Requires-Python: >=3.11,<3.14
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Requires-Dist: beautifulsoup4 (>=4.14.3,<5.0.0)
+Requires-Dist: crewai (>=1.6.1,<2.0.0) ; python_version >= "3.10" and python_version < "3.14"
+Requires-Dist: ddgs (>=9.8.0,<10.0.0)
+Requires-Dist: litellm (>=1.80.7,<2.0.0)
+Requires-Dist: lxml (>=6.0.2,<7.0.0)
+Requires-Dist: requests (>=2.32.0,<3.0.0)
+Project-URL: Documentation, https://github.com/ser0vs/pipeline_node_agents/blob/master/docs/maintenance_guide.md
+Project-URL: Homepage, https://github.com/ser0vs/pipeline_node_agents
+Project-URL: Repository, https://github.com/ser0vs/pipeline_node_agents
+Description-Content-Type: text/markdown
+
+# Pipeline Node Agents
+
+A lightweight Python framework for building modular AI pipelines with function nodes and agent nodes. Designed to work well with lightweight local LLMs by giving you full control over context and task complexity at each step.
+
+## Table of Contents
+
+- [Basic Usage](#basic-usage)
+- [Usage as Developer](#usage-as-developer)
+
+
+# Basic Usage
+
+## Requirements
+
+- **Python 3.11 - 3.13** (required)
+- [Ollama](https://ollama.ai/) for local LLM support
+
+## Installation
+
+*(Optional, but recommended)* create python virtual environment:
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+```
+
+Install package:
+```bash
+pip install pipeline-node-agents
+```
+
+
+## Verify Installation
+
+```python
+from pipeline_node_agents import greet
+
+print(greet())
+```
+
+Expected output:
+```
+Hello, World! Pipeline Node Agents <version> is working.
+```
+
+## Run Pipelines
+
+### Prerequisites:
+1. Start Ollama in a **separate terminal**: 
+```bash
+ollama serve
+```
+2. Make sure the required model is installed using 
+```bash
+ollama list
+````
+as of January 15th 2026, the default LLM is *llama3.2*
+
+### Option 1: With defined model and logger (recommended)
+```python
+from crewai import LLM
+from pipeline_node_agents import init_pipeline_logger, get_logger, TripPlannerPipeline
+
+init_pipeline_logger(pipeline_name="trip_planner_pipeline", project_root=".")
+logger = get_logger(__name__)
+
+# Default model is llama3.2, change if needed
+ollama_llm = LLM(model="ollama/llama3.2", base_url="http://localhost:11434")
+
+pipeline = TripPlannerPipeline(ollama_llm=ollama_llm, logger=logger)
+pipeline.run()
+```
+
+### Option 2: Without logger
+```python
+from pipeline_node_agents import TripPlannerPipeline
+
+# Default model is llama3.2
+pipeline = TripPlannerPipeline()
+pipeline.run()
+```
+
+
+
+# Usage as Developer
+
+## Requirements
+
+- **curl**: For installing dependencies
+- **git**: For cloning the repository
+- [Poetry](https://python-poetry.org/) for dependency management
+- [Ollama](https://ollama.ai/) for local LLM support
+
+## Installation
+
+In this guide, **curl** and **git** are assumed to be installed. If you do not have them, please follow the official documentation to install.
+
+1. **Install Poetry** (if not already installed):
+    ```bash
+    curl -sSL https://install.python-poetry.org | python3 -
+    ```
+
+2. **Install Ollama** (if not already installed):
+    ```bash
+    curl -fsSL https://ollama.com/install.sh | sh
+    ```
+
+3. **Clone the repository and install dependencies**:
+    ```bash
+    git clone <repository_url>
+    cd pipeline_node_agents
+    poetry install
+    ```
+
+
+4. **Install LLM** (default: `llama3.2:latest`):
+    ```bash
+    ollama pull llama3.2:latest
+    ```
+
+## How to Run
+
+> **Prerequisites:**
+> 1. Start Ollama in a **separate terminal**: `ollama serve`
+> 2. Make sure the required model is installed using `ollama list` (as of January 15th 2026, it's *llama3.2*)
+
+### Option 1: Run an example directly
+
+```bash
+poetry run python3 examples/<example_name>.py
+```
+
+e.g.
+```bash
+poetry run python3 examples/random_mean_pipeline.py
+```
+
+### Option 2: Using Runner Scripts
+
+> **Additional requirement:** All scripts in the `scripts/` folder must have execution permissions.
+>
+> If not, run:
+> ```bash
+> chmod +x scripts/*.sh
+> ```
+
+#### Run a Single Pipeline
+
+```bash
+./scripts/run_single_pipeline.sh <path_to_pipeline> <runs> [input_strings]
+```
+
+**Parameters:**
+- `<path_to_pipeline>` - Path to the Python pipeline file
+- `<runs>` - Number of times to run the pipeline
+- `[input_strings]` - Optional: newline-separated inputs for interactive prompts
+
+**Examples:**
+```bash
+# Run a simple pipeline 3 times
+./scripts/run_single_pipeline.sh src/pipeline_node_agents/examples/random_mean_pipeline.py 3
+
+# Run with single input
+./scripts/run_single_pipeline.sh src/pipeline_node_agents/examples/input_checker_pipeline.py 2 "Munich, Vienna"
+
+# Run with multiple inputs (use $'\n' to separate)
+./scripts/run_single_pipeline.sh src/pipeline_node_agents/examples/trip_planner/pipeline.py 1 $'Madrid, Dubai\n30 January 2026\n5 February 2026'
+```
+
+#### Run All Smoke Tests
+
+```bash
+./scripts/run_smoke_pipelines.sh [number_of_runs_per_pipeline]
+```
+
+**Examples:**
+```bash
+# Run all example pipelines once
+./scripts/run_smoke_pipelines.sh
+
+# Run all example pipelines 3 times each
+./scripts/run_smoke_pipelines.sh 3
+```
+
+Logs are automatically saved to `logs/` directory by the Python logging system.
+
+
+
+## Maintenance Guide
+
+For detailed maintenance instructions, including how to create nodes, build pipelines, and extend the framework, please refer to the [Maintenance Guide](docs/maintenance_guide.md).
+
+
