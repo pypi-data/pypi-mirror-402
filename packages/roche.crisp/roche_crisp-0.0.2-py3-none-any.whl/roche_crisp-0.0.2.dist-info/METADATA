@@ -1,0 +1,479 @@
+Metadata-Version: 2.4
+Name: roche.crisp
+Version: 0.0.2
+Summary: Framework for Cell & Region Image Segmentation/Classification
+Author-email: Nazim Shaikh <nazim.shaikh@roche.com>, Kamil Wasag <kamil.wasag.kw1@roche.com>, Srinath Jayachandran <srinath.jayachandran@roche.com>, Ruben Bagan Benavides <ruben.bagan_benavides@roche.com>
+Maintainer-email: Nazim Shaikh <nazim.shaikh@roche.com>, Srinath Jayachandran <srinath.jayachandran@roche.com>
+Project-URL: homepage, https://code.roche.com/rds-csi-dp/crisp-ai
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: wandb
+Requires-Dist: fastremap
+Requires-Dist: csbdeep
+Requires-Dist: einops
+Requires-Dist: edt
+Requires-Dist: matplotlib
+Requires-Dist: joblib
+Requires-Dist: tqdm
+Requires-Dist: hydra-core
+Requires-Dist: onnx
+Requires-Dist: onnxruntime
+Requires-Dist: onnxruntime-gpu
+Requires-Dist: stardist
+Requires-Dist: monai
+Requires-Dist: streamlit
+Requires-Dist: loguru
+Requires-Dist: lightning==2.5.1
+Requires-Dist: scikit-learn==1.4.0
+Requires-Dist: torch==2.5.1
+Requires-Dist: timm==1.0.15
+Requires-Dist: torchvision==0.20.1
+Requires-Dist: imageio==2.37.0
+Requires-Dist: numba==0.61.2
+Requires-Dist: scikit-image==0.25.2
+Requires-Dist: albumentations==2.0.8
+Requires-Dist: opencv-contrib-python-headless==4.11.0.86
+Requires-Dist: scipy==1.15.3
+Requires-Dist: pandas==2.2.0
+Requires-Dist: numpy==1.26.4
+Requires-Dist: typer>=0.16.0
+Requires-Dist: typeguard>=4.4.4
+Requires-Dist: nvtx>=0.2.13
+Provides-Extra: dev
+Requires-Dist: ruff; extra == "dev"
+Requires-Dist: pydocstringformatter; extra == "dev"
+Requires-Dist: pre-commit; extra == "dev"
+Provides-Extra: test
+Requires-Dist: flake8; extra == "test"
+Requires-Dist: flake8-docstrings; extra == "test"
+Requires-Dist: mypy; extra == "test"
+Requires-Dist: pydocstyle; extra == "test"
+Requires-Dist: pyfakefs; extra == "test"
+Requires-Dist: pytest; extra == "test"
+Requires-Dist: pytest-cov; extra == "test"
+Provides-Extra: doc
+Requires-Dist: myst-parser; extra == "doc"
+Requires-Dist: sphinx; extra == "doc"
+Requires-Dist: sphinx-autodoc-typehints; extra == "doc"
+Requires-Dist: sphinxcontrib-autoprogram; extra == "doc"
+Requires-Dist: sphinx-pyreverse; extra == "doc"
+Requires-Dist: sphinx-rtd-theme; extra == "doc"
+Provides-Extra: build
+Requires-Dist: build; extra == "build"
+Requires-Dist: twine; extra == "build"
+
+<div align="center">
+
+# CRISP - Cell and Region Image Segmentation for Pathology
+
+## A Generic Framework for Developing Algorithms for Histopathological Image Analysis
+
+---
+
+### Use Cases
+
+**Cell Detection and Classification** &bull; **Region Segmentation** &bull; **Cell Segmentation**
+
+</div>
+
+## Table of Contents
+
+- [Project Structure](#project-structure)
+- [Dependencies](#dependencies)
+- [Main Technologies](#main-technologies)
+- [Setup and Installation](#setup-and-installation)
+  - [For Users](#installation-for-crisp-users)
+  - [For Developers](#setup-for-developers)
+- [Quickstart](#quickstart)
+- [Workflow](#crisp-workflow)
+- [Use Cases](#use-cases)
+  - [Cell Detection and classification](#cell-detection-and-classification)
+  - [Region Segmentation](#region-segmentation)
+  - [Cell Segmentation](#cell-segmentation)
+- [Best Practices](#best-practices)
+- [Contributing guidelines](#contributing-guidelines)
+- [Support](#support)
+
+## Project Structure
+```
+├── configs/                # Configuration files
+├── data/                   # Data files
+├── docs/                   # Documentation files
+├── notebooks/              # Jupyter notebooks
+├── scripts/                # Scripts for various tasks
+├── src/                    # Source code
+│   └── roche/
+│       └── crisp/
+│           ├── callbacks/         # Callback functions
+│           ├── datamodules/       # Data modules
+│           ├── inference/         # Inference scripts
+│           ├── metrics/           # Metrics calculation
+│           ├── model_engines/     # Model engines
+│           ├── networks/          # Network architectures
+│           ├── utils/             # Utility functions
+│           ├── main.py            # Entrypoint script
+│           └── version.py         # Version information
+├── tests/                  # Test code
+├── .gitignore              # Git ignore file
+├── .pre-commit-config.yaml # Pre-commit hooks configuration
+├── environment.yaml        # Conda environment configuration
+├── pyproject.toml          # Python project configuration
+├── README.md               # Project README
+└── run_task.sh             # Helper script for tasks
+```
+## Dependencies
+
+- **Python**: 3.11+
+- **PyTorch**: 2.5+
+- **CUDA**: 12.1
+
+## Main Technologies
+- [PyTorch Lightning](https://lightning.ai/docs/pytorch/stable/)
+- [Hydra](https://hydra.cc/docs/intro/)
+- [Weights & Biases (wandb)](https://wandb.ai/site)
+
+## Setup and Installation
+<a name="installation-for-crisp-users"></a>
+<details open>
+<summary id="installation-for-crisp-users">Installation for CRISP users</summary>
+You can directly install the CRISP package via PIP. Follow these steps to authenticate and install from the GitLab Package Registry:
+
+1. Authenticate with GitLab Package Registry:
+
+- Follow [the official instructions](https://docs.gitlab.com/ee/user/packages/pypi_repository/#publish-a-pypi-package) to authenticate with the GitLab Package Registry. Setting up authentication with a group is sufficient to be able to access all packages within that group.
+
+2. Create a Personal Access Token:
+
+- Follow [the official instructions](https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html#create-a-personal-access-token) to create a personal access token.
+
+3. Update pip configuration:
+
+- Update your `~/.config/pip/pip.conf` file with the following content:
+
+```bash
+[global]
+index-url = https://pypi.org/simple
+
+extra-index-url = https://__token__:<access_token>@code.roche.com/api/v4/projects/424003/packages/pypi/simple
+
+trusted-host = pypi.org
+               code.roche.com
+```
+
+4. Install the package
+
+```bash
+pip install roche.crisp
+```
+</details>
+
+<a name="setup-for-developers"></a>
+<details open>
+<summary id="setup-for-developers">Setup for developers of CRISP </summary>
+
+#### Prerequisites - Visual Studio Code is recommended
+
+To setup the CRISP package for development, follow these steps:
+
+- Clone the repository
+  ```bash
+  git clone https://code.roche.com/rds-csi-dp/crisp-ai.git
+  cd crisp-ai
+  ```
+#### Configuring the environment
+
+We use [micromamba](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html) for environment configuration and [uv](https://docs.astral.sh/uv/) for package management.
+
+**1. Install micromamba:**
+
+- **On sHPC systems**: Load micromamba by running:
+  ```bash
+  ml Python
+  ```
+- **On other Linux systems**: Install micromamba by running:
+  ```bash
+  curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
+  ```
+**2. Create and activate virtual environment:**
+- Create a conda environment and install the package with all its dependencies using the provided helper script:
+
+  ```bash
+  ./run_task.sh install
+  ```
+- To install in [`editable mode`](https://setuptools.pypa.io/en/latest/userguide/development_mode.html), run below command using the provided helper script:
+
+  ```bash
+  ./run_task.sh install-db
+  ```
+- To install packages without new virtual environment, activate your preferred environment,
+navigate to the root of the repository, and run pip install from source.
+For example, for the editable mode, execute:
+
+  ```bash
+  pip install uv
+  uv pip install -e .
+  ```
+
+**NOTE**: INSTALLATION OF EXTRA PACKAGES THROUGH CHANNEL OTHER THAN `conda-forge` IS RESTRICTED.
+</details>
+
+## Quickstart
+
+```bash
+crisp --config-name=train_detection.yaml
+```
+
+```bash
+bash scripts/run_main.sh 'crisp' lfs /home/user/global/nuclei-segmentation-classification/configs train_detection.yaml 1
+```
+
+Above commands internally call the src/roche/crisp/main.py.
+
+## CRISP Workflow
+
+The main.py script serves as the entry point for the CRISP framework. Here's a brief overview of its functionalities:
+
+- Configuration Management: Loads and parses configuration files using Hydra.
+- Reproducibility: Ensures reproducible results by setting seeds for pseudo-random number generators.
+- Data Module Initialization: Instantiates the data module for data loading and preprocessing.
+- Model Initialization: Sets up the network and model engine, with optional JIT compilation for faster training.
+- Callbacks and Logger Setup: Initializes callbacks and configures Weights & Biases (wandb) for experiment tracking.
+- Trainer Initialization: Creates a PyTorch Lightning trainer with support for distributed training.
+- Training, Testing, and Prediction: Executes training, testing, or prediction based on the specified pipeline_mode.
+
+<details><summary>
+Example configuration file: train_detection.yaml</summary>
+
+```yaml
+defaults:
+  - _self_
+  - datamodule: detection_data
+  - network: resunet
+  - model_engine: cell_detection
+  - logging
+  - experiment: mosaic-detection
+
+
+# logger args
+logger:
+  _target_: lightning.pytorch.loggers.WandbLogger
+  mode: online
+  project: crisp
+  entity: csi-dp
+  name: mosaic-detection
+  save_dir: ${oc.env:HOME}/crisp-logs
+  log_model: true
+
+# define callbacks
+callbacks:
+  model_checkpoint:
+    _target_: lightning.pytorch.callbacks.ModelCheckpoint
+    monitor: validate_macro_f1
+    mode: max
+
+  wandb_log_predictions:
+    _target_: roche.crisp.callbacks.DataVisualizer
+    class_map: ${model_engine.metrics.detection_stats.class_map}
+
+  # early_stopping:
+  #   _target_: lightning.pytorch.callbacks.EarlyStopping
+  #   monitor: val_total_f1
+  #   patience: 50
+  #   mode: max
+
+  model_summary:
+    _target_: lightning.pytorch.callbacks.ModelSummary
+    max_depth: -1
+
+  learning_rate_monitor:
+    _target_: lightning.pytorch.callbacks.LearningRateMonitor
+    logging_interval: 'step'
+    log_momentum: True
+
+# trainer args
+resume_from_checkpoint_path: null
+trainer:
+  _target_: lightning.Trainer
+  fast_dev_run: false
+  num_sanity_val_steps: 0
+  accelerator: auto
+  strategy: auto
+  devices: 1
+  enable_model_summary: true
+  max_epochs: 1500
+  precision: 32
+  benchmark: false
+  deterministic: false
+
+# flag to use pytorch's latest JIT-compiling for faster training
+torch_compile: false
+```
+
+</details>
+
+## Use Cases
+
+### Cell Detection and classification
+
+Train cell detection and classification model on your custom dataset. Dataset should include images with point masks.
+
+Example:
+
+![Example detection mask](assets/example-detection-mask.jpg)
+
+#### Data Preparation
+- Convert point masks
+  - Use the [point2gauss](https://code.roche.com/phc-csi-dp/nuclei-segmentation-classification/-/blob/47-create-documentation-for-framework-usage/src/roche/crisp/utils/common_utils.py?ref_type=heads#L1233) utility to convert point masks to multi-channel gaussian masks.
+
+- Prepare CSV files
+  - Create CSV files for your training, validation, and test datasets in the following format:
+
+  ```
+  imagefile,point_mask,gaussian_mask
+  /path/to/image1.png,/path/to/point_mask1.png,/path/to/gaussian_mask1.tiff
+  /path/to/image2.png,/path/to/point_mask2.png,/path/to/gaussian_mask2.tiff
+  /path/to/image3.png,/path/to/point_mask3.png,/path/to/gaussian_mask3.tiff
+  ...
+  ```
+- Configuration
+  - `train_detection.yaml` contains the default configurations.
+  - To override these settings, create an experiment YAML file, for example, `configs/experiment/mosaic-detection.yaml` and specify the configurations relevant to your dataset, such as the network architecture, number of classes, and dataset CSV file paths.
+  - Set `experiments` to `mosaic-detection` in `train_detection.yaml`.
+
+### Region Segmentation
+
+Train a region segmentation model on your custom dataset. The dataset should include images with region masks.
+
+Example:
+
+![Example region mask](assets/example-region-mask.jpg)
+
+#### Data Preparation
+
+- Prepare CSV files
+  - Create CSV files for your training, validation, and test datasets in the following format:
+
+  ```
+  image,mask
+  /path/to/image1.png,/path/to/region_mask1.npy
+  /path/to/image2.png,/path/to/region_mask2.npy
+  /path/to/image3.png,/path/to/region_mask3.npy
+  ...
+  ```
+- Configuration
+  - `train_region_segmentation.yaml` contains the default configurations.
+  - To override these settings, create an experiment YAML file, for example, `configs/experiment/usz_region_segmentation.yaml` and specify the configurations relevant to your dataset, such as the network architecture, number of classes, and dataset CSV file paths.
+  - Set `experiments` to `usz_region_segmentation` in `train_region_segmentation.yaml`.
+
+### Cell Segmentation
+
+Train a cell segmentation model on your custom dataset. The dataset should include images with cell masks.
+
+Example:
+
+![Example instance mask](assets/example-instance-mask.jpg)
+
+#### Data Preparation
+
+- Convert instance masks
+  - The current implementation requires cell masks to be converted into flows for the training.
+  - Use the [labels_to_flows](https://code.roche.com/phc-csi-dp/nuclei-segmentation-classification/-/blob/dev/src/roche/crisp/utils/cellpose_utils.py?ref_type=heads#L335) utility to perform the conversion.
+
+- Prepare CSV files
+  - Create CSV files for your training, validation, and test datasets in the following format:
+    - train_dataset.csv and validation_dataset.csv
+    ```
+    image,mask
+    /path/to/image1.png,/path/to/mask1_flows.tif
+    /path/to/image2.png,/path/to/mask2_flows.tif
+    /path/to/image3.png,/path/to/mask3_flows.tif
+    ...
+    ```
+    - test_dataset.csv
+    ```
+    image,mask
+    /path/to/image1.png,/path/to/mask1.png
+    /path/to/image2.png,/path/to/mask2.png
+    /path/to/image3.png,/path/to/mask3.png
+    ...
+    ```
+
+- Configuration
+  - `train_cellpose.yaml` contains the default configurations.
+  - To override these settings, create an experiment YAML file, for example, `configs/experiment/cellpose-segmentation.yaml` and specify the configurations relevant to your dataset, such as the network architecture, number of classes, and dataset CSV file paths.
+  - Set `experiments` to `cellpose-segmentation` in `train_cellpose.yaml`.
+
+## Best Practices
+
+### Style Conventions
+Follow common style conventions to make code more readable, maintainable, and consistent. The repository comes with a set of pre-configured defaults that automate most of this process.
+
+Format Python source code in compliance with [PEP 8](https://www.python.org/dev/peps/pep-0008/).
+
+### Coding style
+Highlight compliance issues in your editor using a [flake8](https://flake8.pycqa.org/en/latest/index.html) plugin or extension.
+Auto-format source code using [black](https://black.readthedocs.io/en/stable/).
+Annotate all parameters and return values with type hints in compliance with [PEP 484](https://www.python.org/dev/peps/pep-0484/) using type definitions provided by the [typing](https://docs.python.org/3/library/typing.html) module. Check type hints using the [mypy](https://github.com/python/mypy) command line tool.
+Document every package, module, class, function, method, property, constant, and attribute with a docstring in compliance with [PEP 257](https://www.python.org/dev/peps/pep-0257/). Use the [NumPy style](https://numpydoc.readthedocs.io/en/latest/format.html) for docstrings.
+
+To do a static code analysis run execute:
+
+```bash
+./run_task.sh lint
+```
+
+To automatically format code run:
+
+```bash
+./run_task.sh fmt
+```
+
+This code analysis will also be triggered is required to pass upon all commits.
+
+
+### Using pre-commit
+
+Pre-commit hooks help improve quality of commits, by making sure your commits meet some minimal
+requirements. For details, please see the `Coding style` section above.
+The hooks are defined in `.pre-commit-config.yaml`.
+
+Execute the command to do a static code analysis (`./run_task.sh lint`) once to set up the
+hooks. Post that, `pre-commit` will run automatically on every git commit!
+You can use the `./run_task.sh fmt` command to automatically format your code to be compliant with most of the static code analysis.
+
+### Unit testing
+
+Write and run unit tests using [pytest](https://docs.pytest.org/en/latest/).
+
+You can run tests using the `pytest` command line tool with the command below:
+
+```bash
+./run_task.sh test
+```
+
+For guidelines and best practices on how to write unit tests, kindly refer to the docs of this package.
+
+## Versioning
+
+This package has automate versioning system. Each merge to dev branch will be deployed as unstable version: X.Y.Z.devT+githash where X.Y.Z is number version dev is name of branch and added last commit hash. This automate version is should be used by expirienced users that can track potentaial bugs.
+Official releases needs to be tagged manually. Manual tag will affect X.Y.Z of unstable version.
+
+## Contributing guidelines
+
+1. Begin by opening an issue with a concise, descriptive title (this will determine the branch name).
+1. Create a branch from the issue (instructions can be found [here](https://docs.gitlab.com/ee/user/project/repository/branches/#from-an-issue)).
+1. Initiate a merge request targeting the dev branch.
+1. It is possible to create a merge request before it is ready for review - simply mark it as a draft.
+1. Developers should respond to reviewer comments, but only the reviewer should resolve them.
+1. The developer must provide the identifier of the commit (or the corresponding link) that addresses the comment. This makes it easier for the reviewer to track and determine whether the comment has been adequately addressed.
+1. Once approved, anyone is permitted to click the merge button.
+
+## Support
+
+For any questions or doubts, please reach out to the maintainers:
+- [Srinath Jayachandran](mailto:srinath.jayachandran@roche.com)
+- [Nazim Shaikh](mailto:nazim.shaikh@roche.com)
+- [Ruben Bagan Benavides](mailto:ruben.bagan_benavides@roche.com)
+
+You can also join our slack support channel for real-time support and discussions:
+- [CRISP Support](https://roche.enterprise.slack.com/archives/C07DS9DBB89)
