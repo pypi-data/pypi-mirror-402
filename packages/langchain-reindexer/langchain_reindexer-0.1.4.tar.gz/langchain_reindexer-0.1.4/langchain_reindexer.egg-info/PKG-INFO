@@ -1,0 +1,83 @@
+Metadata-Version: 2.4
+Name: langchain-reindexer
+Version: 0.1.4
+Summary: Reindexer vector store integration for LangChain
+Author: Parviz Mirzoev
+Author-email: Parviz Mirzoev <parviz.mirzoev@restream.ru>
+License: Apache-2.0
+Project-URL: Homepage, https://github.com/Restream/reindexer-langchain-community
+Project-URL: Repository, https://github.com/Restream/reindexer-langchain-community
+Project-URL: Documentation, https://github.com/Restream/reindexer-langchain-community/blob/main/README.md
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: langchain-core>=0.1.0
+Requires-Dist: pyreindexer>=0.5.0
+Requires-Dist: numpy>=2.0.2
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.21.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+Dynamic: author
+Dynamic: license-file
+Dynamic: requires-python
+
+[EN README](https://github.com/Restream/langchain-reindexer/blob/main/README_EN.md)
+# Reindexer Vector Store for LangChain
+
+Этот пакет предоставляет интеграцию векторного хранилища для базы данных [Reindexer](https://reindexer.io/) с фреймворком [LangChain](https://github.com/hwchase17/langchain).
+
+## Установка
+
+```bash
+pip install langchain-reindexer
+```
+
+## Использование
+Теперь вы можете использовать векторное хранилище в вашем приложении LangChain:
+
+```python
+from langchain_reindexer import ReindexerVectorStore
+from langchain_openai import OpenAIEmbeddings
+
+# Инициализация векторного хранилища
+vector_store = ReindexerVectorStore(
+    embedding=OpenAIEmbeddings(),
+    rx_connector_config={"dsn": "builtin:///tmp/my_db"},
+    rx_namespace="my_namespace",
+)
+
+# Добавление документов
+from langchain_core.documents import Document
+
+documents = [
+    Document(page_content="foo", metadata={"baz": "bar"}),
+    Document(page_content="thud", metadata={"bar": "baz"}),
+]
+
+ids = vector_store.add_documents(documents=documents)
+
+# Поиск
+results = vector_store.similarity_search(query="thud", k=1)
+```
+Больше примеров [здесь](https://github.com/Restream/langchain-reindexer/blob/main/examples/reindexer_ru.ipynb) 
+## Возможности
+
+- Добавление и удаление документов
+- Поиск по сходству с оценкой и без
+- Фильтрация по метаданным
+- Поиск максимальной предельной релевантности (MMR)
+- Асинхронная поддержка
+- Сохранение и загрузка конфигурации векторного хранилища
