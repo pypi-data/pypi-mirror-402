@@ -1,0 +1,25 @@
+from enum import Enum
+
+
+class StatisticAcronym(Enum):
+    HSH = "High shots"
+    MSH = "Mid shots"
+    LSH = "Low shots"
+    HG = "High goals"
+    MG = "Mid goals"
+    LG = "Low goals"
+    A = "Assists"
+    GB = "Ground balls"
+    T = "Turnovers"
+    CT = "Caused turnovers"
+    P = "Penalty minutes"
+    K = "Knockdowns"
+    MS = "Missed slides"
+    HGA = "High goals allowed"
+    MGA = "Mid goals allowed"
+    LGA = "Low goals allowed"
+    HGS = "High goal saves"
+    MGS = "Mid goal saves"
+    LGS = "Low goal saves"
+    FOW = "Face off wins"
+    FOL = "Face off losses"
