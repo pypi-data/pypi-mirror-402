@@ -1,0 +1,30 @@
+# okin_gui
+Organic Kinetic GUI. Contains simple tools for kinetic analysis and teaching.
+
+## Install
+
+### Base Version
+- Create and activate a dedicated environment
+- `pip install okin_gui`
+
+
+### With Modeling
+- make sure COPASI is installed (https://copasi.org/Download/)
+- download and unzip 'python implementation of COPASI':
+https://drive.google.com/file/d/1cVNLU4SBsz0JhC48MO69wVSLH-RpyIt6/view?usp=sharing
+- OR clone github repo of 'python implementation of COPASI' `https://gitlab.com/heingroup/py_copasi`
+
+- create a text file named `copasi_path.txt` in the folder you want to run the GUI from
+- add the path to the previously downloaded 'python implementation of COPASI' to `copasi_path.txt` as plain text
+
+#### Run from Python File
+- make a python file that imports the gui with `import okin_gui`
+- execute this file in the dedicated environment
+
+#### Run from Terminal
+- open a terminal in the folder with `copasi_path.txt`
+- activate the dedicated environment
+- enter python shell via: `python`
+- in the python shell type: `import okin_gui`
+
+
