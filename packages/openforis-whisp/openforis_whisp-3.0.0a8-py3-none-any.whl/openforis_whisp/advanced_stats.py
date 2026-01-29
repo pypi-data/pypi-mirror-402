@@ -1,0 +1,2551 @@
+"""
+Advanced statistics processing for WHISP - concurrent and sequential endpoints.
+
+This module provides optimized functions for processing GeoJSON FeatureCollections
+with Whisp datasets using concurrent batching (for high-volume processing)
+and standard sequential processing.
+
+NOTE: This module is a transition state. The plan is to eventually merge these
+functions into stats.py and replace the standard functions there as the primary
+implementation, deprecating the legacy versions.
+
+Key features:
+  - whisp_stats_geojson_to_df_concurrent
+  - whisp_stats_geojson_to_df_sequential (standard endpoint, sequential)
+  - Proper logging at different levels (WARNING, INFO, DEBUG)
+  - Progress tracking without external dependencies
+  - Client-side and server-side metadata extraction options
+  - Endpoint validation and warnings
+"""
+
+import ee
+import pandas as pd
+import geopandas as gpd
+import logging
+import sys
+import threading
+import time
+import warnings
+import json
+import io
+import os
+import subprocess
+from contextlib import redirect_stdout, contextmanager
+from pathlib import Path
+from typing import Optional, List, Dict, Any, Tuple, Union
+from importlib.metadata import version as get_version
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import tempfile
+
+# Configure the "whisp" logger with auto-flush handler for Colab visibility
+_whisp_logger = logging.getLogger("whisp")
+if not _whisp_logger.handlers:
+    _handler = logging.StreamHandler(sys.stdout)
+    _handler.setLevel(logging.DEBUG)
+    _handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+    # Override emit to force flush after each message for Colab
+    _original_emit = _handler.emit
+
+    def _emit_with_flush(record):
+        _original_emit(record)
+        sys.stdout.flush()
+
+    _handler.emit = _emit_with_flush
+    _whisp_logger.addHandler(_handler)
+    _whisp_logger.setLevel(logging.INFO)
+    _whisp_logger.propagate = False  # Don't propagate to root to avoid duplicates
+
+# ============================================================================
+# STDOUT/STDERR SUPPRESSION CONTEXT MANAGER (for C-level output)
+# ============================================================================
+
+
+@contextmanager
+def suppress_c_level_output():
+    """Suppress C-level stdout/stderr writes from libraries like Fiona."""
+    if sys.platform == "win32":
+        # Windows doesn't support dup2() reliably for STDOUT/STDERR
+        # Fall back to Python-level suppression
+        with redirect_stdout(io.StringIO()):
+            yield
+    else:
+        # Unix-like systems: use file descriptor redirection
+        saved_stdout = os.dup(1)
+        saved_stderr = os.dup(2)
+        try:
+            devnull = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull, 1)
+            os.dup2(devnull, 2)
+            yield
+        finally:
+            os.dup2(saved_stdout, 1)
+            os.dup2(saved_stderr, 2)
+            os.close(devnull)
+            os.close(saved_stdout)
+            os.close(saved_stderr)
+
+
+# Suppress verbose warnings globally for this module
+# Note: FutureWarnings are kept (they signal important API changes)
+warnings.filterwarnings("ignore", category=UserWarning, message=".*geographic CRS.*")
+warnings.simplefilter("ignore", UserWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+# Suppress verbose logging from GeoPandas/Fiona/pyogrio
+logging.getLogger("fiona").setLevel(logging.WARNING)
+logging.getLogger("fiona.ogrext").setLevel(logging.WARNING)
+logging.getLogger("pyogrio").setLevel(logging.WARNING)
+logging.getLogger("pyogrio._io").setLevel(logging.WARNING)
+
+from openforis_whisp.parameters.config_runtime import (
+    plot_id_column,
+    external_id_column,
+    geometry_type_column,
+    geometry_area_column,
+    centroid_x_coord_column,
+    centroid_y_coord_column,
+    iso3_country_column,
+    iso2_country_column,
+    admin_1_column,
+    water_flag,
+    geometry_area_column_formatting,
+    stats_area_columns_formatting,
+    stats_percent_columns_formatting,
+)
+from openforis_whisp.data_conversion import (
+    convert_geojson_to_ee,
+    convert_ee_to_df,
+    convert_ee_to_geojson,
+)
+from openforis_whisp.datasets import combine_datasets
+from openforis_whisp.reformat import validate_dataframe_using_lookups_flexible
+from openforis_whisp.stats import (
+    reformat_geometry_type,
+    set_point_geometry_area_to_zero,
+)
+
+
+# ============================================================================
+# LOGGING & PROGRESS UTILITIES
+# ============================================================================
+
+
+def _suppress_verbose_output(max_concurrent: int = None):
+    """
+    Suppress verbose warnings and logging from dependencies.
+
+    Dynamically adjusts urllib3 logger level based on max_concurrent to prevent
+    "Connection pool is full" warnings during high-concurrency scenarios.
+
+    Parameters
+    ----------
+    max_concurrent : int, optional
+        Maximum concurrent workers. Adjusts urllib3 logging level:
+        - max_concurrent <= 20: WARNING (pool rarely full)
+        - max_concurrent 21-35: CRITICAL (suppress pool warnings)
+        - max_concurrent >= 36: CRITICAL (maximum suppression)
+    """
+    warnings.filterwarnings("ignore", category=UserWarning)
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+    # Suppress urllib3 connection pool warnings via filters
+    warnings.filterwarnings("ignore", message=".*Connection pool is full.*")
+    warnings.filterwarnings("ignore", message=".*discarding connection.*")
+
+    # Set logger levels to WARNING to suppress INFO messages
+    for mod_name in [
+        "openforis_whisp.reformat",
+        "openforis_whisp.data_conversion",
+        "geopandas",
+        "fiona",
+        "pyogrio._io",
+        "urllib3",
+    ]:
+        logging.getLogger(mod_name).setLevel(logging.WARNING)
+
+    # ALL urllib3 loggers: use CRITICAL to suppress ALL connection pool warnings
+    # (these appear at WARNING level during high concurrency)
+    urllib3_loggers = [
+        "urllib3.connectionpool",
+        "urllib3.poolmanager",
+        "urllib3",
+        "requests.packages.urllib3.connectionpool",
+        "requests.packages.urllib3.poolmanager",
+        "requests.packages.urllib3",
+    ]
+
+    for logger_name in urllib3_loggers:
+        logging.getLogger(logger_name).setLevel(logging.CRITICAL)
+
+    # Suppress warning logs specifically from reformat module during validation
+    reformat_logger = logging.getLogger("openforis_whisp.reformat")
+    reformat_logger.setLevel(logging.ERROR)
+
+
+def _load_and_prepare_geojson(
+    filepath: str, external_id_column: Optional[str] = None
+) -> gpd.GeoDataFrame:
+    """Load GeoJSON file and prepare for processing.
+
+    Suppresses logging output and optionally renames external_id column.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to GeoJSON file
+    external_id_column : str, optional
+        If provided, rename this column to 'external_id' immediately after loading
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Loaded GeoDataFrame with external_id renamed if specified
+    """
+    fiona_logger = logging.getLogger("fiona")
+    pyogrio_logger = logging.getLogger("pyogrio._io")
+    old_fiona_level = fiona_logger.level
+    old_pyogrio_level = pyogrio_logger.level
+    fiona_logger.setLevel(logging.CRITICAL)
+    pyogrio_logger.setLevel(logging.CRITICAL)
+
+    try:
+        with redirect_stdout(io.StringIO()):
+            gdf = gpd.read_file(filepath)
+
+        # Rename external_id column early and convert to string
+        if external_id_column and external_id_column in gdf.columns:
+            if external_id_column != "external_id":
+                gdf = gdf.rename(
+                    columns={external_id_column: "external_id"}
+                )  # hard coding here to avoid confusion later
+            # Convert to string to ensure consistent type throughout pipeline
+            gdf["external_id"] = gdf["external_id"].astype(str)
+
+        return gdf
+    finally:
+        fiona_logger.setLevel(old_fiona_level)
+        pyogrio_logger.setLevel(old_pyogrio_level)
+
+
+def _extract_decimal_places(format_string: str) -> int:
+    """
+    Extract decimal places from a format string like '%.3f'.
+
+    Parameters
+    ----------
+    format_string : str
+        Format string (e.g., '%.3f' → 3)
+
+    Returns
+    -------
+    int
+        Number of decimal places
+    """
+    import re
+
+    match = re.search(r"\.(\d+)f", format_string)
+    if match:
+        return int(match.group(1))
+    return 2  # Default to 2 decimal places
+
+
+def _normalize_keep_external_columns(
+    keep_external_columns: Union[bool, List[str]],
+    all_columns: List[str],
+    plot_id_column: str = "plotId",
+) -> List[str]:
+    """
+    Normalize keep_external_columns parameter to a list of column names.
+
+    Converts flexible user input (bool or list) to a concrete list of columns to keep.
+
+    Parameters
+    ----------
+    keep_external_columns : bool or List[str]
+        - False: keep nothing (return empty list)
+        - True: keep all columns except geometry and plot_id
+        - List[str]: keep specific columns (return as-is)
+    all_columns : List[str]
+        All available columns to choose from
+    plot_id_column : str
+        Name of plot ID column to exclude
+
+    Returns
+    -------
+    List[str]
+        Columns to keep from external (GeoJSON) data
+
+    Examples
+    --------
+    >>> cols = _normalize_keep_external_columns(False, ["id", "Country", "geom"], "id")
+    >>> cols
+    []
+
+    >>> cols = _normalize_keep_external_columns(True, ["id", "Country", "geom"], "id")
+    >>> cols
+    ['Country']
+
+    >>> cols = _normalize_keep_external_columns(["Country"], ["id", "Country", "geom"], "id")
+    >>> cols
+    ['Country']
+    """
+    if keep_external_columns is True:
+        # Keep all columns except geometry and plot_id
+        return [c for c in all_columns if c not in [plot_id_column, "geometry"]]
+    elif keep_external_columns is False:
+        # Keep nothing
+        return []
+    else:
+        # Use provided list (handle None case)
+        return keep_external_columns or []
+
+
+def _add_admin_context(
+    df: pd.DataFrame, admin_code_col: str = "admin_code_median", debug: bool = False
+) -> pd.DataFrame:
+    """
+    Join admin codes to get Country, ProducerCountry, and Admin_Level_1 information.
+
+    Uses GAUL 2024 Level 1 administrative lookup to map admin codes to country and
+    administrative region names.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with admin_code_median column from reduceRegions
+    admin_code_col : str
+        Name of the admin code column (default: "admin_code_median")
+    debug : bool
+        If True, print detailed debugging information (default: False)
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with added Country, ProducerCountry, Admin_Level_1 columns
+    """
+    logger = logging.getLogger("whisp")
+
+    # Return early if admin code column doesn't exist
+    if admin_code_col not in df.columns:
+        logger.debug(f"Admin code column '{admin_code_col}' not found in dataframe")
+        if debug:
+            print(f"DEBUG: Admin code column '{admin_code_col}' not found")
+            print(f"DEBUG: Available columns: {df.columns.tolist()}")
+        return df
+
+    try:
+        from openforis_whisp.parameters.lookup_gaul1_admin import lookup_dict
+
+        if debug:
+            print(f"DEBUG: Found admin_code_col '{admin_code_col}'")
+            print(f"DEBUG: Sample values: {df[admin_code_col].head()}")
+            print(f"DEBUG: Value types: {df[admin_code_col].dtype}")
+            print(f"DEBUG: Null count: {df[admin_code_col].isna().sum()}")
+
+        # Create lookup dataframe
+        lookup_data = []
+        for gaul_code, info in lookup_dict.items():
+            lookup_data.append(
+                {
+                    "gaul1_code": gaul_code,
+                    "gaul1_name": info.get("gaul1_name"),
+                    "iso3_code": info.get("iso3_code"),
+                    "iso2_code": info.get("iso2_code"),
+                }
+            )
+
+        lookup_df = pd.DataFrame(lookup_data)
+
+        if debug:
+            print(f"DEBUG: Lookup dictionary has {len(lookup_df)} entries")
+            print(f"DEBUG: Sample lookup codes: {lookup_df['gaul1_code'].head()}")
+
+        # Prepare data for join
+        df = df.copy()
+        df["admin_code_for_join"] = df[admin_code_col].fillna(-9999).astype("int32")
+        lookup_df["gaul1_code"] = lookup_df["gaul1_code"].astype("int32")
+
+        if debug:
+            print(
+                f"DEBUG: Codes to join (first 10): {df['admin_code_for_join'].unique()[:10]}"
+            )
+
+        # Perform join
+        df_joined = df.merge(
+            lookup_df, left_on="admin_code_for_join", right_on="gaul1_code", how="left"
+        )
+
+        if debug:
+            matched = df_joined["iso3_code"].notna().sum()
+            print(f"DEBUG: Merge result - {matched}/{len(df_joined)} rows matched")
+            print(f"DEBUG: Sample matched rows:")
+            print(
+                df_joined[
+                    ["admin_code_for_join", "iso3_code", "iso2_code", "gaul1_name"]
+                ].head()
+            )
+
+        # Rename columns to match output schema
+        df_joined = df_joined.rename(
+            columns={
+                "iso3_code": iso3_country_column,  # 'Country'
+                "iso2_code": iso2_country_column,  # 'ProducerCountry'
+                "gaul1_name": admin_1_column,  # 'Admin_Level_1'
+            }
+        )
+
+        # Drop temporary columns
+        df_joined = df_joined.drop(
+            columns=["admin_code_for_join", "gaul1_code"], errors="ignore"
+        )
+
+        logger.debug(
+            f"Admin context added: {iso3_country_column}, {iso2_country_column}, {admin_1_column}"
+        )
+        return df_joined
+
+    except ImportError:
+        logger.warning(
+            "Could not import GAUL lookup dictionary - admin context not added"
+        )
+        if debug:
+            print("DEBUG: ImportError - could not load lookup dictionary")
+        return df
+    except Exception as e:
+        logger.warning(f"Error adding admin context: {e}")
+        if debug:
+            print(f"DEBUG: Exception in _add_admin_context: {e}")
+            import traceback
+
+            traceback.print_exc()
+        return df
+
+
+def join_admin_codes(
+    df: pd.DataFrame, lookup_dict: Dict, id_col: str = "admin_code_median"
+) -> pd.DataFrame:
+    """
+    Join admin codes to DataFrame using a lookup dictionary.
+
+    Converts the admin code column to integer and performs a left join with
+    the lookup dictionary to add Country, ProducerCountry, and Admin_Level_1.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with admin code column
+    lookup_dict : dict
+        Dictionary mapping GAUL codes to admin info (iso3_code, iso2_code, gaul1_name)
+    id_col : str
+        Name of the admin code column (default: "admin_code_median")
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with added Country, ProducerCountry, Admin_Level_1 columns
+    """
+    logger = logging.getLogger("whisp")
+
+    # Return early if admin code column doesn't exist
+    if id_col not in df.columns:
+        logger.debug(f"Admin code column '{id_col}' not found in dataframe")
+        return df
+
+    try:
+        # Create lookup dataframe
+        lookup_data = []
+        for gaul_code, info in lookup_dict.items():
+            lookup_data.append(
+                {
+                    "gaul1_code": gaul_code,
+                    "gaul1_name": info.get("gaul1_name"),
+                    "iso3_code": info.get("iso3_code"),
+                    "iso2_code": info.get("iso2_code"),
+                }
+            )
+
+        lookup_df = pd.DataFrame(lookup_data)
+
+        # Prepare data for join
+        df = df.copy()
+        # Round to nearest integer (handles float values from EE reducers)
+        df["admin_code_for_join"] = df[id_col].fillna(-9999).astype("int32")
+        lookup_df["gaul1_code"] = lookup_df["gaul1_code"].astype("int32")
+
+        # Perform join
+        df_joined = df.merge(
+            lookup_df, left_on="admin_code_for_join", right_on="gaul1_code", how="left"
+        )
+
+        # Rename columns to match output schema
+        df_joined = df_joined.rename(
+            columns={
+                "iso3_code": iso3_country_column,  # 'Country'
+                "iso2_code": iso2_country_column,  # 'ProducerCountry'
+                "gaul1_name": admin_1_column,  # 'Admin_Level_1'
+            }
+        )
+
+        # Drop temporary columns
+        df_joined = df_joined.drop(
+            columns=["admin_code_for_join", "gaul1_code"], errors="ignore"
+        )
+
+        # Fill NaN values with "Unknown" and "not found" for features outside admin boundaries
+        # (e.g., points in the ocean or international waters)
+        df_joined[iso3_country_column] = df_joined[iso3_country_column].fillna(
+            "Unknown"
+        )
+        df_joined[iso2_country_column] = df_joined[iso2_country_column].fillna(
+            "not found"
+        )
+        df_joined[admin_1_column] = df_joined[admin_1_column].fillna("Unknown")
+
+        logger.debug(
+            f"Admin codes joined: {iso3_country_column}, {iso2_country_column}, {admin_1_column}"
+        )
+        return df_joined
+
+    except Exception as e:
+        logger.warning(f"Error joining admin codes: {e}")
+        return df
+
+
+def _format_time(seconds: float) -> str:
+    """Format seconds as human-readable string."""
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    elif seconds < 3600:
+        mins = seconds / 60
+        return f"{mins:.1f}m"
+    else:
+        hours = seconds / 3600
+        return f"{hours:.1f}h"
+
+
+def _get_progress_milestones(total_features: int) -> set:
+    """
+    Get progress milestones based on dataset size.
+
+    Parameters
+    ----------
+    total_features : int
+        Total number of features being processed
+
+    Returns
+    -------
+    set
+        Set of percentage milestones to show
+    """
+    # Set milestones based on feature count
+    if total_features < 250:
+        return set(range(20, 101, 20))  # Every 20%: {20, 40, 60, 80, 100}
+    elif total_features < 1000:
+        return set(range(10, 101, 10))  # Every 10%
+    elif total_features < 10000:
+        return set(range(5, 101, 5))  # Every 5%
+    elif total_features < 50000:
+        return set(range(2, 101, 2))  # Every 2%
+    else:
+        return set(range(1, 101))  # Every 1%
+
+
+def _log_progress(
+    completed: int,
+    total: int,
+    milestones: set,
+    shown_milestones: set,
+    start_time: float,
+    logger: logging.Logger,
+) -> None:
+    """
+    Log progress at milestone percentages.
+
+    Parameters
+    ----------
+    completed : int
+        Number of batches completed
+    total : int
+        Total number of batches
+    milestones : set
+        Set of percentage milestones to show
+    shown_milestones : set
+        Set of milestones already shown (modified in place)
+    start_time : float
+        Start time from time.time()
+    logger : logging.Logger
+        Logger for output
+    """
+    percent = int((completed / total) * 100)
+
+    # Check for new milestones reached
+    for milestone in sorted(milestones):
+        if percent >= milestone and milestone not in shown_milestones:
+            shown_milestones.add(milestone)
+
+            # Calculate time metrics
+            elapsed = time.time() - start_time
+            rate = completed / elapsed if elapsed > 0 else 0
+            remaining_items = total - completed
+
+            # Calculate ETA with padding for overhead (loading, joins, etc.)
+            # Don't show ETA until we have some samples (at least 5% complete)
+            if rate > 0 and completed >= max(5, total * 0.05):
+                eta_seconds = (remaining_items / rate) * 1.15  # Add 15% padding
+            else:
+                eta_seconds = 0
+
+            # Format time strings
+            eta_str = _format_time(eta_seconds) if eta_seconds > 0 else "calculating..."
+            elapsed_str = _format_time(elapsed)
+
+            # Build progress message
+            msg = f"Progress: {completed:,}/{total:,} batches ({percent}%)"
+            if percent < 100:
+                msg += f" | Elapsed: {elapsed_str} | ETA: {eta_str}"
+            else:
+                msg += f" | Total time: {elapsed_str}"
+
+            logger.info(msg)
+
+
+# ============================================================================
+# ENDPOINT VALIDATION
+# ============================================================================
+
+
+def check_ee_endpoint(endpoint_type: str = "high-volume") -> bool:
+    """
+    Check if Earth Engine is using the correct endpoint.
+
+    Parameters
+    ----------
+    endpoint_type : str
+        Expected endpoint type: "high-volume" or "standard"
+
+    Returns
+    -------
+    bool
+        True if using expected endpoint, False otherwise
+    """
+    api_url = str(ee.data._cloud_api_base_url)
+
+    if endpoint_type == "high-volume":
+        return "highvolume" in api_url.lower()
+    elif endpoint_type == "standard":
+        return "highvolume" not in api_url.lower()
+    else:
+        return False
+
+
+def validate_ee_endpoint(endpoint_type: str = "high-volume", raise_error: bool = True):
+    """
+    Validate Earth Engine endpoint and warn/error if incorrect.
+
+    Parameters
+    ----------
+    endpoint_type : str
+        Expected endpoint type
+    raise_error : bool
+        If True, raise error if incorrect endpoint; if False, warn
+
+    Raises
+    ------
+    RuntimeError
+        If incorrect endpoint and raise_error=True
+    """
+    if not check_ee_endpoint(endpoint_type):
+        if endpoint_type == "high-volume":
+            msg = (
+                "# Concurrent mode requires the HIGH-VOLUME endpoint. To change endpoint run:\n"
+                "ee.Reset()\n"
+                "ee.Initialize(project=gee_project_name, opt_url='https://earthengine-highvolume.googleapis.com')\n"
+                "# where gee_project_name is your GEE project (necessary in Colab)"
+            )
+        else:  # standard endpoint
+            msg = (
+                "Sequential mode requires the STANDARD endpoint. To change endpoint run:\n"
+                "ee.Reset()\n"
+                "ee.Initialize(project=gee_project_name)\n"
+                "# where gee_project_name is your GEE project (necessary in Colab)"
+            )
+
+        if raise_error:
+            raise RuntimeError(msg)
+        else:
+            logging.warning(msg)
+
+
+# ============================================================================
+# METADATA EXTRACTION (CLIENT & SERVER SIDE)
+# ============================================================================
+
+
+def extract_centroid_and_geomtype_client(
+    gdf: gpd.GeoDataFrame,
+    x_col: str = None,
+    y_col: str = None,
+    type_col: str = None,
+    external_id_column: str = None,
+    return_attributes_only: bool = True,
+) -> pd.DataFrame:
+    """
+    Extract centroid coordinates and geometry type using GeoPandas (client-side).
+
+    Parameters
+    ----------
+    gdf : gpd.GeoDataFrame
+        Input GeoDataFrame
+    x_col : str, optional
+        Column name for centroid x. Defaults to config value
+    y_col : str, optional
+        Column name for centroid y. Defaults to config value
+    type_col : str, optional
+        Column name for geometry type. Defaults to config value
+    external_id_column: : str, optional
+        Name of external ID column to preserve
+    return_attributes_only : bool
+        If True, return only attribute columns (no geometry)
+
+    Returns
+    -------
+    pd.DataFrame or gpd.GeoDataFrame
+        DataFrame/GeoDataFrame with centroid and geometry type columns
+    """
+    x_col = x_col or centroid_x_coord_column
+    y_col = y_col or centroid_y_coord_column
+    type_col = type_col or geometry_type_column
+
+    gdf = gdf.copy()
+
+    # Extract centroid coordinates (suppressing geographic CRS warning from Shapely)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning)
+        warnings.simplefilter("ignore", UserWarning)  # Additional suppression
+        centroid_points = gdf.geometry.centroid
+
+    gdf[x_col] = centroid_points.x.round(6)
+    gdf[y_col] = centroid_points.y.round(6)
+    gdf[type_col] = gdf.geometry.geom_type
+
+    if return_attributes_only:
+        # Build column list starting with merge keys
+        cols = []
+
+        # Always include __row_id__ first if present (needed for row-level merging)
+        if "__row_id__" in gdf.columns:
+            cols.append("__row_id__")
+
+        # Always include plot_id_column if present (needed for merging batches)
+        if plot_id_column in gdf.columns:
+            cols.append(plot_id_column)
+
+        # Include external_id if it exists (already renamed during load)
+        if (
+            external_id_column
+            and "external_id" in gdf.columns
+            and "external_id" not in cols
+        ):
+            cols.append("external_id")
+
+        # Always include metadata columns (centroid, geometry type)
+        cols.extend([x_col, y_col, type_col])
+
+        # Remove any duplicates while preserving order
+        cols = list(dict.fromkeys(cols))
+
+        return gdf[cols].reset_index(drop=True)
+
+    return gdf
+
+
+def extract_centroid_and_geomtype_server(
+    fc: ee.FeatureCollection,
+    x_col: str = None,
+    y_col: str = None,
+    type_col: str = None,
+    max_error: float = 1.0,
+) -> ee.FeatureCollection:
+    """
+    Extract centroid coordinates and geometry type using Earth Engine (server-side).
+
+    Parameters
+    ----------
+    fc : ee.FeatureCollection
+        Input FeatureCollection
+    x_col : str, optional
+        Column name for centroid x
+    y_col : str, optional
+        Column name for centroid y
+    type_col : str, optional
+        Column name for geometry type
+    max_error : float
+        Maximum error for centroid calculation (meters)
+
+    Returns
+    -------
+    ee.FeatureCollection
+        FeatureCollection with centroid and geometry type properties
+    """
+    x_col = x_col or centroid_x_coord_column
+    y_col = y_col or centroid_y_coord_column
+    type_col = type_col or geometry_type_column
+
+    def add_metadata(feature):
+        centroid = feature.geometry().centroid(max_error)
+        coords = centroid.coordinates()
+        x = ee.Number(coords.get(0)).multiply(1e6).round().divide(1e6)
+        y = ee.Number(coords.get(1)).multiply(1e6).round().divide(1e6)
+        return feature.set({x_col: x, y_col: y, type_col: feature.geometry().type()})
+
+    return fc.map(add_metadata)
+
+
+# ============================================================================
+# BATCH PROCESSING UTILITIES
+# ============================================================================
+
+
+def batch_geodataframe(
+    gdf: gpd.GeoDataFrame,
+    batch_size: int,
+) -> List[gpd.GeoDataFrame]:
+    """
+    Split a GeoDataFrame into batches.
+
+    Parameters
+    ----------
+    gdf : gpd.GeoDataFrame
+        Input GeoDataFrame
+    batch_size : int
+        Size of each batch
+
+    Returns
+    -------
+    List[gpd.GeoDataFrame]
+        List of batch GeoDataFrames
+    """
+    batches = []
+    for i in range(0, len(gdf), batch_size):
+        batches.append(gdf.iloc[i : i + batch_size].copy())
+    return batches
+
+
+def convert_batch_to_ee(batch_gdf: gpd.GeoDataFrame) -> ee.FeatureCollection:
+    """
+    Convert a batch GeoDataFrame to EE FeatureCollection efficiently.
+
+    OPTIMIZATION: Passes GeoDataFrame directly to convert_geojson_to_ee to preserve CRS.
+    This ensures proper coordinate system handling and reprojection to WGS84 if needed.
+
+    Preserves the __row_id__ column if present so it can be retrieved after processing.
+
+    IMPORTANT: Drops external_id column before sending to EE to enable query caching.
+    external_id is user metadata that's not needed for EE computation. Including it
+    breaks EE's caching mechanism since each unique external_id creates a different query.
+
+    Parameters
+    ----------
+    batch_gdf : gpd.GeoDataFrame
+        Input batch (should have __row_id__ column)
+
+    Returns
+    -------
+    ee.FeatureCollection
+        EE FeatureCollection with __row_id__ as a feature property (no external_id)
+    """
+    # Drop external_id before sending to EE to enable caching
+    # (external_id is preserved separately on client side for merging)
+    batch_for_ee = batch_gdf.copy()
+    if "external_id" in batch_for_ee.columns:
+        batch_for_ee = batch_for_ee.drop(columns=["external_id"])
+
+    # Pass GeoDataFrame directly to preserve CRS metadata
+    # convert_geojson_to_ee will handle:
+    # - CRS detection and conversion to WGS84 if needed
+    # - Data type sanitization (datetime, object columns)
+    # - Geometry validation and Z-coordinate stripping
+
+    fc = convert_geojson_to_ee(batch_for_ee, enforce_wgs84=True, strip_z_coords=True)
+
+    # If __row_id__ is in the original GeoDataFrame, it will be preserved
+    # as a feature property in the GeoJSON and thus in the EE FeatureCollection
+    return fc
+
+
+def clean_geodataframe(
+    gdf: gpd.GeoDataFrame,
+    remove_nulls: bool = False,
+    repair_geometries: bool = False,
+    logger: logging.Logger = None,
+) -> gpd.GeoDataFrame:
+    """
+    Validate and clean GeoDataFrame geometries.
+
+    Parameters
+    ----------
+    gdf : gpd.GeoDataFrame
+        Input GeoDataFrame
+    remove_nulls : bool
+        Remove null geometries. Defaults to False to preserve data integrity.
+        Set to True only if you explicitly want to drop rows with null geometries.
+    repair_geometries : bool
+        Repair invalid geometries using Shapely's make_valid(). Defaults to False to preserve
+        original geometries. Set to True only if you want to automatically repair invalid geometries.
+    logger : logging.Logger, optional
+        Logger for output
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        Cleaned GeoDataFrame
+    """
+    logger = logger or logging.getLogger("whisp")
+
+    if remove_nulls:
+        null_count = gdf.geometry.isna().sum()
+        if null_count > 0:
+            logger.warning(f"Removing {null_count} null geometries")
+            gdf = gdf[~gdf.geometry.isna()].copy()
+
+    if repair_geometries:
+        valid_count = gdf.geometry.is_valid.sum()
+        invalid_count = len(gdf) - valid_count
+        if invalid_count > 0:
+            logger.warning(f"Repairing {invalid_count} invalid geometries")
+            from shapely.validation import make_valid
+
+            gdf = gdf.copy()
+            gdf["geometry"] = gdf["geometry"].apply(
+                lambda g: make_valid(g) if g and not g.is_valid else g
+            )
+
+    logger.debug(f"Validation complete: {len(gdf):,} geometries ready")
+    return gdf
+
+
+# ============================================================================
+# AUDIT TRAIL HELPER
+# ============================================================================
+
+
+def _add_geometry_audit_trail(
+    df_validated: pd.DataFrame,
+    input_geojson_filepath: str,
+    gdf_original_geoms: gpd.GeoDataFrame = None,
+    logger: logging.Logger = None,
+) -> pd.DataFrame:
+    """
+    Add original input geometries as geo_original column for audit trail.
+
+    Parameters
+    ----------
+    df_validated : pd.DataFrame
+        Validated DataFrame to add audit trail to
+    input_geojson_filepath : str
+        Path to original GeoJSON file
+    gdf_original_geoms : gpd.GeoDataFrame, optional
+        Pre-loaded original geometries (to avoid reloading)
+    logger : logging.Logger, optional
+        Logger for output
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with geo_original column added
+    """
+    import json
+    from shapely.geometry import mapping
+
+    logger = logger or logging.getLogger("whisp")
+
+    try:
+        # Load original geometries if not provided
+        if gdf_original_geoms is None:
+            logger.warning("Original geometries not pre-loaded, loading now...")
+            gdf_original_geoms = _load_and_prepare_geojson(input_geojson_filepath)
+
+        # Create DataFrame with plotId and geo_original
+        df_original_geom = pd.DataFrame(
+            {
+                "plotId": df_validated["plotId"].values[: len(gdf_original_geoms)],
+                "geo_original": gdf_original_geoms["geometry"].apply(
+                    lambda g: json.dumps(mapping(g)) if g is not None else None
+                ),
+            }
+        )
+
+        # Merge original geometries back
+        df_result = df_validated.merge(df_original_geom, on="plotId", how="left")
+        logger.info("Audit trail added: geo_original column")
+        return df_result
+
+    except Exception as e:
+        logger.warning(f"Error adding audit trail: {e}")
+        # Return original DataFrame if audit trail fails
+        return df_validated
+
+
+# ============================================================================
+# BATCH RETRY HELPER - DEPRECATED (removed due to semaphore deadlock issues)
+# ============================================================================
+# Note: Retry logic via sub-batching has been removed. Instead, use fail-fast
+# approach: when a batch fails, reduce batch_size parameter and retry manually.
+# This avoids semaphore deadlocks and provides clearer error messages.
+
+
+# ============================================================================
+# EE PROCESSING WITH RETRY LOGIC
+# ============================================================================
+
+
+def process_ee_batch(
+    fc: ee.FeatureCollection,
+    whisp_image: ee.Image,
+    reducer: ee.Reducer,
+    batch_idx: int,
+    max_retries: int = 3,
+    logger: logging.Logger = None,
+) -> pd.DataFrame:
+    """
+    Process an EE FeatureCollection with automatic retry logic.
+
+    Parameters
+    ----------
+    fc : ee.FeatureCollection
+        Input FeatureCollection
+    whisp_image : ee.Image
+        Image containing bands to reduce
+    reducer : ee.Reducer
+        Reducer to apply
+    batch_idx : int
+        Batch index (for logging)
+    max_retries : int
+        Maximum retry attempts
+    logger : logging.Logger, optional
+        Logger for output
+
+    Returns
+    -------
+    pd.DataFrame
+        Results as DataFrame
+
+    Raises
+    ------
+    RuntimeError
+        If processing fails after all retries
+    """
+    logger = logger or logging.getLogger("whisp")
+
+    for attempt in range(max_retries):
+        try:
+            results = whisp_image.reduceRegions(
+                collection=fc,
+                reducer=reducer,
+                scale=10,
+            )
+            df = convert_ee_to_df(results)
+
+            # Ensure plot_id_column is present for merging
+            # It should come from the feature properties (added before EE processing)
+            if plot_id_column not in df.columns:
+                logger.warning(
+                    f"Batch {batch_idx + 1}: plotId column DROPPED by EE. "
+                    f"Regenerating with 1-indexed range. "
+                    f"Columns from EE: {list(df.columns)}"
+                )
+                # Use 1-indexed range to match client-side assignment
+                df[plot_id_column] = [str(i) for i in range(1, len(df) + 1)]
+
+            # Ensure plotId is string type (consistent with creation)
+            if plot_id_column in df.columns:
+                df[plot_id_column] = df[plot_id_column].astype(str)
+
+            # Ensure all column names are strings (fixes pandas .str accessor issues)
+            df.columns = df.columns.astype(str)
+
+            return df
+
+        except ee.EEException as e:
+            error_msg = str(e)
+
+            if "Quota" in error_msg or "limit" in error_msg.lower():
+                if attempt < max_retries - 1:
+                    wait_time = min(30, 2**attempt)
+                    logger.warning(
+                        f"Batch {batch_idx + 1}: Rate limited, waiting {wait_time}s..."
+                    )
+                    time.sleep(wait_time)
+                else:
+                    raise RuntimeError(f"Batch {batch_idx + 1}: Quota exhausted")
+
+            elif "timeout" in error_msg.lower():
+                if attempt < max_retries - 1:
+                    wait_time = min(15, 2**attempt)
+                    logger.warning(
+                        f"Batch {batch_idx + 1}: Timeout, retrying in {wait_time}s..."
+                    )
+                    time.sleep(wait_time)
+                else:
+                    raise
+
+            else:
+                if attempt < max_retries - 1:
+                    wait_time = min(5, 2**attempt)
+                    time.sleep(wait_time)
+                else:
+                    raise
+
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(min(5, 2**attempt))
+            else:
+                raise RuntimeError(f"Batch {batch_idx + 1}: {str(e)}")
+
+    raise RuntimeError(f"Batch {batch_idx + 1}: Failed after {max_retries} attempts")
+
+
+# ============================================================================
+# CONCURRENT PROCESSING FUNCTIONS
+# ============================================================================
+
+
+def whisp_stats_geojson_to_df_concurrent(
+    input_geojson_filepath: str,
+    external_id_column: str = None,
+    national_codes: List[str] = None,
+    unit_type: str = "ha",
+    whisp_image: ee.Image = None,
+    custom_bands: Dict[str, Any] = None,
+    batch_size: int = 10,
+    max_concurrent: int = 20,
+    validate_geometries: bool = True,
+    max_retries: int = 3,
+    add_metadata_server: bool = False,
+    logger: logging.Logger = None,
+    # Format parameters (auto-detect from config if not provided)
+    decimal_places: int = None,
+) -> pd.DataFrame:
+    """
+    Process GeoJSON concurrently to compute Whisp statistics with automatic formatting.
+
+    Uses high-volume endpoint and concurrent batching. Client-side metadata
+    extraction is always applied; optionally add server-side metadata too.
+    Automatically formats output (converts units, removes noise columns, etc.).
+
+    Parameters
+    ----------
+    input_geojson_filepath : str
+        Path to input GeoJSON file
+    external_id_column : str, optional
+        Column name for external IDs
+    national_codes : List[str], optional
+        ISO2 codes for national datasets
+    unit_type : str
+        "ha" or "percent"
+    whisp_image : ee.Image, optional
+        Pre-combined image (created with combine_datasets if None)
+    custom_bands : Dict[str, Any], optional
+        Custom band information
+    batch_size : int
+        Features per batch
+    max_concurrent : int
+        Maximum concurrent EE calls
+    validate_geometries : bool
+        Validate and clean geometries
+    max_retries : int
+        Retry attempts per batch
+    add_metadata_server : bool
+        Add metadata server-side (in addition to client-side)
+    logger : logging.Logger, optional
+        Logger for output
+    decimal_places : int, optional
+        Decimal places for formatting. If None, auto-detects from config.
+
+    Returns
+    -------
+    pd.DataFrame
+        Formatted results DataFrame with Whisp statistics
+    """
+    from openforis_whisp.reformat import format_stats_dataframe
+
+    logger = logger or logging.getLogger("whisp")
+
+    # Suppress verbose output from dependencies (dynamically adjust based on max_concurrent)
+    _suppress_verbose_output(max_concurrent=max_concurrent)
+
+    # Auto-detect decimal places from config if not provided
+    if decimal_places is None:
+        decimal_places = _extract_decimal_places(stats_area_columns_formatting)
+        logger.debug(f"Using decimal_places={decimal_places} from config")
+
+    # Validate endpoint
+    validate_ee_endpoint("high-volume", raise_error=True)
+
+    # Load GeoJSON with output suppressed (external_id_column renamed to 'external_id' if provided)
+    gdf = _load_and_prepare_geojson(
+        input_geojson_filepath, external_id_column=external_id_column
+    )
+    logger.info(f"Loaded {len(gdf):,} features")
+
+    # Validate external_id if provided (lightweight client-side check)
+    # Note: external_id_column already renamed to 'external_id' during load
+    if external_id_column and "external_id" not in gdf.columns:
+        # Exclude geometry column from available columns list
+        available_cols = [c for c in gdf.columns if c != gdf.geometry.name]
+        raise ValueError(
+            f"Column '{external_id_column}' not found in GeoJSON properties. "
+            f"Available columns: {available_cols}"
+        )
+
+    # Check completeness of external_id (warn if nulls exist)
+    if external_id_column and "external_id" in gdf.columns:
+        null_count = gdf["external_id"].isna().sum()
+        if null_count > 0:
+            null_pct = (null_count / len(gdf)) * 100
+            logger.warning(
+                f"Column 'external_id' (from '{external_id_column}') has {null_count:,} null values ({null_pct:.1f}% of {len(gdf):,} features). "
+                f"These features may have missing external IDs in output."
+            )
+
+    if validate_geometries:
+        gdf = clean_geodataframe(
+            gdf, remove_nulls=False, repair_geometries=False, logger=logger
+        )
+
+    # Add stable plotIds for merging (starting from 1, not 0)
+    gdf[plot_id_column] = [str(i) for i in range(1, len(gdf) + 1)]
+
+    # Strip unnecessary properties before sending to EE
+    # Keep only: geometry, plot_id_column, and external_id
+    # This prevents duplication of GeoJSON properties in EE results
+    keep_cols = ["geometry", plot_id_column]
+    if (
+        external_id_column and "external_id" in gdf.columns
+    ):  # Already renamed during load
+        keep_cols.append("external_id")
+
+    gdf_for_ee = gdf[keep_cols].copy()
+
+    # CRITICAL: Convert external_id to string (both plotId and external_id are now strings)
+    if external_id_column and "external_id" in gdf_for_ee.columns:
+        gdf_for_ee["external_id"] = gdf_for_ee["external_id"].astype(str)
+        logger.debug(f"Converted external_id column to string type")
+
+    logger.debug(f"Stripped GeoJSON to essential columns: {keep_cols}")
+
+    # Create image if not provided
+    if whisp_image is None:
+        logger.debug("Creating Whisp image...")
+        # Suppress print statements from combine_datasets
+        with redirect_stdout(io.StringIO()):
+            try:
+                # First try without validation
+                whisp_image = combine_datasets(
+                    national_codes=national_codes, validate_bands=False
+                )
+            except Exception as e:
+                logger.warning(
+                    f"First attempt failed: {str(e)[:100]}. Retrying with validate_bands=True..."
+                )
+                # Retry with validation to catch and fix bad bands
+                whisp_image = combine_datasets(
+                    national_codes=national_codes, validate_bands=True
+                )
+
+    # Create reducer
+    reducer = ee.Reducer.sum().combine(ee.Reducer.median(), sharedInputs=True)
+
+    # Batch the data
+    batches = batch_geodataframe(gdf_for_ee, batch_size)
+    logger.info(
+        f"Processing {len(gdf_for_ee):,} features in {len(batches)} batches (concurrent mode)..."
+    )
+
+    # Setup semaphore for EE concurrency control
+    ee_semaphore = threading.BoundedSemaphore(max_concurrent)
+
+    # Progress tracking setup
+    progress_lock = threading.Lock()
+    completed_batches = 0
+    milestones = _get_progress_milestones(len(gdf_for_ee))
+    shown_milestones = set()
+    start_time = time.time()
+
+    results = []
+
+    def process_batch(
+        batch_idx: int, batch: gpd.GeoDataFrame
+    ) -> Tuple[int, pd.DataFrame, pd.DataFrame]:
+        """Process one batch: server EE work + client metadata."""
+        with ee_semaphore:
+            # Server-side: convert to EE, optionally add metadata, reduce
+            fc = convert_batch_to_ee(batch)
+            if add_metadata_server:
+                fc = extract_centroid_and_geomtype_server(fc)
+            df_server = process_ee_batch(
+                fc, whisp_image, reducer, batch_idx, max_retries, logger
+            )
+
+            # Client-side: extract metadata using GeoPandas
+            df_client = extract_centroid_and_geomtype_client(
+                batch,
+                external_id_column=external_id_column,
+                return_attributes_only=True,
+            )
+
+        return batch_idx, df_server, df_client
+
+    # Process batches with thread pool
+    pool_workers = max(2 * max_concurrent, max_concurrent + 2)
+
+    # Track if we had errors that suggest bad bands
+    batch_errors = []
+
+    # Suppress fiona logging during batch processing (threads create new loggers)
+    fiona_logger = logging.getLogger("fiona")
+    pyogrio_logger = logging.getLogger("pyogrio._io")
+    old_fiona_level = fiona_logger.level
+    old_pyogrio_level = pyogrio_logger.level
+    fiona_logger.setLevel(logging.CRITICAL)
+    pyogrio_logger.setLevel(logging.CRITICAL)
+
+    try:
+        # Don't suppress stdout here - we want progress messages to show in Colab
+        with ThreadPoolExecutor(max_workers=pool_workers) as executor:
+            futures = {
+                executor.submit(process_batch, i, batch): i
+                for i, batch in enumerate(batches)
+            }
+
+            # Track which batches failed for retry
+            batch_map = {i: batch for i, batch in enumerate(batches)}
+            batch_futures = {future: i for future, i in futures.items()}
+
+            for future in as_completed(futures):
+                batch_idx = batch_futures[future]
+                try:
+                    batch_idx, df_server, df_client = future.result()
+
+                    # Merge server and client results
+                    if plot_id_column not in df_server.columns:
+                        logger.warning(
+                            f"Batch {batch_idx + 1} (concurrent merge): plotId DROPPED by EE. "
+                            f"Regenerating. Columns from EE: {list(df_server.columns)}"
+                        )
+                        df_server[plot_id_column] = pd.array(
+                            range(1, len(df_server) + 1), dtype="Int64"
+                        )
+                    else:
+                        df_server[plot_id_column] = df_server[plot_id_column].astype(
+                            str
+                        )
+
+                    # Ensure plotId is string in client data too
+                    if plot_id_column in df_client.columns:
+                        df_client[plot_id_column] = df_client[plot_id_column].astype(
+                            str
+                        )
+
+                    # Keep all EE statistics from server (all columns with _sum and _median suffixes)
+                    # These are the actual EE processing results
+                    df_server_clean = df_server.copy()
+
+                    # Drop external_id from df_server if it exists (already in df_client)
+                    if "external_id" in df_server_clean.columns:
+                        df_server_clean = df_server_clean.drop(columns=["external_id"])
+
+                    # Keep external metadata: plot_id, external_id, geometry, geometry type, and centroids from client
+                    # (formatted wrapper handles keep_external_columns parameter)
+                    keep_external_columns = [plot_id_column]
+                    if external_id_column and "external_id" in df_client.columns:
+                        keep_external_columns.append("external_id")
+                    if "geometry" in df_client.columns:
+                        keep_external_columns.append("geometry")
+                    # Keep geometry type column (Geometry_type)
+                    if geometry_type_column in df_client.columns:
+                        keep_external_columns.append(geometry_type_column)
+                    # Also keep centroid columns (Centroid_lon, Centroid_lat)
+                    centroid_cols = [
+                        c for c in df_client.columns if c.startswith("Centroid_")
+                    ]
+                    keep_external_columns.extend(centroid_cols)
+
+                    df_client_clean = df_client[
+                        [c for c in keep_external_columns if c in df_client.columns]
+                    ]
+                    # Don't drop duplicates - we need one row per feature (one per plot_id)
+                    # Each plot_id should have exactly one row with its metadata
+
+                    merged = df_server_clean.merge(
+                        df_client_clean,
+                        on=plot_id_column,
+                        how="left",
+                        suffixes=("_ee", "_client"),
+                    )
+                    results.append(merged)
+
+                    # Update progress
+                    with progress_lock:
+                        completed_batches += 1
+                        _log_progress(
+                            completed_batches,
+                            len(batches),
+                            milestones,
+                            shown_milestones,
+                            start_time,
+                            logger,
+                        )
+
+                except Exception as e:
+                    # Batch failed - fail fast with clear guidance
+                    error_msg = str(e)
+                    logger.error(f"Batch {batch_idx} failed: {error_msg[:100]}")
+                    logger.debug(f"Full error: {error_msg}")
+
+                    # Get original batch for error reporting
+                    original_batch = batch_map[batch_idx]
+
+                    # Add to batch errors for final reporting
+                    batch_errors.append((batch_idx, original_batch, error_msg))
+    except (KeyboardInterrupt, SystemExit) as interrupt:
+        logger.warning("Processing interrupted by user")
+        raise interrupt
+    finally:
+        # Restore logger levels
+        fiona_logger.setLevel(old_fiona_level)
+        pyogrio_logger.setLevel(old_pyogrio_level)
+
+    # Log completion
+    total_time = time.time() - start_time
+    time_str = _format_time(total_time)
+    logger.info(
+        f"Processing complete: {completed_batches:,}/{len(batches):,} batches in {time_str}"
+    )
+
+    # If we have batch errors after retry attempts, fail the entire process
+    if batch_errors:
+        total_failed_rows = sum(len(batch) for _, batch, _ in batch_errors)
+        failed_batch_indices = [str(idx) for idx, _, _ in batch_errors]
+
+        # Format detailed error information for debugging
+        error_details_list = []
+        for idx, batch, msg in batch_errors:
+            error_details_list.append(f"  Batch {idx} ({len(batch)} features): {msg}")
+        error_details = "\n".join(error_details_list)
+
+        # Analyze error patterns for debugging hints
+        error_patterns = {
+            "memory": any("memory" in msg.lower() for _, _, msg in batch_errors),
+            "request_size": any(
+                keyword in msg.lower()
+                for _, _, msg in batch_errors
+                for keyword in ["too large", "10mb", "payload", "size limit"]
+            ),
+            "quota": any("quota" in msg.lower() for _, _, msg in batch_errors),
+            "timeout": any("timeout" in msg.lower() for _, _, msg in batch_errors),
+        }
+
+        # Build helpful suggestions based on error patterns
+        suggestions = []
+        if error_patterns["memory"]:
+            suggestions.append(
+                f"  • Reduce batch_size parameter (currently: {batch_size}). Try: batch_size=5 or lower"
+            )
+        if error_patterns["request_size"]:
+            suggestions.append(
+                "  • Request payload too large: reduce batch_size or simplify input geometries"
+            )
+        if error_patterns["quota"]:
+            suggestions.append("  • Earth Engine quota exceeded: wait and retry later")
+        if error_patterns["timeout"]:
+            suggestions.append(
+                "  • Processing timeout: reduce batch_size or simplify input geometries"
+            )
+
+        suggestions_text = (
+            "\nDebugging hints:\n" + "\n".join(suggestions) if suggestions else ""
+        )
+
+        raise RuntimeError(
+            f"Failed to process {len(batch_errors)} batch(es):\n"
+            f"\n{error_details}\n"
+            f"\nTotal rows affected: {total_failed_rows}\n"
+            f"{suggestions_text}\n"
+            f"Please reduce batch_size and try again."
+        )
+
+    # Check if we should retry with validation due to band errors (legacy band error handling)
+    if not results:
+        # All batches failed - likely a bad band issue
+        is_band_error = any(
+            keyword in str(batch_errors)
+            for keyword in ["Image.load", "asset", "not found", "does not exist"]
+        )
+
+        if is_band_error:
+            logger.warning(
+                "Detected potential bad band error. Retrying with validate_bands=True..."
+            )
+            try:
+                with redirect_stdout(io.StringIO()):
+                    whisp_image = combine_datasets(
+                        national_codes=national_codes, validate_bands=True
+                    )
+                logger.info(
+                    "Image recreated with validation. Retrying batch processing..."
+                )
+
+                # Retry batch processing with validated image
+                results = []
+                retry_completed = 0
+                retry_shown = set()
+                retry_start = time.time()
+
+                # Suppress fiona logging during batch processing (threads create new loggers)
+                fiona_logger = logging.getLogger("fiona")
+                pyogrio_logger = logging.getLogger("pyogrio._io")
+                old_fiona_level = fiona_logger.level
+                old_pyogrio_level = pyogrio_logger.level
+                fiona_logger.setLevel(logging.CRITICAL)
+                pyogrio_logger.setLevel(logging.CRITICAL)
+
+                try:
+                    with ThreadPoolExecutor(max_workers=pool_workers) as executor:
+                        futures = {
+                            executor.submit(process_batch, i, batch): i
+                            for i, batch in enumerate(batches)
+                        }
+
+                        for future in as_completed(futures):
+                            try:
+                                batch_idx, df_server, df_client = future.result()
+                                if plot_id_column not in df_server.columns:
+                                    # Use 1-indexed range to match client-side assignment
+                                    df_server[plot_id_column] = range(
+                                        1, len(df_server) + 1
+                                    )
+                                merged = df_server.merge(
+                                    df_client,
+                                    on=plot_id_column,
+                                    how="left",
+                                    suffixes=("", "_client"),
+                                )
+                                results.append(merged)
+
+                                # Update retry progress
+                                with progress_lock:
+                                    retry_completed += 1
+                                    _log_progress(
+                                        retry_completed,
+                                        len(batches),
+                                        milestones,
+                                        retry_shown,
+                                        retry_start,
+                                        logger,
+                                    )
+                            except Exception as e:
+                                logger.error(
+                                    f"Batch processing error (retry): {str(e)[:100]}"
+                                )
+
+                    # Log retry completion
+                    retry_time = time.time() - retry_start
+                    logger.info(
+                        f"Retry complete: {retry_completed:,}/{len(batches):,} batches in {_format_time(retry_time)}"
+                    )
+                finally:
+                    # Restore logger levels
+                    fiona_logger.setLevel(old_fiona_level)
+                    pyogrio_logger.setLevel(old_pyogrio_level)
+            except Exception as validation_e:
+                logger.error(
+                    f"Failed to recover with validation: {str(validation_e)[:100]}"
+                )
+                return pd.DataFrame()
+
+    if results:
+        # Filter out empty DataFrames and all-NA columns to avoid FutureWarning in pd.concat
+        results_filtered = []
+        for df in results:
+            if not df.empty:
+                # Drop columns that are entirely NA
+                df_clean = df.dropna(axis=1, how="all")
+                if not df_clean.empty:
+                    results_filtered.append(df_clean)
+        results = results_filtered
+
+        if results:
+            # Concatenate with explicit dtype handling to suppress FutureWarning
+            combined = pd.concat(results, ignore_index=True, sort=False)
+            # Ensure all column names are strings (fixes pandas .str accessor issues later)
+            combined.columns = combined.columns.astype(str)
+        else:
+            return pd.DataFrame()
+
+        # Clean up duplicate external_id columns created by merges (if any exist)
+        # external_id was already renamed during load, so we just need to handle duplicates
+        if external_id_column and "external_id" in combined.columns:
+            # Find merge duplicates like external_id_x, external_id_y, external_id_ee, external_id_client
+            duplicate_variants = [
+                col
+                for col in combined.columns
+                if col != "external_id" and col.startswith("external_id_")
+            ]
+
+            if duplicate_variants:
+                logger.debug(
+                    f"Dropping duplicate external_id columns: {duplicate_variants}"
+                )
+                combined = combined.drop(columns=duplicate_variants, errors="ignore")
+
+        # plotId column is already present from batch processing
+        # Just ensure it's at position 0
+        if plot_id_column in combined.columns:
+            combined = combined[
+                [plot_id_column]
+                + [col for col in combined.columns if col != plot_id_column]
+            ]
+
+        # Add admin context (Country, ProducerCountry, Admin_Level_1) from admin_code
+        # MUST be done BEFORE formatting (which removes _median columns)
+        logger.debug("Adding administrative context...")
+        try:
+            from openforis_whisp.parameters.lookup_gaul1_admin import lookup_dict
+
+            combined = join_admin_codes(
+                df=combined, lookup_dict=lookup_dict, id_col="admin_code_median"
+            )
+        except ImportError:
+            logger.warning(
+                "Could not import lookup dictionary - admin context not added"
+            )
+
+        # Format the output with error handling for bad bands
+        logger.debug("Formatting output...")
+        try:
+            formatted = format_stats_dataframe(
+                df=combined,
+                area_col=f"{geometry_area_column}_sum",
+                decimal_places=decimal_places,
+                unit_type=unit_type,
+                remove_columns=True,
+                convert_water_flag=True,
+            )
+        except Exception as e:
+            # If formatting fails, try recreating the image with validation
+            logger.warning(
+                f"Formatting failed: {str(e)[:100]}. Attempting to recreate image with band validation..."
+            )
+            try:
+                with redirect_stdout(io.StringIO()):
+                    whisp_image_validated = combine_datasets(
+                        national_codes=national_codes, validate_bands=True
+                    )
+
+                # Reprocess batches with validated image - create a local process function
+                logger.info("Reprocessing batches with validated image...")
+                results_validated = []
+
+                def process_batch_validated(
+                    batch_idx: int, batch: gpd.GeoDataFrame
+                ) -> Tuple[int, pd.DataFrame, pd.DataFrame]:
+                    """Process one batch with validated image."""
+                    with ee_semaphore:
+                        fc = convert_batch_to_ee(batch)
+                        if add_metadata_server:
+                            fc = extract_centroid_and_geomtype_server(fc)
+                        df_server = process_ee_batch(
+                            fc,
+                            whisp_image_validated,
+                            reducer,
+                            batch_idx,
+                            max_retries,
+                            logger,
+                        )
+                        df_client = extract_centroid_and_geomtype_client(
+                            batch,
+                            external_id_column=external_id_column,
+                            return_attributes_only=True,
+                        )
+                    return batch_idx, df_server, df_client
+
+                with ThreadPoolExecutor(max_workers=pool_workers) as executor:
+                    futures = {
+                        executor.submit(process_batch_validated, i, batch): i
+                        for i, batch in enumerate(batches)
+                    }
+
+                    for future in as_completed(futures):
+                        try:
+                            batch_idx, df_server, df_client = future.result()
+                            if plot_id_column not in df_server.columns:
+                                logger.warning(
+                                    f"Batch {batch_idx + 1} (retry): plotId DROPPED by EE. "
+                                    f"Regenerating. Columns from EE: {list(df_server.columns)}"
+                                )
+                                # Use 1-indexed range to match client-side assignment
+                                df_server[plot_id_column] = range(1, len(df_server) + 1)
+
+                            # Ensure plotId is string type (consistent with creation)
+                            if plot_id_column in df_server.columns:
+                                df_server[plot_id_column] = df_server[
+                                    plot_id_column
+                                ].astype(str)
+                            if plot_id_column in df_client.columns:
+                                df_client[plot_id_column] = df_client[
+                                    plot_id_column
+                                ].astype(str)
+
+                            # Drop external_id from df_server if it exists (already in df_client)
+                            if "external_id" in df_server.columns:
+                                df_server = df_server.drop(columns=["external_id"])
+
+                            merged = df_server.merge(
+                                df_client,
+                                on=plot_id_column,
+                                how="left",
+                                suffixes=("", "_client"),
+                            )
+                            results_validated.append(merged)
+                        except Exception as batch_e:
+                            logger.error(
+                                f"Batch reprocessing error: {str(batch_e)[:100]}"
+                            )
+
+                if results_validated:
+                    # Concatenate with explicit dtype handling to suppress FutureWarning
+                    combined = pd.concat(
+                        results_validated, ignore_index=True, sort=False
+                    )
+                    # Ensure all column names are strings (fixes pandas .str accessor issues later)
+                    combined.columns = combined.columns.astype(str)
+
+                    # Clean up duplicate external_id columns created by merges (if any exist)
+                    # external_id was already renamed during load, so we just need to handle duplicates
+                    if external_id_column and "external_id" in combined.columns:
+                        # Find merge duplicates like external_id_x, external_id_y, external_id_ee, external_id_client
+                        duplicate_variants = [
+                            col
+                            for col in combined.columns
+                            if col != "external_id" and col.startswith("external_id_")
+                        ]
+
+                        if duplicate_variants:
+                            logger.debug(
+                                f"Dropping duplicate external_id columns: {duplicate_variants}"
+                            )
+                            combined = combined.drop(
+                                columns=duplicate_variants, errors="ignore"
+                            )
+
+                    # plotId column is already present, just ensure it's at position 0
+                    if plot_id_column in combined.columns:
+                        combined = combined[
+                            [plot_id_column]
+                            + [col for col in combined.columns if col != plot_id_column]
+                        ]
+
+                    # Add admin context again
+                    try:
+                        from openforis_whisp.parameters.lookup_gaul1_admin import (
+                            lookup_dict,
+                        )
+
+                        combined = join_admin_codes(
+                            df=combined,
+                            lookup_dict=lookup_dict,
+                            id_col="admin_code_median",
+                        )
+                    except ImportError:
+                        logger.warning(
+                            "Could not import lookup dictionary - admin context not added"
+                        )
+
+                    # Try formatting again with validated data
+                    formatted = format_stats_dataframe(
+                        df=combined,
+                        area_col=f"{geometry_area_column}_sum",
+                        decimal_places=decimal_places,
+                        unit_type=unit_type,
+                        remove_columns=True,
+                        convert_water_flag=True,
+                    )
+                else:
+                    logger.error(" Reprocessing with validation produced no results")
+                    return pd.DataFrame()
+            except Exception as retry_e:
+                logger.error(
+                    f"Failed to recover from formatting error: {str(retry_e)[:100]}"
+                )
+                raise retry_e
+
+        # Ensure plot_id is present (should already be there from batch processing)
+        if plot_id_column not in formatted.columns:
+            logger.warning(f"{plot_id_column} column missing, regenerating...")
+            formatted.insert(0, plot_id_column, range(1, len(formatted) + 1))
+
+        # Note: Sorting is handled by format_stats_dataframe in the formatted wrapper functions
+
+        logger.info(f"Processing complete: {len(formatted):,} features")
+        return formatted
+    else:
+        logger.error(" No results produced")
+        return pd.DataFrame()
+
+
+# ============================================================================
+# SEQUENTIAL PROCESSING (STANDARD ENDPOINT)
+# ============================================================================
+
+
+def whisp_stats_geojson_to_df_sequential(
+    input_geojson_filepath: str,
+    external_id_column: str = None,
+    national_codes: List[str] = None,
+    unit_type: str = "ha",
+    whisp_image: ee.Image = None,
+    custom_bands: Dict[str, Any] = None,
+    add_metadata_client_side: bool = True,
+    logger: logging.Logger = None,
+    # Format parameters (auto-detect from config if not provided)
+    decimal_places: int = None,
+) -> pd.DataFrame:
+    """
+    Process GeoJSON sequentially using standard EE endpoint with automatic formatting.
+
+    Uses reduceRegions for server-side processing and client-side metadata
+    extraction via GeoPandas. Suitable for smaller datasets or when high-volume
+    endpoint is not available. Automatically formats output.
+
+    Requires: standard EE endpoint (default)
+
+    Parameters
+    ----------
+    input_geojson_filepath : str
+        Path to input GeoJSON
+    external_id_column : str, optional
+        Column name for external IDs
+    national_codes : List[str], optional
+        ISO2 codes for national datasets
+    unit_type : str
+        "ha" or "percent"
+    whisp_image : ee.Image, optional
+        Pre-combined image
+    custom_bands : Dict[str, Any], optional
+        Custom band information
+    add_metadata_client_side : bool
+        Add client-side metadata (recommended)
+    logger : logging.Logger, optional
+        Logger for output
+    decimal_places : int, optional
+        Decimal places for formatting. If None, auto-detects from config.
+
+    Returns
+    -------
+    pd.DataFrame
+        Formatted results DataFrame
+    """
+    from openforis_whisp.reformat import format_stats_dataframe
+
+    logger = logger or logging.getLogger("whisp")
+
+    # Suppress verbose output from dependencies (sequential has lower concurrency, use default)
+    _suppress_verbose_output(max_concurrent=1)
+
+    # Auto-detect decimal places from config if not provided
+    if decimal_places is None:
+        decimal_places = _extract_decimal_places(stats_area_columns_formatting)
+        logger.debug(f"Using decimal_places={decimal_places} from config")
+
+    # Validate endpoint
+    validate_ee_endpoint("standard", raise_error=True)
+
+    # Load GeoJSON with output suppressed (external_id_column renamed to 'external_id' if provided)
+    gdf = _load_and_prepare_geojson(
+        input_geojson_filepath, external_id_column=external_id_column
+    )
+    logger.info(f"Loaded {len(gdf):,} features")
+
+    # Validate external_id if provided (lightweight client-side check)
+    # Note: external_id_column already renamed to 'external_id' during load
+    if external_id_column and "external_id" not in gdf.columns:
+        # Exclude geometry column from available columns list
+        available_cols = [c for c in gdf.columns if c != gdf.geometry.name]
+        raise ValueError(
+            f"Column '{external_id_column}' not found in GeoJSON properties. "
+            f"Available columns: {available_cols}"
+        )
+
+    # Check completeness of external_id (warn if nulls exist)
+    if external_id_column and "external_id" in gdf.columns:
+        null_count = gdf["external_id"].isna().sum()
+        if null_count > 0:
+            null_pct = (null_count / len(gdf)) * 100
+            logger.warning(
+                f"Column 'external_id' (from '{external_id_column}') has {null_count:,} null values ({null_pct:.1f}% of {len(gdf):,} features). "
+                f"These features may have missing external IDs in output."
+            )
+
+    # Clean geometries (preserve both null and invalid geometries by default)
+    gdf = clean_geodataframe(
+        gdf, remove_nulls=False, repair_geometries=False, logger=logger
+    )
+
+    # Add stable plotIds for merging (starting from 1, not 0)
+    gdf[plot_id_column] = [str(i) for i in range(1, len(gdf) + 1)]
+
+    # Strip unnecessary properties before sending to EE
+    # Keep only: geometry, plot_id_column, and external_id
+    # This prevents duplication of GeoJSON properties in EE results
+    keep_cols = ["geometry", plot_id_column]
+    if (
+        external_id_column and "external_id" in gdf.columns
+    ):  # Already renamed during load
+        keep_cols.append("external_id")
+
+    gdf_for_ee = gdf[keep_cols].copy()
+
+    # CRITICAL: Convert external_id to string (both plotId and external_id are now strings)
+    if external_id_column and "external_id" in gdf_for_ee.columns:
+        gdf_for_ee["external_id"] = gdf_for_ee["external_id"].astype(str)
+        logger.debug(f"Converted external_id column to string type")
+
+    logger.debug(f"Stripped GeoJSON to essential columns: {keep_cols}")
+
+    # Create image if not provided
+    if whisp_image is None:
+        logger.debug("Creating Whisp image...")
+        # Suppress print statements from combine_datasets
+        with redirect_stdout(io.StringIO()):
+            try:
+                # First try without validation
+                whisp_image = combine_datasets(
+                    national_codes=national_codes, validate_bands=False
+                )
+            except Exception as e:
+                logger.warning(
+                    f"First attempt failed: {str(e)[:100]}. Retrying with validate_bands=True..."
+                )
+                # Retry with validation to catch and fix bad bands
+                whisp_image = combine_datasets(
+                    national_codes=national_codes, validate_bands=True
+                )
+
+    # Drop external_id before sending to EE to enable caching
+    # (external_id is preserved separately in gdf for client-side merging)
+    gdf_for_ee_clean = gdf_for_ee.copy()
+    if "external_id" in gdf_for_ee_clean.columns:
+        gdf_for_ee_clean = gdf_for_ee_clean.drop(columns=["external_id"])
+        logger.debug("Dropped external_id from data sent to EE (enables caching)")
+
+    # Convert to EE (suppress print statements from convert_geojson_to_ee)
+    logger.debug("Converting to EE FeatureCollection...")
+    with redirect_stdout(io.StringIO()):
+        fc = convert_geojson_to_ee(
+            gdf_for_ee_clean, enforce_wgs84=True, strip_z_coords=True
+        )
+
+    # Create reducer
+    reducer = ee.Reducer.sum().combine(ee.Reducer.median(), sharedInputs=True)
+
+    # Process server-side with error handling for bad bands
+    logger.info(
+        f"Processing {len(gdf):,} features with Earth Engine (sequential mode)..."
+    )
+    try:
+        results_fc = whisp_image.reduceRegions(collection=fc, reducer=reducer, scale=10)
+        df_server = convert_ee_to_df(results_fc)
+    except Exception as e:
+        # Check if this is a band error
+        error_msg = str(e)
+        is_band_error = any(
+            keyword in error_msg
+            for keyword in ["Image.load", "asset", "not found", "does not exist"]
+        )
+
+        if is_band_error and whisp_image is not None:
+            logger.warning(
+                f"Detected bad band error: {error_msg[:100]}. Retrying with validate_bands=True..."
+            )
+            try:
+                with redirect_stdout(io.StringIO()):
+                    whisp_image = combine_datasets(
+                        national_codes=national_codes, validate_bands=True
+                    )
+                logger.info("Image recreated with validation. Retrying processing...")
+                results_fc = whisp_image.reduceRegions(
+                    collection=fc, reducer=reducer, scale=10
+                )
+                df_server = convert_ee_to_df(results_fc)
+            except Exception as retry_e:
+                logger.error(f"Retry failed: {str(retry_e)[:100]}")
+                raise
+        else:
+            raise
+
+    logger.info("Server-side processing complete")
+
+    # Ensure plotId is string type for consistent merges
+    if plot_id_column in df_server.columns:
+        df_server[plot_id_column] = df_server[plot_id_column].astype(str)
+
+    # Add client-side metadata if requested
+    if add_metadata_client_side:
+        logger.debug("Extracting client-side metadata...")
+        df_client = extract_centroid_and_geomtype_client(
+            gdf,
+            external_id_column=external_id_column,
+            return_attributes_only=True,
+        )
+
+        # Ensure plotId is string type for consistent merges
+        if plot_id_column in df_client.columns:
+            df_client[plot_id_column] = df_client[plot_id_column].astype(str)
+
+        # Drop external_id from df_server if it exists (keep from df_client - more reliable)
+        if "external_id" in df_server.columns:
+            df_server = df_server.drop(columns=["external_id"])
+
+        # Merge on plotId (same strategy as concurrent mode)
+        result = df_server.merge(
+            df_client, on=plot_id_column, how="left", suffixes=("", "_client")
+        )
+    else:
+        result = df_server
+
+    # Format the output
+    # Add admin context (Country, ProducerCountry, Admin_Level_1) from admin_code
+    # MUST be done BEFORE formatting (which removes _median columns)
+    logger.debug("Adding administrative context...")
+    try:
+        from openforis_whisp.parameters.lookup_gaul1_admin import lookup_dict
+
+        result = join_admin_codes(
+            df=result, lookup_dict=lookup_dict, id_col="admin_code_median"
+        )
+    except ImportError:
+        logger.warning("Could not import lookup dictionary - admin context not added")
+
+    # Format the output
+    logger.debug("Formatting output...")
+    formatted = format_stats_dataframe(
+        df=result,
+        area_col=f"{geometry_area_column}_sum",
+        decimal_places=decimal_places,
+        unit_type=unit_type,
+        remove_columns=True,
+        convert_water_flag=True,
+    )
+
+    # Ensure plot_id exists
+    if plot_id_column not in formatted.columns:
+        formatted.insert(0, plot_id_column, range(1, len(formatted) + 1))
+
+    # Note: Sorting is handled by format_stats_dataframe in the formatted wrapper functions
+
+    logger.info(f"Processing complete: {len(formatted):,} features")
+
+    # external_id_column already renamed to 'external_id' during load - no action needed here
+
+    return formatted
+
+
+# ============================================================================
+# FORMATTED WRAPPER FUNCTIONS (STATS + FORMAT)
+# ============================================================================
+
+
+def whisp_formatted_stats_geojson_to_df_concurrent(
+    input_geojson_filepath: str,
+    external_id_column: str = None,
+    national_codes: List[str] = None,
+    unit_type: str = "ha",
+    whisp_image: ee.Image = None,
+    custom_bands: Dict[str, Any] = None,
+    batch_size: int = 10,
+    max_concurrent: int = 20,
+    validate_geometries: bool = True,
+    max_retries: int = 3,
+    add_metadata_server: bool = False,
+    logger: logging.Logger = None,
+    # Format parameters (auto-detect from config if not provided)
+    decimal_places: int = None,
+    remove_median_columns: bool = True,
+    convert_water_flag: bool = True,
+    water_flag_threshold: float = 0.5,
+    sort_column: str = "plotId",
+    geometry_audit_trail: bool = False,
+) -> pd.DataFrame:
+    """
+    Process GeoJSON concurrently with automatic formatting and validation.
+
+    Combines whisp_stats_geojson_to_df_concurrent + format_stats_dataframe + validation
+    for a complete pipeline: extract stats → convert units → format output → validate schema.
+
+    Uses high-volume endpoint and concurrent batching.
+
+    Parameters
+    ----------
+    input_geojson_filepath : str
+        Path to input GeoJSON file
+    external_id_column : str, optional
+        Column name for external IDs
+    national_codes : List[str], optional
+        ISO2 codes for national datasets
+    unit_type : str
+        "ha" or "percent"
+    whisp_image : ee.Image, optional
+        Pre-combined image
+    custom_bands : Dict[str, Any], optional
+        Custom band information
+    batch_size : int
+        Features per batch (default 25)
+    max_concurrent : int
+        Maximum concurrent EE calls (default 10)
+    validate_geometries : bool
+        Validate and clean geometries (default True)
+    max_retries : int
+        Retry attempts per batch (default 3)
+    add_metadata_server : bool
+        Add metadata server-side (default False)
+    logger : logging.Logger, optional
+        Logger for output
+    decimal_places : int, optional
+        Decimal places for rounding. If None, auto-detects from config:
+        - Area columns: geometry_area_column_formatting
+        - Percent columns: stats_percent_columns_formatting
+        - Other columns: stats_area_columns_formatting
+    remove_median_columns : bool
+        Remove '_median' columns (default True)
+    convert_water_flag : bool
+        Convert water flag to boolean (default True)
+    water_flag_threshold : float
+        Water flag ratio threshold (default 0.5)
+    sort_column : str
+        Column to sort by (default "plotId", None to skip)
+    geometry_audit_trail : bool, default False
+        If True, includes original input geometry column:
+        - geo_original: Original input geometry (before EE processing), stored as GeoJSON
+        Enables geometry traceability for compliance and audit purposes.
+
+    Returns
+    -------
+    pd.DataFrame
+        Validated, formatted results DataFrame with optional audit trail
+    """
+    from openforis_whisp.reformat import format_stats_dataframe
+    from datetime import datetime, timezone
+    import json
+    from shapely.geometry import mapping
+
+    logger = logger or logging.getLogger("whisp")
+
+    # Auto-detect decimal places from config if not provided
+    if decimal_places is None:
+        # Use stats_area_columns_formatting as default for most columns
+        decimal_places = _extract_decimal_places(stats_area_columns_formatting)
+        logger.debug(f"Using decimal_places={decimal_places} from config")
+
+    # Load original geometries once here if needed for audit trail (avoid reloading later)
+    gdf_original_geoms = None
+    if geometry_audit_trail:
+        logger.debug("Pre-loading GeoJSON for geometry audit trail...")
+        gdf_original_geoms = _load_and_prepare_geojson(input_geojson_filepath)
+
+    # Step 1: Get raw stats
+    logger.debug("Step 1/2: Extracting statistics (concurrent)...")
+    df_raw = whisp_stats_geojson_to_df_concurrent(
+        input_geojson_filepath=input_geojson_filepath,
+        external_id_column=external_id_column,
+        national_codes=national_codes,
+        unit_type=unit_type,
+        whisp_image=whisp_image,
+        custom_bands=custom_bands,
+        batch_size=batch_size,
+        max_concurrent=max_concurrent,
+        validate_geometries=validate_geometries,
+        max_retries=max_retries,
+        add_metadata_server=add_metadata_server,
+        logger=logger,
+    )
+
+    # Step 2: Format the output
+    logger.debug("Step 2/2: Formatting output...")
+    median_cols_before = [c for c in df_raw.columns if c.endswith("_median")]
+    logger.debug(
+        f"Columns ending with '_median' BEFORE formatting: {median_cols_before}"
+    )
+
+    df_formatted = format_stats_dataframe(
+        df=df_raw,
+        area_col=f"{geometry_area_column}_sum",
+        decimal_places=decimal_places,
+        unit_type=unit_type,
+        remove_columns=remove_median_columns,
+        convert_water_flag=convert_water_flag,
+        water_flag_threshold=water_flag_threshold,
+        sort_column=sort_column,
+    )
+
+    median_cols_after = [c for c in df_formatted.columns if c.endswith("_median")]
+    logger.debug(f"Columns ending with '_median' AFTER formatting: {median_cols_after}")
+
+    # Step 2b: Reformat geometry and handle point areas
+    try:
+        df_formatted = reformat_geometry_type(df_formatted)
+    except Exception as e:
+        logger.warning(f"Error reformatting geometry type: {e}")
+
+    try:
+        df_formatted = set_point_geometry_area_to_zero(df_formatted)
+    except Exception as e:
+        logger.warning(f"Error setting point geometry area to zero: {e}")
+
+    # Step 3: Validate against schema
+    logger.debug("Step 3/3: Validating against schema...")
+    from openforis_whisp.reformat import validate_dataframe_using_lookups_flexible
+
+    df_validated = validate_dataframe_using_lookups_flexible(
+        df_stats=df_formatted,
+        national_codes=national_codes,
+        custom_bands=custom_bands,
+    )
+
+    # Step 2c: Add audit trail column (AFTER validation to preserve columns)
+    if geometry_audit_trail:
+        logger.debug("Adding geo_original column for audit trail...")
+        df_validated = _add_geometry_audit_trail(
+            df_validated=df_validated,
+            input_geojson_filepath=input_geojson_filepath,
+            gdf_original_geoms=gdf_original_geoms,
+            logger=logger,
+        )
+
+    # Add processing metadata column using pd.concat to avoid fragmentation warning
+    metadata_dict = {
+        "whisp_version": get_version("openforis-whisp"),
+        "processing_timestamp_utc": datetime.now(timezone.utc).strftime(
+            "%Y-%m-%d %H:%M:%S%z"
+        ),
+    }
+    metadata_series = pd.Series(
+        [metadata_dict] * len(df_validated), name="whisp_processing_metadata"
+    )
+    df_validated = pd.concat([df_validated, metadata_series], axis=1)
+
+    logger.info("Concurrent processing + formatting + validation complete")
+    return df_validated
+
+
+def whisp_formatted_stats_geojson_to_df_sequential(
+    input_geojson_filepath: str,
+    external_id_column: str = None,
+    national_codes: List[str] = None,
+    unit_type: str = "ha",
+    whisp_image: ee.Image = None,
+    custom_bands: Dict[str, Any] = None,
+    add_metadata_client_side: bool = True,
+    logger: logging.Logger = None,
+    # Format parameters (auto-detect from config if not provided)
+    decimal_places: int = None,
+    remove_median_columns: bool = True,
+    convert_water_flag: bool = True,
+    water_flag_threshold: float = 0.5,
+    sort_column: str = "plotId",
+    geometry_audit_trail: bool = False,
+) -> pd.DataFrame:
+    """
+    Process GeoJSON sequentially with automatic formatting and validation.
+
+    Combines whisp_stats_geojson_to_df_sequential + format_stats_dataframe + validation
+    for a complete pipeline: extract stats → convert units → format output → validate schema.
+
+    Uses standard endpoint for sequential processing.
+
+    Parameters
+    ----------
+    input_geojson_filepath : str
+        Path to input GeoJSON file
+    external_id_column : str, optional
+        Column name for external IDs
+    national_codes : List[str], optional
+        ISO2 codes for national datasets
+    unit_type : str
+        "ha" or "percent"
+    whisp_image : ee.Image, optional
+        Pre-combined image
+    custom_bands : Dict[str, Any], optional
+        Custom band information
+    add_metadata_client_side : bool
+        Add client-side metadata (default True)
+    logger : logging.Logger, optional
+        Logger for output
+    decimal_places : int, optional
+        Decimal places for rounding. If None, auto-detects from config:
+        - Area columns: geometry_area_column_formatting
+        - Percent columns: stats_percent_columns_formatting
+        - Other columns: stats_area_columns_formatting
+    remove_median_columns : bool
+        Remove '_median' columns (default True)
+    convert_water_flag : bool
+        Convert water flag to boolean (default True)
+    water_flag_threshold : float
+        Water flag ratio threshold (default 0.5)
+    sort_column : str
+        Column to sort by (default "plotId", None to skip)
+    geometry_audit_trail : bool, default True
+        If True, includes original input geometry column:
+        - geo_original: Original input geometry (before EE processing), stored as GeoJSON
+        Enables geometry traceability for compliance and audit purposes.
+
+    Returns
+    -------
+    pd.DataFrame
+        Validated, formatted results DataFrame with optional audit trail
+    """
+    from openforis_whisp.reformat import format_stats_dataframe
+    from datetime import datetime, timezone
+    import json
+    from shapely.geometry import mapping
+
+    logger = logger or logging.getLogger("whisp")
+
+    # Auto-detect decimal places from config if not provided
+    if decimal_places is None:
+        # Use stats_area_columns_formatting as default for most columns
+        decimal_places = _extract_decimal_places(stats_area_columns_formatting)
+        logger.debug(f"Using decimal_places={decimal_places} from config")
+
+    # Load original geometries once here if needed for audit trail (avoid reloading later)
+    gdf_original_geoms = None
+    if geometry_audit_trail:
+        logger.debug("Pre-loading GeoJSON for geometry audit trail...")
+        gdf_original_geoms = _load_and_prepare_geojson(input_geojson_filepath)
+
+    # Step 1: Get raw stats
+    logger.debug("Step 1/2: Extracting statistics (sequential)...")
+    df_raw = whisp_stats_geojson_to_df_sequential(
+        input_geojson_filepath=input_geojson_filepath,
+        external_id_column=external_id_column,
+        national_codes=national_codes,
+        unit_type=unit_type,
+        whisp_image=whisp_image,
+        custom_bands=custom_bands,
+        add_metadata_client_side=add_metadata_client_side,
+        logger=logger,
+    )
+
+    # Step 2: Format the output
+    logger.debug("Step 2/2: Formatting output...")
+    median_cols_before = [c for c in df_raw.columns if c.endswith("_median")]
+    logger.debug(
+        f"Columns ending with '_median' BEFORE formatting: {median_cols_before}"
+    )
+
+    df_formatted = format_stats_dataframe(
+        df=df_raw,
+        area_col=f"{geometry_area_column}_sum",
+        decimal_places=decimal_places,
+        unit_type=unit_type,
+        remove_columns=remove_median_columns,
+        convert_water_flag=convert_water_flag,
+        water_flag_threshold=water_flag_threshold,
+        sort_column=sort_column,
+    )
+
+    median_cols_after = [c for c in df_formatted.columns if c.endswith("_median")]
+    logger.debug(f"Columns ending with '_median' AFTER formatting: {median_cols_after}")
+
+    # Step 2b: Reformat geometry and handle point areas
+    try:
+        df_formatted = reformat_geometry_type(df_formatted)
+    except Exception as e:
+        logger.warning(f"Error reformatting geometry type: {e}")
+
+    try:
+        df_formatted = set_point_geometry_area_to_zero(df_formatted)
+    except Exception as e:
+        logger.warning(f"Error setting point geometry area to zero: {e}")
+
+    # Step 3: Validate against schema
+    logger.debug("Step 3/3: Validating against schema...")
+    from openforis_whisp.reformat import validate_dataframe_using_lookups_flexible
+
+    df_validated = validate_dataframe_using_lookups_flexible(
+        df_stats=df_formatted,
+        national_codes=national_codes,
+        custom_bands=custom_bands,
+    )
+
+    # Step 2c: Add audit trail column (AFTER validation to preserve columns)
+    if geometry_audit_trail:
+        logger.debug("Adding geo_original column for audit trail...")
+        df_validated = _add_geometry_audit_trail(
+            df_validated=df_validated,
+            input_geojson_filepath=input_geojson_filepath,
+            gdf_original_geoms=gdf_original_geoms,
+            logger=logger,
+        )
+
+    # Add processing metadata column using pd.concat to avoid fragmentation warning
+    metadata_dict = {
+        "whisp_version": get_version("openforis-whisp"),
+        "processing_timestamp_utc": datetime.now(timezone.utc).strftime(
+            "%Y-%m-%d %H:%M:%S%z"
+        ),
+    }
+    metadata_series = pd.Series(
+        [metadata_dict] * len(df_validated), name="whisp_processing_metadata"
+    )
+    df_validated = pd.concat([df_validated, metadata_series], axis=1)
+
+    logger.info("Sequential processing + formatting + validation complete")
+    return df_validated
+
+
+# ============================================================================
+# FAST PROCESSING WITH AUTO-ROUTING
+# ============================================================================
+
+
+def whisp_formatted_stats_geojson_to_df_fast(
+    input_geojson_filepath: str,
+    external_id_column: str = None,
+    national_codes: List[str] = None,
+    unit_type: str = "ha",
+    whisp_image: ee.Image = None,
+    custom_bands: Dict[str, Any] = None,
+    mode: str = "sequential",
+    # Concurrent-specific parameters
+    batch_size: int = 10,
+    max_concurrent: int = 20,
+    validate_geometries: bool = True,
+    max_retries: int = 3,
+    add_metadata_server: bool = False,
+    # Format parameters (auto-detect from config if not provided)
+    decimal_places: int = None,
+    remove_median_columns: bool = True,
+    convert_water_flag: bool = True,
+    water_flag_threshold: float = 0.5,
+    sort_column: str = "plotId",
+    geometry_audit_trail: bool = False,
+) -> pd.DataFrame:
+    """
+    Process GeoJSON to Whisp statistics with optimized fast processing.
+
+    Routes to concurrent (high-volume endpoint) or sequential (standard endpoint)
+    based on explicit mode selection.
+
+    This is the recommended entry point for most users.
+
+    Parameters
+    ----------
+    input_geojson_filepath : str
+        Path to input GeoJSON file
+    external_id_column : str, optional
+        Column name for external IDs
+    national_codes : List[str], optional
+        ISO2 codes for national datasets
+    unit_type : str
+        "ha" or "percent"
+    whisp_image : ee.Image, optional
+        Pre-combined image
+    custom_bands : Dict[str, Any], optional
+        Custom band information
+    mode : str
+        Processing mode:
+        - "concurrent": Uses high-volume endpoint with batch processing
+        - "sequential": Uses standard endpoint for sequential processing
+    batch_size : int
+        Features per batch (only for concurrent mode)
+    max_concurrent : int
+        Maximum concurrent EE calls (only for concurrent mode)
+    validate_geometries : bool
+        Validate and clean geometries
+    max_retries : int
+        Retry attempts per batch (only for concurrent mode)
+    add_metadata_server : bool
+        Add metadata server-side (only for concurrent mode)
+    decimal_places : int, optional
+        Decimal places for rounding. If None, auto-detects from config.
+    remove_median_columns : bool
+        Remove '_median' columns
+    convert_water_flag : bool
+        Convert water flag to boolean
+    water_flag_threshold : float
+        Water flag ratio threshold
+    sort_column : str
+        Column to sort by
+    geometry_audit_trail : bool
+        Include geometry modification audit trail columns
+
+    Returns
+    -------
+    pd.DataFrame
+        Validated, formatted results DataFrame
+
+    Examples
+    --------
+    >>> # Use concurrent processing (recommended for most datasets)
+    >>> df = whisp_formatted_stats_geojson_to_df_fast(
+    ...     "data.geojson",
+    ...     mode="concurrent"
+    ... )
+
+    >>> # Use sequential processing for more stable results
+    >>> df = whisp_formatted_stats_geojson_to_df_fast(
+    ...     "data.geojson",
+    ...     mode="sequential"
+    ... )
+    """
+    logger = logging.getLogger("whisp")
+
+    # Validate mode parameter
+    if mode not in ("concurrent", "sequential"):
+        raise ValueError(
+            f"Invalid mode '{mode}'. Must be 'concurrent' or 'sequential'."
+        )
+
+    logger.info(f"Mode: {mode}")
+
+    # Route to appropriate function
+    if mode == "concurrent":
+        logger.debug("Routing to concurrent processing...")
+        return whisp_formatted_stats_geojson_to_df_concurrent(
+            input_geojson_filepath=input_geojson_filepath,
+            external_id_column=external_id_column,
+            national_codes=national_codes,
+            unit_type=unit_type,
+            whisp_image=whisp_image,
+            custom_bands=custom_bands,
+            batch_size=batch_size,
+            max_concurrent=max_concurrent,
+            validate_geometries=validate_geometries,
+            max_retries=max_retries,
+            add_metadata_server=add_metadata_server,
+            logger=logger,
+            decimal_places=decimal_places,
+            remove_median_columns=remove_median_columns,
+            convert_water_flag=convert_water_flag,
+            water_flag_threshold=water_flag_threshold,
+            sort_column=sort_column,
+            geometry_audit_trail=geometry_audit_trail,
+        )
+    else:  # sequential
+        logger.debug("Routing to sequential processing...")
+        return whisp_formatted_stats_geojson_to_df_sequential(
+            input_geojson_filepath=input_geojson_filepath,
+            external_id_column=external_id_column,
+            national_codes=national_codes,
+            unit_type=unit_type,
+            whisp_image=whisp_image,
+            custom_bands=custom_bands,
+            logger=logger,
+            decimal_places=decimal_places,
+            remove_median_columns=remove_median_columns,
+            convert_water_flag=convert_water_flag,
+            water_flag_threshold=water_flag_threshold,
+            sort_column=sort_column,
+            geometry_audit_trail=geometry_audit_trail,
+        )
