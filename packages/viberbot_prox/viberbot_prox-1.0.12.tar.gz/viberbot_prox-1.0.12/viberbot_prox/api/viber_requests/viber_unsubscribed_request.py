@@ -1,0 +1,17 @@
+from viberbot_prox.api.event_type import EventType
+from viberbot_prox.api.viber_requests.viber_request import ViberRequest
+
+
+class ViberUnsubscribedRequest(ViberRequest):
+	def __init__(self):
+		super(ViberUnsubscribedRequest, self).__init__(EventType.UNSUBSCRIBED)
+		self._user_id = None
+
+	def from_dict(self, request_dict):
+		super(ViberUnsubscribedRequest, self).from_dict(request_dict)
+		self._user_id = request_dict['user_id']
+		return self
+
+	@property
+	def user_id(self):
+		return self._user_id
