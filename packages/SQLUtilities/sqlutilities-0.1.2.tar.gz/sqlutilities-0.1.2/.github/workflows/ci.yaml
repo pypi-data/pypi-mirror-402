@@ -1,0 +1,261 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Check code formatting with Black
+        run: uv run black --check sqlutilities/ UNIT_TESTS/
+
+      - name: Check import sorting with isort
+        run: uv run isort --check-only sqlutilities/ UNIT_TESTS/
+
+      - name: Lint with flake8
+        run: |
+          uv run flake8 sqlutilities/ UNIT_TESTS/ \
+            --count \
+            --select=E9,F63,F7,F82 \
+            --show-source \
+            --statistics
+
+      - name: Type checking with mypy
+        run: uv run mypy sqlutilities/ --ignore-missing-imports
+        continue-on-error: true
+
+  test:
+    name: Test Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run unit tests (SQLite only)
+        run: |
+          uv run pytest UNIT_TESTS/ \
+            --skip-integration \
+            -v \
+            --cov=sqlutilities \
+            --cov-report=xml \
+            --cov-report=term-missing
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-py${{ matrix.python-version }}
+        continue-on-error: true
+
+  validate-pyproject:
+    name: Validate pyproject.toml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Validate pyproject.toml
+        run: uv sync --dry-run
+
+      - name: Check lock file is up to date
+        run: uv lock --check
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run pip-audit for security check
+        run: |
+          uv pip install pip-audit
+          uv run pip-audit
+        continue-on-error: true
+
+  integration-tests:
+    name: Integration Tests (Databases)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
+
+    services:
+      mysql:
+        image: mysql:8.3
+        env:
+          MYSQL_ROOT_PASSWORD: test_password
+          MYSQL_DATABASE: testdb
+          MYSQL_USER: testuser
+          MYSQL_PASSWORD: test_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_USER: testuser
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: YourStrong!Passw0rd
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'YourStrong!Passw0rd' -C -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dependencies with database drivers
+        run: |
+          uv sync --dev
+          uv pip install PyMySQL psycopg2-binary pyodbc
+
+      - name: Create test .env file
+        run: |
+          cat > tst/docker/.env << EOF
+          MYSQL_HOST=localhost
+          MYSQL_HOST_PORT=3306
+          MYSQL_DATABASE=testdb
+          MYSQL_USER=testuser
+          MYSQL_PASSWORD=test_password
+
+          POSTGRES_HOST=localhost
+          POSTGRES_HOST_PORT=5432
+          POSTGRES_DB=testdb
+          POSTGRES_USER=testuser
+          POSTGRES_PASSWORD=test_password
+
+          SQLSERVER_HOST=localhost
+          SQLSERVER_HOST_PORT=1433
+          SQLSERVER_DB_NAME=master
+          SQLSERVER_USER=SA
+          SQLSERVER_PASSWORD=YourStrong!Passw0rd
+          EOF
+
+      - name: Wait for databases to be ready
+        run: |
+          echo "Waiting for MySQL..."
+          until docker exec $(docker ps -q -f ancestor=mysql:8.3) mysqladmin ping -h localhost --silent; do
+            echo "MySQL is unavailable - sleeping"
+            sleep 2
+          done
+          echo "MySQL is ready!"
+
+          echo "Waiting for PostgreSQL..."
+          sleep 5
+          echo "PostgreSQL is ready!"
+
+          echo "Waiting for SQL Server..."
+          sleep 10
+          echo "SQL Server is ready!"
+
+      - name: Run integration tests
+        run: |
+          uv run pytest UNIT_TESTS/ \
+            -v \
+            --dialect=all \
+            --cov=sqlutilities \
+            --cov-report=xml \
+            --cov-report=term-missing
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: integration
+          name: codecov-integration
+        continue-on-error: true

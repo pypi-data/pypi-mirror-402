@@ -1,0 +1,244 @@
+name: Build and Publish
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+a[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+b[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+rc[0-9]+"
+
+env:
+  PACKAGE_NAME: "SQLUtilities"
+  OWNER: "ruppert20"
+
+jobs:
+  details:
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.release.outputs.new_version }}
+      suffix: ${{ steps.release.outputs.suffix }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract tag and Details
+        id: release
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+            # Remove 'v' prefix for version number
+            NEW_VERSION=$(echo $TAG_NAME | sed 's/^v//' | awk -F'-' '{print $1}')
+            SUFFIX=$(echo $TAG_NAME | grep -oP '[a-z]+[0-9]+' || echo "")
+            echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+            echo "suffix=$SUFFIX" >> "$GITHUB_OUTPUT"
+            echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+            echo "Version is $NEW_VERSION"
+            echo "Suffix is $SUFFIX"
+            echo "Tag name is $TAG_NAME"
+          else
+            echo "No tag found"
+            exit 1
+          fi
+
+  check_pypi:
+    needs: details
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch information from PyPI
+        run: |
+          response=$(curl -s https://pypi.org/pypi/${{ env.PACKAGE_NAME }}/json || echo "{}")
+          latest_previous_version=$(echo $response | jq --raw-output "select(.releases != null) | .releases | keys_unsorted | last")
+          if [ -z "$latest_previous_version" ]; then
+            echo "Package not found on PyPI."
+            latest_previous_version="0.0.0"
+          fi
+          echo "Latest version on PyPI: $latest_previous_version"
+          echo "latest_previous_version=$latest_previous_version" >> $GITHUB_ENV
+
+      - name: Compare versions and exit if not newer
+        run: |
+          NEW_VERSION=${{ needs.details.outputs.new_version }}
+          LATEST_VERSION=$latest_previous_version
+          if [ "$(printf '%s\n' "$LATEST_VERSION" "$NEW_VERSION" | sort -rV | head -n 1)" != "$NEW_VERSION" ] || [ "$NEW_VERSION" == "$LATEST_VERSION" ]; then
+            echo "The new version $NEW_VERSION is not greater than the latest version $LATEST_VERSION on PyPI."
+            exit 1
+          else
+            echo "The new version $NEW_VERSION is greater than the latest version $LATEST_VERSION on PyPI."
+          fi
+
+  setup_and_build:
+    needs: [details, check_pypi]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history including tags for setuptools-scm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install build dependencies
+        run: |
+          uv pip install --system build setuptools-scm
+
+      - name: Verify version from setuptools-scm
+        run: |
+          echo "Version detected by setuptools-scm:"
+          python -c "from setuptools_scm import get_version; print(get_version())"
+
+      - name: Build package
+        run: |
+          echo "Building package..."
+          python -m build
+          echo "Build artifacts:"
+          ls -lh dist/
+
+      - name: Verify build artifacts
+        run: |
+          echo "Checking distribution contents..."
+          if [ -f dist/*.whl ]; then
+            echo "Wheel file found:"
+            ls -lh dist/*.whl
+          fi
+          if [ -f dist/*.tar.gz ]; then
+            echo "Source distribution found:"
+            ls -lh dist/*.tar.gz
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  pypi_publish:
+    name: Upload release to PyPI
+    needs: [setup_and_build, details]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+    permissions:
+      id-token: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Verify artifacts
+        run: |
+          echo "Artifacts to publish:"
+          ls -lh dist/
+
+      - name: Publish distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  github_release:
+    name: Create GitHub Release
+    needs: [setup_and_build, details]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          VERSION="${{ needs.details.outputs.new_version }}"
+          echo "Generating release notes for version $VERSION"
+
+          # Create release notes
+          cat > release_notes.md << 'EOF'
+          ## SQLUtilities ${{ needs.details.outputs.tag_name }}
+
+          ### Installation
+
+          Install via pip:
+          ```bash
+          pip install SQLUtilities==${{ needs.details.outputs.new_version }}
+          ```
+
+          Or with UV:
+          ```bash
+          uv add SQLUtilities==${{ needs.details.outputs.new_version }}
+          ```
+
+          ### Install with database drivers
+
+          ```bash
+          # MySQL support
+          pip install "SQLUtilities[mysql]==${{ needs.details.outputs.new_version }}"
+
+          # PostgreSQL support
+          pip install "SQLUtilities[postgres]==${{ needs.details.outputs.new_version }}"
+
+          # All database drivers
+          pip install "SQLUtilities[all-drivers]==${{ needs.details.outputs.new_version }}"
+
+          # Full installation with performance libraries
+          pip install "SQLUtilities[full]==${{ needs.details.outputs.new_version }}"
+          ```
+
+          ### What's Changed
+
+          EOF
+
+      - name: Create GitHub Release
+        id: create_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create ${{ needs.details.outputs.tag_name }} \
+            dist/* \
+            --title "SQLUtilities ${{ needs.details.outputs.tag_name }}" \
+            --notes-file release_notes.md \
+            --generate-notes
+
+  # Test installation (optional but recommended)
+  test_installation:
+    name: Test PyPI Installation
+    needs: [pypi_publish, details]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+    steps:
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Wait for PyPI to update
+        run: sleep 60
+
+      - name: Install package from PyPI
+        run: |
+          pip install --upgrade pip
+          pip install SQLUtilities==${{ needs.details.outputs.new_version }}
+
+      - name: Verify installation
+        run: |
+          python -c "import sqlutilities; print('Package version:', sqlutilities.__version__)"
+          python -c "from sqlutilities import SQLDialect; print('SQLDialect imported:', SQLDialect)"
+          python -c "from sqlutilities import DatabaseConnection; print('DatabaseConnection imported successfully')"
+          python -c "from sqlutilities import SQL_TABLE; print('SQL_TABLE imported successfully')"
