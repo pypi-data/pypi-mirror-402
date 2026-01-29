@@ -1,0 +1,57 @@
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, TypeVar
+
+from attrs import define as _attrs_define
+from attrs import field as _attrs_field
+
+if TYPE_CHECKING:
+    from ..models.controller_description import ControllerDescription
+
+
+T = TypeVar("T", bound="ControllerDescriptions")
+
+
+@_attrs_define
+class ControllerDescriptions:
+    """ """
+
+    additional_properties: dict[str, "ControllerDescription"] = _attrs_field(init=False, factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        field_dict: dict[str, Any] = {}
+        for prop_name, prop in self.additional_properties.items():
+            field_dict[prop_name] = prop.to_dict()
+
+        return field_dict
+
+    @classmethod
+    def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        from ..models.controller_description import ControllerDescription
+
+        d = dict(src_dict)
+        controller_descriptions = cls()
+
+        additional_properties = {}
+        for prop_name, prop_dict in d.items():
+            additional_property = ControllerDescription.from_dict(prop_dict)
+
+            additional_properties[prop_name] = additional_property
+
+        controller_descriptions.additional_properties = additional_properties
+        return controller_descriptions
+
+    @property
+    def additional_keys(self) -> list[str]:
+        return list(self.additional_properties.keys())
+
+    def __getitem__(self, key: str) -> "ControllerDescription":
+        return self.additional_properties[key]
+
+    def __setitem__(self, key: str, value: "ControllerDescription") -> None:
+        self.additional_properties[key] = value
+
+    def __delitem__(self, key: str) -> None:
+        del self.additional_properties[key]
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.additional_properties
