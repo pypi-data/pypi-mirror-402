@@ -1,0 +1,6 @@
+Before
+
+<<CHANGES>>
+
+X {++a++}.
+
