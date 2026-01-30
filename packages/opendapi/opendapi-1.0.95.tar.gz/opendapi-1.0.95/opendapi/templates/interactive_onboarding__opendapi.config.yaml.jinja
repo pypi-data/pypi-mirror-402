@@ -1,0 +1,45 @@
+schema: https://opendapi.org/spec/0-0-3/opendapi.config.json
+
+organization:
+  name: {{ props.org_name }}
+  email_domain: {{ props.org_email_domain }}
+
+repository:
+  urn: {{ props.repo_urn }}
+  mainline_branch: {{ props.mainline_branch_name }}
+  integration_mode: {{ props.integration_mode.value }}
+
+dapis:
+  runtimes:
+    DEFAULT:
+      integrations:
+        {%- for integration_config in props.integrations %}
+        - type: {{ integration_config.integration.value }}
+          projects:
+            include_all: {{ integration_config.include_all }}
+            {%- if integration_config.artifact_path %}
+            artifact_path: {{ integration_config.artifact_path }}
+            {%- endif %}
+            {%- if integration_config.dialect %}
+            dialect: {{ integration_config.dialect.value }}
+            {%- endif %}
+            {%- if integration_config.model_allowlist %}
+            model_allowlist: {{ integration_config.model_allowlist }}
+            {%- endif %}
+
+            {%- if integration_config.projects %}
+            overrides:
+              {%- for project_config in integration_config.projects %}
+              - project_path: {{ project_config.project_path }}
+                artifact_path: {{ project_config.artifact_path }}
+                {%- if project_config.dialect %}
+                dialect: {{ project_config.dialect.value }}
+                {%- endif %}
+                {%- if project_config.model_allowlist %}
+                model_allowlist: [{% for v in project_config.model_allowlist %}"{{ v }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+                {%- endif %}
+
+              {%- endfor %}
+            {%- endif %}
+
+        {%- endfor %}
