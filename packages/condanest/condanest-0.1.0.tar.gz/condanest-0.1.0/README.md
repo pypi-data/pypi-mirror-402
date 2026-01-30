@@ -1,0 +1,73 @@
+<p align="center">
+  <img src="condanest.png" alt="CondaNest logo" width="200">
+</p>
+
+## CondaNest: Web-based Conda Manager
+
+A fast, minimal web app for **managing and cleaning Conda/Mamba environments** on Linux, Windows, and macOS.
+
+Runs a local web server that opens in your browser - no native GUI dependencies required.
+
+<p align="center">
+  <img src="app.gif" alt="CondaNest in action">
+</p>
+
+
+### Features
+
+* List environments with path and disk usage
+* Clone, rename, delete, export to `environment.yml`
+* Bulk export or create envs from YAML folders
+* Run `conda clean --all` from a simple dialog
+* Manage global channels and strict priority
+* Install packages in a environment
+
+### Installation
+
+Install CondaNest using pip:
+
+```bash
+pip install condanest
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/aradar46/condanest.git
+cd condanest
+pip install .
+```
+
+### Usage
+
+After installation, run:
+
+```bash
+condanest
+```
+
+The app will automatically start a web server and open in your browser at http://127.0.0.1:8765
+
+**Platform-specific notes:**
+- **Linux/macOS**: The browser should open automatically
+- **Windows**: The browser should open automatically. If it doesn't, manually navigate to http://127.0.0.1:8765
+
+### Anaconda Terms of Service
+
+If you use **Anaconda or Miniconda** with default Anaconda channels, you may need to accept the Terms of Service once:
+
+```bash
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+```
+
+After running these commands, retry the operation in CondaNest.
+
+### Requirements
+
+* Python 3.10+
+* FastAPI and Uvicorn (installed automatically via pip)
+
+### License
+
+MIT License
