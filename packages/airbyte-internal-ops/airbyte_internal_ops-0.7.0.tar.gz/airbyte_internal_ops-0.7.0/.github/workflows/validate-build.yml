@@ -1,0 +1,46 @@
+name: Validate Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request: {}
+
+permissions:
+  contents: read
+
+jobs:
+  build-check:
+    name: Build and Inspect Python Package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Disable direct references for build check
+        # Forcibly disable allow-direct-references to catch git dependencies at build time.
+        run: |
+          echo "Before:" && grep allow-direct-references pyproject.toml
+          sed -i 's/allow-direct-references *= *true/allow-direct-references = false/' pyproject.toml
+          echo "After:" && grep allow-direct-references pyproject.toml
+
+      - name: Build package
+        run: uv build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: Packages-${{ github.run_id }}
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
