@@ -1,0 +1,37 @@
+[package]
+name = "palisade-native"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "palisade_native"
+# cdylib is required for PyO3 to create a Python extension module
+# rlib is required for running Rust tests
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# PyO3 for Python bindings (0.21+ supports Python 3.13)
+pyo3 = { version = "0.22" }
+
+# Serialization for SafeTensors JSON parsing
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Aho-Corasick algorithm for fast multi-pattern matching
+# Used for security scanning (detecting malicious patterns in binary data)
+aho-corasick = "1.1"
+
+# Rayon for data parallelism
+# Used for parallel pattern matching across CPU cores
+rayon = "1.10"
+
+# Highflame Policy Engine - Cedar-based policy framework
+# Bundled into palisade with 'embedded' feature (disables standalone pymodule)
+highflame-policy = { path = "../../highflame-policy", features = ["python", "embedded"] }
+
+[features]
+default = ["pyo3/extension-module"]
+# Extension module is the default for production builds
+# For tests, run with --no-default-features --features test-mode
+test-mode = ["pyo3/auto-initialize"]
+

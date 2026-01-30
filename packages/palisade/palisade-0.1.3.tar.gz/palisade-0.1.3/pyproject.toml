@@ -1,0 +1,219 @@
+[project]
+name = "palisade"
+version = "0.1.3"
+description = "Comprehensive LLM security scanner - Palisade"
+readme = "README.md"
+license = {text = "HIGHFLAME COMMERCIAL LICENSE"}
+requires-python = ">=3.10,<3.13"  # Python 3.13+ not yet supported by llama-cpp-python wheels
+authors = [
+    {name = "Sharath Rajasekar", email = "sharath@highflame.com"},
+]
+dependencies = [
+    # Core dependencies for security scanning
+    "numpy>=1.19.0",          # Tensor operations and numerical analysis
+    "psutil>=5.8.0",          # System monitoring and process management
+    "msgpack>=1.0.0",         # MessagePack format support
+    "pydantic>=2.0.0",        # Data validation and settings management
+    "py-tlsh>=4.0.0",         # Fuzzy hashing for file similarity detection
+    "sarif-pydantic>=0.6.1",  # SARIF report generation and validation
+    
+    # File format support (lightweight)
+    "safetensors>=0.3.0",     # Safetensors format (preferred secure format)
+    
+    # Cryptographic provenance verification
+    "sigstore>=2.0.0",        # Sigstore signature verification for model transparency
+    
+    # CLI and UI (Phase 0: Refactoring - Dec 2025)
+    "typer>=0.12.0",          # Modern CLI framework with tab completion
+    "rich>=13.7.0",           # Beautiful terminal output with tables and colors
+    
+    # Configuration and data files
+    "PyYAML>=6.0",            # YAML parsing for warning catalog
+]
+
+# Optional dependencies (pip extras)
+# Install with: pip install palisade[inference]
+[project.optional-dependencies]
+# Full inference support (PyTorch + GGUF)
+inference = [
+    "torch>=2.0.0",
+    "transformers>=4.35.0",
+    "accelerate>=0.20.0",
+    "bitsandbytes>=0.40.0",  # For quantized HuggingFace models (bnb-4bit, etc.)
+    "llama-cpp-python>=0.2.0",
+    "numpy>=1.19.0",
+]
+
+# PyTorch/Transformers only (for SafeTensors/HuggingFace models)
+inference-pytorch = [
+    "torch>=2.0.0", 
+    "transformers>=4.35.0",
+    "accelerate>=0.20.0",
+    "bitsandbytes>=0.40.0",  # For quantized HuggingFace models
+    "numpy>=1.19.0",
+]
+
+# GGUF only (lighter weight, for quantized GGUF models)
+inference-gguf = [
+    "llama-cpp-python>=0.2.0",
+]
+
+# Development dependencies (UV style)
+[dependency-groups]
+dev = [
+    "maturin>=1.0,<2.0",  # Rust build tool for manual development
+    "patchelf>=0.17.0",   # Required for setting rpath on Linux wheels
+    "mypy>=1.14.1",
+    "pytest>=6.0.0", # Testing framework
+    "pytest-cov>=2.10.0", # Coverage reporting
+    "ruff>=0.1.0", # Linting and formatting
+    "bump-my-version>=0.28.0", # Version management
+]
+test = [
+    "pytest>=6.0.0",
+    "pytest-cov>=2.10.0",
+]
+lint = [
+    "ruff>=0.1.0",
+]
+examples = [
+    "marimo>=0.8.0", # Interactive notebooks for examples and demos
+    "transformers>=4.0.0", # For model loading in examples
+    "torch>=1.9.0", # PyTorch for model inference examples
+]
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+# Maturin configuration for Rust extension
+[tool.maturin]
+python-source = "src"
+module-name = "palisade._native"
+features = ["pyo3/extension-module"]
+manifest-path = "highflame-palisade/rust/Cargo.toml"
+
+[project.scripts]
+palisade = "palisade.cli.main:main"
+
+# Ruff configuration for linting and formatting
+[tool.ruff]
+# Increase line length for security-focused code with detailed messages
+line-length = 100  
+target-version = "py310"
+
+[tool.ruff.lint]
+# Enable additional rule categories
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings  
+    "F",   # Pyflakes
+    "I",   # isort (import sorting)
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "S",   # flake8-bandit (security)
+    "C4",  # flake8-comprehensions
+    "PIE", # flake8-pie
+    "T20", # flake8-print
+    "Q",   # flake8-quotes
+    "ANN", # flake8-annotations (type annotations)
+]
+
+# Ignore specific rules for security code
+ignore = [
+    "S101",  # Use of assert (common in security validation)
+    "S603",  # subprocess without shell=True (security tools need subprocess)
+    "S607",  # Starting process with partial executable path
+    "T20",   # Allow print statements in CLI tools
+    "E501",  # Line too long (handled by line-length setting)
+    "PIE790", # Unnecessary pass (sometimes needed for clarity)
+    "ANN401", # Any in **kwargs is acceptable for flexible APIs
+    "S110",  # try-except-pass is acceptable in some security contexts
+]
+
+# Fix what can be auto-fixed
+fixable = ["ALL"]
+unfixable = []
+
+# Exclude certain directories and files
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    "*.egg-info",
+    ".pytest_cache",
+    "models/",  # Don't lint model files
+    "testmodels/"  # Don't lint test model files
+]
+
+# Per-file ignores for specific security patterns
+[tool.ruff.lint.per-file-ignores]
+"**/validators/pickle_security.py" = ["S301", "S320"]  # Allow pickle operations in security validator
+"**/validators/backdoor.py" = ["S311"]  # Allow random in ML analysis
+"**/validators/gguf_safety.py" = ["S108"]  # Allow /tmp/ pattern strings for security detection
+"**/cli.py" = ["T201"]  # Allow print statements in CLI
+
+# Configure import sorting
+[tool.ruff.lint.isort]
+known-first-party = ["palisade"]
+force-single-line = false
+combine-as-imports = true
+
+# Configure quotes
+[tool.ruff.lint.flake8-quotes]
+inline-quotes = "double"
+
+# No workspace needed for single package
+
+# UV settings
+[tool.uv]
+# Extra index for llama-cpp-python CUDA wheels
+# Users can override with: uv pip install --extra-index-url ...
+extra-index-url = ["https://abetlen.github.io/llama-cpp-python/whl/cu124"]
+
+[tool.uv.pip]
+# Use system site packages if needed
+# system-site-packages = true
+
+# =============================================================================
+# Version Management with bump-my-version
+# =============================================================================
+# Usage:
+#   bump-my-version bump patch  # 0.4.0 -> 0.4.1
+#   bump-my-version bump minor  # 0.4.0 -> 0.5.0
+#   bump-my-version bump major  # 0.4.0 -> 1.0.0
+#
+# Or use Makefile shortcuts:
+#   make version-patch
+#   make version-minor
+#   make version-major
+
+[tool.bumpversion]
+current_version = "0.4.0"
+commit = true
+commit_args = "--no-verify"
+tag = true
+tag_name = "v{new_version}"
+tag_message = "Release v{new_version}"
+allow_dirty = false
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'current_version = "{current_version}"'
+replace = 'current_version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "src/palisade/__init__.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'

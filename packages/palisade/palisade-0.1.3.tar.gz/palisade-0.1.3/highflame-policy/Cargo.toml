@@ -1,0 +1,73 @@
+[workspace]
+members = [".", "node"]
+
+[package]
+name = "highflame-policy"
+version = "0.1.0"
+edition = "2021"
+authors = ["Yash Datta <yash.datta@highflame.com>"]
+description = "Unified Cedar-based policy framework for Highflame security platform"
+license = "Apache-2.0"
+repository = "https://github.com/highflame-io/highflame-policy"
+keywords = ["policy", "security", "cedar", "authorization", "highflame"]
+categories = ["authentication", "network-programming"]
+readme = "README.md"
+
+[lib]
+name = "highflame_policy"
+crate-type = ["rlib", "cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+# Core Cedar policy engine
+cedar-policy = "4.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging
+tracing = "0.1"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# UUID for tracing
+uuid = { version = "1.6", features = ["v4", "serde"] }
+
+# URL parsing for context enrichment
+url = "2.5"
+
+# File watching for hot-reload (future feature)
+notify = { version = "6.1", optional = true }
+
+# Async runtime (optional, for future sidecar)
+tokio = { version = "1.35", features = ["full"], optional = true }
+
+# gRPC support (future feature)
+tonic = { version = "0.12", optional = true }
+prost = { version = "0.13", optional = true }
+
+# Python bindings (optional)
+pyo3 = { version = "0.22", optional = true, features = ["extension-module"] }
+
+[dev-dependencies]
+tempfile = "3.8"
+tokio-test = "0.4"
+
+[features]
+default = []
+# Future feature: hot-reload support
+hot-reload = ["notify", "tokio"]
+# Future feature: gRPC sidecar service
+grpc-sidecar = ["tokio", "tonic", "prost"]
+# Python bindings
+python = ["dep:pyo3"]
+# Embedded mode: disables standalone pymodule for embedding in other crates (e.g., palisade)
+# When embedded, the Python classes are still available but no PyInit__native is generated
+embedded = []
+
