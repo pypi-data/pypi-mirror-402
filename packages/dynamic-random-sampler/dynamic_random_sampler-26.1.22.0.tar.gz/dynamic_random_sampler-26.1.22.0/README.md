@@ -1,0 +1,204 @@
+# Dynamic Random Sampler
+
+A high-performance weighted random sampler with dynamic weight updates, implementing
+the data structure from "Dynamic Generation of Discrete Random Variates" by
+Matias, Vitter, and Ni (1993/2003).
+
+## Quality Disclaimer
+
+The majority of this code was written by Claude Code, with heavy human guidance. It has had moderate human review and been extensively tested (again, mostly by Claude). It is likely to be reasonably robust, but it is still an early release that has not seen much use in practice, so there may be problems that have not yet been discovered. If you run into any, please report them.
+
+## Features
+
+- $O(\log^* N)$ **sampling**: Expected constant time for all practical $N$ (up to $2^{65536}$)
+- $O(\log^* N)$ **updates**: Amortized expected time for weight changes
+- **Dynamic operations**: Append, pop, and update weights without rebuilding
+- **Numerically stable**: Handles weights spanning $10^{-300}$ to $10^{300}$
+- **Python bindings**: Easy-to-use Python API via PyO3
+
+## Installation
+
+### Python
+
+```bash
+pip install dynamic-random-sampler
+```
+
+### From source
+
+```bash
+git clone https://github.com/DRMacIver/dynamic-random-sampler.git
+cd dynamic-random-sampler
+just install  # Install dependencies
+just build    # Build the Rust extension
+```
+
+## Quick Start
+
+### SamplerList (list-like interface)
+
+A list of weights with $O(\log^* N)$ weighted random sampling. Indices are stable -
+elements can only be added at the end (append) or removed from the end (pop).
+
+```python
+from dynamic_random_sampler import SamplerList
+
+# Create sampler with weights
+sampler = SamplerList([1.0, 2.0, 3.0])
+
+# Sample an index (returns 0, 1, or 2 with probabilities 1/6, 2/6, 3/6)
+index = sampler.sample()
+
+# Access weights like a list
+weight = sampler[0]     # Get weight at index 0
+sampler[0] = 10.0       # Update weight at index 0
+
+# Add and remove elements (at end only - indices stay stable)
+sampler.append(5.0)     # Add weight 5.0 at end
+sampler.extend([1.0, 2.0])  # Add multiple weights
+sampler.pop()           # Remove and return last element
+
+# Soft exclusion (keeps index but excludes from sampling)
+sampler[2] = 0.0        # Element at index 2 won't be sampled
+
+# Standard list operations
+len(sampler)            # Number of elements
+list(sampler)           # Get all weights as a list
+2.0 in sampler          # Check if weight exists
+sampler.clear()         # Remove all elements
+```
+
+### SamplerDict (dict-like interface)
+
+A dictionary mapping keys to weights with $O(\log^* N)$ weighted random sampling.
+Supports arbitrary string keys with full dict operations.
+
+```python
+from dynamic_random_sampler import SamplerDict
+
+# Create empty dict (or with seed for reproducibility)
+wd = SamplerDict(seed=12345)
+
+# Set weights for keys
+wd["apple"] = 1.0
+wd["banana"] = 2.0
+wd["cherry"] = 3.0
+
+# Sample a random key (probability proportional to weight)
+key = wd.sample()  # Returns "cherry" most often (weight 3.0)
+
+# Dict-like access
+weight = wd["apple"]    # Get weight
+wd["apple"] = 5.0       # Update weight
+del wd["banana"]        # Delete key
+
+# Standard dict operations
+len(wd)                 # Number of keys
+"apple" in wd           # Check if key exists
+wd.keys()               # List of keys
+wd.values()             # List of weights
+wd.items()              # List of (key, weight) tuples
+wd.get("missing", 0.0)  # Get with default
+wd.pop("apple")         # Remove and return weight
+wd.clear()              # Remove all keys
+```
+
+## Performance
+
+The algorithm achieves sub-logarithmic time complexity through a tree structure
+where elements are partitioned by weight ranges. Key optimizations include:
+
+- $O(1)$ **random child access**: Dual Vec+HashMap storage for rejection sampling
+- **Gumbel-max trick**: Log-space sampling without normalization
+- **Weight caching**: Avoid redundant log-sum-exp computations
+- **Lazy propagation**: Small weight changes don't propagate through tree
+
+### Benchmarks
+
+| Operation | Size | Time |
+|-----------|------|------|
+| single_sample (uniform) | 1000 | ~198ns |
+| single_sample (power_law) | 1000 | ~370ns |
+| batch_1000 | 1000 | ~199μs |
+| construction | 1000 | ~135μs |
+| update (same range) | 1000 | ~1.8μs |
+| update (cross range) | 1000 | ~750ns |
+| insert | 1000 | ~5.2μs |
+| delete | 1000 | ~4.1μs |
+
+(Measured on development machine)
+
+## Algorithm Overview
+
+Given $N$ elements with weights $w_1, \ldots, w_N$, samples index $j$ with probability
+$w_j / \sum_i w_i$.
+
+### Key Ideas
+
+1. **Range partitioning**: Elements grouped by weight range $R_j = [2^{j-1}, 2^j)$
+2. **Tree structure**: Non-root ranges (degree $\geq 2$) become elements at next level
+3. **Rejection sampling**: Within each range, accept with probability $w/2^j \geq 1/2$
+4. **Log-space arithmetic**: Weights stored as $\log_2(w)$ for numerical stability
+
+The tree height is bounded by $O(\log^* N)$, the iterated logarithm, which is $\leq 5$
+for all practical $N$.
+
+See [docs/algorithm.md](docs/algorithm.md) for detailed documentation with
+mathematical notation.
+
+## Development
+
+### Requirements
+
+- Rust 1.75+
+- Python 3.12+
+- [uv](https://github.com/astral-sh/uv) (Python package manager)
+- [just](https://github.com/casey/just) (command runner)
+
+### Commands
+
+```bash
+just install    # Install all dependencies
+just build      # Build the Rust extension
+just test       # Run fast tests
+just test-slow  # Run slow tests (statistical validation)
+just test-all   # Run all tests
+just lint       # Run all linters
+just format     # Format all code
+just check      # Run full quality check
+cargo bench     # Run benchmarks
+```
+
+### Project Structure
+
+```
+src/
+  core/           # Pure Rust implementation
+    mod.rs        # Module definitions, log-sum-exp
+    sampler.rs    # Sampling algorithm with Gumbel-max
+    range.rs      # Range data structure (O(1) random access)
+    level.rs      # Level data structure
+    tree.rs       # Immutable tree for sampling
+    update.rs     # MutableTree with insert/delete/update
+    config.rs     # Section 4 optimization configuration
+    stats.rs      # Chi-squared testing
+  lib.rs          # PyO3 bindings
+tests/
+  test_distributions.rs  # Rust statistical tests
+  test_hypothesis.py     # Property-based Python tests
+benches/
+  sampling.rs     # Criterion benchmarks
+docs/
+  algorithm.md    # Detailed algorithm documentation
+```
+
+## References
+
+Matias, Y., Vitter, J. S., & Ni, W. (2003). "Dynamic generation of discrete
+random variates." *Theory of Computing Systems*, 36(4), 329-358.
+
+Original conference version: SODA 1993.
+
+## License
+
+MIT
