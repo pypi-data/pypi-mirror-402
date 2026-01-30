@@ -1,0 +1,103 @@
+# string-tools 
+
+![Tests](https://github.com/keita223/string-tools/actions/workflows/tests.yaml/badge.svg)
+![Documentation](https://github.com/keita223/string-tools/actions/workflows/docs.yaml/badge.svg)
+![Python](https://img.shields.io/badge/python-3.12-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+
+A Python package for string manipulation with powerful utilities.
+
+## Features
+
+- 🔄 **Reverse strings** - Flip any text backwards
+- 🔤 **Count vowels** - Analyze vowel frequency
+- ✨ **Capitalize words** - Format text professionally
+
+##  Installation
+```bash
+pip install string-tools
+```
+
+##  Quick Start
+```python
+from string_tools.string_ops import reverse_string, count_vowels, capitalize_words
+
+# Reverse a string
+result = reverse_string("hello")
+print(result)  # Output: "olleh"
+
+# Count vowels
+count = count_vowels("hello world")
+print(count)  # Output: 3
+
+# Capitalize words
+formatted = capitalize_words("hello world")
+print(formatted)  # Output: "Hello World"
+```
+
+##  Documentation
+
+Full documentation is available at: **[https://keita223.github.io/string-tools/](https://keita223.github.io/string-tools/)**
+
+##  Development
+
+### Setup
+```bash
+# Clone the repository
+git clone https://github.com/keita223/string-tools.git
+cd string-tools
+
+# Install Poetry
+pipx install poetry
+
+# Install dependencies
+poetry install
+
+# Activate virtual environment
+poetry shell
+```
+
+### Running Tests
+```bash
+# Run all tests
+poetry run pytest
+
+# Run with coverage
+poetry run pytest --cov=src/string_tools
+```
+
+### Building Documentation
+```bash
+cd docs
+poetry run make html
+```
+
+##  Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License.
+
+##  Author
+
+**keita**
+
+- GitHub: [@keita223](https://github.com/keita223)
+
+##  Acknowledgments
+
+- Built with [Poetry](https://python-poetry.org/)
+- Documentation powered by [Sphinx](https://www.sphinx-doc.org/)
+- CI/CD with [GitHub Actions](https://github.com/features/actions)
+
+---
+
+ **If you like this project, please give it a star!** 
