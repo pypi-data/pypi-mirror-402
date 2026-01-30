@@ -1,0 +1,133 @@
+Metadata-Version: 2.4
+Name: onnxifier
+Version: 2.0.0
+Summary: An Open Neural Network Exchange (ONNX) Optimization and Transformation Tool.
+Author-email: Wenyi Tang <wenyitang@outlook.com>, Jianjin Liao <1486660504@qq.com>
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Software Development
+License-File: LICENSE
+Requires-Dist: ml_dtypes>=0.5.1
+Requires-Dist: onnx>=1.17.0
+Requires-Dist: networkx
+Requires-Dist: numpy>2.0
+Requires-Dist: tabulate
+Requires-Dist: colorlog>=6.9.0
+Requires-Dist: termcolor>=3.1.0
+Requires-Dist: tensorflow-cpu>=2.20.0 ; extra == "fuzzy"
+Requires-Dist: pyyaml ; extra == "fuzzy"
+Requires-Dist: mypy ; extra == "test"
+Requires-Dist: onnxoptimizer ; extra == "test"
+Requires-Dist: onnxruntime ; extra == "test"
+Requires-Dist: onnxscript>=0.5.7 ; extra == "test"
+Requires-Dist: onnxsim ; extra == "test"
+Requires-Dist: openvino>=2025.0.0 ; extra == "test"
+Requires-Dist: pooch ; extra == "test"
+Requires-Dist: pre-commit ; extra == "test"
+Requires-Dist: pyright>=1.1.408 ; extra == "test"
+Requires-Dist: pytest ; extra == "test"
+Requires-Dist: pytest-cov ; extra == "test"
+Requires-Dist: torch ; extra == "test"
+Project-URL: Docs, https://loseall.github.io/onnxifier
+Project-URL: Home, https://github.com/LoSealL/onnxifier
+Provides-Extra: fuzzy
+Provides-Extra: test
+
+# ONNXifier
+A simple tool to convert any IR format to ONNX file.
+
+[![Checked with pyright](https://microsoft.github.io/pyright/img/pyright_badge.svg)](https://microsoft.github.io/pyright/)
+
+| Framework | Status |
+|:----------|:-------|
+| OpenVINO  |  ✅    |
+| ONNXRuntime | ✅  |
+
+- ✅: well supported
+- 🪛: partially supported
+- 🚧: developing
+
+## Usage
+
+1. Install from PyPI
+```shell
+pip install onnxifier
+```
+
+2. Convert IR using CLI
+```shell
+onnxify model.xml
+```
+
+```
+usage: onnxify input_model.xml [output_model.onnx]
+
+onnxify command-line api
+
+options:
+  -h, --help            show this help message and exit
+  -a [ACTIVATE ...], --activate [ACTIVATE ...]
+                        select passes to be activated, activate L1, L2 and L3 passes if not set.
+  -r [REMOVE ...], --remove [REMOVE ...]
+                        specify passes to be removed from activated passes.
+  -n, --no-passes       do not run any optimizing passes, just convert the model
+  --print [PRINT]       print the name of all optimizing passes
+  --format {protobuf,textproto,json,onnxtxt}
+                        onnx file format
+  -s, --infer-shapes    infer model shapes
+  -c CONFIG_FILE, --config-file CONFIG_FILE
+                        specify a json-format config file for passes
+  -u, --uncheck         no checking output model
+  --check               check optimized model with random inputs
+  --checker-backend {onnx,openvino,onnxruntime}
+                        backend for accuracy checking, defaults to openvino
+  -v OPSET_VERSION, --opset-version OPSET_VERSION
+                        target opset version, defaults to 19
+  -vv [{DEBUG,INFO,WARNING,ERROR,CRITICAL}], --log-level [{DEBUG,INFO,WARNING,ERROR,CRITICAL}]
+                        specify the level of log messages to be printed, defaults to INFO
+  -R, --recursive       recursively optimize nested functions
+  --nodes [NODES ...]   specify a set of node names to apply passes only on these nodes
+```
+
+To print pass information:
+
+```shell
+onnxify --print all
+onnxify --print fuse_swish
+onnxify --print l1
+```
+
+
+## TODO
+
+- [ ] [**OV**] Add [Loop](https://docs.openvino.ai/2024/documentation/openvino-ir-format/operation-sets/operation-specs/infrastructure/loop-5.html) support.
+- [ ] [**OV**] Add [NMS](https://docs.openvino.ai/2024/documentation/openvino-ir-format/operation-sets/operation-specs/sort/non-max-suppression-9.html) support.
+- [ ] [**OV**] Add [If](https://docs.openvino.ai/2024/documentation/openvino-ir-format/operation-sets/operation-specs/condition/if-8.html) support.
+- [ ] [**ONNX**] Support to optimize [If](https://onnx.ai/onnx/operators/onnx__If.html).
+
+
+## Contribute
+
+1. pyright type checking
+
+```
+pip install -U pyright
+pyright onnxifier
+```
+
+2. mypy type checking
+
+```
+pip install -U mypy
+mypy onnxifier --disable-error-code=import-untyped --disable-error=override --disable-error=call-overload
+```
+
+3. pre-commit checking
+
+```
+pip install -U pre-commit
+pre-commit run --all-files
+```
+
