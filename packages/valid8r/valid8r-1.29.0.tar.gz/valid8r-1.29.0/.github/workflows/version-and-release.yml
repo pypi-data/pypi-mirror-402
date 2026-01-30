@@ -1,0 +1,62 @@
+name: Version and Release (DEPRECATED)
+
+# This workflow is DEPRECATED in favor of semantic-release.yml
+# It has been kept for emergency manual use only, but should not be used for normal releases.
+#
+# Reasons for deprecation:
+# 1. Still uses Poetry (project migrated to uv in PR #48)
+# 2. Manual version management instead of semantic versioning
+# 3. Creates unnecessary version bump PRs
+# 4. Duplicates functionality of semantic-release.yml
+#
+# Use semantic-release.yml instead, which:
+# - Uses uv for faster builds
+# - Follows conventional commits for automated versioning
+# - Creates releases directly without intermediate PRs
+# - Is the single source of truth for releases
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_deprecated:
+        description: 'This workflow is DEPRECATED. Use semantic-release.yml instead. Type "yes" to confirm you understand this.'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  deprecated-warning:
+    name: Deprecation Warning
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm_deprecated }}" != "yes" ]; then
+            echo "❌ ERROR: You must confirm that you understand this workflow is deprecated."
+            echo ""
+            echo "This workflow is DEPRECATED and should not be used."
+            echo "Please use the semantic-release.yml workflow instead."
+            exit 1
+          fi
+
+      - name: Display deprecation notice
+        run: |
+          echo "⚠️  WARNING: This workflow is DEPRECATED!"
+          echo ""
+          echo "You are running a deprecated workflow. This workflow:"
+          echo "  - Still uses Poetry (project uses uv since PR #48)"
+          echo "  - Uses manual version management (project uses semantic-release)"
+          echo "  - Creates unnecessary version bump PRs"
+          echo "  - Duplicates functionality of semantic-release.yml"
+          echo ""
+          echo "RECOMMENDED ACTION:"
+          echo "  Use the semantic-release.yml workflow instead, which is the"
+          echo "  single source of truth for releases in this project."
+          echo ""
+          echo "This workflow will NOT execute. Exiting."
+          exit 1
