@@ -1,0 +1,216 @@
+name: Release to PyPI
+
+on:
+  push:
+    tags:
+      - "v*"
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (e.g., v0.1.1)"
+        required: true
+        type: string
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.get_tag.outputs.tag }}
+      version: ${{ steps.get_version.outputs.tag_version }}
+
+    steps:
+      - name: Determine tag
+        id: get_tag
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Tag: $TAG"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.get_tag.outputs.tag }}
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          TAG_VERSION="${{ steps.get_tag.outputs.tag }}"
+          TAG_VERSION=${TAG_VERSION#v}
+          echo "tag_version=$TAG_VERSION" >> $GITHUB_OUTPUT
+          echo "Tag version: $TAG_VERSION"
+
+      - name: Get version from __init__.py
+        id: get_pkg_version
+        run: |
+          PKG_VERSION=$(grep '__version__' src/testla/__init__.py | cut -d'"' -f2)
+          echo "pkg_version=$PKG_VERSION" >> $GITHUB_OUTPUT
+          echo "Package version: $PKG_VERSION"
+
+      - name: Verify version match
+        run: |
+          if [ "${{ steps.get_version.outputs.tag_version }}" != "${{ steps.get_pkg_version.outputs.pkg_version }}" ]; then
+            echo "Version mismatch!"
+            echo "   Git tag: v${{ steps.get_version.outputs.tag_version }}"
+            echo "   __init__.py: ${{ steps.get_pkg_version.outputs.pkg_version }}"
+            echo ""
+            echo "Please update src/testla/__init__.py version to match the git tag."
+            exit 1
+          fi
+          echo "Version match confirmed: ${{ steps.get_version.outputs.tag_version }}"
+
+      - name: Check CHANGELOG.md
+        run: |
+          if ! grep -q "\[${{ steps.get_version.outputs.tag_version }}\]" CHANGELOG.md; then
+            echo "Warning: Version ${{ steps.get_version.outputs.tag_version }} not found in CHANGELOG.md"
+          else
+            echo "CHANGELOG.md contains entry for ${{ steps.get_version.outputs.tag_version }}"
+          fi
+
+  build:
+    name: Build Package
+    runs-on: ubuntu-latest
+    needs: validate
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Build package
+        run: uv build
+
+      - name: Verify build
+        run: |
+          ls -lh dist/
+          if [ ! -f dist/testla-*.whl ]; then
+            echo "Build failed: wheel not found"
+            exit 1
+          fi
+          echo "Build successful"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package
+          path: dist/
+          retention-days: 5
+
+  test-package:
+    name: Test Package Installation
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package
+          path: dist/
+
+      - name: Install package
+        run: |
+          pip install dist/testla-*.whl
+          testla --help
+          echo "Package installed successfully"
+
+  publish-pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: [build, test-package]
+    environment: pypi
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package
+          path: dist/
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Publish to PyPI
+        run: uv publish --trusted-publishing always
+
+  upload-release-assets:
+    name: Upload Release Assets
+    runs-on: ubuntu-latest
+    needs: [validate, build, publish-pypi]
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package
+          path: dist/
+
+      - name: Upload assets to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.validate.outputs.tag }}
+          files: dist/*
+          fail_on_unmatched_files: false
+
+  notify:
+    name: Release Summary
+    runs-on: ubuntu-latest
+    needs: [validate, build, test-package, publish-pypi, upload-release-assets]
+    if: always()
+
+    steps:
+      - name: Success summary
+        if: ${{ !contains(needs.*.result, 'failure') }}
+        run: |
+          echo "Release v${{ needs.validate.outputs.version }} completed successfully!"
+          echo ""
+          echo "Validation: ${{ needs.validate.result }}"
+          echo "Build: ${{ needs.build.result }}"
+          echo "Test Package: ${{ needs.test-package.result }}"
+          echo "Publish to PyPI: ${{ needs.publish-pypi.result }}"
+          echo "Upload Assets: ${{ needs.upload-release-assets.result }}"
+          echo ""
+          echo "Package available at:"
+          echo "   - PyPI: https://pypi.org/project/testla/${{ needs.validate.outputs.version }}/"
+          echo "   - GitHub Release: https://github.com/m1yag1/testla/releases/tag/${{ needs.validate.outputs.tag }}"
+
+      - name: Failure summary
+        if: ${{ contains(needs.*.result, 'failure') }}
+        run: |
+          echo "Release v${{ needs.validate.outputs.version }} encountered failures"
+          echo ""
+          echo "Validation: ${{ needs.validate.result }}"
+          echo "Build: ${{ needs.build.result }}"
+          echo "Test Package: ${{ needs.test-package.result }}"
+          echo "Publish to PyPI: ${{ needs.publish-pypi.result }}"
+          echo "Upload Assets: ${{ needs.upload-release-assets.result }}"
+          echo ""
+          echo "Please check the logs and fix any issues before retrying."
+          exit 1
