@@ -1,0 +1,409 @@
+Metadata-Version: 2.4
+Name: ippc-model
+Version: 1.0.2
+Summary: IPPC Data Model
+Author-email: Data Developer <info@sysnet.cz>
+Project-URL: Homepage, https://github.com/SYSNET-CZ/models/tree/main/ippc
+Classifier: Development Status :: 4 - Beta
+Classifier: Programming Language :: Python :: 3
+Classifier: Intended Audience :: Developers
+Classifier: License :: Free For Home Use
+Classifier: Natural Language :: Czech
+Classifier: Operating System :: OS Independent
+Classifier: Topic :: Software Development :: Libraries
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: sysnet-pyutils>=1.3.10
+Requires-Dist: pydantic~=2.11.7
+Dynamic: license-file
+
+# Dokumentace projektu IPPC Data Model
+
+## Přehled projektu
+
+**Datový model IPPC** je Python knihovna obsahující kompletní datový model pro systém 
+Integrovaného povolení a kontroly znečišťování (IPPC – Integrated Pollution Prevention and Control). 
+Projekt je vyvinut společností SYSNET s.r.o.
+
+### Základní informace
+- **Název**: ippc-model
+- **Verze**: 1.0.2
+- **Licence**: GNU Affero General Public License v3
+- **Python verze**: ≥ 3.10
+- **Vývojové prostředí**: PyCharm
+- **Homepage**: https://github.com/SYSNET-CZ/models/tree/main/ippc
+
+## Závislosti
+
+Projekt využívá následující hlavní závislosti:
+- **Pydantic** (~2.11.7) - pro datovou validaci a typování
+- **sysnet-pyutils** (≥1.3.10) - interní utility knihovna SYSNET
+
+## Architektura projektu
+
+### Struktura adresářů
+```
+ippc/
+├── ippc_model/              # Hlavní balíček s datovými modely
+│   ├── ippc_activity.py     # Model pro činnosti/kategorie IPPC
+│   ├── ippc_common.py       # Sdílené typy a pomocné funkce
+│   ├── ippc_container.py    # Model pro kontejnery dokumentů
+│   ├── ippc_document.py     # Model pro dokumenty IPPC
+│   ├── ippc_equipment.py    # Model pro zařízení
+│   ├── ippc_expert.py       # Model pro odborně způsobilé osoby
+│   └── __init__.py
+├── .venv/                   # Virtuální prostředí Python
+├── dist/                    # Distribuční balíčky
+├── pyproject.toml          # Konfigurace projektu
+├── requirements.txt        # Python závislosti
+├── LICENSE                 # GNU AGPL v3
+├── README.md              # Základní informace
+└── upload.cmd             # Skript pro nahrání balíčku
+```
+
+## Datové modely
+
+### 1. ippc_common.py – Sdílené typy
+
+Tento modul obsahuje společné enumy, typy a pomocné funkce používané napříč celým projektem.
+
+#### Klíčové enumy:
+
+**IppcDocCodeEnum** - Typy dokumentů IPPC:
+- `REQUEST` - Žádost o integrované povolení
+- `SUMMARIZE` - Stručné shrnutí
+- `STATEMENT` - Vyjádření
+- `DECISION` - Rozhodnutí
+- `APPEAL` - Odvolání
+- `CHANGE` - Změna integrovaného povolení
+- `EXCEPTIONS` - Výjimky
+- `REPORT_CONDITIONS` - Zpráva o plnění podmínek
+- `REPORT_REVIEW` - Zpráva o přezkumu
+- `REPORT_CHECK` - Zpráva o kontrole
+- a další...
+
+**IppcStatusEnum** - Stavy řízení:
+- `STATUS_0` - Neautorizováno
+- `STATUS_1` - Publikováno
+- `STATUS_6` - Rozhodnuto
+- `STATUS_9` - Řízení zastaveno
+- `STATUS_B` - Odvolání
+- `STATUS_D` - IP zrušeno
+- `STATUS_Z` - Provoz ukončen
+- a další...
+
+**IppcContainerEnum** - Typy kontejnerů:
+- `PROCEEDING` - Řízení
+- `DOCUMENTATION` - Dokumentace
+- `OTHER` - Jiný
+
+**ActivityStatusEnum** - Stavy činností:
+- `AC_NEW` - nová
+- `AC_ACTIVE` - aktivní
+- `AC_EXCLUDED` - vyřazená
+
+**EquipmentStatusEnum** - Stavy zařízení:
+- `EQ_NEW` - nové
+- `EQ_AUTHORIZED` - autorizováno
+- `EQ_ACTIVE` - aktivní
+- `EQ_MERGED` - sloučené
+- `EQ_CLOSED` - Provoz ukončen
+- `EQ_EXCLUDED` - Vyňato z režimu
+
+#### Klíčové typy:
+
+**PermittingType** - Informace o povolovacím řízení:
+- Datumy zahájení, ukončení, právní moci
+- Informace o autorizaci, BAT, EIA
+- Stav povolení
+
+**InspectionType** - Informace o kontrole:
+- Termíny kontroly
+- Typ přezkumu (plánovaná/neplánovaná)
+- Kontrolní orgán
+- Předmět kontroly
+
+**ReportType** – Informace o zprávách:
+- Datum podání
+- Kontrolované období
+- Stav plnění podmínek
+
+**ValidationType** - Informace o validaci:
+- Datum doručení MŽP
+- Číslo jednací
+- Archivační údaje
+
+**ChangeOperator** – Změna provozovatele:
+- Datum změny a účinnosti
+- Původní a nový provozovatel
+
+**MergeEquipment** – Sloučení zařízení:
+- Datumy sloučení
+- Zdrojové a cílové zařízení
+
+### 2. ippc_activity.py – Činnosti
+
+Model pro kategorie zařízení podle Přílohy č. 1 zákona č. 76/2002 Sb.
+
+**ActivityType** – Hlavní model činnosti:
+- `category` - Kategorie zařízení
+- `code` - Číslo kategorie
+- `value_cz` - Popis česky
+- `value_en` - Popis pro reporting EK
+- `hidden` - Skrytí v pohledech
+- `status` - Stav činnosti
+- `metadata` - Metadata
+- `history` - Historie změn
+
+**ActivityListType** – Seznam činností s počtem záznamů
+
+**ActivityViewItemType** - Agregovaný pohled s počty:
+- Počet integrovaných povolení
+- Počet zařízení
+- Počet OZO (odborně způsobilých osob)
+
+### 3. ippc_equipment.py – Zařízení
+
+Model pro zařízení podléhající režimu IPPC.
+
+**EquipmentType** - Hlavní model zařízení:
+- `title` - Úplný název zařízení
+- `name` - Stručný název
+- `operator` - Aktuální provozovatel
+- `location` - Umístění (LocationType s GPS souřadnicemi)
+- `activity_main` - Hlavní činnost
+- `activity_other` - Ostatní činnosti
+- `international` - Mezinárodní mechanismus
+- `office_check` - Kontrolní orgán
+- `waste_water_disposal` - Vypouštění odpadních vod
+- `status` - Stav zařízení
+- `authorized` - Stav autorizace
+- `merged` - Informace o sloučení
+- `equipment_merged` - Odkaz na sloučené zařízení
+- `operator_history` - Historie provozovatelů
+- `metadata` - Metadata
+- `history` - Historie životního cyklu
+
+**EquipmentOtherInfo** - Další relevantní informace:
+- E-PRTR registrace
+- Propojení s IRZ
+- ČHMÚ zdroje znečišťování
+- Spalovny
+- Reporting LCP
+- ISOH
+
+**EquipmentReporting** - Data pro reporting do EK:
+- INSPIRE ID
+- BAT Conclusion Value
+- Baseline Report
+- Geometrické údaje
+- Kompetentní autority
+- Údaje o povolení
+
+**EquipmentMigration** – Migrovaná data z původního systému
+
+### 4. ippc_container.py - Kontejnery
+
+Model pro kontejnery seskupující dokumenty jednoho řízení.
+
+**ContainerType** – Hlavní model kontejneru:
+- `name` - Název kontejneru
+- `content_type` - Typ obsahu (řízení/dokumentace/jiný)
+- `equipment` - Propojené zařízení
+- `operator` - Provozovatel
+- `activity_main` - Hlavní činnost
+- `activity_other` - Ostatní činnosti
+- `status` - Aktuální stav řízení
+- `status_saved` - Předchozí stav
+- `locked` - Zámek kontejneru
+- `has_attachments` - Přítomnost příloh
+- `international` - Mezinárodní mechanismus
+- `permitting` - Povolovací řízení (včetně seznamu dokumentů)
+- `inspection` - Seznam kontrol
+- `report` - Zprávy o plnění
+- `validation` - Validační informace
+- `operator_change` - Historie změn provozovatele
+- `equipment_merge` - Historie sloučení zařízení
+- `expert` - Odborně způsobilá osoba
+- `workflow` - Workflow řízení
+- `history` - Historie kontejneru
+- `metadata` - Metadata
+
+**ContainerTypeLight** - Odlehčená verze pro seznamy
+
+**ContainerListType** – Seznam kontejnerů s počtem záznamů
+
+### 5. ippc_document.py – Dokumenty
+
+Model pro dokumenty v rámci řízení IPPC.
+
+**DocumentType** - Hlavní model dokumentu:
+- `doc_code` - Kód typu dokumentu
+- `additional_type` - Typ dodatečné informace
+- `title` - Úplný název dokumentu
+- `subject` - Stručný název
+- `version_ozo` - Verze OZO
+- `annotation` - Anotace (RTF)
+- `content` - Plný obsah (RTF)
+- `operator` - Aktuální provozovatel
+- `equipment` - Aktuální zařízení
+- `activity_main` - Hlavní činnost
+- `activity_other` - Ostatní činnosti
+- `permitting` - Povolovací řízení
+- `inspection` - Informace o kontrole
+- `report` - Zpráva o plnění
+- `validation` - Validační informace
+- `operator_change` - Změna provozovatele
+- `equipment_merge` - Sloučení zařízení
+- `expert` - OZO
+- `additional` - Další propojené dokumenty
+- `has_attachments` - Přílohy
+- `linked_list` - Propojené dokumenty
+- `metadata` - Metadata
+- `history` - Historie
+
+**DocumentEntryType** – Lehčí verze pro seznamy
+
+**DocumentListType** – Seznam dokumentů s počtem záznamů
+
+### 6. ippc_expert.py – Odborně způsobilé osoby
+
+Model pro odborně způsobilé osoby (OZO).
+
+**ExpertType** - Hlavní model OZO:
+- Základní osobní údaje (z PersonCoreType):
+    - `title_before` - Titul před jménem
+    - `first_name` - Křestní jméno
+    - `last_name` - Příjmení
+    - `title_after` - Titul za jménem
+- `email` - Seznam emailů
+- `activity` - Činnosti
+- `date_validity` - Platnost zápisu
+- `contact` - Kontaktní údaje (UserType)
+- `annotation` - Anotace (RTF)
+- `migration` - Migrovaná data
+- `metadata` - Metadata
+- `history` - Historie
+
+**ExpertListType** – Seznam OZO s počtem záznamů
+
+## Pomocné funkce
+
+Modul `ippc_common.py` obsahuje pomocné funkce:
+
+- `get_dict_value_regional()` - Získání regionálních hodnot ze slovníku
+- `get_dict_value_uuid()` - Získání UUID ze slovníku s validací
+- `get_dict_value_rtf()` - Získání RTF obsahu jako JSON
+
+## Workflow a přechody stavů
+
+Projekt definuje workflow řízení pomocí:
+
+**PROCEEDING_TRANSITION** - Definice přechodů mezi stavy:
+- Mapování typu dokumentu na workflow uzel
+- Cílový stav řízení
+- Název uzlu pro UI
+
+**IppcWorkflowType** - Model pro workflow:
+- `status_from` - Předchozí stav
+- `status_to` - Následný stav
+- Plus standardní položky workflow (datum, uživatel, komentář)
+
+## Metadata a historie
+
+Všechny hlavní entity obsahují:
+
+**MetadataType** - Standardní metadata:
+- UUID dokumentu
+- Datumy vytvoření/modifikace
+- Vytvořil/Upravil
+- Verze
+- Tagy
+
+**LogItemType** - Položka historie:
+- Časové razítko
+- Uživatel
+- Akce
+- Popis změny
+
+**TimeLimitedType** – Časově omezené záznamy:
+- Platnost od/do
+- Hodnota/objekt
+
+## Integrace se sysnet-pyutils
+
+Projekt využívá typy z knihovny `sysnet-pyutils`:
+
+- `LinkedType` - Propojení entit (UUID + name)
+- `LocationType` - Lokace s adresou a GPS
+- `GeoPointType` - GPS souřadnice
+- `CodeValueType` - Kód + hodnota
+- `RegionalValueType` - Regionální hodnoty
+- `WorkflowType` - Workflow informace
+- `UserType` - Uživatelské údaje
+- `PersonCoreType` - Základní osobní údaje
+- `ListTypeBase` - Základní seznam
+
+## Seznamy a kategorizace
+
+Projekt definuje několik konstantních seznamů:
+
+- `DOC_CREATES_CONTAINER` - Dokumenty vytvářející kontejner
+- `CONTAINER_TITLES` - Názvy kontejnerů podle typu dokumentu
+- `DOC_PROCEEDING` - Dokumenty řízení
+- `DOC_DOCUMENTATION` - Dokumenty dokumentace
+
+## Použití
+
+Projekt je distribuován jako Python balíček a může být nainstalován pomocí pip:
+
+```bash
+pip install ippc-model
+```
+
+Pro vývoj:
+```bash
+# Klonování repository
+git clone https://github.com/SYSNET-CZ/models.git
+cd models/ippc
+
+# Vytvoření virtuálního prostředí
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+.venv\Scripts\activate     # Windows
+
+# Instalace závislostí
+pip install -r requirements.txt
+```
+
+## Pokrytí funkcionality
+
+Datový model pokrývá celý životní cyklus IPPC řízení:
+
+1. **Žádost o povolení** – REQUEST
+2. **Povolovací řízení** – včetně shrnutí, vyjádření, rozhodnutí
+3. **Změny povolení** – CHANGE, MINORCHANGE
+4. **Výjimky** - EXCEPTIONS
+5. **Kontroly** – plánované i neplánované
+6. **Zprávy o plnění** – REPORT_CONDITIONS, REPORT_REVIEW
+7. **Odvolání** - APPEAL, APPEAL_RESULT
+8. **Ukončení** - TERMINATED, CLOSED, CANCELED
+9. **Sloučení** – MERGED
+10. **Změny provozovatele** – XCHG_COMPANY
+
+## Reporting pro Evropskou komisi
+
+Model obsahuje speciální struktury pro reporting do EK:
+
+- INSPIRE identifikátory
+- BAT (Best Available Techniques) údaje
+- Geometrická data
+- Kompetentní autority
+- Stav povolení
+
+## Závěr
+
+Projekt IPPC Data Model představuje komplexní datový model pro správu integrovaných povolení dle české 
+a evropské legislativy. Využívá moderní Python nástroje (Pydantic) pro typovou bezpečnost a validaci dat. 
+Model je dostatečně flexibilní pro pokrytí všech aspektů IPPC řízení včetně reportingu do evropského systému.
