@@ -1,0 +1,36 @@
+import os
+import platform
+from unittest import TestCase, mock
+
+from smart_tests.app import Application
+from smart_tests.utils.http_client import _HttpClient
+from smart_tests.version import __version__
+
+
+class HttpClientTest(TestCase):
+    @mock.patch.dict(
+        os.environ,
+        {"SMART_TESTS_ORGANIZATION": "launchableinc", "SMART_TESTS_WORKSPACE": "test"},
+        clear=True,
+    )
+    def test_header(self):
+        cli = _HttpClient("/test")
+        self.assertEqual(cli._headers(True), {
+            'Content-Encoding': 'gzip',
+            'Content-Type': 'application/json',
+            "User-Agent": f"Launchable/{__version__} (Python {platform.python_version()}, {platform.platform()})",
+        })
+
+        self.assertEqual(cli._headers(False), {
+            'Content-Type': 'application/json',
+            "User-Agent": f"Launchable/{__version__} (Python {platform.python_version()}, {platform.platform()})",
+        })
+
+        app = Application()
+        app.test_runner = "dummy"
+        cli = _HttpClient("/test", app=app)
+        self.assertEqual(cli._headers(False), {
+            'Content-Type': 'application/json',
+            "User-Agent": f"Launchable/{__version__} (Python {platform.python_version()}, "
+            f"{platform.platform()}) TestRunner/dummy",
+        })
