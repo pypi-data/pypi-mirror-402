@@ -1,0 +1,471 @@
+# Dolphin Language SDK
+
+**[中文文档](./README.zh-CN.md)** | English
+
+[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+> 🐬 A Domain-Specific Language (DSL) and SDK for building intelligent AI workflows
+
+Dolphin Language is an innovative programming language and SDK designed specifically for building complex AI-driven applications. It solves complex problems by breaking down user requirements into smaller, manageable steps, providing a complete toolchain for developing, testing, and deploying AI applications.
+
+## ✨ Core Features
+
+### 🎯 AI Workflow Orchestration
+
+- **Intelligent Task Decomposition**: Automatically breaks down complex queries into executable subtasks
+- **Multi-Agent Collaboration**: Supports coordination and interaction between multiple AI Agents
+- **Context Awareness**: Intelligent context management and compression mechanisms
+
+### 🔧 Rich Tool Ecosystem
+
+- **SQL/Database Integration**: Native support for various database queries and operations
+- **Ontology Management**: Structured concept and relationship modeling
+- **Long-term Memory**: Persistent memory storage and retrieval system
+- **MCP Integration**: Model Context Protocol support for connecting external tools and services
+
+### 🧪 Experiment System (Planned)
+
+Note: The experiment system mentioned here is not included in this repository snapshot.
+
+- **Benchmarking**: Standardized performance evaluation and comparison
+- **Configuration Management**: Flexible experiment configuration and parameter tuning
+- **Result Tracking**: Detailed experiment result recording and analysis
+
+### 📊 Monitoring & Debugging
+
+- **Runtime Tracking**: Complete execution path monitoring
+- **Performance Analysis**: Detailed performance metrics and bottleneck analysis
+- **Visual Debugging**: Intuitive call chain graphical display
+
+## 🔧 Requirements
+
+```text
+python=3.10+
+```
+
+## 🚀 Quick Installation
+
+### Recommended: Automated Setup
+
+```bash
+git clone https://github.com/kweaver-ai/dolphin.git
+cd dolphin
+make dev-setup
+```
+
+This will:
+- Install all dependencies using `uv`
+- Set up the development environment
+- Make the `dolphin` command available
+
+### Alternative: Manual Installation
+
+If you prefer manual control:
+
+```bash
+# Install dependencies
+uv sync --all-groups
+
+# Or using pip in editable mode
+pip install -e ".[dev]"
+```
+
+### Build Only (No Install)
+
+To build the wheel package without installing:
+
+```bash
+make build-only
+# or
+uv run python -m build
+```
+
+**Requirements**: Python 3.10+ and [uv](https://docs.astral.sh/uv/) package manager (recommended) or pip.
+
+For more installation options, see `make help`.
+
+## ⚙️ Configuration
+
+Before running Dolphin, configure your LLM API credentials. Choose the method that fits your workflow:
+
+### 🚀 Quick Setup: Environment Variables (Recommended)
+
+The simplest way to get started:
+
+```bash
+# Set your OpenAI API key
+export OPENAI_API_KEY="sk-your-key-here"
+
+# Or add to your shell profile for persistence
+echo 'export OPENAI_API_KEY="sk-your-key-here"' >> ~/.bashrc  # or ~/.zshrc
+```
+
+**Why environment variables?**
+- ✅ No configuration files needed
+- ✅ More secure (won't accidentally commit secrets)
+- ✅ Works across all examples
+- ✅ Easy to update or rotate keys
+
+**You're ready!** Continue to [Quick Start](#-quick-start) to run your first agent.
+
+### 📁 Advanced: Configuration File (Optional)
+
+For complex setups (multiple models, custom endpoints):
+
+```bash
+# 1. Copy the template
+cp config/global.template.yaml config/global.yaml
+
+# 2. Edit with your API key
+vim config/global.yaml
+# Replace "********" with your actual API key
+```
+
+**Example configuration**:
+```yaml
+clouds:
+  openai:
+    api: "https://api.openai.com/v1/chat/completions"
+    api_key: "sk-your-actual-key"  # ← Replace this
+
+llms:
+  default:  # Custom config name (not a model name)
+    cloud: "openai"
+    model_name: "gpt-4o"  # Actual OpenAI model
+    temperature: 0.0
+```
+
+**Configuration Priority** (highest to lowest):
+1. Environment variables (`OPENAI_API_KEY`)
+2. CLI argument `--config path/to/config.yaml`
+3. Project config `./config/global.yaml`
+4. User config `~/.dolphin/config.yaml`
+5. Default values
+
+💡 See [config/global.template.yaml](config/global.template.yaml) for all options.
+
+## 🌟 Quick Start
+
+### Your First Query (30 seconds)
+
+**Prerequisites**: Make sure you've [configured](#%EF%B8%8F-configuration) your API key.
+
+```bash
+# 1. Create a sample data file
+echo "name,age,city
+Alice,30,New York
+Bob,25,San Francisco
+Charlie,35,Los Angeles" > /tmp/test_data.csv
+
+# 2. Run your first analysis
+dolphin run --agent tabular_analyst \
+  --folder ./examples/tabular_analyst \
+  --query "/tmp/test_data.csv"
+```
+
+✅ You should see Dolphin analyzing your data with intelligent insights!
+
+---
+
+### CLI Tool
+
+Dolphin provides a powerful command-line tool with four running modes:
+
+```bash
+# Explore mode (default, like Claude Code / Codex)
+dolphin
+dolphin explore
+
+# Run Agent
+dolphin run --agent my_agent --folder ./agents --query "Analyze data"
+
+# Debug mode (step-by-step, breakpoints, variable inspection)
+dolphin debug --agent my_agent --folder ./agents --break-on-start
+
+# Interactive chat
+dolphin chat --agent my_agent --folder ./agents
+```
+
+### Subcommand Overview
+
+| Subcommand | Description | Typical Usage |
+|------------|-------------|---------------|
+| `explore` | Explore mode (default) | Interactive coding assistant |
+| `run` | Run Agent (default) | Batch execution, scripting |
+| `debug` | Debug mode | Development, troubleshooting |
+| `chat` | Interactive chat | Continuous conversation, exploration |
+
+### Common Options
+
+```bash
+# Basic run
+dolphin run --agent my_agent --folder ./agents --query "your query"
+
+# Verbose output
+dolphin run --agent my_agent --folder ./agents -v --query "task"
+
+# Debug level logging
+dolphin run --agent my_agent --folder ./agents -vv --query "debug"
+
+# Debug mode (with breakpoints)
+dolphin debug --agent my_agent --folder ./agents --break-at 3 --break-at 7
+
+# Interactive chat (with turn limit)
+dolphin chat --agent my_agent --folder ./agents --max-turns 10
+
+# Show version
+dolphin --version
+
+# Show help
+dolphin --help
+dolphin run --help
+dolphin debug --help
+dolphin chat --help
+```
+
+Detailed CLI documentation: [bin/README.md](bin/README.md)
+
+### Python API
+
+```python
+from dolphin.sdk.agent.dolphin_agent import DolphinAgent
+import asyncio
+
+async def main():
+    # Create Agent
+    agent = DolphinAgent(
+        name="my_agent",
+        content="@print('Hello, Dolphin!') -> result"
+    )
+    
+    # Initialize
+    await agent.initialize()
+    
+    # Run
+    async for result in agent.arun(query="test"):
+        print(result)
+
+asyncio.run(main())
+```
+
+For detailed Python API usage, see [Dolphin Agent Integration Guide](docs/usage/guides/dolphin-agent-integration.md).
+
+
+## 🛠️ Utility Tools
+
+The project provides a collection of utility tools in the `tools/` directory:
+
+| Tool | Description |
+|------|-------------|
+| `view_trajectory.py` | Visualize Agent execution trajectories |
+
+### Usage Examples
+
+```bash
+# List all trajectory files
+python tools/view_trajectory.py --list
+
+# View the latest trajectory
+python tools/view_trajectory.py --latest
+
+# View the Nth trajectory
+python tools/view_trajectory.py --index 1
+```
+
+Detailed tools documentation: [tools/README.md](tools/README.md)
+
+## 🧪 Experiment System (Planned)
+
+The experiment system mentioned in some older docs/examples is not included in this repository snapshot.
+
+## 🔌 MCP Integration
+
+Support for Model Context Protocol (MCP) integration, connecting various external tools and services:
+
+```yaml
+# Configure MCP servers
+mcp_servers:
+  - name: browser_automation
+    command: ["npx", "playwright-mcp-server"]
+    args: ["--port", "3000"]
+  - name: file_operations
+    command: ["filesystem-mcp-server"]
+    args: ["--root", "/workspace"]
+```
+
+### Supported MCP Services
+
+- **🌐 Browser Automation**: Playwright integration
+- **📁 File System Operations**: File read/write and management
+- **🗄️ Database Access**: Multiple database connections
+- **🛠️ Custom Tools**: Any MCP protocol-compliant service
+
+Detailed documentation: [docs/design/skill/mcp_integration_design.md](docs/design/skill/mcp_integration_design.md)
+
+## 🧠 Intelligent Features
+
+### Context Engineering
+
+- **Smart Compression**: Importance-based context compression
+- **Strategy Configuration**: Configurable compression strategies
+- **Model Awareness**: Automatic adaptation to different LLM token limits
+
+### Long-term Memory
+
+- **Persistent Storage**: Support for multiple storage backends
+- **Semantic Retrieval**: Similarity-based memory retrieval
+- **Automatic Management**: Intelligent memory compression and cleanup
+
+### Ontology Management
+
+- **Concept Modeling**: Structured domain knowledge representation
+- **Relationship Mapping**: Entity relationship modeling
+- **Data Source Integration**: Unified data access interface
+
+## 📖 Project Structure
+
+```
+dolphin/
+├── bin/                    # CLI entry point
+│   └── dolphin             # Main CLI tool
+├── src/dolphin/            # Core SDK
+├── tools/                  # Utility tools
+│   └── view_trajectory.py  # Trajectory visualization tool
+├── examples/               # Example projects
+├── tests/                  # Test suite
+├── docs/                   # Documentation
+└── config/                 # Configuration files
+```
+
+## 📖 Documentation
+
+- [CLI Guide](bin/README.md) - Complete CLI documentation
+- [Utility Tools](tools/README.md) - Utility tools usage guide
+- [Language Rules](docs/usage/concepts/language_rules.md) - Dolphin Language syntax and specifications
+- [Variable Format Guide](docs/usage/guides/Dolphin_Language_SDK_Variable_Format_Guide.md) - Variable usage guide
+- [Context Engineering Guide](docs/design/context/context_engineer_guide.md) - Context management best practices
+- [Runtime Tracking Architecture](docs/design/architecture/Runtime_Tracking_Architecture_Guide.md) - Monitoring and debugging guide
+- [Long-term Memory Design](docs/design/context/long_term_memory_design.md) - Memory system design document
+
+## 💡 Examples and Use Cases
+
+### Intelligent Data Analysis Workflow
+
+```dph
+# Data analysis example
+AGENT data_analyst:
+  PROMPT analyze_data:
+    Please analyze the following dataset: {{query}}
+    
+  TOOL sql_query:
+    Query relevant data from database
+    
+  JUDGE validate_results:
+    Check the reasonability of analysis results
+```
+
+### Quick Experience
+
+```bash
+# Chat BI example
+./examples/bin/chatbi.sh
+
+# Deep search example  
+./examples/bin/deepsearch.sh
+```
+
+### Use Cases
+
+- **🔍 Intelligent Q&A Systems**: Build enterprise-level knowledge Q&A applications
+- **📊 Data Analysis Platforms**: Automated data analysis and report generation
+- **🤖 AI Assistants**: Multi-skill intelligent assistant development
+- **🔬 Research Tools**: Academic research and experiment automation
+- **💼 Business Process Automation**: Complex business logic automation
+
+## 🏗️ Architecture Overview
+
+Dolphin Language SDK adopts a modular design with main components including:
+
+- **Core Engine**: Core execution engine and language parser
+- **CLI**: Command-line tool (run/debug/chat subcommands)
+- **Skill System**: Extensible skill and tool system
+- **Context Manager**: Intelligent context management and compression
+- **Memory System**: Long-term memory storage and retrieval
+- **Experiment Framework**: Experiment management and benchmarking
+- **MCP Integration**: External tools and services integration
+
+## 🧪 Testing and Quality Assurance
+
+```bash
+# Run complete test suite
+make test
+
+# Run integration tests
+./tests/run_tests.sh
+
+# Run unit tests
+python -m pytest tests/unittest/
+```
+
+### Test Coverage
+
+- ✅ Unit Tests: Core components and algorithms
+- ✅ Integration Tests: End-to-end workflow validation
+- ✅ Benchmark Tests: Performance and accuracy evaluation
+- ✅ Compatibility Tests: Multi-version Python support
+
+## 🛠️ Development Environment Setup
+
+```bash
+# Clone project
+git clone https://github.com/kweaver-ai/dolphin.git
+cd dolphin
+
+# Setup development environment
+make dev-setup
+
+# Clean build files
+make clean
+
+# Build (clean + build)
+make build
+
+# Run tests
+make test
+```
+
+## 🤝 Contributing
+
+We welcome community contributions! Ways to participate:
+
+1. **🐛 Report Issues**: Report bugs or feature requests in Issues
+2. **📝 Improve Documentation**: Help improve documentation and examples
+3. **💻 Submit Code**: Submit bug fixes or new features
+4. **🧪 Add Tests**: Expand test coverage
+5. **🔧 Develop Tools**: Develop new Skillkits or tools
+
+### Development Workflow
+
+1. Fork the project and create a feature branch
+2. Write code and tests
+3. Ensure all tests pass
+4. Submit Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
+
+## 🔗 Related Links
+
+- [Official Documentation](docs/README.md)
+- [CLI Documentation](bin/README.md)
+- [Utility Tools](tools/README.md)
+- [Example Projects](examples/)
+- [Changelog](CHANGELOG.md)
+
+---
+
+## 🐬 Dolphin Language SDK - Making AI Workflow Development Simpler
+
+[Get Started](#-quick-start) • [View Docs](docs/README.md) • [Contribute](#-contributing) • [Report Issues](../../issues)
