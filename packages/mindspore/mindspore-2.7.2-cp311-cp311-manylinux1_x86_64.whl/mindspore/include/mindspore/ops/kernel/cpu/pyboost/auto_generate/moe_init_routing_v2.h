@@ -1,0 +1,38 @@
+/**
+ * Copyright 2023 Huawei Technologies Co., Ltd
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef MINDSPORE_MINDSPORE_CCSRC_PLUGIN_DEVICE_CPU_KERNEL_PYBOOST_MOEINITROUTINGV2_CPU_H_
+#define MINDSPORE_MINDSPORE_CCSRC_PLUGIN_DEVICE_CPU_KERNEL_PYBOOST_MOEINITROUTINGV2_CPU_H_
+
+#include "mindspore/ccsrc/pyboost/auto_generate/moe_init_routing_v2.h"
+#include "ir/tensor.h"
+#include "ir/scalar.h"
+
+namespace mindspore {
+namespace kernel {
+namespace pyboost {
+class MoeInitRoutingV2CPU : public pyboost::MoeInitRoutingV2 {
+ public:
+  MoeInitRoutingV2CPU(PrimitivePtr primitive, const DeviceContext *device_context)
+    : MoeInitRoutingV2(std::move(primitive), device_context) {}
+  ~MoeInitRoutingV2CPU() = default;
+
+  std::tuple<mindspore::tensor::TensorPtr,mindspore::tensor::TensorPtr,mindspore::tensor::TensorPtr,mindspore::tensor::TensorPtr> Call(const mindspore::tensor::TensorPtr &x_tensor, const mindspore::tensor::TensorPtr &expert_idx_tensor, const mindspore::Int64ImmPtr &active_num, const mindspore::Int64ImmPtr &expert_capacity, const mindspore::Int64ImmPtr &expert_num, const mindspore::Int64ImmPtr &drop_pad_mode, const mindspore::Int64ImmPtr &expert_tokens_count_or_cumsum_flag, const mindspore::BoolImmPtr &expert_tokens_before_capacity_flag) override;
+};
+}  // namespace pyboost
+}  // namespace kernel
+}  // namespace mindspore
+#endif  // MINDSPORE_MINDSPORE_CCSRC_PLUGIN_DEVICE_CPU_KERNEL_PYBOOST_MOEINITROUTINGV2_CPU_H_
