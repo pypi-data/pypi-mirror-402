@@ -1,0 +1,173 @@
+package require Vivado
+
+proc get_version {} {
+    # NOTE: We cannot use standard method of getting a Tcl package version
+    # because some Vivado versions do not report it correctly.
+    # Vivado 2022.1 will return 1.2020.3 when querying the Tcl package version
+    # of Vivado (package present Vivado).
+    # Instead, we parse the output of 'version -short' command. We extract the
+    # version string up to the first underscore character, because installing
+    # pactches creates a version string like '2025.1_AR000036275' which
+    # is not compatible with version comparison operations.
+    set version [lindex [split [version -short] "_"] 0]
+}
+
+
+proc source_script {filename} {
+    if {[catch {source -notrace $filename} err]} {
+        send_msg_id {SimplHDL SOURCE-1} {ERROR} "Error sourcing $filename: $err"
+    }
+}
+
+
+proc source_bd_script {filename} {
+    # Fail if bd script return an error code or a non zero value
+    if {[catch {source -notrace $filename} err]} {
+        return -code 1
+    } elseif {$err != ""} {
+        return -code 1
+    }
+}
+
+
+proc import_bd_file {filename} {
+    set_msg_config -suppress -id {BD 41-2576}
+    set_msg_config -suppress -id {BD 41-1663}
+    set bd [import_files $filename]
+    # generate_target all $bd
+    # export_ip_user_files -of_objects $bd -no_script -sync -force -quiet
+    # reset_msg_config -suppress -id {BD 41-2576}
+    reset_msg_config -suppress -id {BD 41-1663}
+}
+
+
+proc source_step_script {filename} {
+    # NOTE: make get_files fail if not files are found
+    set_msg_config -id {Vivado 12-818} -new_severity {ERROR}
+    source_script $filename
+    reset_msg_config -id {Vivado 12-818} -default_severity
+}
+
+
+proc set_hooks {filename} {
+    foreach run [get_runs -filter {IS_SYNTHESIS==true}] {
+        set_property STEPS.SYNTH_DESIGN.TCL.PRE $filename $run
+        set_property STEPS.SYNTH_DESIGN.TCL.POST $filename $run
+    }
+    foreach run [get_runs -filter {IS_IMPLEMENTATION==true}] {
+        set_property STEPS.INIT_DESIGN.TCL.PRE $filename $run
+        set_property STEPS.INIT_DESIGN.TCL.POST $filename $run
+        set_property STEPS.OPT_DESIGN.TCL.PRE $filename $run
+        set_property STEPS.OPT_DESIGN.TCL.POST $filename $run
+        set_property STEPS.POWER_OPT_DESIGN.TCL.PRE $filename $run
+        set_property STEPS.POWER_OPT_DESIGN.TCL.POST $filename $run
+        set_property STEPS.PLACE_DESIGN.TCL.PRE $filename $run
+        set_property STEPS.PLACE_DESIGN.TCL.POST $filename $run
+        set_property STEPS.POST_PLACE_POWER_OPT_DESIGN.TCL.PRE $filename $run
+        set_property STEPS.POST_PLACE_POWER_OPT_DESIGN.TCL.POST $filename $run
+        set_property STEPS.PHYS_OPT_DESIGN.TCL.PRE $filename $run
+        set_property STEPS.PHYS_OPT_DESIGN.TCL.POST $filename $run
+        set_property STEPS.ROUTE_DESIGN.TCL.PRE $filename $run
+        set_property STEPS.ROUTE_DESIGN.TCL.POST $filename $run
+        set_property STEPS.POST_ROUTE_PHYS_OPT_DESIGN.TCL.PRE $filename $run
+        set_property STEPS.POST_ROUTE_PHYS_OPT_DESIGN.TCL.POST $filename $run
+        set_property STEPS.WRITE_BITSTREAM.TCL.PRE $filename $run
+        set_property STEPS.WRITE_BITSTREAM.TCL.POST $filename $run
+    }
+}
+
+proc add_reports {} {
+    # Report strategies are only available from Vivado 2021.1
+    if {[package vsatisfies 1.[get_version] 1.2021.1]} {
+        foreach run [get_runs -filter {IS_IMPLEMENTATION==true}] {
+            set reportName "${run}__route_report_cdc"
+            create_report_config -report_name $reportName -step route_design -report_type report_cdc -run $run
+            set_property DISPLAY_NAME {CDC - Route Design} [get_report_configs -of_objects $run $reportName]
+            set reportName "${run}__post_route_phys_opt_report_cdc"
+            create_report_config -report_name $reportName -step post_route_phys_opt_design -report_type report_cdc -run $run
+            set_property DISPLAY_NAME {CDC - Route Design} [get_report_configs -of_objects $run $reportName]
+        }
+    }
+}
+
+
+proc add_filesets {} {
+    # Older Vivado version does not have a utils_1 fileset
+    if {[llength [get_filesets -quiet utils_1]] == 0} {
+        create_fileset utils_1
+    }
+}
+
+
+create_project -force -part {{project.part}} {{project.name}} [pwd]
+set_msg_config -suppress -id {Board 49-26}
+add_filesets
+{% if project.parameters or project.generics %}
+foreach fileset [get_filesets -filter {FILESET_TYPE =~ *Srcs}] {
+    set_property generic "{{dict2str(project.parameters, project.generics)}}" $fileset
+}
+{% endif %}
+{% if project.defines %}
+foreach fileset [get_filesets -filter {FILESET_TYPE =~ *Srcs}] {
+    set_property verilog_define "{{dict2str(project.defines)}}" $fileset
+}
+{% endif %}
+{% for file in project.defaultDesign.files(usedin=UsedIn.IMPLEMENTATION) %}
+{% if isinstance(file, VerilogIncludeFile) %}
+add_files "{{file.path|replace('\\', '/')}}"
+{% elif isinstance(file, SystemVerilogFile) %}
+read_verilog -sv "{{file.path|replace('\\', '/')}}"
+{% elif isinstance(file, VerilogFile) %}
+read_verilog "{{file.path|replace('\\', '/')}}"
+{% elif isinstance(file, VhdlFile) %}
+{# NOTE: Do not specify a library for VHDL components unless it differs from the default.
+   All Verilog modules are compiled into 'xil_defaultlib' by default.
+   Explicitly mapping a VHDL entity to a specific library (e.g., 'work.my_entity')
+   will cause elaboration errors if the underlying source is a Verilog module,
+   as the compiler will look for VHDL-style library bindings that don't exist
+   in the unified Verilog namespace.
+#}
+{% if file.library.name == project.defaultDesign.defaultLibrary.name %}
+read_vhdl -vhdl2008 "{{file.path|replace('\\', '/')}}"
+{% else %}
+read_vhdl -vhdl2008 -library {{file.library.name}} "{{file.path|replace('\\', '/')}}"
+{% endif %}
+{% elif isinstance(file, VivadoXdcFile) %}
+{% if file.scope is not none %}
+read_xdc "{{file.path|replace('\\', '/')}}" -ref "{{file.scope}}"
+{% else %}
+read_xdc "{{file.path|replace('\\', '/')}}"
+{% endif %}
+{% elif isinstance(file, VivadoXciFile) %}
+import_ip "{{file.path|replace('\\', '/')}}"
+{% elif isinstance(file, VivadoBdFile) %}
+import_bd_file "{{file.path|replace('\\', '/')}}"
+{% elif isinstance(file, VivadoXcixFile) %}
+add_files -norecurse "{{file.path|replace('\\', '/')}}"
+{% elif isinstance(file, VivadoDcpFile) %}
+add_files "{{file.path|replace('\\', '/')}}"
+{% elif isinstance(file, EdifFile) %}
+read_edif "{{file.path|replace('\\', '/')}}"
+{% elif isinstance(file, VivadoBdTclFile) %}
+send_msg_id {SimplHDL PRJ-3} {INFO} "Sourcing BD tcl file {{file.path|replace('\\', '/')}}: this might take some time."
+source_bd_script "{{file.path|replace('\\', '/')}}"
+{% elif isinstance(file, VivadoStepFile) %}
+add_files -fileset utils_1 "{{file.path|replace('\\', '/')}}"
+global step
+set step {project}
+send_msg_id {SimplHDL PRJ-2} {INFO} "Sourcing step tcl file {{file.path|replace('\\', '/')}}."
+source_step_script "{{file.path|replace('\\', '/')}}"
+unset step
+{% else %}
+add_files -fileset utils_1 "{{file.path|replace('\\', '/')}}"
+{% endif %}
+{% endfor %}
+{% if project.garameters or project.generics %}
+set_property generic "{{dict2str(project.parameters, project.generics)}}" [current_fileset]
+{% endif %}
+{% if project.defines %}
+set_property verilog_define "{{dict2str(project.defines)}}" [current_fileset]
+{% endif %}
+set_property top {{project.defaultDesign.toplevels[0]}} [current_fileset]
+add_reports
+update_compile_order -fileset [current_fileset]
