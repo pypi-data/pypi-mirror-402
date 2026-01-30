@@ -1,0 +1,102 @@
+import logging
+from importlib.metadata import version
+from logging.config import dictConfig
+
+import click
+
+from ccdcoe.cli_cmds.deploy_cmds import commands as deploy_commands
+from ccdcoe.cli_cmds.deploy_cmds.pipeline_cmds import (
+    commands as deployment_pipeline_commands,
+)
+from ccdcoe.cli_cmds.deploy_cmds.pipeline_cmds.schedule_cmds import (
+    commands as deployment_pipeline_schedule_commands,
+)
+from ccdcoe.cli_cmds.gitlab_cmds import commands as gitlab_commands
+from ccdcoe.cli_cmds.gitlab_cmds.projects import commands as gitlab_projects
+from ccdcoe.cli_cmds.gitlab_cmds.projects.namespaces import (
+    commands as gitlab_projects_namespaces,
+)
+from ccdcoe.cli_cmds.gitlab_cmds.projects.namespaces.pipelines import (
+    commands as gitlab_projects_namespaces_pipelines,
+)
+from ccdcoe.cli_cmds.gitlab_cmds.projects.namespaces.schedules import (
+    commands as gitlab_projects_namespaces_schedules,
+)
+from ccdcoe.cli_cmds.gitlab_cmds.user import commands as gitlab_users_commands
+from ccdcoe.cli_cmds.pipeline_cmds import commands as pipeline_commands
+from ccdcoe.cli_cmds.providentia_cmds import commands as providentia_commands
+from ccdcoe.loggers.console_logger import ConsoleLogger
+
+__version__ = VERSION = version("ccdcoe")
+
+
+@click.group(no_args_is_help=True)
+@click.version_option(version=VERSION)
+@click.option(
+    "-vv",
+    "--verbose",
+    help="Enable verbose (DEBUG) logging",
+    show_default=True,
+    default=False,
+    flag_value=True,
+)
+@click.option(
+    "--log_level",
+    show_default=True,
+    default="INFO",
+    help="DEBUG, INFO (default), WARNING, ERROR, CRITICAL",
+)
+@click.pass_context
+def main(ctx, log_level, verbose):
+    if ctx.invoked_subcommand is None:
+        click.echo(main.get_help(ctx))
+
+    logDict = {
+        "version": 1,
+        "formatters": {"simpleFormatter": {"format": "%(asctime)s %(message)s"}},
+        "handlers": {
+            "consoleHandler": {
+                "class": "logging.StreamHandler",
+                "stream": "ext://sys.stdout",
+                "formatter": "simpleFormatter",
+            }
+        },
+        "root": {
+            "level": getattr(logging, log_level if not verbose else "DEBUG"),
+            "handlers": ["consoleHandler"],
+        },
+    }
+
+    dictConfig(logDict)
+
+    logging.setLoggerClass(ConsoleLogger)
+
+    logger = logging.getLogger(__name__)
+
+    logger.debug("DEBUG Logging configured.....")
+
+
+# GITLAB COMMANDS
+gitlab_commands.gitlab_cmd.add_command(gitlab_users_commands.user_cmd)
+gitlab_projects_namespaces.namespace_cmd.add_command(
+    gitlab_projects_namespaces_pipelines.pipeline_cmd
+)
+gitlab_projects_namespaces.namespace_cmd.add_command(
+    gitlab_projects_namespaces_schedules.schedule_cmd
+)
+gitlab_projects.project_cmd.add_command(gitlab_projects_namespaces.namespace_cmd)
+gitlab_commands.gitlab_cmd.add_command(gitlab_projects.project_cmd)
+main.add_command(gitlab_commands.gitlab_cmd)
+
+# DEPLOYMENT COMMANDS
+deployment_pipeline_commands.pipeline_cmd.add_command(
+    deployment_pipeline_schedule_commands.schedule_cmd
+)
+deploy_commands.deploy_cmd.add_command(deployment_pipeline_commands.pipeline_cmd)
+main.add_command(deploy_commands.deploy_cmd)
+
+# PROVIDENTIA COMMANDS
+main.add_command(providentia_commands.providentia_cmd)
+
+# PIPELINE CONFIG COMMANDS
+main.add_command(pipeline_commands.pipeline_cmd)
