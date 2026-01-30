@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        
+        <title>
+            
+    
+    examples.syntax_extensions.test_qualify
+ &mdash;
+    SQLAlchemy 2.1 Documentation
+
+        </title>
+
+        
+            <!-- begin iterate through site-imported + sphinx environment css_files -->
+                <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+                <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+                <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+                <link rel="stylesheet" href="../../../_static/copybutton.css" type="text/css" />
+                <link rel="stylesheet" href="../../../_static/docs.css" type="text/css" />
+                <link rel="stylesheet" href="../../../_static/changelog.css" type="text/css" />
+                <link rel="stylesheet" href="../../../_static/sphinx_paramlinks.css" type="text/css" />
+            <!-- end iterate through site-imported + sphinx environment css_files -->
+        
+
+        
+
+    
+
+    <!-- begin layout.mako headers -->
+
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+        <link rel="copyright" title="Copyright" href="../../../copyright.html" />
+    <link rel="top" title="SQLAlchemy 2.1 Documentation" href="../../../index.html" />
+        <link rel="up" title="Module code" href="../../index.html" />
+    <!-- end layout.mako headers -->
+
+
+    </head>
+    <body>
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div id="docs-container">
+
+
+
+
+
+<div id="docs-top-navigation-container" class="body-background">
+<div id="docs-header">
+    <div id="docs-version-header">
+        Release: <span class="version-num">2.1.0b1</span>
+
+
+        | Release Date: January 21, 2026
+
+    </div>
+
+    <h1><a href="../../../index.html">SQLAlchemy 2.1 Documentation</a></h1>
+
+</div>
+</div>
+
+<div id="docs-body-container">
+
+    <div id="fixed-sidebar" class="">
+
+        <div id="index-nav">
+            <form class="search" action="../../../search.html" method="get">
+              <label>
+                 Search terms:
+              <input type="text" placeholder="search..." name="q" size="12" />
+              </label>
+              <input type="submit" value="Search" />
+              <input type="hidden" name="check_keywords" value="yes" />
+              <input type="hidden" name="area" value="default" />
+            </form>
+
+            <p>
+            <a href="../../../contents.html">Contents</a> |
+            <a href="../../../genindex.html">Index</a>
+            </p>
+
+        </div>
+
+
+    </div>
+
+    <div id="narrow-index-nav">
+        <form class="search" action="../../../search.html" method="get">
+            <label>
+                Search terms:
+            <input type="text" placeholder="search..." name="q" size="12" />
+            </label>
+            <input type="submit" value="Search" />
+            <input type="hidden" name="check_keywords" value="yes" />
+            <input type="hidden" name="area" value="default" />
+        </form>
+
+        <p>
+        <a href="../../../index.html">Home</a>
+        </p>
+
+    </div>
+
+
+
+    <div id="docs-body" role="main" class=" _modules-examples-syntax_extensions-test_qualify" >
+        
+<h1>Source code for examples.syntax_extensions.test_qualify</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">random</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">unittest</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Column</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">func</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Integer</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">MetaData</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">select</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Table</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">AssertsCompiledSQL</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">eq_</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">fixtures</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.qualify</span><span class="w"> </span><span class="kn">import</span> <span class="n">qualify</span>
+
+<span class="n">qt_table</span> <span class="o">=</span> <span class="n">Table</span><span class="p">(</span>
+    <span class="s2">&quot;qt&quot;</span><span class="p">,</span>
+    <span class="n">MetaData</span><span class="p">(),</span>
+    <span class="n">Column</span><span class="p">(</span><span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="n">Integer</span><span class="p">),</span>
+    <span class="n">Column</span><span class="p">(</span><span class="s2">&quot;p&quot;</span><span class="p">,</span> <span class="n">Integer</span><span class="p">),</span>
+    <span class="n">Column</span><span class="p">(</span><span class="s2">&quot;o&quot;</span><span class="p">,</span> <span class="n">Integer</span><span class="p">),</span>
+<span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">QualifyCompileTest</span><span class="p">(</span><span class="n">AssertsCompiledSQL</span><span class="p">,</span> <span class="n">fixtures</span><span class="o">.</span><span class="n">CacheKeySuite</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A sample test suite for the QUALIFY clause, making use of SQLAlchemy</span>
+<span class="sd">    testing utilities.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">__dialect__</span> <span class="o">=</span> <span class="s2">&quot;default&quot;</span>
+
+    <span class="nd">@fixtures</span><span class="o">.</span><span class="n">CacheKeySuite</span><span class="o">.</span><span class="n">run_suite_tests</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_qualify_cache_key</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;A cache key suite using the ``CacheKeySuite.run_suite_tests``</span>
+<span class="sd">        decorator.</span>
+
+<span class="sd">        This suite intends to test that the &quot;_traverse_internals&quot; structure</span>
+<span class="sd">        of the custom SQL construct covers all the structural elements of</span>
+<span class="sd">        the object.    A decorated function should return a callable (e.g.</span>
+<span class="sd">        a lambda) which returns a list of SQL structures.    The suite will</span>
+<span class="sd">        call upon this lambda multiple times, to make the same list of</span>
+<span class="sd">        SQL structures repeatedly.  It then runs comparisons of the generated</span>
+<span class="sd">        cache key for each element in a particular list to all the other</span>
+<span class="sd">        elements in that same list, as well as other versions of the list.</span>
+
+<span class="sd">        The rules for this list are then as follows:</span>
+
+<span class="sd">        * Each element of the list should store a SQL structure that is</span>
+<span class="sd">          **structurally identical** each time, for a given position in the</span>
+<span class="sd">          list.   Successive versions of this SQL structure will be compared</span>
+<span class="sd">          to previous ones in the same list position and they must be</span>
+<span class="sd">          identical.</span>
+
+<span class="sd">        * Each element of the list should store a SQL structure that is</span>
+<span class="sd">          **structurally different** from **all other** elements in the list.</span>
+<span class="sd">          Successive versions of this SQL structure will be compared to</span>
+<span class="sd">          other members in other list positions, and they must be different</span>
+<span class="sd">          each time.</span>
+
+<span class="sd">        * The SQL structures returned in the list should exercise all of the</span>
+<span class="sd">          structural features that are provided by the construct.  This is</span>
+<span class="sd">          to ensure that two different structural elements generate a</span>
+<span class="sd">          different cache key and won&#39;t be mis-cached.</span>
+
+<span class="sd">        * Literal parameters like strings and numbers are **not** part of the</span>
+<span class="sd">          cache key itself since these are not &quot;structural&quot; elements; two</span>
+<span class="sd">          SQL structures that are identical can nonetheless have different</span>
+<span class="sd">          parameterized values.  To better exercise testing that this variation</span>
+<span class="sd">          is not stored as part of the cache key, ``random`` functions like</span>
+<span class="sd">          ``random.randint()`` or ``random.choice()`` can be used to generate</span>
+<span class="sd">          random literal values within a single element.</span>
+
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">stmt0</span><span class="p">():</span>
+            <span class="k">return</span> <span class="n">select</span><span class="p">(</span><span class="n">qt_table</span><span class="p">)</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">stmt1</span><span class="p">():</span>
+            <span class="n">stmt</span> <span class="o">=</span> <span class="n">stmt0</span><span class="p">()</span>
+
+            <span class="k">return</span> <span class="n">stmt</span><span class="o">.</span><span class="n">ext</span><span class="p">(</span><span class="n">qualify</span><span class="p">(</span><span class="n">qt_table</span><span class="o">.</span><span class="n">c</span><span class="o">.</span><span class="n">p</span> <span class="o">==</span> <span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">([</span><span class="mi">2</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">10</span><span class="p">])))</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">stmt2</span><span class="p">():</span>
+            <span class="n">stmt</span> <span class="o">=</span> <span class="n">stmt0</span><span class="p">()</span>
+
+            <span class="k">return</span> <span class="n">stmt</span><span class="o">.</span><span class="n">ext</span><span class="p">(</span>
+                <span class="n">qualify</span><span class="p">(</span><span class="n">func</span><span class="o">.</span><span class="n">row_number</span><span class="p">()</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="n">order_by</span><span class="o">=</span><span class="n">qt_table</span><span class="o">.</span><span class="n">c</span><span class="o">.</span><span class="n">o</span><span class="p">))</span>
+            <span class="p">)</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">stmt3</span><span class="p">():</span>
+            <span class="n">stmt</span> <span class="o">=</span> <span class="n">stmt0</span><span class="p">()</span>
+
+            <span class="k">return</span> <span class="n">stmt</span><span class="o">.</span><span class="n">ext</span><span class="p">(</span>
+                <span class="n">qualify</span><span class="p">(</span>
+                    <span class="n">func</span><span class="o">.</span><span class="n">row_number</span><span class="p">()</span><span class="o">.</span><span class="n">over</span><span class="p">(</span>
+                        <span class="n">partition_by</span><span class="o">=</span><span class="n">qt_table</span><span class="o">.</span><span class="n">c</span><span class="o">.</span><span class="n">i</span><span class="p">,</span> <span class="n">order_by</span><span class="o">=</span><span class="n">qt_table</span><span class="o">.</span><span class="n">c</span><span class="o">.</span><span class="n">o</span>
+                    <span class="p">)</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+
+        <span class="k">return</span> <span class="k">lambda</span><span class="p">:</span> <span class="p">[</span><span class="n">stmt0</span><span class="p">(),</span> <span class="n">stmt1</span><span class="p">(),</span> <span class="n">stmt2</span><span class="p">(),</span> <span class="n">stmt3</span><span class="p">()]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_query_one</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;A compilation test.  This makes use of the</span>
+<span class="sd">        ``AssertsCompiledSQL.assert_compile()`` utility.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">stmt</span> <span class="o">=</span> <span class="n">select</span><span class="p">(</span><span class="n">qt_table</span><span class="p">)</span><span class="o">.</span><span class="n">ext</span><span class="p">(</span>
+            <span class="n">qualify</span><span class="p">(</span>
+                <span class="n">func</span><span class="o">.</span><span class="n">row_number</span><span class="p">()</span><span class="o">.</span><span class="n">over</span><span class="p">(</span>
+                    <span class="n">partition_by</span><span class="o">=</span><span class="n">qt_table</span><span class="o">.</span><span class="n">c</span><span class="o">.</span><span class="n">p</span><span class="p">,</span> <span class="n">order_by</span><span class="o">=</span><span class="n">qt_table</span><span class="o">.</span><span class="n">c</span><span class="o">.</span><span class="n">o</span>
+                <span class="p">)</span>
+                <span class="o">==</span> <span class="mi">1</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">assert_compile</span><span class="p">(</span>
+            <span class="n">stmt</span><span class="p">,</span>
+            <span class="s2">&quot;SELECT qt.i, qt.p, qt.o FROM qt QUALIFY row_number() &quot;</span>
+            <span class="s2">&quot;OVER (PARTITION BY qt.p ORDER BY qt.o) = :param_1&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_query_two</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;A compilation test.  This makes use of the</span>
+<span class="sd">        ``AssertsCompiledSQL.assert_compile()`` utility.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">row_num</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">func</span><span class="o">.</span><span class="n">row_number</span><span class="p">()</span>
+            <span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="n">partition_by</span><span class="o">=</span><span class="n">qt_table</span><span class="o">.</span><span class="n">c</span><span class="o">.</span><span class="n">p</span><span class="p">,</span> <span class="n">order_by</span><span class="o">=</span><span class="n">qt_table</span><span class="o">.</span><span class="n">c</span><span class="o">.</span><span class="n">o</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">label</span><span class="p">(</span><span class="s2">&quot;row_num&quot;</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">stmt</span> <span class="o">=</span> <span class="n">select</span><span class="p">(</span><span class="n">qt_table</span><span class="p">,</span> <span class="n">row_num</span><span class="p">)</span><span class="o">.</span><span class="n">ext</span><span class="p">(</span>
+            <span class="n">qualify</span><span class="p">(</span><span class="n">row_num</span><span class="o">.</span><span class="n">as_reference</span><span class="p">()</span> <span class="o">==</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">assert_compile</span><span class="p">(</span>
+            <span class="n">stmt</span><span class="p">,</span>
+            <span class="s2">&quot;SELECT qt.i, qt.p, qt.o, row_number() OVER &quot;</span>
+            <span class="s2">&quot;(PARTITION BY qt.p ORDER BY qt.o) AS row_num &quot;</span>
+            <span class="s2">&quot;FROM qt QUALIFY row_num = :param_1&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_propagate_attrs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;ORM propagate test.  this is an optional test that tests</span>
+<span class="sd">        apply_propagate_attrs, indicating when you pass ORM classes /</span>
+<span class="sd">        attributes to your construct, there&#39;s a dictionary called</span>
+<span class="sd">        ``._propagate_attrs`` that gets carried along to the statement,</span>
+<span class="sd">        which marks it as an &quot;ORM&quot; statement.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">row_num</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">func</span><span class="o">.</span><span class="n">row_number</span><span class="p">()</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="n">partition_by</span><span class="o">=</span><span class="n">qt_table</span><span class="o">.</span><span class="n">c</span><span class="o">.</span><span class="n">p</span><span class="p">)</span><span class="o">.</span><span class="n">label</span><span class="p">(</span><span class="s2">&quot;row_num&quot;</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">row_num</span><span class="o">.</span><span class="n">_propagate_attrs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;foo&quot;</span><span class="p">:</span> <span class="s2">&quot;bar&quot;</span><span class="p">}</span>
+
+        <span class="n">stmt</span> <span class="o">=</span> <span class="n">select</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">ext</span><span class="p">(</span><span class="n">qualify</span><span class="p">(</span><span class="n">row_num</span><span class="o">.</span><span class="n">as_reference</span><span class="p">()</span> <span class="o">==</span> <span class="mi">1</span><span class="p">))</span>
+
+        <span class="n">eq_</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">_propagate_attrs</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;foo&quot;</span><span class="p">:</span> <span class="s2">&quot;bar&quot;</span><span class="p">})</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">QualifyCompileUnittest</span><span class="p">(</span><span class="n">QualifyCompileTest</span><span class="p">,</span> <span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+    <span class="k">pass</span>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">unittest</span><span class="o">.</span><span class="n">main</span><span class="p">()</span></pre><div class="code-non-annotations-key"></div></div>
+    </div>
+
+</div>
+
+<div id="docs-bottom-navigation" class="docs-navigation-links">
+
+    <div id="docs-copyright">
+        &copy; <a href="../../../copyright.html">Copyright</a> 2007-2026, the SQLAlchemy authors and contributors.
+
+
+    <p><b>flambé!</b> the dragon and <b><i>The Alchemist</i></b> image designs created and generously donated by <a href="https://github.com/vmalloc">Rotem Yaari</a>.</p>
+
+        Created using <a href="https://www.sphinx-doc.org">Sphinx</a> 9.1.0.
+
+    Documentation last generated: Wed 21 Jan 2026 02:26:37 PM  EST
+
+    </div>
+</div>
+
+</div>
+
+
+
+        
+        
+
+    <script type="text/javascript">
+      document.documentElement.dataset.content_root = '../../../';
+
+    </script>
+
+    <!-- begin iterate through sphinx environment script_files -->
+        <script type="text/javascript" src="../../../_static/jquery.js"></script>
+        <script type="text/javascript" src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script type="text/javascript" src="../../../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../../../_static/doctools.js"></script>
+        <script type="text/javascript" src="../../../_static/sphinx_highlight.js"></script>
+        <script type="text/javascript" src="../../../_static/clipboard.min.js"></script>
+        <script type="text/javascript" src="../../../_static/copybutton.js"></script>
+    <!-- end iterate through sphinx environment script_files -->
+
+    <script type="text/javascript" src="../../../_static/init.js"></script>
+
+
+    </body>
+</html>
+
+

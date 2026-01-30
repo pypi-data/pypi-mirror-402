@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        
+        <title>
+            
+    
+    examples.syntax_extensions.qualify
+ &mdash;
+    SQLAlchemy 2.1 Documentation
+
+        </title>
+
+        
+            <!-- begin iterate through site-imported + sphinx environment css_files -->
+                <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+                <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+                <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+                <link rel="stylesheet" href="../../../_static/copybutton.css" type="text/css" />
+                <link rel="stylesheet" href="../../../_static/docs.css" type="text/css" />
+                <link rel="stylesheet" href="../../../_static/changelog.css" type="text/css" />
+                <link rel="stylesheet" href="../../../_static/sphinx_paramlinks.css" type="text/css" />
+            <!-- end iterate through site-imported + sphinx environment css_files -->
+        
+
+        
+
+    
+
+    <!-- begin layout.mako headers -->
+
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+        <link rel="copyright" title="Copyright" href="../../../copyright.html" />
+    <link rel="top" title="SQLAlchemy 2.1 Documentation" href="../../../index.html" />
+        <link rel="up" title="Module code" href="../../index.html" />
+    <!-- end layout.mako headers -->
+
+
+    </head>
+    <body>
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div id="docs-container">
+
+
+
+
+
+<div id="docs-top-navigation-container" class="body-background">
+<div id="docs-header">
+    <div id="docs-version-header">
+        Release: <span class="version-num">2.1.0b1</span>
+
+
+        | Release Date: January 21, 2026
+
+    </div>
+
+    <h1><a href="../../../index.html">SQLAlchemy 2.1 Documentation</a></h1>
+
+</div>
+</div>
+
+<div id="docs-body-container">
+
+    <div id="fixed-sidebar" class="">
+
+        <div id="index-nav">
+            <form class="search" action="../../../search.html" method="get">
+              <label>
+                 Search terms:
+              <input type="text" placeholder="search..." name="q" size="12" />
+              </label>
+              <input type="submit" value="Search" />
+              <input type="hidden" name="check_keywords" value="yes" />
+              <input type="hidden" name="area" value="default" />
+            </form>
+
+            <p>
+            <a href="../../../contents.html">Contents</a> |
+            <a href="../../../genindex.html">Index</a>
+            </p>
+
+        </div>
+
+
+    </div>
+
+    <div id="narrow-index-nav">
+        <form class="search" action="../../../search.html" method="get">
+            <label>
+                Search terms:
+            <input type="text" placeholder="search..." name="q" size="12" />
+            </label>
+            <input type="submit" value="Search" />
+            <input type="hidden" name="check_keywords" value="yes" />
+            <input type="hidden" name="area" value="default" />
+        </form>
+
+        <p>
+        <a href="../../../index.html">Home</a>
+        </p>
+
+    </div>
+
+
+
+    <div id="docs-body" role="main" class=" _modules-examples-syntax_extensions-qualify" >
+        
+<h1>Source code for examples.syntax_extensions.qualify</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.ext.compiler</span><span class="w"> </span><span class="kn">import</span> <span class="n">compiles</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClauseElement</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">coercions</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">ColumnElement</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">ColumnExpressionArgument</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">roles</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">Select</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">SyntaxExtension</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.sql</span><span class="w"> </span><span class="kn">import</span> <span class="n">visitors</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">qualify</span><span class="p">(</span><span class="n">predicate</span><span class="p">:</span> <span class="n">ColumnExpressionArgument</span><span class="p">[</span><span class="n">bool</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Qualify</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a QUALIFY construct</span>
+
+<span class="sd">    E.g.::</span>
+
+<span class="sd">        stmt = select(qt_table).ext(</span>
+<span class="sd">            qualify(func.row_number().over(order_by=qt_table.c.o))</span>
+<span class="sd">        )</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">Qualify</span><span class="p">(</span><span class="n">predicate</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Qualify</span><span class="p">(</span><span class="n">SyntaxExtension</span><span class="p">,</span> <span class="n">ClauseElement</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Define the QUALIFY class.&quot;&quot;&quot;</span>
+
+    <span class="n">predicate</span><span class="p">:</span> <span class="n">ColumnElement</span><span class="p">[</span><span class="n">bool</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A single column expression that is the predicate within the QUALIFY.&quot;&quot;&quot;</span>
+
+    <span class="n">_traverse_internals</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span><span class="s2">&quot;predicate&quot;</span><span class="p">,</span> <span class="n">visitors</span><span class="o">.</span><span class="n">InternalTraversal</span><span class="o">.</span><span class="n">dp_clauseelement</span><span class="p">)</span>
+    <span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;This structure defines how SQLAlchemy can do a deep traverse of internal</span>
+<span class="sd">    contents of this structure.  This is mostly used for cache key generation.</span>
+<span class="sd">    If the traversal is not written yet, the ``inherit_cache=False`` class</span>
+<span class="sd">    level attribute may be used to skip caching for the construct.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">predicate</span><span class="p">:</span> <span class="n">ColumnExpressionArgument</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">predicate</span> <span class="o">=</span> <span class="n">coercions</span><span class="o">.</span><span class="n">expect</span><span class="p">(</span>
+            <span class="n">roles</span><span class="o">.</span><span class="n">WhereHavingRole</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">apply_propagate_attrs</span><span class="o">=</span><span class="bp">self</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">apply_to_select</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">select_stmt</span><span class="p">:</span> <span class="n">Select</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Called when the :meth:`.Select.ext` method is called.</span>
+
+<span class="sd">        The extension should apply itself to the :class:`.Select`, typically</span>
+<span class="sd">        using :meth:`.HasStatementExtensions.apply_syntax_extension_point`,</span>
+<span class="sd">        which receives a callable that receives a list of current elements to</span>
+<span class="sd">        be concatenated together and then returns a new list of elements to be</span>
+<span class="sd">        concatenated together in the final structure.  The</span>
+<span class="sd">        :meth:`.SyntaxExtension.append_replacing_same_type` callable is</span>
+<span class="sd">        usually used for this.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">select_stmt</span><span class="o">.</span><span class="n">apply_syntax_extension_point</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">append_replacing_same_type</span><span class="p">,</span> <span class="s2">&quot;post_criteria&quot;</span>
+        <span class="p">)</span>
+
+
+<span class="nd">@compiles</span><span class="p">(</span><span class="n">Qualify</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_compile_qualify</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="n">compiler</span><span class="p">,</span> <span class="o">**</span><span class="n">kw</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;a compiles extension that delivers the SQL text for Qualify&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;QUALIFY </span><span class="si">{</span><span class="n">compiler</span><span class="o">.</span><span class="n">process</span><span class="p">(</span><span class="n">element</span><span class="o">.</span><span class="n">predicate</span><span class="p">,</span><span class="w"> </span><span class="o">**</span><span class="n">kw</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span></pre><div class="code-annotations-key"></div></div>
+    </div>
+
+</div>
+
+<div id="docs-bottom-navigation" class="docs-navigation-links">
+
+    <div id="docs-copyright">
+        &copy; <a href="../../../copyright.html">Copyright</a> 2007-2026, the SQLAlchemy authors and contributors.
+
+
+    <p><b>flambé!</b> the dragon and <b><i>The Alchemist</i></b> image designs created and generously donated by <a href="https://github.com/vmalloc">Rotem Yaari</a>.</p>
+
+        Created using <a href="https://www.sphinx-doc.org">Sphinx</a> 9.1.0.
+
+    Documentation last generated: Wed 21 Jan 2026 02:26:37 PM  EST
+
+    </div>
+</div>
+
+</div>
+
+
+
+        
+        
+
+    <script type="text/javascript">
+      document.documentElement.dataset.content_root = '../../../';
+
+    </script>
+
+    <!-- begin iterate through sphinx environment script_files -->
+        <script type="text/javascript" src="../../../_static/jquery.js"></script>
+        <script type="text/javascript" src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script type="text/javascript" src="../../../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../../../_static/doctools.js"></script>
+        <script type="text/javascript" src="../../../_static/sphinx_highlight.js"></script>
+        <script type="text/javascript" src="../../../_static/clipboard.min.js"></script>
+        <script type="text/javascript" src="../../../_static/copybutton.js"></script>
+    <!-- end iterate through sphinx environment script_files -->
+
+    <script type="text/javascript" src="../../../_static/init.js"></script>
+
+
+    </body>
+</html>
+
+
