@@ -1,0 +1,61 @@
+# Metadata
+name: broot
+version: 2.0
+description: Interactive file browser and selector
+provides:
+  file_selector:
+    type: service
+    capabilities: [select_file, select_directory, browse]
+    returns: filepath
+requires:
+  - pane
+  - modal
+  - clipboard
+# Context
+context: {}
+# Metadata
+metadata:
+  environment:
+    optional: ["BROOT_CMD_SEPARATOR"]
+# Grammar
+grammar:
+  direction:
+    values: [left, right, up, down, pop]
+    transform: lower
+    description: "Split direction for browser (pop = popup)"
+# Vocabulary
+vocabulary:
+  verbs: [BROWSE, BR]
+# Expectations
+expectations:
+  BROWSE: ["target?", "direction?=left"]
+  BR: ["target?", "direction?=left"]
+# Commands
+commands:
+  - match: {verb: [BROWSE, BR], direction: pop}
+    exec: "{split_popup} 'broot'"
+  - match: {verb: [BROWSE, BR]}
+    exec: "{split} 'broot'"
+# Selectors
+selectors:
+  br?:
+    type: stream
+    exec: "broot"
+  rs?:
+    type: stream
+    exec: "broot ~/.local/share/resources"
+# Services
+services: {}
+# Integration
+integration:
+  files:
+    - source: "ali.hjson"
+      target: "~/.config/ali/broot.hjson"
+  instructions: |
+    Add to ~/.config/broot/conf.hjson imports section:
+      imports: ["~/.config/ali/broot.hjson"]
+    Or manually add verbs from the file
+  check_command: "grep -q 'ali/broot.hjson' ~/.config/broot/conf.hjson"
+  usage: |-
+    :ae <direction> - Edit file in specified direction
+    :ab <args> - Browse in new pane
