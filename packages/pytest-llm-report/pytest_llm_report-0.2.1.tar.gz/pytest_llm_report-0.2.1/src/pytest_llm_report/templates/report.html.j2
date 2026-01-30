@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Report &bull; {{ report.run_meta.collected_count }} tests</title>
+    <!-- Optional: Inter font from rsms.me CDN. Falls back to system fonts if unavailable. -->
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+    <style>
+        {% include "style.css" %}
+    </style>
+    <script>
+        {% include "report.js" %}
+    </script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>Test Report</h1>
+                <div class="meta">
+                    Run ID: {{ report.run_meta.run_id or "N/A" }} &bull;
+                    Generated: {{ report.run_meta.end_time[:19].replace('T', ' ') }} &bull;
+                    Duration: {{ report.run_meta.duration | duration }}<br>
+                    <strong>Plugin:</strong> v{{ report.run_meta.plugin_version }}
+                    {% if report.run_meta.plugin_git_sha %}
+                        ({{ report.run_meta.plugin_git_sha }})
+                        {% if report.run_meta.plugin_git_dirty %}[dirty]{% endif %}
+                    {% endif %}<br>
+                    <strong>Repo:</strong> v{{ report.run_meta.repo_version or "unknown" }}
+                    {% if report.run_meta.repo_git_sha %}
+                        ({{ report.run_meta.repo_git_sha }})
+                        {% if report.run_meta.repo_git_dirty %}[dirty]{% endif %}
+                    {% endif %}
+                    {% if report.run_meta.llm_annotations_enabled %}<br>
+                    <strong>LLM:</strong> {{ report.run_meta.llm_provider }} / {{ report.run_meta.llm_model or "default" }}
+                        ({{ report.run_meta.llm_context_mode or "minimal" }} context,
+                         {{ report.run_meta.llm_annotations_count or 0 }} annotated{% if report.run_meta.llm_annotations_errors %}, {{ report.run_meta.llm_annotations_errors }} errors{% endif %})
+                        {% if report.run_meta.llm_total_tokens %}
+                        <br><strong>Token Usage:</strong>
+                        {{ report.run_meta.llm_total_input_tokens | default(0) }} input,
+                        {{ report.run_meta.llm_total_output_tokens | default(0) }} output
+                        (Total: {{ report.run_meta.llm_total_tokens }})
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+            {% if report.summary.coverage_total_percent is not none %}
+            <div style="text-align: right">
+                <div style="font-size: 2rem; font-weight: 700; color: var(--primary-color)">
+                    {{ report.summary.coverage_total_percent }}%
+                </div>
+                <div class="meta">Total Coverage</div>
+            </div>
+            {% endif %}
+        </header>
+
+        <!-- Summary Cards -->
+        <div class="summary">
+            <div class="summary-card">
+                <div class="count">{{ report.summary.total }}</div>
+                <div class="label">Total Tests</div>
+            </div>
+            <div class="summary-card passed">
+                <div class="count">{{ report.summary.passed }}</div>
+                <div class="label">Passed</div>
+            </div>
+            <div class="summary-card failed">
+                <div class="count">{{ report.summary.failed }}</div>
+                <div class="label">Failed</div>
+            </div>
+            <div class="summary-card skipped">
+                <div class="count">{{ report.summary.skipped }}</div>
+                <div class="label">Skipped</div>
+            </div>
+            <div class="summary-card xfailed">
+                <div class="count">{{ report.summary.xfailed }}</div>
+                <div class="label">XFailed</div>
+            </div>
+            <div class="summary-card xpassed">
+                <div class="count">{{ report.summary.xpassed }}</div>
+                <div class="label">XPassed</div>
+            </div>
+            <div class="summary-card failed">
+                <div class="count">{{ report.summary.error }}</div>
+                <div class="label">Errors</div>
+            </div>
+        </div>
+
+        <!-- Table of Contents -->
+        <nav class="toc">
+            <ul>
+                {% if report.source_coverage %}
+                <li><a href="#source-coverage">Source Coverage</a></li>
+                {% endif %}
+                <li><a href="#test-list">Per Test Details</a></li>
+                <li><a onclick="showFailuresOnly()">Failures Only</a></li>
+            </ul>
+        </nav>
+
+        {% if report.source_coverage %}
+        <section class="source-coverage" id="source-coverage">
+            <h2>Source Coverage</h2>
+            <div class="source-coverage-table">
+                <div class="source-coverage-header">
+                    <span>File</span>
+                    <span>Stmts</span>
+                    <span>Miss</span>
+                    <span>Cover</span>
+                    <span>%</span>
+                    <span>Covered Lines</span>
+                    <span>Missed Lines</span>
+                </div>
+                {% for entry in report.source_coverage %}
+                <div class="source-coverage-row">
+                    <span class="source-path">{{ entry.file_path }}</span>
+                    <span>{{ entry.statements }}</span>
+                    <span>{{ entry.missed }}</span>
+                    <span>{{ entry.covered }}</span>
+                    <span>{{ entry.coverage_percent }}%</span>
+                    <span class="source-lines">{{ entry.covered_ranges or "-" }}</span>
+                    <span class="source-lines">{{ entry.missed_ranges or "-" }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
+        <section class="per-test-details" id="test-list">
+            <h2>Per Test Details</h2>
+
+        <!-- Filters -->
+        <div class="filters">
+            <input type="text" id="searchInput" class="filter-input" placeholder="Search tests..." onkeyup="filterTests()">
+            <div class="filter-statuses" aria-label="Filter by status">
+                <label class="filter-chip passed">
+                    <input type="checkbox" data-status="passed" checked onchange="toggleStatus(this)">
+                    Passed
+                </label>
+                <label class="filter-chip failed">
+                    <input type="checkbox" data-status="failed" checked onchange="toggleStatus(this)">
+                    Failed
+                </label>
+                <label class="filter-chip skipped">
+                    <input type="checkbox" data-status="skipped" checked onchange="toggleStatus(this)">
+                    Skipped
+                </label>
+                <label class="filter-chip xfailed">
+                    <input type="checkbox" data-status="xfailed" checked onchange="toggleStatus(this)">
+                    XFailed
+                </label>
+                <label class="filter-chip xpassed">
+                    <input type="checkbox" data-status="xpassed" checked onchange="toggleStatus(this)">
+                    XPassed
+                </label>
+                <label class="filter-chip error">
+                    <input type="checkbox" data-status="error" checked onchange="toggleStatus(this)">
+                    Error
+                </label>
+            </div>
+        </div>
+
+        <!-- Test List -->
+        <div class="test-list">
+            {% for file_path, tests in report.tests | groupby('file_path') %}
+            <div class="test-file-group">
+                <div class="test-file-header">
+                    <span>📄 {{ file_path }}</span>
+                    <span style="font-size: 0.9rem; font-weight: 400; color: var(--text-secondary)">{{ tests | length }} tests</span>
+                </div>
+                {% for test in tests %}
+                <div class="test-row {{ test.outcome | outcome_class }}" data-status="{{ test.outcome }}">
+                    <details open>
+                        <summary class="test-header">
+                            <span class="status-badge status-{{ test.outcome }}">{{ test.outcome | upper }}</span>
+                            <span class="test-name">{{ test.nodeid }}</span>
+                            <div class="test-meta">
+                                <span>{{ test.duration | duration }}</span>
+                                {% if test.coverage %}
+                                <span title="Covered file count">🛡️ {{ test.coverage | length }}</span>
+                                {% endif %}
+                            </div>
+                        </summary>
+
+                        <div class="test-details">
+                            {% if test.error_message %}
+                            <div class="detail-section">
+                                <div class="detail-title">Error</div>
+                                <div class="error-message">{{ test.error_message }}</div>
+                            </div>
+                            {% endif %}
+
+                            {% if test.llm_annotation and (test.llm_annotation.scenario or test.llm_annotation.error) %}
+                            <div class="detail-section">
+                                <div class="detail-title">AI Assessment</div>
+                                <div class="llm-annotation">
+                                    {% if test.llm_annotation.scenario %}
+                                    <p><strong>Scenario:</strong> {{ test.llm_annotation.scenario }}</p>
+                                    {% endif %}
+                                    {% if test.llm_annotation.why_needed %}
+                                    <p><strong>Why Needed:</strong> {{ test.llm_annotation.why_needed }}</p>
+                                    {% endif %}
+                                    {% if test.llm_annotation.key_assertions %}
+                                    <div class="key-assertions">
+                                        <strong>Key Assertions:</strong>
+                                        <ul>
+                                            {% for assertion in test.llm_annotation.key_assertions %}
+                                            <li>{{ assertion }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                    {% endif %}
+                                    {% if test.llm_annotation.confidence is not none %}
+                                    <p class="confidence-score" style="font-size: 0.85em; color: var(--text-secondary); margin-top: 0.5rem;">
+                                        <strong>Confidence:</strong> {{ (test.llm_annotation.confidence * 100) | round(0) | int }}%
+                                    </p>
+                                    {% endif %}
+                                    {% if test.llm_annotation.error %}
+                                    <p><strong>LLM error:</strong> {{ test.llm_annotation.error }}</p>
+                                    {% endif %}
+                                    {% if test.llm_annotation.token_usage %}
+                                    <p class="token-usage" style="font-size: 0.85em; color: var(--text-secondary); margin-top: 0.5rem; border-top: 1px dashed #e5e7eb; padding-top: 0.5rem;">
+                                        <strong>Tokens:</strong>
+                                        {{ test.llm_annotation.token_usage.prompt_tokens }} input +
+                                        {{ test.llm_annotation.token_usage.completion_tokens }} output =
+                                        {{ test.llm_annotation.token_usage.total_tokens }} total
+                                    </p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {% if test.coverage %}
+                            <div class="detail-section">
+                                <div class="detail-title">Coverage</div>
+                                <div class="coverage-list">
+                                    {% for cov in test.coverage %}
+                                    <div class="coverage-item" style="padding: 0.5rem 1rem;">
+                                        <span>{{ cov.file_path }}</span>
+                                        <span style="color: var(--text-secondary)">{{ cov.line_count }} lines (ranges: {{ cov.line_ranges }})</span>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </details>
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        </section>
+    </div>
+</body>
+</html>
