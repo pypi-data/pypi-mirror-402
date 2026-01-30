@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+{% block title %}{{ page_title|default:"User Chemicals" }}{% endblock %}
+{% block content %}
+    <h1>{{ page_title|default:"User Chemical Inventory" }}</h1>
+    {% if user.is_staff and view_name != 'my_chemicals' %}
+        <p>
+            <a href="{% url 'add_user_chemical' %}" class="btn btn-success">Add a new chemical</a>
+        </p>
+    {% endif %}
+    <div class="col-lg-12" style="margin-top:30px">
+        <table class="table table-bordered table-condensed">
+            <thead>
+                <tr>
+                    {% if user.is_staff %}
+                        <th>
+                            <a href="{% url view_name|default:'user_chemicals' sort_by='owner' %}">Owner</a>
+                        </th>
+                    {% endif %}
+                    <th>
+                        <a href="{% url view_name|default:'user_chemicals' sort_by='chemical' %}">Name</a>
+                    </th>
+                    <th>
+                        <a href="{% url view_name|default:'user_chemicals' sort_by='label_id' %}">Label ID</a>
+                    </th>
+                    <th>
+                        <a href="{% url view_name|default:'user_chemicals' sort_by='in_date' %}">Date of Entry</a>
+                    </th>
+                    <th>
+                        <a href="{% url view_name|default:'user_chemicals' sort_by='expiration' %}">Expiration Date</a>
+                    </th>
+                    <th>
+                        <a href="{% url view_name|default:'user_chemicals' sort_by='location' %}">Location</a>
+                    </th>
+                    <th>Request</th>
+                    <th>History</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for x in user_chemicals %}
+                    <tr>
+                        {% if user.is_staff %}
+                            <td>
+                                <a href="{% url 'create_or_modify_user' x.owner.id %}">{{ x.owner }}</a>
+                            </td>
+                        {% endif %}
+                        <td>
+                            {% if x.request %}
+                                <a href="#"
+                                   onclick="return view_request_details('{% url 'request_details' x.request.id %}');"
+                                   data-toggle="tooltip"
+                                   title="View Request Details">{{ x.chemical.name }}</a>
+                            {% else %}
+                                {{ x.chemical.name }}
+                            {% endif %}
+                        </td>
+                        <td>{{ x.label_id }}</td>
+                        <td>{{ x.in_date }}</td>
+                        <td>{{ x.expiration }}</td>
+                        <td>{{ x.location }}</td>
+                        <td>
+                            {% if x.request %}
+                                <a href="#" onclick="return view_request_details('{% url 'request_details' x.request.id %}');">View Request</a>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if x.history %}
+                                <a href="javascript:void(0)"
+                                   onclick="view_history('{{ x.history|escapejs }}', '{{ x.chemical.name|escapejs }}')">View</a>
+                            {% else %}
+                                None
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.is_staff %}
+                                <a href="{% url 'update_user_chemical' x.id %}" class="btn btn-default">Update</a>
+                            {% elif view_name == 'my_chemicals' or x.owner == user %}
+                                <a href="{% url 'request_chemical_update' x.id %}" class="btn btn-default">Request Update</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <!-- History Modal -->
+    <div id="historyModal" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">
+                        History for <span id="history_chemical_name"></span>
+                    </h4>
+                </div>
+                <div class="modal-body">
+                    <pre id="history_content" style="white-space: pre-wrap; word-wrap: break-word;"></pre>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Request Details Modal -->
+    <div id="requestModal" class="modal fade" role="dialog">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">Request Details</h4>
+                </div>
+                <div class="modal-body" id="request_modal_body">Loading...</div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+      function view_history(history_text, chemical_name) {
+          $('#history_chemical_name').text(chemical_name);
+          $('#history_content').text(history_text);
+          $('#historyModal').modal('show');
+      }
+
+      function view_request_details(url) {
+          $('#request_modal_body').html("Loading...");
+          $('#requestModal').modal('show');
+          // Load only the .container-fluid content to ensure correct formatting without full page inheritance
+          $('#request_modal_body').load(url + " .container-fluid", function(response, status, xhr) {
+              if (status == "error") {
+                  var msg = "Sorry but there was an error loading the request details: ";
+                  $("#request_modal_body").html(msg + xhr.status + " " + xhr.statusText);
+              }
+          });
+          return false;
+      }
+    </script>
+{% endblock %}

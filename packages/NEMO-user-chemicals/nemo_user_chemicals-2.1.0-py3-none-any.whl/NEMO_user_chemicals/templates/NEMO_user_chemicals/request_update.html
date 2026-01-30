@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Request Chemical Update{% endblock %}
+{% block extrahead %}
+    {% load static %}
+    {% load custom_tags_and_filters %}
+    <script type="text/javascript" src="{% static "datetimepicker/bootstrap-datetimepicker.js" %}"></script>
+    <link rel="stylesheet" type="text/css" href="{% static "datetimepicker/bootstrap-datetimepicker.css" %}" />
+{% endblock %}
+{% block content %}
+    <div class="container">
+        <h1>Request Update for Chemical</h1>
+        <div class="well">
+            <h4>{{ user_chem.chemical.name }}</h4>
+            <p>
+                <strong>Label ID:</strong> {{ user_chem.label_id }}
+            </p>
+            <p>
+                <strong>Current Location:</strong> {{ user_chem.location }}
+            </p>
+            <p>
+                <strong>Expiration:</strong> {{ user_chem.expiration }}
+            </p>
+        </div>
+        <form method="post" class="form-horizontal">
+            {% csrf_token %}
+            {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+            <div class="alert alert-info">Please fill out only the fields you wish to update.</div>
+            <div class="form-group">
+                <label for="id_new_owner" class="col-sm-2 control-label">New Owner:</label>
+                <div class="col-sm-6">
+                    {{ form.new_owner.errors }}
+                    <input type="text"
+                           name="new_owner"
+                           id="id_new_owner"
+                           class="form-control"
+                           value="{{ form.new_owner.value|default_if_none:'' }}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="id_new_location" class="col-sm-2 control-label">New Location:</label>
+                <div class="col-sm-6">
+                    {{ form.new_location.errors }}
+                    <input type="text"
+                           name="new_location"
+                           id="id_new_location"
+                           class="form-control"
+                           value="{{ form.new_location.value|default_if_none:'' }}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="id_new_expiration" class="col-sm-2 control-label">New Expiration Date:</label>
+                <div class="col-sm-3">
+                    {{ form.new_expiration.errors }}
+                    <input type="text"
+                           name="new_expiration"
+                           id="id_new_expiration"
+                           class="form-control"
+                           value="{{ new_expiration.date|input_date_format }}">
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-offset-2 col-sm-10">
+                    <div class="checkbox">
+                        <label>
+                            <input type="checkbox" name="new_bottle" {% if form.new_bottle.value %}checked{% endif %}>
+                            Bring in New Bottle
+                        </label>
+                    </div>
+                    <div class="checkbox">
+                        <label>
+                            <input type="checkbox" name="remove" {% if form.remove.value %}checked{% endif %}>
+                            Remove/Dispose Chemical
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="id_other_comments" class="col-sm-2 control-label">Details / Other:</label>
+                <div class="col-sm-6">
+                    {{ form.other_comments.errors }}
+                    <textarea name="other_comments" id="id_other_comments" class="form-control" rows="3">{{ form.other_comments.value|default_if_none:'' }}</textarea>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-offset-2 col-sm-10">
+                    <button type="submit" class="btn btn-primary">Send Request</button>
+                    <a href="{% url 'my_chemicals' %}" class="btn btn-default">Cancel</a>
+                </div>
+            </div>
+        </form>
+    </div>
+    <script>
+	let timepicker_properties = {format: '{{ date_input_js_format }}'};
+	$('#id_new_expiration').datetimepicker(timepicker_properties);
+
+
+
+    </script>
+{% endblock %}
