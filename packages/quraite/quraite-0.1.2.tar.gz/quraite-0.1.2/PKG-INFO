@@ -1,0 +1,386 @@
+Metadata-Version: 2.3
+Name: quraite
+Version: 0.1.2
+Summary: This project provides adaptors and methods to integrate with the Quraite platform
+Author: Shiv Mohith
+Author-email: Shiv Mohith <shivmohith8@gmail.com>
+Requires-Dist: aiohttp>=3.13.2
+Requires-Dist: fastapi>=0.121.1
+Requires-Dist: httpx>=0.28.1
+Requires-Dist: openinference-semantic-conventions>=0.1.25
+Requires-Dist: opentelemetry-api>=1.37.0
+Requires-Dist: opentelemetry-sdk>=1.37.0
+Requires-Dist: pydantic>=2.12.4
+Requires-Dist: python-dotenv>=1.2.1
+Requires-Dist: uvicorn>=0.38.0
+Requires-Dist: agno>=2.3.4 ; extra == 'agno'
+Requires-Dist: boto3>=1.40.70 ; extra == 'bedrock'
+Requires-Dist: google-adk>=1.18.0 ; extra == 'google-adk'
+Requires-Dist: langchain>=1.0.5 ; extra == 'langchain'
+Requires-Dist: langgraph>=1.0.3 ; extra == 'langchain'
+Requires-Dist: openai-agents>=0.5.0 ; extra == 'openai-agents'
+Requires-Dist: pydantic-ai>=1.25.0 ; extra == 'pydantic-ai'
+Requires-Dist: pyngrok>=7.5.0 ; extra == 'pyngrok'
+Requires-Dist: smolagents>=1.23.0 ; extra == 'smolagents'
+Requires-Python: >=3.10
+Provides-Extra: agno
+Provides-Extra: bedrock
+Provides-Extra: google-adk
+Provides-Extra: langchain
+Provides-Extra: openai-agents
+Provides-Extra: pydantic-ai
+Provides-Extra: pyngrok
+Provides-Extra: smolagents
+Description-Content-Type: text/markdown
+
+# Quraite Python SDK
+
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Compatible-blue)](https://opentelemetry.io/)
+
+The **Quraite Python SDK** provides adapters and methods to integrate AI agent with the [Quraite platform](https://quraite.ai) for evaluation. It offers a unified interface for different agent frameworks, automatic tracing at every turn for agent trajectory evaluation, and easy local server setup with tunneling capabilities.
+
+## Features
+
+- 🔌 **Framework Adapters**: Support for multiple AI agent frameworks (LangChain, Pydantic AI, Agno, Google ADK, OpenAI Agents, Smolagents, AWS Bedrock, Flowise, Langflow, N8n, and more)
+- 📊 **Automatic Tracing**: Built-in OpenInference-based (OpenTelemetry-based tracing support coming soon) tracing for agent trajectory evaluation. Track token usage, costs, latency, and model information for each agent invocation
+- 🚀 **Local Server**: Easy-to-use local server with optional tunneling (Cloudflare/ngrok) for public access and integration with Quraite platform
+
+## Installation
+
+### Basic Installation
+
+```bash
+pip install quraite
+```
+
+### Framework-Specific Installation
+
+Install with optional dependencies for specific frameworks:
+
+```bash
+# LangChain
+pip install 'quraite[langchain]'
+
+# Pydantic AI
+pip install 'quraite[pydantic-ai]'
+
+# Agno
+pip install 'quraite[agno]'
+
+# Google ADK
+pip install 'quraite[google-adk]'
+
+# OpenAI Agents
+pip install 'quraite[openai-agents]'
+
+# Smolagents
+pip install 'quraite[smolagents]'
+
+# AWS Bedrock
+pip install 'quraite[bedrock]'
+
+# Multiple frameworks
+pip install 'quraite[langchain,pydantic-ai,agno]'
+```
+
+## Quick Start
+
+### Example: LangChain Agent with Local Server
+
+Pass your compiled LangChain agent to the adapter and expose it as an HTTP API:
+
+```python
+import asyncio
+import uvicorn
+from dotenv import load_dotenv
+from openinference.instrumentation import TracerProvider
+from openinference.instrumentation.langchain import LangChainInstrumentor
+
+from quraite.adapters import LangChainAdapter
+from quraite.serve.local_agent import LocalAgentServer
+from quraite.tracing.span_exporter import QuraiteInMemorySpanExporter
+from quraite.tracing.span_processor import QuraiteSimpleSpanProcessor
+
+load_dotenv()
+
+# Set up tracing
+# Use Quraite's in-memory span exporter to capture the agent trajectory
+# and use it for evaluation.
+tracer_provider = TracerProvider()
+quraite_span_exporter = QuraiteInMemorySpanExporter()
+quraite_span_processor = QuraiteSimpleSpanProcessor(quraite_span_exporter)
+tracer_provider.add_span_processor(quraite_span_processor)
+LangChainInstrumentor().instrument(tracer_provider=tracer_provider)
+
+# Your compiled LangChain agent (created elsewhere)
+# agent = create_agent(...)
+
+# Wrap with Quraite adapter
+adapter = LangChainAdapter(
+    agent_graph=agent,  # Pass your compiled LangChain agent here
+    tracer_provider=tracer_provider,
+)
+
+# Create and start server with Cloudflare tunnel
+server = LocalAgentServer(
+    wrapped_agent=adapter,
+    agent_id="your-agent-id",  # Optional: for Quraite platform integration
+)
+
+app = server.create_app(
+    port=8080,
+    host="0.0.0.0",
+    tunnel="cloudflare",  # Options: "cloudflare", "ngrok", or "none"
+)
+
+# Option 1: Use the start method to start the server
+asyncio.run(server.start(host="0.0.0.0", port=8080))
+
+# Option 2: Use uvicorn to start the server for auto-reload
+# if __name__ == "__main__":
+#     uvicorn.run("local_server:app", host="0.0.0.0", port=8080, reload=True)
+```
+
+The server exposes:
+
+- `GET /` - Health check endpoint
+- `POST /v1/agents/completions` - Agent invocation endpoint. This is the endpoint that Quraite will use to invoke your agent.
+
+When using `tunnel="cloudflare"` or `tunnel="ngrok"`, your agent will be publicly accessible via the generated URL.
+
+## Supported Frameworks
+
+| Framework            | Adapter                  | Installation                           |
+| -------------------- | ------------------------ | -------------------------------------- |
+| **LangChain**        | `LangChainAdapter`       | `pip install 'quraite[langchain]'`     |
+| **Pydantic AI**      | `PydanticAIAdapter`      | `pip install 'quraite[pydantic-ai]'`   |
+| **Agno**             | `AgnoAdapter`            | `pip install 'quraite[agno]'`          |
+| **Google ADK**       | `GoogleADKAdapter`       | `pip install 'quraite[google-adk]'`    |
+| **OpenAI Agents**    | `OpenaiAgentsAdapter`    | `pip install 'quraite[openai-agents]'` |
+| **Smolagents**       | `SmolagentsAdapter`      | `pip install 'quraite[smolagents]'`    |
+| **AWS Bedrock**      | `BedrockAgentsAdapter`   | `pip install 'quraite[bedrock]'`       |
+| **Flowise**          | `FlowiseAdapter`         | Included in base package               |
+| **Langflow**         | `LangflowAdapter`        | Included in base package               |
+| **N8n**              | `N8nAdapter`             | Included in base package               |
+| **HTTP**             | `HttpAdapter`            | Included in base package               |
+| **LangChain Server** | `LangChainServerAdapter` | `pip install 'quraite[langchain]'`     |
+
+## Core Concepts
+
+### Adapters
+
+Adapters provide a unified interface (`BaseAdapter`) for different agent frameworks. Each adapter converts framework-specific agent response formats to the Quraite agent message format.
+
+If you are building your own agent framework, you can create a custom adapter by extending the `BaseAdapter` class and implementing the `ainvoke` method.
+
+### Tracing for Agent Trajectory Evaluation
+
+**Capture agent trajectories without modifying your code.** Get comprehensive trace data including token usage, costs, and latency for every agent step.
+
+Most agent frameworks return agent steps, but lack critical observability data. We solve this with **OpenInference instrumentation** (OpenTelemetry instrumentation support coming soon) that automatically captures:
+
+- Complete agent trajectories
+- Token usage and costs
+- Step-by-step latency
+- Full execution context
+
+**Works with your existing setup.** We provide OpenInference-compatible span exporters and processors that integrate seamlessly with your current observability platform - no vendor lock-in required.
+
+To enable tracing:
+
+```python
+from openinference.instrumentation import TracerProvider
+from quraite.tracing.span_exporter import QuraiteInMemorySpanExporter
+from quraite.tracing.span_processor import QuraiteSimpleSpanProcessor
+
+tracer_provider = TracerProvider()
+
+# Add Quraite span exporter and processor to the tracer provider
+quraite_span_exporter = QuraiteInMemorySpanExporter()
+quraite_span_processor = QuraiteSimpleSpanProcessor(quraite_span_exporter)
+tracer_provider.add_span_processor(quraite_span_processor)
+
+# Instrument your framework with OpenInference
+from openinference.instrumentation.langchain import LangChainInstrumentor
+LangChainInstrumentor().instrument(tracer_provider=tracer_provider)
+```
+
+### Message Schema
+
+The SDK uses a standardized message format:
+
+```python
+from quraite.schema.message import (
+    UserMessage,
+    AssistantMessage,
+    ToolMessage,
+    SystemMessage,
+    MessageContentText,
+    ToolCall,
+)
+
+# User message
+user_msg = UserMessage(
+    content=[MessageContentText(text="Hello, world!")]
+)
+
+# Assistant message with tool calls
+assistant_msg = AssistantMessage(
+    content=[MessageContentText(text="I'll calculate that for you.")],
+    tool_calls=[
+        ToolCall(
+            id="call_123",
+            name="add",
+            arguments={"a": 10, "b": 5}
+        )
+    ]
+)
+
+# Tool message
+tool_msg = ToolMessage(
+    tool_call_id="call_123",
+    content=[MessageContentText(text="15")]
+)
+```
+
+### Response Format
+
+Agent invocations return an `AgentInvocationResponse`:
+
+```python
+from quraite.schema.response import AgentInvocationResponse
+
+response: AgentInvocationResponse = await adapter.ainvoke(
+    input=[user_msg],
+    session_id="session-123"
+)
+
+# Access trajectory (list of messages)
+trajectory = response.agent_trajectory
+
+# Access trace
+trace = response.agent_trace
+```
+
+## Examples
+
+The repository includes comprehensive examples for each supported framework:
+
+- [`langchain_calculator_agent`](examples/langchain_calculator_agent/) - LangChain calculator agent
+- [`pydantic_calculator_agent`](examples/pydantic_calculator_agent/) - Pydantic AI calculator agent
+- [`agno_calculator_agent`](examples/agno_calculator_agent/) - Agno calculator agent
+- [`google_adk_weather_agent`](examples/google_adk_weather_agent/) - Google ADK weather agent
+- [`openai_flight_booking_agent`](examples/openai_flight_booking_agent/) - OpenAI Agents flight booking
+- [`smolagents_sql_agent`](examples/smolagents_sql_agent/) - Smolagents SQL agent
+- [`bedrock_restaurant_support_agent`](examples/bedrock_restaurant_support_agent/) - AWS Bedrock agent
+- And more...
+
+Each example includes:
+
+- Agent implementation
+- Adapter setup
+- Local server configuration
+- Environment variable examples
+
+## API Reference
+
+### BaseAdapter
+
+All adapters inherit from `BaseAdapter`:
+
+```python
+from quraite.adapters.base import BaseAdapter
+
+class MyAdapter(BaseAdapter):
+    async def ainvoke(
+        self,
+        input: List[AgentMessage],
+        session_id: str | None,
+    ) -> AgentInvocationResponse:
+        # Implementation
+        pass
+```
+
+### LocalAgentServer
+
+Create a local HTTP server for your agent:
+
+```python
+import asyncio
+from quraite.serve.local_agent import LocalAgentServer
+
+server = LocalAgentServer(
+    wrapped_agent=adapter,
+    agent_id="optional-agent-id",
+)
+
+app = server.create_app(
+    port=8080,
+    host="0.0.0.0",
+    tunnel="cloudflare",  # or "ngrok" or "none"
+)
+
+asyncio.run(server.start(host="0.0.0.0", port=8080))
+```
+
+## Development
+
+### Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/innowhyte/quraite-python.git
+cd quraite-python
+
+# Install dependencies
+pip install -e ".[dev,test]"
+```
+
+### Running Tests
+
+```bash
+pytest
+```
+
+### Building
+
+```bash
+make build
+```
+
+### Publishing
+
+```bash
+# Update version
+make update-version v=0.4.0
+
+# Build
+make build
+
+# Publish to Test PyPI
+make publish
+# Enter username as "__token__" and then enter your API key
+```
+
+## Requirements
+
+- Python 3.10+
+- See `pyproject.toml` for full dependency list
+
+## License
+
+See [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Support
+
+For issues, questions, or contributions, please visit the [Quraite platform](https://quraite.ai) or open an issue on GitHub.
+
+## Changelog
+
+See the repository's commit history for detailed changes.
