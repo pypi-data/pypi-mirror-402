@@ -1,0 +1,130 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags: ["v*"]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Create venv
+        run: uv venv .venv
+
+      # Installs your project editable + dev group deps (from [dependency-groups].dev)
+      - name: Install dev deps
+        run: uv sync --python .venv/bin/python --group dev
+
+      # Build extension into the venv so tests import the native module
+      - name: Build with maturin (develop)
+        run: uv run --python .venv/bin/python maturin develop --release
+
+      - name: Run Python tests
+        run: uv run --python .venv/bin/python pytest
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run Rust tests
+        run: cargo test
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  build:
+    name: Build wheels
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Native wheels
+          - os: ubuntu-latest
+            maturin_args: "--release --sdist --out dist"
+            manylinux: "2_28"
+
+          - os: macos-latest
+            maturin_args: "--release --out dist --target universal2-apple-darwin"
+
+          - os: windows-latest
+            maturin_args: "--release --out dist"
+
+          # Linux cross-arch wheels
+          - os: ubuntu-latest
+            maturin_args: "--release --out dist --target aarch64-unknown-linux-gnu"
+            manylinux: "2_28"
+
+          - os: ubuntu-latest
+            maturin_args: "--release --out dist --target armv7-unknown-linux-gnueabihf"
+            manylinux: "2_28"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Keep Python simple here; maturin-action brings its own Python(s) for builds.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Build wheels with maturin
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: ${{ matrix.maturin_args }}
+          manylinux: ${{ matrix.manylinux }}
+
+      - name: Upload dist artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ runner.os }}-${{ matrix.maturin_args }}
+          path: dist/*
+
+  publish:
+    name: Publish distributions to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # for Trusted Publisher (recommended)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Download all dist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+
+      # Option A (recommended): PyPI Trusted Publisher (OIDC), no token needed.
+      # - name: Publish (Trusted Publisher)
+      #   run: uv publish dist/*
+
+      # Option B: Token-based publish.
+      - name: Publish (Token)
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: uv publish dist/*

@@ -1,0 +1,174 @@
+[build-system]
+requires = ["maturin>=1.5"]
+build-backend = "maturin"
+
+[project]
+name = "fastquadtree"
+# Version comes from Cargo.toml
+dynamic = ["version"]
+description = "Rust-accelerated quadtree for Python with fast inserts, range queries, and k-NN search."
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.9"
+dependencies = [] # No runtime dependencies
+license = { file = "LICENSE" }
+authors = [{ name = "Ethan Anderson" }]
+keywords = ["quadtree", "spatial-index", "geometry", "rust", "pyo3", "nearest-neighbor", "k-nn"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Rust",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Operating System :: OS Independent",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+  "Topic :: Software Development :: Libraries",
+  "Typing :: Typed",
+  "License :: OSI Approved :: MIT License",
+]
+
+[project.urls]
+Homepage = "https://github.com/Elan456/fastquadtree"
+Repository = "https://github.com/Elan456/fastquadtree"
+Documentation = "https://elan456.github.io/fastquadtree/"
+Issues = "https://github.com/Elan456/fastquadtree/issues"
+
+# --- uv (optional but recommended) ---
+[tool.uv]
+managed = true
+
+# --- maturin ---
+[tool.maturin]
+bindings = "pyo3"
+strip = true
+python-source = "pysrc"
+module-name = "fastquadtree._native"
+compatibility = "manylinux_2_28"
+
+# --- dependency groups (uv-friendly) ---
+# uv sync will install the "dev" group by default.
+[dependency-groups]
+dev = [  # Testing and build dependencies
+  "ruff>=0.6.0",
+  "pytest>=8.4.2",
+  "pytest-cov>=7.0.0",
+  "coverage>=7.5",
+  "mypy>=1.10",
+  "build>=1.2.1",
+  "maturin>=1.5",
+  "pyqtree==1.0.0",
+  "numpy",
+  "pre-commit",
+]
+docs = [  # Documentation dependencies
+  "mkdocs>=1.6",
+  "mkdocs-material",
+  "mkdocstrings[python]",
+  "mkdocs-autorefs",
+  "mkdocs-git-revision-date-localized-plugin",
+  "mkdocs-minify-plugin",
+]
+interactive = [  # Interactive visualization dependencies (`interactive/`)
+  "pygame-ce",
+  "fastquadtree",
+  "pyqtree>=1.0.0",
+]
+benchmark = [  # Benchmarking dependencies (`benchmarks/`)
+  "plotly>=5.20",
+  "tqdm>=4.66",
+  "kaleido>=0.2",
+  "e-pyquadtree>=0.1.1",
+  "pyqtree>=1.0.0",
+  "fastquadtree>=0.1.0",
+  "quads>=1.1.0",
+  "nontree>=1.0.5; python_version >= \"3.10\"",
+  "rtree>=1.3.0",
+  "shapely>=2.0.0",
+  "psutil",
+  "py-cpuinfo",
+  "distro",
+  "numpy",
+]
+
+# --- pytest / coverage ---
+[tool.pytest.ini_options]
+addopts = [
+  "--cov=fastquadtree",
+  "--cov-branch",
+  "--cov-report=term-missing",
+  "--cov-report=xml:coverage.xml",
+  "--cov-fail-under=100",
+]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["fastquadtree"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+omit = ["tests/*"]
+
+# --- ruff ---
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+src = ["pysrc", "fastquadtree", "tests"]
+extend-exclude = [
+  "**/.venv/**",
+  "build/**",
+  "dist/**",
+]
+
+[tool.ruff.lint]
+select = [
+  "E",
+  "F",
+  "W",
+  "I",
+  "N",
+  "UP",
+  "B",
+  "BLE",
+  "A",
+  "C4",
+  "PIE",
+  "PT",
+  "RET",
+  "SIM",
+  "PTH",
+  "PERF",
+  "PL",
+  "RUF",
+]
+ignore = [
+  "E203",
+  "E266",
+  "E501",
+  "PLR2004",
+  "PT011",
+  "PLW0603",
+  "PLR0915",
+  "PLR0913",
+  "PLR0912",
+  "PLC0415",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+  "S101",
+  "PLR2004",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["fastquadtree"]
+combine-as-imports = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
