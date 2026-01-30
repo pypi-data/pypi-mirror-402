@@ -1,0 +1,10 @@
+LOAD_RENAME_OVERWRITE = "RENAME_OVERWRITE"
+LOAD_OVERWRITE = "OVERWRITE"
+LOAD_MERGE = "MERGE"
+LOAD_APPEND = "APPEND"
+
+
+FILE_TRANSFORM_FUNC_DEFAULT_VALUE = """\
+def transform(filename: str) -> str:
+    return filename
+"""
