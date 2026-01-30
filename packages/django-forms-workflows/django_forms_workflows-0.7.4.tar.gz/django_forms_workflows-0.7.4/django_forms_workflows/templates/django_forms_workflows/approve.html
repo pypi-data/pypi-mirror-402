@@ -1,0 +1,248 @@
+{% extends 'django_forms_workflows/base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Approve Submission #{{ submission.id }} - Django Forms Workflows{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-10 mx-auto">
+        <h1 class="mb-4">Review Submission</h1>
+
+        <!-- Approval Progress (only show for sequential workflows with steps) -->
+        {% if approval_steps %}
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-diagram-3"></i> Approval Progress</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center flex-wrap">
+                    {% for step in approval_steps %}
+                    <div class="text-center flex-fill p-2">
+                        <div class="rounded-circle d-inline-flex justify-content-center align-items-center mb-2 {% if step.is_completed %}bg-success text-white{% elif step.is_current %}bg-primary text-white{% elif step.is_rejected %}bg-danger text-white{% else %}bg-light text-muted border{% endif %}" style="width: 40px; height: 40px;">
+                            {% if step.is_completed %}<i class="bi bi-check"></i>{% elif step.is_rejected %}<i class="bi bi-x"></i>{% else %}{{ step.number }}{% endif %}
+                        </div>
+                        <div class="{% if step.is_current %}fw-bold text-primary{% elif step.is_pending %}text-muted{% endif %}">
+                            <small>{{ step.group_name }}</small>
+                        </div>
+                    </div>
+                    {% if not forloop.last %}
+                    <div class="flex-shrink-1 px-2 text-muted d-none d-md-block">
+                        <i class="bi bi-arrow-right"></i>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Submission Info -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Submission Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Form:</strong> {{ submission.form_definition.name }}</p>
+                        <p><strong>Submitter:</strong> {{ submission.submitter.get_full_name|default:submission.submitter.username }}</p>
+                        <p><strong>Email:</strong> {{ submission.submitter.email }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Submitted:</strong> {{ submission.submitted_at|date:"Y-m-d H:i" }}</p>
+                        <p><strong>Status:</strong> {{ submission.get_status_display }}</p>
+                        {% if current_step_number and total_steps %}
+                        <p><strong>Current Step:</strong> {{ current_step_number }} of {{ total_steps }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if has_approval_step_fields and approval_step_form %}
+        <!-- Submission Data Section (Read-only) -->
+        <div class="card mb-4">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0"><i class="bi bi-file-text"></i> Submission Data</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-bordered table-sm">
+                    {% for key, value in submission.form_data.items %}
+                        {% if not key|slice:":7" == "advisor" and not key|slice:":2" == "fa" and not key|slice:":9" == "registrar" and not key|slice:":7" == "manager" %}
+                        <tr>
+                            <th style="width: 30%;">{{ key|title }}</th>
+                            <td>
+                                {% if value.url %}
+                                    {% if value.content_type and 'image' in value.content_type %}
+                                        <img src="{{ value.url }}" alt="{{ value.filename }}" class="img-fluid" style="max-width: 200px; max-height: 200px;">
+                                    {% endif %}
+                                    <a href="{{ value.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-download"></i> {{ value.filename }}
+                                    </a>
+                                {% elif value.path %}
+                                    <span class="text-muted">{{ value.filename }}</span>
+                                {% else %}
+                                    {{ value }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endif %}
+                    {% endfor %}
+                </table>
+            </div>
+        </div>
+
+        <!-- Completed Approval Steps (show previous approvals) -->
+        {% for step in approval_steps %}
+            {% if step.is_completed %}
+            <div class="card mb-4 border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-check-circle"></i> Step {{ step.number }}: {{ step.group_name }}
+                        <span class="badge bg-light text-success float-end">Completed</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-bordered table-sm mb-0">
+                        {% for key, value in submission.form_data.items %}
+                            {% if step.number == 1 and key|slice:":7" == "advisor" %}
+                            <tr><th style="width: 30%;">{{ key|title }}</th><td>{{ value }}</td></tr>
+                            {% elif step.number == 2 and key|slice:":3" == "fa_" %}
+                            <tr><th style="width: 30%;">{{ key|title }}</th><td>{{ value }}</td></tr>
+                            {% elif step.number == 3 and key|slice:":9" == "registrar" %}
+                            <tr><th style="width: 30%;">{{ key|title }}</th><td>{{ value }}</td></tr>
+                            {% elif step.number == 4 and key|slice:":7" == "manager" %}
+                            <tr><th style="width: 30%;">{{ key|title }}</th><td>{{ value }}</td></tr>
+                            {% endif %}
+                        {% endfor %}
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        {% endfor %}
+
+        <!-- Approval Form with Step Fields -->
+        <form method="post" data-loading-message="Processing your decision...">
+            {% csrf_token %}
+
+            <!-- Current Step Fields Section with Decision inline -->
+            <div class="card mb-4 border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-pencil-square"></i> Step {{ current_step_number }}: {{ task.step_name }}
+                        <span class="badge bg-light text-primary float-end">Your Action Required</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-4">Please review the submission above and fill in the required fields below.</p>
+                    {{ approval_step_form|crispy }}
+
+                    <hr class="my-4">
+
+                    <!-- Decision Section inline -->
+                    <h6 class="mb-3"><i class="bi bi-clipboard-check"></i> Your Decision</h6>
+                    <div class="mb-3">
+                        <label for="comments" class="form-label">Comments (Optional)</label>
+                        <textarea class="form-control" id="comments" name="comments" rows="2" placeholder="Add any comments about your decision..."></textarea>
+                    </div>
+                    <div class="d-grid gap-2 d-md-block">
+                        <button type="submit" name="decision" value="approve" class="btn btn-success btn-lg">
+                            <i class="bi bi-check-circle"></i> Approve
+                        </button>
+                        <button type="submit" name="decision" value="reject" class="btn btn-danger btn-lg">
+                            <i class="bi bi-x-circle"></i> Reject
+                        </button>
+                        <a href="{% url 'forms_workflows:approval_inbox' %}" class="btn btn-outline-secondary btn-lg">
+                            <i class="bi bi-arrow-left"></i> Back
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </form>
+
+        <!-- Future Steps Preview (greyed out) -->
+        {% for step in approval_steps %}
+            {% if step.number > current_step_number %}
+            <div class="card mb-4 border-secondary opacity-50">
+                <div class="card-header bg-light text-muted">
+                    <h5 class="mb-0"><i class="bi bi-hourglass"></i> Step {{ step.number }}: {{ step.group_name }}
+                        <span class="badge bg-secondary float-end">Pending</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-0"><em>This step will be available after all previous steps are approved.</em></p>
+                </div>
+            </div>
+            {% endif %}
+        {% endfor %}
+
+        {% else %}
+        <!-- Standard Approval (No Step Fields) -->
+        <!-- Submission Data -->
+        <div class="card mb-4">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0"><i class="bi bi-file-text"></i> Submission Data</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-bordered">
+                    {% for key, value in submission.form_data.items %}
+                        <tr>
+                            <th style="width: 30%;">{{ key|title }}</th>
+                            <td>
+                                {% if value.url %}
+                                    {# File upload with URL - display as image or link #}
+                                    {% if value.content_type and 'image' in value.content_type %}
+                                        <div class="mb-2">
+                                            <img src="{{ value.url }}" alt="{{ value.filename }}" class="img-fluid" style="max-width: 400px; max-height: 400px;">
+                                        </div>
+                                    {% endif %}
+                                    <a href="{{ value.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-download"></i> {{ value.filename }}
+                                    </a>
+                                    <small class="text-muted ms-2">
+                                        {% if value.size %}({{ value.size|filesizeformat }}){% endif %}
+                                    </small>
+                                {% elif value.path %}
+                                    {# File upload with path but no URL #}
+                                    <span class="text-muted">{{ value.filename }}</span>
+                                    <small class="text-muted ms-2">(File stored but URL unavailable)</small>
+                                {% else %}
+                                    {{ value }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </table>
+            </div>
+        </div>
+        <!-- Approval Decision -->
+        <div class="card mb-4 border-success">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-clipboard-check"></i> Your Decision</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" data-loading-message="Processing your decision...">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="comments" class="form-label">Comments (Optional)</label>
+                        <textarea class="form-control" id="comments" name="comments" rows="3" placeholder="Add any comments about your decision..."></textarea>
+                    </div>
+                    <div class="d-grid gap-2 d-md-block">
+                        <button type="submit" name="decision" value="approve" class="btn btn-success btn-lg">
+                            <i class="bi bi-check-circle"></i> Approve
+                        </button>
+                        <button type="submit" name="decision" value="reject" class="btn btn-danger btn-lg">
+                            <i class="bi bi-x-circle"></i> Reject
+                        </button>
+                        <a href="{% url 'forms_workflows:approval_inbox' %}" class="btn btn-outline-secondary btn-lg">
+                            <i class="bi bi-arrow-left"></i> Back
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+
+
