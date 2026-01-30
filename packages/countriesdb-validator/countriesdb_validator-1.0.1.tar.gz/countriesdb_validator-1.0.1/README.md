@@ -1,0 +1,306 @@
+# countriesdb-validator
+
+**Backend validation package for CountriesDB.** Provides server-side validation for country and subdivision codes using ISO 3166-1 and ISO 3166-2 standards.
+
+📖 **[Full Documentation](https://countriesdb.com/docs/backend-api)** | 🌐 **[Website](https://countriesdb.com)**
+
+**Important**: This package only provides validation methods. Data fetching for frontend widgets must be done through frontend packages ([`@countriesdb/widget-core`](https://www.npmjs.com/package/@countriesdb/widget-core), [`@countriesdb/widget`](https://www.npmjs.com/package/@countriesdb/widget)).
+
+## Getting Started
+
+**⚠️ API Key Required:** This package requires a CountriesDB **private** API key to function. You must create an account at [countriesdb.com](https://countriesdb.com) to obtain your private API key. Test accounts are available with limited functionality.
+
+- 🔑 [Get your API key](https://countriesdb.com) - Create an account and get your private key
+- 📚 [View documentation](https://countriesdb.com/docs/backend-api) - Complete API reference and examples
+- 💬 [Support](https://countriesdb.com) - Get help and support
+
+## Installation
+
+```bash
+pip install countriesdb-validator
+```
+
+## Usage
+
+### Basic Validation
+
+```python
+from validator import CountriesDBValidator
+
+validator = CountriesDBValidator({
+    "api_key": "YOUR_API_KEY",
+})
+
+# Validate a single country
+result = validator.validate_country("US")
+print(result)  # {"valid": True} or {"valid": False, "message": "..."}
+
+# Validate a single subdivision
+subdivision_result = validator.validate_subdivision("US-CA", "US")
+print(subdivision_result)  # {"valid": True} or {"valid": False, "message": "..."}
+```
+
+### Multiple Values
+
+```python
+# Validate multiple countries
+results = validator.validate_countries(["US", "CA", "MX"])
+# Returns: [{"code": "US", "valid": True}, {"code": "CA", "valid": True}, ...]
+
+# Validate multiple subdivisions
+subdivision_results = validator.validate_subdivisions(
+    ["US-CA", "US-NY", "US-TX"],
+    "US"
+)
+# Returns: [{"code": "US-CA", "valid": True}, ...]
+```
+
+### Validation Options
+
+```python
+# Country validation with follow_upward
+result = validator.validate_country("US", follow_upward=True)
+# Check if country is referenced in a subdivision
+
+# Subdivision validation with options
+result = validator.validate_subdivision(
+    "US-CA",
+    "US",
+    follow_related=True,  # Check if subdivision redirects to another country
+    allow_parent=True     # Allow selecting parent subdivisions
+)
+```
+
+## API Reference
+
+### `CountriesDBValidator`
+
+Main validator class.
+
+#### Constructor
+
+```python
+CountriesDBValidator(config: dict)
+```
+
+**Config:**
+- `api_key` (required): Your CountriesDB API key
+
+#### Methods
+
+##### `validate_country(code, follow_upward=False)`
+
+Validate a single country code.
+
+**Parameters:**
+- `code` (str): ISO 3166-1 alpha-2 country code
+- `follow_upward` (bool): Check if country is referenced in a subdivision
+
+**Returns:** `ValidationResult` (dict with `valid` bool and optional `message`)
+
+##### `validate_countries(codes)`
+
+Validate multiple country codes.
+
+**Parameters:**
+- `codes` (List[str]): List of ISO 3166-1 alpha-2 country codes
+
+**Returns:** `List[ValidationResult]` (each with `code`, `valid`, and optional `message`)
+
+##### `validate_subdivision(code, country, follow_related=False, allow_parent=False)`
+
+Validate a single subdivision code.
+
+**Parameters:**
+- `code` (str | None): Subdivision code (e.g., 'US-CA') or None/empty string
+- `country` (str): ISO 3166-1 alpha-2 country code
+- `follow_related` (bool): Check if subdivision redirects to another country
+- `allow_parent` (bool): Allow selecting parent subdivisions
+
+**Returns:** `ValidationResult` (dict with `valid` bool and optional `message`)
+
+##### `validate_subdivisions(codes, country, allow_parent=False)`
+
+Validate multiple subdivision codes.
+
+**Parameters:**
+- `codes` (List[str | None]): List of subdivision codes or None/empty strings
+- `country` (str): ISO 3166-1 alpha-2 country code
+- `allow_parent` (bool): Allow selecting parent subdivisions
+
+**Returns:** `List[ValidationResult]` (each with `code`, `valid`, and optional `message`)
+
+## Examples
+
+### Django Validation
+
+```python
+from validator import CountriesDBValidator
+from django.core.exceptions import ValidationError
+
+validator = CountriesDBValidator({
+    "api_key": settings.COUNTRIESDB_API_KEY,
+})
+
+def validate_user_country(country_code: str, subdivision_code: str = None):
+    """Validate user's country and subdivision"""
+    # Validate country
+    result = validator.validate_country(country_code)
+    if not result["valid"]:
+        raise ValidationError(result["message"])
+    
+    # Validate subdivision
+    if subdivision_code:
+        result = validator.validate_subdivision(subdivision_code, country_code)
+        if not result["valid"]:
+            raise ValidationError(result["message"])
+```
+
+### Flask Validation
+
+```python
+from validator import CountriesDBValidator
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+validator = CountriesDBValidator({
+    "api_key": os.environ.get("COUNTRIESDB_API_KEY"),
+})
+
+@app.route("/api/user", methods=["POST"])
+def create_user():
+    data = request.json
+    country = data.get("country")
+    subdivision = data.get("subdivision")
+    
+    # Validate country
+    result = validator.validate_country(country)
+    if not result["valid"]:
+        return jsonify({"error": result["message"]}), 422
+    
+    # Validate subdivision
+    if subdivision:
+        result = validator.validate_subdivision(subdivision, country)
+        if not result["valid"]:
+            return jsonify({"error": result["message"]}), 422
+    
+    # Proceed with user creation
+    # ...
+    return jsonify({"success": True}), 201
+```
+
+### FastAPI Validation
+
+```python
+from validator import CountriesDBValidator
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+app = FastAPI()
+validator = CountriesDBValidator({
+    "api_key": os.environ.get("COUNTRIESDB_API_KEY"),
+})
+
+class UserData(BaseModel):
+    country: str
+    subdivision: str | None = None
+
+@app.post("/api/user")
+async def create_user(user_data: UserData):
+    # Validate country
+    result = validator.validate_country(user_data.country)
+    if not result["valid"]:
+        raise HTTPException(status_code=422, detail=result["message"])
+    
+    # Validate subdivision
+    if user_data.subdivision:
+        result = validator.validate_subdivision(
+            user_data.subdivision,
+            user_data.country
+        )
+        if not result["valid"]:
+            raise HTTPException(status_code=422, detail=result["message"])
+    
+    # Proceed with user creation
+    return {"success": True}
+```
+
+## Error Handling
+
+### Single-Value Methods
+
+Single-value methods (`validate_country`, `validate_subdivision`) return validation results with `valid: False` for invalid input. They only raise exceptions on network errors:
+
+```python
+try:
+    result = validator.validate_country("US")
+    if not result["valid"]:
+        print(f"Validation failed: {result['message']}")
+except ValueError as e:
+    print(f"Network error: {e}")
+```
+
+### Multi-Value Methods
+
+Multi-value methods (`validate_countries`, `validate_subdivisions`) return per-item results. Invalid codes are included in the results list with `valid: False`. They only raise exceptions on network errors or invalid input types:
+
+```python
+try:
+    results = validator.validate_countries(["US", "BAD", "CA"])
+    # Results: [
+    #   {"code": "US", "valid": True},
+    #   {"code": "BAD", "valid": False, "message": "Invalid country code."},
+    #   {"code": "CA", "valid": True}
+    # ]
+    
+    for result in results:
+        if not result["valid"]:
+            print(f"Code {result['code']} failed: {result['message']}")
+except ValueError as e:
+    print(f"Network error: {e}")
+```
+
+**Note:** 
+- Empty arrays return empty results lists (not an error)
+- Basic type checks are performed client-side (e.g., ensuring lists are lists, country is a string)
+- Format validation (e.g., 2-character country codes) is handled by the backend and included in results with appropriate error messages
+- Invalid format codes or invalid country codes are returned in the results list with `valid: False` rather than raising exceptions
+
+## Full backend examples
+
+Clone-and-run projects that use this package (and the other SDKs) are available in the [CountriesDB examples repository](https://github.com/countriesdb/examples):
+
+- `javascript/backend-fetch` – native `fetch`
+- `javascript/backend-axios` – axios wrapper
+- `javascript/backend-validator` – `@countriesdb/validator` package
+- `javascript/backend-nextjs` – Next.js App Router API routes
+- `php/backend-laravel` – PHP/Laravel validation rules
+- `php/backend-guzzle` – vanilla PHP + Guzzle
+- `python/backend-requests` – Python requests library
+- `java/backend-httpclient` and `backend-spring` – Java examples
+- `csharp/backend-httpclient` – C# .NET examples
+- `go/backend-http` – Go examples
+- `ruby/backend-faraday` – Ruby examples
+- `bash/backend-curl` – Bash cURL examples
+
+Each folder includes a README with setup instructions so you can test the flows end-to-end.
+
+## Requirements
+
+- Python 3.8+
+- `requests` library
+
+## Additional Resources
+
+- 📖 [Full Documentation](https://countriesdb.com/docs/backend-api) - Complete API reference
+- 🌐 [Website](https://countriesdb.com) - Learn more about CountriesDB
+- 🔑 [Get API Key](https://countriesdb.com) - Sign up and get your private API key
+- 💬 [Support](https://countriesdb.com) - Get help and support
+
+## License
+
+PROPRIETARY
+
+Copyright (c) NAYEE LLC. All rights reserved.
+
+This software is the proprietary property of NAYEE LLC. For licensing inquiries, please contact [NAYEE LLC](https://nayee.net).
