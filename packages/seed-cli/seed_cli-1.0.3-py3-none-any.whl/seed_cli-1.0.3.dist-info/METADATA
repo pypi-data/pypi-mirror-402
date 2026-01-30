@@ -1,0 +1,177 @@
+Metadata-Version: 2.4
+Name: seed-cli
+Version: 1.0.3
+Summary: Terraform-inspired filesystem orchestration tool
+Project-URL: Repository, https://github.com/isaac12x/seed-cli.git
+Project-URL: Issues, https://github.com/isaac12x/seed-cli/issues
+Author-email: Isaac AR <isaac@fortisvincere.com>
+Maintainer-email: Isaac AR <isaac@fortisvincere.com>
+License: ModifiedMIT
+License-File: LICENSE.md
+Keywords: directory,filesystem,orchestration,seed,terraform,tree
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Software Development :: Build Tools
+Requires-Python: >=3.10
+Requires-Dist: argcomplete
+Requires-Dist: pyyaml
+Provides-Extra: dev
+Requires-Dist: black==23.3.0; extra == 'dev'
+Requires-Dist: hypothesis>=6.103.1; extra == 'dev'
+Requires-Dist: hypothesis[numpy]>=6.103.1; extra == 'dev'
+Requires-Dist: pre-commit; extra == 'dev'
+Requires-Dist: pytest; extra == 'dev'
+Requires-Dist: pytest-asyncio; extra == 'dev'
+Provides-Extra: image
+Requires-Dist: fitz; extra == 'image'
+Requires-Dist: numpy; extra == 'image'
+Requires-Dist: opencv-python; extra == 'image'
+Requires-Dist: pillow; extra == 'image'
+Requires-Dist: pytesseract; extra == 'image'
+Provides-Extra: ui
+Requires-Dist: rich; extra == 'ui'
+Description-Content-Type: text/markdown
+
+# seed-cli
+
+**seed** is a Terraform-inspired, spec-driven filesystem orchestration tool.
+
+It allows you to declaratively describe directory structures, generate plans,
+diff against reality, safely apply changes, detect drift, lock state, and
+collaborate using immutable execution plans.
+
+Think **Terraform for directory trees**.
+
+---
+
+## Features
+
+- Tree / YAML / JSON / stdin / image-based specs
+- Deterministic planning (`seed plan`)
+- Immutable plans (`seed plan --out plan.json`)
+- Safe execution (`seed apply plan.json`)
+- Sync with deletion (`seed sync --dangerous`)
+- State locking + heartbeat renewal
+- Partial plans (`--target scripts/`)
+- Spec inheritance (`@include`)
+- Variables (`{{project_name}}`)
+- Plugins
+- Checksums & drift detection
+- CI & pre-commit hooks
+- Graphviz execution graphs (`--dot`)
+
+---
+
+## Install
+
+```bash
+pip install seed-cli
+pip install "seed-cli[image]"   # OCR support
+```
+
+---
+
+## Core Workflow
+
+```bash
+seed plan dir_structure.tree --out plan.json
+seed apply plan.json
+```
+
+---
+
+## Commands
+
+| Command | Description                     |
+| ------- | ------------------------------- |
+| plan    | Generate execution plan         |
+| apply   | Apply spec or plan              |
+| sync    | Apply + delete extras           |
+| diff    | Compare FS vs spec              |
+| capture | Capture FS to spec              |
+| doctor  | Lint & repair specs             |
+| export  | Export filesystem state or plan |
+| lock    | Manage state locks              |
+| hooks   | Install git hooks               |
+
+---
+
+## Example Spec
+
+```text
+@include base.tree
+
+scripts/
+├── build.py (@generated)
+└── notes.txt (@manual)
+```
+
+---
+
+## State & Locking
+
+State is stored in `.seed/state.json`.
+Locks are stored in `.seed/lock.json`.
+
+Locks:
+
+- TTL-based
+- Auto-renewed during apply
+- Force-unlock available
+
+---
+
+## Partial Plans
+
+```bash
+seed plan spec.tree --target scripts/
+```
+
+---
+
+## Graphviz
+
+```bash
+seed plan spec.tree --dot > plan.dot
+dot -Tpng plan.dot -o plan.png
+```
+
+---
+
+## Plugins
+
+seed-cli is extensible by default. You can create your own plugins and use them to do any dir modifications, transformations, or anything you can conceive and is not captured in the previous statement.
+
+Note: this is Work In Progress.
+
+Local plugins live in:
+
+```text
+.seed/plugins/*.py
+```
+
+---
+
+## Philosophy
+
+seed-cli is:
+
+- Declarative
+- Deterministic
+- Auditable
+- Safe by default
+
+## License
+
+Modified MIT file.
+Read the `LICENSE.md` file in this project.
