@@ -1,0 +1,49 @@
+# This is a basic workflow to help you get started with Actions
+
+name: test
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        sphinx_version: ["", "~=8.0.0"]
+        python_version: ["3.10", '3.x']
+        #exclude:
+        #  - {sphinx_version: "~=6.0.0", python_version: '3.8'}
+        #  - {sphinx_version: "~=4.0.0", python_version: '3.10'}
+        #  - {sphinx_version: "~=3.0.0", python_version: '3.x'}
+        include:
+          #- {sphinx_version: "~=3.0.0", python_version: '3.6'}
+          - {sphinx_version: "~=4.0.0", python_version: '3.8'}
+          - {sphinx_version: "~=5.0.0", python_version: '3.10'}
+          - {sphinx_version: "~=7.0.0", python_version: '3.12'}
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+      - name: Install Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python_version }}
+      - name: Install dependencies
+        run: |
+          pip install sphinx${{matrix.sphinx_version}} -r requirements.txt .
+          # jinja2 broke on 2022-03-24
+          # https://github.com/sphinx-doc/sphinx/issues/10291
+          # https://github.com/sphinx-doc/sphinx/issues/10289
+          # Unsure of long-term plan here.
+          if [ -n "{{matrix.sphinx_version}}" ] ; then
+              pip install "jinja2<3.1"
+          fi
+      - name: List dependency versions
+        run: |
+          python -V
+          pip list
+
+      # Runs a set of commands using the runners shell
+      - name: Build and fail on errors
+        run: |
+          make html SPHINXOPTS="-W --keep-going -T -v"

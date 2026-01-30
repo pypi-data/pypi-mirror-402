@@ -1,0 +1,20 @@
+"""Sphinx extension for CodeRefinery lessons"""
+from ._version import __version__
+
+def setup(app):
+    "Sphinx extension setup"
+    app.setup_extension('myst_nb')
+    app.setup_extension('sphinx_copybutton')
+    app.setup_extension('sphinx_minipres')
+    app.setup_extension('sphinx_tabs.tabs')
+    app.setup_extension('sphinx_togglebutton')
+    app.setup_extension(__name__+'.directives')
+    app.setup_extension(__name__+'.md_transforms')
+    app.setup_extension(__name__+'.exerciselist')
+    app.setup_extension(__name__+'.term_role_formatting')
+
+    return {
+        'version': __version__,
+        'parallel_read_safe': True,
+        'parallel_write_safe': True,
+    }
