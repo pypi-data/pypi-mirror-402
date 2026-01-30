@@ -1,0 +1,122 @@
+<div class="container-fluid py-4">
+  <div class="row justify-content-center">
+    <div class="col">
+      <div class="{{ widget.card_class or 'card' }}">
+        <div class="card-header">
+          <h3 class="card-title">{{ widget.title or 'Topics' }}</h3>
+        </div>
+        <div class="card-body p-0">
+          {% if widget.data %}
+          <div class="table-responsive">
+            <table id="{{ widget.table_id or 'topics-table' }}" class="{{ widget.table_class or 'table table-vcenter' }}">
+              <thead>
+                <tr>
+                  {% for f in widget.use_fields %}
+                    <th>{{ widget.use_headers.get(f, f) }}</th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in widget.data %}
+                  <tr>
+                    {% for f in widget.use_fields %}
+                      {% set val = row.get(f) %}
+                      <td>
+                        {% if f == 'details' %}
+                          {% set base_id = (row.topic or 'topic') | string %}
+                          {% set dlg_id = (row.dialog_id or ('tpdlg-' ~ base_id|replace(' ', '-')|replace('.', '-')|replace(':', '-')|replace('@', '-')|replace('/', '-'))) if row is mapping else ('tpdlg-' ~ loop.index) %}
+                          <button type="button" class="btn btn-outline-primary btn-sm"
+                                  onclick="(function(m){ if(m){ m.style.display='block'; m.setAttribute('aria-hidden','false'); m.querySelector('[data-modal-content]')?.focus(); } })(document.getElementById('{{ dlg_id }}'))"
+                                  aria-label="Show topic details">Info</button>
+                          <div id="{{ dlg_id }}" class="modal modal-blur" style="display:none;" role="dialog" aria-hidden="true" tabindex="-1" onclick="if(event.target===this){ this.style.display='none'; this.setAttribute('aria-hidden','true'); }" onkeydown="if(event.key==='Escape'){ this.style.display='none'; this.setAttribute('aria-hidden','true'); }">
+                            <div class="modal-dialog modal-lg" role="document">
+                              <div class="modal-content" data-modal-content tabindex="0">
+                                <div class="modal-header">
+                                  <h5 class="modal-title">Topic {{ row.topic or 'Unknown' }} details</h5>
+                                  <button type="button" class="btn-close" aria-label="Close"
+                                          onclick="(function(m){ if(m){ m.style.display='none'; m.setAttribute('aria-hidden','true'); } })(this.closest('.modal'))"></button>
+                                </div>
+                                <div class="modal-body" style="max-height:70vh; overflow:auto;">
+                                  <div class="row g-3 mb-3">
+                                    <div class="col-sm-6"><div><strong>Topic:</strong> {{ row.topic }}</div></div>
+                                    <div class="col-sm-6"><div><strong>Subscribers:</strong> {{ row.subscribers }}</div></div>
+                                    <div class="col-sm-6">
+                                      <div>
+                                        <strong>Queued:</strong>
+                                        <a href="{{ row.url_active_tasks or '#' }}">{{ row.queued }}</a>
+                                      </div>
+                                    </div>
+                                    <div class="col-sm-6"><div><strong>Running:</strong> {{ row.running }}</div></div>
+                                    <div class="col-sm-6"><div><strong>Dead letter:</strong> {{ row.dead_letter }}</div></div>
+                                    <div class="col-sm-6"><div><strong>Total:</strong> {{ row.total_count }}</div></div>
+                                    <div class="col-sm-6"><div><strong>Completed:</strong> {{ row.completed_count }}</div></div>
+                                    <div class="col-sm-6"><div><strong>Errors:</strong> {{ row.error_count }}</div></div>
+                                    <div class="col-sm-6"><div><strong>Skipped:</strong> {{ row.skipped_count }}</div></div>
+                                  </div>
+                                  {# configuration may be a nested object; show prettified JSON #}
+                                  {% if row.configuration is mapping or row.configuration is sequence %}
+                                    <h4 class="mt-2">Configuration</h4>
+                                    <pre class="code">{{ row.configuration | tojson(indent=2) }}</pre>
+                                  {% elif row.configuration %}
+                                    <h4 class="mt-2">Configuration</h4>
+                                    <pre class="code">{{ row.configuration }}</pre>
+                                  {% endif %}
+                                  <button type="button" class="btn btn-sm" onclick="var p=this.nextElementSibling; if(p){ p.style.display = (p.style.display==='none' || !p.style.display) ? 'block' : 'none'; }">Toggle raw JSON</button>
+                                  <pre class="code mt-2" style="display:none;">{{ row | tojson(indent=2) }}</pre>
+                                </div>
+                                <div class="modal-footer d-block text-start">
+                                  <form class="row g-2 align-items-center" action="{{ row.url_update_limit or '/debug/action/set_topic_limit' }}" method="get" onsubmit="return true;">
+                                    <input type="hidden" name="topic" value="{{ row.topic }}" />
+                                    <div class="col-auto">
+                                      <label class="form-label mb-0"><strong>Concurrency limit</strong></label>
+                                    </div>
+                                    <div class="col-auto">
+                                      <input type="number" min="0" step="1" class="form-control" name="limit" placeholder="leave empty = unlimited" value="{{ (row.configuration.get('concurrency_limit') if row.configuration is mapping else (row.configuration.concurrency_limit if row.configuration else '')) or '' }}" />
+                                    </div>
+                                    <div class="col-auto">
+                                      <button type="submit" class="btn btn-primary">Update</button>
+                                    </div>
+                                    <div class="col-auto">
+                                      <a class="btn btn-outline-secondary" href="{{ row.url_remove_limit or ('/debug/action/set_topic_limit?topic=' ~ row.topic | urlencode) }}">Remove limit</a>
+                                    </div>
+                                    <div class="col-auto">
+                                      <a class="btn btn-outline-danger" href="{{ row.url_purge or ('/debug/action/purge_topic?topic=' ~ row.topic | urlencode) }}" onclick="return confirm('Purge all queued messages for topic {{ row.topic }}?');">Purge queued</a>
+                                    </div>
+                                    <div class="col-auto">
+                                      <a class="btn btn-danger" href="{{ row.url_purge_dead or ('/debug/action/purge_topic?topic=' ~ row.topic | urlencode ~ '&include_dead=true') }}" onclick="return confirm('Purge queued and dead-letter messages for topic {{ row.topic }}?');">Purge queued + DLQ</a>
+                                    </div>
+                                    <div class="col-auto ms-auto">
+                                      <button type="button" class="btn"
+                                              onclick="(function(m){ if(m){ m.style.display='none'; m.setAttribute('aria-hidden','true'); } })(this.closest('.modal'))">Close</button>
+                                    </div>
+                                  </form>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        {% elif val is mapping %}
+                          <pre class="code">{{ val | tojson(indent=2) }}</pre>
+                        {% else %}
+                          {{ val }}
+                        {% endif %}
+                      </td>
+                    {% endfor %}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+            <div class="empty">
+              <div class="empty-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><circle cx="12" cy="12" r="9" /><path d="M9 12l2 2l4 -4" /></svg>
+              </div>
+              <p class="empty-title">No topics found</p>
+              <p class="empty-subtitle text-muted">Topics will appear once your broker reports them.</p>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
