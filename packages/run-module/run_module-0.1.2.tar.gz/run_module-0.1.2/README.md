@@ -1,0 +1,57 @@
+# run-module
+
+An intentionally simple command-line wrapper around Python's built-in `runpy.run_module`.
+
+## Motivation
+
+Tools like:
+
+- pipx
+- uv tool install
+- uvx (convenience bin for `uv tool run`)
+
+are convenient. A single simple command can:
+
+- Download a PyPI package (with additional deps specified if desired)
+- Create a temporary out-of-sight venv dedicated to that package
+- Have that package's bins placed on your PATH
+    - or just run the command directly without having the bins on your PATH
+
+However, they have a limitation: they can't run a module ala `python -m`.
+So if you find a package that'd you'd like to use these conveniences with,
+but its entrypoint must be run with `python -m`, too bad. 
+
+A small and simple bin, like `run-module`, could help fill the gap.
+Here is an example usage using `pyftpdlib`, a popular FTP server package:
+
+```
+uvx --with pyftpdlib run-module pyftpdlib [args_for_pyftpdlib...]
+pipx --pip-args pyftpdlib run-module pyftpdlib [args_for_pyftpdlib...]
+```
+
+What about pip-run?
+
+It's true that pip-run lets you run a module:
+
+```
+pip-run pyftpdlib -- -m pyftpdlib [args_for_pyftpdlib...]
+```
+
+But compared to `run-module`, `pip-run` is:
+- Heavy: it reimplements or delegates downloading, caching, and venv logic 
+    - Tools like `uv` and `pipx` already do this well.
+- Has an unintuitive CLI surface often requiring invocations containing '--' or '!'
+
+That said, if `pip-run` is working for you, great! No need to switch.
+
+Comparatively `run-module`:
+- Is incredibly lightweight: a single small wrapper around `runpy.run_module`.
+- Will not (and cannot) download anything on its own.
+- Has a simple and intuitive command line surface. 
+- Does one thing and does it well -- with no dependencies.
+- Should work with virtually any launcher or tool that supports Python packages / modules.
+- Allows you to reuse your `uv` or `pipx` cache, saving space and download time.
+
+## License
+
+MIT
