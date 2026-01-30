@@ -1,0 +1,382 @@
+Metadata-Version: 2.4
+Name: hyperdev
+Version: 0.1.2
+Summary: Unified streaming interface for multiple LLM providers
+Author-email: HyperDev <dev@hyperdev.com>
+License: MIT
+Project-URL: Homepage, https://github.com/HyperDev/llmrouter
+Project-URL: Repository, https://github.com/HyperDev/llmrouter.git
+Project-URL: Issues, https://github.com/HyperDev/llmrouter/issues
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: openai>=1.0.0
+Requires-Dist: anthropic>=0.18.0
+Requires-Dist: google-genai>=0.2.0
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: python-dotenv>=1.0.0
+Provides-Extra: langfuse
+Requires-Dist: langfuse>=2.0.0; extra == "langfuse"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+Dynamic: license-file
+
+# HyperDev LLMRouter
+
+Unified streaming interface for multiple LLM providers with a simple, consistent API.
+
+## Features
+
+- **Multi-Provider Support**: OpenAI, Claude (Anthropic), Gemini (Google), and OpenRouter
+- **Unified Streaming Interface**: Same API for all providers
+- **Configuration Files**: JSON-based config for easy customization
+- **Environment Variables**: Secure API key management
+- **Type-Safe**: Built with Pydantic for data validation
+- **Memory Efficient**: Iterator-based streaming
+- **Easy to Extend**: Abstract base class for adding new providers
+- **Langfuse Integration**: Optional monitoring, debugging, and analytics (see [Langfuse Guide](LANGFUSE_INTEGRATION.md))
+
+## Installation
+
+```bash
+pip install hyperdev
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/HyperDev/llmrouter.git
+cd llmrouter
+pip install -e .
+```
+
+## Quick Start
+
+### 1. Configure Your Providers
+
+Create config files for the providers you want to use. Example for OpenAI:
+
+```json
+{
+  "model": "gpt-4",
+  "api_key_env_var": "OPENAI_API_KEY",
+  "max_tokens": 1024,
+  "temperature": 0.7,
+  "additional_params": {
+    "top_p": 1.0
+  }
+}
+```
+
+Save as `openai_chat_config.json` in your config directory.
+
+See `config_examples/` for all provider examples.
+
+### 2. Set Environment Variables
+
+```bash
+export OPENAI_API_KEY="your-api-key"
+export ANTHROPIC_API_KEY="your-api-key"
+export GOOGLE_API_KEY="your-api-key"
+export OPENROUTER_API_KEY="your-api-key"
+```
+
+### 3. Use in Code
+
+```python
+from pathlib import Path
+from hyperdev.llmrouter import chat_stream, LLMProvider
+
+# Stream from OpenAI
+for chunk in chat_stream(
+    prompt="Explain quantum computing",
+    llm_provider=LLMProvider.OPENAI,
+    llm_string="gpt-4",
+    config_dir=Path("./config")  # Directory with *_chat_config.json files
+):
+    print(chunk.content, end="", flush=True)
+```
+
+## API Reference
+
+### `chat_stream()`
+
+Main function for streaming LLM responses.
+
+**Parameters:**
+- `prompt` (str): User message/prompt
+- `llm_provider` (LLMProvider): Provider enum (OPENAI, CLAUDE, GEMINI, OPENROUTER)
+- `llm_string` (str): Model identifier:
+  - OpenAI: `"gpt-4"`, `"gpt-3.5-turbo"`
+  - Claude: `"claude-sonnet-4-5-20250929"`
+  - Gemini: `"gemini-2.5-flash"`
+  - OpenRouter: `"anthropic/claude-3-sonnet"`
+- `config_dir` (Path, optional): Config directory. Defaults to current working directory
+
+**Yields:**
+- `StreamChunk`: Objects with attributes:
+  - `content` (str): Text chunk
+  - `finish_reason` (str | None): Finish reason if stream ended
+  - `model` (str): Model identifier
+  - `provider` (str): Provider name
+
+**Raises:**
+- `ConfigurationError`: Invalid config or missing env vars
+- `ValidationError`: Invalid inputs
+- `ProviderError`: Provider initialization failed
+- `StreamingError`: Streaming error occurred
+
+### `LLMProvider` Enum
+
+Supported providers:
+- `LLMProvider.OPENAI`
+- `LLMProvider.CLAUDE`
+- `LLMProvider.GEMINI`
+- `LLMProvider.OPENROUTER`
+
+### `StreamChunk` Model
+
+Result of streaming operation:
+
+```python
+from hyperdev.llmrouter import StreamChunk
+
+chunk = StreamChunk(
+    content="Hello world",
+    finish_reason=None,
+    model="gpt-4",
+    provider="openai"
+)
+```
+
+## Configuration Format
+
+All config files follow this JSON schema:
+
+```json
+{
+  "model": "model-identifier",
+  "api_key_env_var": "ENV_VAR_NAME",
+  "max_tokens": 1024,
+  "temperature": 0.7,
+  "additional_params": {
+    "top_p": 1.0
+  }
+}
+```
+
+- **model**: Default model for this provider (can be overridden via `llm_string`)
+- **api_key_env_var**: Environment variable containing the API key
+- **max_tokens**: Maximum output tokens
+- **temperature**: Sampling temperature (0.0-2.0)
+- **additional_params**: Provider-specific parameters
+
+Config files are loaded from: `{config_dir}/{provider}_chat_config.json`
+
+For example:
+- `openai_chat_config.json`
+- `claude_chat_config.json`
+- `gemini_chat_config.json`
+- `openrouter_chat_config.json`
+
+## Examples
+
+### Basic Usage
+
+```python
+from hyperdev.llmrouter import chat_stream, LLMProvider
+
+for chunk in chat_stream(
+    "Explain quantum computing in one sentence",
+    LLMProvider.OPENAI,
+    "gpt-4"
+):
+    print(chunk.content, end="", flush=True)
+```
+
+### Stream from Multiple Providers
+
+```python
+from hyperdev.llmrouter import chat_stream, LLMProvider
+
+providers = [
+    (LLMProvider.OPENAI, "gpt-4"),
+    (LLMProvider.CLAUDE, "claude-sonnet-4-5-20250929"),
+]
+
+for provider, model in providers:
+    print(f"\n{provider.value.upper()}:")
+    for chunk in chat_stream("Hi!", provider, model):
+        print(chunk.content, end="", flush=True)
+```
+
+### Error Handling
+
+```python
+from hyperdev.llmrouter import chat_stream, LLMProvider
+from hyperdev.llmrouter.exceptions import ConfigurationError, ValidationError
+
+try:
+    for chunk in chat_stream("Hello", LLMProvider.OPENAI, "gpt-4"):
+        print(chunk.content, end="", flush=True)
+except ConfigurationError as e:
+    print(f"Config error: {e}")
+except ValidationError as e:
+    print(f"Invalid input: {e}")
+```
+
+### Custom Config Directory
+
+```python
+from pathlib import Path
+from hyperdev.llmrouter import chat_stream, LLMProvider
+
+config_path = Path.home() / ".llmrouter" / "configs"
+
+for chunk in chat_stream(
+    "What is AI?",
+    LLMProvider.CLAUDE,
+    "claude-sonnet-4-5-20250929",
+    config_dir=config_path
+):
+    print(chunk.content, end="", flush=True)
+```
+
+### Langfuse Integration (Optional)
+
+Track all your LLM calls with [Langfuse](https://langfuse.com/) for analytics, debugging, and monitoring:
+
+```bash
+pip install hyperdev[langfuse]
+```
+
+Then enable tracing:
+
+```python
+from hyperdev.llmrouter import chat_stream, LLMProvider
+
+for chunk in chat_stream(
+    "Explain quantum computing",
+    LLMProvider.OPENAI,
+    "gpt-4",
+    langfuse_public_key="pk_...",
+    langfuse_secret_key="sk_...",
+    langfuse_user_id="user_123",
+    langfuse_session_id="session_456",
+    langfuse_metadata={"feature": "essay_generation"},
+    langfuse_tags=["production"],
+):
+    print(chunk.content, end="", flush=True)
+```
+
+This logs:
+- Full input/output of each call
+- Token usage and latency
+- User and session information
+- Custom metadata and tags
+
+See [Langfuse Integration Guide](LANGFUSE_INTEGRATION.md) for detailed documentation.
+
+## Adding New Providers
+
+Extend `BaseProvider` to add support for new LLM providers:
+
+```python
+from hyperdev.llmrouter.providers.base import BaseProvider
+from hyperdev.llmrouter.types import ProviderConfig, StreamChunk
+from typing import Iterator
+
+class CustomProvider(BaseProvider):
+    def stream_chat(self, prompt: str, llm_string: str) -> Iterator[StreamChunk]:
+        # Implement streaming logic
+        pass
+
+    def validate_model(self, llm_string: str) -> bool:
+        # Validate model string
+        pass
+```
+
+Then register it in `src/hyperdev/llmrouter/providers/__init__.py`:
+
+```python
+PROVIDER_REGISTRY[LLMProvider.CUSTOM] = CustomProvider
+```
+
+## Dependencies
+
+**Required:**
+- `openai>=1.0.0` - OpenAI and OpenRouter
+- `anthropic>=0.18.0` - Claude
+- `google-genai>=0.2.0` - Gemini
+- `pydantic>=2.0.0` - Data validation
+- `python-dotenv>=1.0.0` - Environment management
+
+**Optional:**
+- `langfuse>=2.0.0` - LLM tracing and analytics (install with `pip install hyperdev[langfuse]`)
+
+## Project Structure
+
+```
+hyperdev_pip/
+├── pyproject.toml              # Package configuration
+├── README.md                   # This file
+├── .gitignore                  # Git ignore rules
+├── src/
+│   └── hyperdev/
+│       ├── __init__.py         # Package init
+│       └── llmrouter/
+│           ├── __init__.py     # Exports: chat_stream, LLMProvider, etc.
+│           ├── enums.py        # LLMProvider enum
+│           ├── types.py        # Pydantic models
+│           ├── exceptions.py   # Custom exceptions
+│           ├── config.py       # ConfigLoader class
+│           ├── chat_stream.py  # Main streaming function
+│           └── providers/
+│               ├── __init__.py # Provider registry
+│               ├── base.py     # Abstract base class
+│               ├── openai.py   # OpenAI implementation
+│               ├── claude.py   # Claude implementation
+│               ├── gemini.py   # Gemini implementation
+│               └── openrouter.py # OpenRouter implementation
+├── config_examples/            # Example config files
+├── examples/                   # Usage examples
+│   ├── basic_usage.py
+│   └── all_providers.py
+```
+
+## Testing
+
+Run tests with pytest:
+
+```bash
+pip install -e ".[dev]"
+pytest tests/
+```
+
+## License
+
+MIT
+
+## Contributing
+
+Contributions welcome! Please ensure:
+- Code follows the project style
+- Tests are included for new features
+- Documentation is updated
+
+## Support
+
+For issues and questions:
+- GitHub Issues: https://github.com/HyperDev/llmrouter/issues
+- GitHub Discussions: https://github.com/HyperDev/llmrouter/discussions
