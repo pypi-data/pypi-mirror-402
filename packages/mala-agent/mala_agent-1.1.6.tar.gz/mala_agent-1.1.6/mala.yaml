@@ -1,0 +1,47 @@
+preset: python-uv
+
+commands:
+  import-linter: "uvx --from import-linter lint-imports"
+
+per_issue_review:
+  enabled: true
+  reviewer_type: cerberus
+  max_retries: 10
+  finding_threshold: P1
+
+validation_triggers:
+  run_end:
+    fire_on: both
+    failure_mode: remediate 
+    max_retries: 3
+    commands:
+      - ref: setup
+      - ref: format
+      - ref: lint
+      - ref: typecheck
+      - ref: import-linter
+      - ref: test
+        command: "uv run pytest -m 'unit or integration' --cov=src --cov-report=xml:coverage.xml --cov-fail-under=0 -o cache_dir=/tmp/pytest-${AGENT_ID:-default} -n auto"
+        timeout: 300
+      - ref: e2e
+        command: "uv run pytest -m 'e2e and not flaky_sdk'"
+
+    code_review:
+      enabled: true
+      reviewer_type: cerberus
+      baseline: since_last_review
+      finding_threshold: P0
+
+coverage:
+  format: xml
+  file: coverage.xml
+  threshold: 85
+
+evidence_check:
+  required:
+  - lint
+  - typecheck
+
+epic_verification:
+  enabled: true
+  reviewer_type: cerberus
