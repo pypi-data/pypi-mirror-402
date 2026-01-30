@@ -1,0 +1,209 @@
+# Action versions use major tags (e.g., v5) for automatic minor/patch updates
+# Last reviewed: 2025-11-08
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint and Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: '3.12'
+          dependency-groups: 'lint'
+
+      - name: Run ruff check
+        run: uv run ruff check .
+
+      - name: Run ruff format check
+        run: uv run ruff format --check .
+
+      - name: Run isort check
+        run: uv run isort --check-only valid8r tests
+
+  type-check:
+    name: Type Check (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: '3.12'
+          dependency-groups: 'lint'
+
+      - name: Run mypy
+        run: uv run mypy valid8r
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13', '3.14']
+
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: ${{ matrix.python-version }}
+          dependency-groups: 'test'
+
+      - name: Run unit and integration tests with coverage
+        run: uv run pytest tests/unit tests/integration --cov=valid8r --cov-report=xml --cov-report=term
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v6.0.0
+        if: matrix.python-version == '3.12'
+        with:
+          name: coverage-pytest
+          path: |
+            .coverage
+            coverage.xml
+          include-hidden-files: true
+
+  bdd-test:
+    name: BDD Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: '3.12'
+          dependency-groups: 'test'
+
+      - name: Run BDD tests with coverage
+        run: uv run behave tests/bdd/features
+
+      - name: Verify coverage file exists
+        run: ls -la .coverage.bdd
+
+      - name: Upload BDD coverage artifact
+        uses: actions/upload-artifact@v6.0.0
+        with:
+          name: coverage-bdd
+          path: .coverage.bdd
+          if-no-files-found: error
+          include-hidden-files: true
+
+  coverage:
+    name: Combined Coverage Report
+    needs: [test, bdd-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: '3.12'
+          dependency-groups: 'test'
+
+      - name: Download pytest coverage
+        uses: actions/download-artifact@v7.0.0
+        with:
+          name: coverage-pytest
+
+      - name: Download BDD coverage
+        uses: actions/download-artifact@v7.0.0
+        with:
+          name: coverage-bdd
+
+      - name: List downloaded coverage files
+        run: ls -la .coverage*
+
+      - name: Combine coverage data
+        run: |
+          uv run coverage combine .coverage .coverage.bdd
+          uv run coverage report -m
+          uv run coverage xml -o coverage-combined.xml
+
+      - name: Upload combined coverage to Codecov
+        uses: codecov/codecov-action@v5.5.2
+        with:
+          files: ./coverage-combined.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  docs:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: '3.12'
+          dependency-groups: 'docs'
+
+      - name: Build documentation
+        run: uv run docs-build
+
+      - name: Upload docs artifact
+        uses: actions/upload-artifact@v6.0.0
+        with:
+          name: documentation
+          path: docs/_build/html/
+
+  smoke-test:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run smoke test
+        run: uv run python smoke_test.py
+
+  doctest:
+    name: Documentation Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
+
+      - uses: ./.github/actions/setup-uv
+        with:
+          python-version: '3.12'
+          dependency-groups: 'test'
+
+      - name: Run doctests
+        run: uv run tox -e doctests
+
+  all-checks:
+    name: All Checks Passed
+    needs: [lint, type-check, test, bdd-test, coverage, docs, smoke-test, doctest]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check all jobs
+        run: |
+          if [ "${{ needs.lint.result }}" != "success" ] || \
+             [ "${{ needs.type-check.result }}" != "success" ] || \
+             [ "${{ needs.test.result }}" != "success" ] || \
+             [ "${{ needs.bdd-test.result }}" != "success" ] || \
+             [ "${{ needs.coverage.result }}" != "success" ] || \
+             [ "${{ needs.docs.result }}" != "success" ] || \
+             [ "${{ needs.smoke-test.result }}" != "success" ] || \
+             [ "${{ needs.doctest.result }}" != "success" ]; then
+            echo "One or more checks failed"
+            exit 1
+          fi
+          echo "All checks passed!"

@@ -1,0 +1,285 @@
+name: Performance Benchmarks
+
+on:
+  pull_request:
+    paths:
+      - 'valid8r/**/*.py'
+      - 'tests/benchmarks/**/*.py'
+      - 'benchmarks/**/*.py'
+      - 'pyproject.toml'
+  workflow_dispatch:
+    inputs:
+      update_baseline:
+        description: 'Update baseline after successful run'
+        required: false
+        default: 'false'
+        type: boolean
+  schedule:
+    # Run weekly on Mondays at 00:00 UTC
+    - cron: '0 0 * * 1'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  # Regression threshold (5% = 0.05)
+  REGRESSION_THRESHOLD: '0.05'
+
+jobs:
+  benchmark:
+    name: Run Performance Benchmarks
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: 'pyproject.toml'
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          uv sync --all-groups
+
+      - name: Run benchmark correctness tests
+        run: |
+          uv run pytest tests/benchmarks/test_benchmark_correctness.py -v
+
+      - name: Run benchmarks
+        run: |
+          uv run pytest tests/benchmarks/test_benchmarks.py \
+            --benchmark-only \
+            --benchmark-sort=name \
+            --benchmark-json=benchmark-results-py${{ matrix.python-version }}.json \
+            --benchmark-columns=min,max,mean,median,ops,rounds
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: benchmark-results-py${{ matrix.python-version }}
+          path: benchmark-results-py${{ matrix.python-version }}.json
+          retention-days: 90
+
+  compare:
+    name: Compare with Baseline
+    runs-on: ubuntu-latest
+    needs: benchmark
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: 'pyproject.toml'
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          uv sync --all-groups
+
+      - name: Download benchmark results
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: benchmark-results-py3.12
+          path: ./
+
+      - name: Compare with baseline
+        id: compare
+        run: |
+          BASELINE_FILE="benchmarks/baselines/baseline-py3.12.json"
+          CURRENT_FILE="benchmark-results-py3.12.json"
+
+          if [ -f "$BASELINE_FILE" ]; then
+            echo "Comparing against baseline..."
+            RESULT=$(uv run python -m benchmarks.comparison "$CURRENT_FILE" "$BASELINE_FILE" 2>&1) || EXIT_CODE=$?
+
+            # Save comparison output for PR comment
+            echo "$RESULT" > comparison-output.md
+
+            # Check if there were regressions
+            if [ "${EXIT_CODE:-0}" -ne 0 ]; then
+              echo "has_regressions=true" >> $GITHUB_OUTPUT
+              echo "Performance regressions detected!"
+            else
+              echo "has_regressions=false" >> $GITHUB_OUTPUT
+              echo "No significant regressions."
+            fi
+          else
+            echo "No baseline found. Skipping comparison."
+            echo "has_regressions=false" >> $GITHUB_OUTPUT
+            echo "## Benchmark Results (Python 3.12)" > comparison-output.md
+            echo "" >> comparison-output.md
+            echo "No baseline available for comparison. Run workflow with 'update_baseline' to create one." >> comparison-output.md
+          fi
+
+      - name: Comment PR with comparison
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Read comparison output
+            let comparisonBody = '';
+            if (fs.existsSync('comparison-output.md')) {
+              comparisonBody = fs.readFileSync('comparison-output.md', 'utf8');
+            }
+
+            // Read current results for detailed table
+            const results = JSON.parse(fs.readFileSync('benchmark-results-py3.12.json'));
+
+            // Build detailed results section
+            let detailedResults = '\n\n### Detailed Results\n\n';
+            detailedResults += '| Category | Benchmark | Median | Ops/sec |\n';
+            detailedResults += '|----------|-----------|--------|----------|\n';
+
+            // Group benchmarks by category
+            const categories = {
+              'Integer': /int/i,
+              'Email': /email/i,
+              'URL': /url/i,
+              'Nested': /nested/i,
+              'List': /list/i
+            };
+
+            for (const [category, pattern] of Object.entries(categories)) {
+              const categoryBenchmarks = results.benchmarks
+                .filter(b => pattern.test(b.name) && b.name.includes('valid8r'))
+                .slice(0, 2);
+
+              for (const b of categoryBenchmarks) {
+                const medianNs = b.stats.median * 1_000_000_000;
+                let medianStr;
+                if (medianNs >= 1_000_000) {
+                  medianStr = (medianNs / 1_000_000).toFixed(2) + 'ms';
+                } else if (medianNs >= 1_000) {
+                  medianStr = (medianNs / 1_000).toFixed(2) + 'us';
+                } else {
+                  medianStr = medianNs.toFixed(0) + 'ns';
+                }
+
+                const ops = b.stats.ops;
+                let opsStr;
+                if (ops >= 1_000_000) {
+                  opsStr = (ops / 1_000_000).toFixed(2) + 'M';
+                } else if (ops >= 1_000) {
+                  opsStr = (ops / 1_000).toFixed(2) + 'K';
+                } else {
+                  opsStr = ops.toFixed(0);
+                }
+
+                const shortName = b.name.replace('it_benchmarks_', '').replace('_success', '').replace('_failure', ' (fail)');
+                detailedResults += `| ${category} | ${shortName} | ${medianStr} | ${opsStr} |\n`;
+              }
+            }
+
+            detailedResults += '\n Full results available in workflow artifacts.';
+
+            // Check for existing comments and update or create
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' &&
+              c.body.includes('Benchmark Results')
+            );
+
+            const body = comparisonBody + detailedResults;
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+      - name: Fail on regression
+        if: steps.compare.outputs.has_regressions == 'true'
+        run: |
+          echo "Performance regression detected (>${REGRESSION_THRESHOLD}% slower)"
+          echo "Review the PR comment for details."
+          # Note: We warn but don't fail the workflow to avoid blocking PRs
+          # Uncomment the next line to fail on regressions:
+          # exit 1
+
+  update-baseline:
+    name: Update Baseline
+    runs-on: ubuntu-latest
+    needs: benchmark
+    if: |
+      (github.event_name == 'schedule') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.update_baseline == 'true')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Download all benchmark results
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          path: ./artifacts
+
+      - name: Update baseline files
+        run: |
+          mkdir -p benchmarks/baselines
+
+          for version in 3.11 3.12 3.13; do
+            ARTIFACT_DIR="artifacts/benchmark-results-py${version}"
+            RESULT_FILE="${ARTIFACT_DIR}/benchmark-results-py${version}.json"
+
+            if [ -f "$RESULT_FILE" ]; then
+              cp "$RESULT_FILE" "benchmarks/baselines/baseline-py${version}.json"
+              echo "Updated baseline for Python ${version}"
+            else
+              echo "No results found for Python ${version}"
+            fi
+          done
+
+      - name: Commit baseline updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add benchmarks/baselines/*.json
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "ci: update benchmark baselines [skip ci]"
+            git push
+          fi
