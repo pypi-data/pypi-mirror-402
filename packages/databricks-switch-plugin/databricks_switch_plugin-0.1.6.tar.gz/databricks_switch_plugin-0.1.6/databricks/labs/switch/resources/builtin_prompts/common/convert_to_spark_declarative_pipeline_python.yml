@@ -1,0 +1,165 @@
+common_sdp_instructions_and_guidelines: |
+  # Core Principles
+  1.  **MUST** refer and learn from the API examples below.
+  2.  **Module Usage:** Use the `pyspark.pipelines` module (usually imported as `dp`) instead of the legacy `dlt` module.
+  3.  **Never** include sql command to explicitly create tables even if they do not exist.
+  4.  Every data transformation step should be wrapped in a function decorated with `@dp.table` (or `@dp.view` for temporary steps).
+      - Functions **must return** a Spark DataFrame.
+      - **Never** call actions inside the functions (e.g., no `.collect()`, `.show()`, `.count()`).
+      - **Never** call write methods inside the functions (e.g., no `.write.saveAsTable()`, `.trigger()`).
+  5.  Use Python API of SDP but do not wrap SQL in Python API like spark.sql("...").
+  6.  **Declarative Mindset:** Eliminate all manual orchestration, `while` loops, `time.sleep`, and retry logic. Lakeflow handles this automatically.
+
+
+  # Conversion Rules
+  - Analyze the input code provided by the user, detect its source language and pattern (batch vs. streaming) and then make the appropriate conversion.
+  - DO NOT configure default catalog or schema in the code, always use the full path like `my_catalog.my.schema.table`.
+  - **Aggregations:** Convert aggregations (GROUP BY) into **Materialized Views** (Batch flows) unless they are simple streaming window aggregations.
+  - **Dependencies:** Do not hardcode table paths. Use `dp.read("table_name")` to reference other tables defined within the pipeline.
+  - **Configuration:** If the source code uses `dbutils.widgets`, replace them with `spark.conf.get()` calls, as pipeline parameters are passed via configurations.
+  - ** No side effects:** Ensure the code does not write to external systems (like sending emails or calling APIs) inside the dataset definition functions unless using specific `sink` flow types.
+
+  # API examples
+  Refer to the example APIs below as guidance for converting source code into Spark Declarative Pipeline (SDP) definitions. Follow these patterns closely when structuring your output.
+  ## Load data from existing table and transform.
+  ```python
+  from pyspark import pipelines as dp
+  from pyspark.sql.functions import expr, sum, desc
+
+  @dp.table(
+      comment="A table summarizing counts of the top partners for 2021."
+  )
+  def top_partners():
+      return (
+          spark.read.table("partners")
+            .filter(expr("year == 2021"))
+            .groupBy("region")
+            .agg(sum("sales_count").alias("total_count"))
+            .sort(desc("total_count"))
+      )
+  
+  @dp.materialized_view
+  def regional_sales():
+      partners_df = spark.read.table("partners")
+      sales_df = spark.read.table("sales")
+
+      return (
+        partners_df.join(sales_df, on="partner_id", how="inner")
+      )
+  
+  @dp.table
+  def customer_sales():
+      return spark.readStream.table("sales").join(spark.read.table("customers"), ["customer_id"], "left")
+  ```
+
+  ## Use flow API to incrementally append 2 streams of data to a target streaming table. 
+  ```python
+  from pyspark import pipelines as dp
+
+  # create a streaming table
+  dp.create_streaming_table("customers_us")
+
+  # add the first append flow
+  @dp.append_flow(target = "customers_us")
+  def append1():
+      return spark.readStream.table("customers_us_west")
+
+  # add the second append flow
+  @dp.append_flow(target = "customers_us")
+  def append2():
+      return spark.readStream.table("customers_us_east")
+  ```
+
+  ## Use Auto CDC flow to ingest changes
+  ```python
+  from pyspark import pipelines as dp
+  from pyspark.sql.functions import col, expr
+
+  @dp.view
+  def users():
+     return spark.readStream.table("cdc_data.users")
+
+  dp.create_streaming_table("target")
+
+  dp.create_auto_cdc_flow(
+      target = "target",
+      source = "users",
+      keys = ["userId"],
+      sequence_by = col("sequenceNum"),
+      apply_as_deletes = expr("operation = 'DELETE'"),
+      except_column_list = ["operation", "sequenceNum"],
+      stored_as_scd_type = "2"
+  )
+  ```
+
+  ## Use change flow to merge changes into a streaming table with both snapshot and cdc. 
+  ```python
+  from pyspark import pipelines as dp
+
+  dp.create_streaming_table("rdbms_orders")
+
+  # (Optional) Once Flow — Load initial snapshot of full RDBMS table
+  @dp.view()
+  def full_orders_snapshot():
+      return (
+          spark.readStream
+          .format("cloudFiles")
+          .option("cloudFiles.format", "json")
+          .load(orders_snapshot_path)
+          .select("*")
+      )
+  dp.create_auto_cdc_flow(
+      flow_name = "initial_load_orders",
+      once = True, 
+      target = "rdbms_orders",
+      source = "full_orders_snapshot", 
+      keys = ["order_id"],
+      sequence_by = "timestamp",
+      stored_as_scd_type = "1"
+  )
+
+  # Change Flow — Ingest ongoing CDC stream from source system
+  @dp.view()
+  def rdbms_orders_change_feed():
+  return (
+    spark.readStream
+       .format("cloudFiles")
+       .option("cloudFiles.format", "json")
+       .load(orders_cdc_path)
+  )
+
+  dp.create_auto_cdc_flow(
+      flow_name = "orders_incremental_cdc",
+      target = "rdbms_orders",
+      source = "rdbms_orders_change_feed", 
+      keys = ["order_id"],
+      sequence_by = "timestamp",
+      stored_as_scd_type = "1"
+  )
+  ```
+
+  ## Expectations to check data quality and / or drop bad data.
+  ```python
+  valid_pages = {"valid_count": "count > 0", "valid_current_page": "current_page_id IS NOT NULL AND current_page_title IS NOT NULL"}
+
+  @dp.table
+  @dp.expect_all(valid_pages)
+  def raw_data():
+    # Create a raw dataset ...
+
+  @dp.table
+  @dp.expect_all_or_drop(valid_pages)
+  def prepared_data():
+    # Create a cleaned and prepared dataset ...
+
+  @dp.table
+  @dp.expect_all_or_fail(valid_pages)
+  def customer_facing_data():
+    # Create cleaned and prepared to share the dataset ...
+  ```
+
+  # Output Format
+  Provide the complete, runnable Python code snippet. Include comments (in {comment_lang}) explaining *why* a specific flow type (Streaming vs. Materialized View) was chosen.
+
+language: |
+  Python

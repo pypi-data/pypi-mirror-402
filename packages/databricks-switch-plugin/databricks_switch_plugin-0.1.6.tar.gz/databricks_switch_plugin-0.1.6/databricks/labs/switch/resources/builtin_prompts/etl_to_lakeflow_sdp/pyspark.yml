@@ -1,0 +1,242 @@
+system_message: |
+  Convert the PySpark ETL workload code to Lakeflow Spark Declarative Pipeline (Previously known as DLT) code in ${language} according to the following instructions:
+
+  # Input and Output
+  - Input: A single Python file containing definition of a ETL pipeline using Spark SQL or PySpark API.
+  - Output: Lakeflow Spark Declarative Pipeline code in ${language} with comments (in {comment_lang}) explaining the code and any necessary context.
+  - Do not wrap your output code inside any Markdown code block such as ```${language}```. Output the code as plain text.
+
+  ${common_sdp_instructions_and_guidelines}
+
+few_shots:
+# Example 1:
+- role: user
+  content: |
+    from pyspark.sql import functions as F
+
+    page_views_stream = (
+        spark.readStream
+             .format("kafka")
+             .option("kafka.bootstrap.servers", "localhost:9092")
+             .option("subscribe", "page_views")
+             .load()
+             .selectExpr("CAST(value AS STRING) AS json_str")
+    )
+
+    page_views_query = (
+        page_views_stream.writeStream
+            .format("delta")
+            .outputMode("append")
+            .option("checkpointLocation", "/tmp/checkpoints/events_page_views")
+            .table("analytics.customer_360.events")
+    )
+
+    # Stream 2: purchases → write to the *same* table analytics.events
+    purchases_stream = (
+        spark.readStream
+             .format("kafka")
+             .option("kafka.bootstrap.servers", "localhost:9092")
+             .option("subscribe", "purchases")
+             .load()
+             .selectExpr("CAST(value AS STRING) AS json_str")
+    )
+
+    purchases_query = (
+        purchases_stream.writeStream
+            .format("delta")
+            .outputMode("append")
+            .option("checkpointLocation", "/tmp/checkpoints/events_purchases")
+            .table("analytics.customer_360.events")
+    )
+
+    spark.streams.awaitAnyTermination()
+- role: assistant
+  content: |
+    import pyspark.pipelines as dp
+    from pyspark.sql import functions as F
+
+    KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
+
+    dp.create_streaming_table("kafka_events")
+
+    # Stream from Kafka topic: page_views
+    @dp.append_flow(
+        name="page_views_stream",
+        comment="Raw events from Kafka topic 'page_views'."
+    )
+    def page_views_stream():
+        return (
+            spark.readStream
+                 .format("kafka")
+                 .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS)
+                 .option("subscribe", "page_views")
+                 .load()
+                 .selectExpr("CAST(value AS STRING) AS json_str")
+        )
+
+
+    # Stream from Kafka topic: purchases
+    @dp.append_flow(
+        name="purchases_stream",
+        comment="Raw events from Kafka topic 'purchases'."
+    )
+    def purchases_stream():
+        return (
+            spark.readStream
+                 .format("kafka")
+                 .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS)
+                 .option("subscribe", "purchases")
+                 .load()
+                 .selectExpr("CAST(value AS STRING) AS json_str")
+        )
+
+# Example 2:
+- role: user
+  content: |
+    from pyspark.sql import functions as F
+    CATALOG = "analytics"
+    SCHEMA = "my_schema"
+
+    def full_table_name(name: str) -> str:
+        return f"{CATALOG}.{SCHEMA}.{name}"
+
+    def checkpoint_path(name: str) -> str:
+        return f"/mnt/checkpoints/{CATALOG}_{SCHEMA}_{name}"
+
+    USER_EVENTS_DAILY_TBL    = full_table_name("user_events_daily")
+    DIM_USERS_TBL            = full_table_name("dim_users")
+    USER_EVENTS_ENRICHED_TBL = full_table_name("user_events_enriched")
+
+    RAW_EVENTS_SRC_TBL = full_table_name("raw_clickstream_events")
+    RAW_USERS_SRC_TBL  = full_table_name("raw_users")
+
+    # Streaming read
+    user_events_stream = (
+    spark.readStream
+         .table(RAW_EVENTS_SRC_TBL)
+         .withColumn("event_date", F.to_date("event_time"))
+    )
+
+    user_events_query = (
+        user_events_stream.writeStream
+            .format("delta")
+            .outputMode("append")
+            .option("checkpointLocation", checkpoint_path("user_events_daily"))
+            .option("mergeSchema", "true")
+            .partitionBy("event_date")
+            .table(USER_EVENTS_DAILY_TBL)
+    )
+
+    # Batch read
+    dim_users_df = (
+        spark.read
+             .table(RAW_USERS_SRC_TBL)
+             .select(
+                 "user_id",
+                 "email",
+                 "country",
+                 "customer_segment"
+             )
+    )
+    
+    (
+        dim_users_df.write
+            .format("delta")
+            .mode("overwrite") 
+            .option("overwriteSchema", "true")
+            .saveAsTable(DIM_USERS_TBL)
+    )
+
+    # JOIN and enrich
+    user_events_stream_2 = spark.readStream.table(USER_EVENTS_DAILY_TBL)
+
+    dim_users_2 = spark.table(DIM_USERS_TBL)
+    
+    enriched_events = (
+        user_events_stream_2.alias("e")
+            .join(
+                dim_users_2.alias("u"),
+                on="user_id",
+                how="left"
+            )
+            .select(
+                "e.event_time",
+                "e.event_date",
+                "e.user_id",
+                "e.event_type",
+                "u.email",
+                "u.country",
+                "u.customer_segment"
+            )
+    )
+    
+    enriched_query = (
+        enriched_events.writeStream
+            .format("delta")
+            .outputMode("append")
+            .option("checkpointLocation", checkpoint_path("user_events_enriched"))
+            .partitionBy("event_date")
+            .table(USER_EVENTS_ENRICHED_TBL)
+    )
+    spark.streams.awaitAnyTermination()
+- role: assistant
+  content: |
+    from pyspark.sql import functions as F
+    import pyspark.pipelines as dp
+
+    CATALOG = "analytics"
+    SCHEMA = "customer_360"
+    RAW_EVENTS_SRC_TBL = f"{CATALOG}.{SCHEMA}.raw_clickstream_events"
+    RAW_USERS_SRC_TBL  = f"{CATALOG}.{SCHEMA}.raw_users"
+
+    @dp.table(
+        name="user_events_daily",
+        comment="Daily clickstream events with derived event_date."
+    )
+    def user_events_daily():
+        return (
+            spark.readStream
+                 .table(RAW_EVENTS_SRC_TBL)
+                 .withColumn("event_date", F.to_date("event_time"))
+        )
+
+    @dp.table(
+        name="dim_users",
+        comment="User dimension snapshot with country and customer segment."
+    )
+    def dim_users():
+        return (
+            spark.read
+                 .table(RAW_USERS_SRC_TBL)
+                 .select(
+                     "user_id",
+                     "email",
+                     "country",
+                     "customer_segment",
+                 )
+        )
+
+    @dp.materialized_view(
+        name="user_events_enriched",
+        comment="Clickstream events enriched with user attributes."
+    )
+    def user_events_enriched():
+        events = dp.read("user_events_daily")   # streaming upstream
+        users  = dp.read("dim_users")           # batch/snapshot upstream
+
+        return (
+            events.join(
+                users,
+                on="user_id",
+                how="left"
+            )
+            .select(
+                "events.event_time",
+                "events.event_date",
+                "events.user_id",
+                "events.event_type",
+                "users.email",
+                "users.country",
+                "users.customer_segment",
+            )
+        )

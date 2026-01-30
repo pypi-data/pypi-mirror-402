@@ -1,0 +1,130 @@
+common_sdp_instructions_and_guidelines: |
+  # Core Concepts to Apply
+  - **MUST** refer and learn from the API examples below.
+  - **Ingestion:** Convert `COPY INTO` or `INSERT INTO` statements reading from raw files into `CREATE OR REFRESH STREAMING TABLE`. Use the `read_files()` table-valued function for robust file ingestion.
+  - **Transformations:** Convert `CREATE TABLE AS SELECT` (CTAS) statements into either:
+      1.  **Streaming Tables:** If the query creates a continuous flow of data (e.g., appending cleaned logs). Syntax: `CREATE OR REFRESH STREAMING TABLE x AS SELECT ... FROM STREAM(source)`.
+      2.  **Materialized Views:** If the query performs aggregations, joins, or represents the "current state" of data. Syntax: `CREATE MATERIALIZED VIEW y AS SELECT ...`.
+  - **Dependencies:** Ensure that if Table B depends on Table A, you reference Table A by name. Lakeflow handles the DAG execution order.
+
+  # Syntax Restrictions
+  - Analyze the input code provided by the user, detect its source language and pattern (batch vs. streaming) and then make the appropriate conversion.
+  - Remove all transaction control statements (`BEGIN`, `COMMIT`, `ROLLBACK`).
+  - Remove all `DROP TABLE` or `TRUNCATE` statements; Lakeflow manages table lifecycle.
+  - If you see a `MERGE` statement, identify if it is for Change Data Capture (CDC). If yes, suggest using the `APPLY CHANGES INTO` (Auto CDC) syntax.
+
+  # API examples
+  ## Load data from existing table and transform.
+  ```sql
+  CREATE OR REFRESH MATERIALIZED VIEW partners 
+  AS SELECT 
+    partner_id, 
+    region,
+    sum(sales_count) as total_count
+  FROM my_catalog.my.schema.partners
+  WHERE year = 2021
+  GROUP BY partner_id, region 
+  ORDER BY total_count DESC
+
+  CREATE OR REPLACE MATERIALIZED VIEW regional_sales
+  AS SELECT *
+  FROM partners
+    INNER JOIN sales ON
+      partners.partner_id = sales.partner_id;
+
+  CREATE OR REFRESH STREAMING TABLE customer_sales
+  AS SELECT * FROM STREAM(sales)
+  INNER JOIN LEFT customers USING (customer_id)
+  ```
+
+  ## Use flow API to incrementally append 2 streams of data to a target streaming table. 
+  ```sql
+  CREATE OR REFRESH STREAMING TABLE kafka_target;
+
+  CREATE FLOW
+    topic1_flow
+  AS INSERT INTO
+    kafka_target BY NAME
+  SELECT * FROM
+    read_kafka(bootstrapServers => 'host1:port1,...', subscribe => 'topic1_flow');
+  
+  CREATE FLOW
+    topic2
+  AS INSERT INTO
+    kafka_target BY NAME
+  SELECT * FROM
+    read_kafka(bootstrapServers => 'host1:port1,...', subscribe => 'topic2');
+  ```
+
+  ## Use Auto CDC flow to ingest changes
+  ```sql
+  -- Create and populate the target table.
+  CREATE OR REFRESH STREAMING TABLE target;
+  
+  CREATE FLOW target_flow
+  AS AUTO CDC INTO
+    target
+  FROM
+    stream(cdc_data.users)
+  KEYS
+    (userId)
+  APPLY AS DELETE WHEN
+    operation = "DELETE"
+  SEQUENCE BY
+    sequenceNum
+  COLUMNS * EXCEPT
+    (operation, sequenceNum)
+  STORED AS
+    SCD TYPE 2;
+  ```
+
+  ## Use change flow to merge changes into a streaming table with both snapshot and cdc. 
+  ```sql
+  -- load initial snapshot files using Auto Loader.
+  CREATE OR REFRESH VIEW full_orders_snapshot
+  AS SELECT *
+  FROM STREAM read_files("<orders_snapshot_path>", "json", map(
+    "cloudFiles.includeExistingFiles", "true",
+    "cloudFiles.inferColumnTypes", "true"
+  ));
+
+  -- load ongoing CDC stream from source system using Auto Loader.
+  CREATE OR REFRESH VIEW rdbms_orders_change_feed
+  AS SELECT *
+  FROM STREAM read_files("<orders_cdc_path>", "json", map(
+    "cloudFiles.includeExistingFiles", "true",
+    "cloudFiles.inferColumnTypes", "true"
+  ));
+
+
+  -- Create the target streaming table
+  CREATE OR REFRESH STREAMING TABLE rdbms_orders;
+
+  -- Optional: Once Flow for initial snapshot.
+  CREATE FLOW rdbms_orders_hydrate
+  AS AUTO CDC ONCE INTO rdbms_orders
+  FROM stream(full_orders_snapshot)
+  KEYS (order_id)
+  SEQUENCE BY timestamp
+  STORED AS SCD TYPE 1;
+
+  -- Change Flow - CDC ingestion
+  CREATE FLOW rdbms_orders_continuous
+  AS AUTO CDC INTO rdbms_orders
+  FROM stream(rdbms_orders_change_feed)
+  KEYS (order_id)
+  SEQUENCE BY timestamp
+  STORED AS SCD TYPE 1;
+  ```
+
+  ## Expectations to check data quality and / or drop bad data.
+  ```sql
+  CONSTRAINT valid_timestamp EXPECT (timestamp > '2012-01-01')
+
+  CONSTRAINT valid_current_page EXPECT (current_page_id IS NOT NULL and current_page_title IS NOT NULL) ON VIOLATION DROP ROW
+
+  CONSTRAINT valid_count EXPECT (count > 0) ON VIOLATION FAIL UPDATE
+  ```
+
+language: |
+  SQL
