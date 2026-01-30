@@ -1,0 +1,43 @@
+name: release-please
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          release-type: python
+          token: ${{ secrets.RELEASE_PLEASE_PR_CI_TOKEN }}
+
+      - uses: actions/checkout@v4
+        if: ${{ steps.release.outputs.release_created }}
+
+      - uses: actions/setup-python@v5
+        if: ${{ steps.release.outputs.release_created }}
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install dependencies
+        if: ${{ steps.release.outputs.release_created }}
+        run:  make install-ci
+
+      - name: Build a binary wheel and a source tarball
+        if: ${{ steps.release.outputs.release_created }}
+        run:  make build
+
+      - name: Publish to PyPI
+        if: ${{ steps.release.outputs.release_created }}
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          user:     __token__
+          password: ${{ secrets.PYPI_TOKEN }}
