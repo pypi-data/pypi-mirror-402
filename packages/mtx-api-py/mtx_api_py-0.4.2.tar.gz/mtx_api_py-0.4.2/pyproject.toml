@@ -1,0 +1,158 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mtx-api-py"
+dynamic = ["version"]
+description = "SDK (wrapper) en Python para la API externa de MTX"
+readme = "README.md"
+authors = [
+    { name = "Álvaro Martín Rodríguez", email = "alvaro.martin@radmas.com" }
+]
+license = { text = "MIT" }
+license-files = { globs = ["LICENSE.txt"] }
+
+requires-python = ">=3.12.0"
+dependencies = [
+    "httpx~=0.28.1",
+    "pydantic~=2.12.4",
+    "pydantic_settings~=2.12.0",
+    "PyJWT~=2.10.1",
+]
+keywords = ["mtx", "sdk", "api"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Repository = "https://bitbucket.org/radmas/mtx_api_py"
+
+[tool.hatch.version]
+path = "src/mtx_api/__init__.py"
+
+[tool.hatch.envs.default]
+installer = "uv"
+path = ".venv/default"
+
+[tool.hatch.envs.dev]
+path = ".venv/dev"
+installer = "uv"
+dependencies = [
+    "python-dotenv==1.1.1",
+    "pytest==8.4.2",
+    "pytest-cov==7.0.0",
+    "pytest-asyncio==1.2.0",
+    "ruff==0.14.1",
+    "mypy==1.18.2",
+    "notebook==7.4.7",
+    "ipykernel==6.30.1",
+    "devtools==0.12.2",
+    "nest_asyncio==1.6.0",
+    "nbstripout==0.8.2",
+]
+
+[tool.hatch.envs.dev.scripts]
+install-pre-commit = "python scripts/install_pre_commit.py"
+test = "pytest -s"
+tests = [
+    "check",
+    "test",
+]
+check = [
+    "ruff format . --check",
+    "ruff check .",
+    "mypy .",
+]
+fix = [
+    "ruff format .",
+    "ruff check . --fix",
+    "mypy .",
+    "test",
+]
+install-notebook-kernel = "ipython kernel install --user --name=mtx-api-py-hatch"
+remove-notebook-kernel = "jupyter kernelspec uninstall mtx-api-py-hatch"
+
+[tool.pytest.ini_options]
+addopts = "-q --cov=. --cov-report=html --cov-fail-under=100"
+testpaths = ["tests"]
+pythonpath = ["src"]
+#log_cli = true
+#log_cli_level = "DEBUG"
+#log_cli_format = "%(asctime)s %(levelname)s %(message)s"
+
+[tool.coverage.html]
+directory = ".cov/reports"
+
+[tool.coverage.run]
+data_file = ".cov/.coverage"
+
+[tool.ruff]
+line-length = 115
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "W",
+    "N",
+    "SIM",
+    "ARG",
+    "PERF",
+    "PL",
+    "UP",
+    "TID",
+    "ERA",
+    "C4",
+    "DTZ",
+    "LOG",
+    "TC",
+]
+ignore = [
+    "PLR0913", # Too many arguments
+    "TC001", # typing-only-first-party-import
+    "TC002", # typing-only-third-party-import
+    "TC003", # typing-only-standard-library-import
+]
+[tool.ruff.lint.per-file-ignores]
+"**/{tests,docs,tools}/*" = [
+    "PLR2004", # magic-value-comparison
+]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = true
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unreachable = true
+mypy_path = "src"
+
+[tool.hatch.build]
+include = [
+    "src/mtx_api/**",
+]
+
+[tool.hatch.build.targets.wheel]
+ignore-vcs = true
+packages = [
+    "src/mtx_api",
+]
