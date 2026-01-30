@@ -1,0 +1,22 @@
+stages:
+    - static_analyses
+    - publish
+
+# Static analysis of the Python project with linter tools
+linters:
+    stage: static_analyses
+    image: "python:3.11"
+    script:
+        - ./run_linters.sh
+
+
+publish:
+    stage: publish
+    image: python:3.11
+    only:
+        # We want this job to be run on tags only.
+        - tags
+    script:
+        - python -m pip install --upgrade build twine
+        - python -m build
+        - TWINE_PASSWORD=${PYPI_TOKEN} TWINE_USERNAME=__token__ python -m twine upload --skip-existing dist/*
