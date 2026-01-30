@@ -1,0 +1,146 @@
+# NiceGUIExt
+
+[English](./README_EN.md) | 简体中文
+
+NiceGUIExt 是一个基于 [NiceGUI](https://nicegui.io) 的扩展组件库，提供了表格、CRUD 界面、表单等常用组件，帮助快速构建数据管理界面。
+
+## 功能特性
+
+- **NiceTable** - 功能丰富的表格组件，支持查询、分页、详情查看、自定义操作按钮
+- **NiceCRUD** - 基于 NiceTable 的 CRUD 组件，支持增删改查，支持表格和卡片两种展示模式
+- **NiceForm** - 基于字段定义的表单组件，支持多种输入类型和验证
+- **show_error/show_warn** - 错误和警告消息显示组件
+
+## 安装
+
+```bash
+pip install niceguiext
+```
+
+## 快速开始
+
+### NiceCRUD 示例
+
+```python
+from nicegui import ui
+from niceguiext import NiceCRUD, FieldDefinition
+
+# 定义字段
+fields = [
+    FieldDefinition(name="id", title="ID", type="integer", readonly=True, show_in_table=True),
+    FieldDefinition(name="name", title="名称", type="text", required=True, show_in_table=True, show_in_query=True),
+    FieldDefinition(name="price", title="价格", type="number", min_value=0, show_in_table=True),
+]
+
+# 初始数据
+data = [
+    {"id": 1, "name": "产品A", "price": 100},
+    {"id": 2, "name": "产品B", "price": 200},
+]
+
+# 创建 CRUD 组件
+crud = NiceCRUD(
+    fields=fields,
+    data=data,
+    id_field="id",
+    heading="产品管理",
+)
+
+ui.run()
+```
+
+### NiceTable 示例
+
+```python
+from nicegui import ui
+from niceguiext import NiceTable, FieldDefinition, PageData
+
+class UserTable(NiceTable):
+    async def query(self, query_values: dict, page: int = 1, page_size: int = 20) -> PageData:
+        # 实现数据查询逻辑
+        data = [{"id": 1, "name": "张三", "status": "active"}]
+        return PageData(data=data, total=1)
+
+fields = [
+    FieldDefinition(name="id", title="ID", type="integer", show_in_table=True),
+    FieldDefinition(name="name", title="姓名", type="text", show_in_table=True, show_in_query=True),
+    FieldDefinition(
+        name="status", 
+        title="状态", 
+        type="tag",
+        input_type="select",
+        selections={"active": "激活|green", "inactive": "未激活|red"},
+        show_in_table=True,
+    ),
+]
+
+table = UserTable(fields=fields, id_field="id", heading="用户列表")
+ui.run()
+```
+
+### NiceForm 示例
+
+```python
+from nicegui import ui
+from niceguiext import NiceForm, FormConfig
+from niceguiext.form import FieldDefinition
+
+fields = [
+    FieldDefinition(name="name", field_type=str, title="姓名", required=True),
+    FieldDefinition(name="age", field_type=int, title="年龄", min_value=0, max_value=120),
+    FieldDefinition(name="email", field_type=str, title="邮箱"),
+]
+
+async def handle_submit(form_data: dict):
+    print("提交的数据:", form_data)
+    ui.notify("提交成功!", color="positive")
+
+form = NiceForm(
+    fields=fields,
+    config=FormConfig(title="用户信息"),
+    on_submit=handle_submit,
+)
+
+ui.run()
+```
+
+## 文档
+
+完整文档请查看 [docs](./docs) 目录：
+
+- [文档首页](./docs/index.md)
+- [NiceTable 组件](./docs/NiceTable.md)
+- [NiceCRUD 组件](./docs/NiceCRUD.md)
+- [NiceForm 组件](./docs/NiceForm.md)
+- [show_error 工具函数](./docs/show_error.md)
+
+## 示例
+
+更多示例请查看 [examples](./examples) 目录：
+
+| 示例 | 说明 |
+|------|------|
+| `nicecrud_simple.py` | NiceCRUD 简单示例 |
+| `nicecrud_example.py` | NiceCRUD 完整示例 |
+| `nicecrud_advanced.py` | NiceCRUD 高级用法 |
+| `nicecrud_grid.py` | NiceCRUD 网格模式 |
+| `nicetable_example.py` | NiceTable 示例 |
+| `form_field_definition_example.py` | NiceForm 示例 |
+| `validation_example.py` | 验证功能示例 |
+
+## 贡献
+
+欢迎贡献代码！
+
+### 发布新版本
+
+确保环境变量 `UV_PUBLISH_TOKEN` 已设置为 PyPI 密钥令牌。
+
+```bash
+uv build
+uv publish
+```
+
+## 许可证
+
+本项目采用 MIT 许可证。详见 [LICENSE](LICENSE)。
