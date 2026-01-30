@@ -1,0 +1,162 @@
+Metadata-Version: 2.4
+Name: treesearch-ud
+Version: 0.2.0
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Classifier: Programming Language :: Python :: Implementation :: CPython
+Classifier: Programming Language :: Rust
+Classifier: Topic :: Text Processing :: Linguistic
+Classifier: Typing :: Typed
+Classifier: Operating System :: OS Independent
+Requires-Dist: maturin>=1.10.1 ; extra == 'dev'
+Requires-Dist: pytest>=9.0 ; extra == 'dev'
+Requires-Dist: mkdocs>=1.5.0 ; extra == 'docs'
+Requires-Dist: mkdocs-material>=9.0.0 ; extra == 'docs'
+Requires-Dist: spacy>=3.0.0 ; extra == 'viz'
+Provides-Extra: dev
+Provides-Extra: docs
+Provides-Extra: viz
+License-File: LICENSE
+Summary: High-performance toolkit for querying linguistic dependency parses
+Keywords: nlp,linguistics,dependency-parsing,corpus-linguistics,treebank
+Author-email: Rob Malouf <rmalouf@sdsu.edu>
+License-Expression: MIT
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Project-URL: Documentation, https://rmalouf.github.io/treesearch/
+Project-URL: Homepage, https://github.com/rmalouf/treesearch
+Project-URL: Issues, https://github.com/rmalouf/treesearch/issues
+Project-URL: Repository, https://github.com/rmalouf/treesearch
+
+# Treesearch
+
+[![PyPI](https://img.shields.io/pypi/v/treesearch-ud)](https://pypi.org/project/treesearch-ud/)
+
+Pattern matching for dependency treebanks.
+
+> **⚠️ Early Stage**: This project is under active development. The API and query language **will** change as we refine the design.
+
+## Overview
+
+Treesearch finds syntactic patterns in dependency-parsed corpora. It reads treebanks in CoNLL-U format and returns all sentences matching a specified structural pattern. Designed for corpus linguistics research on large treebanks with automatic parallel processing for multi-file operations.
+
+## Installation
+
+### From PyPI
+
+Requires Python 3.12+.
+
+```bash
+pip install treesearch-ud
+
+# Optional: Install with visualization support (displaCy)
+pip install treesearch-ud[viz]
+```
+
+### From Source
+
+Requires Python 3.12+ and [Rust toolchain](https://www.rust-lang.org/tools/install).
+
+```bash
+# Clone repository
+git clone https://github.com/rmalouf/treesearch
+cd treesearch
+
+# Install with uv (recommended)
+uv pip install -e .
+
+# Or with pip
+pip install maturin
+maturin develop
+```
+
+## Quick Example
+
+Find passive constructions in an English treebank:
+
+```python
+import treesearch
+
+# Parse a pattern for passive voice
+pattern = treesearch.compile_query("""
+    MATCH {
+        V [upos="VERB"];
+        Aux [lemma="be"];
+        V -[aux:pass]-> Aux;
+    }
+""")
+
+# Search a single file
+for tree, match in treesearch.search("corpus.conllu", pattern):
+    verb = tree.word(match["V"])
+    print(f"{verb.form}: {tree.sentence_text}")
+```
+
+Search multiple files with automatic parallel processing:
+
+```python
+# Glob pattern for multiple files
+for tree, match in treesearch.search("data/*.conllu", pattern):
+    verb = tree.word(match["V"])
+    print(f"{verb.form}: {tree.sentence_text}")
+
+# Or use the object-oriented API
+treebank = treesearch.load("data/*.conllu")
+for tree, match in treebank.search(pattern):
+    verb = tree.word(match["V"])
+    print(f"{verb.form}: {tree.sentence_text}")
+```
+
+## Pattern Language
+
+Patterns specify structural constraints on dependency trees:
+
+```
+MATCH {
+    Verb [upos="VERB" & lemma="help"];
+    Obj [upos="NOUN"];
+    Verb -[obj]-> Obj;
+}
+```
+
+**Node constraints**: `upos`, `xpos`, `lemma`, `form`, `deprel`, `feats.*` (morphological features), `misc.*` (miscellaneous features)
+
+**Edge constraints**: `->` (child), `-[label]->` (labeled edge), `!->` (negative), `!-[label]->` (negative labeled edge)
+
+**Precedence**: `<` (immediately precedes), `<<` (precedes)
+
+**EXCEPT blocks**: Reject matches where a condition is true (negative existential)
+
+**OPTIONAL blocks**: Extend matches with additional bindings if possible
+
+## Data Format
+
+Reads treebanks in [CoNLL-U format](https://universaldependencies.org/format.html). Supports plain text (`.conllu`) and gzip-compressed files (`.conllu.gz`) with automatic decompression.
+
+## Documentation
+
+- [API.md](API.md) - Complete Python API reference
+- [GitHub repository](https://github.com/rmalouf/treesearch) - Source code and issue tracker
+
+## License
+
+MIT
+
+## Citation
+
+If you use Treesearch in your research, please cite:
+
+```bibtex
+@software{treesearch,
+  author = {Malouf, Robert},
+  title = {Treesearch: Pattern matching for dependency treebanks},
+  year = {2025},
+  url = {https://github.com/rmalouf/treesearch}
+}
+```
+
