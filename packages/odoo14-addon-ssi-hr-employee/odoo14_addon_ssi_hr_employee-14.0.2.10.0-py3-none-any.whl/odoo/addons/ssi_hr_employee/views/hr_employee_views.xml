@@ -1,0 +1,375 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2022 OpenSynergy Indonesia
+     Copyright 2022 PT. Simetri Sinergi Indonesia
+     License LGPL-3.0 or later (http://www.gnu.org/licenses/lgpl). -->
+<odoo>
+    <record id="hr_employee_view_form" model="ir.ui.view">
+        <field name="name">form hr.employee</field>
+        <field name="model">hr.employee</field>
+        <field name="inherit_id" ref="hr.view_employee_form" />
+        <field name="arch" type="xml">
+            <data>
+                <xpath expr="//field[@name='department_id']" position="before">
+                    <field name="organization_unit_id" />
+                </xpath>
+                <xpath expr="//field[@name='job_id']" position="after">
+                    <field
+                        name="allowed_job_grade_ids"
+                        widget="many2many_tags"
+                        invisible="1"
+                    />
+                    <field
+                        name="job_grade_id"
+                        domain="[('id','in',allowed_job_grade_ids)]"
+                    />
+                    <field name="employment_status_id" />
+                </xpath>
+                <xpath expr="//field[@name='job_id']" position="before">
+                    <field name="date_join" />
+                    <field name="date_termination" />
+                    <field name="date_permanent" />
+                    <field name="date_contract_start" />
+                    <field name="date_contract_end" />
+                    <label for="year_work_longetivity" string="Work Longetivity" />
+                    <div>
+                          <field name="year_work_longetivity" class="oe_inline" /> Years
+                          <field
+                            name="month_work_longetivity"
+                            class="oe_inline"
+                        /> Months
+                    </div>
+                </xpath>
+                <xpath expr="//notebook" position="inside">
+                    <page name="job_desc" string="Job Description">
+                        <separator string="Main" />
+                        <field name="main_job_description_ids" />
+                    </page>
+                </xpath>
+                <xpath
+                    expr="//page[@name='personal_information']/group[1]/group[1]"
+                    position="after"
+                >
+                    <group string="Legal Information" clospan="2">
+                        <field name="legal_address_id" label="Legal Address" />
+                        <!-- <group colspan="2"> -->
+                        <label for="legal_street" string="Address" />
+                        <div>
+                            <field name="legal_street" placeholder="Street..." />
+                            <field name="legal_street2" />
+                            <div class="address_format">
+                                <field
+                                    name="legal_city"
+                                    placeholder="City"
+                                    style="width: 40%%"
+                                />
+                                <field
+                                    name="legal_state_id"
+                                    class="oe_no_button"
+                                    placeholder="State"
+                                    style="width: 37%%"
+                                />
+                                <field
+                                    name="legal_zip"
+                                    placeholder="ZIP"
+                                    style="width: 20%%"
+                                />
+                            </div>
+                            <field
+                                name="legal_country_id"
+                                placeholder="Country"
+                                class="oe_no_button"
+                            />
+                        </div>
+                        <!-- </group> -->
+                        <field name="legal_phone" />
+                    </group>
+                </xpath>
+            </data>
+        </field>
+    </record>
+
+<record id="hr_employee_self_view_form" model="ir.ui.view">
+    <field name="name">hr.employee - form</field>
+    <field name="model">hr.employee</field>
+    <field name="priority" eval="100" />
+    <field name="arch" type="xml">
+        <form>
+            <header>
+                <button
+                        name="action_dummy_save"
+                        string="Save"
+                        type="object"
+                        class="oe_highlight"
+                    />
+            </header>
+            <sheet>
+                <div name="button_box" class="oe_button_box">
+                </div>
+                <field
+                        name="image_1920"
+                        widget='image'
+                        class="oe_avatar"
+                        options='{"zoom": true, "preview_image":"image_128"}'
+                        readonly="1"
+                    />
+                <div class="oe_title">
+                    <h1 class="d-flex">
+                        <field
+                                name="name"
+                                placeholder="Employee's Name"
+                                required="True"
+                                readonly="1"
+                            />
+                    </h1>
+                </div>
+            <group>
+                <group>
+                    <field name="mobile_phone" widget="phone" />
+                    <field name="work_phone" widget="phone" />
+                    <field name="work_email" widget="email" />
+                    <field name="company_id" groups="base.group_multi_company" />
+                </group>
+            </group>
+            <notebook>
+                <page name="job_desc" string="Job Description">
+                    <separator string="Main" />
+                    <field name="main_job_description_ids" />
+                </page>
+                <page name="personal_information" string="Private Information">
+                    <group>
+                        <group string="Work Permit" name="work_permit">
+                            <field name="visa_no" />
+                            <field name="permit_no" />
+                            <field name="visa_expire" />
+                        </group>
+                        <group string="Marital Status">
+                            <field name="marital" />
+                            <field
+                                        name="spouse_complete_name"
+                                        attrs="{'invisible': [('marital', 'not in', ['married', 'cohabitant'])]}"
+                                        groups="hr.group_hr_user"
+                                    />
+                            <field
+                                        name="spouse_birthdate"
+                                        attrs="{'invisible': [('marital', 'not in', ['married', 'cohabitant'])]}"
+                                        groups="hr.group_hr_user"
+                                    />
+                        </group>
+                        <group string="Citizenship">
+                            <field
+                                        name="country_id"
+                                        options='{"no_open": True, "no_create": True}'
+                                    />
+                            <field name="identification_id" />
+                            <field name="passport_id" />
+                            <field name="gender" />
+                            <field name="birthday" />
+                            <field name="place_of_birth" />
+                            <field
+                                        name="country_of_birth"
+                                        options='{"no_open": True, "no_create": True}'
+                                    />
+                            <field
+                                        name="birth_state_id"
+                                        options='{"no_open": True, "no_create": True}'
+                                    />
+                            <field
+                                        name="ethnicity_id"
+                                        options='{"no_open": True, "no_create": True}'
+                                    />
+                            <field
+                                        name="religion_id"
+                                        options='{"no_open": True, "no_create": True}'
+                                    />
+                            <field name="blood_type" />
+                            <field name="blood_type_rhesus" />
+                        </group>
+                        <group string="Dependant">
+                            <field name="children" />
+                        </group>
+                    </group>
+                </page>
+                <page string="Experiences">
+                    <separator name="academic" string="Academics" />
+                    <field
+                                name="academic_ids"
+                                context="{'default_partner_id': active_id}"
+                            >
+                    <tree>
+                        <field name="partner_address_id" string="Institution" />
+                        <field name="diploma" />
+                        <field name="education_level_id" />
+                        <field name="field_of_study_id" />
+                        <field name="date_start" />
+                        <field name="date_end" />
+                    </tree>
+                    <form>
+                        <group name="header" colspan="4" col="2">
+                            <group name="header_left" colspan="1" col="2">
+                                <field name="partner_id" invisible="1" />
+                                <field
+                                                name="partner_address_id"
+                                                string="Institution"
+                                                options='{"no_open": True, "no_create": True}'
+                                            />
+                                <field name="location" />
+                                <field name="active" widget="boolean_toggle" />
+                            </group>
+                            <group name="header_right" colspan="1" col="2">
+                                <field name="date_start" />
+                                <field name="expire" />
+                                <field
+                                                name="date_end"
+                                                attrs="{'invisible':[('expire', '=', False)], 'required': [('expire', '=', True)]}"
+                                            />
+                                <separator string="Academic Information" colspan="1" />
+                                <field name="diploma" />
+                                <field
+                                                name="education_level_id"
+                                                options='{"no_open": True, "no_create": True}'
+                                            />
+                                <field
+                                                name="field_of_study_id"
+                                                options='{"no_open": True, "no_create": True}'
+                                            />
+                                <field name="gpa" />
+                                <field name="activities" />
+                            </group>
+                        </group>
+                        <notebook>
+                            <page name="note" string="Note">
+                                <field name="note" colspan="4" nolabel="1" />
+                            </page>
+                        </notebook>
+                    </form>
+                    </field>
+                    <separator name="certification" string="Certifications" />
+                    <field
+                                name="certification_ids"
+                                context="{'default_partner_id': active_id}"
+                            >
+                    <tree>
+                        <field name="name" string="Certification" />
+                        <field name="certification" string="# Certificate" />
+                        <field name="partner_address_id" string="Issued By" />
+                        <field name="date_start" />
+                        <field name="date_end" />
+                    </tree>
+                    <form>
+                        <group name="header" colspan="4" col="2">
+                            <group name="header_left" colspan="1" col="2">
+                                <field name="name" string="Certification" />
+                                <field name="certification" />
+                                <field name="partner_id" invisible="1" />
+                                <field
+                                                name="partner_address_id"
+                                                string="Issued By"
+                                                options='{"no_open": True, "no_create": True}'
+                                            />
+                                <field name="location" />
+                                <field name="active" widget="boolean_toggle" />
+                            </group>
+                            <group name="header_right" colspan="1" col="2">
+                                <field name="date_start" />
+                                <field name="expire" />
+                                <field
+                                                name="date_end"
+                                                attrs="{'invisible':[('expire', '=', False)], 'required': [('expire', '=', True)]}"
+                                            />
+                            </group>
+                        </group>
+                        <notebook>
+                            <page name="note" string="Note">
+                                <field name="note" colspan="4" nolabel="1" />
+                            </page>
+                        </notebook>
+                    </form>
+                    </field>
+                    <separator
+                                name="personal_experience"
+                                string="Professional Experiences"
+                            />
+                    <field
+                                name="experience_ids"
+                                context="{'default_partner_id': active_id}"
+                            >
+                    <tree>
+                        <field name="job_position" />
+                        <field name="job_level" />
+                        <field name="partner_address_id" string="Employer" />
+                        <field name="date_start" />
+                        <field name="date_end" />
+                    </tree>
+                    <form>
+                        <group name="header" colspan="4" col="2">
+                            <group name="header_left" colspan="1" col="2">
+                                <field name="job_position" />
+                                <field name="job_level" />
+                                <field name="partner_id" invisible="1" />
+                                <field
+                                                name="partner_address_id"
+                                                string="Employer"
+                                                options='{"no_open": True, "no_create": True}'
+                                            />
+                                <field name="location" />
+                                <field name="active" widget="boolean_toggle" />
+                            </group>
+                            <group name="header_right" colspan="1" col="2">
+                                <field name="date_start" />
+                                <field name="expire" />
+                                <field
+                                                name="date_end"
+                                                attrs="{'invisible':[('expire', '=', False)], 'required': [('expire', '=', True)]}"
+                                            />
+                            </group>
+                        </group>
+                        <notebook>
+                            <page name="note" string="Note">
+                                <field name="note" colspan="4" nolabel="1" />
+                            </page>
+                        </notebook>
+                    </form>
+                    </field>
+                </page>
+                <page string="Languages">
+                    <field name="language_ids" nolabel="1" colspan="4">
+                        <tree string="Language" editable="bottom">
+                            <field name="name" />
+                            <field name="read_rating" />
+                            <field name="write_rating" />
+                            <field name="speak_rating" />
+                            <field name="listen_rating" />
+                        </tree>
+                    </field>
+                </page>
+            </notebook>
+            </sheet>
+        </form>
+    </field>
+</record>
+
+<record id="hr_employee_self_action" model="ir.actions.server">
+    <field name="name">My Employment Information</field>
+    <field name="model_id" ref="hr.model_hr_employee" />
+    <field name="state">code</field>
+    <field name="code">
+action = {
+    "name": "My Employment Information",
+    "res_model": "hr.employee",
+    "view_mode": "form",
+    "view_id": env.ref("ssi_hr_employee.hr_employee_self_view_form").id,
+    "res_id": env.user.employee_id.id,
+    "type": "ir.actions.act_window",
+    "target": "inline",
+}
+    </field>
+</record>
+
+<menuitem
+        id="hr_employee_self_menu"
+        name="My Employment Information"
+        parent="ssi_hr.menu_root_human_resource"
+        action="hr_employee_self_action"
+        sequence="0"
+    />
+</odoo>
