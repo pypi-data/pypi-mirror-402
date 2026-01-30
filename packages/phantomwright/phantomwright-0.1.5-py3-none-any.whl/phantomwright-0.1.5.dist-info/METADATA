@@ -1,0 +1,390 @@
+Metadata-Version: 2.4
+Name: phantomwright
+Version: 0.1.5
+Summary: Bridging playwright-core patch + extending playwright API for stealth injection & user simulation
+Project-URL: homepage, https://github.com/ai-microsoft/phantom-wright
+Project-URL: changelog, https://github.com/ai-microsoft/phantom-wright/blob/main/CHANGELOG.md
+Author-email: Hang Yin <hangyin@microsoft.com>, Daniel Wan <benyuwan@microsoft.com>
+License-Expression: MIT
+License-File: LICENSE
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.9
+Requires-Dist: phantomwright-driver==1.57.7
+Provides-Extra: black
+Requires-Dist: black>=25.9.0; extra == 'black'
+Provides-Extra: dev
+Requires-Dist: pytest-asyncio>=1.2.0; extra == 'dev'
+Requires-Dist: pytest>=8.4.2; extra == 'dev'
+Description-Content-Type: text/markdown
+
+<h1 align="center">
+    🎭 Phantomwright
+</h1>
+
+<p align="center">
+    <em>A patched and undetected Playwright — drop-in replacement that bypasses bot detection.</em>
+</p>
+
+---
+
+- **Full Playwright API** — All APIs exported from Playwright, no learning curve
+- **Fingerprints Evasion** — Override browser fingerprints to better evade detection
+- **User Simulation** — Humanized page interactions for realistic behavior
+- **Captcha Solver** — Automatic Cloudflare challenge solving with background monitoring
+
+## Installation
+
+```bash
+pip install phantomwright
+phantomwright_driver install chromium
+```
+
+## Usage
+
+### Basic Usage
+
+```python
+import asyncio
+from phantomwright.async_api import async_playwright
+
+async def main():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch()
+        page = await browser.new_page()
+        await page.goto('http://playwright.dev')
+        await page.screenshot(path=f'example-{p.chromium.name}.png')
+        await browser.close()
+
+asyncio.run(main())
+```
+
+### Fingerprints Evasion
+
+```python
+import asyncio
+from phantomwright.async_api import async_playwright
+from phantomwright.stealth import Stealth, ALL_EVASIONS_DISABLED_KWARGS
+
+async def advanced_example():
+    # Custom configuration with specific languages
+    custom_languages = ("fr-FR", "fr")
+    stealth = Stealth(
+        navigator_languages_override=custom_languages
+    )
+    
+    async with async_playwright() as p:
+        browser = await p.chromium.launch()
+        context = await browser.new_context()
+        await stealth.apply_stealth_async(context)
+        
+        # Test stealth on multiple pages
+        page_1 = await context.new_page()
+        page_2 = await context.new_page()
+        
+        # Verify language settings
+        for i, page in enumerate([page_1, page_2], 1):
+            is_mocked = await page.evaluate("navigator.languages") == custom_languages
+            print(f"Stealth applied to page {i}: {is_mocked}")
+
+    # Example of selective evasion usage
+    no_evasions = Stealth(**ALL_EVASIONS_DISABLED_KWARGS)
+    single_evasion = Stealth(**{**ALL_EVASIONS_DISABLED_KWARGS, "navigator_webdriver": True})
+    
+    print("Total evasions (none):", len(no_evasions.script_payload))
+    print("Total evasions (single):", len(single_evasion.script_payload))
+
+asyncio.run(advanced_example())
+```
+
+### User Simulation
+
+```python
+from playwright.sync_api import sync_playwright
+from phantomwright.user_simulator import SyncUserSimulator
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=False)
+    page = browser.new_page(viewport={"width": 1280, "height": 900})
+
+    # Create simulator
+    sim = SyncUserSimulator(page)
+
+    page.goto("https://www.bing.com")
+
+    # Find search box
+    search_box = page.locator("#sb_form_q")
+    search_box.first.wait_for(timeout=5000)
+
+    # Click with human-like behavior (scrolls into view + moves mouse + clicks)
+    sim.click(search_box)
+
+    # Or prepare for interaction without clicking
+    # sim.prepare_for_interaction(search_box)
+
+    # Type with human-like delays
+    sim.type(search_box, "hello world")
+
+    # Type with simulated typos
+    # sim.type(search_box, "hello world", typos=True)
+
+    # Simulate browsing behavior
+    sim.simulate_browsing(duration_ms=2000)
+
+    browser.close()
+```
+
+### Cloudflare Captcha Solver
+
+```python
+import logging
+from phantomwright.async_api import async_playwright
+from phantomwright.captcha.cloudfare.solver import CloudflareAutoSolver
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+async def main():
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=False)
+        context = await browser.new_context()
+        solver = CloudflareAutoSolver(
+            context,
+            max_attempts=3,
+            attempt_delay=5,
+            log_callback=logger.info,
+        )
+
+        solver.start()
+        urls = [
+            "https://2captcha.com/demo/cloudflare-turnstile", 
+            "https://2captcha.com/demo/cloudflare-turnstile-challenge"
+            ]
+        for url in urls:
+            page = await context.new_page()
+            await page.goto(url)
+```
+
+**Key Features:**
+
+- **Seamless Background Solving** — Once `solve()` is called, the solver continuously monitors all pages in the context. No manual intervention required, even across navigations on the same page.
+- **Dual Challenge Support** — Handles both Cloudflare **Turnstile** and **Interstitial** challenge types automatically.
+- **Logging Callback** — Provides real-time visibility into captcha events via `log_callback`. Receives JSON strings containing:
+  ```json
+  {
+    "event": "cloudflare_captcha_solve",
+    "url": "https://example.com",
+    "challenge_type": "TURNSTILE",
+    "success": true,
+    "attempts": 1,
+    "duration_sec": 2.345,
+    "error": null,
+    "timestamp": 1736985600.123
+  }
+  ```
+
+> ⚠️ **Note:** To prevent infinite detection loops caused by automatic page refreshes during captcha resolution, manual refreshes on the same URL will **not** trigger the resolve process again.
+
+## Development
+
+### Setup & Test
+
+```bash
+uv venv
+.venv\Scripts\activate
+uv sync --extra dev
+uv run phantomwright_driver install-deps
+uv run phantomwright_driver install
+uv run pytest
+```
+
+### Clear Cache
+
+```bash
+uv cache clean
+```
+
+### Debug Playwright Core
+
+Phantomwright allows debugging both playwright-python and the underlying Node.js playwright-core process.
+
+1. Open Chrome and navigate to `chrome://inspect`
+2. Click "Open dedicated DevTools for Node"
+3. In the **Connection** tab, add `localhost:9229`
+4. Select debug session `Core Repro: Select Case` and pick a minimal repro case
+
+The Node process will pause at the first breakpoint, enabling playwright-core debugging.
+
+## Known Limitations
+
+### Active Bugs
+
+None currently.
+
+### Won't Fix
+
+#### Console Domain Disabled
+
+`Runtime.enable` removal disables `Runtime.consoleAPICalled` event. The following APIs are unavailable:
+
+- ❌ **WebError**
+  ```python
+  page.context.on("weberror", lambda web_error: print(f"uncaught exception: {web_error.error}"))
+  page.context.expect_event("weberror")
+  ```
+
+- ❌ **PageError**
+  ```python
+  page.on("pageerror", lambda exc: print(f"uncaught exception: {exc}"))
+  page.expect_event("pageerror")
+  page.page_errors()
+  ```
+
+- ❌ **ConsoleMessage**
+  ```python
+  page.on("console", lambda msg: print(msg.text))
+  page.expect_console_message()
+  page.console_messages()
+  page.context.wait_for_event("console")
+  page.expect_popup()
+  ```
+
+#### WebSocketRoute Disabled
+
+CDP does not provide endpoints to manipulate WebSocket. Supporting this would require injecting init scripts into MainWorld, which is detectable.
+
+- ❌ **WebSocketRoute**
+  ```python
+  await page.route_web_socket("/ws", handler)
+  ```
+
+#### `add_init_script` Not Compatible with Edge New Tab Page Prerender
+
+As Edge NTP's prerendered New Tab page won't install Playwright route, `add_init_script` won't work in a prerendered session, plz ensure you disabled Edge's prerender when launch browser.
+
+#### `add_init_script` Timing Issue
+
+`add_init_script` cannot directly call bindings exposed by `expose_function`/`expose_binding`. Init scripts are injected into the HTML document and execute before exposed APIs are available.
+
+- ❌ Won't work:
+  ```python
+  args = []
+  await context.expose_function("woof", lambda arg: args.append(arg))
+  await context.add_init_script("woof('context')")
+  await context.new_page()
+  assert args == ["context"]
+  ```
+
+- ✅ Works:
+  ```python
+  args = []
+  await context.expose_function("woof", lambda arg: args.append(arg))
+  page = await context.new_page()
+  await page.evaluate("woof('context')")
+  assert args == ["context"]
+  ```
+
+#### `add_init_script` Doesn't Affect Special URLs
+
+Patchright init scripts use routing, which doesn't trigger for `about:blank`, Data-URIs, `file://` URLs, as well as privilege pages such as `edge://newtab`.
+
+- ❌ **Data-URIs**
+  ```python
+  await page.add_init_script("window.injected = 123")
+  await page.goto("data:text/html,<script>window.result = window.injected</script>")
+  ```
+
+- ❌ **about:blank**
+  ```python
+  await page.add_init_script("window.injected = 123")
+  await page.goto("about:blank")
+  ```
+
+- ❌ **file://**
+  ```python
+  await page.add_init_script("window.injected = 123")
+  await page.goto("file://app/test.html")
+  ```
+
+#### `add_init_script` Only Affects Main World
+
+Init scripts only execute in the main world, not isolated worlds.
+
+```python
+await page.add_init_script("window.injected = 123")
+
+# Main world (browser top context)
+window.injected  # 123
+
+# Isolated world (utility context)
+window.injected  # undefined
+```
+
+#### Popup Blocking Enabled
+
+`--disable-popup-blocking` is removed by default. Can be re-enabled if popup support is needed.
+
+#### Selector Engines Aren't Atomic
+
+```python
+import asyncio
+from phantomwright.async_api import async_playwright
+
+async def main():
+    async with async_playwright() as p:
+        create_dummy_selector = """({
+            create(root, target) { },
+            query(root, selector) {
+              const result = root.querySelector(selector);
+              if (result)
+                Promise.resolve().then(() => result.textContent = 'modified');
+              return result;
+            },
+            queryAll(root, selector) {
+              const result = Array.from(root.querySelectorAll(selector));
+              for (const e of result)
+                Promise.resolve().then(() => e.textContent = 'modified');
+              return result;
+            }
+        })"""
+        
+        await p.selectors.register("innerHtml", create_dummy_selector, content_script=False)
+        
+        browser = await p.chromium.launch(
+            channel="chrome",
+            headless=False
+        )
+        context = await browser.new_context(viewport=None)
+        page = await context.new_page()
+        
+        await page.set_content("<div>Hello</div>")
+        inner = await page.inner_html("innerHtml=div")
+        evaluate = await page.evaluate("() => document.querySelector('div').textContent")
+        
+        print(f"text content via inner HTML = {inner}")
+        print(f"text content via evaluate = {evaluate}")
+        
+        await browser.close()
+
+asyncio.run(main())
+```
+
+Phantomwright results:
+
+```
+text content via inner HTML = modified
+text content via evaluate = modified
+```
+
+Playwright results:
+
+```
+text content via inner HTML = Hello
+text content via evaluate = modified
+```
+
+
+## Acknowledgments
+
+- [patchright](https://pypi.org/project/patchright/)
+- [playwright-stealth](https://pypi.org/project/playwright-stealth/)
