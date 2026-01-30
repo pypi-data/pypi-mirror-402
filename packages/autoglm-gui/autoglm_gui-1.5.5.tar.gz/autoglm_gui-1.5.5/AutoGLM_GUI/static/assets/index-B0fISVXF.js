@@ -1,0 +1,1 @@
+import{aa as o,r as a,j as t}from"./index-CH4jPveL.js";function n(){const e=o();return a.useEffect(()=>{e({to:"/chat"})},[e]),t.jsx("div",{className:"p-2",children:t.jsx("h3",{children:"Welcome Home!"})})}export{n as component};
