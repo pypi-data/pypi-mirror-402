@@ -1,0 +1,506 @@
+# PJPS - Process Viewer on Steroids
+
+A powerful, feature-rich process management utility with both Terminal (TUI) and Graphical (GUI) interfaces. Think of it as `ps` and `htop` combined, with a tree view, advanced filtering, and full signal support.
+
+**Supported Platforms:** Linux, macOS, and Windows Subsystem for Linux (WSL)
+
+## Features
+
+- **Cross-Platform**: Works on Linux (all distros), macOS, and WSL
+- **Dual Interface**: Choose between a Midnight Commander-style TUI or a Tkinter-based GUI
+- **Process Tree View**: Visualize parent-child process relationships with expandable/collapsible nodes
+- **Multiple Sort Options**: Sort by CPU usage, memory usage, PID, process name, user, or start time
+- **Advanced Filtering**: Search processes using simple text matching or regular expressions
+- **Full Signal Support**: Send any Unix signal (1-31) to processes, with descriptions for each
+- **Privilege Escalation**: Automatically prompts for sudo password when signaling processes owned by other users
+- **Mouse Support**: Full mouse interaction in the TUI (click to select, expand/collapse)
+- **Keyboard Navigation**: Comprehensive keyboard shortcuts for power users
+- **Auto-Refresh**: Process list updates automatically every 2 seconds
+- **Internationalization**: Full gettext support with translations for 12+ languages
+
+## Screenshots
+
+### TUI (Terminal User Interface)
+```
++----------------------- PJPS - Process Viewer -----------------------+
+| NAME                    PID    USER       CPU%  MEM%  STATUS  STARTED|
+|[-]systemd                 1    root        0.0   0.1  sleeping Jan 15|
+|  [-]systemd-journal     412    root        0.0   0.2  sleeping Jan 15|
+|  [-]NetworkManager      523    root        0.1   0.3  sleeping Jan 15|
+|  [+]gdm                 892    root        0.0   0.1  sleeping Jan 15|
+|[-]firefox              2341    paige      12.3   4.2  sleeping 10:23 |
+|  |-Web Content         2456    paige       8.1   2.1  sleeping 10:23 |
+|  |-Web Content         2512    paige       3.2   1.8  sleeping 10:24 |
++---------------------------------------------------------------------+
+| Processes: 342/342                                                   |
+| F1 Help F2 Details F3 Search F5 Refresh F6 Sort F7 Kill F10 Quit    |
++---------------------------------------------------------------------+
+```
+
+## Installation
+
+### Quick Install (pip)
+
+```bash
+pip install pjps
+```
+
+### From Source (Development)
+
+```bash
+git clone https://github.com/paigejulianne/pjps.git
+cd pjps
+pip install -e .
+```
+
+---
+
+## System-Wide Installation
+
+### Linux (All Distributions)
+
+#### Option 1: Install via pip (Recommended)
+
+```bash
+# Install system-wide (requires root)
+sudo pip3 install pjps
+
+# Or install for current user only
+pip3 install --user pjps
+# Make sure ~/.local/bin is in your PATH
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+#### Option 2: Install from Source
+
+```bash
+# Clone and install
+git clone https://github.com/paigejulianne/pjps.git
+cd pjps
+sudo pip3 install .
+
+# Or for user-only installation
+pip3 install --user .
+```
+
+#### Option 3: Manual Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/paigejulianne/pjps.git
+cd pjps
+
+# Install dependencies
+sudo apt install python3-pip python3-tk  # Debian/Ubuntu
+sudo dnf install python3-pip python3-tkinter  # Fedora/RHEL
+sudo pacman -S python-pip tk  # Arch Linux
+sudo zypper install python3-pip python3-tk  # openSUSE
+
+# Install pjps
+sudo pip3 install .
+
+# Create symlink (optional, for /usr/local/bin)
+sudo ln -s $(which pjps) /usr/local/bin/pjps
+```
+
+#### Distribution-Specific Dependencies
+
+**Debian/Ubuntu:**
+```bash
+sudo apt update
+sudo apt install python3 python3-pip python3-tk python3-venv
+```
+
+**Fedora/RHEL/CentOS:**
+```bash
+sudo dnf install python3 python3-pip python3-tkinter
+```
+
+**Arch Linux:**
+```bash
+sudo pacman -S python python-pip tk
+```
+
+**openSUSE:**
+```bash
+sudo zypper install python3 python3-pip python3-tk
+```
+
+**Alpine Linux:**
+```bash
+sudo apk add python3 py3-pip tk
+```
+
+---
+
+### macOS
+
+#### Option 1: Install via pip (Recommended)
+
+```bash
+# Using Homebrew Python (recommended)
+brew install python python-tk
+pip3 install pjps
+
+# Or using system Python
+pip3 install --user pjps
+```
+
+#### Option 2: Install from Source
+
+```bash
+# Install Homebrew if not already installed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install Python with Tkinter support
+brew install python python-tk
+
+# Clone and install
+git clone https://github.com/paigejulianne/pjps.git
+cd pjps
+pip3 install .
+```
+
+#### Option 3: Using MacPorts
+
+```bash
+sudo port install python311 py311-pip py311-tkinter
+pip3 install pjps
+```
+
+#### macOS Notes
+
+- macOS uses different signal numbers than Linux for some signals
+- The `io_counters()` feature is not available on macOS
+- Tkinter may require additional setup: `brew install python-tk@3.11`
+
+---
+
+### Windows Subsystem for Linux (WSL)
+
+WSL1 and WSL2 are both supported. PJPS runs natively in the Linux environment.
+
+#### WSL2 (Recommended)
+
+```bash
+# Update packages
+sudo apt update && sudo apt upgrade -y
+
+# Install dependencies
+sudo apt install python3 python3-pip python3-tk python3-venv
+
+# Install pjps
+pip3 install pjps
+
+# For GUI support, install an X server on Windows (e.g., VcXsrv, X410)
+# Then set the DISPLAY variable:
+echo 'export DISPLAY=$(cat /etc/resolv.conf | grep nameserver | awk '\''{print $2}'\''):0' >> ~/.bashrc
+source ~/.bashrc
+```
+
+#### WSL1
+
+```bash
+# Install dependencies
+sudo apt update
+sudo apt install python3 python3-pip python3-tk
+
+# Install pjps
+pip3 install pjps
+
+# For GUI support:
+export DISPLAY=:0
+```
+
+#### GUI Support in WSL
+
+To use the GUI (`pjps --gui`) in WSL, you need an X server running on Windows:
+
+1. **Install an X Server** (choose one):
+   - [VcXsrv](https://sourceforge.net/projects/vcxsrv/) (free)
+   - [X410](https://x410.dev/) (paid, from Microsoft Store)
+   - [MobaXterm](https://mobaxterm.mobatek.net/) (free, includes X server)
+
+2. **Configure the X Server**:
+   - Launch VcXsrv with "Disable access control" checked
+   - Or run: `xhost +local:` on the X server
+
+3. **Set DISPLAY in WSL**:
+   ```bash
+   # For WSL2
+   export DISPLAY=$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}'):0
+   
+   # For WSL1
+   export DISPLAY=:0
+   ```
+
+4. **Launch the GUI**:
+   ```bash
+   pjps --gui
+   ```
+
+---
+
+## Verifying Installation
+
+After installation, verify PJPS is working:
+
+```bash
+# Check version
+pjps --version
+
+# Launch TUI
+pjps
+
+# Launch GUI
+pjps --gui
+
+# Test Python import
+python3 -c "from pjps import ProcessManager, CURRENT_PLATFORM; print(f'Platform: {CURRENT_PLATFORM.value}')"
+```
+
+---
+
+## Uninstallation
+
+```bash
+# If installed via pip
+pip3 uninstall pjps
+
+# If installed system-wide
+sudo pip3 uninstall pjps
+```
+
+---
+
+## Usage
+
+### Launch TUI (default)
+```bash
+pjps
+# or explicitly
+pjps --tui
+```
+
+### Launch GUI
+```bash
+pjps --gui
+```
+
+### Command Line Options
+```
+usage: pjps [-h] [-v] [-t | -g] [--no-refresh]
+
+options:
+  -h, --help      show this help message and exit
+  -v, --version   show program's version number and exit
+  -t, --tui       Launch terminal user interface (default)
+  -g, --gui       Launch graphical user interface
+  --no-refresh    Disable auto-refresh (useful for debugging)
+```
+
+## Keyboard Shortcuts (TUI)
+
+| Key | Action |
+|-----|--------|
+| F1, h, ? | Show help |
+| F2, d | Show process details |
+| F3, / | Search/filter processes |
+| F4 | Toggle regex filter mode |
+| F5, r | Refresh process list |
+| F6, s | Sort by column |
+| F7, k | Kill process (SIGKILL) |
+| F8, K | Send signal to process |
+| F9 | Toggle expand/collapse all |
+| F10, q | Quit |
+| Enter, Space | Toggle tree node expand/collapse |
+| +/- | Expand/collapse all nodes |
+| 1-6 | Quick sort (1=CPU, 2=Mem, 3=PID, 4=Name, 5=User, 6=Time) |
+| Arrow keys | Navigate |
+| Page Up/Down | Scroll page |
+| Home/End | Go to first/last |
+
+## Mouse Support (TUI)
+
+- **Click [+]/[-]**: Expand or collapse a process tree node
+- **Click process**: Select a process
+
+## Signals
+
+PJPS supports all standard Unix signals. Signal numbers may differ between Linux and macOS:
+
+| Signal | Linux | macOS | Description |
+|--------|-------|-------|-------------|
+| SIGHUP | 1 | 1 | Hangup |
+| SIGINT | 2 | 2 | Interrupt |
+| SIGKILL | 9 | 9 | Kill (cannot be caught) |
+| SIGTERM | 15 | 15 | Terminate (graceful) |
+| SIGSTOP | 19 | 17 | Stop process |
+| SIGCONT | 18 | 19 | Continue stopped process |
+
+Use F8 (TUI) or the Signal menu (GUI) to see all available signals for your platform.
+
+## Internationalization
+
+PJPS includes translations for the following languages:
+
+- English (default)
+- French (fr)
+- Spanish (es)
+- German (de)
+- Portuguese (pt)
+- Italian (it)
+- Chinese Simplified (zh_CN)
+- Japanese (ja)
+- Russian (ru)
+- Korean (ko)
+- Dutch (nl)
+- Polish (pl)
+- Arabic (ar)
+
+To contribute a new translation:
+
+1. Copy `pjps/locale/pjps.pot` to `pjps/locale/<lang>/LC_MESSAGES/pjps.po`
+2. Translate the strings in the .po file
+3. Compile with: `msgfmt pjps.po -o pjps.mo`
+4. Submit a pull request
+
+## Development
+
+### Project Structure
+```
+pjps/
+├── LICENSE              # MIT License
+├── README.md            # This file
+├── pyproject.toml       # Package configuration
+├── requirements.txt     # Dependencies
+└── pjps/
+    ├── __init__.py      # Package initialization
+    ├── __main__.py      # CLI entry point
+    ├── core.py          # Process management logic
+    ├── gui.py           # Tkinter GUI
+    ├── tui.py           # Urwid TUI
+    ├── locale.py        # Internationalization setup
+    ├── platform.py      # Cross-platform support
+    └── locale/
+        ├── pjps.pot     # Translation template
+        ├── fr/          # French translation
+        ├── es/          # Spanish translation
+        ├── de/          # German translation
+        └── ...          # Other languages
+```
+
+### Running Tests
+```bash
+# Verify the package imports correctly
+python3 -c "from pjps import ProcessManager, CURRENT_PLATFORM; pm = ProcessManager(); pm.refresh(); print(f'Platform: {CURRENT_PLATFORM.value}, Processes: {len(pm.processes)}')"
+```
+
+### Generating Translation Template
+```bash
+xgettext --language=Python --keyword=_ --keyword=ngettext:1,2 \
+  --output=pjps/locale/pjps.pot --from-code=UTF-8 \
+  --package-name=pjps --package-version=1.0.0 \
+  pjps/*.py
+```
+
+### Compiling Translations
+```bash
+# Compile all translations
+for lang in fr es de pt it zh_CN ja ru ko nl pl ar; do
+  msgfmt pjps/locale/$lang/LC_MESSAGES/pjps.po -o pjps/locale/$lang/LC_MESSAGES/pjps.mo
+done
+```
+
+## Platform-Specific Notes
+
+### Linux
+- Full feature support
+- Works with all major distributions
+- Uses `/proc` filesystem via psutil
+
+### macOS
+- Full feature support with minor differences
+- `io_counters()` (disk I/O stats) not available
+- Signal numbers differ from Linux (handled automatically)
+- Requires Tkinter: `brew install python-tk`
+
+### WSL (Windows Subsystem for Linux)
+- Full TUI support
+- GUI requires X server on Windows host
+- WSL2 recommended for better performance
+- Detected automatically via `/proc/version`
+
+## Requirements
+
+- **Python**: 3.8 or higher
+- **Operating System**: Linux, macOS, or WSL
+- **Terminal**: Color support (for TUI)
+- **Display Server**: X11, Wayland, or macOS Aqua (for GUI)
+
+### Python Dependencies
+
+- **psutil** >= 5.9.0 - Cross-platform process utilities
+- **urwid** >= 2.1.0 - Console user interface library
+
+Dependencies are automatically installed via pip.
+
+## Troubleshooting
+
+### TUI not displaying colors
+- Ensure your terminal supports colors
+- Try: `export TERM=xterm-256color`
+
+### GUI not launching
+- **Linux**: Install tkinter: `sudo apt install python3-tk`
+- **macOS**: Install via Homebrew: `brew install python-tk`
+- **WSL**: Set up X server (see WSL section above)
+
+### Permission errors when sending signals
+- PJPS will prompt for sudo password automatically
+- Ensure your user is in the sudoers file
+
+### "Module not found" errors
+- Reinstall: `pip3 install --force-reinstall pjps`
+- Check Python path: `python3 -c "import sys; print(sys.path)"`
+
+## License
+
+MIT License
+
+Copyright (c) 2026 Paige Julianne Sullivan
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## Author
+
+**Paige Julianne Sullivan**
+
+- GitHub: [@paigejulianne](https://github.com/paigejulianne)
