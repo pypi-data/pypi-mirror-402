@@ -1,0 +1,3683 @@
+from collections.abc import (
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Iterator,
+    MutableMapping,
+    Sequence,
+)
+from contextlib import AbstractContextManager, asynccontextmanager
+from ssl import SSLContext
+from typing import IO, Any, Literal, overload
+
+from mas.schema.climate import climate_capnp
+from mas.schema.cluster import cluster_admin_service_capnp
+from mas.schema.common import common_capnp, date_capnp
+from mas.schema.config import config_capnp
+from mas.schema.crop import crop_capnp
+from mas.schema.dakis.modam import modam_capnp
+from mas.schema.data import field_exp_data_capnp
+from mas.schema.fbp import fbp_capnp
+from mas.schema.geo import geo_capnp
+from mas.schema.grid import grid_capnp
+from mas.schema.jobs import jobs_capnp
+from mas.schema.management import management_capnp
+from mas.schema.model import model_capnp
+from mas.schema.model.monica import (
+    monica_management_capnp,
+    monica_params_capnp,
+    monica_state_capnp,
+)
+from mas.schema.model.weberest import web_berest_data_import_capnp
+from mas.schema.model.yieldstat import yieldstat_capnp
+from mas.schema.persistence import persistence_capnp
+from mas.schema.registry import registry_capnp
+from mas.schema.service import service_capnp
+from mas.schema.soil import soil_capnp, soil_params_capnp
+from mas.schema.storage import storage_capnp
+
+# Type alias for anypointer to reflect what is really allowed for anypointer inputs
+# Generated imports for project-specific types
+from mas.schema.test import a_capnp, x_capnp
+
+# Import schema.capnp types for precise node property types
+# These are _DynamicStructReader at runtime but typed more precisely
+from schema_capnp import FieldReader as _SchemaFieldReader
+from schema_capnp import NodeReader as _SchemaNodeReader
+
+from .._internal import CapnpModule as _CapnpModule
+from .._internal import CapnpTypesModule as _CapnpTypesModule
+from .._internal import (
+    Server as _Server,
+)
+
+type AnyPointer = (
+    str
+    | bytes
+    | _DynamicStructBuilder
+    | _DynamicStructReader
+    | _DynamicCapabilityClient
+    | _DynamicCapabilityServer
+    | _DynamicListBuilder
+    | _DynamicListReader
+    | _DynamicObjectReader
+    | _DynamicObjectBuilder
+)
+type Capability = (
+    _DynamicCapabilityClient
+    | _DynamicCapabilityServer
+    | _DynamicObjectReader
+    | _DynamicObjectBuilder
+)
+type AnyStruct = (
+    _DynamicStructBuilder
+    | _DynamicStructReader
+    | _DynamicObjectReader
+    | _DynamicObjectBuilder
+)
+type AnyList = (
+    _DynamicListBuilder
+    | _DynamicListReader
+    | _DynamicObjectReader
+    | _DynamicObjectBuilder
+)
+type _CapnpModuleType = _CapnpModule
+
+types: _CapnpTypesModule
+
+class KjException(Exception):
+    """Exception raised by Cap'n Proto operations.
+
+    KjException is a wrapper of the internal C++ exception type.
+    It contains an enum named `Type` and several properties providing
+    information about the exception.
+    """
+
+    class Type:
+        """Exception type enumeration."""
+
+        FAILED: str
+        OVERLOADED: str
+        DISCONNECTED: str
+        UNIMPLEMENTED: str
+        OTHER: str
+        reverse_mapping: dict[int, str]
+
+    message: str | None
+    nature: str | None
+    durability: str | None
+    wrapper: Any
+
+    def file(self) -> str:
+        """Source file where the exception occurred."""
+
+    def line(self) -> int:
+        """Line number where the exception occurred."""
+
+    def type(self) -> str | None:
+        """Exception type (one of the Type enum values)."""
+
+    def description(self) -> str:
+        """Human-readable description of the exception."""
+
+    def __init__(
+        self,
+        message: str | None = None,
+        nature: str | None = None,
+        durability: str | None = None,
+        wrapper: Any = None,
+        type: str | None = None,
+    ) -> None: ...
+    def _to_python(self) -> Exception:
+        """Convert to a more specific Python exception if appropriate."""
+
+class _NestedNodeReader:
+    """pycapnp's internal representation of a nested node in a schema.
+
+    This is distinct from schema_capnp.NestedNodeReader which is a _DynamicStructReader.
+    This type is returned by _NodeReader.nestedNodes.
+    """
+
+    @property
+    def id(self) -> int:
+        """The ID of the nested node."""
+
+    @property
+    def name(self) -> str:
+        """The name of the nested node."""
+
+class _List_NestedNode_Reader:
+    """pycapnp's internal list of nested nodes.
+
+    This is distinct from schema_capnp list types which are _DynamicListReader.
+    """
+
+    def __len__(self) -> int: ...
+    def __getitem__(self, index: int) -> _NestedNodeReader: ...
+    def __iter__(self) -> Iterator[_NestedNodeReader]: ...
+
+class _NodeReader:
+    """pycapnp's internal representation of a schema node.
+
+    This is distinct from schema_capnp.NodeReader which is a _DynamicStructReader.
+    This type is returned by _Schema.get_proto() and can be passed to SchemaLoader.load().
+    """
+
+    @property
+    def displayName(self) -> str:
+        """The display name of the node."""
+
+    @property
+    def id(self) -> int:
+        """The unique ID of the node."""
+
+    @property
+    def isConst(self) -> bool:
+        """Whether this node is a constant."""
+
+    @property
+    def isEnum(self) -> bool:
+        """Whether this node is an enum."""
+
+    @property
+    def isInterface(self) -> bool:
+        """Whether this node is an interface."""
+
+    @property
+    def isStruct(self) -> bool:
+        """Whether this node is a struct."""
+
+    @property
+    def nestedNodes(self) -> _List_NestedNode_Reader:
+        """List of nested nodes."""
+
+    @property
+    def node(self) -> _SchemaNodeReader:
+        """Access the underlying schema.capnp Node reader."""
+
+    @property
+    def scopeId(self) -> int:
+        """The scope ID of this node."""
+
+class _StructSchemaField:
+    """pycapnp's internal representation of a field in a struct schema.
+
+    This is distinct from schema_capnp.FieldReader which is a _DynamicStructReader.
+    This type is returned by _StructSchema.fields and _StructSchema.fields_list.
+    """
+
+    @property
+    def proto(self) -> _SchemaFieldReader:
+        """The field's schema as a schema.capnp Field reader."""
+
+    @property
+    def schema(self) -> _StructSchema | _EnumSchema | _InterfaceSchema:
+        """The schema of the field's type.
+
+        Note: For list fields, use the field's slot.type to get element type info.
+        This property may raise for primitive/unknown types.
+        """
+
+class _InterfaceMethod:
+    param_type: _StructSchema
+    result_type: _StructSchema
+
+class _Schema:
+    """Base class for _StructSchema and _ParsedSchema"""
+
+    def as_const_value(self) -> Any: ...
+    @property
+    def node(self) -> _SchemaNodeReader: ...
+    def as_enum(self) -> _EnumSchema: ...
+    def as_interface(self) -> _InterfaceSchema: ...
+    def as_struct(self) -> _StructSchema: ...
+    def get_proto(self) -> _NodeReader: ...
+
+class _ParsedSchema(_Schema):
+    def get_nested(self, name: str) -> _ParsedSchema: ...
+
+class _StructSchema(_Schema):
+    @property
+    def fieldnames(self) -> tuple[str, ...]:
+        """A tuple of the field names in the struct."""
+
+    @property
+    def union_fields(self) -> tuple[str, ...]:
+        """A tuple of the field names in the struct."""
+
+    @property
+    def non_union_fields(self) -> tuple[str, ...]:
+        """A tuple of the field names in the struct."""
+
+    @property
+    def fields(self) -> dict[str, _StructSchemaField]:
+        """All of the _StructSchemaField in this schema as a dict"""
+
+    @property
+    def fields_list(self) -> list[_StructSchemaField]:
+        """All of the _StructSchemaField in this schema as a list"""
+
+class _EnumSchema:
+    """Schema for enum types.
+
+    Provides access to enum schema information.
+    Only accessible from capnp.lib.capnp, not from capnp directly.
+    """
+
+    @property
+    def enumerants(self) -> dict[str, int]:
+        """The list of enumerants as a dictionary"""
+
+    @property
+    def node(self) -> _SchemaNodeReader:
+        """The raw schema node"""
+
+class _InterfaceSchema:
+    """Schema for interface types, parameterized by the interface type.
+
+    Provides access to interface schema information.
+    Only accessible from capnp.lib.capnp, not from capnp directly.
+    """
+
+    @property
+    def method_names(self) -> tuple[str, ...]:
+        """A tuple of the function names in the interface."""
+
+    @property
+    def method_names_inherited(self) -> set[str]:
+        """A set of the function names in the interface, including inherited methods"""
+
+    @property
+    def methods(self) -> dict[str, _InterfaceMethod]:
+        """A mapping of method names to their respective _InterfaceMethod"""
+
+    @property
+    def methods_inherited(self) -> dict[str, _InterfaceMethod]:
+        """A mapping of method names to their respective _InterfaceMethod, including inherited methods"""
+
+    @property
+    def superclasses(self) -> list[Any]:
+        """A list of superclasses for this interface"""
+    @property
+    def node(self) -> _SchemaNodeReader:
+        """The raw schema node"""
+
+class _ListSchema:
+    """Schema for list types.
+
+    Can be instantiated to create list schemas for different element types.
+    """
+
+    def __init__(
+        self,
+        schema: (
+            _StructSchema
+            | _EnumSchema
+            | _InterfaceSchema
+            | _ListSchema
+            | _SchemaType
+            | None
+        ) = None,
+    ) -> None:
+        """Create a list schema for the given element type.
+
+        Args:
+            schema: Element type schema. Can be:
+                - A struct schema (_StructSchema or StructSchema)
+                - An enum schema (_EnumSchema)
+                - An interface schema (_InterfaceSchema)
+                - Another list schema (_ListSchema) for nested lists
+                - A primitive type (_SchemaType, e.g., capnp.types.Int8)
+                - Any object with a .schema attribute
+                - None (creates uninitialized schema)
+
+        """
+    @property
+    def elementType(
+        self,
+    ) -> _StructSchema | _EnumSchema | _InterfaceSchema | _ListSchema:
+        """The schema of the element type of this list.
+
+        Returns:
+            Schema of the list element type:
+            - _StructSchema for struct elements
+            - _EnumSchema for enum elements
+            - _InterfaceSchema for interface elements
+            - _ListSchema for nested list elements
+
+        Raises:
+            KjException: When the element type is a primitive type (Int32, Text, Bool, etc.)
+                with message "Schema type is unknown"
+
+        """
+
+class _StructModule:
+    """Module/class for a generated struct type.
+
+    Instances of this class are what you get when you access a struct class from
+    a loaded schema (e.g. `addressbook.Person`). The module exposes factory and
+    I/O helpers for that struct type.
+
+    Nested types (structs, enums, interfaces) are accessed as attributes, not methods.
+    """
+
+    def __init__(self, schema: _StructSchema, name: str) -> None: ...
+    def __getattr__(self, name: str) -> Any: ...
+    def __setattr__(self, name: str, value: Any) -> None: ...
+    @property
+    def schema(self) -> _StructSchema: ...
+    def new_message(
+        self,
+        num_first_segment_words: int | None = None,
+        allocate_seg_callable: Callable[[int], bytearray] | None = None,
+        **kwargs: Any,
+    ) -> _DynamicStructBuilder:
+        """Create a new in-memory message builder for this struct type.
+
+        Args:
+            num_first_segment_words: Initial size of the first segment in 8-byte words
+            allocate_seg_callable: Custom allocator function that takes the minimum
+                number of 8-byte words to allocate and returns a bytearray
+            **kwargs: Additional keyword arguments
+
+        Returns:
+            A builder instance for this struct type
+
+        """
+
+    def read(
+        self,
+        file: IO[str] | IO[bytes],
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> _DynamicStructReader:
+        """Read a struct of this type from a file-like object and return a reader.
+
+        Args:
+            file: File-like object with a fileno() method (opened file, socket, etc.)
+                  Does NOT accept BytesIO or other pure-Python file-like objects
+            traversal_limit_in_words: Optional limit on pointer dereferences
+            nesting_limit: Optional limit on nesting depth
+
+        Returns:
+            A reader for this struct type
+
+        """
+
+    def read_packed(
+        self,
+        file: IO[str] | IO[bytes],
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> _DynamicStructReader:
+        """Read a packed-format struct from a file-like object and return a reader.
+
+        Args:
+            file: File-like object with a fileno() method (opened file, socket, etc.)
+                  Does NOT accept BytesIO or other pure-Python file-like objects
+            traversal_limit_in_words: Optional limit on pointer dereferences
+            nesting_limit: Optional limit on nesting depth
+
+        Returns:
+            A reader for this struct type
+
+        """
+
+    @overload
+    def from_bytes(
+        self,
+        buf: bytes,
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> AbstractContextManager[_DynamicStructReader]:
+        """Create a reader for this struct type from a bytes buffer (unpacked).
+
+        Returns a context manager that yields a reader. The context manager must be
+        used to ensure proper memory management.
+
+        Args:
+            buf: Bytes buffer containing the serialized message
+            traversal_limit_in_words: Optional limit on pointer dereferences
+            nesting_limit: Optional limit on nesting depth
+
+        Returns:
+            Context manager yielding a reader for this struct type
+
+        Example:
+            with Person.from_bytes(data) as reader:
+                print(reader.name)
+
+        """
+
+    @overload
+    def from_bytes(
+        self,
+        buf: bytes,
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+        *,
+        builder: Literal[False],
+    ) -> AbstractContextManager[_DynamicStructReader]:
+        """Create a reader for this struct type from a bytes buffer (unpacked).
+
+        Returns a context manager that yields a reader. The context manager must be
+        used to ensure proper memory management.
+
+        Args:
+            buf: Bytes buffer containing the serialized message
+            traversal_limit_in_words: Optional limit on pointer dereferences
+            nesting_limit: Optional limit on nesting depth
+            builder: If False, returns a reader
+
+        Returns:
+            Context manager yielding a reader for this struct type
+
+        Example:
+            with Person.from_bytes(data, builder=False) as reader:
+                print(reader.name)
+
+        """
+
+    @overload
+    def from_bytes(
+        self,
+        buf: bytes,
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+        *,
+        builder: Literal[True],
+    ) -> AbstractContextManager[_DynamicStructBuilder]:
+        """Create a builder for this struct type from a bytes buffer (unpacked).
+
+        Returns a context manager that yields a builder. The context manager must be
+        used to ensure proper memory management.
+
+        Args:
+            buf: Bytes buffer containing the serialized message
+            traversal_limit_in_words: Optional limit on pointer dereferences
+            nesting_limit: Optional limit on nesting depth
+            builder: If True, returns a builder (mutable)
+
+        Returns:
+            Context manager yielding a builder for this struct type
+
+        Example:
+            with Person.from_bytes(data, builder=True) as builder:
+                builder.name = "New Name"
+
+        """
+
+    def from_bytes_packed(
+        self,
+        buf: bytes,
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> _DynamicStructReader:
+        """Create a reader for this struct type from a packed bytes buffer.
+
+        Args:
+            buf: Packed bytes buffer containing the serialized message
+            traversal_limit_in_words: Optional limit on pointer dereferences
+            nesting_limit: Optional limit on nesting depth
+
+        Returns:
+            A reader for this struct type
+
+        """
+
+    def from_segments(
+        self,
+        segments: Sequence[bytes],
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> _DynamicStructReader:
+        """Create a reader for this struct type from a list of segment bytes.
+
+        Args:
+            segments: List of byte arrays, one for each segment
+            traversal_limit_in_words: Optional limit on pointer dereferences
+            nesting_limit: Optional limit on nesting depth
+
+        Returns:
+            A reader for this struct type
+
+        """
+
+    async def read_async(
+        self,
+        stream: AsyncIoStream,
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> _DynamicStructReader:
+        """Asynchronously read a struct of this type from an AsyncIoStream.
+
+        Args:
+            stream: AsyncIoStream to read from
+            traversal_limit_in_words: Optional limit on pointer dereferences
+            nesting_limit: Optional limit on nesting depth
+
+        Returns:
+            A reader for this struct type
+
+        """
+
+    def read_multiple(
+        self,
+        file: IO[str] | IO[bytes],
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+        skip_copy: bool = False,
+    ) -> Iterator[_DynamicStructReader]:
+        """Read multiple structs of this type from a file-like object.
+
+        Args:
+            file: File-like object with a fileno() method (opened file, socket, etc.)
+                  Does NOT accept BytesIO or other pure-Python file-like objects
+            traversal_limit_in_words: Optional limit on pointer dereferences
+            nesting_limit: Optional limit on nesting depth
+            skip_copy: If True, skip copying data (use with caution)
+
+        Returns:
+            Iterator yielding readers for each message in the file
+
+        """
+
+    def read_multiple_bytes(
+        self,
+        buf: bytes,
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> Iterator[_DynamicStructReader]:
+        """Read multiple structs of this type from a bytes buffer.
+
+        Args:
+            buf: Bytes buffer containing multiple serialized messages
+            traversal_limit_in_words: Optional limit on pointer dereferences
+            nesting_limit: Optional limit on nesting depth
+
+        Returns:
+            Iterator yielding readers for each message in the buffer
+
+        """
+
+    def read_multiple_bytes_packed(
+        self,
+        buf: bytes,
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> Iterator[_DynamicStructReader]:
+        """Read multiple packed structs of this type from a bytes buffer.
+
+        Args:
+            buf: Packed bytes buffer containing multiple serialized messages
+            traversal_limit_in_words: Optional limit on pointer dereferences
+            nesting_limit: Optional limit on nesting depth
+
+        Returns:
+            Iterator yielding readers for each message in the buffer
+
+        """
+
+    def read_multiple_packed(
+        self,
+        file: IO[str] | IO[bytes],
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+        skip_copy: bool = False,
+    ) -> Iterator[_DynamicStructReader]:
+        """Read multiple packed structs of this type from a file-like object.
+
+        Args:
+            file: File-like object with a fileno() method (opened file, socket, etc.)
+                  Does NOT accept BytesIO or other pure-Python file-like objects
+            traversal_limit_in_words: Optional limit on pointer dereferences
+            nesting_limit: Optional limit on nesting depth
+            skip_copy: If True, skip copying data (use with caution)
+
+        Returns:
+            Iterator yielding readers for each message in the file
+
+        """
+
+class _DynamicObjectReader:
+    """Reader for Cap'n Proto AnyPointer type.
+
+    This class wraps the Cap'n Proto C++ DynamicObject::Reader.
+    AnyPointer can be cast to different pointer types (struct, list, text, interface).
+    """
+
+    @overload
+    def as_interface(
+        self,
+        schema: climate_capnp._AlterTimeSeriesWrapperInterfaceModule,
+    ) -> climate_capnp.AlterTimeSeriesWrapperClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: model_capnp._EnvInstanceProxyInterfaceModule,
+    ) -> model_capnp.EnvInstanceProxyClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: model_capnp._EnvInstanceInterfaceModule,
+    ) -> model_capnp.EnvInstanceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: climate_capnp._DatasetInterfaceModule,
+    ) -> climate_capnp.DatasetClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: climate_capnp._ServiceInterfaceModule,
+    ) -> climate_capnp.ServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: climate_capnp._TimeSeriesInterfaceModule,
+    ) -> climate_capnp.TimeSeriesClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: common_capnp._IdentifiableHolderInterfaceModule,
+    ) -> common_capnp.IdentifiableHolderClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: crop_capnp._CropInterfaceModule,
+    ) -> crop_capnp.CropClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: fbp_capnp._ChannelInterfaceModule,
+    ) -> fbp_capnp.ChannelClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: fbp_capnp._ChannelInterfaceModule._ReaderInterfaceModule,
+    ) -> fbp_capnp.ReaderClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: fbp_capnp._ChannelInterfaceModule._WriterInterfaceModule,
+    ) -> fbp_capnp.WriterClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: fbp_capnp._ProcessInterfaceModule,
+    ) -> fbp_capnp.ProcessClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: grid_capnp._GridInterfaceModule,
+    ) -> grid_capnp.GridClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: jobs_capnp._ServiceInterfaceModule,
+    ) -> jobs_capnp.ServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: management_capnp._FertilizerInterfaceModule,
+    ) -> management_capnp.FertilizerClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: persistence_capnp._GatewayInterfaceModule,
+    ) -> persistence_capnp.GatewayClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: persistence_capnp._HostPortResolverInterfaceModule,
+    ) -> persistence_capnp.HostPortResolverClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: soil_capnp._ProfileInterfaceModule,
+    ) -> soil_capnp.ProfileClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: soil_capnp._ServiceInterfaceModule,
+    ) -> soil_capnp.ServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: storage_capnp._StoreInterfaceModule,
+    ) -> storage_capnp.StoreClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: storage_capnp._StoreInterfaceModule._ContainerInterfaceModule,
+    ) -> storage_capnp.ContainerClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: climate_capnp._AlterTimeSeriesWrapperFactoryInterfaceModule,
+    ) -> climate_capnp.AlterTimeSeriesWrapperFactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: climate_capnp._CSVTimeSeriesFactoryInterfaceModule,
+    ) -> climate_capnp.CSVTimeSeriesFactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: cluster_admin_service_capnp._ClusterStructModule._AdminMasterInterfaceModule,
+    ) -> cluster_admin_service_capnp.AdminMasterClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: cluster_admin_service_capnp._ClusterStructModule._ModelInstanceFactoryInterfaceModule,
+    ) -> cluster_admin_service_capnp.ModelInstanceFactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: cluster_admin_service_capnp._ClusterStructModule._RuntimeInterfaceModule,
+    ) -> cluster_admin_service_capnp.RuntimeClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: cluster_admin_service_capnp._ClusterStructModule._UserMasterInterfaceModule,
+    ) -> cluster_admin_service_capnp.UserMasterClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: common_capnp._FactoryInterfaceModule,
+    ) -> common_capnp.FactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: common_capnp._IOFactoryInterfaceModule,
+    ) -> common_capnp.IOFactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: crop_capnp._ServiceInterfaceModule,
+    ) -> crop_capnp.ServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: fbp_capnp._ProcessInterfaceModule._FactoryInterfaceModule,
+    ) -> fbp_capnp.FactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: fbp_capnp._RunnableInterfaceModule,
+    ) -> fbp_capnp.RunnableClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: fbp_capnp._StartChannelsServiceInterfaceModule,
+    ) -> fbp_capnp.StartChannelsServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: management_capnp._FertilizerServiceInterfaceModule,
+    ) -> management_capnp.FertilizerServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: management_capnp._ServiceInterfaceModule,
+    ) -> management_capnp.ServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: model_capnp._ClimateInstanceInterfaceModule,
+    ) -> model_capnp.ClimateInstanceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: model_capnp._InstanceFactoryInterfaceModule,
+    ) -> model_capnp.InstanceFactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: monica_management_capnp._ServiceInterfaceModule,
+    ) -> monica_management_capnp.ServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: registry_capnp._AdminInterfaceModule,
+    ) -> registry_capnp.AdminClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: registry_capnp._RegistrarInterfaceModule,
+    ) -> registry_capnp.RegistrarClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: registry_capnp._RegistryInterfaceModule,
+    ) -> registry_capnp.RegistryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: service_capnp._AdminInterfaceModule,
+    ) -> service_capnp.AdminClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: service_capnp._FactoryInterfaceModule,
+    ) -> service_capnp.FactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: service_capnp._SimpleFactoryInterfaceModule,
+    ) -> service_capnp.SimpleFactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: climate_capnp._DatasetInterfaceModule._GetLocationsCallbackInterfaceModule,
+    ) -> climate_capnp.GetLocationsCallbackClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: climate_capnp._MetadataStructModule._InformationInterfaceModule,
+    ) -> climate_capnp.InformationClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: climate_capnp._MetadataStructModule._SupportedInterfaceModule,
+    ) -> climate_capnp.SupportedClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: cluster_admin_service_capnp._ClusterStructModule._UnregisterInterfaceModule,
+    ) -> cluster_admin_service_capnp.UnregisterClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: cluster_admin_service_capnp._ClusterStructModule._ValueHolderInterfaceModule,
+    ) -> cluster_admin_service_capnp.ValueHolderClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: common_capnp._HolderInterfaceModule,
+    ) -> common_capnp.HolderClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: common_capnp._IdentifiableInterfaceModule,
+    ) -> common_capnp.IdentifiableClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: config_capnp._ServiceInterfaceModule,
+    ) -> config_capnp.ServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: modam_capnp._ModamWrapperServiceInterfaceModule,
+    ) -> modam_capnp.ModamWrapperServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: fbp_capnp._ProcessInterfaceModule._StateTransitionInterfaceModule,
+    ) -> fbp_capnp.StateTransitionClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: grid_capnp._GridInterfaceModule._CallbackInterfaceModule,
+    ) -> grid_capnp.CallbackClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: model_capnp._EnvInstanceProxyInterfaceModule._UnregisterInterfaceModule,
+    ) -> model_capnp.UnregisterClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: web_berest_data_import_capnp._DWLABImportInterfaceModule,
+    ) -> web_berest_data_import_capnp.DWLABImportClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: persistence_capnp._GatewayRegistrableInterfaceModule,
+    ) -> persistence_capnp.GatewayRegistrableClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: persistence_capnp._HeartbeatInterfaceModule,
+    ) -> persistence_capnp.HeartbeatClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: persistence_capnp._HostPortResolverInterfaceModule._RegistrarInterfaceModule,
+    ) -> persistence_capnp.RegistrarClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: persistence_capnp._PersistentInterfaceModule,
+    ) -> persistence_capnp.PersistentClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: persistence_capnp._PersistentInterfaceModule._ReleaseSturdyRefInterfaceModule,
+    ) -> persistence_capnp.ReleaseSturdyRefClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: persistence_capnp._RestorerInterfaceModule,
+    ) -> persistence_capnp.RestorerClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: registry_capnp._RegistrarInterfaceModule._UnregisterInterfaceModule,
+    ) -> registry_capnp.UnregisterClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: service_capnp._StoppableInterfaceModule,
+    ) -> service_capnp.StoppableClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: soil_capnp._ServiceInterfaceModule._StreamInterfaceModule,
+    ) -> soil_capnp.StreamClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: storage_capnp._StoreInterfaceModule._ContainerInterfaceModule._EntryInterfaceModule,
+    ) -> storage_capnp.EntryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(self, schema: a_capnp._AInterfaceModule) -> a_capnp.AClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(self, schema: x_capnp._XInterfaceModule) -> x_capnp.XClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(self, schema: x_capnp._YInterfaceModule) -> x_capnp.YClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(self, schema: x_capnp._ZInterfaceModule) -> x_capnp.ZClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_interface(
+        self,
+        schema: _InterfaceSchema | _InterfaceModule,
+    ) -> _DynamicCapabilityClient: ...  # type: ignore[reportOverlappingOverload]
+    def as_interface(
+        self,
+        schema: _InterfaceSchema | _InterfaceModule,
+    ) -> _DynamicCapabilityClient:
+        """Cast this AnyPointer to an interface capability.
+
+        The return type matches the interface type parameterized in the schema.
+
+        Args:
+            schema: The interface schema to cast to (e.g., MyInterface.schema).
+
+        Returns:
+            A capability client of the interface type.
+
+        Example:
+            iface = anyptr.as_interface(MyInterface.schema)  # Returns MyInterface
+
+        """
+
+    def as_list(self, schema: _ListSchema) -> Any:
+        """Cast this AnyPointer to a list.
+
+        Args:
+            schema: The list schema to cast to.
+
+        Returns:
+            A list reader.
+
+        """
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule._AutomaticSowingStructModule._AvgSoilTempStructModule,
+    ) -> monica_management_capnp.AvgSoilTempReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule._CuttingStructModule._SpecStructModule,
+    ) -> monica_management_capnp.SpecReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule._DailyWeatherStructModule._KVStructModule,
+    ) -> monica_management_capnp.KVReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule._HarvestStructModule._OptCarbonMgmtDataStructModule,
+    ) -> monica_management_capnp.OptCarbonMgmtDataReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule._IrrigationStructModule._ParametersStructModule,
+    ) -> monica_management_capnp.ParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule._OrganicFertilizationStructModule._OrganicMatterParametersStructModule,
+    ) -> monica_management_capnp.OrganicMatterParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._VocStructModule._EmissionsStructModule._SpeciesIdToEmissionStructModule,
+    ) -> monica_params_capnp.SpeciesIdToEmissionReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: storage_capnp._StoreInterfaceModule._ContainerInterfaceModule._EntryInterfaceModule._ValueStructModule,
+    ) -> storage_capnp.ValueReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._ParamsStructModule._AutomaticSowingStructModule._AvgSoilTempStructModule,
+    ) -> management_capnp.AvgSoilTempReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._ParamsStructModule._CuttingStructModule._SpecStructModule,
+    ) -> management_capnp.SpecReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._ParamsStructModule._HarvestStructModule._OptCarbonMgmtDataStructModule,
+    ) -> management_capnp.OptCarbonMgmtDataReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._EventStructModule._EventAfterStructModule,
+    ) -> monica_management_capnp.EventAfterReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._EventStructModule._EventAtStructModule,
+    ) -> monica_management_capnp.EventAtReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._EventStructModule._EventBetweenStructModule,
+    ) -> monica_management_capnp.EventBetweenReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._EventStructModule._TypeStructModule,
+    ) -> monica_management_capnp.TypeReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule._AutomaticHarvestStructModule,
+    ) -> monica_management_capnp.AutomaticHarvestReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule._AutomaticSowingStructModule,
+    ) -> monica_management_capnp.AutomaticSowingReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule._CuttingStructModule,
+    ) -> monica_management_capnp.CuttingReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule._DailyWeatherStructModule,
+    ) -> monica_management_capnp.DailyWeatherReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule._HarvestStructModule,
+    ) -> monica_management_capnp.HarvestReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule._IrrigationStructModule,
+    ) -> monica_management_capnp.IrrigationReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule._MineralFertilizationStructModule,
+    ) -> monica_management_capnp.MineralFertilizationReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule._NDemandFertilizationStructModule,
+    ) -> monica_management_capnp.NDemandFertilizationReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule._OrganicFertilizationStructModule,
+    ) -> monica_management_capnp.OrganicFertilizationReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule._SaveStateStructModule,
+    ) -> monica_management_capnp.SaveStateReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule._SowingStructModule,
+    ) -> monica_management_capnp.SowingReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule._TillageStructModule,
+    ) -> monica_management_capnp.TillageReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._EnvironmentParametersStructModule._YearToValueStructModule,
+    ) -> monica_params_capnp.YearToValueReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._MeasuredGroundwaterTableInformationStructModule._DateToValueStructModule,
+    ) -> monica_params_capnp.DateToValueReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._VocStructModule._CPDataStructModule,
+    ) -> monica_params_capnp.CPDataReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._VocStructModule._EmissionsStructModule,
+    ) -> monica_params_capnp.EmissionsReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._VocStructModule._EnzymeActivityTStructModule,
+    ) -> monica_params_capnp.EnzymeActivityTReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._VocStructModule._FoliageTStructModule,
+    ) -> monica_params_capnp.FoliageTReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._VocStructModule._LeafEmissionTStructModule,
+    ) -> monica_params_capnp.LeafEmissionTReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._VocStructModule._LeafEmissionsStructModule,
+    ) -> monica_params_capnp.LeafEmissionsReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._VocStructModule._MicroClimateDataStructModule,
+    ) -> monica_params_capnp.MicroClimateDataReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._VocStructModule._PhotosynthTStructModule,
+    ) -> monica_params_capnp.PhotosynthTReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._VocStructModule._SpeciesDataStructModule,
+    ) -> monica_params_capnp.SpeciesDataReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_state_capnp._MonicaModelStateStructModule._ACDToValueStructModule,
+    ) -> monica_state_capnp.ACDToValueReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_state_capnp._SoilColumnStateStructModule._DelayedNMinApplicationParamsStructModule,
+    ) -> monica_state_capnp.DelayedNMinApplicationParamsReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: yieldstat_capnp._OutputStructModule._YearToResultStructModule,
+    ) -> yieldstat_capnp.YearToResultReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: yieldstat_capnp._ResultStructModule._ResultToValueStructModule,
+    ) -> yieldstat_capnp.ResultToValueReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: persistence_capnp._HostPortResolverInterfaceModule._RegistrarInterfaceModule._RegisterParamsStructModule,
+    ) -> persistence_capnp.RegisterParamsReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: storage_capnp._StoreInterfaceModule._ContainerInterfaceModule._KeyAndEntryStructModule,
+    ) -> storage_capnp.KeyAndEntryReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: climate_capnp._AlterTimeSeriesWrapperInterfaceModule._AlteredStructModule,
+    ) -> climate_capnp.AlteredReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: climate_capnp._CSVTimeSeriesFactoryInterfaceModule._CSVConfigStructModule,
+    ) -> climate_capnp.CSVConfigReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: climate_capnp._LocationStructModule._KVStructModule,
+    ) -> climate_capnp.KVReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: climate_capnp._MetadataStructModule._EntryStructModule,
+    ) -> climate_capnp.EntryReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: climate_capnp._MetadataStructModule._ValueStructModule,
+    ) -> climate_capnp.ValueReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: cluster_admin_service_capnp._ClusterStructModule._ZmqPipelineAddressesStructModule,
+    ) -> cluster_admin_service_capnp.ZmqPipelineAddressesReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: common_capnp._StructuredTextStructModule._StructuredTextStructureStructModule,
+    ) -> common_capnp.StructuredTextStructureReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: fbp_capnp._ChannelInterfaceModule._MsgStructModule,
+    ) -> fbp_capnp.MsgReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: fbp_capnp._ChannelInterfaceModule._StartupInfoStructModule,
+    ) -> fbp_capnp.StartupInfoReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: fbp_capnp._ComponentStructModule._ComponentFactoryStructModule,
+    ) -> fbp_capnp.ComponentFactoryReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: fbp_capnp._ComponentStructModule._PortStructModule,
+    ) -> fbp_capnp.PortReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: fbp_capnp._IPStructModule._KVStructModule,
+    ) -> fbp_capnp.KVReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: fbp_capnp._PortInfosStructModule._NameAndSRStructModule,
+    ) -> fbp_capnp.NameAndSRReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: fbp_capnp._ProcessInterfaceModule._ConfigEntryStructModule,
+    ) -> fbp_capnp.ConfigEntryReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: fbp_capnp._StartChannelsServiceInterfaceModule._ParamsStructModule,
+    ) -> fbp_capnp.ParamsReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: grid_capnp._GridInterfaceModule._AggregationPartStructModule,
+    ) -> grid_capnp.AggregationPartReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: grid_capnp._GridInterfaceModule._LocationStructModule,
+    ) -> grid_capnp.LocationReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: grid_capnp._GridInterfaceModule._ResolutionStructModule,
+    ) -> grid_capnp.ResolutionReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: grid_capnp._GridInterfaceModule._RowColStructModule,
+    ) -> grid_capnp.RowColReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: grid_capnp._GridInterfaceModule._ValueStructModule,
+    ) -> grid_capnp.ValueReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._EventStructModule._EventAfterStructModule,
+    ) -> management_capnp.EventAfterReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._EventStructModule._EventAtStructModule,
+    ) -> management_capnp.EventAtReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._EventStructModule._EventBetweenStructModule,
+    ) -> management_capnp.EventBetweenReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._EventStructModule._TypeStructModule,
+    ) -> management_capnp.TypeReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._ParamsStructModule._AutomaticHarvestStructModule,
+    ) -> management_capnp.AutomaticHarvestReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._ParamsStructModule._AutomaticSowingStructModule,
+    ) -> management_capnp.AutomaticSowingReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._ParamsStructModule._CuttingStructModule,
+    ) -> management_capnp.CuttingReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._ParamsStructModule._HarvestStructModule,
+    ) -> management_capnp.HarvestReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._ParamsStructModule._IrrigationStructModule,
+    ) -> management_capnp.IrrigationReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._ParamsStructModule._MineralFertilizationStructModule,
+    ) -> management_capnp.MineralFertilizationReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._ParamsStructModule._NDemandFertilizationStructModule,
+    ) -> management_capnp.NDemandFertilizationReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._ParamsStructModule._OrganicFertilizationStructModule,
+    ) -> management_capnp.OrganicFertilizationReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._ParamsStructModule._SowingStructModule,
+    ) -> management_capnp.SowingReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._ParamsStructModule._TillageStructModule,
+    ) -> management_capnp.TillageReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._EventStructModule,
+    ) -> monica_management_capnp.EventReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ILRDatesStructModule,
+    ) -> monica_management_capnp.ILRDatesReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_management_capnp._ParamsStructModule,
+    ) -> monica_management_capnp.ParamsReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._AutomaticHarvestParametersStructModule,
+    ) -> monica_params_capnp.AutomaticHarvestParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._AutomaticIrrigationParametersStructModule,
+    ) -> monica_params_capnp.AutomaticIrrigationParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._CropModuleParametersStructModule,
+    ) -> monica_params_capnp.CropModuleParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._CropParametersStructModule,
+    ) -> monica_params_capnp.CropParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._CropResidueParametersStructModule,
+    ) -> monica_params_capnp.CropResidueParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._CropSpecStructModule,
+    ) -> monica_params_capnp.CropSpecReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._CultivarParametersStructModule,
+    ) -> monica_params_capnp.CultivarParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._EnvironmentParametersStructModule,
+    ) -> monica_params_capnp.EnvironmentParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._MeasuredGroundwaterTableInformationStructModule,
+    ) -> monica_params_capnp.MeasuredGroundwaterTableInformationReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._NMinApplicationParametersStructModule,
+    ) -> monica_params_capnp.NMinApplicationParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._NMinCropParametersStructModule,
+    ) -> monica_params_capnp.NMinCropParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._SimulationParametersStructModule,
+    ) -> monica_params_capnp.SimulationParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._SiteParametersStructModule,
+    ) -> monica_params_capnp.SiteParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._SoilMoistureModuleParametersStructModule,
+    ) -> monica_params_capnp.SoilMoistureModuleParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._SoilOrganicModuleParametersStructModule,
+    ) -> monica_params_capnp.SoilOrganicModuleParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._SoilParametersStructModule,
+    ) -> monica_params_capnp.SoilParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._SoilTemperatureModuleParametersStructModule,
+    ) -> monica_params_capnp.SoilTemperatureModuleParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._SoilTransportModuleParametersStructModule,
+    ) -> monica_params_capnp.SoilTransportModuleParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._SpeciesParametersStructModule,
+    ) -> monica_params_capnp.SpeciesParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._SticsParametersStructModule,
+    ) -> monica_params_capnp.SticsParametersReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._VocStructModule,
+    ) -> monica_params_capnp.VocReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_params_capnp._YieldComponentStructModule,
+    ) -> monica_params_capnp.YieldComponentReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_state_capnp._AOMPropertiesStructModule,
+    ) -> monica_state_capnp.AOMPropertiesReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_state_capnp._CropModuleStateStructModule,
+    ) -> monica_state_capnp.CropModuleStateReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_state_capnp._CropStateStructModule,
+    ) -> monica_state_capnp.CropStateReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_state_capnp._FrostModuleStateStructModule,
+    ) -> monica_state_capnp.FrostModuleStateReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_state_capnp._ICDataStructModule,
+    ) -> monica_state_capnp.ICDataReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_state_capnp._MaybeBoolStructModule,
+    ) -> monica_state_capnp.MaybeBoolReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_state_capnp._MonicaModelStateStructModule,
+    ) -> monica_state_capnp.MonicaModelStateReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_state_capnp._RuntimeStateStructModule,
+    ) -> monica_state_capnp.RuntimeStateReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_state_capnp._SnowModuleStateStructModule,
+    ) -> monica_state_capnp.SnowModuleStateReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_state_capnp._SoilColumnStateStructModule,
+    ) -> monica_state_capnp.SoilColumnStateReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_state_capnp._SoilLayerStateStructModule,
+    ) -> monica_state_capnp.SoilLayerStateReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_state_capnp._SoilMoistureModuleStateStructModule,
+    ) -> monica_state_capnp.SoilMoistureModuleStateReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_state_capnp._SoilOrganicModuleStateStructModule,
+    ) -> monica_state_capnp.SoilOrganicModuleStateReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_state_capnp._SoilTemperatureModuleStateStructModule,
+    ) -> monica_state_capnp.SoilTemperatureModuleStateReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: monica_state_capnp._SoilTransportModuleStateStructModule,
+    ) -> monica_state_capnp.SoilTransportModuleStateReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: yieldstat_capnp._OutputStructModule,
+    ) -> yieldstat_capnp.OutputReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: yieldstat_capnp._RestInputStructModule,
+    ) -> yieldstat_capnp.RestInputReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: yieldstat_capnp._ResultStructModule,
+    ) -> yieldstat_capnp.ResultReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: persistence_capnp._AddressStructModule._AddressIp6StructModule,
+    ) -> persistence_capnp.AddressIp6Reader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: persistence_capnp._GatewayInterfaceModule._RegResultsStructModule,
+    ) -> persistence_capnp.RegResultsReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: persistence_capnp._PersistentInterfaceModule._SaveParamsStructModule,
+    ) -> persistence_capnp.SaveParamsReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: persistence_capnp._PersistentInterfaceModule._SaveResultsStructModule,
+    ) -> persistence_capnp.SaveResultsReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: persistence_capnp._RestorerInterfaceModule._RestoreParamsStructModule,
+    ) -> persistence_capnp.RestoreParamsReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: persistence_capnp._SturdyRefStructModule._OwnerStructModule,
+    ) -> persistence_capnp.OwnerReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: persistence_capnp._SturdyRefStructModule._TokenStructModule,
+    ) -> persistence_capnp.TokenReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: registry_capnp._RegistrarInterfaceModule._CrossDomainRestoreStructModule,
+    ) -> registry_capnp.CrossDomainRestoreReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: registry_capnp._RegistrarInterfaceModule._RegParamsStructModule,
+    ) -> registry_capnp.RegParamsReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: registry_capnp._RegistryInterfaceModule._EntryStructModule,
+    ) -> registry_capnp.EntryReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: service_capnp._FactoryInterfaceModule._AccessInfoStructModule,
+    ) -> service_capnp.AccessInfoReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: service_capnp._FactoryInterfaceModule._CreateParamsStructModule,
+    ) -> service_capnp.CreateParamsReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: soil_capnp._LayerStructModule._PropertyStructModule,
+    ) -> soil_capnp.PropertyReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: soil_capnp._QueryStructModule._ResultStructModule,
+    ) -> soil_capnp.ResultReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: soil_params_capnp._CapillaryRiseRateStructModule._DataStructModule,
+    ) -> soil_params_capnp.DataReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: storage_capnp._StoreInterfaceModule._ImportExportDataStructModule,
+    ) -> storage_capnp.ImportExportDataReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: storage_capnp._StoreInterfaceModule._InfoAndContainerStructModule,
+    ) -> storage_capnp.InfoAndContainerReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: climate_capnp._EnsembleMemberStructModule,
+    ) -> climate_capnp.EnsembleMemberReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: climate_capnp._LocationStructModule,
+    ) -> climate_capnp.LocationReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: climate_capnp._MetaPlusDataStructModule,
+    ) -> climate_capnp.MetaPlusDataReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: climate_capnp._MetadataStructModule,
+    ) -> climate_capnp.MetadataReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: climate_capnp._TimeSeriesDataStructModule,
+    ) -> climate_capnp.TimeSeriesDataReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: cluster_admin_service_capnp._ClusterStructModule,
+    ) -> cluster_admin_service_capnp.ClusterReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: common_capnp._IdInformationStructModule,
+    ) -> common_capnp.IdInformationReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: common_capnp._PairStructModule,
+    ) -> common_capnp.PairReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: common_capnp._StructuredTextStructModule,
+    ) -> common_capnp.StructuredTextReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: common_capnp._ValueStructModule,
+    ) -> common_capnp.ValueReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: date_capnp._DateStructModule,
+    ) -> date_capnp.DateReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: field_exp_data_capnp._CultivarStructModule,
+    ) -> field_exp_data_capnp.CultivarReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: field_exp_data_capnp._EnvironmentModificationStructModule,
+    ) -> field_exp_data_capnp.EnvironmentModificationReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: field_exp_data_capnp._ExperimentDescriptionStructModule,
+    ) -> field_exp_data_capnp.ExperimentDescriptionReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: field_exp_data_capnp._FertilizerEventStructModule,
+    ) -> field_exp_data_capnp.FertilizerEventReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: field_exp_data_capnp._FieldStructModule,
+    ) -> field_exp_data_capnp.FieldReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: field_exp_data_capnp._HarvestEventStructModule,
+    ) -> field_exp_data_capnp.HarvestEventReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: field_exp_data_capnp._InitialConditionsLayerStructModule,
+    ) -> field_exp_data_capnp.InitialConditionsLayerReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: field_exp_data_capnp._IrrigationEventStructModule,
+    ) -> field_exp_data_capnp.IrrigationEventReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: field_exp_data_capnp._PlantingEventStructModule,
+    ) -> field_exp_data_capnp.PlantingEventReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: field_exp_data_capnp._PlotStructModule,
+    ) -> field_exp_data_capnp.PlotReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: field_exp_data_capnp._ResidueStructModule,
+    ) -> field_exp_data_capnp.ResidueReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: field_exp_data_capnp._SoilMetadataStructModule,
+    ) -> field_exp_data_capnp.SoilMetadataReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: field_exp_data_capnp._TreatmentStructModule,
+    ) -> field_exp_data_capnp.TreatmentReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: field_exp_data_capnp._WeatherStationStructModule,
+    ) -> field_exp_data_capnp.WeatherStationReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: fbp_capnp._ComponentStructModule,
+    ) -> fbp_capnp.ComponentReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(self, schema: fbp_capnp._IIPStructModule) -> fbp_capnp.IIPReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(self, schema: fbp_capnp._IPStructModule) -> fbp_capnp.IPReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: fbp_capnp._PortInfosStructModule,
+    ) -> fbp_capnp.PortInfosReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: geo_capnp._CoordStructModule,
+    ) -> geo_capnp.CoordReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: geo_capnp._EPSGStructModule,
+    ) -> geo_capnp.EPSGReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: geo_capnp._GKCoordStructModule,
+    ) -> geo_capnp.GKCoordReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: geo_capnp._LatLonCoordStructModule,
+    ) -> geo_capnp.LatLonCoordReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: geo_capnp._Point2DStructModule,
+    ) -> geo_capnp.Point2DReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: geo_capnp._RectBoundsStructModule,
+    ) -> geo_capnp.RectBoundsReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: geo_capnp._RowColStructModule,
+    ) -> geo_capnp.RowColReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: geo_capnp._UTMCoordStructModule,
+    ) -> geo_capnp.UTMCoordReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: jobs_capnp._JobStructModule,
+    ) -> jobs_capnp.JobReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._EventStructModule,
+    ) -> management_capnp.EventReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._NutrientStructModule,
+    ) -> management_capnp.NutrientReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: management_capnp._ParamsStructModule,
+    ) -> management_capnp.ParamsReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: model_capnp._EnvStructModule,
+    ) -> model_capnp.EnvReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: model_capnp._StatStructModule,
+    ) -> model_capnp.StatReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: model_capnp._XYPlusResultStructModule,
+    ) -> model_capnp.XYPlusResultReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: model_capnp._XYResultStructModule,
+    ) -> model_capnp.XYResultReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: persistence_capnp._AddressStructModule,
+    ) -> persistence_capnp.AddressReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: persistence_capnp._SturdyRefStructModule,
+    ) -> persistence_capnp.SturdyRefReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: persistence_capnp._VatIdStructModule,
+    ) -> persistence_capnp.VatIdReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: persistence_capnp._VatPathStructModule,
+    ) -> persistence_capnp.VatPathReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: soil_capnp._LayerStructModule,
+    ) -> soil_capnp.LayerReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: soil_capnp._ProfileDataStructModule,
+    ) -> soil_capnp.ProfileDataReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: soil_capnp._QueryStructModule,
+    ) -> soil_capnp.QueryReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: soil_params_capnp._CapillaryRiseRateStructModule,
+    ) -> soil_params_capnp.CapillaryRiseRateReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: soil_params_capnp._SoilCharacteristicDataStructModule,
+    ) -> soil_params_capnp.SoilCharacteristicDataReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: soil_params_capnp._SoilCharacteristicModifierStructModule,
+    ) -> soil_params_capnp.SoilCharacteristicModifierReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(self, schema: x_capnp._SStructModule) -> x_capnp.SReader: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def as_struct(
+        self,
+        schema: _StructSchema | _StructModule,
+    ) -> _DynamicStructReader: ...  # type: ignore[reportOverlappingOverload]
+    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructReader:
+        """Cast this AnyPointer to a struct reader.
+
+        The return type matches the Reader type parameterized in the schema.
+        Can accept either the .schema attribute or the struct class itself.
+
+        Args:
+            schema: The struct schema or class to cast to (e.g., MyStruct.schema or MyStruct).
+
+        Returns:
+            A struct reader of the appropriate type.
+
+        Examples:
+            reader = anyptr.as_struct(MyStruct.schema)  # Returns MyStructReader
+            reader = anyptr.as_struct(MyStruct)         # Also returns MyStructReader
+
+        """
+
+    def as_text(self) -> str:
+        """Cast this AnyPointer to Text (str).
+
+        Returns:
+            The text value as a Python string.
+
+        """
+
+class _DynamicObjectBuilder:
+    """Builder for Cap'n Proto AnyPointer type.
+
+    This class wraps the Cap'n Proto C++ DynamicObject::Builder.
+    AnyPointer can be initialized or cast to different pointer types.
+    """
+
+    def as_interface(self, schema: _InterfaceSchema | _InterfaceModule) -> Any:
+        """Cast this AnyPointer to an interface capability.
+
+        The return type matches the interface type parameterized in the schema.
+
+        Args:
+            schema: The interface schema to cast to (e.g., MyInterface.schema).
+
+        Returns:
+            A capability client of the interface type.
+
+        Example:
+            iface = anyptr.as_interface(MyInterface.schema)  # Returns MyInterface
+
+        """
+
+    def as_list(self, schema: _ListSchema) -> Any:
+        """Cast this AnyPointer to a list.
+
+        Args:
+            schema: The list schema to cast to.
+
+        Returns:
+            A list builder.
+
+        """
+
+    def as_reader(self) -> _DynamicObjectReader:
+        """Get a reader view of this builder.
+
+        Returns:
+            A reader for this AnyPointer.
+
+        """
+
+    def as_struct(self, schema: _StructSchema | _StructModule) -> _DynamicStructBuilder:
+        """Cast this AnyPointer to a struct builder.
+
+        The return type matches the Builder type parameterized in the schema.
+        Can accept either the .schema attribute or the struct class itself.
+
+        Args:
+            schema: The struct schema or class to cast to (e.g., MyStruct.schema or MyStruct).
+
+        Returns:
+            A struct builder of the appropriate type.
+
+        Examples:
+            builder = anyptr.as_struct(MyStruct.schema)  # Returns MyStructBuilder
+            builder = anyptr.as_struct(MyStruct)         # Also returns MyStructBuilder
+
+        """
+
+    def as_text(self) -> str:
+        """Cast this AnyPointer to Text (str).
+
+        Returns:
+            The text value as a Python string.
+
+        """
+
+    def init_as_list(self, schema: _ListSchema, size: int) -> _DynamicListBuilder:
+        """Initialize this AnyPointer as a list of the given size.
+
+        Args:
+            schema: The list schema.
+            size: The number of elements in the list.
+
+        Returns:
+            A list builder for the newly initialized list.
+
+        """
+
+    def set(self, other: _DynamicObjectReader) -> None:
+        """Set this AnyPointer to a copy of another AnyPointer.
+
+        Note: Don't use this for structs.
+
+        Args:
+            other: The AnyPointer reader to copy from.
+
+        """
+
+    def set_as_text(self, text: str) -> None:
+        """Set this AnyPointer to a Text value.
+
+        Args:
+            text: The text value to set.
+
+        """
+
+class _MessageSize:
+    @property
+    def cap_count(self) -> int: ...
+    @property
+    def word_count(self) -> int: ...
+
+class _DynamicStructReader:
+    """Reader for Cap'n Proto structs.
+
+    This class is almost a 1:1 wrapping of the Cap'n Proto C++ DynamicStruct::Reader.
+    The only difference is that instead of a `get` method, __getattr__ is overloaded and the field name
+    is passed onto the C++ equivalent `get`. This means you just use . syntax to access any field.
+    For field names that don't follow valid python naming convention for fields, use the global function
+    getattr()::
+
+        person = addressbook.Person.read(file)  # This returns a _DynamicStructReader
+        print(person.name)  # using . syntax
+        print(getattr(person, 'field-with-hyphens'))  # for names that are invalid for python
+    """
+
+    @property
+    def schema(self) -> _StructSchema: ...
+    @property
+    def is_root(self) -> bool: ...
+    @property
+    def total_size(self) -> _MessageSize: ...
+    def which(self) -> str:
+        """Return the name of the currently set union field.
+
+        Raises:
+            KjException: if this struct doesn't contain a union
+
+        """
+
+    def _get(self, field: str) -> Any:
+        """Low-level get method for accessing struct fields by name."""
+
+    def __getattr__(self, field: str) -> Any:
+        """Access struct fields by name."""
+
+    def _has(self, field: str) -> bool:
+        """Check if a field is set (mainly for unions and pointer fields)."""
+
+    def _which(self) -> Any:
+        """Return the enum corresponding to the union in this struct.
+
+        Returns:
+            A string/enum corresponding to what field is set in the union
+
+        Raises:
+            KjException: if this struct doesn't contain a union
+
+        """
+
+    def _which_str(self) -> str:
+        """Return the union field name as a string."""
+
+    def as_builder(
+        self,
+        num_first_segment_words: int | None = None,
+        allocate_seg_callable: Callable[..., Any] | None = None,
+    ) -> _DynamicStructBuilder:
+        """Convert this reader to a builder (creates a copy).
+
+        Args:
+            num_first_segment_words: Size of first segment
+            allocate_seg_callable: Custom allocator function
+
+        Returns:
+            A builder containing a copy of this struct
+
+        """
+
+    def to_dict(
+        self,
+        verbose: bool = False,
+        ordered: bool = False,
+        encode_bytes_as_base64: bool = False,
+    ) -> dict[str, Any]:
+        """Convert the struct to a Python dictionary.
+
+        Args:
+            verbose: Include more details
+            ordered: Use OrderedDict for output
+            encode_bytes_as_base64: Encode bytes fields as base64 strings
+
+        Returns:
+            Dictionary representation of the struct
+
+        """
+
+class _DynamicStructBuilder:
+    """Builder for Cap'n Proto structs.
+
+    This class is almost a 1:1 wrapping of the Cap'n Proto C++ DynamicStruct::Builder.
+    The only difference is that instead of `get`/`set` methods, __getattr__/__setattr__ is overloaded
+    and the field name is passed onto the C++ equivalent function.
+
+    This means you just use . syntax to access or set any field. For field names that don't follow valid
+    python naming convention for fields, use the global functions getattr()/setattr()::
+
+        person = addressbook.Person.new_message()  # This returns a _DynamicStructBuilder
+
+        person.name = 'foo'  # using . syntax
+        print(person.name)  # using . syntax
+
+        setattr(person, 'field-with-hyphens', 'foo')  # for invalid python names
+        print(getattr(person, 'field-with-hyphens'))
+    """
+
+    @property
+    def schema(self) -> _StructSchema: ...
+    @property
+    def is_root(self) -> bool: ...
+    @property
+    def total_size(self) -> _MessageSize: ...
+    def which(self) -> str:
+        """Return the name of the currently set union field.
+
+        Raises:
+            KjException: if this struct doesn't contain a union
+
+        """
+
+    def _get(self, field: str) -> Any:
+        """Low-level get method for accessing struct fields by name."""
+
+    def _set(self, field: str, value: Any) -> None:
+        """Low-level set method for setting struct fields by name."""
+
+    def _has(self, field: str) -> bool:
+        """Check if a field is set (mainly for unions and pointer fields)."""
+
+    def _which(self) -> Any:
+        """Return the enum corresponding to the union in this struct.
+
+        Returns:
+            A string/enum corresponding to what field is set in the union
+
+        Raises:
+            KjException: if this struct doesn't contain a union
+
+        """
+
+    def _which_str(self) -> str:
+        """Return the union field name as a string."""
+
+    def as_reader(self) -> _DynamicStructReader:
+        """Convert this builder to a reader (read-only view).
+
+        Returns:
+            A reader view of this struct
+
+        """
+
+    def adopt(self, field: str, orphan: Any) -> None:
+        """Adopt an orphaned message into a field.
+
+        Args:
+            field: Field name
+            orphan: Orphaned message to adopt
+
+        """
+
+    def disown(self, field: str) -> Any:
+        """Disown a field, returning an orphan.
+
+        Args:
+            field: Field name
+
+        Returns:
+            Orphaned message
+
+        """
+
+    def init(self, field: Any, size: int | None = None) -> Any:
+        """Initialize a struct or list field.
+
+        Args:
+            field: Field name
+            size: Size for list fields
+
+        Returns:
+            The initialized field (builder for structs, list builder for lists)
+
+        """
+
+    def init_resizable_list(self, field: Any) -> _DynamicListBuilder:
+        """Initialize a resizable list field (for lists of structs).
+
+        This version of init returns a _DynamicResizableListBuilder that allows
+        you to add members one at a time (if you don't know the size for sure).
+        This is only meant for lists of Cap'n Proto objects, since for primitive types
+        you can just define a normal python list and fill it yourself.
+
+        Warning:
+            You need to call finish() on the list object before serializing the
+            Cap'n Proto message. Failure to do so will cause your objects not to be
+            written out as well as leaking orphan structs into your message.
+
+        Args:
+            field: Field name
+
+        Returns:
+            Resizable list builder
+
+        Raises:
+            KjException: if the field isn't in this struct
+
+        """
+
+    def from_dict(self, d: dict[str, Any]) -> None:
+        """Populate the struct from a dictionary.
+
+        Args:
+            d: Dictionary with field values
+
+        """
+
+    def to_dict(
+        self,
+        verbose: bool = False,
+        ordered: bool = False,
+        encode_bytes_as_base64: bool = False,
+    ) -> dict[str, Any]:
+        """Convert the struct to a Python dictionary.
+
+        Args:
+            verbose: Include more details
+            ordered: Use OrderedDict for output
+            encode_bytes_as_base64: Encode bytes fields as base64 strings
+
+        Returns:
+            Dictionary representation of the struct
+
+        """
+
+    def copy(
+        self,
+        num_first_segment_words: int | None = None,
+        allocate_seg_callable: Callable[..., Any] | None = None,
+    ) -> _DynamicStructBuilder:
+        """Create a deep copy of this struct.
+
+        Args:
+            num_first_segment_words: Size of first segment
+            allocate_seg_callable: Custom allocator function
+
+        Returns:
+            A new builder containing a copy
+
+        """
+
+    def clear_write_flag(self) -> None:
+        """Clear the write flag for this struct."""
+
+    def to_bytes(self) -> bytes:
+        """Serialize the struct to bytes.
+
+        Returns:
+            Serialized message bytes
+
+        """
+
+    def to_bytes_packed(self) -> bytes:
+        """Serialize the struct to packed bytes.
+
+        Returns:
+            Serialized message bytes (packed format)
+
+        """
+
+    def to_segments(self) -> list[bytes]:
+        """Serialize the struct to a list of segment bytes.
+
+        Returns:
+            List of segment byte arrays
+
+        """
+
+    def write(self, file: IO[str] | IO[bytes]) -> None:
+        """Write the struct to a file.
+
+        Args:
+            file: File-like object with a fileno() method (opened file, socket, etc.)
+                  Does NOT accept BytesIO or other pure-Python file-like objects
+
+        """
+
+    def write_packed(self, file: IO[str] | IO[bytes]) -> None:
+        """Write the struct to a file in packed format.
+
+        Args:
+            file: File-like object with a fileno() method (opened file, socket, etc.)
+                  Does NOT accept BytesIO or other pure-Python file-like objects
+
+        """
+
+    async def write_async(self, stream: AsyncIoStream) -> None:
+        """Asynchronously write the struct to a stream.
+
+        Args:
+            stream: AsyncIoStream to write to
+
+        """
+
+# RPC Request/Response Types
+class _Request(_DynamicStructBuilder):
+    """RPC request builder.
+
+    Extends DynamicStructBuilder with RPC-specific send() method.
+    """
+
+    def send(self) -> _Response:
+        """Send the RPC request and return a promise for the response.
+
+        Returns:
+            Response promise
+
+        """
+
+    def is_consumed(self) -> bool:
+        """Check if the request has been consumed (sent).
+
+        Returns:
+            True if the request has been sent
+
+        """
+
+class _Response(_DynamicStructReader):
+    """RPC response reader.
+
+    Extends DynamicStructReader for reading RPC responses.
+    Response objects are also awaitable promises.
+    """
+
+class _CallContext:
+    """Context for an RPC call on the server side.
+
+    Provides methods for handling server-side RPC calls.
+
+    """
+
+    def params(self) -> _DynamicStructReader: ...
+    def release_params(self) -> None:
+        """Release the parameter struct.
+
+        Call this when you're done reading the parameters to allow
+        the message memory to be freed.
+        """
+
+    def tail_call(self, tailRequest: _Request) -> None:
+        """Perform a tail call to another capability.
+
+        Args:
+            tailRequest: Request to tail call
+
+        """
+
+# Capability Types
+class _DynamicCapabilityClient(_CapabilityClient):
+    """Dynamic capability client.
+
+    Represents a reference to a remote capability.
+    This is the base class for all generated capability client classes.
+    """
+
+    @property
+    def schema(self) -> _InterfaceSchema: ...
+    def upcast(
+        self,
+        schema: _InterfaceSchema | _InterfaceModule,
+    ) -> _DynamicCapabilityClient:
+        """Upcast this capability to a parent interface type.
+
+        Args:
+            schema: Parent interface type
+
+        Returns:
+            Capability upcast to the parent interface
+
+        """
+
+class _DynamicCapabilityServer:
+    """Dynamic capability server base class.
+
+    Implement this to create server-side capability implementations.
+    """
+
+class _CapabilityClient:
+    """Base class for capability clients.
+
+    Wraps Cap'n Proto capability references.
+    """
+
+    @overload
+    def cast_as(
+        self,
+        schema: climate_capnp._AlterTimeSeriesWrapperInterfaceModule,
+    ) -> climate_capnp.AlterTimeSeriesWrapperClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: model_capnp._EnvInstanceProxyInterfaceModule,
+    ) -> model_capnp.EnvInstanceProxyClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: model_capnp._EnvInstanceInterfaceModule,
+    ) -> model_capnp.EnvInstanceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: climate_capnp._DatasetInterfaceModule,
+    ) -> climate_capnp.DatasetClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: climate_capnp._ServiceInterfaceModule,
+    ) -> climate_capnp.ServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: climate_capnp._TimeSeriesInterfaceModule,
+    ) -> climate_capnp.TimeSeriesClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: common_capnp._IdentifiableHolderInterfaceModule,
+    ) -> common_capnp.IdentifiableHolderClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: crop_capnp._CropInterfaceModule,
+    ) -> crop_capnp.CropClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: fbp_capnp._ChannelInterfaceModule,
+    ) -> fbp_capnp.ChannelClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: fbp_capnp._ChannelInterfaceModule._ReaderInterfaceModule,
+    ) -> fbp_capnp.ReaderClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: fbp_capnp._ChannelInterfaceModule._WriterInterfaceModule,
+    ) -> fbp_capnp.WriterClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: fbp_capnp._ProcessInterfaceModule,
+    ) -> fbp_capnp.ProcessClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: grid_capnp._GridInterfaceModule,
+    ) -> grid_capnp.GridClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: jobs_capnp._ServiceInterfaceModule,
+    ) -> jobs_capnp.ServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: management_capnp._FertilizerInterfaceModule,
+    ) -> management_capnp.FertilizerClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: persistence_capnp._GatewayInterfaceModule,
+    ) -> persistence_capnp.GatewayClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: persistence_capnp._HostPortResolverInterfaceModule,
+    ) -> persistence_capnp.HostPortResolverClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: soil_capnp._ProfileInterfaceModule,
+    ) -> soil_capnp.ProfileClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: soil_capnp._ServiceInterfaceModule,
+    ) -> soil_capnp.ServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: storage_capnp._StoreInterfaceModule,
+    ) -> storage_capnp.StoreClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: storage_capnp._StoreInterfaceModule._ContainerInterfaceModule,
+    ) -> storage_capnp.ContainerClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: climate_capnp._AlterTimeSeriesWrapperFactoryInterfaceModule,
+    ) -> climate_capnp.AlterTimeSeriesWrapperFactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: climate_capnp._CSVTimeSeriesFactoryInterfaceModule,
+    ) -> climate_capnp.CSVTimeSeriesFactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: cluster_admin_service_capnp._ClusterStructModule._AdminMasterInterfaceModule,
+    ) -> cluster_admin_service_capnp.AdminMasterClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: cluster_admin_service_capnp._ClusterStructModule._ModelInstanceFactoryInterfaceModule,
+    ) -> cluster_admin_service_capnp.ModelInstanceFactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: cluster_admin_service_capnp._ClusterStructModule._RuntimeInterfaceModule,
+    ) -> cluster_admin_service_capnp.RuntimeClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: cluster_admin_service_capnp._ClusterStructModule._UserMasterInterfaceModule,
+    ) -> cluster_admin_service_capnp.UserMasterClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: common_capnp._FactoryInterfaceModule,
+    ) -> common_capnp.FactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: common_capnp._IOFactoryInterfaceModule,
+    ) -> common_capnp.IOFactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: crop_capnp._ServiceInterfaceModule,
+    ) -> crop_capnp.ServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: fbp_capnp._ProcessInterfaceModule._FactoryInterfaceModule,
+    ) -> fbp_capnp.FactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: fbp_capnp._RunnableInterfaceModule,
+    ) -> fbp_capnp.RunnableClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: fbp_capnp._RunnableInterfaceModule._FactoryInterfaceModule,
+    ) -> fbp_capnp.FactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: fbp_capnp._StartChannelsServiceInterfaceModule,
+    ) -> fbp_capnp.StartChannelsServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: management_capnp._FertilizerServiceInterfaceModule,
+    ) -> management_capnp.FertilizerServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: management_capnp._ServiceInterfaceModule,
+    ) -> management_capnp.ServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: model_capnp._ClimateInstanceInterfaceModule,
+    ) -> model_capnp.ClimateInstanceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: model_capnp._InstanceFactoryInterfaceModule,
+    ) -> model_capnp.InstanceFactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: monica_management_capnp._ServiceInterfaceModule,
+    ) -> monica_management_capnp.ServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: registry_capnp._AdminInterfaceModule,
+    ) -> registry_capnp.AdminClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: registry_capnp._RegistrarInterfaceModule,
+    ) -> registry_capnp.RegistrarClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: registry_capnp._RegistryInterfaceModule,
+    ) -> registry_capnp.RegistryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: service_capnp._AdminInterfaceModule,
+    ) -> service_capnp.AdminClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: service_capnp._FactoryInterfaceModule,
+    ) -> service_capnp.FactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: service_capnp._SimpleFactoryInterfaceModule,
+    ) -> service_capnp.SimpleFactoryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: climate_capnp._DatasetInterfaceModule._GetLocationsCallbackInterfaceModule,
+    ) -> climate_capnp.GetLocationsCallbackClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: climate_capnp._MetadataStructModule._InformationInterfaceModule,
+    ) -> climate_capnp.InformationClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: climate_capnp._MetadataStructModule._SupportedInterfaceModule,
+    ) -> climate_capnp.SupportedClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: cluster_admin_service_capnp._ClusterStructModule._UnregisterInterfaceModule,
+    ) -> cluster_admin_service_capnp.UnregisterClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: cluster_admin_service_capnp._ClusterStructModule._ValueHolderInterfaceModule,
+    ) -> cluster_admin_service_capnp.ValueHolderClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: common_capnp._HolderInterfaceModule,
+    ) -> common_capnp.HolderClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: common_capnp._IdentifiableInterfaceModule,
+    ) -> common_capnp.IdentifiableClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: config_capnp._ServiceInterfaceModule,
+    ) -> config_capnp.ServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: modam_capnp._ModamWrapperServiceInterfaceModule,
+    ) -> modam_capnp.ModamWrapperServiceClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: fbp_capnp._ProcessInterfaceModule._StateTransitionInterfaceModule,
+    ) -> fbp_capnp.StateTransitionClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: grid_capnp._GridInterfaceModule._CallbackInterfaceModule,
+    ) -> grid_capnp.CallbackClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: model_capnp._EnvInstanceProxyInterfaceModule._UnregisterInterfaceModule,
+    ) -> model_capnp.UnregisterClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: web_berest_data_import_capnp._DWLABImportInterfaceModule,
+    ) -> web_berest_data_import_capnp.DWLABImportClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: persistence_capnp._GatewayRegistrableInterfaceModule,
+    ) -> persistence_capnp.GatewayRegistrableClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: persistence_capnp._HeartbeatInterfaceModule,
+    ) -> persistence_capnp.HeartbeatClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: persistence_capnp._HostPortResolverInterfaceModule._RegistrarInterfaceModule,
+    ) -> persistence_capnp.RegistrarClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: persistence_capnp._PersistentInterfaceModule,
+    ) -> persistence_capnp.PersistentClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: persistence_capnp._PersistentInterfaceModule._ReleaseSturdyRefInterfaceModule,
+    ) -> persistence_capnp.ReleaseSturdyRefClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: persistence_capnp._RestorerInterfaceModule,
+    ) -> persistence_capnp.RestorerClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: registry_capnp._RegistrarInterfaceModule._UnregisterInterfaceModule,
+    ) -> registry_capnp.UnregisterClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: service_capnp._StoppableInterfaceModule,
+    ) -> service_capnp.StoppableClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: soil_capnp._ServiceInterfaceModule._StreamInterfaceModule,
+    ) -> soil_capnp.StreamClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: storage_capnp._StoreInterfaceModule._ContainerInterfaceModule._EntryInterfaceModule,
+    ) -> storage_capnp.EntryClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(self, schema: a_capnp._AInterfaceModule) -> a_capnp.AClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(self, schema: x_capnp._XInterfaceModule) -> x_capnp.XClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(self, schema: x_capnp._YInterfaceModule) -> x_capnp.YClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(self, schema: x_capnp._ZInterfaceModule) -> x_capnp.ZClient: ...  # type: ignore[reportOverlappingOverload]
+    @overload
+    def cast_as(
+        self,
+        schema: _InterfaceSchema | _InterfaceModule,
+    ) -> _DynamicCapabilityClient: ...  # type: ignore[reportOverlappingOverload]
+    def cast_as(
+        self,
+        schema: _InterfaceSchema | _InterfaceModule,
+    ) -> _DynamicCapabilityClient:
+        """Cast this capability to a specific interface type.
+
+        Args:
+            schema: Interface schema or module to cast to
+
+        Returns:
+            Capability cast to the specified interface
+
+        """
+
+class _Promise:
+    """Promise for asynchronous RPC results.
+
+    Represents a promise for a future value in Cap'n Proto RPC.
+    Can be awaited in async contexts.
+    """
+
+    def cancel(self) -> None:
+        """Cancel the promise."""
+
+class _RemotePromise(_Promise):
+    """Remote promise for asynchronous RPC results.
+
+    Extended promise type that provides additional methods for
+    accessing pipelined capabilities.
+    """
+
+    def to_dict(
+        self,
+        verbose: bool = False,
+        ordered: bool = False,
+        encode_bytes_as_base64: bool = False,
+    ) -> dict[str, Any]:
+        """Convert the promise result to a dictionary.
+
+        Args:
+            verbose: Include more details
+            ordered: Use OrderedDict for output
+            encode_bytes_as_base64: Encode bytes fields as base64 strings
+
+        Returns:
+            Dictionary representation
+
+        """
+
+class _DynamicStructPipeline:
+    """Pipeline for pipelined RPC calls on struct results.
+
+    This class is almost a 1:1 wrapping of the Cap'n Proto C++ DynamicStruct::Pipeline.
+    The only difference is that instead of a `get` method, __getattr__ is overloaded and the
+    field name is passed onto the C++ equivalent `get`. This means you just use . syntax to
+    access any field. For field names that don't follow valid python naming convention for fields,
+    use the global function getattr()::
+
+        # Pipeline calls allow you to call methods on results before they arrive
+        result = remote_object.method()
+        result.field.another_method()  # Pipelined call
+    """
+
+    def to_dict(
+        self,
+        verbose: bool = False,
+        ordered: bool = False,
+        encode_bytes_as_base64: bool = False,
+    ) -> dict[str, Any]:
+        """Convert to dictionary when the pipeline resolves.
+
+        Args:
+            verbose: Include more details
+            ordered: Use OrderedDict for output
+            encode_bytes_as_base64: Encode bytes fields as base64 strings
+
+        Returns:
+            Dictionary representation
+
+        """
+
+# Message Builder/Reader Types
+class _MessageBuilder:
+    """Abstract base class for building Cap'n Proto messages.
+
+    Warning:
+        Don't ever instantiate this class directly. It is only used for inheritance.
+
+    """
+
+    def init_root(self, schema: _StructSchema) -> Any:
+        """Initialize the message root as a struct of the given type.
+
+        Args:
+            schema: The struct schema to use for the root
+
+        Returns:
+            A builder for the root struct
+
+        """
+
+    def get_root(self, schema: _StructSchema) -> Any:
+        """Get the message root as a struct of the given type.
+
+        Args:
+            schema: The struct schema to use for the root
+
+        Returns:
+            A reader for the root struct
+
+        """
+
+    def get_root_as_any(self) -> _DynamicObjectBuilder:
+        """Get the message root as an AnyPointer.
+
+        Returns:
+            An AnyPointer builder for the root
+
+        """
+
+    def set_root(self, value: _DynamicStructReader) -> None:
+        """Set the message root by copying from a struct reader.
+
+        Args:
+            value: The struct reader to copy from
+
+        """
+
+    def new_orphan(self, schema: _StructSchema) -> Any:
+        """Create a new orphaned struct.
+
+        Don't use this method unless you know what you're doing.
+
+        Args:
+            schema: The struct schema for the orphan
+
+        Returns:
+            An orphaned struct
+
+        """
+
+    def get_segments_for_output(self) -> list[bytes]:
+        """Get the message segments as a list of bytes.
+
+        Returns:
+            List of segment byte arrays
+
+        """
+
+class _MallocMessageBuilder(_MessageBuilder):
+    """The main class for building Cap'n Proto messages.
+
+    You will use this class to handle arena allocation of Cap'n Proto
+    messages. You also use this object when you're done assigning to Cap'n
+    Proto objects, and wish to serialize them::
+
+        addressbook = capnp.load('addressbook.capnp')
+        message = capnp._MallocMessageBuilder()
+        person = message.init_root(addressbook.Person)
+        person.name = 'alice'
+        ...
+        f = open('out.txt', 'w')
+        capnp._write_message_to_fd(f.fileno(), message)
+    """
+
+    def __init__(self, size: int | None = None) -> None:
+        """Create a new message builder.
+
+        Args:
+            size: Optional initial size for the first segment (in words)
+
+        """
+
+class _MessageReader:
+    """Abstract base class for reading Cap'n Proto messages.
+
+    Warning:
+        Don't ever instantiate this class. It is only used for inheritance.
+
+    """
+
+    def get_root(self, schema: _StructSchema) -> Any:
+        """Get the message root as a struct of the given type.
+
+        Args:
+            schema: The struct schema to use for the root
+
+        Returns:
+            A reader for the root struct
+
+        """
+
+    def get_root_as_any(self) -> _DynamicObjectReader:
+        """Get the message root as an AnyPointer.
+
+        Returns:
+            An AnyPointer reader for the root
+
+        """
+
+class _PackedFdMessageReader(_MessageReader):
+    """Read a Cap'n Proto message from a file descriptor in packed format.
+
+    This class reads messages that were written with _write_packed_message_to_fd.
+    """
+
+    def __init__(
+        self,
+        file: IO[str] | IO[bytes],
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> None:
+        """Create a reader from a file object.
+
+        Args:
+            file: File object with a fileno() method (opened file, socket, etc.)
+                  Does NOT accept BytesIO or other pure-Python file-like objects
+            traversal_limit_in_words: Optional limit on pointer dereferences
+            nesting_limit: Optional limit on nesting depth
+
+        """
+
+class _StreamFdMessageReader(_MessageReader):
+    """Read a Cap'n Proto message from a file descriptor in stream format.
+
+    This class reads messages that were written with _write_message_to_fd.
+    """
+
+    def __init__(
+        self,
+        file: IO[str] | IO[bytes],
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> None:
+        """Create a reader from a file object.
+
+        Args:
+            file: File object with a fileno() method (opened file, socket, etc.)
+                  Does NOT accept BytesIO or other pure-Python file-like objects
+            traversal_limit_in_words: Optional limit on pointer dereferences
+            nesting_limit: Optional limit on nesting depth
+
+        """
+
+class _PyCustomMessageBuilder(_MessageBuilder):
+    """Custom message builder with user-provided segments.
+
+    This allows building messages with custom memory management.
+    """
+
+    def __init__(self, allocate_seg_callable: Callable[[int], bytearray]) -> None:
+        """Create a message builder with custom memory allocation.
+
+        Args:
+            allocate_seg_callable: A callable that takes the minimum number of 8-byte
+                words to allocate (as an int) and returns a bytearray. This is used to
+                customize the memory allocation strategy.
+
+        """
+
+class SchemaParser:
+    """Parser for loading Cap'n Proto schema files.
+
+    Do not use this class unless you're sure you know what you're doing.
+    Use the convenience method :func:`load` instead.
+    """
+
+    modules_by_id: MutableMapping[int, Any]  # Maps ID to loaded module
+    def load(
+        self,
+        file_name: str,
+        display_name: str | None = None,
+        imports: Sequence[str] = [],
+    ) -> _CapnpModule:
+        """Load a Cap'n Proto schema file.
+
+        Args:
+            file_name: Path to the .capnp file
+            display_name: Optional display name for the module
+            imports: List of import paths for resolving imports
+
+        Returns:
+            Loaded module (types.ModuleType with extra attributes like .schema)
+
+        """
+    def _parse_disk_file(
+        self,
+        display_name: str,
+        file_name: str,
+        imports: Sequence[str],
+    ) -> _ParsedSchema: ...
+
+class SchemaLoader:
+    """Class for constructing Schema objects from schema::Nodes.
+
+    Wraps capnproto/c++/src/capnp/schema-loader.h directly.
+    """
+
+    def get(self, id_: int) -> _Schema:
+        """Get a schema by its ID.
+
+        Args:
+            id_: Schema node ID
+
+        Returns:
+            The schema with the given ID
+
+        """
+    def load(self, reader: _NodeReader) -> _Schema:
+        """Load a schema from a reader.
+
+        Args:
+            reader: DynamicStructReader containing schema data
+
+        Returns:
+            Loaded schema
+
+        """
+    def load_dynamic(self, reader: _DynamicStructReader) -> _Schema:
+        """Load a schema dynamically from a reader.
+
+        Args:
+            reader: DynamicStructReader containing schema data
+
+        Returns:
+            Loaded schema
+
+        """
+
+# Module loading and import hooks
+def add_import_hook() -> None:
+    """Add a hook to the Python import system.
+
+    After calling this, Cap'n Proto modules can be directly imported
+    like regular Python modules.
+    """
+
+def remove_import_hook() -> None:
+    """Remove the import hook and return Python's import to normal."""
+
+def load(
+    file_name: str,
+    display_name: str | None = None,
+    imports: Sequence[str] = [],
+) -> _CapnpModule:
+    """Load a Cap'n Proto schema from a file.
+
+    Args:
+        file_name: Path to the .capnp file
+        display_name: Optional display name for the module
+        imports: List of import paths for resolving imports
+
+    Returns:
+        Loaded GeneratedModule with generated types
+
+    """
+
+def register_type(id: int, klass: type) -> None:
+    """Register a type with the given schema ID.
+
+    Args:
+        id: Schema node ID
+        klass: Python class to register
+
+    """
+
+def cleanup_global_schema_parser() -> None:
+    """Unload all schemas from the current context."""
+
+def deregister_all_types() -> None:
+    """Deregister all registered types."""
+
+def read_multiple_bytes_packed(
+    buf: bytes,
+    traversal_limit_in_words: int | None = None,
+    nesting_limit: int | None = None,
+) -> Iterator[_DynamicStructReader]:
+    """Read multiple packed Cap'n Proto messages from a buffer.
+
+    Returns an iterable that yields Readers for AnyPointer messages.
+
+    Args:
+        buf: Buffer containing packed messages
+        traversal_limit_in_words: Optional limit on pointer dereferences
+        nesting_limit: Optional limit on nesting depth
+
+    Yields:
+        DynamicStructReader for each message
+
+    """
+
+def _write_message_to_fd(fd: int, message: _MessageBuilder) -> None:
+    """Write a Cap'n Proto message to a file descriptor.
+
+    Writes the message in unpacked format with a segment table header.
+
+    Args:
+        fd: File descriptor to write to
+        message: Message to write
+
+    """
+
+def _write_packed_message_to_fd(fd: int, message: _MessageBuilder) -> None:
+    """Write a Cap'n Proto message to a file descriptor in packed format.
+
+    Writes the message using Cap'n Proto's packing algorithm which compresses
+    runs of zero bytes.
+
+    Args:
+        fd: File descriptor to write to
+        message: Message to write
+
+    """
+
+def fill_context(method_name: str, context: _CallContext, returned_data: Any) -> None:
+    """Internal helper for filling RPC call context with returned data.
+
+    Args:
+        method_name: Name of the RPC method
+        context: Call context to fill
+        returned_data: Data to return to the caller
+
+    """
+
+def void_task_done_callback(method_name: str, fulfiller: Any, task: Any) -> None:
+    """Internal callback for void RPC methods when async task completes.
+
+    Args:
+        method_name: Name of the RPC method
+        fulfiller: Promise fulfiller to complete
+        task: Async task that completed
+
+    """
+
+# Internal/private module attributes
+_global_schema_parser: SchemaParser | None
+"""Global schema parser instance used by import hooks and pickling (may be None).
+
+Note: This is actually defined in capnp.lib.capnp but referenced at module level
+in some internal code like pickle_helper.py.
+"""
+
+class _SchemaType:
+    """Internal schema type representation.
+
+    This class represents Cap'n Proto primitive types.
+    Instances are used for type comparisons and type checking.
+    """
+
+class _DynamicListBuilder:
+    """List builder type returned by init() for list fields.
+
+    This class wraps the Cap'n Proto C++ DynamicList::Builder.
+    __getitem__, __setitem__, __len__ and __iter__ have been defined properly,
+    so you can treat this class mostly like any other iterable class::
+
+        person = addressbook.Person.new_message()
+
+        phones = person.init('phones', 2)  # This returns a _DynamicListBuilder
+
+        phones[0].number = '555-1234'
+        phones[1].number = '555-5678'
+
+        for phone in phones:
+            print(phone.number)
+
+    For struct element types, both element instances and dict[str, Any] are accepted
+    for convenient initialization, e.g.:
+        list_builder[0] = {"field": value}
+    """
+
+    def __len__(self) -> int: ...
+    def __getitem__(self, index: int) -> Any: ...
+    def __setitem__(self, index: int, value: Any) -> None: ...
+    def __iter__(self) -> Iterator[Any]: ...
+    def adopt(self, index: int, orphan: Any) -> None:
+        """Adopt an orphaned message at the given index.
+
+        Don't use this method unless you know what you're doing.
+        """
+    def disown(self, index: int) -> Any:
+        """Disown the element at the given index, returning an orphan.
+
+        Don't use this method unless you know what you're doing.
+        """
+    def init(self, index: int, size: int) -> Any:
+        """Initialize a struct or list element at the given index with the given size.
+
+        Args:
+            index: Index of the element to initialize
+            size: Size parameter (for nested lists)
+
+        Returns:
+            The initialized element (builder for structs, list builder for lists)
+
+        """
+
+class _DynamicListReader:
+    """List reader type for reading Cap'n Proto list fields.
+
+    This class thinly wraps the C++ Cap'n Proto DynamicList::Reader class.
+    __getitem__ and __len__ have been defined properly, so you can treat this
+    class mostly like any other iterable class::
+
+        person = addressbook.Person.read(file)
+
+        phones = person.phones  # This returns a _DynamicListReader
+
+        phone = phones[0]
+        print(phone.number)
+
+        for phone in phones:
+            print(phone.number)
+
+    Provides read-only list-like interface.
+    """
+
+    def __len__(self) -> int: ...
+    def __getitem__(self, index: int) -> Any: ...
+    def __iter__(self) -> Iterator[Any]: ...
+
+class _DynamicOrphan:
+    """Orphaned Cap'n Proto message.
+
+    An orphan is a message that has been disowned from its parent.
+    Don't use this class unless you know what you're doing.
+    """
+
+class _DynamicResizableListBuilder:
+    """Resizable list builder for Cap'n Proto lists.
+
+    Returned by init_resizable_list(). Allows adding elements one at a time
+    without knowing the final size upfront.
+    """
+
+    def add(self) -> Any:
+        """Add a new element to the list and return a builder for it."""
+    def finish(self) -> None:
+        """Finish building the list. Must be called before serialization."""
+
+class _EventLoop:
+    """Cap'n Proto event loop integration.
+
+    Internal class for managing the KJ event loop.
+    """
+
+class _EnumModule:
+    """Module/class for a generated enum type.
+
+    Instances of this class are what you get when you access an enum from
+    a loaded schema.
+    """
+
+    def __init__(self, schema: _EnumSchema, name: str) -> None: ...
+    def __getattr__(self, name: str) -> Any: ...
+    def __setattr__(self, name: str, value: Any) -> None: ...
+    @property
+    def schema(self) -> _EnumSchema: ...
+
+class _InterfaceModule:
+    """Module/class for a generated interface.
+
+    This is what you get when you access an interface class from a loaded schema.
+    Instances of this class are what you get when you access an interface from
+    a loaded schema (e.g. `calculator.Calculator`). The module exposes factory and
+    RPC helpers for that interface type.
+
+    Nested types (structs, enums) are accessed as attributes.
+    The Server base class is accessed via the `Server` attribute.
+    """
+
+    def __init__(self, schema: _InterfaceSchema, name: str) -> None: ...
+    def __getattr__(self, name: str) -> Any: ...
+    def __setattr__(self, name: str, value: Any) -> None: ...
+    @property
+    def schema(self) -> _InterfaceSchema: ...
+    def _new_client(self, server: _DynamicCapabilityServer) -> _DynamicCapabilityClient:
+        """Create a new client from a server implementation.
+
+        Note: Requires an active event loop (use within capnp.kj_loop() or async context).
+
+        Args:
+            server: Server implementation instance (subclass of this interface's Server class)
+
+        Returns:
+            Client capability for this interface
+
+        Raises:
+            RuntimeError: If there is no running event loop
+
+        Example:
+            class MyCalculator(Calculator.Server):
+                def evaluate(self, expression, **kwargs):
+                    return 42.0
+
+            with capnp.kj_loop():
+                server = MyCalculator()
+                client = Calculator._new_client(server)
+
+        """
+
+def _init_capnp_api() -> None:
+    """Initialize the Cap'n Proto API.
+
+    Internal function called during module initialization.
+    """
+
+# RPC Classes
+
+class TwoPartyClient:
+    """Two-party RPC client for Cap'n Proto.
+
+    Args:
+        socket: AsyncIoStream connection
+        traversal_limit_in_words: Optional limit on pointer dereferences
+        nesting_limit: Optional limit on nesting depth
+
+    """
+
+    def __init__(
+        self,
+        socket: AsyncIoStream | None = None,
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> None: ...
+    def bootstrap(self) -> _CapabilityClient:
+        """Get the bootstrap interface for this client."""
+    def close(self) -> None:
+        """Close the client connection."""
+    async def on_disconnect(self) -> None:
+        """Wait until the connection is disconnected."""
+
+class TwoPartyServer:
+    """Two-party RPC server for Cap'n Proto.
+
+    Args:
+        socket: AsyncIoStream connection
+        bootstrap: Bootstrap interface implementation
+        traversal_limit_in_words: Optional limit on pointer dereferences
+        nesting_limit: Optional limit on nesting depth
+
+    """
+
+    def __init__(
+        self,
+        socket: AsyncIoStream | None = None,
+        bootstrap: Any = None,
+        traversal_limit_in_words: int | None = None,
+        nesting_limit: int | None = None,
+    ) -> None: ...
+    def close(self) -> None:
+        """Close the server connection."""
+    async def on_disconnect(self) -> None:
+        """Wait until the connection is disconnected."""
+
+class AsyncIoStream:
+    """Async I/O stream wrapper for Cap'n Proto RPC.
+
+    Provides async I/O operations for Cap'n Proto RPC over TCP and Unix domain sockets.
+    """
+
+    @staticmethod
+    async def create_connection(
+        host: str | None = None,
+        port: int | None = None,
+        ssl: SSLContext | None = None,
+        ssl_handshake_timeout: int | None = None,
+        **kwargs: Any,
+    ) -> AsyncIoStream:
+        """Create an async TCP connection.
+
+        Args:
+            host: Hostname to connect to
+            port: Port number to connect to
+            **kwargs: Additional connection options
+
+        Returns:
+            AsyncIoStream connected to the server
+
+        """
+
+    @staticmethod
+    async def create_unix_connection(
+        path: str | None = None,
+        **kwargs: Any,
+    ) -> AsyncIoStream:
+        """Create an async Unix domain socket connection.
+
+        Args:
+            path: Path to Unix domain socket
+            **kwargs: Additional connection options
+
+        Returns:
+            AsyncIoStream connected to the server
+
+        """
+
+    @staticmethod
+    async def create_server(
+        callback: Callable[[AsyncIoStream], Awaitable[None]],
+        host: str | None = None,
+        port: int | None = None,
+        **kwargs: Any,
+    ) -> _Server:
+        """Create an async TCP server.
+
+        Args:
+            callback: Async callback function for each new connection
+            host: Hostname to bind to
+            port: Port number to bind to
+            **kwargs: Additional server options
+
+        Returns:
+            Server instance
+
+        """
+
+    @staticmethod
+    async def create_unix_server(
+        callback: Callable[[AsyncIoStream], Awaitable[None]],
+        path: str | None = None,
+        **kwargs: Any,
+    ) -> _Server:
+        """Create an async Unix domain socket server.
+
+        Args:
+            callback: Async callback function for each new connection
+            path: Path for Unix domain socket
+            **kwargs: Additional server options
+
+        Returns:
+            Server instance
+
+        """
+
+    def close(self) -> None:
+        """Close the stream."""
+
+    async def wait_closed(self) -> None:
+        """Wait until the stream is closed."""
+
+# Async utilities
+async def run[T](coro: Awaitable[T]) -> T:
+    """Run an async coroutine with Cap'n Proto event loop.
+
+    Ensures that the coroutine runs while the KJ event loop is running.
+
+    Args:
+        coro: Coroutine to run
+
+    Returns:
+        The result of the coroutine
+
+    """
+
+@asynccontextmanager
+def kj_loop() -> AsyncIterator[None]:
+    """Context manager for running the KJ event loop.
+
+    Usage:
+        with capnp.kj_loop():
+            # Run async code
+            pass
+    """
+
+__all__ = [
+    # Exception class
+    "KjException",
+    # Public classes
+    "AsyncIoStream",
+    "SchemaLoader",
+    "SchemaParser",
+    "TwoPartyClient",
+    "TwoPartyServer",
+    # Public functions
+    "add_import_hook",
+    "cleanup_global_schema_parser",
+    "deregister_all_types",
+    "fill_context",
+    "kj_loop",
+    "load",
+    "read_multiple_bytes_packed",
+    "register_type",
+    "remove_import_hook",
+    "run",
+    "void_task_done_callback",
+    # Modules
+    "types",
+    # Internal classes that are exposed but prefixed with underscore
+    "_CapabilityClient",
+    "_DynamicCapabilityClient",
+    "_DynamicListBuilder",
+    "_DynamicListReader",
+    "_DynamicOrphan",
+    "_DynamicResizableListBuilder",
+    "_DynamicStructBuilder",
+    "_DynamicStructReader",
+    "_EventLoop",
+    "_EnumSchema",
+    "_InterfaceSchema",
+    "_InterfaceMethod",
+    "_InterfaceModule",
+    "_ListSchema",
+    "_MallocMessageBuilder",
+    "_NodeReader",
+    "_NestedNodeReader",
+    "_List_NestedNode_Reader",
+    "_PackedFdMessageReader",
+    "_ParsedSchema",
+    "_PyCustomMessageBuilder",
+    "_StreamFdMessageReader",
+    "_StructModule",
+    "_StructSchema",
+    "_EnumModule",
+    "_StructSchemaField",
+    "_init_capnp_api",
+    "_write_message_to_fd",
+    "_write_packed_message_to_fd",
+    "_Schema",
+]
