@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ case.name }}</title>
+  <style>
+    /* Execution Log style Begin */
+    a:link {
+      text-decoration: none;
+    }
+
+    #logs div {
+      white-space: pre-wrap;
+      font-size: 14px;
+    }
+
+    .aw,
+    .step {
+      font-weight: bold;
+      color: #1E90FF;
+    }
+
+    .aw1 {
+      color: #008B45;
+    }
+
+    .aw2 {
+      color: #00CD00;
+    }
+
+    .aw3 {
+      font-weight: bold;
+      background: linear-gradient(to right, red, orange, yellow, green, blue, indigo, violet);
+      -webkit-background-clip: text;
+      color: transparent;
+      display: inline-block;
+      background-repeat: no-repeat;
+    }
+
+    .aw3-container {
+      display: block;
+      overflow: hidden;
+    }
+
+    .ui_container {
+      background-color: black;
+      color: #18b302;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+
+    .ui_component-number {
+      color: #18b302;
+    }
+
+    .ui_components {
+      display: flex;
+      flex-wrap: wrap;
+    }
+
+    .ui_component {
+      flex: 1;
+      margin: 5px;
+      color: #18b302;
+      background-color: #333;
+      padding: 10px;
+      box-sizing: border-box;
+      overflow-wrap: break-word;
+      word-break: break-all;
+    }
+
+    .ui_component pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .ui_old-component .highlight {
+      color: red;
+    }
+
+    .ui_new-component .highlight {
+      color: yellow;
+    }
+
+    @media (max-width: 600px) {
+      .ui_components {
+        flex-direction: column;
+      }
+    }
+
+    .error,
+    .blocked,
+    .fail,
+    .failed,
+    .unavailable {
+      color: red !important;
+    }
+
+    .pass,
+    .passed {
+      color: green !important;
+    }
+
+    .warn,
+    .warning {
+      color: #FFCC00;
+    }
+    /* Execution Log style End */
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      height: 100%;
+      font-family: "Segoe UI", Tahoma, Verdana, sans-serif;
+      padding: 20px 20px 10px;
+    }
+
+    h4 {
+      margin-top: 16px;
+      margin-bottom: 16px;
+    }
+
+    .h4-details {
+      margin: 0 0 8px;
+      height: 40px;
+      line-height: 40px;
+    }
+
+    .svg-style {
+      margin-right: 2px;
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+      vertical-align: sub;
+    }
+
+    .btn-style-fixed {
+      width: 28px;
+      height: 28px;
+      cursor: pointer;
+    }
+
+    .btn-div {
+      margin-bottom: 5px;
+      border-bottom: 1px solid #d1cdcd;
+      padding: 5px;
+    }
+
+    .scroll-top-btn {
+      padding: 5px;
+    }
+
+    .thumbnail-panel {
+      display: none;
+      overflow-x: auto;
+      gap: 10px;
+      padding: 8px;
+      border-top: 1px solid #cccccc;
+      border-left: 1px solid #cccccc;
+      border-right: 1px solid #cccccc;
+      min-width: 200px;
+    }
+
+    /* 缩略图样式 */
+    .thumbnail {
+      cursor: pointer;
+      height: 124px;
+      object-fit: cover;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s ease;
+    }
+
+    .thumbnail:hover {
+      transform: scale(1.05);
+    }
+
+    .left-panel {
+      display: none;
+      width: 250px;
+      padding: 8px;
+    }
+
+    .left-panel ul {
+      list-style: none;
+      overflow-y: auto;
+      height: 100%;
+    }
+
+    .left-panel li {
+      padding: 5px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .left-panel li:hover,
+    .left-panel .active {
+      background-color: #c9e1f8;
+    }
+
+    .main-content {
+      flex: 1;
+      padding: 8px;
+      overflow-y: auto;
+      border-left: 1px solid #cccccc;
+      position: relative;
+    }
+
+    .right-panel {
+      display: none;
+      background-color: #f5f7fa;
+      padding: 2px 5px 2px ;
+      text-align: center;
+      position: relative;
+    }
+    .right-btn-style {
+      transform-origin: center center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background-color: #fff;
+      text-align: center;
+      line-height: 20px;
+      box-shadow: 0 0 6px rgba(0, 0, 0, .2);
+      cursor: pointer;
+      float: right;
+      z-index: 5;
+      right: 5px;
+      top: 5px;
+    }
+
+    .left-panel, .right-panel, #logs {
+      position: relative;
+    }
+
+    #screenshots {
+      display: flex;
+      overflow-y: auto;
+    }
+
+    /* 步骤截图缩略图样式 */
+    .step-thumbnail {
+      cursor: pointer;
+      height: 500px;
+      object-fit: cover;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s ease;
+      margin-bottom: 5px;
+    }
+
+    .step-thumbnail:hover {
+      transform: scale(1.03);
+    }
+
+    .container {
+      display: flex;
+      justify-content: flex-start;
+      border: 1px solid #cccccc;
+      position: relative;
+      max-height: 830px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10px;
+      table-layout: fixed;
+    }
+
+    td {
+      padding: 8px;
+      border-bottom: 1px solid #edeef5;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      position: relative;
+    }
+
+    #table-summary td {
+      border: 1px solid #edeef5;
+    }
+
+    .td-left {
+      color: #606266;
+      background: #f5f7fa;
+      font-weight: bold;
+    }
+
+    th {
+      color: #606266;
+      padding: 8px;
+      text-align: left;
+      position: relative;
+    }
+
+    .tab-content th {
+      border-bottom: 1px solid #edeef5;
+    }
+  
+    .tab-content tr:nth-child(even),
+    .div-json-table tr:nth-child(even) {
+      background-color: #f5f7fa;
+    }
+  
+    tr:nth-child(odd) {
+      background-color: #ffffff;
+    }
+
+    .resizer {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background-color: #ccc;
+      cursor: col-resize;
+      z-index: 10;
+      opacity: 0;
+    }
+  
+    .visible {
+      background-color: #999;
+      opacity: 1;
+    }
+  
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      overflow: auto;
+    }
+
+    .modal-content {
+      background-color: white;
+      margin: 10% auto 0;
+      padding: 20px;
+      width: 80%;
+      max-width: 90%;
+      position: relative;
+    }
+
+    .div-json-table {
+      margin-top: 10px;
+      max-height: 50vh;
+      overflow: auto;
+    }
+  
+    .close {
+      position: absolute;
+      right: 20px;
+      top: 10px;
+      font-size: 28px;
+      cursor: pointer;
+    }
+
+    /* 导航栏样式-Begin */
+    .navbar {
+      display: flex;
+      background-color: #f5f7fa;
+      padding: 6px 10px;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      float: right;
+    }
+  
+    .navbar a {
+      color: #606266;
+      padding: 4px 20px;
+      flex: 1;
+      transition: background-color 0.3s;
+      line-height: 20px;
+    }
+  
+    .navbar a:hover {
+      background-color: #c9e1f8;
+      border-radius: 4px;
+    }
+
+    .navbar a.active {
+      background-color: #c9e1f8;
+      border-radius: 4px;
+    }
+  
+    .tab-content {
+      display: none;
+      animation: fadeIn 0.5s ease-in-out;
+    }
+  
+    .tab-content.active {
+      display: block;
+    }
+    /* 导航栏样式-End */
+  
+    .list-container {
+      list-style: none;
+      padding: 0;
+    }
+  
+    .list-item {
+      display: flex;
+      align-items: center;
+      height: 65px;
+      overflow: hidden;
+      border-bottom: 1px solid #edeef5;
+      cursor: pointer;
+      background: #f5f7fa;
+    }
+  
+    .text-content {
+      flex: 1;
+      padding: 0 10px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      word-break: break-all;
+      transition: all 0.3s ease;
+    }
+
+    .data-content {
+      padding: 0 5px;
+      text-align: right;
+    }
+
+    .mask {
+      background: rgba(0, 0, 0, 0.5);
+      width: 100%;
+      height: 100%;
+      position: fixed;
+      left: 0;
+      z-index: 20001;
+      top: 0;
+      display: none;
+      justify-content: space-around;
+      align-items: center;
+    }
+
+    .mask-imgBg {
+      background-color: #fff;
+      position: relative;
+      border-radius: 0.1875rem;
+      border: 0.3125rem solid #edeef5;
+    }
+
+    .mask-delete {
+      position: absolute;
+      z-index: 5;
+      right: 20px;
+      top: 20px;
+    }
+  
+    .mask-delete:hover {
+      cursor: pointer;
+    }
+  
+    .btn-style {
+      transform-origin: center center;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background-color: #f0f0f0;
+      text-align: center;
+      line-height: 50px;
+      font-weight: 700;
+      box-shadow: 0 0 6px rgba(0, 0, 0, .2);
+      cursor: pointer;
+    }
+
+    .disabled-btn {
+      background-color: #cccccc70;
+      cursor: not-allowed;
+    }
+  
+    .right-btns {
+      position: absolute;
+      z-index: 5;
+      right: 20px;
+      top: 45%;
+    }
+
+    .page-num {
+      min-width: 50px;
+      width: auto;
+      margin: 10px 0;
+    }
+
+    ::-webkit-scrollbar {
+      width: 7px;
+      height: 7px;
+      border-radius: 7px;
+      background-color: #bcbcbc;
+    }
+
+    ::-webkit-scrollbar-track {
+      border-radius: 7px;
+      background-color: #f5f5f5;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      border-radius: 7px;
+      background-color: #bfc3c6;
+    }
+  </style>
+</head>
+
+<body>
+  {% set ns = namespace(is_fault=false, is_testsuite=false, has_subcases=false, has_tests_result=false) %}
+  <!-- 判断是否为测试套场景 -->
+  {% if case.is_testsuite == "true" %}
+    {% set ns.is_testsuite = true %}
+  {% endif %}
+  <!-- 判断是否为故障注入场景 -->
+  {% for subcase in case.subcases %}
+    {% if subcase.fault %}
+      {% set ns.is_fault = true %}
+    {% endif %}
+  {% endfor %}
+  <!-- 判断是否有子用例 -->
+  {% if case.subcases %}
+    {% set ns.has_subcases = true %}
+  {% endif %}
+  <!-- 判断是否有test步骤结果 -->
+  {% if case.tests_result %}
+    {% set ns.has_tests_result = true %}
+  {% endif %}
+
+  <h3>{{ case.name }}</h3>
+  <h4>Summary</h4>
+  <table id="table-summary">
+    <tbody>
+      <tr>
+        <td class="td-left">Begin</td>
+        <td>{{ case.begin }}</td>
+        <td class="td-left">End</td>
+        <td>{{ case.end }}</td>
+        <td class="td-left">Cost</td>
+        <td>{{ case.elapsed }}</td>
+      </tr>
+      <!-- 测试套脚本，无Result和Error，无需要显示 -->
+      {% if ns.is_fault or ns.is_testsuite %}
+      <tr>
+        <td class="td-left">Log</td>
+        <td colspan="5">{{ case.logs }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td class="td-left">Result</td>
+        <td class="{{ case.result | lower }}">{{ case.result }}</td>
+        <td class="td-left">Log</td>
+        <td colspan="3">{{ case.logs }}</td>
+      </tr>
+      {% if case.error %}
+      <tr>
+        <td class="td-left">Error</td>
+        <td class="td_error error" colspan="5">{{ case.error }}</td>
+      </tr>
+      {% endif %}
+      {% endif %}
+    </tbody>
+  </table>
+
+  <!-- 导航栏 -->
+  <h4 class="h4-details">Test Details
+    <div style="float: right; display: flex;">
+      <div class="navbar">
+        {% if ns.is_fault or ns.is_testsuite %}
+        <a href="" class="nav-link" data-tab="content-details">Details</a>
+        <a href="" class="nav-link" data-tab="content-devices">Devices</a>
+        <a href="" class="nav-link active" data-tab="content-subcases">SubCases</a>
+        {% else %}
+        <a href="" class="nav-link active" data-tab="content-details">Details</a>
+        <a href="" class="nav-link" data-tab="content-devices">Devices</a>
+        {% if ns.has_subcases %}
+        <a href="" class="nav-link" data-tab="content-subcases">SubCases</a>
+        {% endif %}
+        {% if ns.has_tests_result %}
+        <a href="" class="nav-link" data-tab="content-tests">Tests</a>
+        {% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </h4>
+
+  <!-- 内容区域 -->
+  {% if ns.is_fault or ns.is_testsuite %}
+  <div class="tab-content" id="content-details">
+  {% else %}
+  <div class="tab-content active" id="content-details">
+  {% endif %}
+    <!-- 缩略图 -->
+    <div class="thumbnail-panel" id="thumbnails">
+      <!-- 通过JS动态生成 -->
+    </div>
+    <div class="container">
+      <div class="left-panel">
+        <ul id="steps" class="list-container">
+          <!-- 通过JS动态生成 -->
+        </ul>
+      </div>
+      <div class="right-panel">
+        <div style="height: 20px;width: 100%;margin-bottom: 5px;">
+          <div class="right-btn-style" onclick="disableStepScreenshot()">
+            <svg style="vertical-align: -0.125em" focusable="false" data-icon="close" width="1em" height="1em"
+              fill="currentColor" aria-hidden="true" fill-rule="evenodd" viewBox="64 64 896 896">
+              <path
+                d="M799.86 166.31c.02 0 .04.02.08.06l57.69 57.7c.04.03.05.05.06.08a.12.12 0 010 .06c0 .03-.02.05-.06.09L569.93 512l287.7 287.7c.04.04.05.06.06.09a.12.12 0 010 .07c0 .02-.02.04-.06.08l-57.7 57.69c-.03.04-.05.05-.07.06a.12.12 0 01-.07 0c-.03 0-.05-.02-.09-.06L512 569.93l-287.7 287.7c-.04.04-.06.05-.09.06a.12.12 0 01-.07 0c-.02 0-.04-.02-.08-.06l-57.69-57.7c-.04-.03-.05-.05-.06-.07a.12.12 0 010-.07c0-.03.02-.05.06-.09L454.07 512l-287.7-287.7c-.04-.04-.05-.06-.06-.09a.12.12 0 010-.07c0-.02.02-.04.06-.08l57.7-57.69c.03-.04.05-.05.07-.06a.12.12 0 01.07 0c.03 0 .05.02.09.06L512 454.07l287.7-287.7c.04-.04.06-.05.09-.06a.12.12 0 01.07 0z">
+              </path>
+            </svg>
+          </div>
+        </div>
+        <div id="screenshots">
+          <!-- 通过JS动态生成 -->
+        </div>
+      </div>
+      <div id="logs" class="main-content">
+        {% for log in logs %}
+        <div>{{ log | replace("\n", "<br>") }}</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="content-devices">
+    <table id="ResizableTable1">
+      <thead>
+        <tr>
+          <th style="width: 3%;">#</th>
+          <th>SN</th>
+          <th>Type</th>
+          <th>Platform</th>
+          <th>Model</th>
+          <th>Version</th>
+          <th style="width: 25%;">Others</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for device in case.devices %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ device.sn }}</td>
+          <td>{{ device.type }}</td>
+          <td>{{ device.platform }}</td>
+          <td>{{ device.model }}</td>
+          <td>{{ device.version }}</td>
+          <td>
+            {% if device.others %}
+            <svg onclick="viewJSON(this)" class="svg-style" xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 1024 1024" data-v-ea893728="">
+              <path fill="currentColor"
+                d="M512 160c320 0 512 352 512 352S832 864 512 864 0 512 0 512s192-352 512-352m0 64c-225.28 0-384.128 208.064-436.8 288 52.608 79.872 211.456 288 436.8 288 225.28 0 384.128-208.064 436.8-288-52.608-79.872-211.456-288-436.8-288zm0 64a224 224 0 1 1 0 448 224 224 0 0 1 0-448m0 64a160.192 160.192 0 0 0-160 160c0 88.192 71.744 160 160 160s160-71.808 160-160-71.744-160-160-160">
+              </path>
+            </svg>
+            {{ device.others | tojson }}
+            {% else %}
+            -
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if ns.is_fault or ns.is_testsuite %}
+  <div class="tab-content active" id="content-subcases">
+  {% else %}
+  <div class="tab-content" id="content-subcases">
+  {% endif %}
+    <table id="ResizableTable2">
+      <thead>
+        <tr>
+          <th style="width: 3%;">#</th>
+          <th>Name</th>
+          {% if ns.is_fault %}
+          <th>Fault</th>
+          {% endif %}
+          <th>Result</th>
+          <th>Begin</th>
+          <th>End</th>
+          <th>Cost</th>
+          <th style="width: 25%;">Error</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for subcase in case.subcases %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td><a href="{{ subcase.report }}" target="_blank">{{ subcase.name }}</a></td>
+          {% if ns.is_fault %}
+          <td>{{ subcase.fault | default('') }}</td>
+          {% endif %}
+          <td class="{{ subcase.result | lower }}">{{ subcase.result }}</td>
+          <td>{{ subcase.begin }}</td>
+          <td>{{ subcase.end }}</td>
+          <td>{{ subcase.elapsed }}</td>
+          <td class="error">{{ subcase.error }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if ns.has_tests_result %}
+  <div class="tab-content" id="content-tests">
+    <table id="ResizableTable3">
+      <thead>
+        <tr>
+          <th style="width: 3%;">#</th>
+          <th>Name</th>
+          <th>Result</th>
+          <th>Begin</th>
+          <th>End</th>
+          <th>Cost</th>
+          <th style="width: 25%;">Error</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for test in case.tests_result %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ test.name }}</td>
+          <td class="{{ test.result | lower }}">{{ test.result }}</td>
+          <td>{{ test.begin }}</td>
+          <td>{{ test.end }}</td>
+          <td>{{ test.elapsed }}</td>
+          <td class="error">{{ test.error }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <div id="jsonModal" class="modal">
+    <div class="mask-delete btn-style" onclick="closeModal()">
+      <svg style="vertical-align: -0.125em" focusable="false" data-icon="close" width="1em" height="1em"
+        fill="currentColor" aria-hidden="true" fill-rule="evenodd" viewBox="64 64 896 896">
+        <path
+          d="M799.86 166.31c.02 0 .04.02.08.06l57.69 57.7c.04.03.05.05.06.08a.12.12 0 010 .06c0 .03-.02.05-.06.09L569.93 512l287.7 287.7c.04.04.05.06.06.09a.12.12 0 010 .07c0 .02-.02.04-.06.08l-57.7 57.69c-.03.04-.05.05-.07.06a.12.12 0 01-.07 0c-.03 0-.05-.02-.09-.06L512 569.93l-287.7 287.7c-.04.04-.06.05-.09.06a.12.12 0 01-.07 0c-.02 0-.04-.02-.08-.06l-57.69-57.7c-.04-.03-.05-.05-.06-.07a.12.12 0 010-.07c0-.03.02-.05.06-.09L454.07 512l-287.7-287.7c-.04-.04-.05-.06-.06-.09a.12.12 0 010-.07c0-.02.02-.04.06-.08l57.7-57.69c.03-.04.05-.05.07-.06a.12.12 0 01.07 0c.03 0 .05.02.09.06L512 454.07l287.7-287.7c.04-.04.06-.05.09-.06a.12.12 0 01.07 0z">
+        </path>
+      </svg>
+    </div>
+    <div class="modal-content">
+      <h4>认证设备信息</h4>
+      <div class="div-json-table">
+        <table id="jsonTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <div id="dialog" class="mask">
+    <div class="mask-delete btn-style" onclick="exitThumbnailPreview()">
+      <svg style="vertical-align: -0.125em" focusable="false" data-icon="close" width="1em" height="1em"
+        fill="currentColor" aria-hidden="true" fill-rule="evenodd" viewBox="64 64 896 896">
+        <path
+          d="M799.86 166.31c.02 0 .04.02.08.06l57.69 57.7c.04.03.05.05.06.08a.12.12 0 010 .06c0 .03-.02.05-.06.09L569.93 512l287.7 287.7c.04.04.05.06.06.09a.12.12 0 010 .07c0 .02-.02.04-.06.08l-57.7 57.69c-.03.04-.05.05-.07.06a.12.12 0 01-.07 0c-.03 0-.05-.02-.09-.06L512 569.93l-287.7 287.7c-.04.04-.06.05-.09.06a.12.12 0 01-.07 0c-.02 0-.04-.02-.08-.06l-57.69-57.7c-.04-.03-.05-.05-.06-.07a.12.12 0 010-.07c0-.03.02-.05.06-.09L454.07 512l-287.7-287.7c-.04-.04-.05-.06-.06-.09a.12.12 0 010-.07c0-.02.02-.04.06-.08l57.7-57.69c.03-.04.05-.05.07-.06a.12.12 0 01.07 0c.03 0 .05.02.09.06L512 454.07l287.7-287.7c.04-.04.06-.05.09-.06a.12.12 0 01.07 0z">
+        </path>
+      </svg>
+    </div>
+    <div class="mask-imgBg">
+      <div class="show-Data"></div>
+    </div>
+    <div class="right-btns">
+      <div id="prev-btn" class="btn-style" onclick="prevThumbnail()">
+        <svg style="vertical-align: -0.125em" focusable="false" data-icon="close" width="1em" height="1em"
+          fill="currentColor" aria-hidden="true" fill-rule="evenodd" viewBox="64 64 896 896">
+          <path fill="currentColor"
+            d="M609.408 149.376 277.76 489.6a32 32 0 0 0 0 44.672l331.648 340.352a29.12 29.12 0 0 0 41.728 0 30.592 30.592 0 0 0 0-42.752L339.264 511.936l311.872-319.872a30.592 30.592 0 0 0 0-42.688 29.12 29.12 0 0 0-41.728 0z">
+          </path>
+        </svg>
+      </div>
+      <div class="page-num btn-style"></div>
+      <div id="next-btn" class="btn-style" onclick="nextThumbnail()">
+        <svg style="vertical-align: -0.125em" focusable="false" data-icon="close" width="1em" height="1em"
+          fill="currentColor" aria-hidden="true" fill-rule="evenodd" viewBox="64 64 896 896">
+          <path fill="currentColor"
+            d="M340.864 149.312a30.592 30.592 0 0 0 0 42.752L652.736 512 340.864 831.872a30.592 30.592 0 0 0 0 42.752 29.12 29.12 0 0 0 41.728 0L714.24 534.336a32 32 0 0 0 0-44.672L382.592 149.376a29.12 29.12 0 0 0-41.728 0z">
+          </path>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="btns"
+    style="position: fixed;z-index:5000;bottom: 50px;right: 50px;border: 1px solid #d1cdcd;">
+    <div class="btn-div">
+      <div id="svg-none" title="显示图片/视频">
+        <svg onclick="showMedia('none')" class="btn-style-fixed" xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 1024 1024" data-v-ea893728="">
+          <path fill="currentColor"
+            d="M512 160c320 0 512 352 512 352S832 864 512 864 0 512 0 512s192-352 512-352m0 64c-225.28 0-384.128 208.064-436.8 288 52.608 79.872 211.456 288 436.8 288 225.28 0 384.128-208.064 436.8-288-52.608-79.872-211.456-288-436.8-288zm0 64a224 224 0 1 1 0 448 224 224 0 0 1 0-448m0 64a160.192 160.192 0 0 0-160 160c0 88.192 71.744 160 160 160s160-71.808 160-160-71.744-160-160-160">
+          </path>
+        </svg>
+      </div>
+      <div id="svg-block" style="display: none;" title="隐藏图片/视频">
+        <svg onclick="showMedia('block')" class="btn-style-fixed" xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 1024 1024" data-v-ea893728="">
+          <path fill="currentColor"
+            d="M876.8 156.8c0-9.6-3.2-16-9.6-22.4-6.4-6.4-12.8-9.6-22.4-9.6-9.6 0-16 3.2-22.4 9.6L736 220.8c-64-32-137.6-51.2-224-60.8-160 16-288 73.6-377.6 176C44.8 438.4 0 496 0 512s48 73.6 134.4 176c22.4 25.6 44.8 48 73.6 67.2l-86.4 89.6c-6.4 6.4-9.6 12.8-9.6 22.4 0 9.6 3.2 16 9.6 22.4 6.4 6.4 12.8 9.6 22.4 9.6 9.6 0 16-3.2 22.4-9.6l704-710.4c3.2-6.4 6.4-12.8 6.4-22.4Zm-646.4 528c-76.8-70.4-128-128-153.6-172.8 28.8-48 80-105.6 153.6-172.8C304 272 400 230.4 512 224c64 3.2 124.8 19.2 176 44.8l-54.4 54.4C598.4 300.8 560 288 512 288c-64 0-115.2 22.4-160 64s-64 96-64 160c0 48 12.8 89.6 35.2 124.8L256 707.2c-9.6-6.4-19.2-16-25.6-22.4Zm140.8-96c-12.8-22.4-19.2-48-19.2-76.8 0-44.8 16-83.2 48-112 32-28.8 67.2-48 112-48 28.8 0 54.4 6.4 73.6 19.2zM889.599 336c-12.8-16-28.8-28.8-41.6-41.6l-48 48c73.6 67.2 124.8 124.8 150.4 169.6-28.8 48-80 105.6-153.6 172.8-73.6 67.2-172.8 108.8-284.8 115.2-51.2-3.2-99.2-12.8-140.8-28.8l-48 48c57.6 22.4 118.4 38.4 188.8 44.8 160-16 288-73.6 377.6-176C979.199 585.6 1024 528 1024 512s-48.001-73.6-134.401-176Z">
+          </path>
+          <path fill="currentColor"
+            d="M511.998 672c-12.8 0-25.6-3.2-38.4-6.4l-51.2 51.2c28.8 12.8 57.6 19.2 89.6 19.2 64 0 115.2-22.4 160-64 41.6-41.6 64-96 64-160 0-32-6.4-64-19.2-89.6l-51.2 51.2c3.2 12.8 6.4 25.6 6.4 38.4 0 44.8-16 83.2-48 112-32 28.8-67.2 48-112 48Z">
+          </path>
+        </svg>
+      </div>
+    </div>
+    <div title="查看报错" class="btn-div">
+      <svg onclick="gotoError()" class="btn-style-fixed" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" data-v-ea893728="">
+        <path fill="currentColor"
+          d="M832 384H576V128H192v768h640zm-26.496-64L640 154.496V320zM160 64h480l256 256v608a32 32 0 0 1-32 32H160a32 32 0 0 1-32-32V96a32 32 0 0 1 32-32m160 448h384v64H320zm0-192h160v64H320zm0 384h384v64H320z">
+        </path>
+      </svg>
+    </div>
+    <div title="回到顶部" class="scroll-top-btn">
+      <svg class="btn-style-fixed" xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 1024 1024" data-v-ea893728="">
+        <path fill="currentColor"
+          d="M572.235 205.282v600.365a30.118 30.118 0 1 1-60.235 0V205.282L292.382 438.633a28.913 28.913 0 0 1-42.646 0 33.43 33.43 0 0 1 0-45.236l271.058-288.045a28.913 28.913 0 0 1 42.647 0L834.5 393.397a33.43 33.43 0 0 1 0 45.176 28.913 28.913 0 0 1-42.647 0l-219.618-233.23z">
+        </path>
+      </svg>
+    </div>
+  </div>
+
+  <script>
+    const reportData = {{ case }};
+    const deviceSns = reportData.devices.map(device => device.sn);
+    const steps = reportData.steps;
+    const logsContainer = document.getElementById('logs');
+    const stepList = document.getElementById('steps');
+    const tableSummary = document.getElementById('table-summary');
+    const container = document.querySelector('.container');
+    const rightPanel = document.querySelector('.right-panel');
+    const showBgList = [];
+    const showData = document.querySelector('.show-Data');
+    const pageNum = document.querySelector('.page-num');
+
+    // 页面上原始的资源链接
+    const srcUrls = [];
+    initSrcUrls();
+
+    let currentBgIndex = 0;
+    let resizing = {
+      isResizing: false,
+      resizingIndex: -1,
+      startX: 0,
+      startWidth: 0,
+      currentTable: null
+    };
+
+    // 监听窗口大小变化事件
+    window.addEventListener('resize', function() {
+      getImgDivMaxWidth();
+    });
+
+    // 回到顶部
+    const scrollButton = document.querySelector('.scroll-top-btn');
+    scrollButton.addEventListener('click', () => {
+      logsContainer.scrollTo({top: 0, behavior: 'smooth'});
+    });
+
+    // 监听Details拖动事件
+    const panels = document.querySelectorAll('.left-panel, .right-panel');
+    panels.forEach(panel => {
+      const resizer = document.createElement('div');
+      resizer.className = 'resizer';
+      resizer.addEventListener('mousedown', startResizeDiv(panel));
+      // 添加悬停显示逻辑到面板
+      panel.addEventListener('mouseenter', () => {
+        resizer.classList.add('visible');
+      });
+      panel.addEventListener('mouseleave', () => {
+        resizer.classList.remove('visible');
+      });
+      panel.appendChild(resizer);
+    });
+
+    // Details面板拖动逻辑
+    function startResizeDiv(panel) {
+      return function(e) {
+        let initialX = e.clientX;
+        let initialWidth = panel.offsetWidth;
+        const container = document.querySelector('.container');
+        const logs = document.querySelector('#logs');
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', stopDragging);
+        function drag(e) {
+          const dx = e.clientX - initialX;
+          const newWidth = initialWidth + dx;
+          if (newWidth > 0 && newWidth < container.offsetWidth) {
+            panel.style.width = `${newWidth}px`;
+            const otherPanel = panel.classList.contains('left-panel')
+              ? document.querySelector('.right-panel')
+              : document.querySelector('.left-panel');
+            const containerWidth = container.offsetWidth;
+            const logsWidth = containerWidth - newWidth - otherPanel.offsetWidth;
+            if (logsWidth > 0) {
+              logs.style.width = `${logsWidth}px`;
+            } else {
+              logs.style.width = '0px';
+            }
+          }
+        }
+        // 停止拖动处理函数
+        function stopDragging() {
+          // 移除鼠标移动事件监听
+          document.removeEventListener('mousemove', drag);
+          // 移除鼠标松开事件监听
+          document.removeEventListener('mouseup', stopDragging);
+        }
+      };
+    }
+
+    // 切换导航栏
+    const navLinks = document.querySelectorAll('.nav-link');
+    const tabs = document.querySelectorAll('.tab-content');
+    navLinks.forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        // 移除所有active类
+        navLinks.forEach(lnk => lnk.classList.remove('active'));
+        tabs.forEach(tab => tab.classList.remove('active'));
+        // 为当前项添加active类
+        const tabId = link.getAttribute('data-tab');
+        const btns = document.querySelector('.btns');
+        if(tabId === 'content-details') {
+          btns.style.display = 'block';
+        } else {
+          btns.style.display = 'none';
+        }
+        document.getElementById(tabId).classList.add('active');
+        link.classList.add('active');
+      });
+    });
+
+    // 表格调整列宽功能
+    const tables = document.querySelectorAll('table');
+    tables.forEach(table => {
+      const headers = table.querySelectorAll('th');
+      const tableId = table.id;
+      // 添加拖动条
+      headers.forEach((header, index) => {
+        const resizer = document.createElement('div');
+        resizer.className = 'resizer';
+        resizer.addEventListener('mousedown', startResize(tableId, index));
+        // 添加悬停显示逻辑到表头单元格
+        header.addEventListener('mouseenter', () => {
+          resizer.classList.add('visible');
+        });
+        header.addEventListener('mouseleave', () => {
+          resizer.classList.remove('visible');
+        });
+        header.appendChild(resizer);
+      });
+    });
+    showSteps();
+
+    function startResize(tableId, index) {
+      return function (e) {
+        resizing.isResizing = true;
+        resizing.resizingIndex = index;
+        resizing.startX = e.clientX;
+        resizing.startWidth = document.getElementById(tableId).querySelectorAll('th')[index].offsetWidth;
+        resizing.currentTable = tableId;
+        document.addEventListener('mousemove', resize);
+        document.addEventListener('mouseup', stopResize);
+      };
+    }
+
+    function resize(e) {
+      if (!resizing.isResizing) return;
+      const delta = e.clientX - resizing.startX;
+      const newWidth = resizing.startWidth + delta;
+      const headers = document.getElementById(resizing.currentTable).querySelectorAll('th');
+      headers[resizing.resizingIndex].style.width = `${newWidth}px`;
+      // 调整对应列的宽度
+      const cells = document.getElementById(resizing.currentTable).querySelectorAll(`td:nth-child(${resizing.resizingIndex + 1})`);
+      cells.forEach(cell => {
+        cell.style.width = `${newWidth}px`;
+      });
+    }
+
+    function stopResize() {
+      resizing.isResizing = false;
+      resizing.resizingIndex = -1;
+      resizing.currentTable = null;
+      document.removeEventListener('mousemove', resize);
+      document.removeEventListener('mouseup', stopResize);
+    }
+
+    function showSteps() {
+      const stepsCnt = steps.length;
+      if (stepsCnt > 0) {
+        stepList.parentElement.style.display = 'block';
+      }
+      let foundErrStep = false;
+      for (let i = 0; i < stepsCnt; i++) {
+        const step = steps[i];
+        const stepError = step.error;
+        const screenshot = step.screenshot;
+        addThumbnail(screenshot);
+        if (!stepError) {
+          addNextStepScreenshot2Current(i);
+        }
+        const item = document.createElement('li');
+        item.classList.add('list-item');
+        const stepNameDiv = document.createElement('div');
+        stepNameDiv.textContent = step.name;
+        stepNameDiv.title = step.name;
+        stepNameDiv.classList.add('text-content');
+        const stepCostDiv = document.createElement('div');
+        stepCostDiv.textContent = `${step.cost}s`;
+        stepCostDiv.classList.add('data-content');
+        item.appendChild(stepNameDiv);
+        item.appendChild(stepCostDiv);
+        item.onclick = () => {
+          activeStep(item);
+          showStep(i, screenshot);
+        };
+        if (stepError) {
+          stepNameDiv.classList.add('error');
+          if (!foundErrStep) {
+            foundErrStep = true;
+            activeStep(item);
+            showStep(i, screenshot);
+          }
+        }
+        stepList.appendChild(item);
+      }
+    }
+
+    function activeStep(target) {
+      const items = document.querySelectorAll('.left-panel li');
+      items.forEach(i => i.classList.remove('active'));
+      target.classList.add('active');
+    }
+
+    // 下一个步骤的第1张图，作为当前步骤的结束图
+    function addNextStepScreenshot2Current(curIndex) {
+      if (curIndex > steps.length - 2 || deviceSns.length === 0) {
+        return;
+      }
+      const sns = deviceSns.slice();
+      const curStep = steps[curIndex];
+      const nxtStep = steps[curIndex + 1];
+      let curStepScreenshots = curStep.screenshot;
+      let nxtStepScreenshots = nxtStep.screenshot;
+      for (const screenshot of nxtStepScreenshots) {
+        const snsCnt = sns.length;
+        if (snsCnt === 0) {
+          break;
+        }
+        for (let i = 0; i< snsCnt; i++) {
+          const sn = sns[i]
+          if (screenshot.link.includes(sn)) {
+            let target = Object.assign({}, screenshot);
+            target.name = `${curStep.name}-END`;
+            curStepScreenshots.push(target);
+            sns.splice(sn, 1);
+            break;
+          }
+        }
+      }
+    }
+
+    // 添加缩略图
+    function addThumbnail(screenshot) {
+      const thumbs = document.getElementById('thumbnails');
+      thumbs.style.display = 'flex';
+      for (const shot of screenshot) {
+        shot.index = showBgList.length;
+        showBgList.push(shot);
+        const item = createImgOrVideo(shot);
+        item.onclick = () => {
+          showThumbnail(shot);
+        };
+        item.classList.add('thumbnail');
+        thumbs.appendChild(item);
+      }
+    }
+
+    // 当步骤激活时，给当前步骤的第1张缩略图绘制边框
+    function markThumbnail(shot) {
+      const srcName = shot.link.replaceAll('\\', '/').split('/').pop()
+      const thumbnails = document.getElementById('thumbnails');
+      for (let element of thumbnails.children) {
+        const src = getMediaSrc(element);
+        element.style.border = src && src.includes(srcName) ? '2px solid red' : '';
+      }
+    }
+
+    // 展示缩略图
+    function showThumbnail(shot) {
+      const index = shot.index;
+      const div = document.createElement('div');
+      div.innerHTML = `${index + 1}/${showBgList.length}`;
+      div.style.textAlign = 'center';
+      pageNum.appendChild(div);
+      const item = createImgOrVideo(shot);
+      item.style.width = 'auto';
+      item.style.height = 0.8 * window.innerHeight + 'px';
+      showData.appendChild(item);
+      const dialog = document.getElementById('dialog');
+      dialog.style.display = 'flex';
+      const prevBtn = document.getElementById('prev-btn');
+      const nextBtn = document.getElementById('next-btn');
+      // 禁用/启用按钮
+      prevBtn.disabled = index === 0;
+      nextBtn.disabled = index === showBgList.length - 1;
+      // 添加/移除样式
+      prevBtn.classList.toggle('disabled-btn', index === 0);
+      nextBtn.classList.toggle('disabled-btn', index === showBgList.length - 1);
+      currentBgIndex = index;
+    }
+
+    // 显示前一张缩略图
+    function prevThumbnail() {
+      if (currentBgIndex > 0) {
+        showData.replaceChildren();
+        pageNum.replaceChildren();
+        showThumbnail(showBgList[currentBgIndex - 1]);
+      }
+    }
+
+    // 显示后一张缩略图
+    function nextThumbnail() {
+      if (currentBgIndex < showBgList.length - 1) {
+        showData.replaceChildren();
+        pageNum.replaceChildren();
+        showThumbnail(showBgList[currentBgIndex + 1]);
+      }
+    }
+
+    // 退出缩略图预览界面
+    function exitThumbnailPreview() {
+      showData.replaceChildren();
+      pageNum.replaceChildren();
+      const dialog = document.getElementById('dialog');
+      dialog.style.display = 'none';
+    }
+
+    // 显示步骤日志和截图
+    function showStep(stepId, screenshot) {
+      let element = document.getElementById(`step_error_${stepId}`);
+      if (!element) {
+        element = document.getElementById(stepId);
+      }
+      if (element) {
+        logsContainer.scrollTo(0, element.offsetTop - 50);
+      }
+      showScreenshot(screenshot);
+    }
+
+    // 展示步骤截图
+    function showScreenshot(screenshot) {
+      const screenshots = document.getElementById('screenshots');
+      const leftPanel = document.querySelector('.left-panel');
+      leftPanel.style.borderRight = '1px solid #cccccc';
+      screenshots.parentElement.style.display = 'block';
+      while (screenshots.firstChild) {
+        screenshots.removeChild(screenshots.firstChild);
+      }
+      let isMarked = false;
+      for (const shot of screenshot) {
+        if (!isMarked) {
+          markThumbnail(shot);
+          isMarked = true;
+        }
+        const item = createImgOrVideo(shot);
+        item.onclick = () => {
+          gotoLogs(shot);
+        };
+        item.classList.add('step-thumbnail');
+        const nameDiv = document.createElement('div');
+        nameDiv.textContent = shot.name;
+        nameDiv.style.textAlign = 'center';
+        const container = document.createElement('div');
+        container.style.margin = '0 5px';
+        container.appendChild(item);
+        container.appendChild(nameDiv);
+        screenshots.appendChild(container);
+      }
+      const stepThumbnails = document.querySelectorAll('.step-thumbnail');
+      const thumbnailHeight = tableSummary.offsetHeight + 380 + 'px';
+      stepThumbnails.forEach(thumbnail => {
+          thumbnail.style.height = `calc(100vh - ${thumbnailHeight})`;
+      });
+      setTimeout(getImgDivMaxWidth, 0);
+    }
+
+    // 不展示步骤截图
+    function disableStepScreenshot(){
+      rightPanel.style.display = 'none';
+    }
+
+    function getImgDivMaxWidth () {
+      const thumbnails = document.querySelectorAll('.step-thumbnail');
+      const firstThumbnail = thumbnails[0];
+      const width = firstThumbnail ? firstThumbnail.offsetWidth : 0;
+      if (thumbnails.length <= 1) {
+        rightPanel.style.width = `${width + 35}px`;
+      } else if (thumbnails.length >= 2) {
+        rightPanel.style.width = `${width * 2 + 35}px`;
+      }
+    }
+
+    function createImgOrVideo(shot) {
+      const src = getSrcUrl(shot.link);
+      const tag = src.endsWith('.mp4') ? 'video' : 'img';
+      const item = document.createElement(tag);
+      if (tag === 'img') {
+        item.src = src;
+      } else {
+        const source = document.createElement('source');
+        source.src = src;
+        item.appendChild(source);
+        item.controls = true;
+        item.muted = true;
+      }
+      item.title = shot.name;
+      return item;
+    }
+
+    // 展示或隐藏日志中的媒体资源
+    function showMedia(value) {
+      const svg_block = document.getElementById('svg-block');
+      const svg_none = document.getElementById('svg-none');
+      const elements = [...logsContainer.getElementsByTagName('img'), ...logsContainer.getElementsByTagName('video')];
+      elements.forEach(element => {
+        element.style.display = value === 'block' ? 'block' : 'none';
+      });
+      // 设置svg的显示状态
+      svg_block.style.display = value === 'block' ? 'none' : 'block';
+      svg_none.style.display = value === 'block' ? 'block' : 'none';
+    }
+
+    function getMediaSrc(element) {
+      let src;
+      if (element.tagName === 'IMG') {
+        src = element.src;
+      } else if (element.tagName === 'VIDEO') {
+        const sources = element.querySelectorAll('source');
+        if (sources.length > 0) {
+          src = sources[0].src;
+        }
+      }
+      return src;
+    }
+
+    function getSrcUrl(link) {
+      if (srcUrls.length === 0) {
+        return link;
+      }
+      const srcName = link.replaceAll('\\', '/').split('/').pop();
+      for (const url of srcUrls) {
+        if (url.includes(srcName)) {
+          return url;
+        }
+      }
+      return link;
+    }
+
+    function initSrcUrls() {
+      const elements = [...logsContainer.getElementsByTagName('img'), ...logsContainer.getElementsByTagName('video')];
+      elements.forEach(element => {
+        const src = getMediaSrc(element);
+        if (src && (src.includes('http://') || src.includes('https://'))) {
+          srcUrls.push(src);
+        }
+      });
+    }
+
+    // 点击step步骤里的截图，跳转到对应的日志行
+    function gotoLogs(shot) {
+      const src = shot.link;
+      const srcName = src.split('/').slice(-1);
+      const tag = src.endsWith('.mp4') ? 'video' : 'img';
+      const elements = logsContainer.querySelectorAll(tag);
+      for (const element of elements) {
+        const elementSrc = getMediaSrc(element);
+        if (elementSrc.includes(srcName)) {
+          logsContainer.scrollTo(0, element.offsetTop - 50);
+          break;
+        }
+      }
+    }
+
+    function gotoError() {
+      const columns = document.getElementsByClassName('td_error');
+      if (columns.length === 0) {
+        return;
+      }
+      const errorMsg = columns[0].textContent;
+      if (!errorMsg) {
+        return;
+      }
+      const elements = logsContainer.getElementsByClassName('error');
+      for (const element of elements) {
+        if (element.textContent.indexOf(errorMsg) >= 0) {
+          logsContainer.scrollTo(0, element.offsetTop - 50);
+          break;
+        }
+      }
+    }
+
+    // 查看认证设备信息
+    function viewJSON(icon) {
+      const jsonText = icon.nextSibling.textContent.trim();
+      const jsonData = JSON.parse(jsonText);
+      const modal = document.getElementById('jsonModal');
+      const jsonTable = document.getElementById('jsonTable');
+      // 清空表格
+      jsonTable.innerHTML = '';
+      // 生成表格
+      Object.entries(jsonData).forEach(([key, value]) => {
+        const row = jsonTable.insertRow();
+        const keyCell = row.insertCell(0);
+        keyCell.textContent = key;
+        keyCell.style.width = '33%';
+        const valueCell = row.insertCell(1);
+        valueCell.textContent = typeof value === 'object' ? JSON.stringify(value) : value.toString();
+      });
+      modal.style.display = 'block';
+    }
+
+    function closeModal() {
+      document.getElementById('jsonModal').style.display = 'none';
+    }
+  </script>
+</body>
+
+</html>
