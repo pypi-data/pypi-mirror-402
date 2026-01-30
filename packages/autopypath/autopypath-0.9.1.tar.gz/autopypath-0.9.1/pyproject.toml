@@ -1,0 +1,439 @@
+[project]
+name = "autopypath"
+dynamic = ["version"]
+requires-python = ">=3.9" 
+description = "Automatic path management for testing and development."
+authors = [
+    {name = "Jerilyn Franz", email = "opensource@snowhare.com"}
+]
+maintainers = [
+    {name = "Jerilyn Franz", email = "opensource@snowhare.com"}
+]
+readme = "README.rst"
+keywords = [
+    "PYTHONPATH",
+    "path management",
+    "sys.path",
+    "import",
+    "dynamic import",
+    "configuration",
+    "environment",
+    "testing",
+    "tooling",
+    "automation",
+    "development",
+    "runtime"
+]
+
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Utilities"
+]
+
+dependencies = [
+    "tomli",
+    "typing-extensions >= 3.10.0.0"  # for Literal, Final, and other typing features on older Pythons
+]
+
+[project.urls]
+Homepage = "https://github.com/JerilynFranz/python-autopypath"
+Documentation = "https://python-autopypath.readthedocs.io/en/latest/"
+Repository = "https://github.com/JerilynFranz/python-autopypath.git"
+Issues = "https://github.com/JerilynFranz/python-autopypath/issues"
+Changelog = "https://github.com/JerilynFranz/python-autopypath/blob/main/CHANGELOG.rst"
+
+
+[dependency-groups]
+
+dev = [
+       "pytest>=7.4.1,<9.0.0",
+       "pytest-cov>=4.2.1",
+       "coverage>=6.10.6",
+       "mypy>=1.13.1",
+       "ruff>=0.14.11",
+       "hatch>=1.13",
+       "hatchling>=1.27",
+       "pydeps>=1.23.2",
+       "tox>=4.22.0",
+       "tox-uv>=1.13.1",
+       "uv>=0.9.18",
+       "tomli",
+       "typing-extensions >= 3.10.0.0"
+      ]
+
+test = [
+    "pytest>=7.4.1,<9.0.0",
+    "pytest-cov>=4.2.1",
+    "coverage>=6.10.6",
+]
+
+# Dependencies for linting and code style
+lint = [   
+    "mypy>=1.13.1",
+    "pytest>=7.4.1,<9.0.0",
+    "ruff>=0.14.11",
+]
+
+# Dependencies for building documentation
+docs = [
+    "furo>=2025.09.25",
+    "sphinx>=8.2.3,<9.0.0",
+    "sphinx-copybutton>=0.5.2",
+    "sphinx-design>=0.6.1",
+]
+
+# A group for all other development tools
+tools = [
+    "hatch>=1.13",
+    "hatchling>=1.27",
+    "pydeps>=1.23.2",
+    "tox>=4.22.0",
+    "tox-uv>=1.13.1",
+    "uv>=0.9.18",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+
+# NOTE: uv sync resolves across all Python versions allowed by [project].requires-python.
+# Docs deps (e.g., Sphinx >= 8.2.3 requires Python >= 3.11), so keep docs deps
+# marker-restricted to avoid resolution failures on 3.9–3.10, even when installing only dev.
+
+# The development dependency group requires Python 3.12+ because some tools do not support older versions.
+[tool.uv.dependency-groups]
+dev = {requires-python = ">=3.12"}
+docs = {requires-python = ">=3.11"}
+
+[tool.tox]
+requires = ["tox>=4.22"]
+# tox does not support factor expansion in env_list yet (as of tox 4.34.1),
+# so we list all envs explicitly here. You cannot use "py1{0-4}" syntax here.
+env_list = [ 
+    "py39",
+    "py310",
+    "py311",
+    "py312",
+    "py313",
+    "py314",
+    "pypy311",
+    "lint"
+]
+install_command = ["uv", "pip", "install", "{opts}", "{packages}"]
+
+# labels table for grouping environments
+[tool.tox.labels]
+test = ["py39", "py310", "py311", "py312", "py313", "py314", "pypy311", "lint"]
+
+# --- Base Test Environment for automation of 'run' from env_list -
+
+[tool.tox.env_run_base]
+description = "Run test under {base_python}"
+allowlist_externals = ["pytest", "ruff", "mypy", "coverage"]
+dependency_groups = ["test", "lint", "tools"]
+commands = [
+    ["mypy", "src", "tests"],
+    ["coverage", "run", "-m", "pytest", { replace = "posargs", extend = true }],
+    ["coverage", "report"],
+]
+
+# --- Concrete Test Environments ---
+
+# tox devenv -e dev
+[tool.tox.env.dev]
+description = "Development environment with all tools"
+package = "editable"
+dependency_groups = ["dev"]
+base_python = ["python3.12", "python3.11", "python3.13", "python3.14"]
+allowlist_externals = ["pytest", "mypy", "ruff", "coverage"]
+commands = []
+
+[tool.tox.env.lint]
+description = "Run linters"
+package = "skip"
+base_python = ["python3.10", "python3.11", "python3.12", "python3.13", "python3.14"]
+dependency_groups = ["lint", "dev"]
+commands = [
+    ["ruff", "check", "tests", "src"],
+    ["mypy", "src", "tests"],
+]
+
+[tool.mypy]
+exclude = ["venv"]
+
+[tool.tox.env.docs]
+# This environment is self-contained and does NOT inherit from basetest.
+description = "Build the documentation"
+base_python = ["python3.12"]
+dependency_groups = ["docs", "test"]
+allowlist_externals = ["sphinx-build", "sphinx-apidoc", "pydeps"]
+commands = [
+    ["sphinx-apidoc", "--separate", "--remove-old", "--module-first", "-f", "-o", "docs_source/source", "src"],
+    ["sphinx-build", "-b", "html", "docs_source/", "documentation/"],
+]
+
+[tool.tox.env.coverage_html]
+description = "Run tests and generate HTML coverage report"
+base_python = ["python3.12", "python3.13", "python3.14"]
+dependency_groups = ["test", "tools"]
+commands = [
+    ["coverage", "run", "-m", "pytest", {replace = "posargs", extend = true}],
+    ["coverage", "html", "-d", "coverage_html_report"],
+    ["coverage", "report"],
+]
+
+# mypy excluded from pypy envs due to lack of support
+
+[tool.tox.env.pypy311]
+description = "Run tests on PyPy 3.11"
+base_python = ["pypy3.11"]
+dependency_groups = ["test", "tools"]  # omit "lint"
+commands = [
+    ["coverage", "run", "-m", "pytest", { replace = "posargs", extend = true }],
+    ["coverage", "report"],
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/autopypath"]
+exclude = [
+    ".trunk/",
+    ".git/",
+    ".gitignore",
+    "coverage/",
+    "tests/",
+    ".github/",
+    "bootstrap.py",
+    ".python-version",
+    ".readthedocs.yaml",
+    ".vscode/",
+    "coverage_html_report/",
+    "documentation/",
+    "examples/",
+    "docs/",
+    "python-autopypath.code-workspace",
+    "docs_source/",
+    "CODE_OF_CONDUCT.rst",
+    "MODULE.bazel",
+    "BUILD.bazel",
+    "WORKSPACE.bazel",
+]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    ".trunk/",
+    ".git/",
+    "coverage/",
+    "coverage_html_report/",
+    "examples/",
+]
+[tool.hatch.version]
+path = "src/autopypath/_meta.py"
+
+[tool.pyright]
+include = ["src", "tests"]
+exclude = [
+    "**/node_modules",
+    "**/__pycache__",
+    "src/experimental",
+    "src/typestubs"
+]
+ignore = []
+defineConstant = { DEBUG = true }
+
+reportMissingImports = "error"
+reportUnnecessaryIsInstance = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+norecursedirs = ".git .tox .vscode venv* .*_cache build dist .venv*"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["autopypath"]
+omit = [
+    "tests/*",
+    "bootstrap.py",
+    "test_plan.py"
+]
+
+[tool.coverage.report]
+# Regexes for lines to exclude from consideration
+fail_under = 98.0
+exclude_also = [
+    # Don't complain about missing debug-only code:
+    "if self\\.debug",
+
+    # Don't complain if tests don't hit defensive assertion code:
+    "raise AssertionError",
+    "raise NotImplementedError",
+
+    # Don't complain if non-runnable code isn't run:
+    "if 0:",
+    "if __name__ == .__main__.:",
+
+    # Don't complain about code only used by type checking tools:
+    "if TYPE_CHECKING:",
+    "def .*: \\.\\.\\.$",
+
+    # Don't complain about abstract methods, they aren't run:
+    "@(abc\\.)?abstractmethod",
+    ]
+
+ignore_errors = true
+
+[tool.coverage.html]
+directory = "coverage_html_report"
+
+
+[tool.ruff]
+# Assume Python 3.9+ syntax.
+target-version = "py39"
+
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    "venv",
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".venv-tools",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+]
+
+# Same as Black.
+line-length = 120
+indent-width = 4
+
+[tool.ruff.lint]
+# Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`) codes by default.
+# Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
+# McCabe complexity (`C901`) by default.
+select = ["A", "E", "F", "W", "B", "ANN"]
+ignore = ["ANN401"]
+
+# Allow fix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+quote-style = "single"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+
+# Enable auto-formatting of code examples in docstrings. Markdown,
+# reStructuredText code/literal blocks and doctests are all supported.
+#
+# This is currently disabled by default, but it is planned for this
+# to be opt-out in the future.
+docstring-code-format = true
+
+# Set the line length limit used when formatting code snippets in
+# docstrings.
+#
+# This only has an effect when the `docstring-code-format` setting is
+# enabled.
+docstring-code-line-length = "dynamic"
+
+[tool.autopypath]
+
+# Files or directories that indicate the repository root.
+#
+# Specify as a table where the key is the file or directory name,
+# and the value is either 'file' or 'dir' depending on whether the
+# marker is a file or directory.
+#
+# Default is { 'pyproject.toml' = 'file', '.git' = 'dir' } if not specified.
+#
+repo_markers = { 'pyproject.toml' = 'file', '.git' = 'dir', '.hg' = 'dir' }
+
+# Additional paths to add to sys.path relative to the repo root.
+# Paths must be specified as relative paths (POSIX-style, eg. 'src/main.py')
+# from the repository root.
+# Multiple paths can be specified.
+# Default is ['src', 'tests'] if not specified.
+#
+paths = ['src', 'tests']
+
+
+# Strategy for handling multiple PYTHONPATH sources.
+# Options:
+#   prepend_highest_priority: use only the highest priority found source, all others are ignored.
+#   prepend:  combine all found sources, with priority based on path_resolution_order.
+#   replace:  replace sys.path entirely with the priority merged PYTHONPATH sources.
+#             This has the effect of removing all existing sys.path entries and
+#             may break standard library and installed package imports.
+# Default is 'prepend' if not specified. Additional paths are prepended
+# to the existing sys.path. Duplicate paths are removed, preserving existing order.
+load_strategy = 'prepend' # options: 'prepend', 'prepend_highest_priority', 'replace'
+
+# Order to load PYTHONPATH sources, highest priority first.
+# Only resolution sources listed here will be considered.
+# Sources:
+# 
+#   manual: paths specified directly in a call to autopypath.custom.configure_pypath() or
+#           autopypath.custom_debug.configure_pypath()
+#
+#   pyproject: paths specified in this pyproject.toml file in the [tool.autopypath] section.
+#
+#
+# Default order if not specified is: ['manual', 'pyproject']
+#
+path_resolution_order = ['manual', 'pyproject'] # order to load PYTHONPATH sources, highest priority first
