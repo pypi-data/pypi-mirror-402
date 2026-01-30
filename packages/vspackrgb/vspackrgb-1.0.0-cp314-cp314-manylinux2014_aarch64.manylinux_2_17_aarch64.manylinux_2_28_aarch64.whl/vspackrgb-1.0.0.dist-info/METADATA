@@ -1,0 +1,114 @@
+Metadata-Version: 2.4
+Name: vspackrgb
+Version: 1.0.0
+Summary: RGB packing for VapourSynth frames
+Project-URL: Source Code, https://github.com/Jaded-Encoding-Thaumaturgy/vs-view/tree/main/src/vspackrgb
+Project-URL: Bug Tracker, https://github.com/Jaded-Encoding-Thaumaturgy/vs-view/issues
+Project-URL: Contact, https://discord.gg/XTpc6Fa9eB
+License: MIT License
+        
+        Copyright (c) 2026 Jaded Encoding Thaumaturgy
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+License-File: LICENSE
+Keywords: aarch64,arm,arm64,cython,packing,rgb,vapoursynth
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: MacOS :: MacOS X
+Classifier: Operating System :: Microsoft :: Windows
+Classifier: Operating System :: POSIX :: Linux
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Classifier: Typing :: Typed
+Requires-Python: >=3.12
+Requires-Dist: vapoursynth
+Provides-Extra: numpy
+Requires-Dist: numpy>=2.0.0; extra == 'numpy'
+Description-Content-Type: text/markdown
+
+# vspackrgb
+
+RGB packing for VapourSynth frames.
+
+Converts planar RGB VapourSynth clips into display-ready packed formats:
+
+- **RGB24 → BGRA** (8-bit interleaved)
+- **RGB30 → RGB30** (10-bit packed, 2-bit alpha)
+
+Output is stored in a GRAY32 clip.
+
+## Benchmarks
+
+### Blank clip with `keep=True`
+
+```
+             RGB24 Packing (1920x1080)
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┓
+┃ Backend            ┃ Frames ┃    Time ┃     FPS ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━┩
+│ vszip.PackRGB      │   6000 │  2.186s │ 2745.14 │
+│ libp2p.Pack        │   6000 │  2.867s │ 2092.89 │
+│ akarin.Expr        │   6000 │  2.802s │ 2141.23 │
+│ vspackrgb (cython) │   6000 │  8.998s │  666.84 │
+│ vspackrgb (numpy)  │   6000 │ 20.182s │  297.30 │
+│ vspackrgb (python) │     30 │ 13.706s │    2.19 │
+└────────────────────┴────────┴─────────┴─────────┘
+
+             RGB30 Packing (1920x1080)
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┓
+┃ Backend            ┃ Frames ┃    Time ┃     FPS ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━┩
+│ vszip.PackRGB      │   6000 │  2.842s │ 2111.21 │
+│ libp2p.Pack        │   6000 │  2.817s │ 2129.78 │
+│ akarin.Expr        │   6000 │  2.866s │ 2093.62 │
+│ vspackrgb (cython) │   6000 │  8.750s │  685.72 │
+│ vspackrgb (numpy)  │   6000 │ 30.640s │  195.83 │
+│ vspackrgb (python) │     30 │ 11.968s │    2.51 │
+└────────────────────┴────────┴─────────┴─────────┘
+```
+
+### Real world scenario
+
+```
+            RGB24 Packing (1920x1080)
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┓
+┃ Backend            ┃ Frames ┃    Time ┃    FPS ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━┩
+│ vszip.PackRGB      │   6000 │  8.623s │ 695.79 │
+│ libp2p.Pack        │   6000 │  9.450s │ 634.93 │
+│ akarin.Expr        │   6000 │  9.395s │ 638.65 │
+│ vspackrgb (cython) │   6000 │ 12.231s │ 490.57 │
+│ vspackrgb (numpy)  │   6000 │ 23.421s │ 256.18 │
+│ vspackrgb (python) │     30 │ 13.840s │   2.17 │
+└────────────────────┴────────┴─────────┴────────┘
+
+            RGB30 Packing (1920x1080)
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┓
+┃ Backend            ┃ Frames ┃    Time ┃    FPS ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━┩
+│ vszip.PackRGB      │   6000 │ 10.623s │ 564.79 │
+│ libp2p.Pack        │   6000 │ 10.874s │ 551.77 │
+│ akarin.Expr        │   6000 │ 10.655s │ 563.13 │
+│ vspackrgb (cython) │   6000 │ 13.503s │ 444.35 │
+│ vspackrgb (numpy)  │   6000 │ 36.062s │ 166.38 │
+│ vspackrgb (python) │     30 │ 12.055s │   2.49 │
+└────────────────────┴────────┴─────────┴────────┘
+
+```
