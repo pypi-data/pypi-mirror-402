@@ -1,0 +1,188 @@
+# 🦜️🔗 langchain-continuous-learning
+
+**ACE (Agentic Context Engineering)** middleware for LangChain agents that enables self-improvement through evolving playbooks.
+
+[![PyPI version](https://badge.fury.io/py/langchain-continuous-learning.svg)](https://badge.fury.io/py/langchain-continuous-learning)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## Overview
+
+ACE is a technique developed at Stanford that enables agents to self-improve by treating context as an evolving playbook. This playbook accumulates and refines strategies through a process of reflection and curation.
+
+Based on the research paper: [Agentic Context Engineering: Evolving Contexts for Self-Improving Language Models](https://arxiv.org/abs/2510.04618)
+
+## Installation
+
+```bash
+pip install langchain-continuous-learning
+```
+
+For development:
+```bash
+pip install langchain-continuous-learning[test]
+```
+
+## Quick Start
+
+```python
+from langchain.agents import create_agent
+from ace import ACEMiddleware
+from langchain_core.messages import HumanMessage
+
+# Create ACE middleware
+ace = ACEMiddleware(
+    reflector_model="gpt-4o-mini",  # Analyzes agent responses
+    curator_model="gpt-4o-mini",    # Curates the playbook
+    curator_frequency=10,            # Update playbook every 10 interactions
+)
+
+# Create agent with ACE middleware
+agent = create_agent(
+    model="gpt-4o",
+    tools=[calculator, search],
+    middleware=[ace],
+)
+
+# Use the agent - it will self-improve over time
+result = agent.invoke({
+    "messages": [HumanMessage(content="Calculate the NPV of...")]
+})
+```
+
+## How It Works
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                          Agent Loop                            │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐      │
+│  │   Playbook   │───▶│    Model     │───▶│   Response   │      │
+│  │  (injected)  │    │    Call      │    │              │      │
+│  └──────────────┘    └──────────────┘    └──────┬───────┘      │
+│         ▲                                       │              │
+│         │                                       ▼              │
+│  ┌──────┴───────┐    ┌──────────────┐    ┌──────────────┐      │
+│  │   Curator    │◀───│  Reflector   │◀───│  Trajectory  │      │
+│  │  (periodic)  │    │  (analyze)   │    │   Analysis   │      │
+│  └──────────────┘    └──────────────┘    └──────────────┘      │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+```
+
+### Three-Role Architecture
+
+| Role | Purpose | When It Runs |
+|------|---------|--------------|
+| **Generator** | Uses playbook to enhance responses | Every model call |
+| **Reflector** | Analyzes trajectories and tags bullets | After each response |
+| **Curator** | Adds new insights to playbook | Every N interactions |
+
+### The Playbook
+
+The playbook is a structured document with bullets organized by section:
+
+```
+## strategies_and_insights
+[str-00001] helpful=5 harmful=0 :: Always verify data types before processing
+[str-00002] helpful=3 harmful=1 :: Consider edge cases in financial data
+
+## common_mistakes_to_avoid
+[mis-00001] helpful=6 harmful=0 :: Don't forget timezone conversions
+```
+
+Each bullet tracks:
+- **ID**: Unique identifier for tracking
+- **Counts**: `helpful=X harmful=Y` updated by the reflector
+- **Content**: The actual advice or strategy
+
+## Training with Ground Truth
+
+When you have ground truth answers, pass them for faster learning:
+
+```python
+# Training with ground truth
+for item in training_data:
+    result = agent.invoke({
+        "messages": [HumanMessage(content=item["question"])],
+        "ground_truth": item["answer"],  # Enables precise feedback
+    })
+
+# Inference without ground truth
+result = agent.invoke({
+    "messages": [HumanMessage(content="What is 20% of 150?")]
+})
+```
+
+## Configuration
+
+```python
+ace = ACEMiddleware(
+    # Models (required)
+    reflector_model="gpt-4o-mini",      # Or BaseChatModel instance
+    curator_model="gpt-4o-mini",        # Or BaseChatModel instance
+
+    # Playbook settings
+    initial_playbook=None,              # Custom starting playbook
+    curator_frequency=5,                # Curate every N interactions
+    playbook_token_budget=80000,        # Max tokens for playbook
+
+    # Pruning settings
+    auto_prune=False,                   # Auto-remove harmful bullets
+    prune_threshold=0.5,                # Harmful ratio threshold
+    prune_min_interactions=3,           # Min interactions before pruning
+
+    # Training progress
+    expected_interactions=100,          # For progress tracking
+)
+```
+
+## Playbook Sections
+
+| Section | Slug | Purpose |
+|---------|------|---------|
+| `strategies_and_insights` | `str` | General approaches and tactics |
+| `formulas_and_calculations` | `cal` | Mathematical formulas |
+| `code_snippets_and_templates` | `cod` | Reusable code patterns |
+| `common_mistakes_to_avoid` | `mis` | Known pitfalls |
+| `problem_solving_heuristics` | `heu` | Decision-making rules |
+| `context_clues_and_indicators` | `ctx` | Problem type signals |
+| `others` | `oth` | Miscellaneous insights |
+
+## API Reference
+
+### ACEMiddleware
+
+The main middleware class that implements the ACE framework.
+
+### Playbook Utilities
+
+```python
+from ace import (
+    ACEPlaybook,              # Dataclass for playbook state
+    SectionName,              # Enum of section names
+    initialize_empty_playbook,
+    parse_playbook_line,
+    format_playbook_line,
+    extract_bullet_ids,
+    update_bullet_counts,
+    get_playbook_stats,
+    limit_playbook_to_budget,
+)
+```
+
+## Features Beyond Base Implementation
+
+- **Fresh bullet protection**: Newly curated bullets survive at least one round
+- **Token budget enforcement**: Automatic playbook trimming with priority-based selection
+- **Multi-turn support**: Works across conversation turns
+- **Tool integration**: Full support for tool-using agents
+
+## References
+
+- **Paper**: [Agentic Context Engineering](https://arxiv.org/abs/2510.04618)
+- **Original Implementation**: [github.com/ace-agent/ace](https://github.com/ace-agent/ace)
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
