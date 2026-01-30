@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--Copyright 2025 OpenSynergy Indonesia-->
+<!--Copyright 2025 PT. Simetri Sinergi Indonesia-->
+<!--License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).-->
+<odoo>
+<record id="klikpajak_backend_view_tree" model="ir.ui.view">
+    <field name="name">klikpajak_backend - Tree</field>
+    <field name="model">klikpajak_backend</field>
+    <field name="inherit_id" ref="ssi_master_data_mixin.mixin_master_data_view_tree" />
+    <field name="mode">primary</field>
+    <field name="arch" type="xml">
+        <data />
+    </field>
+</record>
+
+<record id="klikpajak_backend_view_search" model="ir.ui.view">
+    <field name="name">klikpajak_backend - Search</field>
+    <field name="model">klikpajak_backend</field>
+    <field
+            name="inherit_id"
+            ref="ssi_master_data_mixin.mixin_master_data_view_search"
+        />
+    <field name="mode">primary</field>
+    <field name="arch" type="xml">
+        <data />
+    </field>
+</record>
+
+<record id="klikpajak_backend_view_form" model="ir.ui.view">
+    <field name="name">klikpajak_backend - Form</field>
+    <field name="model">klikpajak_backend</field>
+    <field name="inherit_id" ref="ssi_master_data_mixin.mixin_master_data_view_form" />
+    <field name="priority">100</field>
+    <field name="mode">primary</field>
+    <field name="arch" type="xml">
+        <data>
+            <xpath expr="//header" position="inside">
+                <button
+                        name="action_running"
+                        string="Running"
+                        type="object"
+                        attrs="{'invisible':[('state','=','running')]}"
+                    />
+                <button
+                        name="action_restart"
+                        string="Restart"
+                        type="object"
+                        attrs="{'invisible':[('state','!=','running')]}"
+                    />
+                <button
+                        name="action_get_hmac"
+                        string="Test HMAC"
+                        type="object"
+                        attrs="{'invisible':[('state','!=','running'), ('auth_method', '!=', 'hmac')]}"
+                    />
+                <field name="state" widget="statusbar" />
+            </xpath>
+            <xpath expr="//group[@name='group_1']" position="replace">
+                <group name="header" colspan="4" col="2">
+                    <group name="header_left" colspan="1" col="2">
+                        <field name="name" />
+                        <field name="code" />
+                        <!-- <field name="exclude_product_ids" widget="many2many_tags"/> -->
+                        <field name="company_id" groups="base.group_multi_company" />
+                        <field name="active" widget="boolean_toggle" />
+                    </group>
+                    <group name="header_right" colspan="1" col="2">
+                        <separator name="api" string="API" />
+                        <field name="base_url" />
+                        <field name="sale_invoice_api" />
+                        <field name="retrieve_sale_invoice_api" />
+                        <field name="approve_sale_invoice_api" />
+                        <field name="cancel_sale_invoice_api" />
+                    </group>
+                </group>
+            </xpath>
+            <xpath expr="//page[@name='note']" position="before">
+                <page name="auth" string="Authentication">
+                    <group name="auth_1">
+                        <field name="auth_method" />
+                        <field
+                                name="token"
+                                attrs="{'invisible': [('auth_method', '!=', 'jwt')], 'required': [('auth_method', '=', 'jwt')]}"
+                            />
+                        <field
+                                name="username"
+                                attrs="{'invisible': [('auth_method', '!=', 'basic')], 'required': [('auth_method', '=', 'basic')]}"
+                            />
+                        <field
+                                name="password"
+                                password="True"
+                                attrs="{'invisible': [('auth_method', '!=', 'basic')], 'required': [('auth_method', '=', 'basic')]}"
+                            />
+                        <field
+                                name="client_id"
+                                attrs="{'invisible': [('auth_method', '!=', 'hmac')], 'required': [('auth_method', '=', 'hmac')]}"
+                            />
+                        <field
+                                name="client_secret"
+                                password="True"
+                                attrs="{'invisible': [('auth_method', '!=', 'hmac')], 'required': [('auth_method', '=', 'hmac')]}"
+                            />
+                    </group>
+                </page>
+                <page name="params" string="Parameters">
+                    <field name='parameter_value_ids'>
+                        <tree editable="bottom">
+                            <field name="name" />
+                            <field name="type" />
+                            <field name="value" />
+                        </tree>
+                    </field>
+                </page>
+            </xpath>
+        </data>
+    </field>
+</record>
+
+<record id="klikpajak_backend_action" model="ir.actions.act_window">
+    <field name="name">Klik Pajak Backends</field>
+    <field name="res_model">klikpajak_backend</field>
+    <field name="view_mode">tree,form</field>
+</record>
+
+
+<menuitem
+        id="klikpajak_backend_menu"
+        name="Backends"
+        parent="klikpajak_configuration_menu"
+        groups="base.group_system"
+        action="klikpajak_backend_action"
+        sequence="1"
+    />
+</odoo>
