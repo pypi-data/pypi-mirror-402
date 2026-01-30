@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2022 OpenSynergy Indonesia
+     Copyright 2022 PT. Simetri Sinergi Indonesia
+     License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl). -->
+<odoo>
+  <record id="amortization_view_search" model="ir.ui.view">
+    <field name="name">account.amortization - search</field>
+    <field name="model">account.amortization</field>
+    <field
+            name="inherit_id"
+            ref="ssi_transaction_mixin.mixin_transaction_view_search"
+        />
+    <field name="mode">primary</field>
+    <field name="arch" type="xml">
+        <data>
+
+        </data>
+    </field>
+</record>
+
+<record id="amortization_view_tree" model="ir.ui.view">
+    <field name="name">account.amortization -tree</field>
+    <field name="model">account.amortization</field>
+    <field name="mode">primary</field>
+    <field name="inherit_id" ref="ssi_transaction_mixin.mixin_transaction_view_tree" />
+    <field name="arch" type="xml">
+        <data>
+            <xpath expr="//field[@name='company_id']" position="after">
+                <field name="date" />
+                <field name="type_id" />
+                <field name="source" />
+                <field name="account_id" />
+                <field name="contra_account_id" />
+            </xpath>
+        </data>
+    </field>
+</record>
+
+<record id="amortization_view_form" model="ir.ui.view">
+    <field name="name">account.amortization - form</field>
+    <field name="model">account.amortization</field>
+    <field name="mode">primary</field>
+    <field name="inherit_id" ref="ssi_transaction_mixin.mixin_transaction_view_form" />
+    <field name="arch" type="xml">
+        <data>
+            <xpath expr="//field[@name='user_id']" position="after">
+                <field name="type_id" />
+                <field name="source" />
+                <field name="allowed_move_line_ids" invisible="1" />
+                <field
+                        name="move_line_id"
+                        domain="[('id','in',allowed_move_line_ids)]"
+                        attrs="{'invisible':[('source','=','manual')]}"
+                    />
+            </xpath>
+            <xpath expr="//group[@name='header_right']" position="inside">
+                <field name="date" />
+                <field name="amount" />
+                <field name="amount_residual" />
+                <field name="account_id" />
+                <field name="contra_account_id" />
+                <field name="journal_id" />
+                <field name="analytic_id" />
+            </xpath>
+            <xpath expr="//page[@name='note']" position="before">
+                <page name="schedule" string="Schedule">
+                    <group name="schedule_1" colspan="4" col="2">
+                        <field name="date_start" />
+                        <field name="period_number" />
+                        <field name="amortized" />
+                        <button
+                                name="action_compute_amortization_schedule"
+                                string="Compute Schedule"
+                                class="oe_highlight"
+                                icon="fa-calculator"
+                                type="object"
+                                attrs="{'invisible':[('state','!=','draft')]}"
+                            />
+                    </group>
+                    <field name="schedule_ids" colspan="4" nolabel="1">
+                        <tree
+                                create="false"
+                                edit="false"
+                                delete="false"
+                                options="{'reload_on_button': true}"
+                            >
+                            <field name="date" />
+                            <field name="amount" />
+                            <field name="state" />
+                            <field name="amortization_state" invisible="1" />
+                            <button
+                                    name="action_mark_as_manual"
+                                    title="Mark as Manual"
+                                    type="object"
+                                    icon="fa-circle-o"
+                                    attrs="{'invisible':['|',('state','!=','draft'),('amortization_state','!=','open')]}"
+                                />
+                            <button
+                                    name="action_create_account_move"
+                                    title="Create Account Move"
+                                    type="object"
+                                    icon="fa-cogs"
+                                    attrs="{'invisible':['|',('state','!=','draft'),('amortization_state','!=','open')]}"
+                                />
+                            <button
+                                    name="action_unmark_as_manual"
+                                    title="Unmark as Manual"
+                                    type="object"
+                                    icon="fa-check-circle-o"
+                                    attrs="{'invisible':[('state','!=','manual')]}"
+                                />
+                            <button
+                                    name="action_remove_account_move"
+                                    title="Cancel Account Move"
+                                    type="object"
+                                    icon="fa-eraser"
+                                    attrs="{'invisible':[('state','!=','post')]}"
+                                />
+                        </tree>
+                        <form create="false" edit="false" delete="false">
+                            <group name="form_schedule_1" colspan="4" col="2">
+                                <field name="date" />
+                                <field name="amount" />
+                                <field name="move_id" />
+                                <field name="move_line_id" />
+                                <field name="state" />
+                            </group>
+                        </form>
+                    </field>
+                </page>
+            </xpath>
+        </data>
+    </field>
+</record>
+
+<record id="amortization_action" model="ir.actions.act_window">
+    <field name="name">Amortizations</field>
+    <field name="type">ir.actions.act_window</field>
+    <field name="res_model">account.amortization</field>
+    <field name="view_mode">tree,form</field>
+    <field
+            name="search_view_id"
+            ref="ssi_account_amortization.amortization_view_search"
+        />
+</record>
+
+<menuitem
+        id="amortization_menu"
+        name="Amortizations"
+        parent="ssi_financial_accounting.menu_periodic_processing"
+        groups="ssi_account_amortization.amortization_viewer_group"
+        action="amortization_action"
+    />
+</odoo>
