@@ -1,0 +1,112 @@
+[build-system]
+requires = ["uv_build == 0.8.*"]
+build-backend = "uv_build"
+
+[project]
+name = "serialite"
+version = "0.5.1"
+description = "A serialization library for Python"
+authors = [ { name = "David Hagen", email = "david@drhagen.com" } ]
+license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
+keywords = ["serialization", "deserialization", "serde", "pydantic", "fastapi"]
+requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "returns >= 0.20,<0.27",
+]
+
+[project.optional-dependencies]
+fastapi = [
+    "fastapi == 0.121.*",
+    "pydantic == 2.*",
+]
+
+numpy = [
+    "numpy >=1.25,<3",
+]
+
+ordered-set = [
+    "ordered-set ~= 4.1",
+]
+
+[project.urls]
+Repository = "https://github.com/drhagen/serialite"
+
+[dependency-groups]
+nox = [
+    "nox-uv == 0.6.*",
+]
+test = [
+    "pytest == 8.*",
+    "coverage == 7.*",
+    "httpx", # Needed by starlette testclient
+]
+lint = [
+    "ruff == 0.14.*"
+]
+
+[tool.uv]
+default-groups = "all"
+python-preference = "only-managed"
+
+[tool.coverage.run]
+branch = true
+source_pkgs = ["serialite"]
+relative_files = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
+
+[tool.coverage.paths]
+source = [
+    "src/",
+    "**/site-packages/",
+]
+
+[tool.ruff]
+src = ["src"]
+line-length = 99
+
+[tool.ruff.lint]
+extend-select = [
+    "I", # isort
+    "N", # pep8-naming
+    "RUF", # ruff
+    "B", # flake8-bugbear
+    "N", # flake8-broken-line
+    "C4", # flake8-comprehensions
+    "PIE", # flake8-pie
+    "PT", # flake8-pytest-style
+    "PTH", # flake8-use-pathlib
+    "ERA", # flake8-eradicate
+]
+# F402: Variable shadowing is perfectly fine
+# PT011: testing for broad exceptions is fine
+extend-ignore = ["F402", "PT011"]
+
+[tool.ruff.lint.per-file-ignores]
+# F401: unused-import; Allow unused imports in __init__.py files
+"__init__.py" = ["F401"]
+
+[tool.ruff.lint.pep8-naming]
+classmethod-decorators = ["serialite._descriptors.classproperty"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["serialite.field", "fastapi.Body"]
