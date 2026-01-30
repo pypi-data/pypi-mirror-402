@@ -1,0 +1,128 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+# For setuptools: https://packaging.python.org/en/latest/specifications/declaring-project-metadata/
+[project]
+name = "aqua-diagnostics"
+dynamic = ["version"]
+authors = [ # AQUA core team reported here
+    {name = "Paolo Davini", email = "paolo.davini@cnr.it"},
+    {name = "Matteo Nurisso", email = "matteo.nurisso@polito.it"},
+    {name = "Silvia Caprioli", email = "silvia.caprioli@polito.it"},
+    {name = "Jost von Hardenberg", email = "jost.hardenberg@polito.it"},
+    {name = "Emanuele Tovazzi", email = "emanueletovazzi@cnr.it"},
+    {name = "Marco Cadau", email = "marco.cadau@polito.it"},
+    {name = "Supriyo Ghosh", email = "supriyo.ghosh@bsc.es"},
+    {name = "Maqsood Mubarak Rajput", email = "maqsoodmubarak.rajput@awi.de"},
+    {name = "Costanza Anerdi", email = "costanza.anerdi@polito.it"}
+]
+description = "AQUA-diagnostics: the diagnostics set of the AQUA framework for high-resolution climate model evaluation"
+readme = "README.md"
+keywords = ["climate", "modeling", "diagnostics", "high-resolution"]
+license = {file = "LICENSE"}
+requires-python = ">=3.10"
+classifiers = [
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: Implementation :: CPython"
+]
+dependencies = [
+    "ECmean4==0.1.15", 
+]
+
+[project.optional-dependencies]
+core = [
+    "aqua-core==1.0.0a2"
+]
+docs = [
+    "sphinx",
+    "sphinx-rtd-theme"
+]
+notebooks = [
+    "ipykernel",
+    "healpy"
+]
+tests = [
+    "pytest",
+    "pytest-cov",
+    "pytest-xdist",
+    "coverage",
+    "cdo"
+]
+minimal = [
+    "aqua-diagnostics[core]"
+]
+dev = [
+    "aqua-diagnostics[docs]",
+    "aqua-diagnostics[notebooks]",
+    "aqua-diagnostics[tests]"
+]
+all = [
+    "aqua-diagnostics[core]",
+    "aqua-diagnostics[docs]",
+    "aqua-diagnostics[notebooks]",
+    "aqua-diagnostics[tests]"
+]
+
+[project.urls]
+homepage = "https://github.com/DestinE-Climate-DT/AQUA-diagnostics/"
+documentation = "https://aqua-diagnostics.readthedocs.io/en/latest/index.html"
+repository = "https://github.com/DestinE-Climate-DT/AQUA-diagnostics/"
+issues = "https://github.com/DestinE-Climate-DT/AQUA-diagnostics/issues/"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["aqua*"]
+
+# Include non-Python files inside aqua/config and aqua/templates
+[tool.setuptools.package-data]
+"aqua" = [
+    "diagnostics/config/**/*",
+    "diagnostics/templates/**/*"
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "aqua.diagnostics.version.__version__"}
+
+[tool.pytest.ini_options]
+# verbose to have full test, run coverage on src folder and use pyproject as a configuration file
+addopts = "--durations=10 -v --cov=aqua" 
+testpaths = [
+    "tests"
+]
+markers = [
+    "aqua: mark test as AQUA framework",
+    #"slow: tests which are slow",
+    #"sbatch: tests which require sbatch",
+    #"graphics: tests which deal with graphics",
+    #"gsv: mark test that requires ECMWF FDB libraries",
+    "diagnostics: single marker for all diagnostics",
+    #"catgen: mark test for catalog generator",
+    "ensemble: pytest for ensemble diagnostic",
+    "frontier: pytest for frontier diagnostics"
+]
+pythonpath = [
+    ".",
+    "frontier-diagnostics/tropical_rainfall",
+    "frontier-diagnostics/tropical_cyclones"
+]
+
+[tool.coverage.run]
+branch = true
+command_line = '-m pytest tests'
+source = ["aqua/diagnostics"]
+omit = [
+    "tests/*", 
+    "**/__init__.py",
+    "aqua/diagnostics/dummy"
+    ]
+
