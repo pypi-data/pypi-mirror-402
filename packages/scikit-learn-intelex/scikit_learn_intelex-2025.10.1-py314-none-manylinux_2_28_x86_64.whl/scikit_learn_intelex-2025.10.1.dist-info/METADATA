@@ -1,0 +1,182 @@
+Metadata-Version: 2.1
+Name: scikit-learn-intelex
+Version: 2025.10.1
+Summary: Intel® Extension for Scikit-learn is a seamless way to speed up your Scikit-learn application.
+Home-page: https://github.com/intel/scikit-learn-intelex
+Author: Intel Corporation
+Author-email: onedal.maintainers@intel.com
+Maintainer-email: onedal.maintainers@intel.com
+License: Apache v2.0
+Project-URL: Bug Tracker, https://github.com/uxlfoundation/scikit-learn-intelex/issues
+Project-URL: Documentation, https://uxlfoundation.github.io/scikit-learn-intelex/
+Project-URL: Source Code, https://github.com/uxlfoundation/scikit-learn-intelex
+Keywords: machine learning,scikit-learn,data science,data analytics
+Platform: UNKNOWN
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Other Audience
+Classifier: Intended Audience :: Science/Research
+Classifier: Operating System :: Microsoft :: Windows
+Classifier: Operating System :: POSIX :: Linux
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Scientific/Engineering
+Classifier: Topic :: System
+Classifier: Topic :: Software Development
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+License-File: LICENSE.txt
+Requires-Dist: daal (==2025.10.1)
+Requires-Dist: numpy (>=1.19)
+Requires-Dist: scikit-learn (>=0.22)
+
+
+# Intel(R) Extension for Scikit-learn*
+
+[![Join the community on GitHub Discussions](https://badgen.net/badge/join%20the%20discussion/on%20github/black?icon=github)](https://github.com/uxlfoundation/scikit-learn-intelex/discussions)
+[![PyPI Version](https://img.shields.io/pypi/v/scikit-learn-intelex)](https://pypi.org/project/scikit-learn-intelex/)
+[![Conda Version](https://img.shields.io/conda/vn/conda-forge/scikit-learn-intelex)](https://anaconda.org/conda-forge/scikit-learn-intelex)
+
+Extension for Scikit-learn is a **free software AI accelerator** designed to deliver over **10-100X** acceleration to your existing scikit-learn code.
+The software acceleration is achieved with vector instructions, AI hardware-specific memory optimizations, threading, and optimizations.
+
+
+With Extension for Scikit-learn, you can:
+
+* Speed up training and inference by up to 100x with equivalent mathematical accuracy
+* Benefit from performance improvements across different hardware configurations, including [GPUs](https://uxlfoundation.github.io/scikit-learn-intelex/latest/oneapi-gpu.html) and [multi-GPU](https://uxlfoundation.github.io/scikit-learn-intelex/latest/distributed-mode.html) configurations
+* Integrate the extension into your existing Scikit-learn applications without code modifications
+* Continue to use the open-source scikit-learn API
+* Enable and disable the extension with a couple of lines of code or at the command line
+
+# 🛠 Installation
+Intel(R) Extension for Scikit-learn is available at the [Python Package Index](https://pypi.org/project/scikit-learn-intelex/),
+in [Conda-Forge](https://anaconda.org/conda-forge/scikit-learn-intelex) and in [Intel's conda channel](https://software.repos.intel.com/python/conda/).
+Intel(R) Extension for Scikit-learn is also available as a part of [Intel® oneAPI AI Analytics Toolkit](https://software.intel.com/content/www/us/en/develop/tools/oneapi/ai-analytics-toolkit.html) (AI Kit).
+
+To install through `pip`:
+
+```shell
+pip install scikit-learn-intelex
+```
+
+See the [documentation](https://uxlfoundation.github.io/scikit-learn-intelex/latest/quick-start.html#installation) for more details about
+supported platforms and other ways of installing it.
+
+You can [build the package from sources](https://github.com/uxlfoundation/scikit-learn-intelex/blob/master/INSTALL.md) as well.
+
+# ⚡️ Get Started
+
+Easiest way to benefit from accelerations from the extension is by patching scikit-learn with it:
+
+- **Enable CPU optimizations**
+
+```py
+import numpy as np
+from sklearnex import patch_sklearn
+patch_sklearn()
+
+from sklearn.cluster import DBSCAN
+
+X = np.array([[1., 2.], [2., 2.], [2., 3.],
+              [8., 7.], [8., 8.], [25., 80.]], dtype=np.float32)
+clustering = DBSCAN(eps=3, min_samples=2).fit(X)
+```
+
+- **Enable GPU optimizations**
+
+    _Note: executing on GPU has [additional system software requirements](https://www.intel.com/content/www/us/en/developer/articles/system-requirements/intel-oneapi-dpcpp-system-requirements.html) - see [details](https://uxlfoundation.github.io/scikit-learn-intelex/latest/oneapi-gpu.html)._
+
+
+```py
+import numpy as np
+from sklearnex import patch_sklearn, config_context
+patch_sklearn()
+
+from sklearn.cluster import DBSCAN
+
+X = np.array([[1., 2.], [2., 2.], [2., 3.],
+              [8., 7.], [8., 8.], [25., 80.]], dtype=np.float32)
+with config_context(target_offload="gpu:0"):
+    clustering = DBSCAN(eps=3, min_samples=2).fit(X)
+```
+
+### Usage without patching
+
+Alternatively, all functionalities are also available under a separate module which can be imported directly, without involving any patching.
+
+* To run on CPU:
+
+  ```python
+  import numpy as np
+  from sklearnex.cluster import DBSCAN
+
+  X = np.array([[1., 2.], [2., 2.], [2., 3.],
+                [8., 7.], [8., 8.], [25., 80.]], dtype=np.float32)
+  clustering = DBSCAN(eps=3, min_samples=2).fit(X)
+  ```
+
+* To run on GPU:
+
+  ```python
+  import numpy as np
+  from sklearnex import config_context
+  from sklearnex.cluster import DBSCAN
+
+  X = np.array([[1., 2.], [2., 2.], [2., 3.],
+                [8., 7.], [8., 8.], [25., 80.]], dtype=np.float32)
+  with config_context(target_offload="gpu:0"):
+      clustering = DBSCAN(eps=3, min_samples=2).fit(X)
+  ```
+
+# 🚀 Scikit-learn patching
+
+![](https://raw.githubusercontent.com/intel/scikit-learn-intelex/master/doc/sources/_static/scikit-learn-acceleration-2021.2.3.PNG)
+Configurations:
+- HW: c5.24xlarge AWS EC2 Instance using an Intel Xeon Platinum 8275CL with 2 sockets and 24 cores per socket
+- SW: scikit-learn version 0.24.2, scikit-learn-intelex version 2021.2.3, Python 3.8
+
+[Benchmarks code](https://github.com/IntelPython/scikit-learn_bench)
+
+Intel(R) Extension for Scikit-learn patching affects performance of specific Scikit-learn functionality. Refer to the [list of supported algorithms and parameters](https://uxlfoundation.github.io/scikit-learn-intelex/latest/algorithms.html) for details. In cases when unsupported parameters are used, the package fallbacks into original Scikit-learn. If the patching does not cover your scenarios, [submit an issue on GitHub](https://github.com/uxlfoundation/scikit-learn-intelex/issues).
+
+Read more about it in the documentation for [scikit-learn patching](https://uxlfoundation.github.io/scikit-learn-intelex/latest/quick-start.html#patching).
+
+## 👀 Follow us on Medium
+
+We publish blogs on Medium, so [follow us](https://medium.com/intel-analytics-software/tagged/machine-learning) to learn tips and tricks for more efficient data analysis with the help of Intel(R) Extension for Scikit-learn. Here are our latest blogs:
+
+- [Save Time and Money with Intel Extension for Scikit-learn](https://medium.com/intel-analytics-software/save-time-and-money-with-intel-extension-for-scikit-learn-33627425ae4)
+- [Superior Machine Learning Performance on the Latest Intel Xeon Scalable Processors](https://medium.com/intel-analytics-software/superior-machine-learning-performance-on-the-latest-intel-xeon-scalable-processor-efdec279f5a3)
+- [Leverage Intel Optimizations in Scikit-Learn](https://medium.com/intel-analytics-software/leverage-intel-optimizations-in-scikit-learn-f562cb9d5544)
+- [Intel Gives Scikit-Learn the Performance Boost Data Scientists Need](https://medium.com/intel-analytics-software/intel-gives-scikit-learn-the-performance-boost-data-scientists-need-42eb47c80b18)
+- [From Hours to Minutes: 600x Faster SVM](https://medium.com/intel-analytics-software/from-hours-to-minutes-600x-faster-svm-647f904c31ae)
+- [Improve the Performance of XGBoost and LightGBM Inference](https://medium.com/intel-analytics-software/improving-the-performance-of-xgboost-and-lightgbm-inference-3b542c03447e)
+- [Accelerate Kaggle Challenges Using Intel AI Analytics Toolkit](https://medium.com/intel-analytics-software/accelerate-kaggle-challenges-using-intel-ai-analytics-toolkit-beb148f66d5a)
+- [Accelerate Your scikit-learn Applications](https://medium.com/intel-analytics-software/improving-the-performance-of-xgboost-and-lightgbm-inference-3b542c03447e)
+- [Accelerate Linear Models for Machine Learning](https://medium.com/intel-analytics-software/accelerating-linear-models-for-machine-learning-5a75ff50a0fe)
+- [Accelerate K-Means Clustering](https://medium.com/intel-analytics-software/accelerate-k-means-clustering-6385088788a1)
+
+## 🔗 Important links
+- [Notebook examples](https://github.com/uxlfoundation/scikit-learn-intelex/tree/master/examples/notebooks)
+- [Documentation](https://uxlfoundation.github.io/scikit-learn-intelex/)
+- [scikit-learn API and patching](https://uxlfoundation.github.io/scikit-learn-intelex/)
+- [Benchmark code](https://github.com/IntelPython/scikit-learn_bench)
+- [Building from Sources](https://github.com/uxlfoundation/scikit-learn-intelex/blob/master/INSTALL.md)
+- [About Intel(R) oneAPI Data Analytics Library](https://github.com/uxlfoundation/oneDAL)
+
+## 💬 Support
+
+Report issues, ask questions, and provide suggestions using:
+
+- [GitHub Issues](https://github.com/uxlfoundation/scikit-learn-intelex/issues)
+- [GitHub Discussions](https://github.com/uxlfoundation/scikit-learn-intelex/discussions)
+- [Forum](https://community.intel.com/t5/Intel-Distribution-for-Python/bd-p/distribution-python)
+
+You may reach out to project maintainers privately at onedal.maintainers@intel.com
+
+
