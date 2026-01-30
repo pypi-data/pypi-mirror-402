@@ -1,0 +1,127 @@
+Metadata-Version: 2.4
+Name: ib-excel-formatting
+Version: 0.1.0
+Summary: Check and apply IB Excel formatting conventions (black=formulas, blue=hardcoded, green=cross-sheet, red=external/provider)
+Project-URL: Homepage, https://github.com/daaa1m/ib-excel-formatting
+Project-URL: Repository, https://github.com/daaa1m/ib-excel-formatting
+License-Expression: MIT
+License-File: LICENSE
+Keywords: excel,finance,formatting,investment-banking,openpyxl
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Financial and Insurance Industry
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Office/Business :: Financial :: Spreadsheet
+Requires-Python: >=3.10
+Requires-Dist: openpyxl>=3.1.5
+Description-Content-Type: text/markdown
+
+# ib-excel-formatting
+
+A Python package to check and apply Investment Banking Excel formatting conventions. This tool helps maintain financial modeling standards by ensuring cell font colors correctly reflect the nature of their content (hardcoded vs. formula vs. cross-reference).
+
+## Overview
+
+In professional financial modeling, specific font colors are used to denote the source of data in a cell:
+- **Blue**: Hardcoded non-string values.
+- **Black**: Formulas referencing the same sheet.
+- **Green**: Formulas referencing other sheets within the same workbook.
+- **Red**: Formulas referencing external workbooks or external data providers (Bloomberg, Capital IQ, FactSet).
+
+`ib-excel-formatting` automates the verification and application of these conventions using `openpyxl`.
+
+## Installation
+
+The package requires Python 3.10 or higher and depends on `openpyxl`.
+
+```bash
+pip install ib-excel-formatting
+```
+
+## Usage
+
+The package exports two main functions: `check_formatting_conventions` and `apply_formatting_conventions`. By default, both functions process all sheets in the workbook unless a specific sheet or cell range is provided.
+
+### Checking Conventions
+
+Use `check_formatting_conventions` to identify cells that do not follow the IB standard.
+
+```python
+from pathlib import Path
+from ib_excel_formatting import check_formatting_conventions
+
+file_path = "financial_model.xlsx"
+passed, violations = check_formatting_conventions(file_path)
+
+if not passed:
+    print(f"Found {len(violations)} formatting violations:")
+    for violation in violations:
+        print(f" - {violation}")
+else:
+    print("All cells follow IB formatting conventions.")
+```
+
+### Applying Conventions
+
+Use `apply_formatting_conventions` to automatically update the font colors of cells based on their content.
+
+```python
+from ib_excel_formatting import apply_formatting_conventions
+
+file_path = "financial_model.xlsx"
+output_path = "financial_model_formatted.xlsx"
+
+# Apply formatting to all sheets
+changes_count, details = apply_formatting_conventions(
+    file_path,
+    output_path=output_path,
+)
+
+print(f"Applied {changes_count} formatting changes.")
+```
+
+### Targeted Application
+
+You can restrict the check or application to specific sheets or cells:
+
+```python
+# Check only specific cells on a specific sheet
+passed, violations = check_formatting_conventions(
+    file_path,
+    sheet="Income Statement",
+    cells=["B5:F20", "H5:H20"],
+)
+```
+
+## Formatting Rules
+
+The package follows these specific detection rules:
+
+| Content Type | Font Color | Details |
+|--------------|------------|---------|
+| **Hardcoded** | Blue | Non-string values (numbers, booleans, dates). |
+| **Formula (Local)** | Black | Formulas referencing only the current sheet. |
+| **Formula (Cross-sheet)** | Green | Formulas referencing other sheets in the same workbook. |
+| **External/Data** | Red | External workbook references or data provider functions. |
+
+### External Data Providers
+
+The following data provider functions are automatically detected and marked as red:
+- **Bloomberg**: `BDP`, `BDH`, `BDS`
+- **Capital IQ**: `CIQ`, `CIQRANGE`
+- **FactSet**: `FDS`, `FDSINFO`, `FQL`
+
+## Limitations
+
+- **Theme Colors**: Excel theme and tint colors are resolved using heuristics. Some custom themes may not be perfectly identified.
+- **Complex Formulas**: Detection of cross-sheet references relies on explicit `Sheet!Cell` syntax. References via `INDIRECT` or named ranges may not be correctly identified.
+- **Strings**: Hardcoded strings are generally ignored by the formatting logic to avoid affecting labels and headers.
+
+## Dependencies
+
+- Python >= 3.10
+- openpyxl >= 3.1.5
