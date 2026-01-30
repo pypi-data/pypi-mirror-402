@@ -1,0 +1,100 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "basyx-client"
+version = "0.1.2"
+description = "High-level HTTP client for the AAS Part 2 API v3.x"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [
+    { name = "BaSyx Community" }
+]
+keywords = ["aas", "basyx", "industry4.0", "digital-twin", "asset-administration-shell"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Manufacturing",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+    "Framework :: AsyncIO",
+]
+dependencies = [
+    "basyx-python-sdk>=2.0.0",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-httpx>=0.30",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
+oauth = ["authlib>=1.3"]
+
+[project.urls]
+Homepage = "https://github.com/hadijannat/basyx-client"
+Documentation = "https://github.com/hadijannat/basyx-client#readme"
+Repository = "https://github.com/hadijannat/basyx-client"
+Changelog = "https://github.com/hadijannat/basyx-client/blob/main/CHANGELOG.md"
+Issues = "https://github.com/hadijannat/basyx-client/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/basyx_client"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+# Not using strict mode due to basyx-python-sdk lacking type stubs
+# Enable specific checks instead
+warn_return_any = false
+warn_unused_configs = true
+warn_unused_ignores = false
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+strict_equality = true
+
+# basyx-python-sdk doesn't have type stubs - ignore all basyx module errors
+[[tool.mypy.overrides]]
+module = "basyx.*"
+ignore_missing_imports = true
+ignore_errors = true
+
+# Relax strict checks for our serialization module that interfaces with basyx
+[[tool.mypy.overrides]]
+module = "basyx_client.serialization"
+disallow_untyped_calls = false
+warn_return_any = false
+
+# Relax strict checks for endpoint modules that use basyx types extensively
+[[tool.mypy.overrides]]
+module = "basyx_client.endpoints.*"
+disallow_untyped_calls = false
+warn_return_any = false
+disable_error_code = ["arg-type", "return-value", "valid-type", "type-arg", "name-defined"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
