@@ -1,0 +1,29 @@
+# readable - utility for cleaning log files
+
+    usage: readable [-h] [--light] [--dark] [--none] [--tidy] [--strip-blank] [--debug] [--out] [--dir DIR] [--aws] [--terraform] [--replace REPLACE] [--verbose]
+                    [--minimal] [--non-minimal]
+                    [files ...]
+
+    Read from standard input and write to standard output modifying ANSI colour codes en-route.
+
+    positional arguments:
+      files                 The files to convert (use stdin/stout if no input files are specified)
+
+    options:
+      -h, --help            show this help message and exit
+      --light, -l           Modify colours for a light background (the default)
+      --dark, -d            Modify colours for a dark background
+      --none, -n            Remove all colour codes
+      --tidy, -t            Remove colour codes and stuff that typically occurs in log files causing diffs, but is of no particular interest (e.g. SHA1 values,
+                            times, dates)
+      --strip-blank, -s     Strip all blank lines
+      --debug, -D           Replace colours with debug information
+      --out, -o             Output to standard output rather than overwriting input files
+      --dir, -O DIR         Store output files in the specified directory (creating it if it doesn't exist)
+      --aws, -a             Remove AWS resource IDs
+      --terraform, -T       Clean Terraform plan/apply log files
+      --replace, -R REPLACE
+                            Additional regex replacements in the form "REGEX=REPLACEMENT"
+      --verbose, -v         Output verbose status
+      --minimal, -m         Remove unnecessary data from the file (e.g. Terraform progress updates (Refreshing..., Reading..., etc.))
+      --non-minimal, -M     Do not remove unnecessary data from the file (e.g. Terraform progress updates (Refreshing..., Reading..., etc.))
