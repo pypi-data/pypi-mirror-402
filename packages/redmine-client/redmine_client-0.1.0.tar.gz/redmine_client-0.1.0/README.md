@@ -1,0 +1,171 @@
+# Redmine Client
+
+Python client for the Redmine REST API with synchronous and asynchronous support.
+
+## Features
+
+- Synchronous and asynchronous client
+- Full type hints with Pydantic models
+- Custom fields support
+- Automatic pagination
+- Context manager support
+
+## Installation
+
+```bash
+pip install redmine-client
+```
+
+Or for development:
+
+```bash
+pip install -e ".[dev]"
+```
+
+## Usage
+
+### Synchronous
+
+```python
+from redmine_client import RedmineClient
+
+with RedmineClient("https://redmine.example.com", "your-api-key") as client:
+    # Get all open issues assigned to me
+    issues = client.get_issues(assigned_to_id="me", status_id="open")
+
+    for issue in issues:
+        print(f"#{issue.id}: {issue.subject}")
+
+    # Update issue with custom field
+    client.update_issue(
+        issue_id=123,
+        custom_fields=[{"id": 42, "value": "2026-KW03-KW04"}]
+    )
+```
+
+### Asynchronous
+
+```python
+from redmine_client import AsyncRedmineClient
+
+async with AsyncRedmineClient("https://redmine.example.com", "your-api-key") as client:
+    issues = await client.get_issues(assigned_to_id="me", status_id="open")
+
+    for issue in issues:
+        print(f"#{issue.id}: {issue.subject}")
+```
+
+## API
+
+### Issues
+
+```python
+# Get issues
+issues = client.get_issues(
+    project_id="myproject",      # Optional: filter by project
+    assigned_to_id="me",         # Optional: filter by assignee
+    status_id="open",            # Optional: "open", "closed", "*", or ID
+    tracker_id=1,                # Optional: Bug, Feature, etc.
+)
+
+# Get single issue
+issue = client.get_issue(123, include_journals=True)
+
+# Create issue
+new_issue = client.create_issue(
+    project_id="myproject",
+    subject="New feature",
+    description="Description...",
+    tracker_id=2,
+    custom_fields=[{"id": 42, "value": "Sprint value"}]
+)
+
+# Update issue
+client.update_issue(
+    issue_id=123,
+    subject="New subject",
+    notes="Add a comment",
+    custom_fields=[{"id": 42, "value": "New value"}]
+)
+
+# Add comment
+client.add_issue_note(123, "My comment")
+```
+
+### Custom Fields
+
+```python
+# Get all custom fields (requires admin rights)
+fields = client.get_custom_fields()
+
+# Get issue custom fields only
+issue_fields = client.get_issue_custom_fields()
+
+# Find custom field by name
+sprint_field = client.find_custom_field_by_name("Sprint")
+
+# Read custom field value from issue
+issue = client.get_issue(123)
+sprint = issue.get_custom_field("Sprint")
+```
+
+### Projects
+
+```python
+projects = client.get_projects(include_closed=False)
+project = client.get_project("myproject")
+```
+
+### Users
+
+```python
+current_user = client.get_current_user()
+users = client.get_users(status=1)  # 1 = active
+user = client.get_user(42)
+```
+
+### Enumerations
+
+```python
+trackers = client.get_trackers()
+statuses = client.get_issue_statuses()
+priorities = client.get_issue_priorities()
+activities = client.get_time_entry_activities()
+```
+
+## Models
+
+All responses are returned as Pydantic models:
+
+- `RedmineIssue` - Issue/Ticket
+- `RedmineProject` - Project
+- `RedmineUser` - User
+- `RedmineTimeEntry` - Time entry
+- `RedmineCustomField` - Custom field value
+- `RedmineCustomFieldDefinition` - Custom field definition
+
+## Error Handling
+
+```python
+from redmine_client import (
+    RedmineError,
+    RedmineAuthenticationError,
+    RedmineNotFoundError,
+    RedmineValidationError,
+)
+
+try:
+    issue = client.get_issue(99999)
+except RedmineNotFoundError:
+    print("Issue not found")
+except RedmineAuthenticationError:
+    print("Invalid API key")
+except RedmineValidationError as e:
+    print(f"Validation error: {e.response}")
+except RedmineError as e:
+    print(f"Redmine error: {e}")
+```
+
+## License
+
+MIT
