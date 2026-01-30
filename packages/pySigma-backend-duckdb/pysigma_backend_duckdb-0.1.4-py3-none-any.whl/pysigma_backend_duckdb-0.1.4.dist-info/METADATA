@@ -1,0 +1,155 @@
+Metadata-Version: 2.4
+Name: pySigma-backend-duckdb
+Version: 0.1.4
+Summary: pySigma DuckDB backend for local Sigma rule validation against JSON logs
+Project-URL: Homepage, https://github.com/northsh/pySigma-backend-duckdb
+Project-URL: Repository, https://github.com/northsh/pySigma-backend-duckdb
+Project-URL: Issues, https://github.com/northsh/pySigma-backend-duckdb/issues
+Author-email: "north.sh Labs" <alex@north.sh>
+License-Expression: MIT
+Keywords: detection,duckdb,pysigma,security,sigma
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Information Technology
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Security
+Requires-Python: >=3.10
+Requires-Dist: pysigma<2.0.0,>=1.0.0
+Provides-Extra: dev
+Requires-Dist: pytest-cov>=4.0.0; extra == 'dev'
+Requires-Dist: pytest>=8.0.0; extra == 'dev'
+Requires-Dist: ruff>=0.4.0; extra == 'dev'
+Description-Content-Type: text/markdown
+
+# pySigma DuckDB Backend
+
+![Tests](https://github.com/northsh/pySigma-backend-duckdb/actions/workflows/test.yml/badge.svg)
+![Status](https://img.shields.io/badge/Status-pre--release-orange)
+
+This is a [pySigma](https://github.com/SigmaHQ/pySigma) backend that generates DuckDB SQL queries from Sigma rules. It's designed for **local validation** of Sigma rules against JSON log files, making it ideal for CI/CD pipelines and regression testing.
+
+## Features
+
+- Convert Sigma rules to DuckDB SQL queries
+- Validate rules against local JSON log files
+- Support for JSON arrays, single objects, and NDJSON formats
+- Built-in `LogIndex` class for efficient log loading and querying
+- `ValidationResult` with match counts and matched log details
+
+## Installation
+
+```bash
+pip install pySigma-backend-duckdb
+```
+
+## Usage
+
+### Basic Query Generation
+
+```python
+from sigma.rule import SigmaRule
+from sigma.collection import SigmaCollection
+from sigma.backends.duckdb import DuckDBBackend
+
+rule = SigmaRule.from_yaml("""
+    title: Suspicious PowerShell Execution
+    logsource:
+        category: process_creation
+        product: windows
+    detection:
+        selection:
+            CommandLine|contains: powershell
+        condition: selection
+""")
+
+backend = DuckDBBackend()
+queries = backend.convert(SigmaCollection([rule]))
+print(queries[0])
+# SELECT * FROM logs WHERE CommandLine ILIKE '%powershell%'
+```
+
+### Validating Rules Against Local Logs
+
+```python
+from sigma.backends.duckdb import DuckDBBackend, LogIndex
+
+# Load logs from JSON files
+index = LogIndex()
+index.load_json_file("logs.json")
+# Or load from a directory
+index.load_directory("logs/")
+
+# Validate a rule
+backend = DuckDBBackend()
+result = backend.validate_rule(rule_yaml, index)
+
+print(f"Rule: {result.rule_title}")
+print(f"Matches: {result.match_count}/{result.total_logs}")
+print(f"Success: {result.success}")
+
+for log in result.matched_logs:
+    print(f"  - {log.get('CommandLine', 'N/A')}")
+```
+
+### Directory Validation for CI
+
+```python
+from sigma.backends.duckdb import validate_rules_directory
+
+# Validate all rules against all logs
+results = validate_rules_directory(
+    rules_dir="rules/",
+    logs_dir="test_logs/",
+)
+
+for result in results:
+    status = "PASS" if result.has_matches else "FAIL"
+    print(f"{status}: {result.rule_title} ({result.match_count} matches)")
+```
+
+## Log Format
+
+The backend expects logs in JSON format. By default, it uses Sysmon field names (e.g., `CommandLine`, `Image`, `ParentImage`). You can use custom pipelines for different schemas.
+
+**Splunk Sysmon format** (default):
+```json
+{
+    "CommandLine": "powershell.exe -e ...",
+    "Image": "C:\\Windows\\System32\\powershell.exe",
+    "ParentImage": "C:\\Windows\\System32\\cmd.exe"
+}
+```
+
+**Elastic ECS format** (with `elastic_ecs` pipeline):
+```json
+{
+    "process": {
+        "command_line": "powershell.exe -e ...",
+        "executable": "C:\\Windows\\System32\\powershell.exe"
+    }
+}
+```
+
+## Pipelines
+
+The backend includes pipelines for common log formats:
+
+```python
+from sigma.backends.duckdb import DuckDBBackend
+from sigma.backends.duckdb.pipelines import splunk_sysmon, elastic_ecs
+
+# For Splunk with Sysmon TA (default)
+backend = DuckDBBackend(processing_pipeline=splunk_sysmon())
+
+# For Elasticsearch with ECS
+backend = DuckDBBackend(processing_pipeline=elastic_ecs())
+```
+
+## License
+
+MIT
