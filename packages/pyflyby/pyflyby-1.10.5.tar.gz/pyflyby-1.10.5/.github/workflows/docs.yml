@@ -1,0 +1,38 @@
+name: Docs
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+    contents: write
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            "pyproject.toml"
+
+      - name: Install dependencies
+        run: |
+          uv python install 3.13
+          uv venv
+          uv pip install -v . --group docs
+
+      - name: Build docs
+        run: |
+          uv run make html
+
+        working-directory: doc
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v4
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        with:
+          publish_branch: gh-pages
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: doc/_build/html
+          force_orphan: true

@@ -1,0 +1,94 @@
+name: Run tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
+          - "3.14t"
+        include:
+          - os: macos-latest
+            python-version: "3.12"
+
+    env:
+      DEBUG_TEST_PYFLYBY: 1
+      ENVNAME: ${{matrix.os}}-${{matrix.python-version}}
+
+    steps:
+    - uses: actions/checkout@v6
+    - name: Install gdb
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+          sudo apt install gdb -y
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          "pyproject.toml"
+
+    - name: Install pyflyby
+      run: |
+        uv python install ${{matrix.python-version}}
+        uv venv
+
+        # Include build dependencies for run time; see
+        # https://mesonbuild.com/meson-python/how-to-guides/editable-installs.html#build-dependencies
+        # for details.
+        uv pip install meson-python meson ninja "pybind11>=2.10.4" "setuptools-scm>=8"
+        uv pip install --no-build-isolation -ve .[test]
+    - name: test release build
+      run: |
+        uv run python -m build
+    - name: compileall
+      run: |
+        uv run python -We:invalid -m compileall -f -q lib/ etc/;
+
+    - name: check-parse pyflyby
+      run: |
+        uv run python -m pyflyby.check_parse lib/python/pyflyby
+
+    - name: pytest Mac OS
+      if: ${{ matrix.os == 'macos-latest'}}
+      # json report can't be installed on Py2, and make macos super slow.
+      run: |
+        uv run python -m pytest -v --cov=pyflyby --cov-report=xml --doctest-modules --maxfail=3 lib tests
+    - name: pytest (not MacOS)
+      if: ${{ matrix.os != 'macos-latest'  }}
+      run: |
+        uv run python -m pytest -v --cov=pyflyby --cov-report=xml\
+               --doctest-modules\
+               --maxfail=3\
+               --json-report\
+               --json-report-file=report-${ENVNAME}.json\
+               lib tests
+
+    - name: Set up Emacs
+      uses: purcell/setup-emacs@8415786a52b3a84babd7ffc92a802b06e3780c17
+      with:
+        version: 30.2
+
+    - name: Test emacs integration
+      run: |
+        uv run emacs -Q --batch -L lib/emacs -L tests -l tests/test-emacs.el -f ert-run-tests-batch-and-exit
+
+    - uses: actions/upload-artifact@v6
+      name: upload pytest timing reports as json
+      with:
+        name: pytest-timing-${{ matrix.os }}-${{ matrix.python-version }}
+        path: ./report-*.json
+    - uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
