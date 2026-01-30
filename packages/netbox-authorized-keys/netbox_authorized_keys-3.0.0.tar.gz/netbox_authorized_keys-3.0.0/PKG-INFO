@@ -1,0 +1,246 @@
+Metadata-Version: 2.4
+Name: netbox-authorized-keys
+Version: 3.0.0
+Summary: NetBox plugin to store Authorized Keys
+Author-email: Jan Krupa <jan.krupa@cesnet.cz>
+License: MIT
+Project-URL: Homepage, https://github.com/CESNET/netbox_authorized_keys
+Project-URL: Repository, https://github.com/CESNET/netbox_authorized_keys
+Project-URL: Bug Tracker, https://github.com/CESNET/netbox_authorized_keys/issues
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: System Administrators
+Classifier: Natural Language :: English
+Classifier: Framework :: Django
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Requires-Python: >=3.12.0
+Description-Content-Type: text/markdown
+
+# NetBox Authorized Keys Plugin
+
+NetBox Authorized Keys is a plugin for NetBox that allows you to store and manage SSH authorized keys and credentials (passwords, tokens, API keys).
+
+## Features
+
+### SSH Authorized Keys
+- Store and manage SSH authorized keys
+- Assign keys to devices or virtual machines
+- Track key ownership and usage
+- Bulk import from YAML
+- Full API support
+
+### Credentials Management
+- Store password, token, and API key credentials
+- Track credential ownership and usage
+- Document credential storage locations (1Password, LastPass, .env files, etc.)
+- Markdown support for descriptions
+- Assign credentials to devices or virtual machines
+- Bulk import from CSV
+- Full API support
+
+## Requirements
+
+- NetBox 4.5.0 to 4.5.x
+- Python 3.12, 3.13, or 3.14
+
+**For older versions:** Use netbox-authorized-keys v2.0.0 for NetBox 4.0.0-4.4.x
+
+## Compatibility
+
+| NetBox Version | Plugin Version | Python Version |
+|---------------|----------------|----------------|
+| 4.5.0 - 4.5.x | 3.0.0+        | 3.12, 3.13, 3.14 |
+| 4.0.0 - 4.4.x | 2.0.0         | 3.10, 3.11, 3.12 |
+
+## What's New in Version 3.0.0
+
+### NetBox 4.5.0 Compatibility
+- **Breaking:** Requires Python 3.12, 3.13, or 3.14
+- **Breaking:** Requires NetBox 4.5.0 to 4.5.x
+- **New:** Advanced search filter selectors in list views
+- **New:** Enhanced filtering UI with comparison operators (contains, exact, regex, etc.)
+
+### Upgrade Notes
+If upgrading from v2.x:
+1. Ensure NetBox 4.5.x is installed
+2. Ensure Python 3.12+ is installed
+3. Run: `pip install --upgrade netbox-authorized-keys`
+4. No database migrations required
+
+## Installation
+
+### From PyPI (when available)
+```sh
+pip install netbox-authorized-keys
+```
+
+### From Source
+
+1. Clone the repository:
+    ```sh
+    git clone https://github.com/CESNET/netbox_authorized_keys.git
+    ```
+
+2. Navigate to the project directory:
+    ```sh
+    cd netbox_authorized_keys
+    ```
+
+3. Install the plugin:
+    ```sh
+    pip install .
+    ```
+
+4. Add the plugin to your NetBox configuration:
+    ```python
+    PLUGINS = ["netbox_authorized_keys"]
+    PLUGINS_CONFIG = {
+        "netbox_authorized_keys": {
+            # Add any plugin-specific configuration here
+        }
+    }
+    ```
+
+5. Run the migrations:
+    ```sh
+    python manage.py migrate
+    ```
+
+## Usage
+
+### Managing SSH Authorized Keys
+
+#### Adding Keys via GUI
+1. Navigate to `Plugins > Authorized Keys > Authorized Keys`
+2. Click "Add" to create a new key
+3. Fill in the required fields:
+   - **Public Key**: The SSH public key
+   - **Username**: SSH username for the key
+   - **Full Name**: Owner's full name
+   - **Description**: Purpose or details about the key
+4. Optionally assign to devices or virtual machines
+5. Save the key
+
+#### Importing Keys through the GUI
+- Visit `<NETBOX_URL>/plugins/authorized-keys/authorized-keys/import/`
+- Paste the authorized keys into the text area as YAML
+- Example:
+```yaml
+- public_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDQq ... user@host"
+  username: "admin"
+  full_name: "System Administrator"
+  description: "Admin SSH key"
+  devices: R121,R119,DEVICE_NAME3
+  virtual_machines: krupa.vm.cesnet.cz, VM_NAME2
+  comments: "Primary admin access key"
+
+- public_key: "ssh-ed25519 AAAAC3aaNzaC1lZDI1NTE5AAAAIJEj2f9jQS3zGOVKUtEtQXFvFJ6YyB4hjQvQEXEsEZGk developer@laptop"
+  username: "developer"
+  full_name: "Jane Developer"
+  description: "Developer access key"
+  comments: "Development environment access"
+  tags: "tag_slug1,tag_slug2"
+```
+
+**Notes:**
+- Tags slug need to be encased in quotes and separated by commas
+- Devices and virtual machines need to be specified by their name, enclosed in quotes, and separated by commas
+
+### Managing Credentials
+
+#### Adding Credentials via GUI
+1. Navigate to `Plugins > Authorized Keys > Credentials`
+2. Click "Add" to create a new credential
+3. Fill in the required fields:
+   - **Credential Type**: Password, Token, or API Key
+   - **Username**: Account username or service account name
+   - **Owner**: Administrator/owner login (e.g., admin, jkrupa)
+   - **Used By**: Which server or service uses this credential (required)
+   - **Description**: What the credential does, which service it accesses (supports Markdown, required)
+   - **Credential Storage**: (Optional) Where the actual credential is stored
+     - Key fingerprint or hash
+     - Storage location (e.g., "1Password vault", ".env file", "LastPass", "Keychain")
+   - **Comments**: (Optional) Additional notes, restrictions, or usage instructions
+4. Optionally assign to devices or virtual machines
+5. Save the credential
+
+#### Importing Credentials via CSV
+1. Navigate to `Plugins > Authorized Keys > Credentials`
+2. Click "Import" 
+3. Upload or paste CSV data with the following columns:
+   - `credential_type`: password, token, or api_key
+   - `username`: Account username
+   - `owner`: Owner login
+   - `used_by`: Server/service using the credential
+   - `description`: Purpose and usage details
+   - `credential_storage`: (Optional) Storage location or fingerprint
+   - `devices`: (Optional) Comma-separated device names
+   - `virtual_machines`: (Optional) Comma-separated VM names
+   - `comments`: (Optional) Additional notes
+   - `tags`: (Optional) Comma-separated tag slugs
+
+#### Example CSV:
+```csv
+credential_type,username,owner,used_by,description,credential_storage,comments
+password,root,admin,web-server-01,Root access for web server,1Password: Production/Web Servers,Rotate monthly
+token,api_service,jsmith,monitoring-api,API token for monitoring service,.env file on monitoring-01,Never commit to git
+api_key,github_deploy,devops,ci-cd-pipeline,GitHub deployment key,GitHub repo settings > Deploy keys,Read-only access
+```
+
+### Credential Storage Field Examples
+The `credential_storage` field can contain various types of information:
+- **Password Manager**: "1Password: Production/Database", "LastPass: Shared/Infra"
+- **Environment File**: ".env file on app-server-01", "docker-compose.yml secrets"
+- **Key Management**: "AWS Secrets Manager: prod/db", "HashiCorp Vault: secret/data/prod"
+- **Hash/Fingerprint**: "SHA256:a3d2f1...", "MD5:5f4dcc3b..."
+- **Other**: "Keychain Access", "Azure Key Vault", "Printed and secured in safe"
+
+### Bulk Operations
+Both Authorized Keys and Credentials support bulk add/remove operations:
+1. Navigate to a Device or Virtual Machine detail page
+2. Click on the "Authorized Keys" or "Credentials" tab
+3. Use "Add Authorized Keys"/"Add Credentials" to assign multiple items at once
+4. Use "Remove Authorized Keys"/"Remove Credentials" to unassign items
+
+## API Usage
+
+### Authorized Keys API
+```bash
+# List all authorized keys
+curl -X GET http://netbox/api/plugins/authorized-keys/authorized-keys/ \
+  -H "Authorization: Token YOUR_TOKEN"
+
+# Create a new authorized key
+curl -X POST http://netbox/api/plugins/authorized-keys/authorized-keys/ \
+  -H "Authorization: Token YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "public_key": "ssh-rsa AAAAB3NzaC1yc2...",
+    "username": "admin",
+    "full_name": "Admin User",
+    "description": "Admin access key"
+  }'
+```
+
+### Credentials API
+```bash
+# List all credentials
+curl -X GET http://netbox/api/plugins/authorized-keys/credentials/ \
+  -H "Authorization: Token YOUR_TOKEN"
+
+# Create a new credential
+curl -X POST http://netbox/api/plugins/authorized-keys/credentials/ \
+  -H "Authorization: Token YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "credential_type": "password",
+    "username": "root",
+    "owner": "admin",
+    "used_by": "web-server-01",
+    "description": "Root access for web server",
+    "credential_storage": "1Password: Production/Servers"
+  }'
+```
