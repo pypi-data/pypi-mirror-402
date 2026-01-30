@@ -1,0 +1,99 @@
+{
+  "root": [
+    "DOI Downloader",
+    "The DOI Downloader module provides functionality to download academic papers using their Digital Object Identifiers (DOIs).",
+    "Table of Contents",
+    [
+      "[Features](#features)",
+      "[Installation](#installation)",
+      "[Quick Start](#quick-start)",
+      "[Detailed Usage](#detailed-usage)",
+      "[API Reference](#api-reference)",
+      "[Examples](#examples)",
+      "[Error Handling](#error-handling)",
+      "[Output Format](#output-format)",
+      "[Best Practices](#best-practices)"
+    ],
+    "Features",
+    [
+      "Download PDFs using DOI",
+      "Batch download multiple DOIs",
+      "Configurable delay between requests",
+      "Email registration for better Crossref API service",
+      "Detailed download status reporting",
+      "CSV export of download results",
+      "Progress tracking for batch downloads",
+      "Robust error handling"
+    ],
+    "Installation",
+    "```\npip install information-composer\n```",
+    "Required dependencies:",
+    "```\npip install requests habanero\n```",
+    "Quick Start",
+    "```\nfrom information_composer.core.doi_downloader import DOIDownloader\n\n# Initialize downloader\ndownloader = DOIDownloader(email=\"your_email@example.com\")\n\n# Download a single paper\nresult = downloader.download_single(\n    doi=\"10.1038/s41477-024-01771-3\",\n    output_dir=\"downloads\"\n)\n```",
+    "Detailed Usage",
+    "Single DOI Download",
+    "```\n# Initialize downloader with email\ndownloader = DOIDownloader(email=\"your_email@example.com\")\n\n# Download single paper\nresult = downloader.download_single(\n    doi=\"10.1038/s41477-024-01771-3\",\n    output_dir=\"downloads/single\"\n)\n\n# Check result\nif result['downloaded']:\n    print(f\"Successfully downloaded to: {result['file_name']}\")\n    print(f\"File size: {os.path.getsize(result['file_name']) / 1024:.2f} KB\")\nelse:\n    print(f\"Failed to download DOI: {result['DOI']}\")\n```",
+    "Batch Download",
+    "```\n# List of DOIs to download\ndois = [\n    \"10.1038/s41477-024-01771-3\",\n    \"10.1038/s41592-024-02305-7\",\n    \"10.1038/s41592-024-02201-0\"\n]\n\n# Download multiple papers\nresults = downloader.download_batch(\n    dois=dois,\n    output_dir=\"downloads/batch\",\n    delay=2  # 2 seconds delay between downloads\n)\n```",
+    "Saving Results to CSV",
+    "```\ndef save_results_to_csv(results, output_file):\n    fieldnames = ['DOI', 'file_name', 'downloaded']\n    with open(output_file, 'w', newline='') as csvfile:\n        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)\n        writer.writeheader()\n        writer.writerows(results)\n```",
+    "API Reference",
+    "DOIDownloader Class",
+    "```\nclass DOIDownloader:\n    def __init__(self, email: str = None):\n        \"\"\"Initialize with optional email for Crossref API\"\"\"\n        \n    def get_pdf_url(self, doi: str) -> Optional[str]:\n        \"\"\"Get PDF URL from DOI\"\"\"\n        \n    def download_pdf(self, url: str, output_path: str) -> bool:\n        \"\"\"Download PDF from URL\"\"\"\n        \n    def download_single(self, doi: str, output_dir: str) -> Dict:\n        \"\"\"Download single paper with detailed output\"\"\"\n        \n    def download_batch(self, dois: List[str], output_dir: str, delay: int = 2) -> List[Dict]:\n        \"\"\"Download multiple papers with delay\"\"\"\n```",
+    "Examples",
+    "Complete Example Script",
+    "```\nfrom information_composer.core.doi_downloader import DOIDownloader\nimport os\n\ndef main():\n    # Configuration\n    base_dir = os.path.join(os.getcwd(), \"downloads\")\n    email = \"your_email@example.com\"\n    \n    # Initialize downloader\n    downloader = DOIDownloader(email=email)\n    \n    # Single download\n    single_result = downloader.download_single(\n        doi=\"10.1038/s41477-024-01771-3\",\n        output_dir=os.path.join(base_dir, \"single\")\n    )\n    \n    # Batch download\n    dois = [\n        \"10.1038/s41477-024-01771-3\",\n        \"10.1038/s41592-024-02305-7\",\n        \"10.1038/s41592-024-02201-0\"\n    ]\n    batch_results = downloader.download_batch(\n        dois=dois,\n        output_dir=os.path.join(base_dir, \"batch\"),\n        delay=2\n    )\n```",
+    "Error Handling",
+    "The module handles various error scenarios:",
+    [
+      "Access denied (401/403): Subscription required",
+      "Not found (404): Invalid DOI or URL",
+      "SSL errors: Security connection issues",
+      "Connection errors: Network problems",
+      "Content type mismatches: Non-PDF responses"
+    ],
+    "Example error messages:",
+    "```\nAccess denied: This paper requires subscription or payment\nPDF not found: The URL is no longer valid\nSSL Error: Could not establish secure connection\nConnection Error: Could not connect to the server\n```",
+    "Output Format",
+    "Download Results Dictionary",
+    "```\n{\n    'DOI': 'paper_doi',\n    'file_name': 'path/to/downloaded.pdf',\n    'downloaded': True/False\n}\n```",
+    "CSV Output Format",
+    "```\nDOI,file_name,downloaded\n10.1038/s41477-024-01771-3,downloads/10.1038_s41477-024-01771-3.pdf,True\n```",
+    "Directory Structure",
+    "```\ndownloads/\n├── single/\n│   └── 10.1038_s41477-024-01771-3.pdf\n├── batch/\n│   ├── 10.1038_s41477-024-01771-3.pdf\n│   ├── 10.1038_s41592-024-02305-7.pdf\n│   └── 10.1038_s41592-024-02201-0.pdf\n├── single_download_results.csv\n└── batch_download_results.csv\n```",
+    "Best Practices",
+    [
+      "**Rate Limiting**",
+      [
+        "Use appropriate delays between requests",
+        "Default delay is 2 seconds"
+      ],
+      "```\ndownloader.download_batch(dois=dois, delay=2)\n```",
+      "**Email Registration**",
+      [
+        "Provide email for better Crossref API service"
+      ],
+      "```\ndownloader = DOIDownloader(email=\"your_email@example.com\")\n```",
+      "**Error Handling**",
+      [
+        "Always check download results"
+      ],
+      "```\nif result['downloaded']:\n    print(f\"Success: {result['file_name']}\")\nelse:\n    print(f\"Failed: {result['DOI']}\")\n```",
+      "**File Organization**",
+      [
+        "Use structured output directories",
+        "Keep single and batch downloads separate"
+      ],
+      "```\nsingle_dir = os.path.join(base_dir, \"single\")\nbatch_dir = os.path.join(base_dir, \"batch\")\n```",
+      "**Results Tracking**",
+      [
+        "Save results to CSV for record keeping",
+        "Monitor download statistics"
+      ],
+      "```\nsave_results_to_csv(results, \"download_results.csv\")\n```"
+    ],
+    "License",
+    "This project is licensed under the MIT License - see the LICENSE file for details."
+  ]
+}
