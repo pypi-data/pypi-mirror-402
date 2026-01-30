@@ -1,0 +1,349 @@
+Metadata-Version: 2.4
+Name: isage-libs
+Version: 0.2.2.1
+Summary: SAGE Libraries - Streaming-Augmented Generative Execution
+Author-email: IntelliStream Team <shuhao_zhang@hust.edu.cn>
+License: MIT
+Project-URL: Homepage, https://github.com/intellistream/SAGE
+Project-URL: Documentation, https://intellistream.github.io/SAGE-Pub/
+Project-URL: Repository, https://github.com/intellistream/SAGE.git
+Project-URL: Bug Tracker, https://github.com/intellistream/SAGE/issues
+Keywords: applications,examples,templates,rag,agents,streaming,tutorials,sage
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: System :: Distributed Computing
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy<2.3.0,>=1.26.0
+Requires-Dist: isage-common>=0.2.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.21.0; extra == "dev"
+Requires-Dist: ruff==0.14.6; extra == "dev"
+Requires-Dist: mypy>=1.7.0; extra == "dev"
+Provides-Extra: anns
+Requires-Dist: isage-anns>=0.1.0; extra == "anns"
+Provides-Extra: amms
+Requires-Dist: isage-amms>=0.1.0; extra == "amms"
+Provides-Extra: finetune
+Requires-Dist: isage-finetune>=0.1.0; extra == "finetune"
+Provides-Extra: agentic
+Requires-Dist: isage-agentic>=0.1.0; extra == "agentic"
+Provides-Extra: rag
+Requires-Dist: isage-rag>=0.1.0; extra == "rag"
+Provides-Extra: eval
+Requires-Dist: isage-eval>=0.1.0; extra == "eval"
+Provides-Extra: privacy
+Requires-Dist: isage-privacy>=0.1.0; extra == "privacy"
+Provides-Extra: safety
+Requires-Dist: isage-safety>=0.1.0; extra == "safety"
+Provides-Extra: vdb
+Requires-Dist: chromadb>=1.0.20; extra == "vdb"
+Requires-Dist: pymilvus[model]>=2.4.0; extra == "vdb"
+Provides-Extra: streaming
+Requires-Dist: kafka-python>=2.0.0; extra == "streaming"
+Requires-Dist: redis>=4.0.0; extra == "streaming"
+Provides-Extra: notebook
+Requires-Dist: jupyter>=1.0.0; extra == "notebook"
+Requires-Dist: notebook>=6.0.0; extra == "notebook"
+Provides-Extra: metrics
+Requires-Dist: datasets>=2.0.0; extra == "metrics"
+Requires-Dist: evaluate>=0.4.0; extra == "metrics"
+Requires-Dist: rouge>=1.0.0; extra == "metrics"
+Requires-Dist: rouge-score>=0.1.0; extra == "metrics"
+Requires-Dist: bleu>=0.3.0; extra == "metrics"
+Provides-Extra: loaders
+Requires-Dist: PyPDF2>=3.0.0; extra == "loaders"
+Requires-Dist: python-docx>=0.8.11; extra == "loaders"
+Provides-Extra: ocr
+Requires-Dist: easyocr>=1.7.0; extra == "ocr"
+Provides-Extra: llm
+Requires-Dist: isagellm>=0.1.0; extra == "llm"
+Requires-Dist: transformers<4.54.0,>=4.52.0; extra == "llm"
+Requires-Dist: tokenizers<0.24.0,>=0.21.0; extra == "llm"
+Requires-Dist: torch<3.0.0,>=2.7.0; extra == "llm"
+Requires-Dist: sentence-transformers<4.0.0,>=3.1.0; extra == "llm"
+Provides-Extra: training
+Requires-Dist: peft<1.0.0,>=0.18.0; extra == "training"
+Requires-Dist: accelerate<2.0.0,>=1.9.0; extra == "training"
+Requires-Dist: tensorboard>=2.14.0; extra == "training"
+Requires-Dist: trl<0.21.0,>=0.20.0; extra == "training"
+Provides-Extra: all
+Requires-Dist: isage-libs[agentic,amms,anns,dev,finetune,llm,loaders,metrics,notebook,ocr,privacy,rag,safety,streaming,training,vdb]; extra == "all"
+
+# SAGE Libraries Package (sage-libs)
+
+## 📋 Overview
+
+**sage-libs** 是 SAGE 框架的算法库层，定位为 **接口/注册表层 (Interface Layer)**。
+
+## 🧭 Governance / 团队协作制度
+
+- `docs/governance/TEAM.md`
+- `docs/governance/MAINTAINERS.md`
+- `docs/governance/DEVELOPER_GUIDE.md`
+- `docs/governance/PR_CHECKLIST.md`
+- `docs/governance/SELF_HOSTED_RUNNER.md`
+- `docs/governance/TODO.md`
+
+核心设计原则：
+
+- 📦 **轻量级接口**：定义抽象基类和工厂函数
+- 🔌 **可插拔实现**：重型实现迁出为独立 PyPI 包 (`isage-*`)
+- 🏗️ **注册表模式**：通过 `register_*` / `create_*` 动态加载实现
+
+## 🏗️ Architecture
+
+```
+sage-libs (Interface Layer)
+    ├── agentic/interface/     → isage-agentic (Agent framework)
+    ├── rag/interface/         → isage-rag (RAG toolkit)
+    ├── finetune/interface/    → isage-finetune (Fine-tuning)
+    ├── eval/interface/        → isage-eval (Evaluation)
+    ├── privacy/interface/     → isage-privacy (Privacy/Unlearning)
+    ├── safety/interface/      → isage-safety (Guardrails)
+    ├── ann/interface/         → isage-anns (ANNS algorithms)
+    ├── amms/interface/        → isage-amms (AMM algorithms)
+    └── foundation/            → Built-in utilities (no external deps)
+```
+
+## 📚 Five Core Domains
+
+### 1. 🤖 Agentic (Agent Framework)
+
+**接口**：`sage.libs.agentic.interface`
+
+| Base Class              | Description                                 |
+| ----------------------- | ------------------------------------------- |
+| `BaseAgent`             | Agent execution interface                   |
+| `BasePlanner`           | Task planning (ToT, ReAct, Hierarchical)    |
+| `BaseToolSelector`      | Tool selection (Keyword, Embedding, Hybrid) |
+| `BaseOrchestrator`      | Multi-agent orchestration                   |
+| `IntentRecognizer`      | Intent recognition                          |
+| `IntentClassifier`      | Intent classification                       |
+| `BaseReasoningStrategy` | Reasoning strategies (CoT, ToT, ReAct)      |
+
+```python
+from sage.libs.agentic.interface import (
+    BaseAgent, BasePlanner, BaseToolSelector,
+    create_agent, create_planner, register_agent
+)
+
+# Register implementation (from isage-agentic)
+register_agent("react", ReactAgent)
+
+# Create via factory
+agent = create_agent("react", tools=[...])
+```
+
+### 2. 📖 RAG (Retrieval-Augmented Generation)
+
+**接口**：`sage.libs.rag.interface`
+
+| Base Class       | Description                            |
+| ---------------- | -------------------------------------- |
+| `DocumentLoader` | Document loading (PDF, DOCX, MD, etc.) |
+| `TextChunker`    | Text segmentation                      |
+| `Retriever`      | Vector/BM25 retrieval                  |
+| `Reranker`       | Reranking (Cross-Encoder, LLM)         |
+| `QueryRewriter`  | Query rewriting (HyDE, Multi-Query)    |
+| `RAGPipeline`    | End-to-end RAG pipeline                |
+
+```python
+from sage.libs.rag.interface import (
+    DocumentLoader, Retriever, RAGPipeline,
+    create_loader, create_retriever, create_pipeline
+)
+
+loader = create_loader("pdf")
+retriever = create_retriever("faiss", dimension=768)
+```
+
+### 3. 🔧 Fine-tuning
+
+**接口**：`sage.libs.finetune.interface`
+
+| Base Class         | Description                             |
+| ------------------ | --------------------------------------- |
+| `FineTuner`        | Fine-tuning trainer                     |
+| `DatasetLoader`    | Training data loading                   |
+| `TrainingCallback` | Training callbacks (WandB, TensorBoard) |
+| `TrainingStrategy` | PEFT strategies (LoRA, QLoRA, Prefix)   |
+
+```python
+from sage.libs.finetune.interface import (
+    FineTuner, TrainingStrategy, TrainingConfig, LoRAConfig,
+    create_trainer, create_strategy
+)
+
+strategy = create_strategy("lora")
+trainer = create_trainer("lora", model_name="gpt2")
+```
+
+### 4. 📊 Evaluation
+
+**接口**：`sage.libs.eval.interface`
+
+| Base Class      | Description                                |
+| --------------- | ------------------------------------------ |
+| `BaseMetric`    | Evaluation metrics (Accuracy, BLEU, ROUGE) |
+| `BaseLLMJudge`  | LLM-as-a-Judge (Faithfulness, Relevance)   |
+| `BaseProfiler`  | Performance profiling                      |
+| `BaseBenchmark` | Benchmark suites                           |
+
+```python
+from sage.libs.eval.interface import (
+    BaseMetric, BaseLLMJudge, MetricResult,
+    create_metric, create_judge
+)
+
+metric = create_metric("accuracy")
+judge = create_judge("faithfulness", model="gpt-4")
+```
+
+### 5. 🔒 Privacy & Safety
+
+**Privacy 接口**：`sage.libs.privacy.interface`
+
+| Base Class                   | Description                                |
+| ---------------------------- | ------------------------------------------ |
+| `BaseUnlearner`              | Machine unlearning (SISA, Gradient Ascent) |
+| `BasePrivacyMechanism`       | DP mechanisms (Laplace, Gaussian)          |
+| `BaseDPOptimizer`            | DP optimizers (DP-SGD, DP-Adam)            |
+| `BaseFederatedClient/Server` | Federated learning                         |
+
+**Safety 接口**：`sage.libs.safety.interface`
+
+| Base Class               | Description                          |
+| ------------------------ | ------------------------------------ |
+| `BaseGuardrail`          | Content safety guardrails            |
+| `BaseJailbreakDetector`  | Jailbreak/prompt injection detection |
+| `BaseToxicityDetector`   | Toxicity detection                   |
+| `BaseAdversarialDefense` | Adversarial input defense            |
+
+```python
+from sage.libs.privacy import create_unlearner, create_mechanism
+from sage.libs.safety import create_guardrail, create_jailbreak_detector
+
+unlearner = create_unlearner("sisa", num_shards=5)
+guardrail = create_guardrail("llm", model="gpt-4")
+```
+
+## 📦 External Packages (isage-\*)
+
+| Domain      | Interface (sage-libs) | Implementation (PyPI) | Status       |
+| ----------- | --------------------- | --------------------- | ------------ |
+| Agentic     | `agentic/interface/`  | `isage-agentic`       | 🚧 Planned   |
+| RAG         | `rag/interface/`      | `isage-rag`           | 🚧 Planned   |
+| Fine-tuning | `finetune/interface/` | `isage-finetune`      | 🚧 Planned   |
+| Evaluation  | `eval/interface/`     | `isage-eval`          | 🚧 Planned   |
+| Privacy     | `privacy/interface/`  | `isage-privacy`       | 🚧 Planned   |
+| Safety      | `safety/interface/`   | `isage-safety`        | 🚧 Planned   |
+| ANNS        | `ann/interface/`      | `isage-anns`          | ✅ Available |
+| AMM         | `amms/interface/`     | `isage-amms`          | 🚧 Migration |
+
+## 🚀 Installation
+
+### Basic Installation
+
+```bash
+# From PyPI
+pip install isage-libs
+
+# Development install (in SAGE repo)
+pip install -e packages/sage-libs
+```
+
+### With Optional Extras
+
+```bash
+# All interfaces
+pip install isage-libs[all]
+
+# Specific domains
+pip install isage-libs[agentic]    # Agent framework
+pip install isage-libs[rag]         # RAG toolkit
+pip install isage-libs[finetune]    # Fine-tuning
+pip install isage-libs[eval]        # Evaluation
+pip install isage-libs[privacy]     # Privacy/Unlearning
+pip install isage-libs[safety]      # Safety/Guardrails
+```
+
+## 🏛️ Built-in Utilities
+
+These modules are included directly (no external deps):
+
+### Foundation (`foundation/`)
+
+```python
+from sage.libs.foundation import (
+    text_utils,    # Text processing
+    io_utils,      # File I/O helpers
+    async_utils,   # Async utilities
+)
+```
+
+### DataOps (`dataops/`)
+
+```python
+from sage.libs.dataops import (
+    text_ops,      # Normalization, truncation
+    table_ops,     # DataFrame operations
+    json_ops,      # JSON processing
+    sampling,      # Sampling strategies
+)
+```
+
+### Lightweight Safety (`safety/`)
+
+```python
+from sage.libs.safety import (
+    content_filter,  # Pattern-based filtering
+    pii_scrubber,    # PII detection
+    policy_check,    # Policy validation
+)
+```
+
+## 📖 Usage Example
+
+```python
+# 1. Define custom implementation
+from sage.libs.agentic.interface import BaseAgent, AgentResult, register_agent
+
+class MyAgent(BaseAgent):
+    @property
+    def name(self) -> str:
+        return "my_agent"
+
+    def run(self, task, context=None):
+        # Implementation
+        return AgentResult(success=True, output="Done")
+
+# 2. Register implementation
+register_agent("my_agent", MyAgent)
+
+# 3. Use via factory
+from sage.libs.agentic.interface import create_agent
+agent = create_agent("my_agent")
+result = agent.run("Hello")
+```
+
+## 📚 Documentation
+
+- **Architecture**: `docs-public/docs_src/dev-notes/l3-libs/`
+- **API Reference**: `docs-public/docs_src/api-reference/sage-libs/`
+- **Tutorials**: `examples/tutorials/L3-libs/`
+
+## 🔗 Related Packages
+
+- [SAGE](https://github.com/intellistream/SAGE) - Main framework
+- [sage-benchmark](https://github.com/intellistream/sage-benchmark) - Evaluation benchmarks
+- [SageVDB](https://github.com/intellistream/sageVDB) - Vector database
+- [NeuroMem](https://github.com/intellistream/NeuroMem) - Memory system
+
+## 📄 License
+
+Apache 2.0 License
