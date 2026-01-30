@@ -1,0 +1,85 @@
+# CI file to deploy stage.
+
+#######################################################
+# Deployment
+#######################################################
+
+# Check if changelog has been updated before deploying.
+check_changelog:
+  extends: .python_base
+  stage: deploy
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^\d+\.\d+\.\d+((a|b|rc)\d+)?$/'
+  script:
+    # Check if the TAG version has an entry in the Changelog.
+    - version=${CI_COMMIT_TAG}
+    - |
+      if grep -Fq "## [$version]" CHANGELOG.md
+      then
+        echo "Changelog correctly updated for $version"
+        true
+      else
+        echo "Changelog invalid for $version"
+        false
+      fi
+
+# Deploy python OSEF library publicly after tagging.
+deploy_osef_library:
+  stage: deploy
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^\d+\.\d+\.\d+((a|b|rc)\d+)?$/'
+  needs: ["check_changelog"]
+  before_script:
+    # Install Git LFS.
+    - apt-get update && apt-get install -y git-lfs
+
+    # Build library.
+    - python3 -m pip install --upgrade build
+    - python3 -m build
+    - python3 -m pip install --upgrade twine
+  script:
+    - TWINE_PASSWORD=$TWINE_PASSWORD TWINE_USERNAME=__token__ python3 -m twine upload dist/* --skip-existing
+
+
+# Deploy documentation to the repo gitlab-page:
+# - README.md, CHANGELOG.md
+# - The whole content of the folder documentation/
+# - Osef Library API generated documentation with pdoc
+pages:
+  stage: deploy
+  needs: ["check_changelog"]
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^\d+\.\d+\.\d+((a|b|rc)\d+)?$/'
+  before_script:
+    # Install curl/nvm(node)/npm as required dependencies for markdown-styles
+  - apt update && apt install curl -y
+  - curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+  - source $HOME/.bashrc
+  - nvm install 18.18.2
+  - curl -qL https://www.npmjs.com/install.sh | bash
+  # Install markdown-styles: md -> html tool
+  - npm install -g markdown-styles -y 
+  
+  # Install pdoc: docstring -> html tool
+  - pip install pdoc
+  # Install the package (needed for pdoc doc generation)
+  - pip install -r test_requirements.txt
+  - pip install .
+
+  script:
+  - mkdir public/
+  # Add a redirection rule because our index is not at the root
+  - echo "/common/osef-python-library/ /common/osef-python-library/documentation/ 301" >> public/_redirects
+
+  # Generate html from markdown documentation
+  - generate-md  --input ./documentation --output ./public/documentation --layout github
+  - generate-md  --input ./CHANGELOG.md --output ./public --layout github
+  - generate-md  --input ./README.md --output ./public --layout github
+
+  # Generate API documentation from docstring
+  - pdoc ./osef -o public/pdoc
+
+  - echo 'Deploying pdoc generated documentation to Gitlab Pages'
+  artifacts:
+    paths:
+    - public

@@ -1,0 +1,78 @@
+# CI file for OSEF Library
+
+variables:
+  DOCKER_CACHE_REGISTRY: registry-cache-docker.berite.outsig.ht/
+  GITLAB_CACHE_REGISTRY: registry-cache-gitlab.berite.outsig.ht/
+
+default:
+  image: ${DOCKER_CACHE_REGISTRY}library/python:3.8
+  tags: ['amd64-build']
+
+workflow:
+  auto_cancel:
+    on_new_commit: interruptible
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+      when: never
+    - if: $CI_COMMIT_REF_PROTECTED == 'true'
+      auto_cancel:
+        on_new_commit: none
+    - when: always
+
+# Define CI stages.
+stages:
+  - format
+  - test
+  - coverage
+  - deploy
+
+
+include:
+  - devops/CI/deploy.yml
+
+
+#######################################################
+# BASE: Python base job
+#######################################################
+.python_base:
+  # Change pip's cache directory to be inside the project directory since we can
+  # only cache local items.
+  before_script:
+    - python -V  # Print out python version for debugging
+    - pip install -r test_requirements.txt
+    - pip install .
+
+
+# Format all python code
+black_format:
+  extends: .python_base
+  stage: format
+  script:
+    - black . --check
+
+
+# Pylint the library
+lint_osef:
+  extends: .python_base
+  stage: format
+  script:
+    - pylint osef/ --rcfile=devops/.pylintrc
+
+
+# Unit tests the OSEF library.
+unit_tests:
+  extends: .python_base
+  stage: test
+  coverage: '/TOTAL(?:\s*\d*){4}\s*(\d+(?:\.\d+)?%)/'
+  script:
+    - pytest -v -s --cov-branch --cov=osef tests/unit_tests/
+    - coverage xml -o coverage.xml
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+# TODO
+# Define end-to-end tests.
+
