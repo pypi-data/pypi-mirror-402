@@ -1,0 +1,174 @@
+Metadata-Version: 2.4
+Name: candle-data-manager
+Version: 0.1.1
+Summary: Fetch, store, and manage OHLCV candle data from cryptocurrency exchanges (Binance, Upbit) with MySQL storage
+Project-URL: Homepage, https://gatesplan-mathgate.com
+Project-URL: Repository, https://github.com/gatesplan/candle-data-manager
+Project-URL: Issues, https://github.com/gatesplan/candle-data-manager/issues
+Author-email: fishfactory <gatesplan@gmail.com>
+License: MIT License
+        
+        Copyright (c) 2026 fishfactory
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+License-File: LICENSE
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.10
+Requires-Dist: binance-connector>=3.0.0
+Requires-Dist: finance-datareader>=0.9.0
+Requires-Dist: loguru>=0.7.0
+Requires-Dist: numpy>=1.24.0
+Requires-Dist: pandas>=2.0.0
+Requires-Dist: pymysql>=1.0.0
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: pyupbit>=0.2.0
+Requires-Dist: requests>=2.28.0
+Requires-Dist: sqlalchemy>=2.0.0
+Provides-Extra: dev
+Requires-Dist: black>=23.0; extra == 'dev'
+Requires-Dist: pytest-cov>=4.0; extra == 'dev'
+Requires-Dist: pytest>=7.0; extra == 'dev'
+Requires-Dist: ruff>=0.1.0; extra == 'dev'
+Description-Content-Type: text/markdown
+
+# Candle Data Manager
+
+Candle data management tool for cryptocurrency and stock markets.
+
+## Installation
+
+```bash
+pip install candle-data-manager
+```
+
+## Requirements
+
+- Python >= 3.10
+- MySQL Server
+- `.env` file with API keys:
+
+```env
+# Binance
+BINANCE_API_KEY=your_binance_api_key
+BINANCE_API_SECRET=your_binance_api_secret
+
+# Upbit
+UPBIT_API_KEY=your_upbit_api_key
+UPBIT_API_SECRET=your_upbit_api_secret
+```
+
+## Overview
+
+### Initialize
+
+```python
+from candle_data_manager import CandleDataAPI
+
+# Default: mysql+pymysql://root@localhost/candle_data_manager
+api = CandleDataAPI()
+
+# Or with custom database URL
+api = CandleDataAPI(database_url="mysql+pymysql://user:password@host/dbname")
+```
+
+### Active Update
+
+Fetch and store all historical data for symbols.
+
+```python
+# Update all Binance Futures PERPETUAL markets
+result = api.active_update(
+    archetype="CRYPTO",
+    exchange="BINANCE",
+    tradetype="FUTURES"
+)
+
+# Update specific symbol with filters
+result = api.active_update(
+    archetype="CRYPTO",
+    exchange="BINANCE",
+    tradetype="SPOT",
+    base="BTC",
+    quote="USDT",
+    timeframe="1d"
+)
+
+print(f"Success: {result.success_count}, Failed: {result.fail_count}, Rows: {result.total_rows}")
+```
+
+### Passive Update
+
+Incremental update for registered symbols.
+
+```python
+result = api.passive_update(
+    archetype="CRYPTO",
+    exchange="BINANCE"
+)
+```
+
+### Load Data
+
+Load candle data as Market objects.
+
+```python
+markets = api.load(
+    archetype="CRYPTO",
+    exchange="BINANCE",
+    tradetype="SPOT",
+    base="BTC",
+    quote="USDT",
+    timeframe="1h",
+    start_at=1609459200,
+    end_at=1609545600
+)
+
+for market in markets:
+    print(market.symbol)
+    print(market.candles)  # pandas DataFrame
+```
+
+## API Reference
+
+### CandleDataAPI
+
+| Method | Description |
+|--------|-------------|
+| `__init__(database_url=None)` | Initialize API with MySQL connection. Creates database schema and tables if not exists. Default: `mysql+pymysql://root@localhost/candle_data_manager` |
+| `active_update(archetype, exchange, tradetype, base, quote, timeframe)` | Register new symbols from exchange market list and fetch all historical candle data from the earliest available timestamp. Filters can be string or list (e.g., `base=["BTC", "ETH"]`). Returns `UpdateResult` with success/fail counts and total rows. |
+| `passive_update(archetype, exchange, tradetype, base, quote, timeframe, buffer_size)` | Incremental update for registered symbols. Fetches candles from the last stored timestamp to current time, updating the last candle and appending new candles. Returns `UpdateResult`. |
+| `load(archetype, exchange, tradetype, base, quote, timeframe, start_at, end_at)` | Load candle data from database as `Market` objects. Each `Market` contains `symbol` and `candles` (pandas DataFrame with OHLCV columns). Auto-fetches missing data if not in database. |
+| `get_symbol(symbol_str)` | Get `Symbol` object by string identifier. Format: `"ARCHETYPE-EXCHANGE-TRADETYPE-BASE-QUOTE-TIMEFRAME"` (e.g., `"CRYPTO-BINANCE-SPOT-BTC-USDT-1h"`). Returns `None` if not found. |
+| `close()` | Close all database connections and release resources. |
+
+### Supported Providers
+
+| Provider | Archetype | Exchange | TradeType |
+|----------|-----------|----------|-----------|
+| Binance Spot | CRYPTO | BINANCE | SPOT |
+| Binance Futures | CRYPTO | BINANCE | FUTURES |
+| Upbit | CRYPTO | UPBIT | SPOT |
+
+## License
+
+MIT License
