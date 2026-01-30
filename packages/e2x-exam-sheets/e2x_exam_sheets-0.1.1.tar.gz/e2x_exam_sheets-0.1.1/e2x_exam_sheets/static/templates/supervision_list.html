@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      @page {
+        size: A4;
+        margin: 1.5cm 1.5cm;
+      }
+      body {
+        font-family: Arial, sans-serif;
+      }
+      .overview_table {
+        font-size: 14px;
+        border-collapse: collapse;
+        width: 18cm;        
+      }
+      .overview_table th,
+      .overview_table td {
+        border: 1px solid black;
+        padding-right: 10px;
+        padding-left: 10px;
+        text-wrap: wrap;
+        word-wrap: break-word;
+      }
+      .name-column {
+        max-width: 4cm;
+      }
+      .first-name-column {
+        max-width: 4cm;
+      }
+      .room-seat-column {
+        max-width: 2cm;
+        text-align: center;
+      }
+      .signature-column {
+        width: 4cm;
+      }
+      .info-column {
+        width: 4cm;
+      }
+      .exam_sheet_info {
+        font-size: 12px;
+        margin-bottom: 5mm;
+      }
+      .exam_sheet_info td {
+        padding-right: 5mm;
+      }
+      .signature-table {
+        margin-top: 2cm;
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+    </style>
+  </head>
+  <body>
+    {% set students_sorted_by_name = students | sort(attribute='last_name') %}
+
+    <h2 style="text-align: center">{{ exam_info.exam_name }}</h2>
+    <h3 style="text-align: center">
+      {{ labels.supervision_list }} {{ room }}.
+    </h3>
+
+    <table class="exam_sheet_info">
+      <tr>
+        <td colspan="2">{{ exam_info.university_name }}</td>
+      </tr>
+      <tr>
+        <td colspan="2">{{ exam_info.department_name }}</td>
+      </tr>
+      <tr>
+        <td colspan="2">{{ exam_info.degree_program }}</td>
+      </tr>
+      <tr>
+        <td colspan="2">&nbsp;</td>
+      </tr>
+      <tr>
+        <td>{{ labels.module }}:</td>
+        <td>{{ exam_info.exam_name }}&nbsp;&nbsp;{{ exam_info.semester }}</td>
+      </tr>
+      {% for examiner in exam_info.examiners %}
+      <tr>
+        <td>{{ labels.examiner }} {{ loop.index }}:</td>
+        <td>{{ examiner }}</td>
+      </tr>
+      {% endfor %}
+      <tr>
+        <td>{{ labels.date }}:</td>
+        <td>{{ exam_info.date }}</td>
+      </tr>
+      <tr>
+        <td>{{ labels.n_students }}:</td>
+        <td>
+          {{ students | rejectattr('is_backup') | list | length }}
+        </td>
+      </tr>
+    </table>
+    <table border="1" class="overview_table">
+      <thead>
+        <tr>
+          <th class="name-column">Name</th>
+          <th class="first-name-column">{{ labels.first_name }}</th>
+          <th class="room-seat-column">{{ labels.seat_label }}</th>
+          <th class="signature-column">{{ labels.signature }}</th>
+          <th class="info-column">Info</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for student in students_sorted_by_name %} {% if not
+        student.get('is_backup', False) %}
+        <tr>
+          <td class="name-column">{{student.last_name}}</td>
+          <td class="first-name-column">{{student.first_name}}</td>
+          <td class="room-seat-column">{{student.seat}}</td>
+          <td class="signature-column"></td>
+          <td class="info-column"></td>
+        </tr>
+        {% endif %} {% endfor %}
+      </tbody>
+    </table>
+    <table class="signature-table">
+      <tr>
+        <th></th>
+        <td style="border-bottom: 1px solid black; min-width: 50mm"></td>
+      </tr>
+      <tr>
+        <th></th>
+        <td class="signature-name">{{ labels.signature_line }}</td>
+      </tr>
+    </table>
+  </body>
+</html>
