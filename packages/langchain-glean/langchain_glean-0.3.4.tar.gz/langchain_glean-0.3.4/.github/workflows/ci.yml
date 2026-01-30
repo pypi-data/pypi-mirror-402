@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      run_integration_tests:
+        description: 'Run integration tests'
+        type: boolean
+        default: false
+      glean_subdomain:
+        description: 'Glean subdomain (for integration tests)'
+        required: false
+      glean_api_token:
+        description: 'Glean API token (for integration tests)'
+        required: false
+
+jobs:
+  lint:
+    name: Lint and Type Check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - uses: jdx/mise-action@v2
+      with:
+        install: true
+        cache: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+    - name: Setup development environment
+      run: task setup
+        
+    - name: Run linters
+      run: task lint
+
+    - name: Check imports
+      run: task check:imports
+
+  test:
+    name: Test Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+    env:
+      PYTHON_VERSION: ${{ matrix.python-version }}
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - uses: jdx/mise-action@v2
+      with:
+        install: true
+        cache: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+    - name: Setup development environment
+      run: task setup
+        
+    - name: Run tests
+      run: task test:unit
+
+    - name: Run integration tests
+      if: github.event.inputs.run_integration_tests == 'true'
+      env:
+        GLEAN_API_TOKEN: ${{ secrets.GLEAN_API_TOKEN }}
+        GLEAN_SUBDOMAIN: ${{ secrets.GLEAN_SUBDOMAIN }}
+      run: task test:integration
