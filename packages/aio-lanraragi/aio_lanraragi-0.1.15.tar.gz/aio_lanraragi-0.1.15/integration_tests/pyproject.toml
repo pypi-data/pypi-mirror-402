@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools"]
+
+[project]
+name = "aio-lanraragi-integration-tests"
+version = "0.1.16"
+description = "Integration tests for aio-lanraragi"
+requires-python = ">=3.12, <=3.14"
+dependencies = [
+    "aiofiles",
+    "docker",
+    "git-python",
+    "matplotlib",
+    "numpy",
+    "pillow",
+    "playwright",
+    "psutil",
+    "pydantic>=2.0.0",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-rerunfailures",
+    "redis"
+]
+
+[project.scripts]
+lrr-staging = "aio_lanraragi_tests.console:console"
+
+[project.urls]
+Homepage = "https://github.com/psilabs-dev/aio-lanraragi"
+
+[tool.pytest.ini_options]
+addopts = [
+    "--import-mode=importlib"
+]
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    # Ignore warnings caused by Windows deployments spawning subprocesses.
+    "ignore:subprocess .* is still running:ResourceWarning",
+    "ignore:.*subprocess .* is still running.*:pytest.PytestUnraisableExceptionWarning",
+
+    "ignore:This process .* is multi-threaded:DeprecationWarning",
+    "error:Unclosed client session.*:ResourceWarning",
+    "error::pytest.PytestUnraisableExceptionWarning",
+]
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+log_cli_date_format = "%H:%M:%S"
+log_format  = "[%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+log_date_format = "%H:%M:%S"
+
+[tool.ruff]
+lint.extend-select = ["ASYNC", "C4", "SIM"]
+show-fixes = true
+target-version = "py312"
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.setuptools.package-data]
+aio_lanraragi_tests = ["resources/**/*.ttf", "resources/**/*.txt"]
