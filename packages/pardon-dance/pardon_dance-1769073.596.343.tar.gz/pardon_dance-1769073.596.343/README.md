@@ -1,0 +1,100 @@
+# pardon-dance
+
+`pardon-dance` is a Python library designed to automate and streamline the creation and integration of pardon-dance effects, as popularized online. This package provides a simple interface for generating and manipulating video clips with integrated pardon-dance elements.
+
+## Installation
+
+You can install `pardon-dance` using pip:
+bash
+pip install pardon-dance
+
+## Basic Usage
+
+Here are a few examples demonstrating how to use `pardon-dance`:
+
+**1. Creating a Basic Pardon-Dance Video:**
+python
+from pardon_dance import PardonDanceGenerator
+
+# Initialize the generator
+generator = PardonDanceGenerator(input_video="input.mp4", output_video="output.mp4")
+
+# Generate the pardon-dance video with default settings
+generator.generate()
+
+print("Pardon-dance video created successfully!")
+
+This example takes an input video (`input.mp4`) and generates a new video (`output.mp4`) with the pardon-dance effect applied.  It uses default settings for the effect.
+
+**2. Customizing the Pardon-Dance Effect:**
+python
+from pardon_dance import PardonDanceGenerator
+
+# Initialize the generator with custom parameters
+generator = PardonDanceGenerator(
+    input_video="input.mp4",
+    output_video="custom_output.mp4",
+    pardon_text="Oops!",
+    text_color="red",
+    font_size=48
+)
+
+# Generate the pardon-dance video with customized settings
+generator.generate()
+
+print("Customized pardon-dance video created!")
+
+This example demonstrates how to customize the pardon-dance effect by changing the text displayed, the text color, and the font size.
+
+**3. Adding Audio to the Pardon-Dance Video:**
+python
+from pardon_dance import PardonDanceGenerator
+
+# Initialize the generator with an audio file
+generator = PardonDanceGenerator(
+    input_video="input.mp4",
+    output_video="audio_output.mp4",
+    audio_file="audio.mp3"
+)
+
+# Generate the pardon-dance video with added audio
+generator.generate()
+
+print("Pardon-dance video with audio created!")
+
+This example shows how to add a custom audio track to the generated pardon-dance video.
+
+**4. Specifying the Duration of the Pardon-Dance Effect:**
+python
+from pardon_dance import PardonDanceGenerator
+
+# Initialize the generator with a custom duration
+generator = PardonDanceGenerator(
+    input_video="input.mp4",
+    output_video="duration_output.mp4",
+    start_time=5,  # Start the effect at 5 seconds
+    duration=3  # Apply the effect for 3 seconds
+)
+
+# Generate the pardon-dance video with specified duration
+generator.generate()
+
+print("Pardon-dance video with specified duration created!")
+
+This example shows how to control the start time and duration of the pardon-dance effect within the video.
+
+## Feature List
+
+*   **Automated Pardon-Dance Generation:** Easily create pardon-dance videos from existing video files.
+*   **Customizable Text:** Modify the text displayed during the pardon-dance effect.
+*   **Adjustable Text Appearance:** Control text color, font size, and font style.
+*   **Audio Integration:** Add custom audio tracks to the generated video.
+*   **Duration Control:** Specify the start time and duration of the pardon-dance effect.
+*   **Simple and Intuitive API:** Easy-to-use interface for quick integration.
+*   **Cross-Platform Compatibility:** Works on various operating systems.
+
+## License
+
+MIT License
+
+This project is a gateway to the pardon-dance ecosystem. For advanced features and full capabilities, please visit: https://supermaker.ai/video/blog/unlocking-the-magic-of-pardon-dance-the-viral-video-effect-taking-over-social-media/
