@@ -1,0 +1,197 @@
+import mrcfile, skimage, torch, yaml, os, copick, zarr
+from skimage import io as skio
+import numpy as np
+
+# Try to import hyperspy for Material Science dataset
+try:
+    import hyperspy.api as hs
+    hyperspy_available = True
+except:
+    hyperspy_available = False
+
+def read_movie(input: str, scale_factor: float):
+    """
+    Read the Fib Volume from a directory or a single file
+    """
+    from saber.filters.downsample import FourierRescale2D
+    import skimage.io as sio
+    import numpy as np
+    import glob
+
+    # Read the Volume from a directory or a single file
+    if '*' in input:
+        files = glob.glob(input)
+        if len(files) == 0:
+            raise ValueError(f"No files found for pattern: {input}")
+        files.sort()  # Ensure files are in order
+        for ii in range(len(files)):
+            im = sio.imread(files[ii])
+            if ii == 0:
+                volume = np.zeros((len(files), im.shape[0], im.shape[1]))
+            volume[ii, :, :] = im
+    else:
+        volume = sio.imread(input)
+    volume = volume.astype(np.float32) # Convert to float32
+
+    # Downsample if needed
+    if scale_factor > 1:
+        for i in range(volume.shape[0]):
+            volume[i, :, :] = FourierRescale2D.run(volume[i, :, :], scale_factor)
+    
+    return volume
+
+def read_micrograph(fname: str):
+    """
+    Read a micrograph from a file.
+    Supports: MRC (.mrc), TIFF (.tif/.tiff), STEM (.dm4/.ser)
+    Returns:
+        data: np.ndarray
+        pixel_size: float or None [Angstroms]
+    """
+
+    if fname.endswith('.mrc'):                 # MRC file
+        with mrcfile.open(fname, permissive=True) as mrc:
+            data = mrc.data
+            pixel_size = mrc.voxel_size.x
+        return data, pixel_size
+    elif fname.endswith(('.tif', '.tiff')):     # TIFF file
+        return skimage.io.imread(fname), None
+    elif fname.endswith(('.dm4', '.ser')):     # STEM file
+        if not hyperspy_available:
+            raise ValueError("Hyperspy is not installed. Please install it to read .dm4 or .ser files. (pip install hyperspy)")
+        return read_stem_micrograph(fname)
+
+    # Unsupported file
+    raise ValueError(f"Unsupported file type: {fname}")
+
+def read_stem_micrograph(input: str):
+    """
+    Read a STEM micrograph from a file.
+    Returns:
+        data: np.ndarray
+        pixel_size: float or None [Angstroms]
+    """
+
+    signal = hs.load(input)
+    data = signal.data
+    axes = signal.axes_manager
+    pixel_size = axes[0].scale
+    units = axes[0].units
+
+    # Convert units to Angstroms
+    if units == 'nm':
+        pixel_size *= 10
+    elif units == 'µm':
+        pixel_size *= 1e3
+    elif units == 'pm':
+        pixel_size *= 1e-3
+    else:
+        raise ValueError(f"Unsupported unit: {units}")
+
+    return data, pixel_size
+
+def get_available_devices(deviceID: int = None):
+    """
+    Get the available devices for the current system.
+    """
+    # Set device
+    if deviceID is None:
+        if torch.cuda.is_available():           device_type = 'cuda'
+        elif torch.backends.mps.is_available(): device_type = "mps" 
+        else:                                   device_type = "cpu" 
+        device = torch.device(device_type)
+    else:
+        device = determine_device(deviceID)
+    return device
+
+def determine_device(deviceID: int = 0):
+    """
+    Determine the device for the given deviceID.
+    """
+
+    # First check if CUDA is available at all
+    if torch.cuda.is_available():
+        try:
+
+            # Make sure the device ID is valid
+            device_count = torch.cuda.device_count()
+            if deviceID >= device_count:
+                print(f"Warning: Requested CUDA device {deviceID} but only {device_count} devices available")
+                print(f"Falling back to device 0")
+                deviceID = 0
+
+            # Safely try to get the device properties
+            props = torch.cuda.get_device_properties(deviceID)
+            device = torch.device(f"cuda:{deviceID}")
+            
+            # Enable TF32 for Ampere GPUs if available
+            if props.major >= 8:
+                torch.backends.cuda.matmul.allow_tf32 = True
+                torch.backends.cudnn.allow_tf32 = True
+                # Only set up autocast after confirming device works
+                # torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
+            
+        except Exception as e:
+            print(f"Error accessing CUDA device {deviceID}: {e}")
+            print("Falling back to CPU")
+            device = torch.device("cpu")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+        print(
+            "\nSupport for MPS devices is preliminary. SAM 2 is trained with CUDA and might "
+            "give numerically different outputs and sometimes degraded performance on MPS. "
+            "See e.g. https://github.com/pytorch/pytorch/issues/84936 for a discussion."
+        )
+    else:
+        device = torch.device("cpu")
+        print("Using CPU for computation (no GPU available)")
+
+    return device
+
+
+def mask3D_to_tiff(mask3D, output_path: str):
+    """
+    Convert a 3D mask to a TIFF file.
+    """
+    skio.imsave(output_path, mask3D)
+
+# Create a custom dumper that uses flow style for lists only.
+class InlineListDumper(yaml.SafeDumper):
+    def represent_list(self, data):
+        node = super().represent_list(data)
+        node.flow_style = True  # Use inline style for lists
+        return node
+
+def save_copick_metadata(config, metadict: dict, output_path: str):
+    """
+    Save CoPick inference metadata to a text file.
+    """
+
+    root = copick.from_file(config)
+    overlay_root = root.config.overlay_root
+    if overlay_root[:8] == 'local://': overlay_root = overlay_root[8:]
+    basepath = os.path.join(overlay_root, 'logs')
+    os.makedirs(basepath, exist_ok=True)
+
+    fname_path = os.path.join(basepath, output_path)
+
+    InlineListDumper.add_representer(list, InlineListDumper.represent_list)
+    with open(fname_path, 'w') as f:
+        yaml.dump(metadict, f, Dumper=InlineListDumper, default_flow_style=False, sort_keys=False)
+
+def get_metadata(zarr_path: str):
+    """
+    Get the class names from the Zarr file.
+    The class names are stored as a string in the Zarr file.
+    This function converts the string to a dictionary.
+    """
+
+    # Open the Zarr file
+    zfile = zarr.open(zarr_path, mode='r')
+
+    # Get the class names
+    class_names = zfile.attrs['labels']
+    labels = {i: name for i, name in enumerate(class_names)}
+    amp_params = zfile.attrs['amg']
+    # convert to dict
+    return labels, amp_params
