@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Job Runner</title>
+    <meta http-equiv="refresh" content="2">
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 2rem;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+        }
+        th {
+            background: #f0f0f0;
+        }
+        .QUEUED { background: #fffbe6; }
+        .RUNNING { background: #e6f2ff; }
+        .SUCCEEDED { background: #e6ffe6; }
+        .FAILED { background: #ffe6e6; }
+        .CANCELLED { background: #f0f0f0; color: #666; }
+
+        .mono { font-family: monospace; }
+
+        form {
+            display: inline;
+        }
+        button {
+            padding: 0.25rem 0.5rem;
+        }
+        .cmd {
+            max-width: 40rem;          /* tune this */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Job Runner</h1>
+<form method="post" action="/shutdown"
+      onsubmit="return confirm('Really shut down the jobrunner server?');">
+    <button type="submit" style="margin-bottom: 1rem;">
+        🛑 Shut down server
+    </button>
+</form>
+
+<table>
+    <thead>
+        <tr>
+            <th>UID</th>
+            <th>Status</th>
+            <th>PID</th>
+            <th>Runtime (s)</th>
+            <th>Command</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for job in jobs %}
+        <tr class="{{ job.status }}">
+            <td class="mono cmd" title="{{ job.cmd }}">
+                <a href="/jobs/{{ job.uid }}">{{ job.uid }}</a>
+            </td>
+            <td>{{ job.status }}</td>
+            <td>{{ job.pid or "" }}</td>
+            <td>
+                {% if job.runtime is not none %}
+                    {{ "%.1f"|format(job.runtime) }}
+                {% endif %}
+            </td>
+            <td class="mono">{{ job.cmd }}</td>
+            <td>
+                <!-- Cancel -->
+                <form method="post" action="/jobs/{{ job.uid }}/cancel">
+                    <button type="submit"
+                        {% if job.status not in ["RUNNING", "QUEUED"] %}disabled{% endif %}>
+                        Cancel
+                    </button>
+                </form>
+
+                <!-- Restart -->
+                <form method="post" action="/jobs/{{ job.uid }}/restart">
+                    <button type="submit"
+                        {% if job.status == "RUNNING" %}disabled{% endif %}>
+                        Restart
+                    </button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<p><small>Last updated: {{ now }}</small></p>
+
+</body>
+</html>
