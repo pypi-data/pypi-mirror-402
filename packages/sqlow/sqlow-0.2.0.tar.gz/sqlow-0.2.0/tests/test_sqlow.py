@@ -1,0 +1,894 @@
+"""Tests for sqlow - dataclass-native SQLite CRUD."""
+
+import json
+import os
+import pytest
+from dataclasses import dataclass
+from datetime import datetime, date, time, timezone
+
+from sqlow import SQL, Model, Count
+
+
+# Test fixtures
+TEST_DB = "test_sqlow.sqlite3"
+
+
+@dataclass
+class Item(Model):
+    name: str = ""
+    count: int = 0
+    price: float = 0.0
+    active: bool = False
+    meta: dict | None = None
+    tags: list | None = None
+
+
+@dataclass
+class Project(Model):
+    title: str = ""
+
+
+@dataclass
+class SimpleItem:
+    """Dataclass without Model - no auto fields."""
+
+    id: str | None = None
+    name: str = ""
+
+
+@dataclass
+class Event(Model):
+    """Model with datetime fields for testing."""
+
+    title: str = ""
+    starts_at: datetime | None = None
+    event_date: date | None = None
+    event_time: time | None = None
+
+
+@pytest.fixture(autouse=True)
+def cleanup():
+    """Clean up test database before and after each test."""
+    if os.path.exists(TEST_DB):
+        os.remove(TEST_DB)
+    yield
+    if os.path.exists(TEST_DB):
+        os.remove(TEST_DB)
+
+
+class TestModel:
+    """Test Model base class."""
+
+    def test_model_has_auto_fields(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        result = items.create(name="test")
+
+        item = result[0]
+        assert item.id is not None
+        assert item.created_at is not None
+        assert item.updated_at is not None
+        assert item.deleted_at is None
+
+    def test_created_at_set_on_insert(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        result = items.create(name="test")
+
+        assert result[0].created_at is not None
+        assert "T" in result[0].created_at  # ISO format
+
+    def test_updated_at_changes_on_update(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        added = items.create(name="test")
+        original_updated = added[0].updated_at
+
+        # Small delay to ensure timestamp differs
+        import time
+        time.sleep(0.01)
+
+        updated = items.update(id=added[0].id, name="changed")
+        assert updated[0].updated_at != original_updated
+
+
+class TestSoftDelete:
+    """Test soft delete functionality."""
+
+    def test_delete_soft_deletes_by_default(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        added = items.create(name="test")
+
+        deleted = items.delete(id=added[0].id)
+        assert len(deleted) == 1
+
+        # Should not appear in normal get
+        assert items.read(id=added[0].id) == []
+
+    def test_read_excludes_deleted_by_default(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        items.create({"name": "keep"}, {"name": "delete"})
+
+        items.delete(name="delete")
+
+        result = items.read()
+        assert len(result) == 1
+        assert result[0].name == "keep"
+
+    def test_read_include_deleted(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        added = items.create(name="test")
+        items.delete(id=added[0].id)
+
+        # With include_deleted=True
+        result = items.read(include_deleted=True)
+        assert len(result) == 1
+        assert result[0].deleted_at is not None
+
+    def test_delete_hard_delete(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        added = items.create(name="test")
+
+        items.delete(id=added[0].id, hard=True)
+
+        # Should not exist even with include_deleted
+        assert items.read(include_deleted=True) == []
+
+    def test_delete_all_soft_delete(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        items.create({"name": "a"}, {"name": "b"}, {"name": "c"})
+
+        deleted = items.delete()
+        assert len(deleted) == 3
+
+        # All soft deleted
+        assert items.read() == []
+        assert len(items.read(include_deleted=True)) == 3
+
+
+class TestSQL:
+    """Test SQL database instance."""
+
+    def test_single_db_multiple_tables(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        projects = db(Project)
+
+        items.create(name="button")
+        projects.create(title="My Project")
+
+        assert len(items.read()) == 1
+        assert len(projects.read()) == 1
+        assert items.read()[0].name == "button"
+        assert projects.read()[0].title == "My Project"
+
+
+class TestCreate:
+    """Test add() - insert records."""
+
+    def test_create_single_with_kwargs(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        result = items.create(name="button", count=5)
+
+        assert len(result) == 1
+        assert result[0].id is not None
+        assert isinstance(result[0].id, str)
+        assert result[0].name == "button"
+        assert result[0].count == 5
+
+    def test_create_single_with_dict(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        result = items.create({"name": "alert", "count": 10})
+
+        assert len(result) == 1
+        assert result[0].name == "alert"
+
+    def test_create_single_with_dataclass(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        result = items.create(Item(name="modal", count=3))
+
+        assert len(result) == 1
+        assert result[0].name == "modal"
+
+    def test_create_multiple(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        result = items.create({"name": "a"}, {"name": "b"}, {"name": "c"})
+
+        assert len(result) == 3
+        assert result[0].id is not None
+        assert result[1].id is not None
+        assert result[2].id is not None
+        # All IDs should be unique
+        ids = [r.id for r in result]
+        assert len(set(ids)) == 3
+
+    def test_create_with_json_fields(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        result = items.create(
+            name="widget",
+            meta={"author": "John", "version": 2},
+            tags=["ui", "core"],
+        )
+
+        assert result[0].meta == {"author": "John", "version": 2}
+        assert result[0].tags == ["ui", "core"]
+
+    def test_create_with_bool(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        result = items.create(name="toggle", active=True)
+
+        assert result[0].active is True
+
+
+class TestRead:
+    """Test get() - select records."""
+
+    def test_read_all_empty(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        result = items.read()
+
+        assert result == []
+
+    def test_read_all(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        items.create({"name": "a"}, {"name": "b"})
+        result = items.read()
+
+        assert len(result) == 2
+
+    def test_read_by_id(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        added = items.create({"name": "a"}, {"name": "b"})
+        result = items.read(id=added[1].id)
+
+        assert len(result) == 1
+        assert result[0].name == "b"
+
+    def test_read_by_field(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        items.create({"name": "button", "count": 5})
+        result = items.read(name="button")
+
+        assert len(result) == 1
+        assert result[0].count == 5
+
+    def test_read_not_found(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        result = items.read(id="nonexistent-id")
+
+        assert result == []
+
+    def test_read_preserves_types(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        added = items.create(
+            name="test",
+            count=42,
+            price=3.14,
+            active=True,
+            meta={"key": "value"},
+            tags=[1, 2, 3],
+        )
+        result = items.read(id=added[0].id)
+
+        item = result[0]
+        assert isinstance(item, Item)
+        assert isinstance(item.id, str)
+        assert isinstance(item.count, int)
+        assert isinstance(item.price, float)
+        assert item.active is True
+        assert isinstance(item.meta, dict)
+        assert isinstance(item.tags, list)
+
+
+class TestUpdate:
+    """Test set() - update records."""
+
+    def test_update_single(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        added = items.create(name="old")
+        result = items.update(id=added[0].id, name="new")
+
+        assert len(result) == 1
+        assert result[0].name == "new"
+
+    def test_update_multiple_fields(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        added = items.create(name="item", count=0, active=False)
+        result = items.update(id=added[0].id, count=10, active=True)
+
+        assert result[0].count == 10
+        assert result[0].active is True
+
+    def test_update_batch(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        added = items.create({"name": "a"}, {"name": "b"})
+        result = items.update({"id": added[0].id, "name": "x"}, {"id": added[1].id, "name": "y"})
+
+        assert len(result) == 2
+        assert result[0].name == "x"
+        assert result[1].name == "y"
+
+    def test_update_requires_id(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        items.create(name="test")
+
+        with pytest.raises(ValueError, match="id required"):
+            items.update(name="new")
+
+    def test_update_json_field(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        added = items.create(name="item", meta={"a": 1})
+        result = items.update(id=added[0].id, meta={"b": 2})
+
+        assert result[0].meta == {"b": 2}
+
+
+class TestDelete:
+    """Test rm() - delete records."""
+
+    def test_delete_by_id(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        added = items.create({"name": "a"}, {"name": "b"})
+        deleted = items.delete(id=added[0].id)
+
+        assert len(deleted) == 1
+        assert deleted[0].name == "a"
+        assert len(items.read()) == 1
+
+    def test_delete_by_field(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        items.create({"name": "keep"}, {"name": "delete"})
+        deleted = items.delete(name="delete")
+
+        assert len(deleted) == 1
+        assert items.read()[0].name == "keep"
+
+    def test_delete_all(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        items.create({"name": "a"}, {"name": "b"}, {"name": "c"})
+        deleted = items.delete()
+
+        assert len(deleted) == 3
+        assert items.read() == []
+
+    def test_delete_not_found(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        deleted = items.delete(id="nonexistent-id")
+
+        assert deleted == []
+
+    def test_delete_batch(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        added = items.create({"name": "a"}, {"name": "b"}, {"name": "c"})
+
+        deleted = items.delete({"id": added[0].id}, {"id": added[1].id})
+        assert len(deleted) == 2
+        assert len(items.read()) == 1
+        assert items.read()[0].name == "c"
+
+    def test_delete_batch_with_dataclass(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        added = items.create({"name": "a"}, {"name": "b"})
+
+        deleted = items.delete(Item(id=added[0].id), Item(id=added[1].id))
+        assert len(deleted) == 2
+        assert items.read() == []
+
+    def test_delete_batch_hard(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        added = items.create({"name": "a"}, {"name": "b"})
+
+        deleted = items.delete({"id": added[0].id}, {"id": added[1].id}, hard=True)
+        assert len(deleted) == 2
+        assert items.read(include_deleted=True) == []
+
+    def test_delete_invalid_type_raises(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+
+        with pytest.raises(TypeError, match="Expected dict"):
+            items.delete("invalid")  # type: ignore
+
+    def test_delete_dataclass_without_id_raises(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+
+        with pytest.raises(ValueError, match="id required"):
+            items.delete(Item(name="test"))
+
+    def test_delete_all_empty_table(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+
+        # Delete all on empty table returns empty list
+        deleted = items.delete()
+        assert deleted == []
+
+
+class TestPagination:
+    """Test pagination functionality."""
+
+    def test_read_with_page(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        items.create({"name": "a"}, {"name": "b"}, {"name": "c"}, {"name": "d"}, {"name": "e"})
+
+        result = items.read(page=1, per_page=3)
+        assert len(result) == 3
+
+    def test_read_pagination(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        items.create({"name": "a"}, {"name": "b"}, {"name": "c"}, {"name": "d"}, {"name": "e"})
+
+        page1 = items.read(page=1, per_page=2)
+        page2 = items.read(page=2, per_page=2)
+        page3 = items.read(page=3, per_page=2)
+
+        assert len(page1) == 2
+        assert len(page2) == 2
+        assert len(page3) == 1  # Only 1 left
+
+    def test_read_default_per_page(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        # Add 15 items
+        for i in range(15):
+            items.create(name=f"item-{i}")
+
+        # Default per_page is 10
+        page1 = items.read(page=1)
+        assert len(page1) == 10
+
+    def test_count_returns_object(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        items.create({"name": "a"}, {"name": "b"}, {"name": "c"})
+
+        info = items.count()
+        assert isinstance(info, Count)
+        assert info.total == 3
+        assert info.pages == 1
+        assert info.per_page == 10
+
+    def test_count_calculates_pages(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        for i in range(25):
+            items.create(name=f"item-{i}")
+
+        info = items.count(per_page=10)
+        assert info.total == 25
+        assert info.pages == 3
+
+    def test_count_with_filter(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        items.create({"name": "a", "count": 1}, {"name": "b", "count": 2}, {"name": "c", "count": 1})
+
+        assert items.count(count=1).total == 2
+        assert items.count(count=2).total == 1
+
+    def test_count_excludes_deleted(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        items.create({"name": "a"}, {"name": "b"}, {"name": "c"})
+        items.delete(name="c")
+
+        assert items.count().total == 2
+        assert items.count(include_deleted=True).total == 3
+
+
+class TestDrop:
+    """Test drop() - delete table."""
+
+    def test_drop(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        items.create(name="test")
+        items.drop()
+
+        # Table should be recreated on next call
+        items2 = db(Item)
+        assert items2.read() == []
+
+
+class TestEdgeCases:
+    """Test edge cases and error handling."""
+
+    def test_not_dataclass_raises(self):
+        class NotADataclass:
+            pass
+
+        db = SQL(TEST_DB)
+        with pytest.raises(TypeError, match="must be a dataclass"):
+            db(NotADataclass)
+
+    def test_unknown_field_raises(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+
+        with pytest.raises(KeyError, match="Unknown field"):
+            items.create(nonexistent="value")
+
+    def test_null_values(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        result = items.create(name="minimal")
+
+        assert result[0].meta is None
+        assert result[0].tags is None
+
+    def test_returns_dataclass_instances(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        result = items.create(name="test")
+
+        assert isinstance(result[0], Item)
+
+    def test_consistency_always_returns_list(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+
+        # All operations return lists
+        added = items.create(name="a")
+        assert isinstance(added, list)
+        assert isinstance(items.read(), list)
+        assert isinstance(items.read(id=added[0].id), list)
+        assert isinstance(items.update(id=added[0].id, name="b"), list)
+        assert isinstance(items.delete(id=added[0].id), list)
+
+    def test_create_invalid_type_raises(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+
+        with pytest.raises(TypeError, match="Expected dict"):
+            items.create("invalid")  # type: ignore
+
+    def test_update_invalid_type_raises(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+
+        with pytest.raises(TypeError, match="Expected dict"):
+            items.update("invalid")  # type: ignore
+
+    def test_update_with_dataclass_instance(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        added = items.create(name="original")
+
+        # Update using dataclass instance
+        updated_item = Item(id=added[0].id, name="updated")
+        result = items.update(updated_item)
+
+        assert len(result) == 1
+        assert result[0].name == "updated"
+
+    def test_delete_hard_delete_all(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        items.create({"name": "a"}, {"name": "b"})
+
+        # Hard delete all
+        deleted = items.delete(hard=True)
+        assert len(deleted) == 2
+
+        # Nothing left, even with include_deleted
+        assert items.read(include_deleted=True) == []
+
+    def test_update_only_id_no_update(self):
+        """Test set with only id and no other fields on non-Model dataclass."""
+        db = SQL(TEST_DB)
+        items = db(SimpleItem)
+        added = items.create(name="test")
+
+        # Set with only id - should skip update
+        result = items.update(id=added[0].id)
+        assert result == []
+
+    def test_dataclass_without_model(self):
+        """Test dataclass without Model base - no soft delete."""
+        db = SQL(TEST_DB)
+        items = db(SimpleItem)
+
+        added = items.create(name="test")
+        assert added[0].id is not None
+
+        # rm does hard delete (no deleted_at field)
+        deleted = items.delete(id=added[0].id)
+        assert len(deleted) == 1
+        assert items.read() == []
+
+    def test_update_with_unknown_auto_field_skips(self):
+        """Test set with only unknown auto field on non-Model class."""
+        db = SQL(TEST_DB)
+        items = db(SimpleItem)
+        added = items.create(name="test")
+
+        # Pass updated_at which SimpleItem doesn't have - should skip
+        result = items.update({"id": added[0].id, "updated_at": "ignored"})
+        assert result == []
+
+
+class TestDatetime:
+    """Test datetime, date, time support."""
+
+    def test_create_with_datetime(self):
+        db = SQL(TEST_DB)
+        events = db(Event)
+        dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        result = events.create(title="Meeting", starts_at=dt)
+
+        assert result[0].starts_at == dt
+        assert isinstance(result[0].starts_at, datetime)
+
+    def test_datetime_always_utc(self):
+        """Naive datetime is treated as UTC."""
+        db = SQL(TEST_DB)
+        events = db(Event)
+        naive_dt = datetime(2024, 6, 15, 10, 30, 0)  # no timezone
+        result = events.create(title="Meeting", starts_at=naive_dt)
+
+        # Should be stored and returned as UTC
+        assert result[0].starts_at.tzinfo == timezone.utc
+        assert result[0].starts_at == datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+
+    def test_create_with_date(self):
+        db = SQL(TEST_DB)
+        events = db(Event)
+        d = date(2024, 6, 15)
+        result = events.create(title="Holiday", event_date=d)
+
+        assert result[0].event_date == d
+        assert isinstance(result[0].event_date, date)
+
+    def test_create_with_time(self):
+        db = SQL(TEST_DB)
+        events = db(Event)
+        t = time(10, 30, 0)
+        result = events.create(title="Daily standup", event_time=t)
+
+        assert result[0].event_time == t
+        assert isinstance(result[0].event_time, time)
+
+    def test_read_preserves_datetime_types(self):
+        db = SQL(TEST_DB)
+        events = db(Event)
+        dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        d = date(2024, 6, 15)
+        t = time(10, 30, 0)
+
+        added = events.create(title="Full event", starts_at=dt, event_date=d, event_time=t)
+        result = events.read(id=added[0].id)
+
+        assert result[0].starts_at == dt
+        assert result[0].event_date == d
+        assert result[0].event_time == t
+
+    def test_update_datetime(self):
+        db = SQL(TEST_DB)
+        events = db(Event)
+        dt1 = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        dt2 = datetime(2024, 7, 20, 14, 0, 0, tzinfo=timezone.utc)
+
+        added = events.create(title="Meeting", starts_at=dt1)
+        updated = events.update(id=added[0].id, starts_at=dt2)
+
+        assert updated[0].starts_at == dt2
+
+    def test_filter_by_datetime(self):
+        db = SQL(TEST_DB)
+        events = db(Event)
+        dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        events.create(title="Meeting", starts_at=dt)
+
+        result = events.read(starts_at=dt)
+        assert len(result) == 1
+        assert result[0].title == "Meeting"
+
+    def test_null_datetime(self):
+        db = SQL(TEST_DB)
+        events = db(Event)
+        result = events.create(title="No date")
+
+        assert result[0].starts_at is None
+        assert result[0].event_date is None
+        assert result[0].event_time is None
+
+    def test_datetime_without_tz_in_db(self):
+        """Datetime stored without timezone (legacy data) is treated as UTC."""
+        import sqlite3
+
+        db = SQL(TEST_DB)
+        events = db(Event)
+
+        # Insert directly with naive datetime string (no timezone)
+        conn = sqlite3.connect(TEST_DB)
+        conn.execute(
+            "INSERT INTO event (id, title, starts_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            ("test-id", "Legacy", "2024-06-15T10:30:00", "2024-01-01T00:00:00+00:00", "2024-01-01T00:00:00+00:00"),
+        )
+        conn.commit()
+        conn.close()
+
+        # Read back - should be UTC
+        result = events.read(id="test-id")
+        assert result[0].starts_at.tzinfo == timezone.utc
+
+
+class TestToDict:
+    """Test to_dict() method."""
+
+    def test_to_dict_basic(self):
+        db = SQL(TEST_DB)
+        items = db(Item)
+        result = items.create(name="test", count=5)
+
+        d = result[0].to_dict()
+        assert isinstance(d, dict)
+        assert d["name"] == "test"
+        assert d["count"] == 5
+        assert d["id"] is not None
+
+    def test_to_dict_with_datetime(self):
+        db = SQL(TEST_DB)
+        events = db(Event)
+        dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        result = events.create(title="Meeting", starts_at=dt)
+
+        d = result[0].to_dict()
+        assert d["starts_at"] == "2024-06-15T10:30:00+00:00"
+        assert isinstance(d["starts_at"], str)
+
+    def test_to_dict_with_date(self):
+        db = SQL(TEST_DB)
+        events = db(Event)
+        d = date(2024, 6, 15)
+        result = events.create(title="Holiday", event_date=d)
+
+        data = result[0].to_dict()
+        assert data["event_date"] == "2024-06-15"
+
+    def test_to_dict_with_time(self):
+        db = SQL(TEST_DB)
+        events = db(Event)
+        t = time(10, 30, 0)
+        result = events.create(title="Standup", event_time=t)
+
+        data = result[0].to_dict()
+        assert data["event_time"] == "10:30:00"
+
+    def test_to_dict_json_serializable(self):
+        db = SQL(TEST_DB)
+        events = db(Event)
+        dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        d = date(2024, 6, 15)
+        t = time(10, 30, 0)
+
+        result = events.create(title="Event", starts_at=dt, event_date=d, event_time=t)
+
+        # Should not raise - all values are JSON serializable
+        json_str = json.dumps(result[0].to_dict())
+        assert "2024-06-15" in json_str
+
+    def test_to_dict_list(self):
+        db = SQL(TEST_DB)
+        events = db(Event)
+        events.create({"title": "A"}, {"title": "B"})
+
+        result = events.read()
+        data = [e.to_dict() for e in result]
+
+        assert len(data) == 2
+        json_str = json.dumps(data)
+        assert "A" in json_str
+        assert "B" in json_str
+
+
+class TestFromDict:
+    """Test from_dict() class method."""
+
+    def test_from_dict_basic(self):
+        item = Item.from_dict({"name": "test", "count": 5})
+
+        assert item.name == "test"
+        assert item.count == 5
+
+    def test_from_dict_with_datetime(self):
+        event = Event.from_dict({
+            "title": "Meeting",
+            "starts_at": "2024-06-15T10:30:00+00:00"
+        })
+
+        assert event.title == "Meeting"
+        assert isinstance(event.starts_at, datetime)
+        assert event.starts_at == datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+
+    def test_from_dict_datetime_naive_becomes_utc(self):
+        event = Event.from_dict({
+            "title": "Meeting",
+            "starts_at": "2024-06-15T10:30:00"  # no timezone
+        })
+
+        assert event.starts_at.tzinfo == timezone.utc
+
+    def test_from_dict_with_date(self):
+        event = Event.from_dict({
+            "title": "Holiday",
+            "event_date": "2024-06-15"
+        })
+
+        assert isinstance(event.event_date, date)
+        assert event.event_date == date(2024, 6, 15)
+
+    def test_from_dict_with_time(self):
+        event = Event.from_dict({
+            "title": "Standup",
+            "event_time": "10:30:00"
+        })
+
+        assert isinstance(event.event_time, time)
+        assert event.event_time == time(10, 30, 0)
+
+    def test_from_dict_null_values(self):
+        event = Event.from_dict({
+            "title": "No date",
+            "starts_at": None
+        })
+
+        assert event.starts_at is None
+
+    def test_from_dict_partial(self):
+        """from_dict with only some fields."""
+        event = Event.from_dict({"title": "Partial"})
+
+        assert event.title == "Partial"
+        assert event.starts_at is None
+
+    def test_from_dict_roundtrip(self):
+        """to_dict -> from_dict should preserve data."""
+        db = SQL(TEST_DB)
+        events = db(Event)
+        dt = datetime(2024, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
+        d = date(2024, 6, 15)
+        t = time(10, 30, 0)
+
+        original = events.create(title="Event", starts_at=dt, event_date=d, event_time=t)[0]
+
+        # Roundtrip
+        data = original.to_dict()
+        restored = Event.from_dict(data)
+
+        assert restored.title == original.title
+        assert restored.starts_at == original.starts_at
+        assert restored.event_date == original.event_date
+        assert restored.event_time == original.event_time
