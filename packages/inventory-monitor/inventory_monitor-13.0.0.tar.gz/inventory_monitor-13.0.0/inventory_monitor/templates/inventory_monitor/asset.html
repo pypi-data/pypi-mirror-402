@@ -1,0 +1,288 @@
+{% extends "generic/object.html" %}
+{% load render_table from django_tables2 %}
+{% load django_tables2 %}
+{% load plugins %}
+{% load tabs %}
+{% load inventory_monitor %}
+{% load i18n %}
+{% load static %}
+{% block content %}
+    <link rel="stylesheet"
+          href="{% static 'inventory_monitor/css/table_row_highlighting.css' %}">
+    <div class="row mb-3">
+        <!-- Left column: Basic Asset Information -->
+        <div class="col col-md-6">
+            <div class="card">
+                <h5 class="card-header">Asset Identification</h5>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <!-- Base Info -->
+                        <tr>
+                            <th>Part Number</th>
+                            <td>{{ object.partnumber|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th>Serial</th>
+                            <td>{{ object.serial|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th>Description</th>
+                            <td>{{ object.description|placeholder }}</td>
+                        </tr>
+                        <!-- Classification -->
+                        <tr>
+                            <th scope="row">Type</th>
+                            <td>
+                                {% if object.type %}
+                                    <a href="{{ object.type.get_absolute_url }}">{{ object.type }}</a>
+                                    {% if object.type.color %}
+                                        <span class="badge color-label"
+                                              style="background-color: #{{ object.type.color }}">&nbsp;</span>
+                                    {% endif %}
+                                {% else %}
+                                    {{ ''|placeholder }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Vendor</th>
+                            <td>{{ object.vendor|placeholder }}</td>
+                        </tr>
+                        <!-- Assignment Information -->
+                        <tr>
+                            <th scope="row">Assignment Status</th>
+                            <td>
+                                <span class="badge text-bg-{{ object.get_assignment_status_color }}">{{ object.get_assignment_status_display }}</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Lifecycle Status</th>
+                            <td>
+                                <span class="badge text-bg-{{ object.get_lifecycle_status_color }}">{{ object.get_lifecycle_status_display }}</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Assigned Object" %}</th>
+                            <td>{{ object.assigned_object|linkify|placeholder }}</td>
+                        </tr>
+                        <!-- Related Objects -->
+                        <tr>
+                            <th>Project</th>
+                            <td>{{ object.project|placeholder }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <!-- Right column: Additional Asset Information -->
+        <div class="col col-md-6">
+            <div class="card">
+                <h5 class="card-header">Asset Details</h5>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <!-- Warranty Information -->
+                        <tr>
+                            <th>Warranty Start</th>
+                            <td>{{ object.warranty_start | placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th>Warranty End</th>
+                            <td>{{ object.warranty_end | placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Warranty Status</th>
+                            <td>{% include 'inventory_monitor/inc/status_badge.html' with record=object status_type='warranty' %}</td>
+                        </tr>
+                        <!-- Financial and Inventory Information -->
+                        <tr>
+                            <th>Items</th>
+                            <td>{{ object.quantity|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th>Price</th>
+                            <td>{{ object.price|format_price_with_currency:object.currency }}</td>
+                        </tr>
+                        <tr>
+                            <th>Currency</th>
+                            <td>{{ object.currency|default:"---" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Asset Number(s)</th>
+                            <td>
+                                {% if object.get_external_inventory_asset_numbers_display %}
+                                    {{ object.get_external_inventory_asset_numbers_display }}
+                                {% else %}
+                                    {{ ''|placeholder }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Order Contract</th>
+                            <td>
+                                {% if object.order_contract %}
+                                    <a href="{{ object.order_contract.get_absolute_url }}">{{ object.order_contract }}</a>
+                                {% else %}
+                                    {{ ''|placeholder }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            <!-- Probe Information Card -->
+            <div class="card mt-3"
+                 {% if object.is_recently_probed %}data-probe-status="recent"{% else %}data-probe-status="stale"{% endif %}>
+                <h5 class="card-header">
+                    Probe Information
+                    {% if object.is_recently_probed %}
+                        <span class="badge text-bg-success ms-2"
+                              title="Probed within last {{ object.get_probe_recent_days_setting }} days">
+                            <i class="mdi mdi-check-circle"></i> Recent
+                        </span>
+                    {% else %}
+                        <span class="badge text-bg-secondary ms-2"
+                              title="Not probed recently or never">
+                            <i class="mdi mdi-clock-outline"></i> Stale
+                        </span>
+                    {% endif %}
+                </h5>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th>Last Probe Time</th>
+                            <td>
+                                {% with probe_time=object.get_last_probe_time %}
+                                    {% if probe_time %}
+                                        {{ probe_time|date:"Y-m-d H:i:s" }}
+                                        <br>
+                                        <small class="text-muted">{{ probe_time|timesince }} ago</small>
+                                    {% else %}
+                                        <span class="text-muted">Never probed</span>
+                                    {% endif %}
+                                {% endwith %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Related Probes</th>
+                            <td>
+                                {% with probe_count=object.get_related_probes.count %}
+                                    {% if probe_count > 0 %}
+                                        <a href="{% url 'plugins:inventory_monitor:probe_list' %}?serial={{ object.serial }}"
+                                           class="btn btn-sm btn-outline-primary">
+                                            View {{ probe_count }} probe{{ probe_count|pluralize }}
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">No probes found</span>
+                                    {% endif %}
+                                {% endwith %}
+                            </td>
+                        </tr>
+                        {% with latest_probe=object.get_related_probes.first %}
+                            {% if latest_probe %}
+                                <tr>
+                                    <th>Latest Probe Details</th>
+                                    <td>
+                                        <a href="{{ latest_probe.get_absolute_url }}"
+                                           class="btn btn-sm btn-outline-info">View Latest Probe</a>
+                                        <br>
+                                        <small class="text-muted">
+                                            {% if latest_probe.device %}Device: {{ latest_probe.device }}{% endif %}
+                                            {% if latest_probe.site %}| Site: {{ latest_probe.site }}{% endif %}
+                                        </small>
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        {% endwith %}
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!--
+    Metadata Section
+    Contains custom fields, tags, and comments 
+    -->
+    <div class="row mb-3">
+        <!-- Left column: Custom Fields -->
+        <div class="col col-md-6">
+            {% include 'inc/panels/image_attachments.html' %}
+            {% include "inc/panels/custom_fields.html" %}
+        </div>
+        <!-- Right column: Tags and Comments -->
+        <div class="col col-md-6">
+            {% include "inc/panels/tags.html" %}
+            {% include "inc/panels/comments.html" %}
+        </div>
+    </div>
+    <div class="row mb-3">
+        <div class="col col-md-12">
+            <div class="card">
+                <h5 class="card-header">
+                    External Inventory Items
+                    <div class="card-actions">
+                        <!-- Add this new button -->
+                        {% if perms.inventory_monitor.change_externalinventory %}
+                            <a href="{% url 'plugins:inventory_monitor:asset_external_inventory_assignment' pk=object.pk %}"
+                               class="btn btn-warning btn-sm me-2">
+                                <i class="mdi mdi-link-variant" aria-hidden="true"></i>Edit External Inventory
+                            </a>
+                        {% endif %}
+                        <a href="{% url 'plugins:inventory_monitor:externalinventory_list' %}?asset_id={{ object.pk }}"
+                           class="btn btn-primary btn-sm">
+                            <i class="mdi mdi-format-list-bulleted" aria-hidden="true"></i>External Inventory List
+                        </a>
+                    </div>
+                </h5>
+                <!-- HTMX powered service table -->
+                {% htmx_table 'plugins:inventory_monitor:externalinventory_list' asset_id=object.pk %}
+            </div>
+        </div>
+    </div>
+    <!--
+    Services Section
+    Lists all services associated with this asset
+    -->
+    <div class="row mb-3">
+        <div class="col col-md-12">
+            <div class="card">
+                <h5 class="card-header">
+                    Services
+                    <div class="card-actions">
+                        <!-- View service list action -->
+                        <a href="{% url 'plugins:inventory_monitor:assetservice_list' %}?asset={{ object.pk }}"
+                           class="btn btn-primary btn-sm">
+                            <i class="mdi mdi-format-list-bulleted" aria-hidden="true"></i>Service List
+                        </a>
+                        <!-- Add service action (if user has permission) -->
+                        {% if perms.inventory_monitor.add_assetservice %}
+                            <a href="{% url 'plugins:inventory_monitor:assetservice_add' %}?asset={{ object.id }}&return_url={{ request.path }}"
+                               class="btn btn-success btn-sm">
+                                <i class="mdi mdi-plus-thick" aria-hidden="true"></i>Add Service
+                            </a>
+                        {% endif %}
+                    </div>
+                </h5>
+                <!-- HTMX powered service table -->
+                {% htmx_table 'plugins:inventory_monitor:assetservice_list' asset=object.pk %}
+            </div>
+        </div>
+    </div>
+    <!--
+    Plugin Extension Sections
+    Reserved for plugin-provided content
+    -->
+    <div class="row mb-3">
+        <div class="col col-md-6">{% plugin_left_page object %}</div>
+        <div class="col col-md-6">{% plugin_right_page object %}</div>
+    </div>
+    <!--
+    RMA Section and Additional Plugin Content
+    Lists all RMA requests associated with this asset
+    -->
+    <div class="row mb-3">
+        <!-- RMA (Return Merchandise Authorization) information -->
+        {% include 'inventory_monitor/inc/asset_rmas.html' %}
+        <!-- Additional plugin content -->
+        <div class="col col-md-12">{% plugin_full_width_page object %}</div>
+    </div>
+{% endblock content %}

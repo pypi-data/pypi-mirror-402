@@ -1,0 +1,162 @@
+{% extends "generic/object.html" %}
+{% load render_table from django_tables2 %}
+{% load plugins %}
+{% load static %}
+{% block content %}
+    <link rel="stylesheet"
+          href="{% static 'inventory_monitor/css/table_row_highlighting.css' %}">
+    <div class="row mb-3">
+        <div class="col col-md-6">
+            <!-- Basic Information -->
+            <div class="card">
+                <h5 class="card-header">Basic Information</h5>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">Name</th>
+                            <td>{{ object.name|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Serial Number</th>
+                            <td>{{ object.serial|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Part Number</th>
+                            <td>{{ object.part|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Category</th>
+                            <td>{{ object.category|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Description</th>
+                            <td>{{ object.description|placeholder }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            <!-- Timing Information -->
+            <div class="card mt-3"
+                 {% if object.is_recently_probed %}data-probe-status="recent"{% else %}data-probe-status="stale"{% endif %}>
+                <h5 class="card-header">
+                    Timing Information
+                    {% if object.is_recently_probed %}
+                        <span class="badge text-bg-success ms-2" title="Probed within last 7 days">
+                            <i class="mdi mdi-check-circle" aria-hidden="true"></i> Recent
+                        </span>
+                    {% else %}
+                        <span class="badge text-bg-secondary ms-2" title="Not probed recently">
+                            <i class="mdi mdi-clock-outline" aria-hidden="true"></i> Stale
+                        </span>
+                    {% endif %}
+                </h5>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">Last Probe Time</th>
+                            <td>
+                                {% if object.time %}
+                                    {{ object.time|date:"Y-m-d H:i:s" }}
+                                {% else %}
+                                    {{ ''|placeholder }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">First Discovery</th>
+                            <td>
+                                {% if object.creation_time %}
+                                    {{ object.creation_time|date:"Y-m-d H:i:s" }}
+                                {% else %}
+                                    {{ ''|placeholder }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            {% include "inc/panels/custom_fields.html" %}
+            {% plugin_left_page object %}
+        </div>
+        <div class="col col-md-6">
+            <!-- Location Information -->
+            <div class="card">
+                <h5 class="card-header">Location Information</h5>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">Device</th>
+                            <td>
+                                {% if object.device %}
+                                    <a href="{{ object.device.get_absolute_url }}">{{ object.device.name }}</a>
+                                    {% if object.device_descriptor %}
+                                        <br>
+                                        <small class="text-muted">{{ object.device_descriptor }}</small>
+                                    {% endif %}
+                                {% else %}
+                                    {{ object.device_descriptor|placeholder }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Site</th>
+                            <td>
+                                {% if object.site %}
+                                    <a href="{{ object.site.get_absolute_url }}">{{ object.site.name }}</a>
+                                    {% if object.site_descriptor %}
+                                        <br>
+                                        <small class="text-muted">{{ object.site_descriptor }}</small>
+                                    {% endif %}
+                                {% else %}
+                                    {{ object.site_descriptor|placeholder }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Location</th>
+                            <td>
+                                {% if object.location %}
+                                    <a href="{{ object.location.get_absolute_url }}">{{ object.location.name }}</a>
+                                    {% if object.location_descriptor %}
+                                        <br>
+                                        <small class="text-muted">{{ object.location_descriptor }}</small>
+                                    {% endif %}
+                                {% else %}
+                                    {{ object.location_descriptor|placeholder }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            <!-- Raw Data -->
+            <div class="card mt-3">
+                <h5 class="card-header">Discovery Data</h5>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">Raw Discovery Data</th>
+                            <td>
+                                <pre class="text-muted small">{{ object.discovered_data|json }}</pre>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            {% include "inc/panels/tags.html" %}
+            {% include "inc/panels/comments.html" %}
+            {% plugin_right_page object %}
+        </div>
+    </div>
+    <div class="row mb-3">
+        <div class="col col-md-12">
+            <div class="card">
+                <h5 class="card-header">History</h5>
+                {% htmx_table 'plugins:inventory_monitor:probe_list' serial=object.serial %}
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col col-md-12">{% plugin_full_width_page object %}</div>
+    </div>
+{% endblock content %}

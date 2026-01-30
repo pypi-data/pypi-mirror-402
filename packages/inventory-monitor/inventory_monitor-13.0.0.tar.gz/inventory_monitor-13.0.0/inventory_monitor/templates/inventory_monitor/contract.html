@@ -1,0 +1,124 @@
+{% extends "generic/object.html" %}
+{% load render_table from django_tables2 %}
+{% load plugins %}
+{% block content %}
+    <div class="row mb-3">
+        <div class="col col-md-6">
+            <div class="card">
+                <h5 class="card-header">Contract</h5>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">Name</th>
+                            <td>{{ object.name }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Name Internal</th>
+                            <td>{{ object.name_internal }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Type</th>
+                            <td>{{ object.get_type_display }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Contract Type</th>
+                            <td>{{ object.contract_type }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Contractor</th>
+                            <td>
+                                <a href="{{ object.contractor.get_absolute_url }}">{{ object.contractor }}</a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Price</th>
+                            <td>{{ object.price|format_price_with_currency:object.currency }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Signed</th>
+                            <td>{{ object.signed|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Accepted</th>
+                            <td>{{ object.accepted|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Invoicing Start</th>
+                            <td>{{ object.invoicing_start|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Invoicing End</th>
+                            <td>{{ object.invoicing_end|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Parent (Master contract)</th>
+                            <td>
+                                {% if object.parent %}
+                                    <a href="{{ object.parent.get_absolute_url }}">{{ object.parent }}</a>
+                                {% else %}
+                                    {{ ''|placeholder }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            {% include "inc/panels/custom_fields.html" %}
+            {% plugin_left_page object %}
+        </div>
+        <div class="col col-md-6">
+            {% include "inc/panels/tags.html" %}
+            {% include "inc/panels/comments.html" %}
+            {% plugin_right_page object %}
+        </div>
+    </div>
+    {% if object.contract_type == "contract" %}
+        <div class="row mb-3">
+            <div class="col col-md-12">
+                <div class="card">
+                    <h5 class="card-header">
+                        Subcontracts
+                        <div class="card-actions">
+                            <a href="{% url 'plugins:inventory_monitor:contract_list' %}?parent_id={{ object.pk }}"
+                               class="btn btn-primary btn-sm">
+                                <i class="mdi mdi-format-list-bulleted" aria-hidden="true"></i>Subcontract List
+                            </a>
+                            {% if perms.inventory_monitor.add_contract %}
+                                <a href="{% url 'plugins:inventory_monitor:contract_add' %}?contractor={{ object.contractor.pk }}&parent={{ object.pk }}&return_url={{ request.path }}"
+                                   class="btn btn-success btn-sm">
+                                    <i class="mdi mdi-plus-thick" aria-hidden="true"></i>Add Subcontract
+                                </a>
+                            {% endif %}
+                        </div>
+                    </h5>
+                    {% htmx_table 'plugins:inventory_monitor:contract_list' parent_id=object.pk %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+    <div class="row mb-3">
+        <div class="col col-md-12">
+            <div class="card">
+                <h5 class="card-header">
+                    Invoices
+                    <div class="card-actions">
+                        <a href="{% url 'plugins:inventory_monitor:invoice_list' %}?contract_id={{ object.pk }}"
+                           class="btn btn-primary btn-sm">
+                            <i class="mdi mdi-format-list-bulleted" aria-hidden="true"></i>Invoices List
+                        </a>
+                        {% if perms.inventory_monitor.add_invoice %}
+                            <a href="{% url 'plugins:inventory_monitor:invoice_add' %}?contract={{ object.id }}&return_url={{ request.path }}"
+                               class="btn btn-success btn-sm">
+                                <i class="mdi mdi-plus-thick" aria-hidden="true"></i>Add Invoices
+                            </a>
+                        {% endif %}
+                    </div>
+                </h5>
+                {% htmx_table 'plugins:inventory_monitor:invoice_list' contract_id=object.pk %}
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col col-md-12">{% plugin_full_width_page object %}</div>
+    </div>
+{% endblock content %}
