@@ -1,0 +1,39 @@
+#!/bin/bash
+set -e
+
+# Make sure the virtual environment is setup
+make venv
+# Make sure IDE is available
+programs=(code codium)
+program=
+for exe in "${programs[@]}"; do
+	if command -v "$exe" >/dev/null 2>/dev/null; then
+		program="$exe"
+	fi
+done
+if [ -z "$program" ]; then
+	echo "ERROR: Missing IDE. Cannot find VSCode-family IDE."
+	echo "       Supported:"
+	for exe in "${programs[@]}"; do
+		echo "       - $exe"
+	done
+	exit 1
+fi
+
+# Make sure the Python extension is installed: "ms-python.python"
+# | $program --list-extensions
+# | $program --install-extension "ms-python.python"
+# TODO: Is this even available on Linux?
+
+# Activate the virtual environment
+# shellcheck disable=1091
+source "$(unset -v MAKELEVEL; make show-venv-bin)/activate"
+
+# Generate Python entrypoints
+python release/build-entrypoints --quiet --traceback-limit 1000 generate-python
+
+# Run VSCode (Open Main Entrypoint is technically optional)
+exec "$program" \
+	-g build/bin/tkmilan-showcase \
+	"$@" \
+	"$PWD"

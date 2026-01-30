@@ -1,0 +1,22 @@
+#!/bin/bash
+# - Make sure the virtual environment is setup
+make venv
+# Activate the virtual environment
+# shellcheck disable=1091
+source "$(unset -v MAKELEVEL; make show-venv-bin)/activate"
+
+run=('tkmilan-showcase')
+if [ "$1" == "forever" ]; then
+	shift  # Was 'forever'
+	while true; do
+		echo "=> Run '${run[*]}'"
+		"${run[@]}" "$@"
+		return="$?"
+		echo "=> $return"
+		if [ $return != 0 ] && [ $return != 255 ]; then
+			read -rp 'Press Enter to Continue'
+		fi
+	done
+else
+	exec "${run[@]}" "$@"
+fi
