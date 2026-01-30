@@ -1,0 +1,45 @@
+name: Tests
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.11', '3.12', '3.13']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        version: "latest"
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      run: uv python install ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: uv sync
+    
+    - name: Run tests
+      run: uv run ccloc --help
+    
+    - name: Test on current directory
+      run: uv run ccloc .
+    
+    - name: Test with extensions filter
+      run: uv run ccloc -e .py -e .yml
+    
+    - name: Test JSON output
+      run: uv run ccloc -f json
+    
+    - name: Test CSV output
+      run: uv run ccloc -f csv
