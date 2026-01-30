@@ -1,0 +1,353 @@
+Metadata-Version: 2.4
+Name: api-sos
+Version: 1.1.0
+Summary: Add your description here
+Requires-Python: >=3.12
+Requires-Dist: aiohttp>=3.11.12
+Requires-Dist: click>=8.1.8
+Requires-Dist: faker>=36.1.1
+Requires-Dist: jinja2>=3.1.6
+Requires-Dist: loguru>=0.7.3
+Requires-Dist: openapi-spec-validator>=0.7.1
+Requires-Dist: prance>=23.6.21.0
+Requires-Dist: pydantic>=2.10.6
+Requires-Dist: ruamel-yaml>=0.18.10
+Description-Content-Type: text/markdown
+
+# 🚀 API-SOS
+
+API-SOS 是一个用于 API 测试的工具，它可以从 OpenAPI 规范生成测试用例，并支持记录和验证 API 响应。
+
+## 📦 安装
+
+```bash
+pip install api-sos
+```
+
+## 🚀 快速开始
+
+## 📚 作为 Python 库使用
+
+API-SOS 既可以通过命令行使用，也可以作为库直接集成到你的代码中。作为库调用时，它不会主动 `sys.exit(1)`，而是返回结果，你可以自行决定如何处理错误或失败。
+
+### ✅ 基础示例：运行已生成的用例
+
+```python
+import asyncio
+
+from api_sos import has_failures, run_checks
+
+
+async def main() -> None:
+    results = await run_checks(
+        "output.yaml",
+        concurrent=5,
+        endpoint="http://localhost:8000",
+        variables="vars.yaml",
+        interactive=False,
+        verbose=True,
+    )
+
+    if has_failures(results):
+        # 这里由你决定如何处理失败，例如抛出异常或返回错误码
+        raise RuntimeError("API checks failed")
+
+
+asyncio.run(main())
+```
+
+### ✅ 生成用例并写入文件
+
+```python
+import asyncio
+
+from api_sos import generate_checks
+
+
+async def main() -> None:
+    await generate_checks(
+        "openapi.yaml",
+        "output.yaml",
+        endpoint="http://localhost:8000",
+        concurrent=3,
+        headers="headers.yaml",
+        headers_variables="vars.yaml",
+        no_record=False,
+        no_example=False,
+        verbose=True,
+    )
+
+
+asyncio.run(main())
+```
+
+### 🔍 直接使用底层运行函数
+
+如果你想完全掌控运行过程（比如批量处理多个 `Input`），可以直接调用 `api_sos.run`：
+
+```python
+import asyncio
+
+from api_sos import Input, run
+
+
+async def main() -> None:
+    input_ = Input.load("output.yaml")
+    results = await run(input_, concurrent=2, variables={"token": "xxx"})
+    # results 是 CheckResult 或 Exception 的列表
+
+
+asyncio.run(main())
+```
+
+### 🎯 生成测试用例
+
+从 OpenAPI 规范生成测试用例：
+
+```bash
+# 指定端点并记录响应
+api-sos generate openapi.yaml output.yaml --endpoint http://localhost:8000
+
+# 使用并发请求记录响应
+api-sos generate openapi.yaml output.yaml --endpoint http://localhost:8000 --concurrent 5
+
+# 使用自定义请求头
+api-sos generate openapi.yaml output.yaml --headers headers.yaml --endpoint http://localhost:8000
+
+# 使用带模板变量的请求头(secretes场景)
+api-sos generate openapi.yaml output.yaml --headers headers.yaml --headers-variables vars.yaml --endpoint http://localhost:8000
+
+# 跳过响应记录
+api-sos generate openapi.yaml output.yaml --no-record
+
+# 跳过从示例生成检查
+api-sos generate openapi.yaml output.yaml --no-example --endpoint http://localhost:8000
+```
+
+### ▶️ 运行测试
+
+运行生成的测试用例：
+
+```bash
+# 基本用法
+api-sos run output.yaml
+
+# 使用并发执行
+api-sos run output.yaml --concurrent 5
+
+# 指定端点
+api-sos run output.yaml --endpoint http://localhost:8000
+
+# 使用变量替换
+api-sos run output.yaml --variables vars.yaml
+
+# 交互式编辑
+api-sos run output.yaml --interactive
+```
+
+### 🔄 交互式编辑模式
+
+当使用`--interactive`或`-i`参数运行测试时，如果检查结果与预期不符（存在差异），系统会自动打开编辑器让你修改断言：
+
+```bash
+# 启用交互式编辑模式
+api-sos run output.yaml -i
+
+# 使用自定义编辑器（通过环境变量设置）
+EDITOR=vim api-sos run output.yaml -i
+```
+
+#### 交互式编辑工作流程
+
+1. 当检测到断言与实际结果不匹配时，系统会打开你的编辑器
+2. 编辑器中会显示以下内容：
+
+   - `assert`: 当前的断言内容，你可以修改这部分
+   - `actual`: 实际响应内容（仅供参考，保存时会被丢弃）
+   - `name`: 检查项名称（仅供参考，保存时会被丢弃）
+   - 使用说明
+
+3. 你可以：
+
+   - 从`actual`部分复制值到`assert`部分
+   - 修改断言中的特定字段
+   - 使用Jinja2模板表达式创建动态断言，如`{{ actual|is_type('int') }}`
+
+4. 保存并退出编辑器后，修改将自动应用到原始文件中
+
+这种交互式方式非常适合初始测试开发和调试过程。
+
+## 📝 配置文件示例
+
+所有配置的文件名可以是任意名称，请通过命令的参数进行传递
+
+### 🔑 请求头配置 (headers.yaml) 在调用generate时，这部分请求头会自动被插入到生成的结构中
+
+```yaml
+Authorization: Bearer {{token}}
+Content-Type: application/json
+X-Custom-Header: xxx
+```
+
+### 🔄 变量配置 (vars.yaml)
+
+```yaml
+token: "your-token-here"
+custom_value: "test"
+```
+
+### ✅ 测试用例配置 (output.yaml)
+
+```yaml
+version: "1.0.0"
+endpoint: "http://localhost:8000"
+checks:
+  - name: "Get User"
+    pathname: "/api/users/1"
+    method: "GET"
+    headers:
+      Authorization: "Bearer {{token}}"
+    assert_:
+      http_status: 200
+      content:
+        id: 1
+        name: "John Doe"
+```
+
+## ✨ 功能特性
+
+- 从 OpenAPI 规范自动生成测试用例
+- 支持记录和验证 API 响应
+- 支持并发请求
+- 支持请求头模板变量
+- 支持变量替换
+- 支持交互式编辑
+- 支持自定义端点
+- 支持多种 HTTP 方法（GET, POST, PUT, DELETE 等）
+- 灵活的响应断言系统
+- 支持 Jinja2 模板表达式
+- 内置丰富的断言过滤器
+- 支持代理和认证
+- 支持超时配置
+
+## 🔧 高级用法
+
+### 🎯 断言系统
+
+#### 🎨 支持的过滤器
+
+- `matches(pattern)`: 正则表达式匹配
+- `contains(substr)`: 包含子字符串
+- `gt(other)`: 大于
+- `lt(other)`: 小于
+- `gte(other)`: 大于等于
+- `lte(other)`: 小于等于
+- `ne(other)`: 不等于
+- `is_numeric()`: 是否为数字
+- `is_date()`: 是否为日期格式
+- `is_email()`: 是否为邮箱格式
+- `length()`: 获取长度
+- `starts_with(prefix)`: 是否以指定字符串开头
+- `ends_with(suffix)`: 是否以指定字符串结尾
+- `in_range(min_val, max_val)`: 是否在指定范围内
+- `is_empty()`: 是否为空
+- `is_type(expected_type)`: 检查值是否为指定的 Python 类型（如 'str', 'int', 'float', 'list', 'dict' 等）
+
+#### 📊 上下文变量
+
+在表达式中可以使用以下变量：
+
+- `actual`: 当前字段的实际值
+- `response`: 整个响应对象
+- `status`: HTTP 状态码
+- `headers`: 响应头
+- `body`: 响应体
+
+### 📋 高级配置示例
+
+#### 🔄 使用变量
+
+```yaml
+version: "1.0.0"
+endpoint: "https://api.example.com"
+variables:
+  min_age: 18
+  valid_status: ["active", "pending"]
+checks:
+  - name: "创建用户"
+    pathname: "/users"
+    method: POST
+    payload:
+      value:
+        name: "test_user"
+        email: "test@example.com"
+    assert:
+      http_status: 201
+      content:
+        age: "{{ actual|gte(min_age) }}"
+        status: "{{ actual in valid_status }}"
+```
+
+#### 🌐 代理设置
+
+```yaml
+checks:
+  - name: "使用代理"
+    pathname: "/api"
+    method: GET
+    proxy: "http://proxy.example.com:8080"
+    proxy_auth:
+      login: "user"
+      password: "pass"
+```
+
+#### ⏱️ 超时设置
+
+```yaml
+checks:
+  - name: "设置超时"
+    pathname: "/api"
+    method: GET
+    timeout:
+      total: 30
+      connect: 10
+      sock_read: 20
+```
+
+#### 🎯 复杂断言示例
+
+```yaml
+checks:
+  - name: "复杂断言示例"
+    pathname: "/orders"
+    method: POST
+    assert:
+      http_status: 201
+      content:
+        # 使用多个条件
+        is_valid: "{{ actual.amount >= 100 and actual.status in ['pending', 'processing'] }}"
+
+        # 使用过滤器链
+        is_valid_email: "{{ actual.email|is_email and actual.email|contains('@example.com') }}"
+
+        # 使用范围检查
+        is_valid_amount: "{{ actual.amount|in_range(100, 1000) }}"
+
+        # 使用正则表达式
+        is_valid_date: "{{ actual.created_at|matches('^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$') }}"
+```
+
+## 🛠️ 开发
+
+```bash
+# 安装开发依赖
+uv sync --dev
+
+# 运行代码格式化
+black src
+isort src
+```
+
+## 📄 许可证
+
+MIT
