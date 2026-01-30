@@ -1,0 +1,357 @@
+Metadata-Version: 2.4
+Name: janet-cli
+Version: 0.3.9
+Summary: CLI tool to sync Janet AI tickets to local markdown files
+Author-email: Janet AI <support@janet-ai.com>
+License: MIT
+Project-URL: Homepage, https://github.com/janet-ai/janet-cli
+Project-URL: Repository, https://github.com/janet-ai/janet-cli
+Project-URL: Issues, https://github.com/janet-ai/janet-cli/issues
+Keywords: cli,janet,tickets,markdown,sync
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: typer>=0.12.0
+Requires-Dist: httpx>=0.27.0
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: pydantic-settings>=2.0.0
+Requires-Dist: rich>=13.0.0
+Requires-Dist: platformdirs>=4.0.0
+Requires-Dist: keyring>=25.0.0
+Requires-Dist: python-dateutil>=2.8.0
+Requires-Dist: pycrdt>=0.9.0
+Requires-Dist: InquirerPy>=0.3.4
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.1.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23.0; extra == "dev"
+Requires-Dist: httpx-mock>=0.15.0; extra == "dev"
+Requires-Dist: black>=24.0.0; extra == "dev"
+Requires-Dist: mypy>=1.8.0; extra == "dev"
+Requires-Dist: ruff>=0.2.0; extra == "dev"
+Dynamic: license-file
+
+# Janet AI CLI
+
+> Sync your Janet AI tickets to local markdown files with real-time updates, and enable AI coding agents to create and manage tickets.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+
+## What is Janet AI?
+
+[Janet AI](https://janet.ai) is an AI-native project management platform for modern software teams. The Janet CLI allows developers to:
+
+- **Sync tickets** to local markdown files with real-time updates as changes are made on the platform
+- **Create tickets** directly from the command line or via AI agents
+- **Update tickets** without leaving your terminal
+
+## Why Use the CLI?
+
+AI coding assistants work better when they understand your project's tickets, requirements, and priorities. With Janet CLI, AI agents like Claude Code and Cursor can:
+
+- Reference specific tickets while writing code
+- Create new tickets when discovering bugs or needed features
+- Update ticket status as work progresses
+- Understand requirements and acceptance criteria
+- Answer questions about project priorities
+
+## Installation
+
+```bash
+pip install janet-cli
+```
+
+## Quick Start
+
+```bash
+# 1. Authenticate
+janet login
+
+# 2. Sync tickets and watch for real-time updates
+janet sync
+```
+
+## Using with AI Coding Agents
+
+### Claude Code
+
+Add Janet CLI to your Claude Code workflow:
+
+```bash
+# In your project directory
+janet sync
+```
+
+Claude Code can now reference, create, and update tickets. Example natural language prompts:
+
+**Referencing tickets:**
+- "Look at ticket BACK-42 and implement the authentication flow"
+- "What are the high priority tickets in the Backend project?"
+- "Show me all tickets assigned to me"
+
+**Creating tickets:**
+- "Create a high-priority bug ticket in BACK for the null pointer exception we just found in auth.py"
+- "Make a new feature ticket in FRONT for dark mode support with the description from design-doc.md"
+- "Create a ticket to add unit tests for the payment service, assign it to dev@example.com"
+
+**Updating tickets:**
+- "Update BACK-42 status to In Progress since I'm working on it now"
+- "Mark FRONT-15 as Done and add a comment that it's deployed to staging"
+- "Change the priority of BACK-38 to Critical"
+
+Claude Code can run these commands directly:
+
+```bash
+janet context --json                    # Discover available projects
+janet ticket create "Bug: null pointer in auth" -p BACK --json
+janet ticket update BACK-42 --status "In Progress"
+```
+
+### Cursor
+
+1. Sync tickets to your workspace:
+```bash
+janet sync
+```
+
+2. Add to `.cursorrules` or system prompt:
+```
+Project tickets are in ./janet-tickets/ as markdown files.
+Use `janet ticket create` to create new tickets.
+Use `janet ticket update` to update ticket status.
+Use `janet context --json` to see available projects.
+```
+
+3. Use natural language prompts:
+
+**Referencing tickets:**
+- "Read ticket BACK-42 and help me implement the OAuth flow"
+- "What bugs are currently open in the Frontend project?"
+
+**Creating tickets:**
+- "Create a ticket in BACK for refactoring the database layer, high priority"
+- "Make a bug ticket for the memory leak we found, include the stack trace"
+
+**Updating tickets:**
+- "Update ticket FRONT-28 to In Review status"
+- "Mark BACK-51 as complete"
+
+### GitHub Copilot / Other Agents
+
+Any AI agent with terminal access can use the CLI:
+
+```bash
+# Get context about the workspace
+janet context --json
+
+# Create tickets programmatically
+janet ticket create "Title" -p PROJECT --json
+
+# Update tickets
+janet ticket update PROJ-123 --status "Done" --json
+```
+
+## Real-Time Sync
+
+After syncing, the CLI stays connected to receive real-time updates:
+
+```bash
+janet sync
+```
+
+Output:
+```
+✓ Sync complete!
+  Projects: 2
+  Tickets: 42
+
+Tickets saved to: ./janet-tickets
+
+Watching for changes... (Ctrl+C to stop)
+
+Watching 2 project(s) in My Org (Backend, Frontend)
+
+   BACK-123 (status)
+   BACK-124 (created)
+   FRONT-45 (title, description)
+```
+
+Real-time updates sync changes whenever tickets are created, updated, or deleted—whether from the web UI, API, or other CLI sessions. Press Ctrl+C to stop watching.
+
+## File Organization
+
+Tickets are organized in a clear hierarchy:
+
+```
+janet-tickets/
+├── AI_AGENT_INSTRUCTIONS.md     # Instructions for AI coding agents
+└── My Organization/
+    ├── Backend/
+    │   ├── BACK-1.md
+    │   ├── BACK-2.md
+    │   └── BACK-42.md
+    └── Frontend/
+        ├── FRONT-1.md
+        └── FRONT-15.md
+```
+
+## Markdown Format
+
+Each ticket is exported with complete information:
+
+```markdown
+# PROJ-42: Add user authentication
+
+## Metadata
+- **Status:** In Progress
+- **Priority:** High
+- **Type:** Feature
+- **Assignees:** John Doe, Jane Smith
+- **Created:** Jan 07, 2026 10:30 AM
+- **Updated:** Jan 07, 2026 02:45 PM
+- **Labels:** backend, security
+
+## Description
+
+We need to implement OAuth authentication...
+
+### Requirements
+- Support multiple auth providers
+- Handle token refresh
+- Secure token storage
+
+## Comments (2)
+
+### John Doe - Jan 07, 2026 11:00 AM
+
+Started working on the OAuth flow.
+
+### Jane Smith - Jan 07, 2026 01:30 PM
+
+Looks good! Add tests when done.
+```
+
+## Commands
+
+### Authentication
+
+```bash
+janet login                     # Authenticate with Janet AI
+janet logout                    # Clear credentials
+janet auth status               # Show authentication status
+```
+
+### Syncing Tickets
+
+```bash
+janet sync                      # Sync and watch for real-time updates
+janet sync --all                # Sync all projects and watch
+janet sync --dir ./tickets      # Specify custom directory
+janet sync --no-watch           # Sync once and exit (no real-time updates)
+```
+
+### Creating Tickets
+
+```bash
+janet ticket create "Title" --project PROJ           # Basic creation
+janet ticket create "Title" -p PROJ --priority High  # With priority
+janet ticket create "Title" -p PROJ --status "To Do" # With status
+janet ticket create "Title" -p PROJ --type Bug       # With type
+janet ticket create "Title" -p PROJ --assignee dev@example.com
+janet ticket create "Title" -p PROJ --tag backend --tag urgent
+janet ticket create "Title" -p PROJ --json           # JSON output for AI agents
+cat desc.md | janet ticket create "Title" -p PROJ    # Pipe description
+
+# Full ticket with all fields
+janet ticket create "Implement OAuth2 authentication" \
+  --project BACK \
+  --description "Add Google and GitHub OAuth providers with token refresh" \
+  --status "To Do" \
+  --priority High \
+  --type Feature \
+  --assignee dev@example.com \
+  --tag backend \
+  --tag security \
+  --tag authentication
+```
+
+### Updating Tickets
+
+```bash
+janet ticket update PROJ-123 --status "In Progress"  # Update status
+janet ticket update PROJ-123 --priority Critical     # Update priority
+janet ticket update PROJ-123 --title "New title"     # Update title
+janet ticket update PROJ-123 --assignee dev@example.com
+janet ticket update PROJ-123 --json                  # JSON output
+
+# Update multiple fields at once
+janet ticket update BACK-42 \
+  --title "Fixed: OAuth authentication flow" \
+  --description "Implemented token refresh and error handling" \
+  --status "In Review" \
+  --priority High \
+  --assignee reviewer@example.com
+```
+
+### Context (for AI Agents)
+
+```bash
+janet context                   # Human-readable context
+janet context --json            # JSON output for AI agents/scripts
+```
+
+### Organization Management
+
+```bash
+janet org list                  # List your organizations
+janet org select <org-id>       # Switch organization
+janet org current               # Show current organization
+```
+
+### Project Management
+
+```bash
+janet project list              # List projects in current org
+```
+
+### Status & Configuration
+
+```bash
+janet status                    # Show overall status
+janet config show               # Display configuration
+janet config path               # Show config file location
+janet config reset              # Reset to defaults
+janet --version                 # Show CLI version
+janet update                    # Update CLI to latest version
+```
+
+## Configuration
+
+The CLI stores configuration at:
+- **macOS:** `~/Library/Application Support/janet-cli/config.json`
+- **Linux:** `~/.config/janet-cli/config.json`
+- **Windows:** `%APPDATA%\janet-cli\config.json`
+
+## Requirements
+
+- Python 3.8 or higher
+- Janet AI account ([sign up](https://janet.ai))
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Links
+
+- [Janet AI](https://janet.ai) - AI-native project management
+- [Documentation](https://docs.janet.ai)
