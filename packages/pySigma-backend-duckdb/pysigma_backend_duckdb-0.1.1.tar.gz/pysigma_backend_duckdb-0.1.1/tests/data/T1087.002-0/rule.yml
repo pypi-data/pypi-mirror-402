@@ -1,0 +1,36 @@
+title: Domain Account Enumeration via Net Command
+id: 4a2c8f45-6b3d-4e7f-8a9c-1d5e2f6a7b8c
+status: experimental
+description: Detects domain account enumeration using net.exe commands with /domain parameter. This technique is commonly used by attackers to discover domain users and groups for lateral movement and privilege escalation planning.
+author: north.sh Labs
+date: 2026/01/21
+references:
+- https://attack.mitre.org/techniques/T1087/002/
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1087.002/T1087.002.md
+tags:
+- attack.t1087.002
+- attack.discovery
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_process:
+    Image|endswith: \net.exe
+  selection_user_enum:
+    CommandLine|contains:
+    - user /domain
+    - user/domain
+  selection_group_enum:
+    CommandLine|contains:
+    - group /domain
+    - group/domain
+  condition: selection_process and (selection_user_enum or selection_group_enum)
+level: medium
+simulation:
+- type: atomic-red-team
+  name: Enumerate all accounts (Domain)
+  technique: T1087.002
+  atomic_guid: 6fbc9e68-5ad7-444a-bd11-8bf3136c477e
+  test_data:
+    splunk: data/tests/T1087.002-0/logs_splunk.json
+    elastic: data/tests/T1087.002-0/logs_elastic.json
