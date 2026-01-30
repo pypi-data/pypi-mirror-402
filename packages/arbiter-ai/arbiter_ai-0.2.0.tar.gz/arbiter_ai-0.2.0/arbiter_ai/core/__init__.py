@@ -1,0 +1,162 @@
+"""Core infrastructure for Arbiter evaluation framework.
+
+This module contains the fundamental components:
+- Configuration management
+- LLM client pooling
+- Middleware system
+- Monitoring and metrics
+- Plugin infrastructure
+- Exception handling
+- Retry logic
+- Circuit breaker pattern
+"""
+
+from .circuit_breaker import CircuitBreaker, CircuitState
+from .cost_calculator import CostCalculator, ModelPricing, get_cost_calculator
+from .estimation import (
+    BatchCostEstimate,
+    CostEstimate,
+    DryRunResult,
+    estimate_batch_cost,
+    estimate_evaluation_cost,
+    estimate_tokens,
+    get_prompt_preview,
+)
+from .exceptions import (
+    ArbiterError,
+    CircuitBreakerOpenError,
+    ConfigurationError,
+    EvaluatorError,
+    ModelProviderError,
+    PluginError,
+    StorageError,
+    TimeoutError,
+    ValidationError,
+)
+from .interfaces import BaseEvaluator, StorageBackend
+from .llm_client import LLMClient, LLMManager, LLMResponse, Provider
+from .llm_client_pool import ConnectionMetrics, LLMClientPool, PoolConfig
+from .logging import configure_logging, get_logger
+from .middleware import (
+    CachingMiddleware,
+    LoggingMiddleware,
+    MetricsMiddleware,
+    Middleware,
+    MiddlewarePipeline,
+    RateLimitingMiddleware,
+    monitor as monitor_context,
+)
+from .models import (
+    BatchEvaluationResult,
+    ComparisonResult,
+    EvaluationResult,
+    LLMInteraction,
+    Metric,
+    Score,
+)
+from .monitoring import (
+    PerformanceMetrics,
+    PerformanceMonitor,
+    get_global_monitor,
+    monitor,
+)
+from .registry import (
+    AVAILABLE_EVALUATORS,
+    get_available_evaluators,
+    get_evaluator_class,
+    register_evaluator,
+    validate_evaluator_name,
+)
+from .retry import (
+    RETRY_PERSISTENT,
+    RETRY_QUICK,
+    RETRY_STANDARD,
+    RetryConfig,
+    with_retry,
+)
+from .type_defs import MiddlewareContext
+from .validation import (
+    validate_batch_evaluate_inputs,
+    validate_compare_inputs,
+    validate_evaluate_inputs,
+)
+
+__all__ = [
+    # Logging
+    "configure_logging",
+    "get_logger",
+    # Exceptions
+    "ArbiterError",
+    "ConfigurationError",
+    "ModelProviderError",
+    "EvaluatorError",
+    "ValidationError",
+    "StorageError",
+    "PluginError",
+    "TimeoutError",
+    "CircuitBreakerOpenError",
+    # Circuit Breaker
+    "CircuitBreaker",
+    "CircuitState",
+    # Cost Calculator
+    "CostCalculator",
+    "ModelPricing",
+    "get_cost_calculator",
+    # Models
+    "EvaluationResult",
+    "ComparisonResult",
+    "BatchEvaluationResult",
+    "Score",
+    "Metric",
+    "LLMInteraction",
+    # Interfaces
+    "BaseEvaluator",
+    "StorageBackend",
+    # LLM Client
+    "LLMClient",
+    "LLMManager",
+    "LLMResponse",
+    "Provider",
+    "LLMClientPool",
+    "PoolConfig",
+    "ConnectionMetrics",
+    # Middleware
+    "Middleware",
+    "MiddlewarePipeline",
+    "LoggingMiddleware",
+    "MetricsMiddleware",
+    "CachingMiddleware",
+    "RateLimitingMiddleware",
+    "monitor_context",
+    # Monitoring
+    "PerformanceMetrics",
+    "PerformanceMonitor",
+    "get_global_monitor",
+    "monitor",
+    # Retry
+    "RetryConfig",
+    "with_retry",
+    "RETRY_QUICK",
+    "RETRY_STANDARD",
+    "RETRY_PERSISTENT",
+    # Types
+    "MiddlewareContext",
+    # Registry
+    "AVAILABLE_EVALUATORS",
+    "register_evaluator",
+    "get_evaluator_class",
+    "get_available_evaluators",
+    "validate_evaluator_name",
+    # Validation
+    "validate_evaluate_inputs",
+    "validate_compare_inputs",
+    "validate_batch_evaluate_inputs",
+    # Estimation
+    "CostEstimate",
+    "BatchCostEstimate",
+    "DryRunResult",
+    "estimate_tokens",
+    "estimate_evaluation_cost",
+    "estimate_batch_cost",
+    "get_prompt_preview",
+]
