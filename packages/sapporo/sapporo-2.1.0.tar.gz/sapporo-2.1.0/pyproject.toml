@@ -1,0 +1,115 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sapporo"
+version = "2.1.0"
+authors = [
+    { name = "DDBJ (Bioinfomatics and DDBJ Center)", email = "tazro.ohta@chiba-u.jp" },
+]
+description = "The sapporo-service is a standard implementation conforming to the Global Alliance for Genomics and Health (GA4GH) Workflow Execution Service (WES) API specification."
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.8"
+keywords = ["workflow", "WES", "GA4GH-WES", "bioinformatics"]
+license = { text = "Apache-2.0" }
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "apscheduler",
+    "argon2-cffi",
+    "fastapi",
+    "httpx",
+    "multiqc",
+    "pydantic",
+    "pyjwt[crypto]",
+    "python-magic",
+    "python-multipart",
+    "pyyaml",
+    "rocrate",
+    "sqlmodel",
+    "uvicorn[standard]",
+]
+
+[project.urls]
+Homepage = "https://github.com/sapporo-wes/sapporo-service"
+Documentation = "https://github.com/sapporo-wes/sapporo-service/blob/main/README.md"
+Repository = "https://github.com/sapporo-wes/sapporo-service.git"
+
+[project.optional-dependencies]
+tests = [
+    "isort",
+    "mypy",
+    "pylint",
+    "pytest-cov",
+    "pytest-mock",
+    "pytest",
+    "types-PyYAML",
+]
+
+[project.scripts]
+sapporo = "sapporo.app:main"
+
+[tool.setuptools]
+packages = ["sapporo"]
+
+[tool.setuptools.package-data]
+sapporo = [
+    "service_info.json",
+    "executable_workflows.json",
+    "auth_config.json",
+    "run.sh",
+    "ga4gh-wes-spec-1.1.0.yml",
+]
+
+[tool.pytest.ini_options]
+addopts = "--cov=sapporo --cov-report=html:tests/htmlcov --cov-report=xml:tests/coverage.xml --cov-report=term-missing --cov-fail-under=80"
+testpaths = ["tests/py_tests"]
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+branch = true
+source = ["sapporo"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:"]
+
+[tool.mypy]
+files = ["./sapporo/**/*.py", "./tests/py_tests/**/*.py"]
+follow_imports = "silent"
+strict = true
+ignore_missing_imports = true
+
+[tool.pylint.main]
+ignore-paths = ["tests/resources"]
+
+[tool.pylint.messages_control]
+disable = [
+    "C0114", # Missing module docstring
+    "C0115", # Missing class docstring
+    "C0116", # Missing function or method docstring
+    "C0301", # Line too long
+    "R0401", # Cyclic import
+    "R0801", # Similar lines in files (duplicate-code)
+    "R0903", # Too few public methods
+    "R0911", # Too many return statements
+    "R0912", # Too many branches
+    "R0913", # Too many arguments
+    "R0914", # Too many local variables
+    "R0915", # Too many statements
+    "R0917", # Too many positional arguments
+    "R1705", # Unnecessary "else" after "return"
+    "R1732", # Consider using 'with' for resource-allocating operations
+    "W0719", # Raising too general exception
+]
