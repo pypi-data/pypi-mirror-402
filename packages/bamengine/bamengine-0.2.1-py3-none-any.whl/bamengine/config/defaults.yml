@@ -1,0 +1,157 @@
+# ==============================================================================
+# BAM Engine Default Configuration
+# ==============================================================================
+#
+# This file provides default parameter values for BAM (Bottom-Up Adaptive
+# Macroeconomics) simulations. All parameters can be overridden via:
+#
+#   1. Custom YAML config file: Simulation.init(config="my_config.yml")
+#   2. Keyword arguments: Simulation.init(n_firms=200, seed=42)
+#
+# Time scale: 1 period = 1 quarter (4 periods = 1 year)
+#
+# Parameter precedence (later overrides earlier):
+#   1. This file (defaults.yml)
+#   2. User config file (if provided)
+#   3. Keyword arguments (highest priority)
+#
+# See Also
+# --------
+# - bamengine.config.schema.Config : Configuration dataclass
+# - bamengine.config.validator.ConfigValidator : Validation logic
+# - bamengine.simulation.Simulation.init : Initialize simulation
+#
+# ==============================================================================
+
+# ── POPULATION SIZES ──────────────────────────────────────────────────────────
+# Number of agents in each population.
+# Recommendation: n_households >= 5 * n_firms for realistic labor markets.
+
+n_firms:              300        # Producer/Employer agents (firms)
+n_households:        3000        # Worker/Consumer agents (households)
+n_banks:               10        # Lender agents (commercial banks)
+
+# ── RUN LENGTH ────────────────────────────────────────────────────────────────
+# Default number of periods for Simulation.run() when n_periods not specified.
+
+n_periods:            1000       # Simulation periods (quarters)
+
+# ── STOCHASTIC SHOCK WIDTHS ───────────────────────────────────────────────────
+# Maximum magnitude of random shocks (drawn from uniform distribution).
+# Example: h_rho = 0.10 means production growth shock in [-10%, +10%].
+
+h_rho:                0.10       # Production growth shock cap (firms)
+h_xi:                 0.05       # Wage growth shock cap (firms)
+h_phi:                0.10       # Bank operating expense shock cap (banks)
+h_eta:                0.10       # Price adjustment shock cap (firms)
+
+# ── SEARCH FRICTIONS ──────────────────────────────────────────────────────────
+# Market matching constraints limiting how many partners agents can contact
+# per period. Higher values reduce frictions but increase computation time.
+
+max_M:                4          # Job applications per unemployed worker/period
+max_H:                2          # Loan applications per firm/period
+max_Z:                2          # Shops a household can visit/period
+
+# ── ECONOMY-WIDE STRUCTURAL PARAMETERS ────────────────────────────────────────
+# Behavioral and policy parameters affecting all agents.
+
+labor_productivity:   0.50       # Labor productivity (good units per worker)
+min_wage_rev_period:  4          # Periods between min wage adjustments
+theta:                8          # Job contract base length (periods)
+v:                    0.10       # Bank capital requirement coefficient
+                                 # Max leverage = 1/v
+r_bar:                0.02       # Baseline interest rate (quarterly)
+                                 # Policy rate used in bank interest calculations
+beta:                 2.50       # Consumption propensity exponent
+                                 # Controls how strongly savings affect spending:
+                                 #   c_j = 1 / (1 + tanh(SA_j / SA_avg)^β)
+                                 # Higher β = stronger response to savings
+delta:                0.10       # Dividend payout ratio (share of profits)
+                                 # Fraction of positive profits paid as dividends
+
+# ── INITIAL CONDITIONS ────────────────────────────────────────────────────────
+# Balance sheet values at t=0. Can be scalars (broadcast to all agents) or
+# arrays of length n_firms/n_households for heterogeneous initialization.
+
+price_init:           1.50       # Goods price at t=0 (money unit per good unit)
+min_wage_ratio:       0.67       # Minimum wage at t=0 (as fraction of mean wage)
+net_worth_ratio:      1.0        # Firm net worth at t=0 (as fraction of production)
+equity_base_init:     5.0        # Bank equity at t=0 (money units)
+savings_init:         3.0        # Household savings at t=0 (money units)
+
+# ── NEW FIRM ENTRY PARAMETERS ───────────────────────────────────────────────
+# Control how replacement firms are initialized after bankruptcy.
+# New firms inherit attributes from the trimmed mean (90%) of surviving firms,
+# scaled by these factors. This follows Delli Gatti et al. (2011) where new
+# entrants start "below the average size of incumbent firms".
+# Calibrated for 100% pass rate with 20 seeds (Combined Score = 0.7229).
+
+new_firm_size_factor: 0.9           # Core "size at entry" measure (as fraction of avg)
+new_firm_production_factor: 0.9     # Initial output capacity as fraction of avg output
+new_firm_wage_factor: 0.9           # Initial wage offer as a fraction of avg wage
+new_firm_price_markup: 1.0          # Initial price markup over average market price
+
+# ── RANDOM NUMBER GENERATION ──────────────────────────────────────────────────
+# Seed for deterministic simulations.
+# Set to null for non-deterministic behavior.
+
+seed:                 0          # RNG seed (null = random seed)
+
+# ── PIPELINE CONFIGURATION ────────────────────────────────────────────────────
+# Path to custom event pipeline YAML. If null, uses config/default_pipeline.yml.
+# Custom pipelines allow reordering events, removing events, or adding custom
+# events. See config/default_pipeline.yml for syntax.
+
+pipeline_path:      null         # Custom pipeline path (null = use default)
+
+# ── LOGGING CONFIGURATION ─────────────────────────────────────────────────────
+# Control log output verbosity globally and per-event.
+# Levels: TRACE (5), DEBUG (10), INFO (20), WARNING (30), ERROR (40), CRITICAL (50)
+
+logging:
+  default_level:    INFO         # Default log level for all events
+  log_file:         null         # Path to log file (null = console only)
+  events:           {}           # Per-event overrides
+                                 # Example:
+                                 #   workers_send_one_round: WARNING
+                                 #   firms_hire_workers: DEBUG
+                                 #   firms_adjust_price: TRACE
+
+# ── IMPLEMENTATION VARIANTS ─────────────────────────────────────────────────
+# Control specific behavioral details. These parameters allow experimenting
+# with different implementation choices to match reference model results.
+
+contract_poisson_mean: 0             # Poisson mean added to theta for contract duration
+                                     # Set to 0 for exact theta-only contracts
+                                     # Actual duration: θ + Poisson(contract_poisson_mean)
+
+max_loan_to_net_worth: 100           # Max loan as multiple of borrower's net worth
+                                     # Caps individual loans: loan <= X * net_worth
+
+max_leverage: 100                    # Maximum leverage ratio (fragility cap)
+                                     # for interest rate calculation
+
+loan_priority_method: by_leverage    # How banks rank loan applicants
+                                     # "by_net_worth" = sort by net worth (desc)
+                                     # "by_leverage" = sort by leverage (asc), book value
+                                     # "by_appearance" = first-come-first-served
+
+firing_method: random                # How firms select workers to fire
+                                     # "random" = random selection
+                                     # "expensive" = highest wage first
+
+matching_method: sequential          # How workers and firms are matched in labor market
+                                     # "sequential" = workers shuffled, apply one at a time
+                                     # "simultaneous" = all workers apply at once (crowding)
+
+job_search_method: vacancies_only    # How workers sample firms for job applications
+                                     # "vacancies_only" = sample only firms with vacancies
+                                     # "all_firms" = sample from ALL firms (wasted apps)
+
+price_cut_allow_increase: true       # Allow price increase when trying to cut
+                                     # (due to breakeven price floor being higher than cut price)
+
+cap_factor: 100                      # Multiplier limiting price increases
+                                     # Prevents extreme price jumps when production is very
+                                     # low (which would lead to very high breakeven prices)
