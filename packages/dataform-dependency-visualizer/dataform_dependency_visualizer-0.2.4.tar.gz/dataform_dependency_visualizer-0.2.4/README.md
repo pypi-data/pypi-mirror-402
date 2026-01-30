@@ -1,0 +1,180 @@
+# Dataform Dependency Visualizer
+
+Generate beautiful, interactive SVG diagrams showing dependencies between Dataform tables.
+
+![Version](https://img.shields.io/badge/version-0.2.2-blue)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+## Features
+
+- 📊 **Interactive SVG Diagrams** - Visualize dependencies for each table
+- 🎨 **Color-Coded** - Tables (blue), views (green), operations (orange)
+- � **JOIN Details** - Shows JOIN types and ON conditions for each dependency
+- �🔍 **Master Index** - Browse all tables in one HTML interface
+- 📁 **Schema Organization** - Automatically organized by database schema
+- ⚡ **Pure Python** - No Graphviz required
+
+## Installation
+
+```bash
+pip install dataform-dependency-visualizer
+```
+
+## Prerequisites
+
+- **Python** 3.10+
+- **Node.js**
+- **@dataform/core** ^3.0.0
+
+```bash
+# Install in your Dataform project
+cd your-dataform-project
+npm install @dataform/core@^3.0.0
+```
+
+## Usage
+
+### 1. Generate Dependencies Report
+
+```bash
+python -m dataform_viz.dataform_check > dependencies_text_report.txt
+```
+
+### 2. Generate Visualizations
+
+```bash
+# For all schemas
+dataform-deps --report dependencies_text_report.txt generate-all
+
+# For specific schema
+dataform-deps --report dependencies_text_report.txt generate dashboard
+
+# For individual table
+dataform-deps --report dependencies_text_report.txt generate schema_name table_name
+```
+
+### 3. View Results
+
+Open `output/dependencies_master_index.html` in your browser
+
+## Additional Commands
+
+```bash
+# Generate master index and open in browser
+dataform-deps --report dependencies_text_report.txt index --open
+
+# Custom output directory
+dataform-deps --report dependencies_text_report.txt --output my_diagrams generate-all
+
+# Cleanup Dataform issues (removes database references, fixes constants)
+python -m dataform_viz.dataform_check --cleanup
+```
+
+## Python API
+
+```python
+from dataform_viz import DependencyVisualizer
+
+viz = DependencyVisualizer('dependencies_text_report.txt')
+viz.load_report()
+
+# Generate for specific schema
+viz.generate_schema_svgs('dashboard', output_dir='output')
+
+# Generate all schemas
+viz.generate_all_svgs(output_dir='output')
+
+# Generate master index
+viz.generate_master_index('output')
+```
+
+## Understanding the Diagrams
+
+Each SVG diagram shows:
+
+- **Center (Yellow)**: The table being viewed
+- **Left (Blue)**: Dependencies - tables this reads FROM, with JOIN details shown below each
+- **Right (Green)**: Dependents - tables that read FROM this
+- **Schema Labels**: Database schema for each table
+- **Type Badges**: table, view, incremental, operation
+- **JOIN Information**: Type (LEFT/INNER/RIGHT JOIN) and ON conditions displayed in red below dependency nodes
+
+## Output Structure
+
+```
+output/
+├── dependencies_master_index.html    # Main browser interface
+├── schema_name/
+│   ├── table1.svg
+│   ├── table2.svg
+│   └── ...
+└── ...
+```
+
+## Common Issues
+
+### "wwim_utils is not defined" or compilation errors
+
+Run the cleanup utility:
+```bash
+python -m dataform_viz.dataform_check --cleanup
+```
+
+This removes:
+- `database:` lines from config blocks
+- `database:` parameters from `ref()` calls  
+- Undefined constant references
+
+### Empty diagrams
+
+Ensure you're using the text format report:
+```bash
+python -m dataform_viz.dataform_check > dependencies_text_report.txt
+```
+
+## Development
+
+```bash
+# Clone and install
+git clone https://github.com/OshigeAkito/dataform-dependency-visualizer
+cd dataform-dependency-visualizer
+poetry install
+
+# Run tests
+poetry run pytest
+
+# Type checking
+poetry run mypy src/
+```
+
+## License
+
+MIT License - See [LICENSE](LICENSE) file
+
+## Links
+
+- **GitHub**: https://github.com/OshigeAkito/dataform-dependency-visualizer
+- **Issues**: https://github.com/OshigeAkito/dataform-dependency-visualizer/issues
+- **PyPI**: https://pypi.org/project/dataform-dependency-visualizer/
+
+## Changelog
+
+### v0.2.3 (2026-01-21)
+- **NEW**: JOIN information extraction from SQL queries
+- Display JOIN types (LEFT, INNER, RIGHT, etc.) and ON conditions in SVG diagrams
+- JOIN count summary shown on center table
+- Detailed JOIN info displayed below each dependency node
+
+### v0.2.0 (2026-01-13)
+- Added cleanup utility for database references
+- Constant replacement functionality
+- Improved error handling
+- Enhanced documentation
+
+### v0.1.0
+- Initial release
+- SVG generation with color coding
+- Master index generator
+- Command-line interface
+
