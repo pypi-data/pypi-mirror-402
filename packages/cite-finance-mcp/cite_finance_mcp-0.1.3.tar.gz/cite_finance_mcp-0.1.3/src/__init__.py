@@ -1,0 +1,5 @@
+"""
+Cite-Finance API - Production Financial Data API
+"""
+
+__version__ = "1.0.0"
