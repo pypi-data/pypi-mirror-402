@@ -1,0 +1,126 @@
+# DarkzSEO
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│██████╗  █████╗ ██████╗ ██╗  ██╗███████╗███████╗███████╗ ██████╗ │
+│██╔══██╗██╔══██╗██╔══██╗██║ ██╔╝╚══███╔╝██╔════╝██╔════╝██╔═══██╗│
+│██║  ██║███████║██████╔╝█████╔╝   ███╔╝ ███████╗█████╗  ██║   ██║│
+│██║  ██║██╔══██║██╔══██╗██╔═██╗  ███╔╝  ╚════██║██╔══╝  ██║   ██║│
+│██████╔╝██║  ██║██║  ██║██║  ██╗███████╗███████║███████╗╚██████╔╝│
+│╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝ ╚═════╝ │
+├─────────────────────────────────────────────────────────────────┤
+│  Static Codebase Auditor for 2026 Search Standards             │
+│  SEO · GEO · AIO · AEO — 16 Checks, Zero APIs, Pure Analysis   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+A lightweight, local-only Python CLI for auditing HTML/JSX/Template files against **2026 Search Standards**. No external APIs required.
+
+## Features
+
+- **16 Automated Checks** across 4 categories
+- **Zero API Dependencies** - runs entirely offline
+- **Color-Coded Console Output** for quick severity identification
+- **JSON Report Export** for CI/CD integration
+- **Template Agnostic** - works with HTML, JSX, Vue, Svelte, Astro, PHP, EJS, and more
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+## Usage
+
+```bash
+# Basic scan
+python darkzseo.py --path ./src
+
+# With brand name (for entity salience check)
+python darkzseo.py --path ./public --brand "MyCompany"
+
+# Custom output file
+python darkzseo.py --path ./templates --output results.json
+
+# Quiet mode (summary only)
+python darkzseo.py --path ./src --quiet
+```
+
+## Audit Categories
+
+### 🟢 SEO (Technical Health)
+| Check | What it Detects |
+|-------|-----------------|
+| Orphan Pages | Files that exist but are never linked to |
+| Resource Hints | External scripts missing `preconnect`/`dns-prefetch` |
+| CLS Risk | Images/videos/iframes missing `width`/`height` |
+| Render Budget | `@import` rules and expensive `*` selectors |
+
+### 🟣 GEO (Generative Engine Optimization)
+| Check | What it Detects |
+|-------|-----------------|
+| Trust Network | Long content lacking authority links (.gov, .edu, etc.) |
+| Entity Salience | Brand not in H1 or first 200 words |
+| Data Density | Low table/list ratio on content pages |
+| Freshness | Missing or stale `dateModified` |
+
+### 🔵 AIO (AI Overviews)
+| Check | What it Detects |
+|-------|-----------------|
+| Comparison Gap | "vs"/"best" in title without comparison table |
+| Direct Answer | Question headers not followed by concise paragraphs |
+| Video Schema | Video content missing `VideoObject` JSON-LD |
+| Skimmability | Paragraphs exceeding 150 words |
+
+### 🔷 AEO (Answer Engine Optimization)
+| Check | What it Detects |
+|-------|-----------------|
+| Simplicity Score | Complex vocabulary (Flesch-Kincaid proxy) |
+| QA Proximity | Elements interrupting question-answer flow |
+| Speakable Schema | Missing Speakable markup on Q&A content |
+| Unit Clarity | Bare units without `<abbr>` tags |
+
+## Output
+
+### Console
+Color-coded findings grouped by category and severity:
+- 🔴 **CRITICAL/HIGH** - Must fix for search visibility
+- 🟡 **MEDIUM** - Recommended improvements
+- 🔵 **LOW/INFO** - Nice to have optimizations
+
+### JSON Report
+```json
+{
+  "generated_at": "2026-01-20T20:00:00",
+  "files_scanned": 42,
+  "total_findings": 15,
+  "summary": {
+    "CRITICAL": 0,
+    "HIGH": 5,
+    "MEDIUM": 7,
+    "LOW": 3
+  },
+  "findings": [
+    {
+      "category": "SEO",
+      "severity": "HIGH",
+      "file": "index.html",
+      "message": "CLS Risk: <img> missing width/height"
+    }
+  ]
+}
+```
+
+## CI/CD Integration
+
+DarkzSEO returns exit code `1` if any HIGH or CRITICAL findings are detected, making it perfect for CI pipelines:
+
+```yaml
+# GitHub Actions example
+- name: SEO Audit
+  run: python darkzseo.py --path ./public --quiet
+```
+
+## License
+
+MIT
