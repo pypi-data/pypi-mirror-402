@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunklandscape_widget=self.webpackChunklandscape_widget||[]).push([[509],{509:(e,a,d)=>{d.r(a),d.d(a,{LandscapeModel:()=>p.LandscapeModel,LandscapeView:()=>p.LandscapeView,MODULE_NAME:()=>s.p,MODULE_VERSION:()=>s.e});var s=d(797),p=d(788)}}]);
