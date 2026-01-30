@@ -1,0 +1,42 @@
+name: Publish to PyPI
+on:
+  release:
+    types: [published]
+
+jobs:
+  pypi_release:
+    name: Build with uv and publish to PyPI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Validate release tag matches package version
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION="$(python -c 'import tomllib, pathlib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text("utf-8"))["project"]["version"])')"
+          echo "Release tag: ${GITHUB_REF_NAME} (version=${TAG_VERSION})"
+          echo "pyproject.toml version: ${PKG_VERSION}"
+          test "${TAG_VERSION}" = "${PKG_VERSION}"
+
+      - name: Build sdist and wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv pip install --system --upgrade pip build
+          python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_KEY }}
