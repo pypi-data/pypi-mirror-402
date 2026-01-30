@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  release:
+    types: [ published ]
+
+jobs:
+  wheels:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+    - name: Checkout github repo
+      uses: actions/checkout@v6
+      with:
+         fetch-depth: 0
+         fetch-tags: true
+    - name: Build wheels
+      uses: pypa/cibuildwheel@v3.3.0
+      env:
+        CIBW_SKIP: "*-musllinux_*"
+        CIBW_ARCHS_LINUX: x86_64
+        CIBW_ARCHS_MACOS: all
+    - uses: actions/upload-artifact@v5
+      with:
+        name: qpoint-wheels-${{ matrix.os }}
+        path: ./wheelhouse/*.whl
+
+  sdist:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout github repo
+      uses: actions/checkout@v6
+    - name: Setup python
+      uses: actions/setup-python@v3
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade build
+    - name: Build sdist
+      run: |
+        python -m build --sdist
+    - uses: actions/upload-artifact@v5
+      with:
+        name: qpoint-sdist
+        path: dist/*.tar.gz
+
+  upload:
+    needs: [wheels, sdist]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    if: github.event_name == 'release' && github.event.action == 'published'
+    steps:
+    - uses: actions/download-artifact@v6
+      with:
+        pattern: qpoint-*
+        path: dist
+        merge-multiple: true
+    - name: Upload to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
