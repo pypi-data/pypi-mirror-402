@@ -1,0 +1,221 @@
+# Amazon 商品监控系统
+
+一个基于 FastAPI 的 Amazon 商品监控系统，支持通过 Amazon SP-API 获取商品链接，使用 DrissionPage 进行商品页面检测，并通过钉钉机器人发送异常通知。
+
+## 文档导航
+
+| 文档 | 说明 |
+|------|------|
+| [配置指南](docs/CONFIGURATION.md) | 环境变量和系统配置详解 |
+| [重试机制](docs/RETRY_LOGIC.md) | 三轮重试逻辑详解 |
+| [钉钉集成](docs/DINGTALK.md) | 钉钉文档读取和通知配置 |
+| [邮编功能](docs/ZIP_CODE.md) | 多站点邮编自动设置指南 |
+| [通知格式](docs/NOTIFICATION.md) | 钉钉通知消息格式说明 |
+| [优化说明](docs/OPTIMIZATION.md) | DrissionPage 爬虫优化总结 |
+| [打包发布](docs/PUBLISH.md) | PyPI 打包与发布指南 |
+
+---
+
+## 项目概述
+
+本系统主要用于监控 Amazon 商品页面的状态，包括：
+- 商品库存状态检测
+- 购物车按钮可用性检测
+- 异常情况实时通知
+- 支持多店铺配置
+- 支持钉钉文档集成
+- 支持 18+ 个 Amazon 站点
+- **终端进度显示**（CLI/定时任务模式）
+
+## 运行模式
+
+系统支持三种运行模式：
+
+| 模式 | 说明 | 终端UI |
+|------|------|--------|
+| `web` | uvicorn Web 服务（默认） | 不支持 |
+| `cli` | 单次执行命令行爬虫 | 支持 |
+| `scheduler` | 定时任务调度器 | 支持 |
+
+```bash
+# Web 服务模式（默认）
+RUN_MODE=web python run.py
+
+# 单次 CLI 执行
+RUN_MODE=cli python run.py
+
+# 定时任务模式（每2小时执行）
+RUN_MODE=scheduler CRON_EXPRESSION="0 */2 * * *" python run.py
+```
+
+## 技术架构
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   FastAPI       │    │   DrissionPage   │    │   钉钉机器人     │
+│   Web 接口      │───▶│   浏览器自动化    │───▶│   异常通知      │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+         │                        │
+         ▼                        ▼
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│  Amazon SP-API  │    │   Chrome 浏览器   │    │   终端进度UI    │
+│  商品数据获取    │    │   页面检测       │    │   Rich 分屏     │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+```
+
+### 核心技术栈
+- **Web框架**: FastAPI
+- **浏览器自动化**: DrissionPage
+- **Amazon API**: python-Amazon-sp-api
+- **通知系统**: dingtalkchatbot + alibabacloud-dingtalk
+- **终端UI**: Rich (分屏进度显示)
+- **定时任务**: croniter
+- **配置管理**: python-dotenv
+
+---
+
+## 快速开始
+
+### 方式一：uvx 一键运行（推荐）
+
+无需安装，直接运行：
+
+```bash
+# 安装 uv（如果还没有）
+# Windows: powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+# macOS/Linux: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 一键运行（默认 Web 模式）
+uvx Amazon-monitor
+
+# CLI 模式
+RUN_MODE=cli uvx Amazon-monitor
+
+# 定时任务模式
+RUN_MODE=scheduler CRON_EXPRESSION="0 */2 * * *" uvx Amazon-monitor
+```
+
+### 方式二：pip 安装
+
+```bash
+pip install Amazon-monitor
+Amazon-monitor
+```
+
+### 方式三：从源码运行
+
+#### 1. 安装依赖
+```bash
+pip install -r requirements.txt
+```
+
+#### 2. 配置环境
+```bash
+copy .env-example .env
+# 编辑 .env 文件，填入你的配置
+```
+
+详细配置说明请参考 [配置指南](docs/CONFIGURATION.md)
+
+#### 3. 启动服务
+```bash
+# 推荐：使用统一入口
+python run.py
+
+# 或直接启动 Web 服务
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 4. 访问接口
+打开浏览器访问 `http://localhost:8000/docs` 查看 API 文档
+
+---
+
+## API 接口
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/get-all-product-urls` | POST | 从 SP-API 获取商品链接 |
+| `/test-dingtalk` | GET | 测试钉钉文档连接 |
+| `/process` | POST | 执行监控任务 |
+| `/task/progress` | GET | 获取任务进度 |
+| `/health` | GET | 健康检查 |
+
+### 执行监控任务
+
+```bash
+# 从钉钉文档读取 URL（推荐）
+curl -X POST http://localhost:8000/process
+
+# 指定 URL 列表
+curl -X POST http://localhost:8000/process \
+  -H "Content-Type: application/json" \
+  -d '{"urls": ["https://www.Amazon.com/dp/B0DFP79LBL"]}'
+```
+
+---
+
+## 项目结构
+
+```
+├── app/
+│   ├── main.py              # FastAPI 主应用
+│   ├── config.py            # 配置管理
+│   ├── spider.py            # 爬虫核心逻辑
+│   ├── Amazon_sp_api.py     # Amazon SP-API 客户端
+│   ├── notifier.py          # 钉钉通知模块
+│   ├── site_configs.py      # 站点配置管理
+│   ├── dingtalk_doc_reader.py # 钉钉文档读取器
+│   ├── terminal_ui.py       # 终端进度显示模块
+│   ├── selectors.py         # 页面选择器管理
+│   └── retry_strategy.py    # 重试策略模块
+├── data/                    # 数据存储目录
+├── docs/                    # 文档目录
+├── run.py                   # 统一入口脚本
+├── .env                     # 环境变量配置
+├── requirements.txt         # 依赖包列表
+└── start.bat               # Windows 启动脚本
+```
+
+---
+
+## 主要功能
+
+### 商品状态检测
+- **库存检测**: 识别商品是否有库存
+- **购物车按钮检测**: 检查 "Add to Cart" 按钮是否可用
+- **页面异常检测**: 处理验证码、页面错误等情况
+- **智能重试机制**: 对失败的检测进行二次验证
+
+### 通知系统
+- **分级通知**: 根据异常类型发送不同级别的通知
+- **购物车异常**: @所有人的紧急通知
+- **库存异常**: 普通通知
+- **任务完成**: 包含详细统计的完成报告
+
+### 多站点支持
+支持 18+ 个 Amazon 站点，自动根据 URL 设置对应邮编。详见 [邮编功能](docs/ZIP_CODE.md)
+
+---
+
+## 故障排除
+
+### Chrome 启动失败
+- 检查 `CHROME_USER_DATA_PATH` 路径是否正确
+- 运行 `python test_chrome_config.py` 验证配置
+
+### API 认证失败
+- 验证 `.env` 文件中的 SP-API 凭证
+- 检查 refresh_token 是否过期
+
+### 钉钉通知失败
+- 检查 `DINGTALK_WEBHOOK` 和 `DINGTALK_SECRET`
+- 确认钉钉机器人有发送消息权限
+
+更多问题请查看 [配置指南](docs/CONFIGURATION.md)
+
+---
+
+## 许可证
+
+本项目仅供学习和研究使用，请遵守相关网站的使用条款。
