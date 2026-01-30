@@ -1,0 +1,442 @@
+# uma-api
+
+[![CI](https://github.com/ruaan-deysel/uma-api/actions/workflows/ci.yml/badge.svg)](https://github.com/ruaan-deysel/uma-api/actions/workflows/ci.yml)
+[![PyPI version](https://badge.fury.io/py/uma-api.svg)](https://badge.fury.io/py/uma-api)
+[![Python versions](https://img.shields.io/pypi/pyversions/uma-api.svg)](https://pypi.org/project/uma-api/)
+[![Coverage](https://codecov.io/gh/ruaan-deysel/uma-api/branch/main/graph/badge.svg)](https://codecov.io/gh/ruaan-deysel/uma-api)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+Python client library for the [Unraid Management Agent](https://github.com/ruaan-deysel/unraid-management-agent) API.
+
+This library provides a simple and intuitive interface to interact with the Unraid Management Agent REST API and WebSocket endpoints for monitoring and controlling your Unraid server.
+
+## Features
+
+- 🚀 Simple and intuitive API client with 70+ endpoints
+- 📡 WebSocket support for real-time event streaming
+- 🔒 Full type hints and Pydantic models for type safety
+- 🐍 Python 3.12+ with modern async/await support
+- 📦 Minimal dependencies (`aiohttp`, `websockets`, `pydantic`)
+- 🎯 Comprehensive error handling with specific exception types
+- ✅ Full endpoint parity with Unraid Management Agent API
+- 📚 Full documentation with examples
+
+## Installation
+
+Install from PyPI:
+
+```bash
+pip install uma-api
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/ruaan-deysel/uma-api.git
+cd uma-api
+pip install -e .
+```
+
+## Quick Start
+
+### Basic Usage
+
+```python
+from uma_api import UnraidClient
+
+# Create a client instance
+client = UnraidClient("192.168.1.100")
+
+# For HTTPS connections:
+# client = UnraidClient("192.168.1.100", use_https=True)
+
+# Get system information (returns Pydantic model)
+system_info = client.get_system_info()
+print(f"Hostname: {system_info.hostname}")
+print(f"CPU Usage: {system_info.cpu_usage_percent}%")
+print(f"RAM Usage: {system_info.ram_usage_percent}%")
+
+# Check array status
+array_status = client.get_array_status()
+print(f"Array State: {array_status.state}")
+print(f"Total Disks: {array_status.total_disks}")
+
+# List all disks
+disks = client.list_disks()
+for disk in disks:
+    print(f"{disk.id}: {disk.status}")
+```
+
+### Array Management
+
+```python
+from uma_api import UnraidClient, UnraidConflictError
+
+client = UnraidClient("192.168.1.100")
+
+# Start the array
+try:
+    result = client.start_array()
+    print("Array started successfully")
+except UnraidConflictError as e:
+    print(f"Array is already running: {e.message}")
+
+# Stop the array
+try:
+    result = client.stop_array()
+    print("Array stopped successfully")
+except UnraidConflictError as e:
+    print(f"Array is already stopped: {e.message}")
+```
+
+### Docker Container Management
+
+```python
+from uma_api import UnraidClient
+
+client = UnraidClient("192.168.1.100")
+
+# List all containers
+containers = client.list_containers()
+for container in containers:
+    print(f"{container.name}: {container.state}")
+
+# Start a container
+client.start_container("plex")
+
+# Stop a container
+client.stop_container("plex")
+
+# Restart a container
+client.restart_container("plex")
+```
+
+### Virtual Machine Management
+
+```python
+from uma_api import UnraidClient
+
+client = UnraidClient("192.168.1.100")
+
+# List all VMs
+vms = client.list_vms()
+for vm in vms:
+    print(f"{vm.name}: {vm.state}")
+
+# Start a VM
+client.start_vm("windows-10")
+
+# Stop a VM
+client.stop_vm("windows-10")
+
+# Pause a VM
+client.pause_vm("windows-10")
+
+# Resume a VM
+client.resume_vm("windows-10")
+```
+
+### Disk Management
+
+```python
+from uma_api import UnraidClient
+
+client = UnraidClient("192.168.1.100")
+
+# Get specific disk info
+parity_disk = client.get_disk("parity")
+print(f"Parity disk status: {parity_disk.status}")
+print(f"Spin state: {parity_disk.spin_state}")
+
+# Spin down a disk
+client.spin_down_disk("disk1")
+
+# Spin up a disk
+client.spin_up_disk("disk1")
+```
+
+### Real-time Event Streaming (WebSocket)
+
+```python
+import asyncio
+from uma_api.websocket import UnraidWebSocketClient
+
+async def handle_message(data):
+    """Handle incoming WebSocket messages."""
+    print(f"Event received: {data}")
+
+async def handle_error(error):
+    """Handle WebSocket errors."""
+    print(f"Error: {error}")
+
+async def handle_close():
+    """Handle WebSocket connection close."""
+    print("Connection closed")
+
+async def main():
+    # Create WebSocket client
+    ws_client = UnraidWebSocketClient(
+        "192.168.1.100",
+        on_message=handle_message,
+        on_error=handle_error,
+        on_close=handle_close,
+    )
+
+    # Connect and receive events
+    await ws_client.connect()
+
+# Run the WebSocket client
+asyncio.run(main())
+```
+
+### Error Handling
+
+```python
+from uma_api import (
+    UnraidClient,
+    UnraidAPIError,
+    UnraidConnectionError,
+    UnraidNotFoundError,
+    UnraidConflictError,
+    UnraidValidationError,
+)
+
+client = UnraidClient("192.168.1.100")
+
+try:
+    # Try to get a non-existent disk
+    disk = client.get_disk("nonexistent")
+except UnraidNotFoundError as e:
+    print(f"Disk not found: {e.message}")
+    print(f"Error code: {e.error_code}")
+except UnraidConnectionError as e:
+    print(f"Connection error: {e.message}")
+except UnraidAPIError as e:
+    print(f"API error: {e.message}")
+```
+
+## API Reference
+
+### UnraidClient
+
+#### Initialization
+
+```python
+client = UnraidClient(host, port=8043, timeout=10, verify_ssl=True, use_https=False)
+```
+
+**Parameters:**
+- `host` (str): The Unraid server hostname or IP address
+- `port` (int, optional): The API port. Default: 8043
+- `timeout` (int, optional): Request timeout in seconds. Default: 10
+- `verify_ssl` (bool, optional): Whether to verify SSL certificates. Default: True
+- `use_https` (bool, optional): Whether to use HTTPS instead of HTTP. Default: False
+
+#### System & Health
+
+- `health_check()` - Check API health status
+- `get_system_info()` - Get system information (CPU, memory, temperatures, etc.)
+
+#### Array Management
+
+- `get_array_status()` - Get array status and disk information
+- `start_array()` - Start the Unraid array
+- `stop_array()` - Stop the Unraid array
+
+#### Disk Operations
+
+- `list_disks()` - List all disks
+- `get_disk(disk_id)` - Get specific disk information
+- `spin_up_disk(disk_id)` - Spin up a disk
+- `spin_down_disk(disk_id)` - Spin down a disk
+
+#### Docker Containers
+
+- `list_containers()` - List all Docker containers
+- `get_container(container_id)` - Get specific container information
+- `start_container(container_id)` - Start a container
+- `stop_container(container_id)` - Stop a container
+- `restart_container(container_id)` - Restart a container
+- `pause_container(container_id)` - Pause a container
+- `unpause_container(container_id)` - Unpause a container
+
+#### Virtual Machines
+
+- `list_vms()` - List all virtual machines
+- `get_vm(vm_id)` - Get specific VM information
+- `start_vm(vm_id)` - Start a VM
+- `stop_vm(vm_id)` - Stop a VM
+- `restart_vm(vm_id)` - Restart a VM
+- `pause_vm(vm_id)` - Pause a VM
+- `resume_vm(vm_id)` - Resume a paused VM
+
+#### Shares
+
+- `list_shares()` - List all user shares
+- `get_share(share_name)` - Get specific share information
+
+#### Network
+
+- `list_network_interfaces()` - List all network interfaces
+- `get_network_interface(interface_name)` - Get specific interface information
+- `get_network_access_urls()` - Get network access URLs
+
+#### Hardware
+
+- `get_hardware_info()` - Get hardware information
+- `get_hardware_full_info()` - Get detailed hardware information
+- `list_gpus()` - List all GPUs
+- `get_ups_info()` - Get UPS information
+
+#### Registration
+
+- `get_registration_info()` - Get Unraid license/registration info
+
+#### Logs
+
+- `list_logs()` - List available log files
+- `get_log(filename, lines)` - Get log file contents
+
+#### Notifications
+
+- `list_notifications()` - List all notifications
+- `get_notification_overview()` - Get notification counts by type
+
+#### Unassigned Devices
+
+- `get_unassigned_info()` - Get unassigned devices info
+- `list_unassigned_devices()` - List unassigned devices
+- `list_remote_shares()` - List remote shares
+
+#### Settings
+
+- `get_system_settings()` - Get system settings
+- `get_docker_settings()` - Get Docker settings
+- `get_vm_settings()` - Get VM settings
+- `get_disk_settings()` - Get disk settings
+
+#### User Scripts
+
+- `list_user_scripts()` - List user scripts
+
+#### ZFS
+
+- `list_zfs_pools()` - List ZFS pools
+- `list_zfs_datasets()` - List ZFS datasets
+- `list_zfs_snapshots()` - List ZFS snapshots
+- `get_zfs_arc_stats()` - Get ZFS ARC statistics
+
+#### NUT (Network UPS Tools)
+
+- `get_nut_info()` - Get NUT information
+
+#### Collectors
+
+- `get_collectors_status()` - Get data collectors status
+
+#### Parity
+
+- `get_parity_history()` - Get parity check history
+
+### UnraidWebSocketClient
+
+#### Initialization
+
+```python
+ws_client = UnraidWebSocketClient(
+    host,
+    port=8043,
+    on_message=None,
+    on_error=None,
+    on_close=None,
+    use_wss=False
+)
+```
+
+**Parameters:**
+- `host` (str): The Unraid server hostname or IP address
+- `port` (int, optional): The API port. Default: 8043
+- `on_message` (callable, optional): Callback function for received messages
+- `on_error` (callable, optional): Callback function for errors
+- `on_close` (callable, optional): Callback function for connection close
+- `use_wss` (bool, optional): Whether to use WSS (secure WebSocket) instead of WS. Default: False
+
+#### Methods
+
+- `await connect()` - Connect to WebSocket and start receiving events
+- `await disconnect()` - Disconnect from WebSocket
+- `is_connected` (property) - Check if WebSocket is connected
+
+## Exception Hierarchy
+
+```
+UnraidAPIError (base exception)
+├── UnraidConnectionError (connection/timeout errors)
+├── UnraidNotFoundError (404 errors)
+├── UnraidConflictError (409 errors)
+└── UnraidValidationError (400 errors)
+```
+
+## Requirements
+
+- Python 3.12 or higher
+- requests >= 2.25.0
+- websockets >= 10.0
+- pydantic >= 2.0.0
+
+## Development
+
+### Setup Development Environment
+
+```bash
+git clone https://github.com/ruaan-deysel/uma-api.git
+cd uma-api
+pip install -e ".[dev]"
+```
+
+### Run Tests
+
+```bash
+pytest --cov=uma_api --cov-fail-under=90
+```
+
+### Code Formatting & Linting
+
+```bash
+ruff check --fix .
+ruff format .
+```
+
+### Type Checking
+
+```bash
+mypy src/uma_api
+```
+
+### Pre-commit Hooks
+
+```bash
+pre-commit install
+pre-commit run --all-files
+```
+
+## Related Projects
+
+- [Unraid Management Agent](https://github.com/ruaan-deysel/unraid-management-agent) - The Go-based agent that provides the API
+- [Home Assistant Integration](https://github.com/ruaan-deysel/ha-unraid-management-agent) - Home Assistant integration for Unraid
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- [Unraid Management Agent](https://github.com/ruaan-deysel/unraid-management-agent) - The API backend
+
+## Support
+
+If you encounter any issues or have questions, please file an issue on the [GitHub issue tracker](https://github.com/ruaan-deysel/uma-api/issues).
