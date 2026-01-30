@@ -1,0 +1,3 @@
+from PySide6.QtWidgets import QSpacerItem, QWidget, QVBoxLayout, QSizePolicy
+class VSpacer:
+    def __init__(self, height: int): ...
