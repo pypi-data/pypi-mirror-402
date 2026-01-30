@@ -1,0 +1,212 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Markdown to Blog Daemon Protocol",
+    "description": "ZeroMQ 기반 Daemon 메시지 프로토콜 정의",
+    "type": "object",
+    "definitions": {
+        "request": {
+            "type": "object",
+            "required": ["command", "id"],
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "요청 고유 ID (UUID 권장)"
+                },
+                "command": {
+                    "type": "string",
+                    "description": "실행할 명령어 이름"
+                },
+                "params": {
+                    "type": "object",
+                    "description": "명령어 파라미터"
+                }
+            }
+        },
+        "response": {
+            "type": "object",
+            "required": ["id", "status"],
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "요청 ID (원본 요청의 id와 동일)"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": ["success", "error"],
+                    "description": "응답 상태"
+                },
+                "data": {
+                    "description": "응답 데이터 (status가 success일 때)"
+                },
+                "error": {
+                    "type": "string",
+                    "description": "에러 메시지 (status가 error일 때)"
+                }
+            }
+        },
+        "commands": {
+            "type": "object",
+            "properties": {
+                "set_blogid": {
+                    "type": "object",
+                    "required": ["blogid"],
+                    "properties": {
+                        "blogid": { "type": "string" }
+                    }
+                },
+                "get_blogid": {
+                    "type": "object",
+                    "properties": {}
+                },
+                "list_my_blogs": {
+                    "type": "object",
+                    "properties": {}
+                },
+                "convert": {
+                    "type": "object",
+                    "required": ["input", "output"],
+                    "properties": {
+                        "input": { "type": "string" },
+                        "output": { "type": "string" }
+                    }
+                },
+                "refresh_auth": {
+                    "type": "object",
+                    "properties": {}
+                },
+                "set_client_secret": {
+                    "type": "object",
+                    "required": ["filename"],
+                    "properties": {
+                        "filename": { "type": "string" }
+                    }
+                },
+                "encode_secret": {
+                    "type": "object",
+                    "required": ["client_secret_path", "output_path", "key"],
+                    "properties": {
+                        "client_secret_path": { "type": "string" },
+                        "output_path": { "type": "string" },
+                        "key": { "type": "string" }
+                    }
+                },
+                "decode_secret": {
+                    "type": "object",
+                    "required": ["encoded_secret_path", "output_path", "key"],
+                    "properties": {
+                        "encoded_secret_path": { "type": "string" },
+                        "output_path": { "type": "string" },
+                        "key": { "type": "string" }
+                    }
+                },
+                "backup_posting": {
+                    "type": "object",
+                    "required": ["blog_id", "target_dir"],
+                    "properties": {
+                        "blog_id": { "type": "string" },
+                        "target_dir": { "type": "string" }
+                    }
+                },
+                "sync_posting": {
+                    "type": "object",
+                    "required": ["blog_id", "posting_info", "target_dir"],
+                    "properties": {
+                        "blog_id": { "type": "string" },
+                        "posting_info": { "type": "string" },
+                        "target_dir": { "type": "string" }
+                    }
+                },
+                "update_posting": {
+                    "type": "object",
+                    "required": ["blog_id", "post_id", "title", "markdown_file_path"],
+                    "properties": {
+                        "blog_id": { "type": "string" },
+                        "post_id": { "type": "string" },
+                        "title": { "type": "string" },
+                        "markdown_file_path": { "type": "string" },
+                        "draft": { "type": "boolean" },
+                        "labels": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "description": { "type": "string" }
+                    }
+                },
+                "delete_posting": {
+                    "type": "object",
+                    "required": ["blog_id", "post_id"],
+                    "properties": {
+                        "blog_id": { "type": "string" },
+                        "post_id": { "type": "string" }
+                    }
+                },
+                "save_as_markdown": {
+                    "type": "object",
+                    "required": ["url", "output"],
+                    "properties": {
+                        "url": { "type": "string" },
+                        "output": { "type": "string" },
+                        "start_comment": { "type": "string" },
+                        "end_comment": { "type": "string" }
+                    }
+                },
+                "publish": {
+                    "type": "object",
+                    "required": ["filename"],
+                    "properties": {
+                        "filename": { "type": "string" },
+                        "title": { "type": "string" },
+                        "is_draft": { "type": "boolean" },
+                        "after": { "type": "string" },
+                        "after_hour": { "type": "integer" },
+                        "blogid": { "type": "string" },
+                        "labels": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "description": { "type": "string" }
+                    }
+                },
+                "publish_html": {
+                    "type": "object",
+                    "required": ["filename", "title"],
+                    "properties": {
+                        "filename": { "type": "string" },
+                        "title": { "type": "string" },
+                        "blogid": { "type": "string" }
+                    }
+                },
+                "upload_image": {
+                    "type": "object",
+                    "required": ["image_path"],
+                    "properties": {
+                        "image_path": { "type": "string" },
+                        "service": { "type": "string" }
+                    }
+                },
+                "upload_images": {
+                    "type": "object",
+                    "required": ["input"],
+                    "properties": {
+                        "input": { "type": "string" }
+                    }
+                },
+                "publish_folder": {
+                    "type": "object",
+                    "required": ["folder_path"],
+                    "properties": {
+                        "folder_path": { "type": "string" },
+                        "blogid": { "type": "string" },
+                        "interval": { "type": "integer" },
+                        "service": { "type": "string" },
+                        "draft": { "type": "boolean" },
+                        "labels": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
