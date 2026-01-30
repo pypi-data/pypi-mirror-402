@@ -1,0 +1,357 @@
+# Volare Signals Python Client
+
+A production-ready Python client library for the [Volare Signals API](https://docs.volaretrading.com/api/signals), providing access to algorithmic trading signals, upgrades, downgrades, and more.
+
+## Features
+
+- Full coverage of all Volare Signals API endpoints
+- Both synchronous and asynchronous clients
+- Comprehensive type hints with Pydantic models
+- Automatic retry logic with exponential backoff
+- Rate limit handling and tracking
+- Custom exception hierarchy for granular error handling
+- Context manager support for proper resource cleanup
+
+## Installation
+
+### Using pip
+
+```bash
+pip install volare-signals
+```
+
+### Using Poetry
+
+```bash
+poetry add volare-signals
+```
+
+### From source
+
+```bash
+git clone https://github.com/volaretrading/volare-signals-python.git
+cd volare-signals-python
+pip install -e .
+```
+
+## Quick Start
+
+### Basic Usage
+
+```python
+from volare_signals import VolareSignalsClient
+
+# Create a client with your API key
+client = VolareSignalsClient(api_key="vk_your_api_key_here")
+
+# Get signal history for a specific date
+response = client.get_history(date="2024-01-15", limit=100)
+
+# Iterate through signals
+for signal in response.data.signals:
+    print(f"{signal.symbol}: Rating {signal.rating} ({signal.side.value})")
+
+# Check rate limits
+print(f"Requests remaining: {response.rate_limit.remaining_minute}/min")
+
+# Don't forget to close the client
+client.close()
+```
+
+### Using Context Manager (Recommended)
+
+```python
+from volare_signals import VolareSignalsClient
+
+with VolareSignalsClient(api_key="vk_your_api_key") as client:
+    # Get strong buy signals
+    response = client.get_strong_buys(date="2024-01-15")
+
+    for signal in response.data.signals:
+        print(f"Strong Buy: {signal.symbol}")
+        if signal.entry_price:
+            print(f"  Entry Price: ${signal.entry_price:.2f}")
+```
+
+### Async Usage
+
+```python
+import asyncio
+from volare_signals import AsyncVolareSignalsClient
+
+async def main():
+    async with AsyncVolareSignalsClient(api_key="vk_your_api_key") as client:
+        # Fetch multiple endpoints concurrently
+        history, upgrades, downgrades = await asyncio.gather(
+            client.get_history(date="2024-01-15"),
+            client.get_upgrades(date="2024-01-15", min_change=2),
+            client.get_downgrades(date="2024-01-15", max_change=-2),
+        )
+
+        print(f"Total signals: {history.data.count}")
+        print(f"Upgrades: {upgrades.data.count}")
+        print(f"Downgrades: {downgrades.data.count}")
+
+asyncio.run(main())
+```
+
+## API Reference
+
+### Client Initialization
+
+```python
+from volare_signals import VolareSignalsClient, RetryConfig
+
+client = VolareSignalsClient(
+    api_key="vk_your_api_key",           # Required: Your API key
+    base_url="https://api.volaretrading.com",  # Optional: Override base URL
+    timeout=30.0,                         # Optional: Request timeout in seconds
+    retry_config=RetryConfig(             # Optional: Retry configuration
+        max_retries=3,
+        base_delay=1.0,
+        max_delay=60.0,
+    ),
+)
+```
+
+### Available Methods
+
+#### `get_history(date, min_rating, max_rating, limit)`
+
+Get historical signals for a given date.
+
+```python
+response = client.get_history(
+    date="2024-01-15",    # Date in YYYY-MM-DD format or date object
+    min_rating=5,         # Optional: Minimum rating (1-10)
+    max_rating=10,        # Optional: Maximum rating (1-10)
+    limit=100,            # Optional: Max signals to return (1-1000)
+)
+```
+
+#### `get_strong_buys(date, limit)`
+
+Get signals with high ratings (typically 8-10).
+
+```python
+response = client.get_strong_buys(date="2024-01-15", limit=50)
+```
+
+#### `get_strong_sells(date, limit)`
+
+Get signals with low ratings (typically 1-3).
+
+```python
+response = client.get_strong_sells(date="2024-01-15", limit=50)
+```
+
+#### `get_upgrades(date, min_change, limit)`
+
+Get signals that were upgraded from a previous rating.
+
+```python
+response = client.get_upgrades(
+    date="2024-01-15",
+    min_change=2,         # Minimum positive rating change
+    limit=100,
+)
+```
+
+#### `get_downgrades(date, max_change, limit)`
+
+Get signals that were downgraded from a previous rating.
+
+```python
+response = client.get_downgrades(
+    date="2024-01-15",
+    max_change=-2,        # Maximum (most negative) rating change
+    limit=100,
+)
+```
+
+#### `get_new_signals(date, limit)`
+
+Get newly generated signals (no previous rating).
+
+```python
+response = client.get_new_signals(date="2024-01-15", limit=100)
+```
+
+### Data Models
+
+#### Signal
+
+```python
+from volare_signals import Signal, Side
+
+signal: Signal
+signal.date           # str: Signal date (YYYY-MM-DD)
+signal.symbol         # str: Ticker symbol
+signal.rating         # int: Rating from 1-10
+signal.side           # Side: LONG or SHORT
+signal.previous_rating  # Optional[int]: Previous rating
+signal.rating_change  # int: Change from previous rating
+signal.entry_price    # Optional[float]: Suggested entry price
+signal.supporting_algos  # list[SupportingAlgo]: Contributing algorithms
+signal.rating_breakdown  # Optional[dict]: Detailed rating breakdown
+```
+
+#### Rate Limit Info
+
+```python
+from volare_signals import RateLimitInfo
+
+rate_limit: RateLimitInfo
+rate_limit.limit_per_minute    # int: Max requests per minute (60)
+rate_limit.limit_per_day       # int: Max requests per day (500)
+rate_limit.remaining_minute    # Optional[int]: Remaining minute requests
+rate_limit.remaining_day       # Optional[int]: Remaining day requests
+rate_limit.is_minute_exhausted # bool: Check if minute limit reached
+rate_limit.is_day_exhausted    # bool: Check if day limit reached
+```
+
+## Error Handling
+
+The client provides a hierarchy of exceptions for different error types:
+
+```python
+from volare_signals import (
+    VolareAPIError,          # Base exception
+    ValidationError,         # 400: Invalid parameters
+    AuthenticationError,     # 401: Invalid/missing API key
+    ForbiddenError,          # 403: Revoked/expired API key
+    RateLimitExceededError,  # 429: Rate limit exceeded
+    ServerError,             # 500: Server error
+    NetworkError,            # Connection/timeout errors
+    RetryExhaustedError,     # All retries failed
+)
+
+try:
+    response = client.get_history(date="2024-01-15")
+except ValidationError as e:
+    print(f"Invalid parameter: {e.field} - {e.message}")
+except AuthenticationError:
+    print("Check your API key")
+except RateLimitExceededError as e:
+    print(f"Rate limited. Retry after {e.retry_after} seconds")
+except VolareAPIError as e:
+    print(f"API error: {e}")
+```
+
+## Retry Configuration
+
+The client includes automatic retry logic for transient errors:
+
+```python
+from volare_signals import VolareSignalsClient, RetryConfig
+
+config = RetryConfig(
+    max_retries=3,            # Number of retry attempts
+    base_delay=1.0,           # Initial delay in seconds
+    max_delay=60.0,           # Maximum delay between retries
+    exponential_base=2.0,     # Exponential backoff multiplier
+    jitter=True,              # Add randomness to delays
+    retry_on_server_error=True,  # Retry on 5xx errors
+)
+
+client = VolareSignalsClient(
+    api_key="vk_your_api_key",
+    retry_config=config,
+)
+```
+
+Retryable errors:
+- `RateLimitExceededError` (429)
+- `ServerError` (500)
+- `NetworkError` (connection/timeout)
+
+## Rate Limits
+
+The Volare Signals API has the following rate limits:
+- **60 requests per minute**
+- **500 requests per day**
+
+Rate limit information is available in every response:
+
+```python
+response = client.get_history(date="2024-01-15")
+
+# From the response
+print(f"Remaining this minute: {response.rate_limit.remaining_minute}")
+print(f"Remaining today: {response.rate_limit.remaining_day}")
+
+# From the client (last request)
+print(f"Last rate limit: {client.last_rate_limit}")
+```
+
+## Development
+
+### Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/volaretrading/volare-signals-python.git
+cd volare-signals-python
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install development dependencies
+pip install -e ".[dev]"
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=volare_signals --cov-report=html
+
+# Run specific test file
+pytest unit_tests/test_client.py -v
+```
+
+### Code Quality
+
+```bash
+# Format code
+ruff format .
+
+# Lint code
+ruff check .
+
+# Type check
+mypy src/volare_signals
+```
+
+### Releasing
+
+The package version is defined in `pyproject.toml`. To release a new version:
+
+```bash
+# 1. Update version in pyproject.toml
+# 2. Commit the change
+git add pyproject.toml
+git commit -m "Bump version to X.Y.Z"
+
+# 3. Create a version tag
+git tag vX.Y.Z
+
+# 4. Push commit and tag
+git push && git push --tags
+```
+
+When a tag matching `v*` is pushed, CI will automatically build and publish the package to PyPI using trusted publishing.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+- Documentation: [docs.volaretrading.com](https://docs.volaretrading.com/api/signals)
+- Issues: [GitHub Issues](https://github.com/volaretrading/volare-signals-python/issues)
+- Email: support@volaretrading.com
