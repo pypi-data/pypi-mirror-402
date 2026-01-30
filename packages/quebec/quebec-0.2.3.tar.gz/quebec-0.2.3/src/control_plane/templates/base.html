@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Control Plane{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@hotwired/turbo@latest/dist/turbo.es2017-esm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script type="module">
+    import { Application, Controller } from "https://unpkg.com/@hotwired/stimulus/dist/stimulus.js"
+    window.Stimulus = Application.start()
+
+    // Auto-refresh controller
+    Stimulus.register("reload", class extends Controller {
+      static values = {
+        interval: { type: Number, default: 5000 },
+        url: String
+      }
+
+      static targets = ["frame"]
+
+      connect() {
+        this.startReloading()
+      }
+
+      disconnect() {
+        this.stopReloading()
+      }
+
+      startReloading() {
+        this.refreshTimer = setInterval(() => {
+          this.refresh()
+        }, this.intervalValue)
+      }
+
+      stopReloading() {
+        if (this.refreshTimer) {
+          clearInterval(this.refreshTimer)
+        }
+      }
+
+      refresh() {
+        if (this.hasFrameTarget) {
+          this.frameTarget.reload()
+        }
+      }
+    })
+
+    // Charts controller - manages chart initialization and updates
+    Stimulus.register("charts", class extends Controller {
+      connect() {
+        this.initCharts();
+        this.setTimeRangeSelector();
+        this.initTooltips();
+        this.setupResizeListener();
+      }
+
+      disconnect() {
+        this.destroyCharts();
+        if (this.resizeTimer) {
+          clearTimeout(this.resizeTimer);
+        }
+        if (this.boundResizeHandler) {
+          window.removeEventListener('resize', this.boundResizeHandler);
+        }
+      }
+
+      setupResizeListener() {
+        this.boundResizeHandler = this.handleResize.bind(this);
+        window.addEventListener('resize', this.boundResizeHandler);
+      }
+
+      handleResize() {
+        if (this.resizeTimer) {
+          clearTimeout(this.resizeTimer);
+        }
+        this.resizeTimer = setTimeout(() => {
+          this.initCharts();
+        }, 250);
+      }
+
+      initCharts() {
+        this.initJobsProcessedChart();
+        this.initJobTypesChart();
+      }
+
+      destroyCharts() {
+        if (this.jobsProcessedChart instanceof Chart) {
+          this.jobsProcessedChart.destroy();
+          this.jobsProcessedChart = null;
+        }
+        if (this.jobTypesChart instanceof Chart) {
+          this.jobTypesChart.destroy();
+          this.jobTypesChart = null;
+        }
+      }
+
+      initJobsProcessedChart() {
+        const jobsCtx = document.getElementById('jobsProcessedChart');
+        if (!jobsCtx) return;
+
+        if (this.jobsProcessedChart instanceof Chart) {
+          this.jobsProcessedChart.destroy();
+        }
+
+        const timeLabels = jobsCtx.getAttribute('data-time-labels');
+        const jobsProcessedData = jobsCtx.getAttribute('data-jobs-processed-data');
+        if (!timeLabels || !jobsProcessedData) return;
+
+        this.jobsProcessedChart = new Chart(jobsCtx.getContext('2d'), {
+          type: 'line',
+          data: {
+            labels: JSON.parse(timeLabels),
+            datasets: [{
+              label: 'Jobs Processed',
+              data: JSON.parse(jobsProcessedData),
+              backgroundColor: 'rgba(59, 130, 246, 0.1)',
+              borderColor: 'rgba(59, 130, 246, 1)',
+              borderWidth: 2,
+              tension: 0.4,
+              fill: true
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  precision: 0
+                }
+              },
+              x: {
+                ticks: {
+                  maxRotation: 45,
+                  minRotation: 45
+                }
+              }
+            },
+            plugins: {
+              legend: {
+                display: true,
+                position: 'top'
+              },
+              tooltip: {
+                mode: 'index',
+                intersect: false
+              }
+            },
+            animation: {
+              duration: 1000
+            },
+            layout: {
+              padding: 10
+            },
+            interaction: {
+              mode: 'nearest',
+              axis: 'x',
+              intersect: false
+            }
+          }
+        });
+      }
+
+      initJobTypesChart() {
+        const typesCtx = document.getElementById('jobTypesChart');
+        if (!typesCtx) return;
+
+        if (this.jobTypesChart instanceof Chart) {
+          this.jobTypesChart.destroy();
+        }
+
+        const jobTypesLabels = typesCtx.getAttribute('data-job-types-labels');
+        const jobTypesData = typesCtx.getAttribute('data-job-types-data');
+        if (!jobTypesLabels || !jobTypesData) return;
+
+        this.jobTypesChart = new Chart(typesCtx.getContext('2d'), {
+          type: 'doughnut',
+          data: {
+            labels: JSON.parse(jobTypesLabels),
+            datasets: [{
+              data: JSON.parse(jobTypesData),
+              backgroundColor: [
+                'rgba(59, 130, 246, 0.8)',
+                'rgba(16, 185, 129, 0.8)',
+                'rgba(245, 158, 11, 0.8)',
+                'rgba(239, 68, 68, 0.8)',
+                'rgba(139, 92, 246, 0.8)',
+                'rgba(236, 72, 153, 0.8)',
+                'rgba(75, 85, 99, 0.8)'
+              ],
+              borderWidth: 1
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'right',
+                labels: {
+                  boxWidth: 12,
+                  padding: 15
+                }
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    const label = context.label || '';
+                    const value = context.raw || 0;
+                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                    const percentage = Math.round((value / total) * 100);
+                    return `${label}: ${value} (${percentage}%)`;
+                  }
+                }
+              }
+            },
+            cutout: '60%',
+            animation: {
+              animateRotate: true,
+              animateScale: true,
+              duration: 1000
+            }
+          }
+        });
+      }
+
+      setTimeRangeSelector() {
+        const selector = document.getElementById('time-range');
+        if (selector) {
+          const urlParams = new URLSearchParams(window.location.search);
+          const hours = urlParams.get('hours');
+          if (hours) {
+            for (let i = 0; i < selector.options.length; i++) {
+              if (selector.options[i].value === hours) {
+                selector.selectedIndex = i;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      initTooltips() {
+        // Tooltips are CSS-based, add complex behavior here if needed
+      }
+    });
+
+    // Local time display controller
+    Stimulus.register("localtime", class extends Controller {
+      static values = { datetime: String }
+
+      connect() {
+        if (!this.datetimeValue) return
+        // Database stores UTC time, append Z suffix for correct parsing
+        const datetimeStr = this.datetimeValue.includes('Z') || this.datetimeValue.includes('+')
+          ? this.datetimeValue
+          : this.datetimeValue.replace(' ', 'T') + 'Z'
+        const datetime = new Date(datetimeStr)
+        if (isNaN(datetime.getTime())) return
+        this.element.textContent = datetime.toLocaleString()
+        this.element.title = this.datetimeValue + ' UTC'
+      }
+    })
+
+    // Relative time display controller
+    Stimulus.register("timeago", class extends Controller {
+      static values = {
+        datetime: String,
+        interval: { type: Number, default: 1000 }
+      }
+
+      connect() {
+        this.update()
+        this.timer = setInterval(() => this.update(), this.intervalValue)
+      }
+
+      disconnect() {
+        if (this.timer) clearInterval(this.timer)
+      }
+
+      update() {
+        if (!this.datetimeValue) return
+        // Database stores UTC time, append Z suffix for correct parsing
+        const datetimeStr = this.datetimeValue.includes('Z') || this.datetimeValue.includes('+')
+          ? this.datetimeValue
+          : this.datetimeValue.replace(' ', 'T') + 'Z'
+        const datetime = new Date(datetimeStr)
+        if (isNaN(datetime.getTime())) return
+
+        const wasFuture = this.isFuture
+        const { text, isFuture } = this.timeago(datetime)
+        this.isFuture = isFuture
+        this.element.textContent = text
+        this.element.title = datetime.toLocaleString()
+
+        // Dispatch event when transitioning from future to past
+        if (wasFuture && !isFuture) {
+          this.dispatch("due", { bubbles: true })
+        }
+      }
+
+      timeago(date) {
+        const now = new Date()
+        const diff = Math.floor((now - date) / 1000)
+        const seconds = Math.abs(diff)
+        const isFuture = diff < 0
+
+        const format = (value, unit) => isFuture ? `in ${value}${unit}` : `${value}${unit} ago`
+
+        let text
+        if (seconds < 60) text = format(seconds, 's')
+        else if (seconds < 3600) text = format(Math.floor(seconds / 60), 'm')
+        else if (seconds < 86400) text = format(Math.floor(seconds / 3600), 'h')
+        else if (seconds < 604800) text = format(Math.floor(seconds / 86400), 'd')
+        else text = date.toLocaleDateString()
+
+        return { text, isFuture }
+      }
+    })
+
+    // Recurring jobs times controller - auto-refreshes last_run/next_run via turbo-stream
+    Stimulus.register("recurring-times", class extends Controller {
+      static values = {
+        interval: { type: Number, default: 5000 }
+      }
+
+      connect() {
+        this.abortController = new AbortController()
+        this.refresh()
+        this.timer = setInterval(() => this.refresh(), this.intervalValue)
+        // Listen for timeago:due events (bubbles up from timeago controllers)
+        this.boundOnDue = this.onDue.bind(this)
+        this.element.addEventListener("timeago:due", this.boundOnDue)
+      }
+
+      disconnect() {
+        if (this.timer) clearInterval(this.timer)
+        if (this.dueTimer) clearTimeout(this.dueTimer)
+        if (this.abortController) this.abortController.abort()
+        this.element.removeEventListener("timeago:due", this.boundOnDue)
+      }
+
+      onDue() {
+        // Debounce: wait a bit for the job to complete, then refresh
+        if (this.dueTimer) return
+        this.dueTimer = setTimeout(() => {
+          this.refresh()
+          this.dueTimer = null
+        }, 3000)
+      }
+
+      async refresh() {
+        try {
+          const response = await fetch('/recurring-jobs/schedule', {
+            signal: this.abortController?.signal
+          })
+          if (response.ok) {
+            const html = await response.text()
+            Turbo.renderStreamMessage(html)
+          }
+        } catch (e) {
+          if (e.name !== 'AbortError') {
+            console.error('Failed to refresh recurring job times:', e)
+          }
+        }
+      }
+    })
+
+    // Filter controller - handles URL-based filtering
+    Stimulus.register("filter", class extends Controller {
+      static targets = ["classSelect", "queueSelect", "statusSelect", "hoursSelect"]
+
+      connect() {
+        this.setInitialValues()
+      }
+
+      setInitialValues() {
+        const params = new URLSearchParams(window.location.search)
+        if (this.hasClassSelectTarget && params.get('class_name')) {
+          this.classSelectTarget.value = params.get('class_name')
+        }
+        if (this.hasQueueSelectTarget && params.get('queue_name')) {
+          this.queueSelectTarget.value = params.get('queue_name')
+        }
+        if (this.hasStatusSelectTarget && params.get('status')) {
+          this.statusSelectTarget.value = params.get('status')
+        }
+        if (this.hasHoursSelectTarget && params.get('hours')) {
+          this.hoursSelectTarget.value = params.get('hours')
+        }
+      }
+
+      apply() {
+        const params = new URLSearchParams(window.location.search)
+        params.delete('page')
+
+        if (this.hasClassSelectTarget) {
+          const classValue = this.classSelectTarget.value
+          if (classValue && !classValue.startsWith('Filter by')) {
+            params.set('class_name', classValue)
+          } else {
+            params.delete('class_name')
+          }
+        }
+
+        if (this.hasQueueSelectTarget) {
+          const queueValue = this.queueSelectTarget.value
+          if (queueValue && !queueValue.startsWith('Filter by')) {
+            params.set('queue_name', queueValue)
+          } else {
+            params.delete('queue_name')
+          }
+        }
+
+        if (this.hasStatusSelectTarget) {
+          const statusValue = this.statusSelectTarget.value
+          if (statusValue && !statusValue.startsWith('Filter by')) {
+            params.set('status', statusValue)
+          } else {
+            params.delete('status')
+          }
+        }
+
+        if (this.hasHoursSelectTarget) {
+          const hoursValue = this.hoursSelectTarget.value
+          if (hoursValue) {
+            params.set('hours', hoursValue)
+          } else {
+            params.delete('hours')
+          }
+        }
+
+        const query = params.toString()
+        window.location.href = window.location.pathname + (query ? '?' + query : '')
+      }
+
+      clear() {
+        window.location.href = window.location.pathname
+      }
+    })
+
+    // Navigation controller - manages navigation and active page state
+    Stimulus.register("nav", class extends Controller {
+      static targets = ["navItem", "content"]
+      static values = {
+        activeClass: { type: String, default: "border-b-2 border-black" }
+      }
+
+      connect() {
+        this.setActivePageFromUrl()
+      }
+
+      setActivePageFromUrl() {
+        const path = window.location.pathname
+        this.navItemTargets.forEach(item => {
+          const href = item.getAttribute('href')
+          this.removeActiveClass(item)
+          if (href === path) {
+            this.addActiveClass(item)
+          }
+        })
+      }
+
+      navigate(event) {
+        if (this.navItemTargets.includes(event.currentTarget)) {
+          event.preventDefault()
+
+          this.navItemTargets.forEach(item => {
+            this.removeActiveClass(item)
+          })
+
+          this.addActiveClass(event.currentTarget)
+
+          const href = event.currentTarget.getAttribute('href')
+          this.contentTarget.setAttribute('src', href)
+          history.pushState({}, '', href)
+        }
+      }
+
+      addActiveClass(element) {
+        const classes = this.activeClassValue.split(' ')
+        element.classList.add(...classes)
+      }
+
+      removeActiveClass(element) {
+        const classes = this.activeClassValue.split(' ')
+        element.classList.remove(...classes)
+      }
+    })
+  </script>
+</head>
+<body class="bg-white text-black min-h-screen flex flex-col">
+  <div class="max-w-7xl mx-auto p-4 md:p-6 w-full flex-grow flex flex-col">
+    <h1 class="text-3xl font-bold mb-6">Control Plane</h1>
+
+    <div data-controller="nav" data-nav-active-class-value="border-b-2 border-black" class="flex flex-col flex-grow">
+      <turbo-frame id="nav-frame">
+        <nav class="flex flex-nowrap border-b mb-6">
+          <a href="/" data-nav-target="navItem" data-action="click->nav#navigate" class="shrink-0 whitespace-nowrap px-4 h-8 font-medium text-gray-600 hover:text-black border-b-2 border-transparent hover:border-black">
+            Overview
+          </a>
+          <a href="/queues" data-nav-target="navItem" data-action="click->nav#navigate" class="shrink-0 whitespace-nowrap px-4 h-8 font-medium text-gray-600 hover:text-black border-b-2 border-transparent hover:border-black">
+            Queues
+          </a>
+
+          <a href="/failed-jobs" data-nav-target="navItem" data-action="click->nav#navigate" class="shrink-0 whitespace-nowrap px-4 h-8 font-medium text-gray-600 hover:text-black border-b-2 border-transparent hover:border-black">
+            Failed jobs <span id="failed-jobs-count" class="px-1 py-0.5 text-xs rounded-full bg-gray-200 text-gray-800">0</span>
+          </a>
+          <a href="/in-progress-jobs" data-nav-target="navItem" data-action="click->nav#navigate" class="shrink-0 whitespace-nowrap px-4 h-8 font-medium text-gray-600 hover:text-black border-b-2 border-transparent hover:border-black">
+            In Progress jobs <span id="in-progress-jobs-count" class="px-1 py-0.5 text-xs rounded-full bg-gray-200 text-gray-800">0</span>
+          </a>
+          <a href="/blocked-jobs" data-nav-target="navItem" data-action="click->nav#navigate" class="shrink-0 whitespace-nowrap px-4 h-8 font-medium text-gray-600 hover:text-black border-b-2 border-transparent hover:border-black">
+            Blocked jobs <span id="blocked-jobs-count" class="px-1 py-0.5 text-xs rounded-full bg-gray-200 text-gray-800">0</span>
+          </a>
+          <a href="/scheduled-jobs" data-nav-target="navItem" data-action="click->nav#navigate" class="shrink-0 whitespace-nowrap px-4 h-8 font-medium text-gray-600 hover:text-black border-b-2 border-transparent hover:border-black">
+            Scheduled jobs <span id="scheduled-jobs-count" class="px-1 py-0.5 text-xs rounded-full bg-gray-200 text-gray-800">0</span>
+          </a>
+          <a href="/recurring-jobs" data-nav-target="navItem" data-action="click->nav#navigate" class="shrink-0 whitespace-nowrap px-4 h-8 font-medium text-gray-600 hover:text-black border-b-2 border-transparent hover:border-black">
+            Recurring jobs
+          </a>
+          <a href="/finished-jobs" data-nav-target="navItem" data-action="click->nav#navigate" class="shrink-0 whitespace-nowrap px-4 h-8 font-medium text-gray-600 hover:text-black border-b-2 border-transparent hover:border-black">
+            Finished jobs <span id="finished-jobs-count" class="px-1 py-0.5 text-xs rounded-full bg-gray-200 text-gray-800">0</span>
+          </a>
+
+          <a href="/workers" data-nav-target="navItem" data-action="click->nav#navigate" class="shrink-0 whitespace-nowrap px-4 h-8 font-medium text-gray-600 hover:text-black border-b-2 border-transparent hover:border-black">
+            Workers
+          </a>
+        </nav>
+      </turbo-frame>
+
+      <div data-controller="reload" data-reload-interval-value="5000">
+        <turbo-frame id="stats-frame" src="/stats" data-reload-target="frame" class="hidden"></turbo-frame>
+      </div>
+
+      <turbo-frame id="content" data-nav-target="content" class="mb-4">
+        {% block content %}{% endblock %}
+      </turbo-frame>
+
+      <!-- Footer -->
+      <div class="mt-8 pt-4 border-t border-gray-200 mt-auto">
+        <div class="flex flex-col md:flex-row justify-between items-center text-sm text-gray-500">
+          <div class="mb-2 md:mb-0">
+            <span>Version: 0.1.0</span>
+            <span class="mx-2">|</span>
+            <span class="inline-flex items-center">
+              <span class="h-2 w-2 rounded-full bg-green-500 mr-1"></span>
+              <span>Operational</span>
+            </span>
+            {% if db_info %}
+            <span class="mx-2">|</span>
+            <span class="inline-flex items-center">
+              <span class="h-2 w-2 rounded-full {% if db_info.status == 'Connected' %}bg-green-500{% else %}bg-red-500{% endif %} mr-1"></span>
+              <span>{{ db_info.database_type }} ({{ db_info.connection_type }})</span>
+              <span class="ml-1 text-xs text-gray-400" title="{{ db_info.dsn }}">{{ db_info.dsn }}</span>
+            </span>
+            {% endif %}
+          </div>
+          <div class="flex space-x-4 items-center">
+            <a href="#" class="hover:text-black">Documentation</a>
+            <a href="https://github.com/ratazzi/quebec" class="hover:text-black flex items-center">
+              <svg class="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd" />
+              </svg>
+              GitHub
+            </a>
+          </div>
+        </div>
+        <div class="mt-2 text-xs text-gray-400 text-right">
+          Last updated: <span id="current-time"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function updateCurrentTime() {
+      const timeElement = document.getElementById('current-time');
+      if (timeElement) {
+        const now = new Date();
+        timeElement.textContent = now.toLocaleString();
+        setTimeout(updateCurrentTime, 1000);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      updateCurrentTime();
+    });
+  </script>
+</body>
+</html>
