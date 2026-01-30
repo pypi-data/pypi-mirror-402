@@ -1,0 +1,50 @@
+# Metadata
+name: micro
+version: 2.0
+description: Modern terminal text editor
+provides:
+  text_editor:
+    type: service
+    capabilities: [edit, view, create]
+requires:
+  - pane
+# Context
+context: {}
+# Metadata
+metadata:
+  environment:
+    optional: ["EDITOR", "VISUAL"]
+# Grammar
+grammar:
+  file:
+    type: string
+    description: "File path to edit"
+  direction:
+    values: [left, right, up, down, pop]
+    transform: lower
+    description: "Split direction for editor (pop = popup)"
+# Vocabulary
+vocabulary:
+  verbs: [EDIT, ED, VIEW]
+# Expectations
+expectations:
+  EDIT: [file, "target?", "direction?=right"]
+  ED: [file, "target?", "direction?=right"]
+  VIEW: [file, "target?", "direction?=right"]
+# Commands
+commands:
+  - match: {verb: [EDIT, ED], file: present, direction: pop}
+    exec: "{?file_exec:{file_exec} | xargs -I {} }{split_popup} 'micro{?file_exec: {}: {file}}'"
+  - match: {verb: [EDIT, ED], file: present}
+    exec: "{?file_exec:{file_exec} | xargs -I {} }{split} 'micro{?file_exec: {}: {file}}'"
+  - match: {verb: VIEW, file: present, direction: pop}
+    exec: "{?file_exec:{file_exec} | xargs -I {} }{split_popup} 'micro -readonly{?file_exec: {}: {file}}'"
+  - match: {verb: VIEW, file: present}
+    exec: "{?file_exec:{file_exec} | xargs -I {} }{split} 'micro -readonly{?file_exec: {}: {file}}'"
+# Selectors
+selectors:
+  ed?:
+    type: stream
+    exec: "micro"
+# Services
+services: {}

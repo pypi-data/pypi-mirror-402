@@ -1,0 +1,155 @@
+# Metadata
+name: tmux
+version: 2.0
+description: Terminal multiplexer - pane and window management
+provides:
+  pane:
+    type: service
+    capabilities: [create, split, focus, close]
+  window:
+    type: service
+    capabilities: [create, focus, close]
+  session:
+    type: service
+    capabilities: [create, switch, close]
+  modal:
+    type: service
+    capabilities: [popup]
+    description: "Modal popup display"
+  clipboard:
+    type: service
+    capabilities: [load, save, paste]
+    description: "Tmux paste buffer"
+# Context
+context:
+  requires_env: TMUX
+# Metadata
+metadata:
+  environment:
+    requires: ["TMUX"]
+    captures: ["TMUX_PANE", "TMUX_WINDOW", "TMUX_SESSION"]
+# Grammar
+grammar:
+  target:
+    pattern: "^\\.[0-9]+$|^\\.\\?$|^\\.THIS$|^\\.CURRENT$|^:[0-9]+$|^:[0-9]+\\.[0-9]+$|^:\\?$|^:THIS$|^:CURRENT$|^\\?$|^THIS$|^CURRENT$"
+    description: "Pane/window selectors (.1, .?, .THIS, :2, :2.1, :?, :THIS, ?, THIS)"
+  source:
+    pattern: "^\\.[0-9]+$|^\\.\\?$|^\\.THIS$|^\\.CURRENT$|^:[0-9]+$|^:[0-9]+\\.[0-9]+$|^:\\?$|^:THIS$|^:CURRENT$|^\\?$|^THIS$|^CURRENT$"
+    description: "Source pane/window for operations"
+  dest:
+    pattern: "^\\.[0-9]+$|^\\.\\?$|^\\.THIS$|^\\.CURRENT$|^:[0-9]+$|^:[0-9]+\\.[0-9]+$|^:\\?$|^:THIS$|^:CURRENT$|^\\?$|^THIS$|^CURRENT$"
+    description: "Destination pane/window for operations"
+  direction:
+    values: [left, right, up, down, pop]
+    transform: lower
+    description: "Direction for operations (pop = popup)"
+  object:
+    values: [PANE, WINDOW, SESSION]
+    transform: upper
+    description: "Tmux object types"
+  clause:
+    values: [AS, WITH, IN]
+    transform: upper
+    description: "Command modifiers"
+  panes:
+    pattern: "^[0-9]+$"
+    description: "Pane indices (e.g., 012 for panes 0, 1, 2)"
+  modifier:
+    values: [full]
+    transform: lower
+    description: "Split modifier (full = full-width/height using -f flag)"
+  fraction:
+    pattern: "^\\d+/\\d+$"
+    description: "Size fractions (e.g., 1/2, 2/3)"
+  stream:
+    type: string
+    description: "Any text, pane reference, or stream selector"
+# Vocabulary
+vocabulary:
+  verbs: [GO, KILL, SPLIT, CREATE, WIDTH, HEIGHT, JOIN, SWAP, COPY, ECHO]
+# Expectations
+expectations:
+  GO: [target]
+  KILL: ["object?", "target?"]
+  SPLIT: ["target?", "direction?=right", "modifier?"]
+  CREATE: [object, "direction?"]
+  WIDTH: [panes, "clause?", "fraction?"]
+  HEIGHT: [panes, "clause?", "fraction?"]
+  JOIN: [source, "dest?", "direction?=right"]
+  SWAP: [source, "dest?"]
+  COPY: [stream]
+  ECHO: [stream, "target?"]
+# Inference
+inference:
+  - when: {verb: GO, target: "?"}
+    transform: {target: ".?"}
+  - when: {verb: KILL, target: "^\\.", object: null}
+    set: {object: PANE}
+  - when: {verb: KILL, target: "^:", object: null}
+    set: {object: WINDOW}
+  - when: {verb: SPLIT}
+    set: {object: PANE}
+# Commands
+commands:
+  - match: {verb: GO, target: [".?", "?"]}
+    exec: "{display_panes}"
+  - match: {verb: GO, target: ":?"}
+    exec: "{choose_window}"
+  - match: {verb: GO, target: present}
+    exec: "{select_pane} {target}"
+  - match: {verb: SPLIT, object: PANE, direction: pop}
+    exec: "tmux display-popup -w 80% -h 80% -d \"$PWD\""
+  - match: {verb: SPLIT, object: PANE}
+    exec: "{?target:{select_pane} {target} && }{split}"
+  - match: {verb: KILL, object: PANE}
+    exec: "{kill_pane}"
+  - match: {verb: KILL, object: WINDOW}
+    exec: "{kill_window}"
+  - match: {verb: KILL}
+    exec: "{kill_pane}"
+  - match: {verb: CREATE, object: WINDOW}
+    exec: "{new_window}"
+  - match: {verb: [WIDTH, HEIGHT], panes: present}
+    exec: "{_distribute_script} --dimension {verb[WIDTH:width,HEIGHT:height]} --panes {panes}{?fraction: --fraction {fraction}}"
+  - match: {verb: JOIN, source: present}
+    exec: "{join} {direction[left:-h -b,right:-h,up:-v -b,down:-v,_:-h]} -s {source}{?dest: -t {dest}}"
+  - match: {verb: SWAP, source: present}
+    exec: "{swap} -s {source}{?dest: -t {dest}}"
+  - match: {verb: COPY, stream_exec: present}
+    exec: "{modal_popup} '{stream_exec} | tmux load-buffer -w'"
+  - match: {verb: ECHO, stream_exec: present}
+    exec: "{modal_popup} '{stream_exec} | tmux load-buffer -b ali-echo - && tmux paste-buffer -b ali-echo{?target: -t {target}} && tmux delete-buffer -b ali-echo'"
+# Selectors
+selectors:
+  .?:
+    type: action
+    exec: "{display_panes}"
+  :?:
+    type: action
+    exec: "{choose_window}"
+# Services
+services:
+  split: "tmux split-window{?modifier: -f}{?target: -t {target}} {direction[left:-h -b,right:-h,up:-v -b,down:-v,_:-h]}"
+  split_popup: "tmux display-popup -w 80% -h 80% -d \"$PWD\" -E"
+  display_panes: "tmux display-panes"
+  choose_window: "tmux choose-window"
+  select_pane: "tmux select-pane -t"
+  new_window: "tmux new-window"
+  kill_pane: "tmux kill-pane{?target: -t {target}}"
+  kill_window: "tmux kill-window{?target: -t {target}}"
+  join: "tmux join-pane"
+  swap: "tmux swap-pane"
+  send_to: "tmux send-keys{?target: -t {target}}"
+  modal_popup: "tmux display-popup -w 80% -h 80% -d \"$PWD\" -E"
+  clipboard_load: "tmux load-buffer -w"
+  _distribute_script: "python3 {plugin_dir}/scripts/distribute.py"
+# Integration
+integration:
+  files:
+    - source: "tmux.conf.ali"
+      target: "~/.config/ali/tmux.conf.ali"
+  inject:
+    file: "~/.tmux.conf"
+    line: "source-file ~/.config/ali/tmux.conf.ali"
+  check_command: "grep -q 'tmux.conf.ali' ~/.tmux.conf"
+  usage: "Press C-b a to open ALI prompt"
