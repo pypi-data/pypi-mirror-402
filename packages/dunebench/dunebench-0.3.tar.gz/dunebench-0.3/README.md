@@ -1,0 +1,58 @@
+
+# DuneBench
+
+**dunebench** is a lightweight, local benchmarking tool for GGUF models. It allows you to evaluate Large Language Models (LLMs) across a variety of domains—including logic, coding, math, and common sense—using `llama-cpp-python`.
+
+
+![Logo](https://i.postimg.cc/SN3h7cYQ/dunebench-(1).png)
+
+
+## Installation
+
+Install dunebench with `pip`
+
+```bash
+    pip install dunebench
+```
+or install EXE with this [link](https://mega.nz/file/y7AFAASS#nfrjiWcEYG60AggSuhkHlvoakKHl6ZKreAnlFINXC1U)
+
+## Features
+
+* **Local Evaluation:** Runs entirely on your machine using GGUF models.
+* **GPU Accelerated:** Offload layers to your GPU for faster testing.
+* **Multi-Domain Support:** Includes 8 distinct benchmarks (Math, Coding, Science, etc.).
+
+## Usage/Examples
+
+```bash
+dunebench --model "path/to/model.gguf" --task science --limit 20
+```
+### Arguments
+| Argument | Description                          | Default  |
+|----------|--------------------------------------|----------|
+| `--model` | Path to your `.gguf` model file       | Required |
+| `--task`  | The benchmark task to run             | Required |
+| `--limit` | Number of samples to test             | `10`     |
+
+### tasks
+
+| Task Name        | Dataset Used           | Domain                   | Type              |
+|------------------|------------------------|--------------------------|-------------------|
+| science          | ai2_arc (Challenge)    | Scientific Reasoning     | Multiple Choice   |
+| math             | gsm8k                  | Math Word Problems       | Generation        |
+| programming      | mbpp (Sanitized)       | Python Coding            | Code Generation   |
+| physical_logic   | piqa                   | Physical Commonsense     | Multiple Choice   |
+| common_sense     | openbookqa             | General Knowledge        | Multiple Choice   |
+| logic            | winogrande             | Ambiguity Resolution     | Multiple Choice   |
+| grammar          | glue (CoLA)            | Linguistic Acceptability | Multiple Choice   |
+| nlp              | hellaswag              | Sentence Completion      | Multiple Choice   |
+
+## License
+
+[MIT](https://choosealicense.com/licenses/mit/)
+
+
+## Authors
+
+- [@Rudransh Joshi](https://rudransh.kafalfpc.com/)
+
