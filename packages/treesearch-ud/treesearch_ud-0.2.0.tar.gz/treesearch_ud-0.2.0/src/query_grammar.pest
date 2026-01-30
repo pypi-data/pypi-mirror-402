@@ -1,0 +1,77 @@
+// Grammar for dependency tree query language
+
+query = { SOI ~ match_block ~ (except_block | optional_block)* ~ EOI }
+
+match_block = { "MATCH" ~ "{" ~ statement* ~ "}" }
+
+except_block = { "EXCEPT" ~ "{" ~ statement* ~ "}" }
+
+optional_block = { "OPTIONAL" ~ "{" ~ statement* ~ "}" }
+
+statement = { node_decl | edge_decl | precedence_decl }
+
+// Node declaration: Name [constraint, constraint];
+node_decl = { ident ~ "[" ~ constraint_list ~ "]" ~ ";"? }
+
+// Edge declaration: Parent -[label]-> Child; or Parent -> Child; with optional negation
+edge_decl = { edge_ident ~ edge_op ~ edge_ident ~ ";"? }
+
+// Edge operators (order matters - longer patterns first)
+edge_op = { neg_labeled_edge | labeled_edge | neg_unlabeled_edge | unlabeled_edge }
+neg_labeled_edge = { "!-[" ~ edge_label ~ "]->" }
+labeled_edge = { "-[" ~ edge_label ~ "]->" }
+neg_unlabeled_edge = { "!->" }
+unlabeled_edge = { "->" }
+
+// Precedence declarations: Node1 ( << | <) Node2;
+precedence_decl = { ident ~ precedence_op ~ ident ~ ";"? }
+precedence_op = { "<<" | "<" }
+
+// Constraint list (can be empty)
+constraint_list = { (constraint ~ ("&" ~ constraint)*)? }
+
+// Single constraint: either feature or regular
+constraint = { feature_constraint | misc_constraint | regular_constraint }
+
+// Feature constraint: feats.Key="Value" or feats.Key!="Value" or feats.Key=/regex/
+feature_constraint = { "feats" ~ "." ~ feature_key ~ constraint_op ~ constraint_value }
+misc_constraint = { "misc" ~ "." ~ feature_key ~ constraint_op ~ constraint_value }
+
+// Regular constraint: key="value" or key!="value" or key=/regex/
+regular_constraint = { constraint_key ~ constraint_op ~ constraint_value }
+
+// Constraint value: string literal or regex
+constraint_value = { regex_literal | string_literal }
+
+// Constraint operators
+constraint_op = { "!=" | "=" }
+
+// Feature key: ASCII identifier (letters, numbers, underscores)
+feature_key = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+
+// Constraint keys
+constraint_key = { "lemma" | "upos" | "xpos" | "form" | "deprel" }
+
+// Edge label (deprel name)
+edge_label = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" | ":" | "-")* }
+
+// Identifier (node name) - includes anonymous variable "_"
+edge_ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* | "_" }
+
+// Identifier (node name)
+ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+
+
+// String literal
+string_literal = ${ "\"" ~ string_inner ~ "\"" }
+string_inner = @{ (!("\"" | "\\") ~ ANY)* }
+
+// Regex literal
+regex_literal = ${ "/" ~ regex_inner ~ "/" }
+regex_inner = @{ (!("/" | "\\") ~ ANY | "\\" ~ ANY)* }
+
+// Whitespace (implicit between tokens)
+WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
+
+// Comments (optional, useful for query files)
+COMMENT = _{ ("//" | "#") ~ (!"\n" ~ ANY)* }
