@@ -1,0 +1,47 @@
+name: CI - Test & Lint
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  test-rust:
+    name: Rust Check & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Check Formatting
+        run: cargo fmt --all -- --check
+      - name: Lint with Clippy
+        run: cargo clippy -- -D warnings
+      - name: Run Rust Tests
+        run: cargo test
+
+  test-python:
+    name: Python Binding Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install uv and maturin
+        run: |
+          pip install uv
+          uv pip install --system maturin
+      - name: Build and Verify
+        run: |
+          # Build the wheel locally in CI
+          # Force maturin to build only for the version we just set up with actions/setup-python
+          maturin build --interpreter python3.12
+          # Install the built wheel from the target directory
+          pip install target/wheels/*.whl
+          # Verify the import works with the new structure
+          python -c "import pdflinkcheck_rust; print('Binding works')"

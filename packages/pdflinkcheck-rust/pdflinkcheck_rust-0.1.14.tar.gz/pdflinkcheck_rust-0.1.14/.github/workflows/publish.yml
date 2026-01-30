@@ -1,0 +1,161 @@
+name: Build and Publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64
+            pdfium_arch: linux-x64
+          - target: aarch64
+            pdfium_arch: linux-arm64
+    steps:
+      - uses: actions/checkout@v4 
+      - name: Download PDFium
+        run: |
+          mkdir -p python/pdflinkcheck_rust
+          curl -L https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-${{ matrix.pdfium_arch }}.tgz | tar -xz -C python/pdflinkcheck_rust
+          mv python/pdflinkcheck_rust/lib/libpdfium.so python/pdflinkcheck_rust/
+          rm -rf python/pdflinkcheck_rust/lib python/pdflinkcheck_rust/include python/pdflinkcheck_rust/args.gn
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: auto
+          args: --release --out dist --find-interpreter
+          sccache: 'true'
+  windows:
+    runs-on: windows-latest
+    if: false # skip, download zip fails
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download PDFium
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force -Path python/pdflinkcheck_rust
+          # Use a specific version or 'latest' - 'latest' can be tricky with direct downloads
+          #$url = "https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-win-x64.zip"
+          #Invoke-WebRequest -Uri $url -OutFile "pdfium.zip"
+          # Using a hardcoded version tag to bypass redirect issues
+          #$url = "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F6885/pdfium-win-x64.zip"
+          # Use -MaximumRedirection just in case
+          #Invoke-WebRequest -Uri $url -OutFile "pdfium.zip" -MaximumRedirection 5
+          #Expand-Archive -Path "pdfium.zip" -DestinationPath "temp_pdfium"
+          #Move-Item -Path "temp_pdfium/x64/bin/pdfium.dll" -Destination "python/pdflinkcheck_rust/"
+          
+          #gh release download chromium/6885 --repo bblanchon/pdfium-binaries --pattern "pdfium-win-x64.zip"
+
+          $url = "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/6885/pdfium-win-x64.zip"
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          Invoke-WebRequest -Uri $url -OutFile "pdfium.zip" -UseBasicParsing
+
+          ls
+          
+          #Expand-Archive -Path "pdfium-win-x64.zip" -DestinationPath "temp_pdfium"
+          Expand-Archive -Path "pdfium.zip" -DestinationPath "temp_pdfium"
+          Move-Item -Path "temp_pdfium/x64/bin/pdfium.dll" -Destination "python/pdflinkcheck_rust/"
+          
+          
+          # Cleanup
+          Remove-Item -Recurse -Force temp_pdfium
+          #Remove-Item -Force pdfium-win-x64.zip
+          Remove-Item -Force pdfium.zip
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: x64
+          args: --release --out dist --find-interpreter
+          sccache: 'true'
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-windows-x64
+          path: dist/*.whl
+
+  macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64
+          - target: aarch64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download PDFium
+        run: |
+          mkdir -p python/pdflinkcheck_rust
+          # Note: Use mac-x64 or mac-arm64 depending on your matrix
+          curl -L https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-mac-x64.tgz | tar -xz -C python/pdflinkcheck_rust
+          mv python/pdflinkcheck_rust/lib/libpdfium.dylib python/pdflinkcheck_rust/
+          rm -rf python/pdflinkcheck_rust/lib python/pdflinkcheck_rust/include python/pdflinkcheck_rust/args.gn
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --find-interpreter
+          sccache: 'true'
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-${{ matrix.target }}
+          path: dist/*.whl
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  release:
+    name: Publish to PyPI & GitHub Release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [linux, macos, sdist]
+    environment: pypi  
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          merge-multiple: true
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdist
+          path: dist
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+          verbose: true
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
