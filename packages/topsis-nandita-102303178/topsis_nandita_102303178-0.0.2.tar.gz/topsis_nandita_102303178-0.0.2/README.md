@@ -1,0 +1,47 @@
+# Topsis-Nandita-102303178
+
+## Description
+This package implements the TOPSIS (Technique for Order Preference by Similarity to Ideal Solution) method.
+
+## Installation
+Install the package using pip:
+pip install topsis-nandita-10230178
+
+
+## Usage
+Once installed use this topsis command from anywhere in your terminal:
+topsis <InputDataFile> <Weights> <Impacts> <OutputResultFileName>
+
+## Example
+topsis data.csv "1,1,1,2" "+,+,-,+" result.csv
+
+## Input File Format
+The input CSV file must follow this structure:
+
+First column: Names of alternatives/options
+Remaining columns: Numeric values for each criterion
+Minimum: 3 columns (1 name column + at least 2 criteria)
+
+## Example Input (data.csv)
+Fund	P1	P2	P3	P4
+M1	0.42	0.62	0.21	0.31
+M2	0.35	0.57	0.25	0.28
+M3	0.4	0.6	0.22	0.35
+M4	0.38	0.59	0.23	0.3
+
+## Output Format
+The output CSV includes all original columns plus:
+
+Topsis Score: Score between 0 and 1 (higher is better)
+Rank: Ranking based on TOPSIS score (1 is best)
+
+## Example Output (output.csv)
+Fund	P1	P2	P3	P4	Topsis Score	Rank
+M1	0.42	0.62	0.21	0.31	0.560441397	2
+M2	0.35	0.57	0.25	0.28	0	4
+M3	0.4	0.6	0.22	0.35	0.866180373	1
+M4	0.38	0.59	0.23	0.3	0.334326707	3
+
+## Author
+Nandita
+Roll Number: 102303178
