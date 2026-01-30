@@ -1,0 +1,3853 @@
+Title: temp_generate_graphs.py
+Location: ./temp_generate_graphs.py
+Content:
+import pandas as pd
+import numpy as np
+import os
+import matplotlib
+from collections import Counter
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
+import matplotlib.pyplot as plt
+plt.style.use('ggplot')
+import csv
+import json
+from hhrl.util import Loader
+from stattests import StatTests
+from tablemaker import TableMaker
+
+
+MEDIUM_SIZE = 16
+
+
+def save_attrs_stat(filename, results_dict, attributes, stat_func):
+    if not filename.endswith('.csv'):
+        filename = filename + '.csv'
+    outfile = open(filename, 'w')
+    w = csv.writer(outfile, delimiter=';')
+    w.writerow([' ']+attributes)
+    for instance_key in results_dict:
+        instance_type = instance_key.split('_')[0]
+        instance_name = instance_key.split('-')[-1].split('.')[0]
+        instance = f'{instance_type}-{instance_name}'
+        row = [instance]
+        for attr in attributes:
+            row.append(stat_func(results_dict[instance_key][attr]))
+        w.writerow(row)
+    outfile.close()
+
+
+def get_snapshots(full_trace, n_snapshots=100):
+    if n_snapshots > len(full_trace):
+        print(f'Number of snapshots {n_snapshots} is higher than the trace length {len(full_trace)}')
+        return full_trace
+    step = int(len(full_trace) / (n_snapshots))
+    snapshots = [full_trace[i] for i in range(0, len(full_trace), step)]
+    snapshots[-1] = full_trace[-1]
+    return snapshots
+
+
+def make_label(config, whitelist, split_char='-'):
+    config_keys = config.split(split_char)
+    allowed_keys = []
+    for key in config_keys:
+        if key in whitelist:
+            allowed_keys
+
+
+def plot_avg_history(instance, instance_dict, attributes, output_dir=''):
+    for attr in attributes:
+        plotdir = f'{output_dir}/instance_plots/history/{attr}'
+        os.system(f'mkdir -p {plotdir}')
+        plt.figure()
+        for config in instance_dict:
+            history = instance_dict[config][attr]
+            avg_history = np.mean(history, 0)
+            iterations = range(len(avg_history))
+            plt.plot(iterations, avg_history, label=f'{config}', linewidth=.8)
+        plt.title(instance)
+        plt.xlabel('Iterations')
+        plt.ylabel(attr)
+        # plt.yticks(np.arange(0, 100, 10))
+        # plt.xticks(np.arange(0, max_gen, 10))
+        plt.legend(loc='best')
+        filepath = f'{plotdir}/{instance}.png'
+        plt.savefig(filepath, dpi=300, bbox_inches='tight')
+        plt.close()
+
+
+def make_boxplot(instance, instance_dict, output_dir='', attr='best_fitness'):
+    plotdir = f'{output_dir}/instance_plots/boxplots'
+    os.system(f'mkdir -p {plotdir}')
+    plt.figure()
+    labels = []
+    boxes = []
+    for config in instance_dict:
+        results = instance_dict[config][attr]
+        boxes.append(results)
+        labels.append(config)
+        # to_trunc = min(map(len, history))
+        # avg_history = np.mean([h[:to_trunc] for h in history], 0)
+        # iterations = range(len(avg_history))
+    plt.boxplot(boxes)
+    plt.gca().set_xticklabels(labels, fontsize=8)
+    # plt.gca().set_xticklabels(labels, rotation=45, fontsize=8)
+    # plt.title(instance)
+    # plt.xlabel("Iterations")
+    # plt.ylabel(attr)
+    # plt.yticks(np.arange(0, 100, 10))
+    # plt.xticks(np.arange(0, max_gen, 10))
+    # plt.legend(loc="best")
+    filepath = f'{plotdir}/{instance}.png'
+    plt.savefig(filepath, dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def save_configs_performance(filename, results_dict, performance_dict, problem, file_type='csv'):
+    for instance_key in results_dict:
+        header = ['Instance']
+        for config in sorted(results_dict[instance_key]):
+            header.append(config)
+        break
+    print(header)
+    if file_type == 'csv':
+        filename = filename + '.csv'
+        outfile = open(filename, 'w')
+        w = csv.writer(outfile, delimiter=';')
+        w.writerow(header)
+    elif file_type == 'tex':
+        filename = filename + '.tex'
+        w = TableMaker(filename, header)
+    else:
+        print(f'Invalid {file_type} format')
+        return
+    for instance_key in results_dict:
+        # instance_type = instance_key.split('-')[0]
+        # instance_name = instance_key.split('-')[-1]
+        # instance = f'{instance_type}-{instance_name}'
+        instance = instance_key.lstrip(f'{problem}-')
+        row = [instance]
+        bold_mask, bg_mask = [False], [False]
+        for config in sorted(results_dict[instance_key]):
+            is_equivalent = False
+            if instance_key in performance_dict[config]['equivalent']:
+                bold_mask.append(False)
+                bg_mask.append(True)
+                is_equivalent = True
+            elif instance_key in performance_dict[config]['better']:
+                bold_mask.append(True)
+                bg_mask.append(True)
+                is_equivalent = True
+            else:
+                bg_mask.append(False)
+                bold_mask.append(False)
+            results = results_dict[instance_key][config]
+            mean = np.around(np.mean(results), 4)
+            std = np.around(np.std(results), 4)
+            cell = f'{mean} ({std})'
+            if is_equivalent:
+                cell += ' *'
+            row.append(cell)
+        if file_type == 'csv':
+            w.writerow(row)
+        elif file_type == 'tex':
+            w.writerow(row, bold_mask, bg_mask)
+    if file_type == 'csv':
+        outfile.close()
+    elif file_type == 'tex':
+        w.save(caption=problem)
+
+
+def make_boxplots(input_dir, output_dir, black_list, key_whitelist):
+    loader = Loader()
+    attributes = ['best_fitness']
+    results_dict = loader.load(input_dir, attributes, 4, black_list, key_whitelist)
+    for instance in results_dict:
+        make_boxplot(instance, results_dict[instance], output_dir)
+
+
+def make_history_plots(input_dir, output_dir, black_list, key_whitelist):
+    loader = Loader()
+    loader.n_snapshots = 100
+    attributes = ['best_fitness_hist', 'reward_hist']
+    for instance, instance_dict in loader.lazy_load(input_dir, attributes, 4, black_list, key_whitelist):
+        plot_avg_history(instance, instance_dict, attributes, output_dir)
+
+
+def list_to_str(input_list):
+    output_str = ''
+    for item in input_list:
+        output_str += f'{item}_'
+    return output_str.rstrip('_')
+
+
+
+def plot_heuristic_hist(instance, heuristic_hists, heuristic_names, config, output_dir, n_phases=10):
+    all_runs_phases = [[] for i in range(n_phases)]
+    # for each history from each of the 31 runs
+    for llh_hist in heuristic_hists:
+        phase_size = int(len(llh_hist) / n_phases)
+        phases = [llh_hist[i:i + phase_size] for i in range(0, len(llh_hist), phase_size)]
+        for i in range(n_phases):
+            all_runs_phases[i].extend(phases[i])
+    actions_mean_dict = {}
+    for run_phase in all_runs_phases:
+        counter = Counter(run_phase)
+        total = sum(counter.values())
+        for action in heuristic_names:
+            if action in counter:
+                count = counter[action]
+            else:
+                count = 0
+            average = count / total * 100
+            actions_mean_dict.setdefault(action,[]).append(average)
+    plt.figure()
+    # colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
+    for i, action in enumerate(sorted(actions_mean_dict)):
+        avg_actions = actions_mean_dict[action]
+        try:
+            # plt.plot(range(n_phases), avg_actions, 'x-', color=colors[i], label=action, linewidth=1)
+            plt.plot(range(n_phases), avg_actions, label=action, linewidth=1)
+        except ValueError:
+            print(instance, action)
+    plt.xlabel("Search Phase")
+    plt.ylabel("Average Apliance (%)")
+    plt.legend(loc="best")
+    plotdir = f'{output_dir}/instance_plots/heuristics/{instance}'
+    os.system(f'mkdir -p {plotdir}')
+    filepath = f'{plotdir}/{config}.png'
+    plt.savefig(filepath, dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def make_heuristic_plot(results_dict, problem):
+    # loader.n_snapshots = 100
+    attributes = ['heuristic_hist']
+    with open(f'hyflex/problems_json/{problem}.json', 'r') as json_file:
+        problem_dict = json.load(json_file)
+    heuristic_names = problem_dict['actions']
+    for instance, instance_dict in loader.lazy_load(input_dir, attributes, 4, black_list, key_whitelist, True):
+        for config in instance_dict:
+            heuristic_hists = instance_dict[config]
+            plot_heuristic_hist(instance, heuristic_hists, heuristic_names, config, output_dir)
+
+
+def make_hypothesis_test(results_dict, output_dir, problem_name, configs):
+    stat = StatTests(output_dir)
+    attributes = ['best_fitness']
+    df = pd.DataFrame.from_dict(results_dict, orient='index')
+    experiment_name = f'{problem_name}_{configs}'
+    performance_dict = stat.kruskal_dunn(df, f'{experiment_name}_instance_performance.pdf')
+    df = df.applymap(np.mean)
+    correct = 'bergmann'
+    control = None
+    stat.friedman_post(df, f'{experiment_name}_rank_{correct}.pdf', f'{experiment_name}_matrix_{correct}.pdf',
+            correct=correct, control=control)
+    # correct = 'finner'
+    # control = 'DQN'
+    # stat.friedman_post(df, f'{experiment_name}_rank_{correct}.pdf', f'{experiment_name}_matrix_{correct}.pdf',
+    #         correct=correct, control=control)
+    save_configs_performance(f'{output_dir}/{experiment_name}_configs_performance', results_dict, performance_dict, problem_name, 'tex')
+
+
+def print_avg_fitness(results_dict, problem):
+    print(problem)
+    for instance in results_dict:
+        print(results_dict[instance])
+        print(instance)
+        print(np.mean(results_dict[instance]['best_fintess']))
+
+
+def main():
+    input_dir='results_data_HHRL_states'
+    output_root = 'states_plots_rip/'
+    all_problem_list = ['TSP']
+    config_list = [('DQN', 'S1', 'default-config'), ('DQN', 'SW')]
+    attributes = ['best_fitness']
+    loader = Loader()
+    for problem in all_problem_list:
+        problem_list = [problem]
+        results_dict = loader.load2(input_dir, problem_list, config_list, attributes, 5, True)
+        output_dir = f'{output_root}/{problem}'
+        # make_boxplots(input_dir, output_dir, black_list, key_whitelist)
+        # make_history_plots(input_dir, output_dir, black_list, key_whitelist)
+        # make_hypothesis_test(results_dict, output_dir, problem, 'DQN-S1-SW')
+        print_avg_fitness(results_dict, problem)
+        # make_heuristic_plot(input_dir, output_dir, problem, black_list, key_whitelist)
+    black_list = ignore_configs
+    output_dir = f'{output_root}/ALL'
+    # make_boxplots(input_dir, output_dir, black_list, key_whitelist)
+    results_dict = loader.load2(input_dir, all_problem_list, config_list, attributes, 5, True)
+    make_hypothesis_test(results_dict, output_dir, 'ALL', 'DQN-S1-SW')
+
+
+if __name__ == '__main__':
+    main()
+
+
+Title: run.sh
+Location: ./run.sh
+Content:
+instances=(
+	0
+	1
+	2
+	3
+	4
+	5
+	6
+	7
+	8
+	9
+	# 10
+	# 11
+)
+
+configs=(
+	# configs/default-config.ini
+	configs/fir_discrete.ini
+	)
+
+problems=(
+	TSP
+	FS
+	SAT
+	BP
+	VRP
+	PS
+	)
+
+#depois BP SW e S2 com --ow
+
+agents=(
+	DQN
+	# DQNUCB
+	# DMAB
+	# FRRMAB
+	# RAND
+	# QL
+	)
+
+states=(
+	# SW
+	# BOLLP
+	# S1
+	# S2
+	# S3
+	# S4
+	# S5
+	# S6
+	S7
+	)
+
+rewards=(
+	# IR
+	# DIV
+	# IND
+	# IOD
+	# IOP
+	RIP
+	# DIP
+	)
+
+acceptances=(
+	ALL
+	)
+
+run() {
+	problem=$1
+	instance=$2
+	config=$3
+	agent=$4
+	state=$5
+	reward=$6
+	acceptance=$7
+	id=$8
+	output_dir="/mnt/NAS/aldantas/results_data_HHRL_states"
+	python runner.py -p $problem -i $instance -c $config -ag $agent -st $state -rw $reward -ac $acceptance -r $id -t 300 -o $output_dir -ow
+}
+
+export -f run
+eval 'parallel --jobs 10 --progress -u run ::: "${problems[@]}" ::: "${instances[@]}" ::: "${configs[@]}"  ::: "${agents[@]}" ::: "${states[@]}" ::: "${rewards[@]}"  ::: "${acceptances[@]}" ::: {1..31}'
+
+
+Title: requirements.txt
+Location: ./requirements.txt
+Content:
+cycler==0.10.0
+Cython==0.29.22
+joblib==1.0.1
+kiwisolver==1.3.1
+matplotlib==3.3.4
+numpy==1.20.1
+pandas==1.2.3
+Pillow==8.1.2
+pyjnius==1.6.1
+pyparsing==2.4.7
+python-dateutil==2.8.1
+pytz==2021.1
+scikit-learn==0.24.1
+scipy==1.6.1
+six==1.15.0
+scikit-learn
+threadpoolctl==2.1.0
+tqdm==4.59.0
+
+
+
+Title: test_loader.py
+Location: ./test_loader.py
+Content:
+from hhrl.util import Loader
+
+if __name__ == "__main__":
+    loader = Loader()
+    root_dir='results_data_HHRL_states'
+    problem_list = ['FS', 'TSP']
+    config_list = [('DQN', 'S1'), ('DQNUCB', 'S1')]
+    attributes = ['best_fitness']
+    results_dict = loader.load_problems(root_dir, problem_list, config_list, attributes, 5)
+    print(results_dict)
+
+
+Title: .gitignore
+Location: ./.gitignore
+Content:
+*/__pycache__/*
+__pycache__/
+.python-version
+
+
+Title: 未命名.ipynb
+Location: ./未命名.ipynb
+Content:
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "id": "45aa328d-836d-4c06-9182-5aea1922aa29",
+   "metadata": {
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Summary generated and saved to hh_project_summary.txt\n"
+     ]
+    }
+   ],
+   "source": [
+    "import os\n",
+    "\n",
+    "def get_file_contents(file_path):\n",
+    "    try:\n",
+    "        with open(file_path, 'r', encoding='utf-8') as file:\n",
+    "            return file.read()\n",
+    "    except UnicodeDecodeError:\n",
+    "            return \"<Unable to read file contents due to encoding issue>\"\n",
+    "\n",
+    "def generate_project_summary(root_dir):\n",
+    "    project_summary = \"\"\n",
+    "    for root, dirs, files in os.walk(root_dir):\n",
+    "        for file_name in files:\n",
+    "            file_path = os.path.join(root, file_name)\n",
+    "            project_summary += f\"Title: {file_name}\\n\"\n",
+    "            project_summary += f\"Location: {file_path}\\n\"\n",
+    "            project_summary += \"Content:\\n\"\n",
+    "            project_summary += get_file_contents(file_path)\n",
+    "            project_summary += \"\\n\\n\"\n",
+    "    return project_summary\n",
+    "\n",
+    "def save_summary_to_file(summary, output_file):\n",
+    "    with open(output_file, 'w', encoding='utf-8') as file:\n",
+    "        file.write(summary)\n",
+    "\n",
+    "if __name__ == \"__main__\":\n",
+    "    root_directory = '.'  # 当前文件夹\n",
+    "    summary = generate_project_summary(root_directory)\n",
+    "    output_file = 'hh_project_summary.txt'  # 输出文件名\n",
+    "    save_summary_to_file(summary, output_file)\n",
+    "    print(\"Summary generated and saved to\", output_file)\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "6f243cfb-af4c-43aa-9411-26f98c8ae650",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 310 (ipykernel)",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.10.13"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
+
+
+Title: stattests.py
+Location: ./stattests.py
+Content:
+from rpy2.robjects.packages import importr
+from rpy2.robjects.conversion import localconverter
+from rpy2.robjects import pandas2ri
+import rpy2.robjects.numpy2ri as rnp
+import rpy2.robjects as ro
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+plt.style.use('ggplot')
+
+rnp.activate()
+scmamp = importr('scmamp')
+pmcmr = importr('PMCMRplus')
+grdevices = importr('grDevices')
+ro.r('''
+    library('ggplot2')
+    plotpv <- function(pvmatrix, filename) {
+        plot <- plotPvalues(pvmatrix)
+        plot + labs(title="Corrected p-values using Bergmann and Hommel procedure") +
+        scale_fill_gradientn("Corrected p-values", colours=c("skyblue4", "orange"))
+        ggsave(filename, width=300, unit='mm')
+    }
+    ''')
+
+class StatTests:
+    image_devices = {
+            'jpeg': grdevices.jpeg,
+            'jpg': grdevices.jpeg,
+            'png': grdevices.png,
+            'pdf': grdevices.pdf,
+            'ps': grdevices.postscript,
+            'postscript': grdevices.postscript
+            }
+
+    def __init__(self, output_location='.'):
+        self.output_location = output_location
+        os.system(f'mkdir -p {output_location}')
+
+    def __open_plot_file(self, filename):
+        extension = filename.split('.')[-1]
+        filedriver = self.image_devices.get(extension, grdevices.pdf)
+        filedriver(f'{self.output_location}/{filename}')
+
+    def __close_plot_file(self):
+        grdevices.dev_off()
+
+    def __convert_df(self, df):
+        with localconverter(ro.default_converter + pandas2ri.converter):
+            r_df = ro.conversion.py2rpy(df)
+        return r_df
+
+    # def friedman_post_bergmanhommel(self, df, filename, control=None):
+    #     print('Friedman with BergmanHommel PostHoc')
+    #     r_df = self.__convert_df(df)
+    #     friedman = scmamp.friedmanTest(r_df)
+    #     print(friedman)
+    #     if not control:
+    #         control = ro.r('NULL')
+    #     pv_matrix = scmamp.friedmanPost(r_df, control=control)
+    #     adjusted_pv = scmamp.adjustBergmannHommel(pv_matrix)
+    #     ro.r['plotpv'](adjusted_pv, filename)
+
+    def friedman_post(self, df, rank_filename, matrix_filename, correct='bergmann', control=None):
+        print(f'Friedman with {correct} PostHoc')
+        # This is needed because the postHocTest method ranks according to the highest values (maximization
+        # problems)
+        df = df *-1
+        r_df = self.__convert_df(df)
+        if not control:
+            control = ro.r('NULL')
+        friedman = scmamp.friedmanTest(r_df)
+        pvalue = friedman.rx2('p.value')[0]
+        print(f'Friedman p-value: {pvalue}')
+        if len(df.columns) <= 2:
+            return
+        ro.r('''
+            f <- function(df, rank_filepath, matrix_filepath, correct, control) {
+                post.results <- postHocTest(data=df, test="friedman", correct=correct, control=control,
+                use.rank=TRUE)
+                pdf(rank_filepath)
+                plotRanking(post.results$corrected.pval, post.results$summary, decreasing=FALSE)
+                dev.off()
+                alg.order <- order(post.results$summary)
+                plot <- plotPvalues(post.results$corrected.pval, alg.order=alg.order)
+                plot + labs(title="Corrected p-values")
+                # scale_fill_gradientn("Corrected p-values", colours=c("skyblue4", "orange"))
+                ggsave(matrix_filepath, width=500, unit='mm')
+                return(post.results)
+            }
+                '''
+            )
+        rank_filepath = f'{self.output_location}/{rank_filename}'
+        matrix_filepath = f'{self.output_location}/{matrix_filename}'
+        print(control)
+        results = ro.r['f'](r_df, rank_filepath, matrix_filepath, correct, control)
+        print(results)
+
+    def friedman_post_nemenyi(self, df, filename, control=None):
+        print('Friedman with Nemenyi PostHoc')
+        r_df = self.__convert_df(df)
+        friedman = scmamp.friedmanTest(r_df)
+        print(friedman)
+        if len(df.columns) <= 2:
+            return
+        posthoc = scmamp.nemenyiTest(r_df, alpha=0.05)
+        print(posthoc)
+        self.__open_plot_file(filename)
+        plot = scmamp.plotCD(r_df, alpha=0.05, decreasing=False)
+        self.__close_plot_file()
+
+    def kruskal_dunn(self, df, filename=None):
+        algs = df.columns.tolist()
+        algs_performance_dict = {}
+        for alg in algs:
+            algs_performance_dict[alg] = {'better': [], 'equivalent': [], 'worse': []}
+        for idx, row in df.iterrows():
+            instance = row.name
+            data_sample = row.tolist()
+            if np.min(data_sample) == np.max(data_sample):
+                for alg in algs:
+                    algs_performance_dict[alg]['equivalent'].append(instance)
+                continue
+            means = np.mean(data_sample, 1)
+            rank_order = means.argsort()
+            # reorders the algs list and data_sample according to the mean performance
+            sorted_algs = [algs[i] for i in rank_order]
+            data_sample = [data_sample[i] for i in rank_order]
+            means.sort()
+            kruskal = pmcmr.kruskalTest(data_sample)
+            pvalues = kruskal.rx2('p.value')
+            if pvalues[0] > 0.05:
+                for alg in algs:
+                    algs_performance_dict[alg]['equivalent'].append(instance)
+                continue
+            if len(df.columns) > 2:
+                post_test = pmcmr.kwManyOneDunnTest(data_sample, p_adjust_method='holm')
+                pvalues = post_test.rx2('p.value')
+            has_equivalent = False
+            # for p, alg, mean in zip(post_test[2], sorted_algs[1:], means[1:]):
+            for p, alg, mean in zip(pvalues, sorted_algs[1:], means[1:]):
+                if p > 0.05:
+                    algs_performance_dict[alg]['equivalent'].append(instance)
+                    has_equivalent = True
+                else:
+                    algs_performance_dict[alg]['worse'].append(instance)
+            best_alg = sorted_algs[0]
+            if has_equivalent:
+                algs_performance_dict[best_alg]['equivalent'].append(instance)
+            else:
+                algs_performance_dict[best_alg]['better'].append(instance)
+        if filename:
+            self.plot_performance_bars(algs_performance_dict, filename, 'Instance Performance')
+        return algs_performance_dict
+
+    def __label_bar(self, bar, color, offset=0):
+        height = bar.get_height()
+        if height > 0:
+            plt.gca().text(bar.get_x() + bar.get_width()/2., height+offset-.15,
+                    '%d' % int(height),
+                    ha='center', va='bottom', color=color)
+
+    def plot_performance_bars(self, performance_dict, filename, title):
+        labels = []
+        better_count = []
+        equivalent_count = []
+        for alg in performance_dict:
+            if alg == 'DQN-RIP':
+                label = r'$R_{1}$'
+            elif alg == 'DQN-IR':
+                label = r'$R_{2}$'
+            else:
+                label = alg
+            labels.append(label)
+            better_count.append(len(performance_dict[alg]['better']))
+            equivalent_count.append(len(performance_dict[alg]['equivalent']))
+        labels.reverse()
+        better_count.reverse()
+        equivalent_count.reverse()
+        width = .8
+        plt.figure()
+        bottom_bars = plt.bar(labels, better_count, width, label='Better', color='black')
+        upper_bars = plt.bar(labels, equivalent_count, width, bottom=better_count, label='Equivalent', color='gray')
+        for bbar, ubar in zip(bottom_bars, upper_bars):
+            self.__label_bar(bbar, 'white')
+            offset = bbar.get_height()
+            self.__label_bar(ubar, 'black', offset)
+        plt.xticks(rotation=45)
+        plt.ylabel('Instances')
+        plt.title(title)
+        plt.legend()
+        plt.savefig(f'{self.output_location}/{filename}', dpi=300, bbox_inches='tight')
+        # plt.show()
+        plt.close()
+
+
+Title: fix_experiment_dirs.py
+Location: ./fix_experiment_dirs.py
+Content:
+import os
+from hhrl.util import Loader
+
+l = Loader()
+l.check_experiments('results_data_HHRL_states/')
+
+# for line in open('temp.txt'):
+#     # cur_dir = '/home/aldantas/github/HH-RL'
+#     parts = line.rstrip('\n').split('/')[:-3]
+#     input_dir = '/'.join(parts)
+#     parts[-1] = 'SW'
+#     output_dir = '/'.join(parts)
+#     print(input_dir)
+#     print(output_dir)
+#     os.system(f'mv {input_dir} {output_dir}')
+
+
+Title: README.md
+Location: ./README.md
+Content:
+# Hyper-Heuristic with Reinforcement Learning
+This is an ongoing project as part of my PhD research, where I am implementing Reinforcement Learning agents for selecting low-level heuristics applied on combinatorial optimization problems.
+
+# Implemented agents
+* Deep Q-Network
+* Dynamic Multi-Armed Bandit
+* Fitness-Rate-Rank Multi Armed Bandit
+
+# Combinatorial Problem Domains
+The domains come from the [HyFlex Framework](http://www.asap.cs.nott.ac.uk/external/chesc2011/hyflex_description.html):
+* Bin Packing
+* MAX-SAT
+* Personnel Scheduling
+* Flow Shop
+* Traveling Salesman
+* Vehicle Routing
+
+
+Title: generate_graphs.py
+Location: ./generate_graphs.py
+Content:
+import pandas as pd
+import numpy as np
+import os
+import matplotlib
+from collections import Counter
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
+import matplotlib.pyplot as plt
+plt.style.use('ggplot')
+import csv
+import json
+from hhrl.util import Loader
+from stattests import StatTests
+from tablemaker import TableMaker
+
+MEDIUM_SIZE = 16
+
+
+def save_attrs_stat(filename, results_dict, attributes, stat_func):
+    if not filename.endswith('.csv'):
+        filename = filename + '.csv'
+    outfile = open(filename, 'w')
+    w = csv.writer(outfile, delimiter=';')
+    w.writerow([' ']+attributes)
+    for instance_key in results_dict:
+        instance_type = instance_key.split('_')[0]
+        instance_name = instance_key.split('-')[-1].split('.')[0]
+        instance = f'{instance_type}-{instance_name}'
+        row = [instance]
+        for attr in attributes:
+            row.append(stat_func(results_dict[instance_key][attr]))
+        w.writerow(row)
+    outfile.close()
+
+
+def get_snapshots(full_trace, n_snapshots=100):
+    if n_snapshots > len(full_trace):
+        print(f'Number of snapshots {n_snapshots} is higher than the trace length {len(full_trace)}')
+        return full_trace
+    step = int(len(full_trace) / (n_snapshots))
+    snapshots = [full_trace[i] for i in range(0, len(full_trace), step)]
+    snapshots[-1] = full_trace[-1]
+    return snapshots
+
+
+def make_label(config, whitelist, split_char='-'):
+    config_keys = config.split(split_char)
+    allowed_keys = []
+    for key in config_keys:
+        if key in whitelist:
+            allowed_keys
+
+
+def plot_avg_history(instance, instance_dict, attributes, output_dir=''):
+    for attr in attributes:
+        plotdir = f'{output_dir}/instance_plots/history/{attr}'
+        os.system(f'mkdir -p {plotdir}')
+        plt.figure()
+        for config in instance_dict:
+            history = instance_dict[config][attr]
+            avg_history = np.mean(history, 0)
+            iterations = range(len(avg_history))
+            plt.plot(iterations, avg_history, label=f'{config}', linewidth=.8)
+        plt.title(instance)
+        plt.xlabel('Iterations')
+        plt.ylabel(attr)
+        # plt.yticks(np.arange(0, 100, 10))
+        # plt.xticks(np.arange(0, max_gen, 10))
+        plt.legend(loc='best')
+        filepath = f'{plotdir}/{instance}.png'
+        plt.savefig(filepath, dpi=300, bbox_inches='tight')
+        plt.close()
+
+
+def make_boxplot(instance, instance_dict, output_dir='', attr='best_fitness'):
+    plotdir = f'{output_dir}/instance_plots/boxplots'
+    os.system(f'mkdir -p {plotdir}')
+    plt.figure()
+    labels = []
+    boxes = []
+    for config in instance_dict:
+        results = instance_dict[config][attr]
+        boxes.append(results)
+        labels.append(config)
+        # to_trunc = min(map(len, history))
+        # avg_history = np.mean([h[:to_trunc] for h in history], 0)
+        # iterations = range(len(avg_history))
+    plt.boxplot(boxes)
+    plt.gca().set_xticklabels(labels, fontsize=8)
+    # plt.gca().set_xticklabels(labels, rotation=45, fontsize=8)
+    # plt.title(instance)
+    # plt.xlabel("Iterations")
+    # plt.ylabel(attr)
+    # plt.yticks(np.arange(0, 100, 10))
+    # plt.xticks(np.arange(0, max_gen, 10))
+    # plt.legend(loc="best")
+    filepath = f'{plotdir}/{instance}.png'
+    plt.savefig(filepath, dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def save_configs_performance(filename, results_dict, performance_dict, problem, file_type='csv'):
+    for instance_key in results_dict:
+        header = ['Instance']
+        for config in sorted(results_dict[instance_key]):
+            header.append(config)
+        break
+    print(header)
+    if file_type == 'csv':
+        filename = filename + '.csv'
+        outfile = open(filename, 'w')
+        w = csv.writer(outfile, delimiter=';')
+        w.writerow(header)
+    elif file_type == 'tex':
+        filename = filename + '.tex'
+        w = TableMaker(filename, header)
+    else:
+        print(f'Invalid {file_type} format')
+        return
+    for instance_key in results_dict:
+        # instance_type = instance_key.split('-')[0]
+        # instance_name = instance_key.split('-')[-1]
+        # instance = f'{instance_type}-{instance_name}'
+        instance = instance_key.lstrip(f'{problem}-')
+        row = [instance]
+        bold_mask, bg_mask = [False], [False]
+        for config in sorted(results_dict[instance_key]):
+            is_equivalent = False
+            if instance_key in performance_dict[config]['equivalent']:
+                bold_mask.append(False)
+                bg_mask.append(True)
+                is_equivalent = True
+            elif instance_key in performance_dict[config]['better']:
+                bold_mask.append(True)
+                bg_mask.append(True)
+                is_equivalent = True
+            else:
+                bg_mask.append(False)
+                bold_mask.append(False)
+            results = results_dict[instance_key][config]
+            mean = np.around(np.mean(results), 4)
+            std = np.around(np.std(results), 4)
+            cell = f'{mean} ({std})'
+            if is_equivalent:
+                cell += ' *'
+            row.append(cell)
+        if file_type == 'csv':
+            w.writerow(row)
+        elif file_type == 'tex':
+            w.writerow(row, bold_mask, bg_mask)
+    if file_type == 'csv':
+        outfile.close()
+    elif file_type == 'tex':
+        w.save(caption=problem)
+
+
+def make_boxplots(input_dir, output_dir, black_list, key_whitelist):
+    loader = Loader()
+    attributes = ['best_fitness']
+    results_dict = loader.load(input_dir, attributes, 4, black_list, key_whitelist)
+    for instance in results_dict:
+        make_boxplot(instance, results_dict[instance], output_dir)
+
+
+def make_history_plots(input_dir, output_dir, black_list, key_whitelist):
+    loader = Loader()
+    loader.n_snapshots = 100
+    attributes = ['best_fitness_hist', 'reward_hist']
+    for instance, instance_dict in loader.lazy_load(input_dir, attributes, 4, black_list, key_whitelist):
+        plot_avg_history(instance, instance_dict, attributes, output_dir)
+
+
+def list_to_str(input_list):
+    output_str = ''
+    for item in input_list:
+        output_str += f'{item}_'
+    return output_str.rstrip('_')
+
+
+
+def plot_heuristic_hist(instance, heuristic_hists, heuristic_names, config, output_dir, n_phases=10):
+    all_runs_phases = [[] for i in range(n_phases)]
+    # for each history from each of the 31 runs
+    for llh_hist in heuristic_hists:
+        phase_size = int(len(llh_hist) / n_phases)
+        phases = [llh_hist[i:i + phase_size] for i in range(0, len(llh_hist), phase_size)]
+        for i in range(n_phases):
+            all_runs_phases[i].extend(phases[i])
+    actions_mean_dict = {}
+    for run_phase in all_runs_phases:
+        counter = Counter(run_phase)
+        total = sum(counter.values())
+        for action in heuristic_names:
+            if action in counter:
+                count = counter[action]
+            else:
+                count = 0
+            average = count / total * 100
+            actions_mean_dict.setdefault(action,[]).append(average)
+    plt.figure()
+    # colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
+    for i, action in enumerate(sorted(actions_mean_dict)):
+        avg_actions = actions_mean_dict[action]
+        try:
+            # plt.plot(range(n_phases), avg_actions, 'x-', color=colors[i], label=action, linewidth=1)
+            plt.plot(range(n_phases), avg_actions, label=action, linewidth=1)
+        except ValueError:
+            print(instance, action)
+    plt.xlabel("Search Phase")
+    plt.ylabel("Average Apliance (%)")
+    plt.legend(loc="best")
+    plotdir = f'{output_dir}/instance_plots/heuristics/{instance}'
+    os.system(f'mkdir -p {plotdir}')
+    filepath = f'{plotdir}/{config}.png'
+    plt.savefig(filepath, dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def make_heuristic_plot(results_dict, output_dir, problem_name):
+    attributes = ['heuristic_hist']
+    with open(f'hyflex/problems_json/{problem_name}.json', 'r') as json_file:
+        problem_dict = json.load(json_file)
+    heuristic_names = problem_dict['actions']
+    print(heuristic_names)
+    for instance, instance_dict in results_dict.items():
+        for config in instance_dict:
+            heuristic_hists = instance_dict[config]
+            plot_heuristic_hist(instance, heuristic_hists, heuristic_names, config, output_dir)
+
+
+def make_hypothesis_test(results_dict, output_dir, problem_name, configs):
+    stat = StatTests(output_dir)
+    attributes = ['best_fitness']
+    df = pd.DataFrame.from_dict(results_dict, orient='index')
+    experiment_name = f'{problem_name}_{configs}'
+    performance_dict = stat.kruskal_dunn(df, f'{experiment_name}_instance_performance.pdf')
+
+    df = df.applymap(np.mean)
+    correct = 'bergmann'
+    control = None
+    stat.friedman_post(df, f'{experiment_name}_rank_{correct}.pdf', f'{experiment_name}_matrix_{correct}.pdf',
+            correct=correct, control=control)
+
+    # correct = 'finner'
+    # control = 'DQN'
+    # stat.friedman_post(df, f'{experiment_name}_rank_{correct}.pdf', f'{experiment_name}_matrix_{correct}.pdf',
+    #         correct=correct, control=control)
+    save_configs_performance(f'{output_dir}/{experiment_name}_configs_performance', results_dict, performance_dict, problem_name, 'tex')
+
+
+def print_avg_fitness(results_dict, problem):
+    print(problem)
+    for instance in results_dict:
+        print(instance)
+        instance_results = results_dict[instance]
+        for config in instance_results:
+            print(f'{config}: {np.mean(instance_results[config])}')
+
+
+def main(experiments):
+    input_dir='results_data_HHRL_states'
+    output_root = 'cec2022_plots_final'
+    problem_list = ['TSP', 'FS', 'BP', 'SAT', 'VRP', 'PS']
+    # problem_list = ['TSP', 'FS', 'SAT']
+    # problem_list = ['TSP']
+    instance_list = None
+    # instance_list = ['d1291']
+    loader = Loader()
+    # loader.n_snapshots = 100
+    attributes = ['best_fitness']
+    # attributes = ['heuristic_hist']
+    for experiment_name, config_dict in experiments.items():
+        all_dict = {}
+        try:
+            config_keys, config_list = zip(*config_dict.items())
+            for problem, problem_dict in loader.load_problems(input_dir, problem_list, config_list, attributes,
+                    instance_list=instance_list, config_keys=config_keys, split_depth=5, use_attr_list=True):
+                output_dir = f'{output_root}/{problem}'
+                make_hypothesis_test(problem_dict, output_dir, problem, experiment_name)
+                all_dict.update(problem_dict)
+                # make_history_plots(input_dir, output_dir, black_list, key_whitelist)
+                # make_heuristic_plot(problem_dict, output_dir, problem)
+            output_dir = f'{output_root}/ALL'
+            make_hypothesis_test(all_dict, output_dir, 'ALL', experiment_name)
+            # make_boxplots(input_dir, output_dir, black_list, key_whitelist)
+        except UnboundLocalError:
+            print(f'Error in {experiment_name}')
+            continue
+
+
+if __name__ == '__main__':
+    experiments = {
+            # 'DQN-S1-configs': [('DQN', 'S1')],
+            # 'DQN-S1-SW': [('DQN', 'S1', 'default-config'), ('DQN', 'SW')],
+            # 'DQN-S1fir_discrete-SW': [('DQN', 'S1', 'fir_discrete'), ('DQN', 'SW')],
+            # 'DQN-S1-FRRMAB': [('DQN', 'S1', 'default-config'), ('FRRMAB', 'S1', 'default-config')],
+            # 'DQN-S1firdiscrete-FRRMAB': [('DQN', 'S1', 'fir-discrete'), ('FRRMAB')],
+            # 'DQN-S1-SW-FRRMAB': [('DQN', 'S1', 'default-config'), ('DQN', 'SW', 'default-config'), ('FRRMAB', 'S1', 'default-config')],
+            # 'DQN-S1-S2-S3-S4-SW-FRRMAB-NOBP': [('DQN', 'S1', 'default-config'), ('DQN', 'S2', 'default-config'), ('DQN',
+            #     'S3', 'default-config'), ('DQN', 'S4', 'default-config'), ('DQN', 'SW', 'default-config'),
+            #     ('FRRMAB', 'S1', 'default-config')],
+            # 'DQN-S1-S3-S5-S6': [('DQN', 'S1', 'default-config'), ('DQN', 'S3', 'default-config'), ('DQN',
+            #     'S5', 'default-config'), ('DQN', 'S6', 'default-config')],
+            # 'DQN-S1-S3-S5-S6-FRRMAB': {
+            #     'DQN-S1': ('DQN', 'S3', 'default-config'),
+            #     'DQN-S2': ('DQN', 'S1', 'default-config'),
+            #     'DQN-S3': ('DQN', 'S5', 'default-config'),
+            #     'DQN-S4': ('DQN', 'S6', 'default-config'),
+            #     'FRRMAB': ('FRRMAB', 'S1', 'default-config'),
+            # }
+            # 'DQN-S1-S3-S5-S6-S1d-QL': {
+            #     'S1': ('DQN', 'S3', 'default-config'),
+            #     'S2': ('DQN', 'S1', 'default-config'),
+            #     'S3': ('DQN', 'S5', 'default-config'),
+            #     'S4': ('DQN', 'S6', 'default-config'),
+            #     'S5': ('DQN', 'S1', 'fir_discrete'),
+            #     'QL-S5': ('QL', 'S1', 'fir_discrete'),
+            # }
+            # 'DQN-states': {
+            #     'S1': ('DQN', 'S3', 'default-config'),
+            #     'S2': ('DQN', 'S1', 'default-config'),
+            #     'S3': ('DQN', 'S5', 'default-config'),
+            #     'S4': ('DQN', 'S6', 'default-config'),
+            #     'S5': ('DQN', 'S1', 'fir_discrete'),
+            # }
+            'DQN-QL-FRRMAB': {
+                'Approximate': ('DQN', 'S1', 'fir_discrete'),
+                'Tabular': ('QL', 'S1', 'fir_discrete'),
+                'FRRMAB': ('FRRMAB', 'S1', 'default-config'),
+            }
+            # 'DQN-S1-S3-SW-FRRMAB': [('DQN', 'S1', 'default-config'), ('DQN', 'S3', 'default-config'), ('DQN', 'SW', 'default-config'),
+            #     ('FRRMAB', 'S1', 'default-config')],
+            # 'heuristic_plots': [('DQN', 'S1', 'default-config'), ('DQN', 'S2', 'default-config'), ('DQN', 'S3',
+            #     'default-config'), ('DQN', 'SW', 'default-config'), ('FRRMAB', 'S1', 'default-config')],
+            }
+    main(experiments)
+
+
+Title: graphs.py
+Location: ./graphs.py
+Content:
+import pandas as pd
+import numpy as np
+import os
+import matplotlib
+from collections import Counter
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
+import matplotlib.pyplot as plt
+plt.style.use('ggplot')
+import csv
+import json
+from hhrl.util import Loader
+from stattests import StatTests
+from tablemaker import TableMaker
+
+
+MEDIUM_SIZE = 16
+
+
+def save_attrs_stat(filename, results_dict, attributes, stat_func):
+    if not filename.endswith('.csv'):
+        filename = filename + '.csv'
+    outfile = open(filename, 'w')
+    w = csv.writer(outfile, delimiter=';')
+    w.writerow([' ']+attributes)
+    for instance_key in results_dict:
+        instance_type = instance_key.split('_')[0]
+        instance_name = instance_key.split('-')[-1].split('.')[0]
+        instance = f'{instance_type}-{instance_name}'
+        row = [instance]
+        for attr in attributes:
+            row.append(stat_func(results_dict[instance_key][attr]))
+        w.writerow(row)
+    outfile.close()
+
+
+def get_snapshots(full_trace, n_snapshots=100):
+    if n_snapshots > len(full_trace):
+        print(f'Number of snapshots {n_snapshots} is higher than the trace length {len(full_trace)}')
+        return full_trace
+    step = int(len(full_trace) / (n_snapshots))
+    snapshots = [full_trace[i] for i in range(0, len(full_trace), step)]
+    snapshots[-1] = full_trace[-1]
+    return snapshots
+
+
+def make_label(config, whitelist, split_char='-'):
+    config_keys = config.split(split_char)
+    allowed_keys = []
+    for key in config_keys:
+        if key in whitelist:
+            allowed_keys
+
+
+def plot_avg_history(instance, instance_dict, attributes, output_dir=''):
+    for attr in attributes:
+        plotdir = f'{output_dir}/instance_plots/history/{attr}'
+        os.system(f'mkdir -p {plotdir}')
+        plt.figure()
+        for config in instance_dict:
+            history = instance_dict[config][attr]
+            avg_history = np.mean(history, 0)
+            iterations = range(len(avg_history))
+            plt.plot(iterations, avg_history, label=f'{config}', linewidth=.8)
+        plt.title(instance)
+        plt.xlabel('Iterations')
+        plt.ylabel(attr)
+        # plt.yticks(np.arange(0, 100, 10))
+        # plt.xticks(np.arange(0, max_gen, 10))
+        plt.legend(loc='best')
+        filepath = f'{plotdir}/{instance}.png'
+        plt.savefig(filepath, dpi=300, bbox_inches='tight')
+        plt.close()
+
+
+def make_boxplot(instance, instance_dict, output_dir='', attr='best_fitness'):
+    plotdir = f'{output_dir}/instance_plots/boxplots'
+    os.system(f'mkdir -p {plotdir}')
+    plt.figure()
+    labels = []
+    boxes = []
+    for config in instance_dict:
+        results = instance_dict[config][attr]
+        boxes.append(results)
+        labels.append(config)
+        # to_trunc = min(map(len, history))
+        # avg_history = np.mean([h[:to_trunc] for h in history], 0)
+        # iterations = range(len(avg_history))
+    plt.boxplot(boxes)
+    plt.gca().set_xticklabels(labels, fontsize=8)
+    # plt.gca().set_xticklabels(labels, rotation=45, fontsize=8)
+    # plt.title(instance)
+    # plt.xlabel("Iterations")
+    # plt.ylabel(attr)
+    # plt.yticks(np.arange(0, 100, 10))
+    # plt.xticks(np.arange(0, max_gen, 10))
+    # plt.legend(loc="best")
+    filepath = f'{plotdir}/{instance}.png'
+    plt.savefig(filepath, dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def save_configs_performance(filename, results_dict, performance_dict, problem, file_type='csv'):
+    for instance_key in results_dict:
+        header = ['Instance']
+        for config in sorted(results_dict[instance_key]):
+            header.append(config)
+        break
+    print(header)
+    if file_type == 'csv':
+        filename = filename + '.csv'
+        outfile = open(filename, 'w')
+        w = csv.writer(outfile, delimiter=';')
+        w.writerow(header)
+    elif file_type == 'tex':
+        filename = filename + '.tex'
+        w = TableMaker(filename, header)
+    else:
+        print(f'Invalid {file_type} format')
+        return
+    for instance_key in results_dict:
+        # instance_type = instance_key.split('-')[0]
+        # instance_name = instance_key.split('-')[-1]
+        # instance = f'{instance_type}-{instance_name}'
+        instance = instance_key.lstrip(f'{problem}-')
+        row = [instance]
+        bold_mask, bg_mask = [False], [False]
+        for config in sorted(results_dict[instance_key]):
+            is_equivalent = False
+            if instance_key in performance_dict[config]['equivalent']:
+                bold_mask.append(False)
+                bg_mask.append(True)
+                is_equivalent = True
+            elif instance_key in performance_dict[config]['better']:
+                bold_mask.append(True)
+                bg_mask.append(True)
+                is_equivalent = True
+            else:
+                bg_mask.append(False)
+                bold_mask.append(False)
+            results = results_dict[instance_key][config]
+            mean = np.around(np.mean(results), 4)
+            std = np.around(np.std(results), 4)
+            cell = f'{mean} ({std})'
+            if is_equivalent:
+                cell += ' *'
+            row.append(cell)
+        if file_type == 'csv':
+            w.writerow(row)
+        elif file_type == 'tex':
+            w.writerow(row, bold_mask, bg_mask)
+    if file_type == 'csv':
+        outfile.close()
+    elif file_type == 'tex':
+        w.save(caption=problem)
+
+
+def make_boxplots(input_dir, output_dir, black_list, key_whitelist):
+    loader = Loader()
+    attributes = ['best_fitness']
+    results_dict = loader.load(input_dir, attributes, 4, black_list, key_whitelist)
+    for instance in results_dict:
+        make_boxplot(instance, results_dict[instance], output_dir)
+
+
+def make_history_plots(input_dir, output_dir, black_list, key_whitelist):
+    loader = Loader()
+    loader.n_snapshots = 100
+    attributes = ['best_fitness_hist', 'reward_hist']
+    for instance, instance_dict in loader.lazy_load(input_dir, attributes, 4, black_list, key_whitelist):
+        plot_avg_history(instance, instance_dict, attributes, output_dir)
+
+
+def list_to_str(input_list):
+    output_str = ''
+    for item in input_list:
+        output_str += f'{item}_'
+    return output_str.rstrip('_')
+
+
+def make_hypothesis_test(input_dir, output_dir, problem_name, black_list, key_whitelist):
+    loader = Loader()
+    stat = StatTests(output_dir)
+    attributes = ['best_fitness']
+    results_dict = loader.load(input_dir, attributes, 4, black_list, key_whitelist, True)
+    df = pd.DataFrame.from_dict(results_dict, orient='index')
+    experiment_name = f'{problem_name}_{list_to_str(key_whitelist)}'
+    performance_dict = stat.kruskal_dunn(df, f'{experiment_name}_instance_performance.pdf')
+    df = df.applymap(np.mean)
+    correct = 'bergmann'
+    control = None
+    stat.friedman_post(df, f'{experiment_name}_rank_{correct}.pdf', f'{experiment_name}_matrix_{correct}.pdf',
+            correct=correct, control=control)
+    # correct = 'finner'
+    # control = 'DQN'
+    # stat.friedman_post(df, f'{experiment_name}_rank_{correct}.pdf', f'{experiment_name}_matrix_{correct}.pdf',
+    #         correct=correct, control=control)
+    save_configs_performance(f'{output_dir}/{experiment_name}_configs_performance', results_dict, performance_dict, problem_name, 'tex')
+
+
+def plot_heuristic_hist(instance, heuristic_hists, heuristic_names, config, output_dir, n_phases=10):
+    all_runs_phases = [[] for i in range(n_phases)]
+    # for each history from each of the 31 runs
+    for llh_hist in heuristic_hists:
+        phase_size = int(len(llh_hist) / n_phases)
+        phases = [llh_hist[i:i + phase_size] for i in range(0, len(llh_hist), phase_size)]
+        for i in range(n_phases):
+            all_runs_phases[i].extend(phases[i])
+    actions_mean_dict = {}
+    for run_phase in all_runs_phases:
+        counter = Counter(run_phase)
+        total = sum(counter.values())
+        for action in heuristic_names:
+            if action in counter:
+                count = counter[action]
+            else:
+                count = 0
+            average = count / total * 100
+            actions_mean_dict.setdefault(action,[]).append(average)
+    plt.figure()
+    # colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
+    for i, action in enumerate(sorted(actions_mean_dict)):
+        avg_actions = actions_mean_dict[action]
+        try:
+            # plt.plot(range(n_phases), avg_actions, 'x-', color=colors[i], label=action, linewidth=1)
+            plt.plot(range(n_phases), avg_actions, label=action, linewidth=1)
+        except ValueError:
+            print(instance, action)
+    plt.xlabel("Search Phase")
+    plt.ylabel("Average Apliance (%)")
+    plt.legend(loc="best")
+    plotdir = f'{output_dir}/instance_plots/heuristics/{instance}'
+    os.system(f'mkdir -p {plotdir}')
+    filepath = f'{plotdir}/{config}.png'
+    plt.savefig(filepath, dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def make_heuristic_plot(input_dir, output_dir, problem, black_list, key_whitelist):
+    loader = Loader()
+    # loader.n_snapshots = 100
+    attributes = ['heuristic_hist']
+    with open(f'hyflex/problems_json/{problem}.json', 'r') as json_file:
+        problem_dict = json.load(json_file)
+    heuristic_names = problem_dict['actions']
+    for instance, instance_dict in loader.lazy_load(input_dir, attributes, 4, black_list, key_whitelist, True):
+        for config in instance_dict:
+            heuristic_hists = instance_dict[config]
+            plot_heuristic_hist(instance, heuristic_hists, heuristic_names, config, output_dir)
+
+
+
+def main():
+    input_dir = 'results_data_HHRL_states/'
+    output_root = 'states_plots_rip/'
+    # key_whitelist = ['DQN', 'DMAB', 'FRRMAB']
+    key_whitelist = ['DQN', 'S1']
+    problems = ['FS', 'TSP']
+    ignore_configs = ['FRRMAB', 'BP', 'PS', 'VRP', 'SAT', 'BOLLP', 'RAND']
+    # ignore_configs = ['EV', 'rank_decay_05', 'IND', 'IOD', 'IOP', 'DIV', 'RAND', 'DIP',
+    #         'epsilon_10', 'DQN/IR', 'FRRMAB/IR', 'DMAB/IR']
+    # ignore_configs += ['FS', 'SAT', 'PS', 'BP', 'VRP']
+    for problem in problems:
+        black_list = problems + ignore_configs
+        black_list.remove(problem)
+        output_dir = f'{output_root}/{problem}'
+        # make_boxplots(input_dir, output_dir, black_list, key_whitelist)
+        make_history_plots(input_dir, output_dir, black_list, key_whitelist)
+        make_hypothesis_test(input_dir, output_dir, problem, black_list, key_whitelist)
+        make_heuristic_plot(input_dir, output_dir, problem, black_list, key_whitelist)
+    black_list = ignore_configs
+    output_dir = f'{output_root}/ALL'
+    # make_boxplots(input_dir, output_dir, black_list, key_whitelist)
+    make_hypothesis_test(input_dir, output_dir, 'ALL', black_list, key_whitelist)
+
+
+if __name__ == '__main__':
+    main()
+
+
+Title: temp.txt
+Location: ./temp.txt
+Content:
+/mnt/NAS/aldantas/results_data_HHRL_states/PS/BCV-3.46.1/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/PS/BCV-A.12.2/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/PS/CHILD-A2/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/PS/ERRVH-A/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/PS/ERRVH-B/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/PS/Ikegami-3Shift-DATA1.1/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/PS/Ikegami-3Shift-DATA1.2/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/PS/Ikegami-3Shift-DATA1/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/PS/MER-A/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/PS/ORTEC02/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/VRP/Homberger_1000_customer_instances/C1_10_1/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/VRP/Homberger_1000_customer_instances/C1_10_8/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/VRP/Homberger_1000_customer_instances/R1_10_1/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/VRP/Homberger_1000_customer_instances/RC1_10_5/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/VRP/Homberger_1000_customer_instances/RC2_10_1/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/VRP/Solomon_100_customer_instances/R101/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/VRP/Solomon_100_customer_instances/R106/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/VRP/Solomon_100_customer_instances/R201/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/VRP/Solomon_100_customer_instances/RC103/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/VRP/Solomon_100_customer_instances/RC207/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/BP/2000/10-30/instance1/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/BP/2000/10-30/instance2/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/BP/falkenauer/falk1000-1/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/BP/falkenauer/falk1000-2/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/BP/schoenfield/schoenfieldhard1/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/BP/schoenfield/schoenfieldhard2/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/BP/testdual4/binpack0/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/BP/testdual7/binpack0/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/BP/trip1002/instance1/DQN/DQN/RIP/ALL/default-config
+/mnt/NAS/aldantas/results_data_HHRL_states/BP/trip2004/instance1/DQN/DQN/RIP/ALL/default-config
+
+
+Title: tablemaker.py
+Location: ./tablemaker.py
+Content:
+from tabulate import tabulate
+
+
+class TableMaker(object):
+    def __init__(self, filepath, header, bg_color='gray!30'):
+        self.latex_file = open(filepath, 'w', newline='')
+        self.header = header
+        self.bg_color = bg_color
+        self.table = []
+
+    def writerow(self, values, bold_mask=None, bg_mask=None):
+        if bold_mask is None:
+            bold_mask = [False] * len(values)
+        if bg_mask is None:
+            bg_mask = [False] * len(values)
+        row = []
+        for value, is_bold, is_bg in zip(values, bold_mask, bg_mask):
+            cell_str = value
+            if is_bold:
+                cell_str = '\\textbf{'+cell_str+'}'
+            if is_bg:
+                cell_str = '\\cellcolor{'+self.bg_color+'}{'+cell_str+'}'
+            row.append(cell_str)
+        self.table.append(row)
+
+    def save(self, caption):
+        # table_fmt = 'latex_raw' if self.colored else 'latex'
+        table_fmt = 'latex_raw'
+        tabular = tabulate(self.table, headers=self.header, tablefmt=table_fmt)
+        self.latex_file.write('\\begin{table}\n')
+        self.latex_file.write('\\centering\n')
+        self.latex_file.write('\\caption{'+caption+'}\n')
+        self.latex_file.write(tabular)
+        self.latex_file.write('\\end{table}')
+        self.latex_file.close()
+
+
+Title: compare_with_chesc.py
+Location: ./compare_with_chesc.py
+Content:
+import numpy as np
+from hhrl.util import Loader
+
+
+problems = ['SAT', 'BP', 'PS', 'FS', 'TSP', 'VRP']
+
+tsp_mapping = {
+        0: 'TSP-pr299',
+        1: 'TSP-usa13509',
+        2: 'TSP-rat575',
+        3: 'TSP-u2152',
+        4: 'TSP-d1291'
+        }
+
+
+sat_mapping = {
+        0: 'SAT-instance_n3_i3_pp',
+        1: 'SAT-instance_n3_i4_pp_ci_ce',
+        2: 'SAT-instance_n3_i3_pp_ci_ce',
+        3: 'SAT-id_10',
+        4: 'SAT-id_11'
+        }
+
+
+fs_mapping = {
+        0: 'FS-100x20-2',
+        1: 'FS-500x20-2',
+        2: 'FS-100x20-4',
+        3: 'FS-id_10',
+        4: 'FS-id_11'
+        }
+
+
+# def get_alg_results(results_list, i):
+#     alg_dict = {}
+#     for instance in range(1, 6):
+#         alg_dict[instance] = {}
+#         i += 1
+#         j = i+1
+#         alg_dict[instance]['median'] = results_list[i]
+#         alg_dict[instance]['min'] = results_list[j]
+#     return alg_dict
+
+
+# with open('chesc_results.txt') as chesc_file:
+#     results_list = [line.rstrip('\n') for line in chesc_file.readlines()]
+
+
+# chesc_dict = {}
+# i = 0
+# while i < len(results_list):
+#     item = results_list[i]
+#     i += 1
+#     if item in problems:
+#         problem = item
+#         chesc_dict[problem] = {}
+#     elif not item.isnumeric():
+#         alg = item
+#         chesc_dict[problem][alg] = get_alg_results(results_list, i)
+#         i += 10
+
+def load_chesch(filepath):
+    algs_dict = {}
+    for line in open(filepath):
+        line = line.lstrip().rstrip('\n').split('\t')
+        algs_dict[line[0]] = [float(value) for value in line[1:]]
+    return algs_dict
+
+loader = Loader()
+input_dir = 'results_data_HHRL_states/'
+attributes = ['best_fitness']
+key_whitelist = ['DQN', 'BOLLP', 'SW']
+problems = {'TSP': ['tsp_chesc.txt', tsp_mapping], 'SAT': ['sat_chesc.txt', sat_mapping],
+        'FS': ['fs_chesc.txt', fs_mapping]}
+ignore_configs = ['FRRMAB', 'BP', 'PS', 'VRP']
+
+for problem in problems:
+    black_list = list(problems.keys()) + ignore_configs
+    black_list.remove(problem)
+    results_dict = loader.load(input_dir, attributes, 5, black_list, key_whitelist, True)
+    print(f'{problem},,')
+    print('Instance, AdapHH, DQN-BOLLP, DQN-SW')
+    chesc_filepath, mapping = problems[problem]
+    algs_dict = load_chesch(chesc_filepath)
+    for instance in mapping:
+        adaphh_median = algs_dict['AdapHH'][instance]
+        dqn_bollp_median = np.median(results_dict[mapping[instance]]['DQN-BOLLP'])
+        dqn_sw_median = np.median(results_dict[mapping[instance]]['DQN-SW'])
+        print(f'{instance}, {adaphh_median},  {dqn_bollp_median}, {dqn_sw_median}')
+
+
+Title: runner.py
+Location: ./runner.py
+Content:
+import configparser
+import argparse
+import pathlib
+import random
+
+from hhrl.agent import RandomAgent
+from hhrl.agent.mab import DMABAgent, FRRMABAgent
+from hhrl.agent.rl import DQNAgent, DQNUCBAgent, QLearningAgent
+from hhrl.reward import *
+from hhrl.state import *
+from hhrl.acceptance import AcceptAll
+from hhrl.hh import HyperHeuristic
+from hhrl.problem import *
+
+
+agent_dict = {
+        'DQN': DQNAgent,
+        'DMAB': DMABAgent,
+        'FRRMAB': FRRMABAgent,
+        'RAND': RandomAgent,
+        'DQNUCB': DQNUCBAgent,
+        'QL': QLearningAgent,
+        }
+
+
+reward_dict = {
+        'EV': ExtremeValue,
+        'IR': ImprovementRate,
+        'DIV': Diversity,
+        'IND': ImprovementAndDiversity,
+        'IOD': ImprovementOrDiversity,
+        'IOP': ImprovementOrPenalty,
+        'RIP': RawImprovementPenalty,
+        'DIP': DiscreteImprovementPenalty,
+        }
+
+
+state_dict = {
+        'SW': [SlidingWindowState],
+        'S1': [FitnessImprovementRate, LastActionVector],
+        'S2': [UnitaryFitnessDistanceCorrelation, LastActionVector],
+        'S3': [LastActionVector],
+        'S4': [FitnessImprovementRate, UnitaryFitnessDistanceCorrelation, LastActionVector],
+        'S5': [ElapsedTime, LastActionVector],
+        'S6': [FitnessImprovementRate, ElapsedTime, LastActionVector],
+        'S7': [FitnessImprovementRate, ElapsedTime],
+        }
+
+
+acceptance_dict = {
+    'ALL': AcceptAll,
+        }
+
+
+domain_dict = {
+        'TSP': TravelingSalesman,
+        'FS': FlowShop,
+        'SAT': MAXSAT,
+        'VRP': VehicleRouting,
+        'PS': PersonnelScheduling,
+        'BP': BinPacking,
+        }
+
+
+def output_path(args, config, instance_name, rootdir=''):
+    config_name = args.config.split('/')[-1].split('.')[0]
+    if 'MAB' in args.agent or args.agent == 'RAND':
+        state_dir = 'NONE'
+    else:
+        state_dir = args.state
+    return pathlib.Path(f'{rootdir}/{args.problem}/{instance_name}/{args.agent}/{state_dir}/{args.reward}/{args.acceptance}/{config_name}')
+
+
+def main(args):
+    config = configparser.ConfigParser()
+    config.read(args.config)
+    seed = random.randint(0,10000)
+    problem = domain_dict[args.problem](args.instance_id, seed)
+    path = output_path(args, config, problem.instance_name, rootdir=args.output_dir)
+    if (path / f'{args.run_id}.dat').exists() and not args.overwrite:
+        return
+    actions = problem.actions
+    state_env = StateBuilder(state_dict[args.state], config, actions=actions, time_limit=args.time_limit)
+    agent = agent_dict[args.agent](config, actions, state_env=state_env)
+    reward = reward_dict[args.reward](config, actions)
+    acceptance = acceptance_dict[args.acceptance]()
+    hh = HyperHeuristic(problem, agent, reward, acceptance)
+    stats = hh.run(args.time_limit)
+    stats.run_id = args.run_id
+    path.mkdir(parents=True, exist_ok=True)
+    stats.save(path)
+
+
+def parse_args(desc=''):
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument('-p', '--problem', type=str, default='TSP')
+    parser.add_argument('-c', '--config', type=str, default='configs/fir_discrete.ini')
+    parser.add_argument('-o', '--output_dir', type=str, default='tmp')
+    parser.add_argument('-i', '--instance_id', type=int, default=1)
+    parser.add_argument('-r', '--run_id', type=int, default=0)
+    parser.add_argument('-t', '--time_limit', type=int, default=3)
+    parser.add_argument('-ag', '--agent', type=str, default='QL')
+    parser.add_argument('-rw', '--reward', type=str, default='RIP')
+    parser.add_argument('-st', '--state', type=str, default='S1')
+    parser.add_argument('-ac', '--acceptance', type=str, default='ALL')
+    parser.add_argument('-ow', '--overwrite', default=False, action='store_true')
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    main(args)
+
+
+Title: __init__.py
+Location: ./hhrl/__init__.py
+Content:
+
+
+Title: hh.py
+Location: ./hhrl/hh.py
+Content:
+import time
+from hhrl.util.stats_info import StatsInfo
+
+
+class HyperHeuristic:
+    def __init__(self, problem, agent, credit_assignment, acceptance):
+        self.problem = problem
+        self.agent = agent
+        self.credit_assignment = credit_assignment
+        self.acceptance = acceptance
+
+    def __elapsed_time(self):
+        self.elapsed = time.process_time() - self.start_time
+        return self.elapsed
+
+    def run(self, time_limit=3):
+        self.problem.initialise_solution()
+        current_fitness = self.problem.get_fitness()
+        iterations = 0
+        stats = StatsInfo(current_fitness)
+        stats.push_fitness(current_fitness, current_fitness)
+        self.start_time = time.process_time()
+        while self.__elapsed_time() < time_limit:
+            llh = self.agent.select()
+            fitness = self.problem.apply_heuristic(llh)
+            # solution = self.problem.get_solution()
+            delta = current_fitness - fitness
+            reward = self.credit_assignment.get_reward(llh, fitness, current_fitness)
+            if self.acceptance.is_solution_accepted(delta):
+                self.problem.accept_solution()
+                current_fitness = fitness
+            self.agent.update(action=llh, reward=reward, solution=self.problem.get_solution(),
+                    elapsed=self.elapsed)
+            stats.push_fitness(current_fitness, self.problem.get_best_fitness())
+            stats.push_heuristic(llh, reward, self.agent.get_env_state())
+            iterations += 1
+        stats.best_fitness = self.problem.get_best_fitness()
+        stats.run_time = self.elapsed
+        stats.iterations = iterations
+        return stats
+
+
+Title: __init__.py
+Location: ./hhrl/acceptance/__init__.py
+Content:
+from .accept_all import AcceptAll
+
+
+Title: accept_all.py
+Location: ./hhrl/acceptance/accept_all.py
+Content:
+class AcceptAll():
+    def is_solution_accepted(self, *args):
+        return True
+
+
+Title: __init__.py
+Location: ./hhrl/reward/__init__.py
+Content:
+from .extreme_value import ExtremeValue
+from .improvement_rate import ImprovementRate
+from .diversity import Diversity
+from .improvement_n_diversity import ImprovementAndDiversity
+from .improvement_or_diversity import ImprovementOrDiversity
+from .improvement_or_penalty import ImprovementOrPenalty
+from .raw_improvement import RawImprovementPenalty
+from .discrete_improvement_penalty import DiscreteImprovementPenalty
+
+
+Title: extreme_value.py
+Location: ./hhrl/reward/extreme_value.py
+Content:
+from hhrl.util.fifo_list import FIFOList
+
+
+class ExtremeValue:
+    def __init__(self, config, actions, normalize=False, *args):
+        self.window_size = config['Reward'].getint('window_size', 20)
+        self.normalize = normalize
+        self.actions = actions
+        self.n_actions = len(actions)
+        self.reward_windows = [FIFOList(self.window_size) for _ in range(self.n_actions)]
+
+    def get_reward(self, action, new_fitness, past_fitness, *args):
+        fit_diff = past_fitness - new_fitness
+        action_idx = self.actions.index(action)
+        action_reward_window = self.reward_windows[action_idx]
+        action_reward_window.append(fit_diff)
+        reward = max(action_reward_window)
+        if self.normalize:
+            return self.normalize_reward(reward)
+        return reward
+
+    def normalize_reward(self, reward):
+        highest_reward = float('-inf')
+        for action_window in self.reward_windows:
+            if len(action_window) > 0:
+                max_r = max(action_window)
+                highest_reward = max(highest_reward, max_r)
+        return 0 if highest_reward == 0 else reward/highest_reward
+
+    def reset(self):
+        self.reward_windows = [FIFOList(self.window_size) for _ in range(self.n_actions)]
+
+
+Title: diversity.py
+Location: ./hhrl/reward/diversity.py
+Content:
+from hhrl.util.priority_fifo_list import PriorityFIFOList
+
+
+class Diversity:
+    def __init__(self, config, *args):
+        self.window_size = config['Reward'].getint('window_size', 10)
+        self.elite_solutions = PriorityFIFOList(self.window_size)
+
+    def get_reward(self, action, new_fitness, past_fitness, solution):
+        dist_sum = 0
+        for sol, fitness in self.elite_solutions:
+            dist_sum += solution.distance(sol)
+        self.elite_solutions.push(solution, new_fitness)
+        return dist_sum / self.window_size
+
+    def reset(self):
+        self.elite_solutions.clear()
+
+
+Title: improvement_or_diversity.py
+Location: ./hhrl/reward/improvement_or_diversity.py
+Content:
+from hhrl.reward import ImprovementRate, Diversity
+
+
+class ImprovementOrDiversity:
+    def __init__(self, config, *args):
+        self.imp_ca = ImprovementRate(config, args)
+        self.div_ca = Diversity(config, args)
+
+    def get_reward(self, action, new_fitness, past_fitness, solution):
+        imp = self.imp_ca.get_reward(action, new_fitness, past_fitness)
+        div = self.div_ca.get_reward(action, new_fitness, past_fitness, solution)
+        return max(imp, div)
+
+    def reset(self):
+        self.imp_ca.reset()
+        self.div_ca.reset()
+
+
+Title: improvement_n_diversity.py
+Location: ./hhrl/reward/improvement_n_diversity.py
+Content:
+from hhrl.reward import ImprovementRate, Diversity
+
+
+class ImprovementAndDiversity:
+    def __init__(self, config, *args):
+        self.imp_ca = ImprovementRate(config, args)
+        self.div_ca = Diversity(config, args)
+
+    def get_reward(self, action, new_fitness, past_fitness, solution):
+        imp = self.imp_ca.get_reward(action, new_fitness, past_fitness)
+        div = self.div_ca.get_reward(action, new_fitness, past_fitness, solution)
+        return imp+div
+
+    def reset(self):
+        self.imp_ca.reset()
+        self.div_ca.reset()
+
+
+Title: raw_improvement.py
+Location: ./hhrl/reward/raw_improvement.py
+Content:
+class RawImprovementPenalty:
+    def __init__(self, config, actions, *args):
+        pass
+
+    def get_reward(self, action, new_fitness, past_fitness, *args):
+        fir = (past_fitness - new_fitness) / past_fitness
+        return fir
+
+    def reset(self):
+        pass
+
+
+Title: improvement_rate.py
+Location: ./hhrl/reward/improvement_rate.py
+Content:
+class ImprovementRate:
+    def __init__(self, config, actions, *args):
+        pass
+
+    def get_reward(self, action, new_fitness, past_fitness, *args):
+        fir = (past_fitness - new_fitness) / past_fitness
+        return max(0, fir)
+
+    def reset(self):
+        pass
+
+
+Title: discrete_improvement_penalty.py
+Location: ./hhrl/reward/discrete_improvement_penalty.py
+Content:
+class DiscreteImprovementPenalty:
+    def __init__(self, config, actions, *args):
+        self.reward = config['Reward'].getfloat('reward', 1.0)
+        self.penalty = config['Reward'].getfloat('penalty', .1)
+
+    def get_reward(self, action, new_fitness, past_fitness, *args):
+        fir = (past_fitness - new_fitness) / past_fitness
+        if fir > 0:
+            return self.reward
+        else:
+            return -self.penalty
+
+    def reset(self):
+        pass
+
+
+Title: improvement_or_penalty.py
+Location: ./hhrl/reward/improvement_or_penalty.py
+Content:
+class ImprovementOrPenalty:
+    def __init__(self, config, actions, *args):
+        self.penalty = config['Reward'].getfloat('penalty', .1)
+
+    def get_reward(self, action, new_fitness, past_fitness, *args):
+        fir = (past_fitness - new_fitness) / past_fitness
+        if fir > 0:
+            return fir
+        else:
+            return -self.penalty
+
+    def reset(self):
+        pass
+
+
+Title: sliding_window.py
+Location: ./hhrl/util/sliding_window.py
+Content:
+from .fifo_list import FIFOList
+
+
+class SlidingWindow:
+    def __init__(self, max_size, n_actions):
+        self.max_size = max_size
+        self.n_actions = n_actions
+        self.sliding_window = FIFOList(max_size)
+        self.count_list = [0] * n_actions
+        self.sum_list = [0] * n_actions
+
+    def clear(self):
+        self.sliding_window.clear()
+        self.count_list = [0] * self.n_actions
+        self.sum_list = [0] * self.n_actions
+
+    def update(self, idx, reward):
+        # Insert new action reward
+        self.count_list[idx] += 1
+        self.sum_list[idx] += reward
+        expired = self.sliding_window.push((idx, reward))
+        # Remove expiring action rewards
+        if expired != None:
+            self.count_list[idx] -= 1
+            self.sum_list[idx] -= reward
+
+
+Title: ordered_fifo_list.py
+Location: ./hhrl/util/ordered_fifo_list.py
+Content:
+import heapq
+
+
+class PriorityFIFOList(list):
+    def  __init__(self, max_len=float('inf')):
+        self.max_len = max_len
+        self.count = 0
+        list.__init__(self)
+
+    def __iter__(self):
+        self.n = 0
+        return self
+
+    def __next__(self):
+        if self.n < self.max_len and self.n < len(self):
+            (*_, x) = self[self.n]
+            self.n += 1
+            return x
+        else:
+            raise StopIteration()
+
+    def push(self, x, priority):
+        # we want to keep the solutions with the lowest objective funcion
+        # on the list, hence the priority is inverted. The count is
+        # inverted as well because older solutions are kept in case of ties
+        entry = (-priority, -self.count, x)
+        heapq.heappush(self, entry)
+        self.count += 1
+        if len(self) > self.max_len:
+            self.pop()
+
+    def pop(self):
+        (*_, x) = heapq.heappop(self)
+        return x
+
+    def isEmpty(self):
+        return len(self) == 0
+
+if __name__ == "__main__":
+    l = PriorityFIFOList(5)
+    l.push(0, 0)
+    l.push(1, 1)
+    l.push(2, 2)
+    print(l)
+    for x in l:
+        print(x)
+
+
+Title: __init__.py
+Location: ./hhrl/util/__init__.py
+Content:
+from .fifo_list import FIFOList
+from .priority_fifo_list import PriorityFIFOList
+from .sliding_window import SlidingWindow
+from .stats_info import StatsInfo
+from .loader import Loader
+from .solution_space import SolutionSpace
+
+
+Title: page_hinkley.py
+Location: ./hhrl/util/page_hinkley.py
+Content:
+class PageHinkley:
+    def __init__(self, config):
+        self.delta = config['PageHinkley'].getfloat('delta', .005)
+        self.threshold = config['PageHinkley'].getint('threshold', 50)
+        self.reward_mean = None
+        self.mt = None
+        self.mt_list = []
+        self.sample_count = None
+        self.sum = None
+        self.in_concept_change = None
+        self.reset()
+
+    def reset(self):
+        self.in_concept_change = False
+        self.mt_list = []
+        self.sample_count = 1
+        self.reward_mean = 0.0
+        self.mt = 0.0
+        self.sum = 0.0
+
+    def detected_change(self):
+        return self.in_concept_change
+
+    def add_element(self, x):
+        if self.in_concept_change:
+            self.reset()
+        self.reward_mean = (self.reward_mean + x) / float(self.sample_count)
+        self.mt += x - self.reward_mean + self.delta
+        self.mt_list.append(self.mt)
+        # self.x_mean = self.x_mean + (x - self.x_mean) / float(self.sample_count)
+        # self.sum = max(0., self.alpha * self.sum + (x - self.x_mean - self.delta))
+        self.sum = max(self.mt_list)
+        self.sample_count += 1
+        if self.sum - self.mt > self.threshold:
+            self.in_concept_change = True
+
+
+Title: solution_space.py
+Location: ./hhrl/util/solution_space.py
+Content:
+from .fifo_list import FIFOList
+
+
+class SolutionSpace:
+    def __init__(self, max_size):
+        self.max_size = max_size
+        self.sample = FIFOList(max_size)
+        self.distance_matrix = FIFOList(max_size)
+
+    def clear(self):
+        self.memory = FIFOList(self.max_size)
+        self.distance_matrix = [FIFOList(self.max_size) for _ in range(self.max_size)]
+
+    def __str__(self):
+        for sol in self.memory:
+            print(sol)
+        for row in self.distance_matrix:
+            print(f'{[dist for dist,sol in row]}')
+        return ''
+
+    def get_nearest_neighbors(self, idx, n):
+        return [sol for dist,sol in sorted(self.distance_matrix[idx])[:n]]
+
+    def get_sample_dispersion(self, idx_list=None):
+        if not idx_list:
+            idx_list = list(range(len(self.sample)))
+        if len(idx_list) <= 1:
+            return 0
+        dist_sum = 0
+        count = 0
+        for l_idx, i in enumerate(idx_list[:-1]):
+            for j in idx_list[l_idx+1:]:
+                dist_sum += self.distance_matrix[i][j][0]
+                count += 1
+        return dist_sum / count
+
+    def update(self, new_solution):
+        # push new solution and remove the oldest if the memory is full
+        popped = self.sample.push(new_solution)
+        new_solution_dists = FIFOList(self.max_size)
+        # remove the first row of the matrix, corresponding to the removed
+        # solution and append the new row
+        self.distance_matrix.push(new_solution_dists)
+        for i, sol in enumerate(self.sample[:-1]):
+            distance = new_solution.distance(sol)
+            # create the new row of items that will be appended to the matrix
+            new_solution_dists.push((distance, sol))
+            # remove the first column item and append new value to the last column
+            self.distance_matrix[i].push((distance, new_solution))
+        # append the distance to itself value of the row
+        # use float('inf') so it does not count as the nearest neighbor when sorting the list
+        new_solution_dists.append((float('inf'), new_solution))
+        return popped
+
+
+Title: loader.py
+Location: ./hhrl/util/loader.py
+Content:
+import os
+import pickle
+import numpy as np
+import pathlib
+from tqdm import tqdm
+from hhrl.util import StatsInfo
+
+
+class Loader:
+    def __init__(self):
+        self.n_snapshots = 0
+
+    def get_snapshots(self, full_trace):
+        if self.n_snapshots > len(full_trace):
+            print(f'Number of snapshots {self.n_snapshots} is higher than the trace length {len(full_trace)}')
+            return full_trace
+        snapshots = [full_trace[i] for i in np.linspace(0, len(full_trace) - 1, self.n_snapshots, dtype=int)]
+        return snapshots
+
+    def read_file_attrs(self, file_path, load_attrs):
+        try:
+            result = pickle.load(open(file_path, 'rb'))
+        except Exception as e:
+            print(file_path)
+            raise e
+        for attr_str in load_attrs:
+            attr = getattr(result, attr_str)
+            if isinstance(attr, list) and self.n_snapshots > 0:
+                attr = self.get_snapshots(attr)
+            yield attr_str, attr
+
+    def _allow_instance_path(self, path, instance_list):
+        if not instance_list:
+            return True
+        return any([
+            True if instance in path.parts else False for instance in instance_list
+        ])
+
+    def _allow_config_path(self, path, config_list):
+        if not config_list:
+            return True
+        return any([
+            all([
+                True if config_key in path.parts else False for config_key in config_tuple
+            ]) for config_tuple in config_list
+        ])
+
+    def get_paths_dict(self, root_dir, instance_list, config_list, split_depth):
+        paths_dict = {}
+        for root, dirs, files in os.walk(root_dir):
+            if not dirs:
+                path = pathlib.Path(root)
+                instance_path = pathlib.Path(*path.parts[:-split_depth])
+                if not self._allow_instance_path(instance_path, instance_list):
+                    continue
+                config_path = pathlib.Path(*path.parts[-split_depth:])
+                if self._allow_config_path(config_path, config_list):
+                    paths_dict.setdefault(instance_path, []).append(config_path)
+        return paths_dict
+
+    def __is_black_listed(self, path, black_list):
+        for item in black_list:
+            if item in str(path):
+                return True
+        return False
+
+    def __tuple_to_str_key(self, keys_tuple, key_whitelist=None):
+        str_key = ''
+        if key_whitelist is None:
+            key_whitelist = keys_tuple
+        for key in keys_tuple:
+            if key in key_whitelist:
+                str_key += f'-{key}'
+        return str_key.lstrip('-')
+
+    def lazy_load(self, directory, attributes, split_depth=1, black_list=[], key_whitelist=None,
+                  use_attr_list=False):
+        paths_dict = self.get_paths_dict(directory, split_depth)
+        for instance_path in tqdm(paths_dict):
+            if self.__is_black_listed(instance_path, black_list):
+                continue
+            instance_key = self.__tuple_to_str_key(instance_path.parts[1:])
+            instance_dict = {}
+            for config_path in tqdm(paths_dict[instance_path], leave=False):
+                if self.__is_black_listed(config_path, black_list):
+                    continue
+                path = instance_path / config_path
+                # TODO: parameterize the config_key slicing
+                # config_key = self.__tuple_to_str_key(config_path.parts[:2])
+                config_key = self.__tuple_to_str_key(config_path.parts, key_whitelist)
+                if use_attr_list:
+                    instance_dict[config_key] = []
+                else:
+                    instance_dict[config_key] = {}
+                for file in tqdm(os.listdir(path), leave=False):
+                    for attr_str, attr_value in self.read_file_attrs(path / file, attributes):
+                        if use_attr_list:
+                            instance_dict[config_key].append(attr_value)
+                        else:
+                            instance_dict[config_key].setdefault(attr_str, []).append(attr_value)
+            yield instance_key, instance_dict
+
+    def __get_config_index(self, path_parts, config_list):
+        for i, config_parts in enumerate(config_list):
+            if set(path_parts).issuperset(set(config_parts)):
+                return i
+        return None
+
+    def lazy_load_instances(self, root_dir, config_list, attribute_list, instance_list, config_keys=[],
+            split_depth=1, use_attr_list=False):
+        paths_dict = self.get_paths_dict(root_dir, instance_list, config_list, split_depth)
+        for instance_path in tqdm(paths_dict):
+            instance_key = self.__tuple_to_str_key(instance_path.parts[1:])
+            instance_dict = {}
+            for config_path in tqdm(paths_dict[instance_path], leave=False):
+                path = instance_path / config_path
+                # TODO: parameterize the config_key slicing
+                # config_key = self.__tuple_to_str_key(config_path.parts[:2])
+
+                if config_keys:
+                    config_idx = self.__get_config_index(config_path.parts, config_list)
+                    config_key = config_keys[config_idx]
+                else:
+                    config_key = self.__tuple_to_str_key(config_path.parts)
+
+                if use_attr_list:
+                    instance_dict[config_key] = []
+                else:
+                    instance_dict[config_key] = {}
+
+                for file in tqdm(os.listdir(path), leave=False):
+                    for attr_str, attr_value in self.read_file_attrs(path / file, attribute_list):
+                        if use_attr_list:
+                            instance_dict[config_key].append(attr_value)
+                        else:
+                            instance_dict[config_key].setdefault(attr_str, []).append(attr_value)
+            yield instance_key, instance_dict
+
+    def load(self, directory, attributes, split_depth=1, black_list=[], key_whitelist=None,
+             use_attr_list=False):
+        results_dict = {}
+        for instance_key, instance_dict in self.lazy_load(
+                directory, attributes, split_depth, black_list, key_whitelist, use_attr_list):
+            results_dict[instance_key] = instance_dict
+        return results_dict
+
+    def check_experiments(self, root_dir, split_depth=5):
+        experiemnts_dict = {}
+        for problem in os.listdir(root_dir):
+            print(problem)
+            problem_dir = f'{root_dir}/{problem}'
+            paths_dict = self.get_paths_dict(problem_dir, None, None, split_depth=split_depth)
+            experiemnts_dict[problem] = {}
+            problem_configs = []
+            for instance_path in paths_dict:
+                instance_dict = {}
+                for config_path in paths_dict[instance_path]:
+                    full_path = f'{instance_path}/{config_path}'
+                    count = len(os.listdir(full_path))
+                    problem_configs.append((full_path, count))
+            problem_configs.sort()
+            for config in problem_configs:
+                if config[1] != 31:
+                    print(config)
+
+
+    def load_problems(self, root_dir, problem_list, config_list, attribute_list, instance_list=None,
+            config_keys=[], split_depth=1, use_attr_list=False):
+        results_dict = {}
+        for problem in problem_list:
+            problem_dir = f'{root_dir}/{problem}'
+            problem_dict = {}
+            for instance_key, instance_dict in self.lazy_load_instances(
+                    problem_dir, config_list, attribute_list, instance_list, config_keys, split_depth, use_attr_list):
+                if len(instance_dict.values()) < len(config_list):
+                    continue
+                problem_dict[instance_key] = instance_dict
+            yield problem, problem_dict
+
+
+Title: priority_fifo_list.py
+Location: ./hhrl/util/priority_fifo_list.py
+Content:
+import heapq
+
+
+class PriorityFIFOList(list):
+    def  __init__(self, max_len=float('inf'), enable_safe_check=False, inversed_priority=True):
+        self.max_len = max_len
+        self.count = 0
+        self.enable_safe_check = enable_safe_check
+        self.inversed_priority = inversed_priority
+        list.__init__(self)
+
+    def __iter__(self):
+        self.n = 0
+        return self
+
+    def __next__(self):
+        if self.n < self.max_len and self.n < len(self):
+            p, c, x = self[self.n]
+            self.n += 1
+            if self.inversed_priority:
+                p *= -1
+            return x, p
+        else:
+            raise StopIteration()
+
+    def push(self, x, priority):
+        if self.inversed_priority:
+            priority *= -1
+        entry = (priority, self.count, x)
+        # entry = (priority, x)
+        if self.enable_safe_check and len(self) == self.max_len:
+            (lowest_priority, *_) = self[0]
+            if priority < lowest_priority:
+                return None
+        heapq.heappush(self, entry)
+        self.count += 1
+        if len(self) > self.max_len:
+            self.pop()
+
+    def pop(self):
+        p, c, x = heapq.heappop(self)
+        if self.inversed_priority:
+            p *= -1
+        return x, p
+
+    def isEmpty(self):
+        return len(self) == 0
+
+if __name__ == "__main__":
+    l = PriorityFIFOList(10, inversed_priority=True)
+    l.push('a', 1)
+    l.push('b', 2)
+    l.push('c', 3)
+    l.push('d', 4)
+    l.push('e', 5)
+    l.push('f', 6)
+    l.push('g', 7)
+    print(l)
+    # print(l[0])
+    print(sorted(l, key=lambda x: -x[1])[:3])
+    print(heapq.nsmallest(3, l, key=lambda x: -x[1]))
+    # l.remove(l[3])
+    # print(l)
+    # print(sorted(l)[:3])
+    # heapq.heapify(l)
+    while not l.isEmpty():
+        print(l.pop())
+
+
+Title: fifo_list.py
+Location: ./hhrl/util/fifo_list.py
+Content:
+class FIFOList(list):
+    def __init__(self, max_size):
+        self.max_size = max_size
+        list.__init__(self)
+
+    def _truncate(self):
+        dif = len(self)-self.max_size
+        if dif > 0:
+            popped = self[:dif][0]
+            self[:dif]=[]
+            return popped
+        return None
+
+    def push(self, x):
+        list.append(self, x)
+        return self._truncate()
+
+    def is_full(self):
+        return len(self) == self.max_size
+
+
+Title: stats_info.py
+Location: ./hhrl/util/stats_info.py
+Content:
+import pickle
+import csv
+import os
+
+
+class StatsInfo:
+    def __init__(self, initial_fitness):
+        self.fitness_hist = []
+        self.best_fitness_hist = []
+        self.heuristic_hist = []
+        self.reward_hist = []
+        self.best_solution = None
+        self.run_id = 0
+        self.run_time = 0.0
+        self.initial_fitness = initial_fitness
+        self.best_fitness = None
+        self.iterations = 0
+        self.state_hist = []
+
+    def __str__(self):
+        return str(self.best_fitness)
+
+    def push_heuristic(self, heuristic, reward, state=None):
+        self.heuristic_hist.append(heuristic)
+        self.reward_hist.append(reward)
+        if state:
+            self.state_hist.append(state)
+
+    def push_fitness(self, current, best):
+        self.fitness_hist.append(current)
+        self.best_fitness_hist.append(best)
+
+    def save(self, outdir='.', save_csv=False):
+        filepath = f'{outdir}/{self.run_id}.dat'
+        pickle.dump(self, open(filepath, 'wb'))
+        if save_csv:
+            self.save_csv(outdir)
+
+    def save_csv(self, outdir='.'):
+        filename = 'fitness_history'
+        history = self.best_fitness_hist
+        initial = self.initial_fitness
+        open_flag = 'w'
+        if os.path.isfile(f'{outdir}/{filename}.csv'):
+            open_flag = 'a'
+        with open(f'{outdir}/{filename}.csv', open_flag, newline='') as evol_file:
+            w = csv.writer(evol_file, delimiter=';')
+            if open_flag == 'w':
+                w.writerow(('run', 'iter', 'fitness'))
+                w.writerow((self.run_id, 0, initial))
+            for it, fitness in enumerate(history):
+                line = (self.run_id, it+1, fitness)
+                w.writerow(line)
+
+
+Title: fs.py
+Location: ./hhrl/problem/fs.py
+Content:
+from hhrl.problem import HyFlexDomain
+from hhrl.solution import ListSolution
+
+
+class FlowShop(HyFlexDomain):
+    def __init__(self, instance_id, seed):
+        HyFlexDomain.__init__(self, 'FS', instance_id, seed)
+
+    def get_solution(self, idx=0):
+        solution_str = self.problem.solutionToString(idx)
+        solution_str = solution_str.split('\n')[1].strip()
+        permutation = tuple((int(x) for x in solution_str.split(' ')))
+        fitness = self.get_fitness(idx)
+        id = next(self.solution_indexer)
+        return ListSolution(id, permutation, fitness)
+
+
+Title: bp.py
+Location: ./hhrl/problem/bp.py
+Content:
+import re
+from hhrl.problem import HyFlexDomain
+from hhrl.solution import ListSolution
+
+
+class BinPacking(HyFlexDomain):
+
+    re_bin_items = re.compile(r'(\d+\.0, )')
+
+    def __init__(self, instance_id, seed):
+        HyFlexDomain.__init__(self, 'BP', instance_id, seed)
+
+    def get_solution(self, idx=0):
+        solution_str = self.problem.solutionToString(idx)
+        sorted_bins = []
+        for bin in solution_str.split('\n')[:-2]:
+            items = [float(it.strip('[, ]')) for it in re.findall(self.re_bin_items, bin)]
+            sorted_bins.append(sorted(items))
+        sorted_bins.sort()
+        fitness = self.get_fitness(idx)
+        id = next(self.solution_indexer)
+        return ListSolution(id, sorted_bins, fitness)
+
+
+Title: __init__.py
+Location: ./hhrl/problem/__init__.py
+Content:
+from .hyflex_domain import HyFlexDomain
+from .tsp import TravelingSalesman
+from .fs import FlowShop
+from .sat import MAXSAT
+from .vrp import VehicleRouting
+from .ps import PersonnelScheduling
+from .bp import BinPacking
+
+
+Title: hyflex_domain.py
+Location: ./hhrl/problem/hyflex_domain.py
+Content:
+import jnius_config
+jnius_config.set_classpath('.', 'hyflex/*')
+from jnius import autoclass
+from itertools import count
+import json
+from hhrl.solution import Solution
+
+
+class HyFlexDomain:
+
+    solution_indexer = count(1)
+
+    def __init__(self, problem_str, instance_id, seed):
+        with open(f'hyflex/problems_json/{problem_str}.json', 'r') as json_file:
+            self.problem_dict = json.load(json_file)
+        ProblemClass = autoclass(self.problem_dict['class'])
+        self.problem = ProblemClass(seed)
+        self.problem.loadInstance(instance_id)
+        try:
+            self.instance_name = self.problem_dict['instances'][str(instance_id)]
+        except KeyError:
+            self.instance_name = f'id_{instance_id}'
+        self.actions = self.problem_dict['actions']
+
+    def initialise_solution(self, idx=0):
+        self.problem.initialiseSolution(idx)
+
+    def get_fitness(self, idx=0):
+        return self.problem.getFunctionValue(idx)
+
+    def apply_heuristic(self, llh, src_idx=0, dest_idx=1):
+        return self.problem.applyHeuristic(llh, src_idx, dest_idx)
+
+    def accept_solution(self, src_idx=1, dest_idx=0):
+        self.problem.copySolution(src_idx, dest_idx)
+
+    def get_best_fitness(self):
+        return self.problem.getBestSolutionValue()
+
+    def get_solution(self, idx=0):
+        solution_str = self.problem.solutionToString(idx)
+        id = next(self.solution_indexer)
+        return Solution(id, solution_str, self.get_fitness(idx))
+
+
+Title: ps.py
+Location: ./hhrl/problem/ps.py
+Content:
+from hhrl.problem import HyFlexDomain
+
+
+class PersonnelScheduling(HyFlexDomain):
+    def __init__(self, instance_id, seed):
+        HyFlexDomain.__init__(self, 'PS', instance_id, seed)
+
+
+Title: sat.py
+Location: ./hhrl/problem/sat.py
+Content:
+from hhrl.problem import HyFlexDomain
+from hhrl.solution import ListSolution
+
+
+class MAXSAT(HyFlexDomain):
+    def __init__(self, instance_id, seed):
+        HyFlexDomain.__init__(self, 'SAT', instance_id, seed)
+
+    def str_to_bool(self, s):
+        if s == 'true':
+            return True
+        else:
+            return False
+
+    def get_solution(self, idx=0):
+        solution_str = self.problem.solutionToString(idx)
+        solution_list = solution_str.strip().split()
+        bool_tuple = tuple((self.str_to_bool(x.split(':')[1]) for x in solution_list))
+        fitness = self.get_fitness(idx)
+        id = next(self.solution_indexer)
+        return ListSolution(id, bool_tuple, fitness)
+
+
+Title: vrp.py
+Location: ./hhrl/problem/vrp.py
+Content:
+from hhrl.problem import HyFlexDomain
+
+
+class VehicleRouting(HyFlexDomain):
+    def __init__(self, instance_id, seed):
+        HyFlexDomain.__init__(self, 'VRP', instance_id, seed)
+
+
+Title: tsp.py
+Location: ./hhrl/problem/tsp.py
+Content:
+from hhrl.problem import HyFlexDomain
+from hhrl.solution import ListSolution
+
+
+class TravelingSalesman(HyFlexDomain):
+    def __init__(self, instance_id, seed):
+        HyFlexDomain.__init__(self, 'TSP', instance_id, seed)
+
+    def get_solution(self, idx=0):
+        solution_str = self.problem.solutionToString(idx)
+        solution_str = solution_str.split('\n')[1].strip()
+        permutation = tuple((int(x) for x in solution_str.split(' ')))
+        fitness = self.get_fitness(idx)
+        id = next(self.solution_indexer)
+        return ListSolution(id, permutation, fitness)
+
+
+Title: __init__.py
+Location: ./hhrl/solution/__init__.py
+Content:
+from .solution import Solution
+from .list_solution import ListSolution
+
+
+Title: list_solution.py
+Location: ./hhrl/solution/list_solution.py
+Content:
+import numpy as np
+from hhrl.solution import Solution
+
+
+class ListSolution(Solution):
+    def __init__(self, id=0, solution=[], fitness=float('inf')):
+        super().__init__(id, solution, fitness=fitness)
+
+    def __str__(self):
+        return f'{self.solution}'
+
+    def distance(self, other):
+        diff = [1 if a != b else 0 for a, b in zip(self.solution, other.solution)]
+        diff.extend([1] * abs(len(self) - len(other)))
+        return np.mean(diff)
+
+    def generate_random(self, n=10):
+        self.solution = tuple(np.random.permutation(n))
+
+
+Title: solution.py
+Location: ./hhrl/solution/solution.py
+Content:
+import copy
+
+
+class Solution:
+    def __init__(self, id, solution, fitness):
+        self.id = id
+        self.solution = solution
+        self.fitness = fitness
+
+    def __len__(self):
+        return len(self.solution)
+
+    def __eq__(self, other):
+        return self.id == other.id
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __lt__(self, other):
+        return (self.fitness, self.id) < (other.fitness, other.id)
+
+    def __le__(self, other):
+        return self.fitness <= other.fitness
+
+    def __gt__(self, other):
+        return (self.fitness, self.id) > (other.fitness, other.id)
+
+    def __ge__(self, other):
+        return self.fitness >= other.fitness
+
+    def copy(self):
+        return copy.deepcopy(self)
+
+    def compare(self, other):
+        return self.solution == other.solution
+
+    def distance(self, other):
+        return 0
+
+
+Title: __init__.py
+Location: ./hhrl/agent/__init__.py
+Content:
+from .agent import Agent
+from .rand import RandomAgent
+
+
+Title: rand.py
+Location: ./hhrl/agent/rand.py
+Content:
+import random
+from hhrl.agent import Agent
+
+
+class RandomAgent(Agent):
+    def __init__(self, config, actions, state_env, prior=[], **kwargs):
+        super().__init__(actions, RoulettePolicy(config))
+        self.prior = prior
+        n_actions = len(actions)
+        if len(prior) != n_actions:
+            self.prior = [float(1/n_actions)] * n_actions
+        self.value_estimates = self.prior
+        self.state_env = state_env
+        self.state = self.state_env.get_state()
+
+    def __str__(self):
+        return f'Random Selection'
+
+    def reset(self):
+        self.value_estimates = self.prior
+
+    def get_env_state(self):
+        return self.state
+
+    def update(self, action, reward, solution):
+        self.state_env.update(action, reward, solution)
+        self.state = self.state_env.get_state()
+
+
+class RoulettePolicy():
+    def __init__(self, config):
+        pass
+
+    def __str__(self):
+        return f'Roulette Wheel'
+
+    def select(self, agent):
+        sample = range(len(agent.actions))
+        return random.choices(sample, weights=agent.value_estimates)[0]
+
+
+Title: agent.py
+Location: ./hhrl/agent/agent.py
+Content:
+class Agent:
+    def __init__(self, actions, policy):
+        self.actions = actions
+        self.policy = policy
+
+    def reset(self):
+        raise NotImplementedError
+
+    def select(self):
+        action_idx = self.policy.select(self)
+        return self.actions[action_idx]
+
+    def get_env_state(self):
+        return None
+
+    def update(self, **kwargs):
+        raise NotImplementedError
+
+
+Title: dqnucb.py
+Location: ./hhrl/agent/rl/dqnucb.py
+Content:
+import numpy as np
+from sklearn.neural_network import MLPRegressor
+from sklearn.exceptions import NotFittedError
+from hhrl.agent import Agent
+from hhrl.agent.mab import UCBPolicy
+from .egreedy import EpsilonGreedyPolicy
+
+
+class DQNUCBAgent(Agent):
+    def __init__(self, config, actions, state_env, prior=[], **kwargs):
+        super().__init__(actions, UCBPolicy(config))
+        self.prior = prior
+        self.gamma = config['DQNAgent'].getfloat('gamma', .9)
+        n_actions = len(actions)
+        if len(prior) != n_actions:
+            self.prior = [.0] * n_actions
+        self.value_estimates = self.prior
+        self.action_attempts = [0] * n_actions
+        self.t = 0
+        self.state_env = state_env
+        self.learning_rate = config['DQNAgent'].getfloat('learning_rate', .001)
+        self.dqn = MLPRegressor(hidden_layer_sizes=(30,20), solver='adam',
+                learning_rate_init=self.learning_rate)
+        self.state = self.state_env.get_state()
+
+    def __str__(self):
+        return f'DQN - Policy: {str(self.policy)}'
+
+    def reset(self):
+        self.value_estimates = self.prior
+        self.action_attempts = [0] * len(self.actions)
+        self.t = 0
+        self.state_env.reset()
+        self.dqn = MLPRegressor(hidden_layer_sizes=(30,20), solver='adam',
+                learning_rate_init=self.learning_rate)
+
+    def __get_qvalues(self, state):
+        try:
+            return self.dqn.predict([state])[0]
+        except NotFittedError:
+            return [0] * len(self.actions)
+
+    def get_env_state(self):
+        return self.state
+
+    def update(self, action, reward, **kwargs):
+        action_idx = self.actions.index(action)
+        self.state_env.update(action, reward, **kwargs)
+        next_state = self.state_env.get_state()
+
+        next_qvalues = self.__get_qvalues(next_state)
+        target_qvalue = reward + self.gamma * max(next_qvalues)
+        target = self.value_estimates
+        target[action_idx] = target_qvalue
+        self.dqn.partial_fit([self.state], [target])
+
+        self.state = next_state
+        self.value_estimates = next_qvalues
+        self.action_attempts[action_idx] += 1
+        self.t += 1
+
+
+Title: egreedy.py
+Location: ./hhrl/agent/rl/egreedy.py
+Content:
+import numpy as np
+import random
+
+
+class EpsilonGreedyPolicy():
+    def __init__(self, config):
+        self.epsilon = config['EpsilonGreedyPolicy'].getfloat('epsilon', 0.05)
+
+    def __str__(self):
+        return f'EpsilonGreedy (epsilon={self.epsilon})'
+
+    def select(self, agent):
+        if random.random() < self.epsilon:
+            return random.randrange(len(agent.actions))
+        return np.argmax(agent.value_estimates)
+
+
+Title: __init__.py
+Location: ./hhrl/agent/rl/__init__.py
+Content:
+from .dqn import DQNAgent
+from .dqnucb import DQNUCBAgent
+from .qlearning import QLearningAgent
+
+
+Title: dqn.py
+Location: ./hhrl/agent/rl/dqn.py
+Content:
+import numpy as np
+from sklearn.neural_network import MLPRegressor
+from sklearn.exceptions import NotFittedError
+from hhrl.agent import Agent
+from .egreedy import EpsilonGreedyPolicy
+
+
+class DQNAgent(Agent):
+    def __init__(self, config, actions, state_env, prior=[], **kwargs):
+        super().__init__(actions, EpsilonGreedyPolicy(config))
+        self.prior = prior
+        self.gamma = config['DQNAgent'].getfloat('gamma', .9)
+        n_actions = len(actions)
+        if len(prior) != n_actions:
+            self.prior = [.0] * n_actions
+        self.value_estimates = self.prior
+        self.state_env = state_env
+        self.learning_rate = config['DQNAgent'].getfloat('learning_rate', .001)
+        self.dqn = MLPRegressor(hidden_layer_sizes=(30,20), solver='adam',
+                learning_rate_init=self.learning_rate)
+        self.state = self.state_env.get_state()
+
+    def __str__(self):
+        return f'DQN - Policy: {str(self.policy)}'
+
+    def reset(self):
+        self.value_estimates = self.prior
+        self.state_env.reset()
+        self.dqn = MLPRegressor(hidden_layer_sizes=(30,20), solver='adam',
+                learning_rate_init=self.learning_rate)
+
+    def __get_qvalues(self, state):
+        try:
+            return self.dqn.predict([state])[0]
+        except NotFittedError:
+            return [0] * len(self.actions)
+
+    def get_env_state(self):
+        return self.state
+
+    def update(self, action, reward, **kwargs):
+        action_idx = self.actions.index(action)
+        self.state_env.update(action=action, reward=reward, **kwargs)
+        next_state = self.state_env.get_state()
+
+        next_qvalues = self.__get_qvalues(next_state)
+        target_qvalue = reward + self.gamma * max(next_qvalues)
+        target = self.value_estimates
+        target[action_idx] = target_qvalue
+        self.dqn.partial_fit([self.state], [target])
+
+        self.state = next_state
+        self.value_estimates = next_qvalues
+
+
+Title: qlearning.py
+Location: ./hhrl/agent/rl/qlearning.py
+Content:
+from collections import defaultdict
+
+import numpy as np
+
+from hhrl.agent import Agent
+from .egreedy import EpsilonGreedyPolicy
+
+
+class QLearningAgent(Agent):
+    def __init__(self, config, actions, state_env, prior=[], **kwargs):
+        super().__init__(actions, EpsilonGreedyPolicy(config))
+        self.prior = prior
+        self.gamma = config['QLearningAgent'].getfloat('gamma', .9)
+        n_actions = len(actions)
+        if len(prior) != n_actions:
+            self.prior = [.0] * n_actions
+        self.value_estimates = self.prior
+        self.state_env = state_env
+        self.learning_rate = config['QLearningAgent'].getfloat('learning_rate', .001)
+        self.q_table = defaultdict(lambda: [.0] * n_actions)
+        self.state = tuple(self.state_env.get_state())
+
+    def __str__(self):
+        return f'QLearning - Policy: {str(self.policy)}'
+
+    def reset(self):
+        self.value_estimates = self.prior
+        self.state_env.reset()
+        self.q_table = defaultdict(lambda: [.0] * len(self.actions))
+
+    def __get_qvalues(self, state):
+        return self.q_table[state]
+
+    def get_env_state(self):
+        return self.state
+
+    def update(self, action, reward, **kwargs):
+        action_idx = self.actions.index(action)
+        self.state_env.update(action=action, reward=reward, **kwargs)
+        next_state = tuple(self.state_env.get_state())
+
+        next_qvalues = self.__get_qvalues(next_state)
+
+        old_value = (1 - self.learning_rate) * self.q_table[self.state][action_idx]
+        temporal_difference = self.learning_rate * (reward + self.gamma * max(next_qvalues))
+
+        self.q_table[self.state][action_idx] = old_value + temporal_difference
+
+        self.state = next_state
+        self.value_estimates = next_qvalues
+
+
+Title: dmab.py
+Location: ./hhrl/agent/mab/dmab.py
+Content:
+from hhrl.util.page_hinkley import PageHinkley
+from hhrl.agent import Agent
+from .ucb import UCBPolicy
+
+
+class DMABAgent(Agent):
+    def __init__(self, config, actions, prior=[], **kwargs):
+        super().__init__(actions, UCBPolicy(config))
+        self.prior = prior
+        n_actions = len(actions)
+        if len(prior) != n_actions:
+            self.prior = [.0] * n_actions
+        self.value_estimates = self.prior
+        self.action_attempts = [0] * n_actions
+        self.t = 0
+        self.ph = PageHinkley(config)
+        self.n, self.p = 0, 0
+
+    def __str__(self):
+        return f'DMAB - Policy: {str(self.policy)}'
+
+    def reset(self):
+        self.value_estimates = self.prior
+        self.action_attempts = [0] * len(self.actions)
+        self.t = 0
+
+    def update(self, action, reward, **kwargs):
+        self.ph.add_element(reward)
+        if self.ph.detected_change():
+            self.p += 1
+            self.reset()
+            return
+        action_idx = self.actions.index(action)
+        self.action_attempts[action_idx] += 1
+        self.t += 1
+        self.n += 1
+
+        # Update the empirical reward (average)
+        n = self.action_attempts[action_idx]
+        q = self.value_estimates[action_idx]
+        new_q = (q * (n-1) + reward) / n #online average
+        self.value_estimates[action_idx] = new_q
+
+
+Title: __init__.py
+Location: ./hhrl/agent/mab/__init__.py
+Content:
+from .dmab import DMABAgent
+from .frrmab import FRRMABAgent
+from .ucb import UCBPolicy
+
+
+Title: frrmab.py
+Location: ./hhrl/agent/mab/frrmab.py
+Content:
+import numpy as np
+from hhrl.util import SlidingWindow
+from hhrl.agent import Agent
+from .ucb import UCBPolicy
+
+
+class FRRMABAgent(Agent):
+    def __init__(self, config, actions, prior=[], **kwargs):
+        super().__init__(actions, UCBPolicy(config))
+        self.prior = prior
+        n_actions = len(actions)
+        if len(prior) != n_actions:
+            self.prior = [.0] * n_actions
+        self.value_estimates = self.prior
+        self.decay_factor = config['FRRMABAgent'].getfloat('decay_factor', 1)
+        window_size = config['FRRMABAgent'].getint('window_size', 100)
+        self.sliding_window = SlidingWindow(window_size, n_actions)
+        self.action_attempts = self.sliding_window.count_list
+        self.t = 0
+
+    def __str__(self):
+        return f'FRRMAB - Policy: {str(self.policy)}'
+
+    def reset(self):
+        self.value_estimates = self.prior
+        self.sliding_window.clear()
+        self.t = 0
+
+    def update(self, action, reward, **kwargs):
+        self.t += 1
+        action_idx = self.actions.index(action)
+        self.sliding_window.update(action_idx, reward)
+
+        action_reward_sum = self.sliding_window.sum_list
+        ranking = np.argsort(action_reward_sum)[::-1]
+        decays = [0] * len(self.actions)
+        for rank, action_idx  in enumerate(ranking):
+            action_reward = action_reward_sum[action_idx]
+            decays[action_idx] = (self.decay_factor ** (rank+1)) * action_reward
+        decay_sum = sum(decays)
+        if decay_sum == 0:
+            return
+        # Update the value estimates (FRR)
+        for action_idx in range(len(self.actions)):
+            FRR = decays[action_idx] / decay_sum
+            self.value_estimates[action_idx] = FRR
+
+
+Title: ucb.py
+Location: ./hhrl/agent/mab/ucb.py
+Content:
+import numpy as np
+
+
+np.seterr(divide='ignore', invalid='ignore')
+
+
+class UCBPolicy():
+    def __init__(self, config):
+        self.c = config['UCBPolicy'].getint('c', 1)
+
+    def __str__(self):
+        return f'UCB (c={self.c})'
+
+    def select(self, agent):
+        if agent.t == 0:
+            exploration = np.zeros(len(agent.actions))
+        else:
+            attempts_sum = sum(agent.action_attempts)
+            exploration = (2 * np.log(attempts_sum)) / agent.action_attempts
+            exploration[np.isnan(exploration)] = np.inf #fix the divisions by zero
+            exploration = np.sqrt(exploration) * self.c
+        q = agent.value_estimates + exploration
+        return int(np.argmax(q))
+
+
+Title: elapsed_time.py
+Location: ./hhrl/state/elapsed_time.py
+Content:
+class ElapsedTime:
+    def __init__(self, config, time_limit, **kwargs):
+        self.time_limit = time_limit
+        self.elapsed = 0
+
+    def reset(self):
+        pass
+
+    def get_state(self):
+        return [self.elapsed / self.time_limit]
+
+    def update(self, elapsed, **kwargs):
+        self.elapsed = elapsed
+
+
+Title: __init__.py
+Location: ./hhrl/state/__init__.py
+Content:
+from .state_builder import StateBuilder
+from .bollp import BoLLP
+from .fdc import FitnessDistanceCorrelation
+from .ufdc import UnitaryFitnessDistanceCorrelation
+from .dispersion import DispersionMetric
+from .sliding_window_state import SlidingWindowState
+from .fitness_improvement_rate import FitnessImprovementRate
+from .last_action_vector import LastActionVector
+from .elapsed_time import ElapsedTime
+
+
+Title: last_action_vector.py
+Location: ./hhrl/state/last_action_vector.py
+Content:
+class LastActionVector:
+    def __init__(self, config, actions, **kwargs):
+        self.actions = actions
+        self.binary_vector = [0] * len(actions)
+        self.last_idx = 0
+
+    def reset(self):
+        self.binary_vector = [0] * len(self.actions)
+
+    def get_state(self):
+        return self.binary_vector
+
+    def update(self, action, **kwargs):
+        action_idx = self.actions.index(action)
+        self.binary_vector[self.last_idx] = 0
+        self.binary_vector[action_idx] = 1
+        self.last_idx = action_idx
+
+
+Title: dispersion.py
+Location: ./hhrl/state/dispersion.py
+Content:
+import numpy as np
+import bisect
+from hhrl.util import SolutionSpace
+
+
+class DispersionMetric:
+    def __init__(self, config, **kwargs):
+        self.sample_size = config['Dispersion'].getint('sample_size', 100)
+        self.elite_sample_size = config['Dispersion'].getint('elite_sample_size', 10)
+        self.sample_space = SolutionSpace(self.sample_size)
+        self.solution_sorted_list = []
+        self.elite_dispersion = 0
+        self.dispersion = 0
+
+    def update_elite_dispersion(self):
+        idx_list = []
+        for elite in self.solution_sorted_list[:self.elite_sample_size]:
+            # get the sample space index of the elite solution
+            elite_idx = self.sample_space.sample.index(elite)
+            idx_list.append(elite_idx)
+        self.elite_dispersion = self.sample_space.get_sample_dispersion(idx_list)
+
+    def reset(self):
+        self.sample_space.clear()
+        self.solution_sorted_list.clear()
+        self.elite_dispersion = 0
+        self.dispersion = 0
+
+    def get_state(self):
+        return [self.dispersion]
+
+    def update(self, action, reward, solution):
+        popped = self.sample_space.update(solution)
+        if popped:
+            popped_sorted_idx = self.solution_sorted_list.index(popped)
+            self.solution_sorted_list.remove(popped)
+        else:
+            # just to be used in the conditional for updating the elite dispersion
+            popped_sorted_idx = float('inf')
+
+        # index to insert the new solution in the sorted list
+        insertion_idx = bisect.bisect(self.solution_sorted_list, solution)
+        self.solution_sorted_list.insert(insertion_idx, solution)
+
+        if popped_sorted_idx < self.elite_sample_size or insertion_idx < self.elite_sample_size:
+            self.update_elite_dispersion()
+        sample_dispersion = self.sample_space.get_sample_dispersion()
+        self.dispersion = sample_dispersion - self.elite_dispersion
+
+
+Title: state_builder.py
+Location: ./hhrl/state/state_builder.py
+Content:
+class StateBuilder:
+    def __init__(self, state_classes, config, **kwargs):
+        self.states = [state_cls(config, **kwargs) for state_cls in state_classes]
+
+    def reset(self):
+        for state_obj in self.states:
+            state_obj.reset()
+
+    def get_state(self):
+        state = []
+        for state_obj in self.states:
+            state.extend(state_obj.get_state())
+        return state
+
+    def update(self, **kwargs):
+        for state_obj in self.states:
+            state_obj.update(**kwargs)
+
+
+Title: fitness_improvement_rate.py
+Location: ./hhrl/state/fitness_improvement_rate.py
+Content:
+class FitnessImprovementRate:
+    def __init__(self, config, **kwargs):
+        self.discrete = config['FIR'].getboolean('discrete', False)
+        self.fir = 0
+        self.last_fitness = None
+
+    def reset(self):
+        self.fir = 0
+        self.last_fitness = None
+
+    def _get_discrete_state(self):
+        if self.fir > 0:
+            return 1
+        elif self.fir == 0:
+            return 0
+        else:
+            return -1
+
+    def get_state(self):
+        if self.discrete:
+            return [self._get_discrete_state()]
+        return [self.fir]
+
+    def update(self, solution, **kwargs):
+        if self.last_fitness != None:
+            self.fir = (self.last_fitness - solution.fitness) / self.last_fitness
+        self.last_fitness = solution.fitness
+
+
+Title: bollp.py
+Location: ./hhrl/state/bollp.py
+Content:
+from hhrl.util import SolutionSpace
+
+
+class BoLLP():
+    def __init__(self, config, **kwargs):
+        self.sample_size = config['BoLLP'].getint('sample_size', 100)
+        self.neighborhood_size = config['BoLLP'].getint('neighborhood_size', 3)
+        self.sample_space = SolutionSpace(self.sample_size)
+        self.histogram = [0] * (2**self.neighborhood_size)
+
+    def compute_llp(self, solution_idx):
+        solution = self.sample_space.sample[solution_idx]
+        neighbors = self.sample_space.get_nearest_neighbors(
+                solution_idx, self.neighborhood_size)
+        llp = [1<<i if solution < neighbor else 0
+                for i,neighbor in enumerate(neighbors)]
+        return sum(llp)
+
+    def update_llp_histogram(self):
+        histogram = [0] * (2**self.neighborhood_size)
+        for idx in range(len(self.sample_space.sample)):
+            llp = self.compute_llp(idx)
+            histogram[llp] += 1
+        # normalize by sample size
+        self.histogram = [x/self.sample_size for x in histogram]
+
+    def reset(self):
+        self.sample_space.clear()
+        histogram = [0] * (2**self.neighborhood_size)
+
+    def get_state(self):
+        return self.histogram
+
+    def update(self, action, reward, solution):
+        self.sample_space.update(solution)
+        self.update_llp_histogram()
+
+
+Title: fdc.py
+Location: ./hhrl/state/fdc.py
+Content:
+import numpy as np
+from hhrl.util.fifo_list import FIFOList
+
+
+class FitnessDistanceCorrelation:
+    def __init__(self, config, **kwargs):
+        self.sample_size = config['FDC'].getint('sample_size', 10)
+        self.solution_list = FIFOList(self.sample_size)
+        self.dist_list = FIFOList(self.sample_size)
+        self.optima_list = []
+        self.fdc = 0
+
+    def update_optima_list(self, solution):
+        if len(self.optima_list) == 0:
+            self.optima_list.append(solution)
+            return True
+        if solution.fitness < self.optima_list[0].fitness:
+            self.optima_list = [solution]
+            return True
+        if solution.fitness == self.optima_list[0].fitness:
+            for optimum in self.optima_list:
+                if solution.compare(optimum):
+                    break
+            else:
+                self.optima_list.append(solution)
+                return True
+        return False
+
+    def update_dist_list(self):
+        for idx, solution in enumerate(self.solution_list):
+            # compare with the last appended optimum
+            dist = solution.distance(self.optima_list[-1])
+            if len(self.optima_list) == 1 or dist < self.dist_list[idx]:
+                self.dist_list[idx] = dist
+
+    def distance_to_closest_optimum(self, solution):
+        dist = float('inf')
+        for optimum in self.optima_list:
+            aux_dist = solution.distance(optimum)
+            if aux_dist < dist:
+                dist = aux_dist
+        return dist
+
+    def compute_fdc(self):
+        cost_list = [sol.fitness for sol in self.solution_list]
+        avg_cost, avg_dist = np.mean(cost_list), np.mean(self.dist_list)
+        product_sum = sum([
+            (c - avg_cost) * (d - avg_dist) for c, d in zip(cost_list, self.dist_list)
+            ])
+        if product_sum == 0:
+            self.fdc = 1
+        else:
+            std_cost, std_dist = np.std(cost_list), np.std(self.dist_list)
+            self.fdc = (product_sum / self.sample_size) / (std_cost * std_dist)
+
+    def reset(self):
+        self.solution_list.clear()
+        self.dist_list.clear()
+        self.optima_list= []
+        self.fdc = 0
+
+    def get_state(self):
+        return [self.fdc]
+
+    def update(self, solution, **kwargs):
+        if self.update_optima_list(solution):
+            self.update_dist_list()
+        self.solution_list.push(solution)
+        self.dist_list.push(self.distance_to_closest_optimum(solution))
+        self.compute_fdc()
+
+
+Title: ufdc.py
+Location: ./hhrl/state/ufdc.py
+Content:
+import numpy as np
+from .fdc import FitnessDistanceCorrelation
+
+
+class UnitaryFitnessDistanceCorrelation(FitnessDistanceCorrelation):
+    def __init__(self, config, **kwargs):
+        super().__init__(config, **kwargs)
+
+    def compute_fdc(self):
+        cost_list = [sol.fitness for sol in self.solution_list]
+        avg_cost, avg_dist = np.mean(cost_list), np.mean(self.dist_list)
+        c = cost_list[-1]
+        d = self.dist_list[-1]
+        product = (c - avg_cost) * (d - avg_dist)
+        if product == 0:
+            self.fdc = 1
+        else:
+            std_cost, std_dist = np.std(cost_list), np.std(self.dist_list)
+            self.fdc = product / (std_cost * std_dist)
+
+
+Title: sliding_window_state.py
+Location: ./hhrl/state/sliding_window_state.py
+Content:
+from hhrl.util import SlidingWindow
+
+
+class SlidingWindowState:
+    def __init__(self, config, actions):
+        self.window_size = config['SlidingWindowState'].getint('window_size', 100)
+        self.sliding_window = SlidingWindow(self.window_size, len(actions))
+        self.actions = actions
+
+    def reset(self):
+        self.sliding_window = SlidingWindow(self.window_size, len(self.actions))
+
+    def get_state(self):
+        state = [sum/count if count > 0 else 0 for sum,count in zip(
+            self.sliding_window.sum_list, self.sliding_window.count_list)]
+        return [(float(x)-min(state))/(max(state)-min(state)+1e-16) for x in state]
+
+    def update(self, action, reward, **kwargs):
+        action_idx = self.actions.index(action)
+        self.sliding_window.update(action_idx, reward)
+
+
+Title: lr_001.ini
+Location: ./configs/lr_001.ini
+Content:
+[FRRMABAgent]
+window_size=100
+decay_factor=1
+
+[UCBPolicy]
+c=8
+
+[PageHinkley]
+delta=.15
+threshold=105
+
+[DQNAgent]
+gamma=.9
+learning_rate=.01
+
+[EpsilonGreedyPolicy]
+epsilon=0.05
+
+[SlidingWindowState]
+window_size=100
+
+[ExtremeValue]
+window_size=50
+
+
+Title: default-config.ini
+Location: ./configs/default-config.ini
+Content:
+[FRRMABAgent]
+window_size=100
+decay_factor=1
+
+[UCBPolicy]
+c=8
+
+[PageHinkley]
+delta=.15
+threshold=105
+
+[DQNAgent]
+gamma=.9
+learning_rate=.001
+
+[QLearningAgent]
+gamma=.9
+learning_rate=.001
+
+[EpsilonGreedyPolicy]
+epsilon=0.05
+
+[SlidingWindowState]
+window_size=100
+
+[BoLLP]
+sample_size=100
+neighborhood_size=3
+
+[FDC]
+sample_size=10
+
+[FIR]
+discrete=False
+
+[Dispersion]
+sample_size=100
+elite_sample_size=10
+
+[Reward]
+window_size=10
+penalty=.1
+reward=1.0
+
+
+Title: epsilon_10.ini
+Location: ./configs/epsilon_10.ini
+Content:
+[FRRMABAgent]
+window_size=100
+decay_factor=1
+
+[UCBPolicy]
+c=8
+
+[PageHinkley]
+delta=.15
+threshold=105
+
+[DQNAgent]
+gamma=.9
+
+[EpsilonGreedyPolicy]
+epsilon=0.1
+
+[SlidingWindowState]
+window_size=100
+
+[Reward]
+window_size=10
+penalty=.1
+reward=1.0
+
+
+Title: fir_discrete.ini
+Location: ./configs/fir_discrete.ini
+Content:
+[FRRMABAgent]
+window_size=100
+decay_factor=1
+
+[UCBPolicy]
+c=8
+
+[PageHinkley]
+delta=.15
+threshold=105
+
+[DQNAgent]
+gamma=.9
+learning_rate=.001
+
+[QLearningAgent]
+gamma=.9
+learning_rate=.001
+
+[EpsilonGreedyPolicy]
+epsilon=0.05
+
+[SlidingWindowState]
+window_size=100
+
+[BoLLP]
+sample_size=100
+neighborhood_size=3
+
+[FDC]
+sample_size=10
+
+[FIR]
+discrete=True
+
+[Dispersion]
+sample_size=100
+elite_sample_size=10
+
+[Reward]
+window_size=10
+penalty=.1
+reward=1.0
+
+
+Title: rank_decay_05.ini
+Location: ./configs/rank_decay_05.ini
+Content:
+[FRRMABAgent]
+window_size=100
+decay_factor=.5
+
+[UCBPolicy]
+c=8
+
+[PageHinkley]
+delta=.15
+threshold=105
+
+[DQNAgent]
+gamma=.9
+
+[EpsilonGreedyPolicy]
+epsilon=0.05
+
+[SlidingWindowState]
+window_size=100
+
+[ExtremeValue]
+window_size=50
+
+
+Title: lr_01.ini
+Location: ./configs/lr_01.ini
+Content:
+[FRRMABAgent]
+window_size=100
+decay_factor=1
+
+[UCBPolicy]
+c=8
+
+[PageHinkley]
+delta=.15
+threshold=105
+
+[DQNAgent]
+gamma=.9
+learning_rate=.1
+
+[EpsilonGreedyPolicy]
+epsilon=0.05
+
+[SlidingWindowState]
+window_size=100
+
+[ExtremeValue]
+window_size=50
+
+
+Title: chesc-ps.jar
+Location: ./hyflex/chesc-ps.jar
+Content:
+<Unable to read file contents due to encoding issue>
+
+Title: chesc-fixed-no-ps.jar
+Location: ./hyflex/chesc-fixed-no-ps.jar
+Content:
+<Unable to read file contents due to encoding issue>
+
+Title: hyflex_ext.jar
+Location: ./hyflex/hyflex_ext.jar
+Content:
+<Unable to read file contents due to encoding issue>
+
+Title: TSP.json
+Location: ./hyflex/problems_json/TSP.json
+Content:
+{
+  "class": "travelingSalesmanProblem.TSP",
+  "actions": [0,1,2,3,4,5,6,7,8],
+  "instances": {
+    "0": "pr299",
+    "1": "pr439",
+    "2": "rat575",
+    "3": "u724",
+    "4": "rat783",
+    "5": "pcb1173",
+    "6": "d1291",
+    "7": "u2152",
+    "8": "usa13509",
+    "9": "d18512"
+  }
+}
+
+
+Title: PS.json
+Location: ./hyflex/problems_json/PS.json
+Content:
+{
+  "class": "PersonnelScheduling.PersonnelScheduling",
+  "actions": [0,1,2,3,4,5,6,7,11],
+  "instances": {
+    "0": "BCV-3.46.1",
+    "1": "BCV-A.12.2",
+    "2": "ORTEC02",
+    "3": "Ikegami-3Shift-DATA1",
+    "4": "Ikegami-3Shift-DATA1.1",
+    "5": "Ikegami-3Shift-DATA1.2",
+    "6": "CHILD-A2",
+    "7": "ERRVH-A",
+    "8": "ERRVH-B",
+    "9": "MER-A"
+  }
+}
+
+
+Title: VRP.json
+Location: ./hyflex/problems_json/VRP.json
+Content:
+{
+  "class": "VRP.VRP",
+  "actions": [0,1,2,3,4,7,8,9],
+  "instances": {
+    "0": "Solomon_100_customer_instances/RC207",
+    "1": "Solomon_100_customer_instances/R101",
+    "2": "Solomon_100_customer_instances/RC103",
+    "3": "Solomon_100_customer_instances/R201",
+    "4": "Solomon_100_customer_instances/R106",
+    "5": "Homberger_1000_customer_instances/C1_10_1",
+    "6": "Homberger_1000_customer_instances/RC2_10_1",
+    "7": "Homberger_1000_customer_instances/R1_10_1",
+    "8": "Homberger_1000_customer_instances/C1_10_8",
+    "9": "Homberger_1000_customer_instances/RC1_10_5"
+  }
+}
+
+
+Title: SAT.json
+Location: ./hyflex/problems_json/SAT.json
+Content:
+{
+  "class": "SAT.SAT",
+  "actions": [0,1,2,3,4,5,6,7,8],
+  "instances": {
+    "0": "sat05-457",
+    "1": "sat05-488",
+    "2": "sat05-486",
+    "3": "instance_n3_i3_pp",
+    "4": "instance_n3_i3_pp_ci_ce",
+    "5": "instance_n3_i4_pp_ci_ce",
+    "6": "HG-3SAT-V250-C1000-1",
+    "7": "HG-3SAT-V250-C1000-2",
+    "8": "HG-3SAT-V300-C1200-2",
+    "9": "t7pm3-9999"
+  }
+}
+
+
+Title: BP.json
+Location: ./hyflex/problems_json/BP.json
+Content:
+{
+  "class": "BinPacking.BinPacking",
+  "actions": [0,1,2,3,4,5,6],
+  "instances": {
+    "0": "falkenauer/falk1000-1",
+    "1": "falkenauer/falk1000-2",
+    "2": "schoenfield/schoenfieldhard1",
+    "3": "schoenfield/schoenfieldhard2",
+    "4": "2000/10-30/instance1",
+    "5": "2000/10-30/instance2",
+    "6": "trip1002/instance1",
+    "7": "trip2004/instance1",
+    "8": "testdual4/binpack0",
+    "9": "testdual7/binpack0"
+  }
+}
+
+
+Title: FS.json
+Location: ./hyflex/problems_json/FS.json
+Content:
+{
+  "class": "FlowShop.FlowShop",
+  "actions": [0,1,2,3,4,5,6,7,8,9,10],
+  "instances": {
+    "0": "100x20/1",
+    "1": "100x20/2",
+    "2": "100x20/3",
+    "3": "100x20/4",
+    "4": "100x20/5",
+    "5": "200x10/1",
+    "6": "200x10/2",
+    "7": "500x20/1",
+    "8": "500x20/2",
+    "9": "500x20/4"
+  }
+}
+
+
+Title: 未命名-checkpoint.ipynb
+Location: ./.ipynb_checkpoints/未命名-checkpoint.ipynb
+Content:
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "id": "45aa328d-836d-4c06-9182-5aea1922aa29",
+   "metadata": {
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Summary generated and saved to hh_project_summary.txt\n"
+     ]
+    }
+   ],
+   "source": [
+    "import os\n",
+    "\n",
+    "def get_file_contents(file_path):\n",
+    "    try:\n",
+    "        with open(file_path, 'r', encoding='utf-8') as file:\n",
+    "            return file.read()\n",
+    "    except UnicodeDecodeError:\n",
+    "            return \"<Unable to read file contents due to encoding issue>\"\n",
+    "\n",
+    "def generate_project_summary(root_dir):\n",
+    "    project_summary = \"\"\n",
+    "    for root, dirs, files in os.walk(root_dir):\n",
+    "        for file_name in files:\n",
+    "            file_path = os.path.join(root, file_name)\n",
+    "            project_summary += f\"Title: {file_name}\\n\"\n",
+    "            project_summary += f\"Location: {file_path}\\n\"\n",
+    "            project_summary += \"Content:\\n\"\n",
+    "            project_summary += get_file_contents(file_path)\n",
+    "            project_summary += \"\\n\\n\"\n",
+    "    return project_summary\n",
+    "\n",
+    "def save_summary_to_file(summary, output_file):\n",
+    "    with open(output_file, 'w', encoding='utf-8') as file:\n",
+    "        file.write(summary)\n",
+    "\n",
+    "if __name__ == \"__main__\":\n",
+    "    root_directory = '.'  # 当前文件夹\n",
+    "    summary = generate_project_summary(root_directory)\n",
+    "    output_file = 'hh_project_summary.txt'  # 输出文件名\n",
+    "    save_summary_to_file(summary, output_file)\n",
+    "    print(\"Summary generated and saved to\", output_file)\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "6f243cfb-af4c-43aa-9411-26f98c8ae650",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 310 (ipykernel)",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.10.13"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
+
+
