@@ -1,0 +1,169 @@
+Metadata-Version: 2.4
+Name: polars-parquet-encrypt
+Version: 0.2.0
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Rust
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: Implementation :: CPython
+Classifier: Topic :: Scientific/Engineering
+Classifier: Topic :: Software Development :: Libraries
+License-File: LICENSE
+Summary: Blazingly fast DataFrame library with Parquet encryption support (AES-256-GCM), not production ready
+Keywords: polars,parquet,encryption,dataframe,aes-gcm,arrow
+Home-Page: https://gitlab.com/anonym1/polars
+Author-email: Wei Wang <wei.wang@example.com>
+License: MIT
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown; charset=UTF-8; variant=GFM
+Project-URL: Homepage, https://gitlab.com/anonym1/polars
+Project-URL: Issues, https://gitlab.com/anonym1/polars/-/issues
+Project-URL: Repository, https://gitlab.com/anonym1/polars
+
+# polars-parquet-encrypt
+
+**Blazingly fast DataFrame library with Parquet encryption support**
+
+This package is a **full replacement for Polars** with built-in AES-256-GCM page-level encryption for Parquet files.
+
+⚠️  **Not production ready** - This is a test/research package
+
+## Why This Package?
+
+The official PyPI `polars` package doesn't include encryption support. This package provides:
+- ✅ **Full Polars functionality** - Everything from standard Polars
+- ✅ **Encryption built-in** - No need to build from source
+- ✅ **Drop-in replacement** - Just `pip install` and use
+
+## Installation
+
+```bash
+pip install polars-parquet-encrypt
+```
+
+That's it! No Rust toolchain, no maturin, no source builds required.
+
+## Usage
+
+### Basic Encryption/Decryption
+
+```python
+import polars as pl
+import os
+
+# Generate 32-byte key for AES-256
+key = os.urandom(32)
+
+# Write encrypted parquet file
+df = pl.DataFrame({
+    "id": [1, 2, 3, 4, 5],
+    "name": ["Alice", "Bob", "Charlie", "David", "Eve"],
+    "salary": [50000, 60000, 75000, 80000, 95000]
+})
+
+df.write_parquet("encrypted.parquet", encryption_key=key)
+
+# Read encrypted parquet file
+df_read = pl.read_parquet("encrypted.parquet", encryption_key=key)
+print(df_read)
+```
+
+### Lazy Scanning with Encryption
+
+```python
+# Lazy scan with encryption
+lf = pl.scan_parquet("encrypted.parquet", encryption_key=key)
+result = lf.filter(pl.col("salary") > 70000).collect()
+print(result)
+```
+
+### Cloud Storage (Azure, S3, etc.)
+
+```python
+# Works with cloud storage too
+storage_options = {"account_name": "myaccount"}
+
+df.write_parquet(
+    "abfs://container/encrypted.parquet",
+    encryption_key=key,
+    storage_options=storage_options
+)
+
+df_read = pl.read_parquet(
+    "abfs://container/encrypted.parquet",
+    encryption_key=key,
+    storage_options=storage_options
+)
+```
+
+## Security Features
+
+### Encryption
+
+- **Algorithm**: AES-256-GCM (authenticated encryption)
+- **Key size**: Exactly 32 bytes (256 bits)
+- **Nonce**: Unique 12-byte random nonce per page
+- **Authentication tag**: 16-byte GCM tag for integrity
+- **Format**: `[nonce(12) | ciphertext | tag(16)]` per page
+
+### What's Encrypted
+
+- ✅ **Data pages**: All column values encrypted
+- ✅ **Dictionary pages**: Dictionary-encoded values encrypted
+- ❌ **Footer metadata**: Schema, row counts, column names remain plaintext
+
+## Performance
+
+### Optimizations
+- Encryption context created once per column chunk (not per page)
+- In-place decryption using `decrypt_in_place_detached()`
+- Scratch buffer reused across all pages in column chunk
+- Zero-copy plaintext extraction with `split_off()`
+
+## Platform Support
+
+Pre-built wheels available for:
+- **macOS**: ARM64 (Apple Silicon), x86_64 (Intel)
+- **Linux**: x86_64, ARM64 (aarch64)
+- **Python**: 3.10, 3.11, 3.12+
+
+## Requirements
+
+- **Python**: >= 3.10
+- **Encryption key**: Exactly 32 bytes for AES-256
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Building from Source
+
+Pre-built wheels are available on PyPI, but if you need to build from source:
+
+### macOS (Current Platform)
+```bash
+./quick-build.sh
+```
+
+### Linux (Without Docker)
+See **[BUILD-LINUX.md](BUILD-LINUX.md)** for complete instructions, or:
+
+```bash
+# On your Linux machine
+./build-linux-native.sh
+```
+
+Quick reference: **[QUICK-START-LINUX.md](QUICK-START-LINUX.md)**
+
+### All Platforms
+See **[BUILD.md](BUILD.md)** for comprehensive build documentation.
+
+## Acknowledgments
+
+Built on [Polars](https://github.com/pola-rs/polars) - blazingly fast DataFrames in Rust and Python.
+
