@@ -1,0 +1,443 @@
+# Liberty - Hardware-Bound Secrets Manager
+
+**Eliminate .env file leaks with hardware-bound encryption.**
+
+[![GitLab](https://img.shields.io/badge/GitLab-deciphergit%2Fliberty-orange?logo=gitlab)](https://gitlab.com/deciphergit/liberty)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
+
+Liberty is a secrets manager that binds encrypted secrets to your hardware fingerprint, making them unusable if copied to another machine. No more `.env` files in git repositories.
+
+**Repository**: https://gitlab.com/deciphergit/liberty
+
+## Features
+
+- **Hardware-Bound Encryption**: Secrets are encrypted with a key derived from your hardware fingerprint (software PUF)
+- **AES-GCM Encryption**: Industry-standard authenticated encryption
+- **Zero Configuration**: No master passwords or key management
+- **CLI Interface**: Simple commands for everyday use
+- **Environment Injection**: Run commands with secrets as environment variables
+- **Audit Logging**: Complete audit trail of all secret access and modifications
+
+## Security Model
+
+### How It Works
+
+1. **Hardware Fingerprinting**: Liberty generates a unique fingerprint from your system's hardware characteristics:
+   - CPU information
+   - Machine ID
+   - Disk serial number
+   - Platform details
+
+2. **Key Derivation**: The hardware fingerprint is used to derive an AES-256 encryption key using PBKDF2
+
+3. **Authenticated Encryption**: Secrets are encrypted with AES-GCM, providing both confidentiality and authenticity
+
+4. **Hardware Binding**: Encrypted secrets can only be decrypted on the machine where they were created
+
+### Security Properties
+
+✓ **Confidentiality**: Secrets are encrypted with AES-256-GCM
+✓ **Authenticity**: GCM mode provides authentication tags to detect tampering
+✓ **Hardware Binding**: Secrets are bound to specific hardware and cannot be decrypted elsewhere
+✓ **No Master Password**: No need to remember or manage master passwords
+✗ **Not Portable**: Secrets cannot be moved between machines (by design)
+✗ **Hardware Changes**: Major hardware changes will invalidate the vault
+
+## Installation
+
+### Via pip (Recommended - Coming Soon)
+
+```bash
+pip install liberty-secrets
+```
+
+### From GitLab
+
+```bash
+git clone https://gitlab.com/deciphergit/liberty.git
+cd liberty
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .
+```
+
+### Quick Install (Global Command)
+
+```bash
+git clone https://gitlab.com/deciphergit/liberty.git
+cd liberty
+python3 -m venv venv
+source venv/bin/activate
+pip install cryptography
+
+# Create global wrapper
+mkdir -p ~/.local/bin
+cat > ~/.local/bin/liberty << 'EOF'
+#!/bin/bash
+cd ~ && ~/liberty/venv/bin/python3 ~/liberty/liberty.py "$@"
+EOF
+chmod +x ~/.local/bin/liberty
+
+# Make sure ~/.local/bin is in your PATH
+export PATH="$HOME/.local/bin:$PATH"  # Add to ~/.bashrc or ~/.zshrc
+```
+
+## Quick Start
+
+### 1. Initialize a Vault
+
+```bash
+cd your-project
+liberty init
+```
+
+This creates a `.liberty` directory with encrypted secrets storage.
+
+### 2. Add Secrets
+
+```bash
+liberty add API_KEY sk-1234567890abcdef
+liberty add DATABASE_URL postgresql://localhost/mydb
+liberty add SECRET_TOKEN my-secret-token
+```
+
+### 3. List Secrets
+
+```bash
+liberty list
+```
+
+Output:
+```
+Secrets:
+  - API_KEY
+  - DATABASE_URL
+  - SECRET_TOKEN
+```
+
+### 4. Show a Secret
+
+```bash
+liberty show API_KEY
+```
+
+Output:
+```
+sk-1234567890abcdef
+```
+
+### 5. Run Commands with Secrets
+
+```bash
+# Run your application with secrets as environment variables
+liberty exec -- npm start
+
+# Any command works
+liberty exec -- python app.py
+liberty exec -- ./my-script.sh
+```
+
+### 6. View Audit Log
+
+```bash
+# Show recent audit entries
+liberty audit
+
+# Show last 50 entries
+liberty audit -n 50
+```
+
+Output:
+```
+Audit Log (showing last 4 entries):
+
+  2026-01-14 04:55:48 | tori         | secret_added         (key=API_KEY)
+  2026-01-14 04:55:55 | tori         | secret_accessed      (key=API_KEY)
+  2026-01-14 04:55:56 | tori         | secrets_injected     (command=npm start, secrets=3)
+  2026-01-14 05:12:30 | tori         | secret_updated       (key=DATABASE_URL)
+```
+
+## Usage Examples
+
+### Node.js Project
+
+```bash
+# Initialize vault
+liberty init
+
+# Add secrets
+liberty add DATABASE_URL postgresql://localhost/myapp
+liberty add JWT_SECRET my-jwt-secret-key
+liberty add API_KEY sk-production-key
+
+# Run your app with secrets
+liberty exec -- npm start
+```
+
+In your code, access secrets normally:
+```javascript
+const dbUrl = process.env.DATABASE_URL;
+const jwtSecret = process.env.JWT_SECRET;
+```
+
+### Python Project
+
+```bash
+# Initialize and add secrets
+liberty init
+liberty add DATABASE_URL postgresql://localhost/myapp
+liberty add SECRET_KEY django-secret-key
+
+# Run your app
+liberty exec -- python manage.py runserver
+```
+
+In your code:
+```python
+import os
+
+database_url = os.environ['DATABASE_URL']
+secret_key = os.environ['SECRET_KEY']
+```
+
+### CI/CD Integration
+
+Liberty is designed for local development. For CI/CD, use traditional secret management:
+
+```bash
+# Development
+liberty exec -- pytest
+
+# CI/CD (use platform secrets)
+# GitHub Actions, GitLab CI, etc. provide their own secret management
+```
+
+## Commands Reference
+
+### `liberty init`
+
+Initialize a new Liberty vault in the current directory.
+
+```bash
+liberty init
+```
+
+Creates `.liberty/` directory with:
+- `secrets.enc`: Encrypted secrets
+- `metadata.json`: Vault metadata
+
+### `liberty add <key> <value>`
+
+Add or update a secret.
+
+```bash
+liberty add API_KEY sk-test-123
+liberty add DATABASE_URL "postgresql://localhost/db"  # Quote if spaces
+```
+
+### `liberty list`
+
+List all secret keys (not values).
+
+```bash
+liberty list
+```
+
+### `liberty show <key>`
+
+Display a secret's value.
+
+```bash
+liberty show API_KEY
+```
+
+### `liberty exec -- <command>`
+
+Execute a command with secrets injected as environment variables.
+
+```bash
+liberty exec -- npm start
+liberty exec -- python app.py
+liberty exec -- ./script.sh
+```
+
+Note: Use `--` to separate Liberty arguments from the command.
+
+## Architecture
+
+### File Structure
+
+```
+.liberty/
+├── secrets.enc      # Encrypted secrets (AES-GCM)
+└── metadata.json    # Vault metadata
+```
+
+### Encryption Flow
+
+```
+Hardware Fingerprint
+       ↓
+    PBKDF2 (SHA-256, 100k iterations)
+       ↓
+   AES-256 Key
+       ↓
+  AES-GCM Encryption
+       ↓
+  Encrypted Secrets
+```
+
+### Decryption Flow
+
+```
+Hardware Fingerprint
+       ↓
+    PBKDF2 (SHA-256, 100k iterations)
+       ↓
+   AES-256 Key
+       ↓
+  AES-GCM Decryption
+       ↓
+   Plaintext Secrets
+```
+
+## Comparison with .env Files
+
+| Feature | .env Files | Liberty |
+|---------|-----------|---------|
+| Encryption | ❌ Plaintext | ✅ AES-256-GCM |
+| Git Safety | ❌ Easy to leak | ✅ Safe to commit encrypted files |
+| Hardware Binding | ❌ Works anywhere | ✅ Bound to hardware |
+| Portability | ✅ Easy to share | ❌ Not portable |
+| Master Password | N/A | ❌ Not needed |
+| CI/CD | ✅ Easy | ⚠️ Use platform secrets |
+
+## Best Practices
+
+### ✅ Do
+
+- Use Liberty for local development secrets
+- Commit `.liberty/` to git (it's encrypted and hardware-bound)
+- Keep a secure backup of critical secrets elsewhere
+- Use platform secret management for CI/CD (GitHub Secrets, GitLab CI/CD Variables, etc.)
+
+### ❌ Don't
+
+- Don't rely on Liberty as your only secret storage (hardware failures happen)
+- Don't try to share Liberty vaults between machines
+- Don't use Liberty for production deployments (use proper secret management)
+
+## Troubleshooting
+
+### "Failed to decrypt secrets. Hardware fingerprint mismatch?"
+
+This happens when:
+- You're on a different machine
+- Your hardware has changed significantly
+- The vault was created on different hardware
+
+**Solution**: You'll need to reinitialize the vault and re-add secrets.
+
+### "Vault not initialized"
+
+Run `liberty init` first to create the vault.
+
+### "Vault already exists"
+
+A vault already exists in this directory. Use existing vault or delete `.liberty/` to start fresh.
+
+## Development
+
+### Running Tests
+
+```bash
+# Install test dependencies
+pip install cryptography
+
+# Run tests
+python test_liberty.py
+```
+
+### Test Coverage
+
+The test suite covers:
+- Hardware fingerprint generation and consistency
+- Vault initialization
+- Secret addition, retrieval, and updates
+- Encryption/decryption
+- CLI commands
+- Security properties
+
+## Security Considerations
+
+### Threat Model
+
+Liberty protects against:
+- ✅ Accidental git commits of secrets
+- ✅ Secrets stolen from disk backups
+- ✅ Secrets copied to different machines
+
+Liberty does NOT protect against:
+- ❌ Attackers with root access on your machine
+- ❌ Memory dumps while secrets are in use
+- ❌ Keyloggers or process monitors
+- ❌ Physical hardware theft (attacker can use your machine)
+
+### Hardware Changes
+
+Major hardware changes may invalidate your vault:
+- Replacing motherboard
+- Changing CPU
+- Replacing primary disk
+
+Keep backups of critical secrets in a secure password manager.
+
+## FAQ
+
+**Q: Can I share secrets between team members?**
+A: No, Liberty vaults are hardware-bound. Use a proper secret sharing solution for teams (1Password, Vault, etc.)
+
+**Q: What happens if my hardware changes?**
+A: You'll need to reinitialize the vault. Keep backups of critical secrets.
+
+**Q: Is this secure?**
+A: Liberty uses industry-standard encryption (AES-256-GCM) and follows cryptographic best practices. However, it's designed for local development, not production secret management.
+
+**Q: Can I use this in production?**
+A: No. Use proper production secret management (AWS Secrets Manager, HashiCorp Vault, etc.)
+
+**Q: Should I commit `.liberty/` to git?**
+A: Yes! The encrypted vault is safe to commit. It's hardware-bound and encrypted with AES-256-GCM.
+
+**Q: How does this compare to git-crypt?**
+A: Liberty is simpler and doesn't require GPG keys. However, git-crypt supports collaboration while Liberty is single-machine only.
+
+## License
+
+MIT License
+
+## Contributing
+
+Contributions welcome! Please ensure:
+- All tests pass
+- Code follows existing style
+- Security changes are reviewed carefully
+
+## Changelog
+
+### v1.0.0
+- Initial release
+- Hardware fingerprinting (software PUF)
+- AES-GCM encryption
+- CLI commands: init, add, list, show, exec
+- Comprehensive test suite
+
+## Credits
+
+Built with:
+- Python 3
+- [cryptography](https://cryptography.io/) library
+- Standard library modules
+
+Inspired by the need for better local development secret management.
