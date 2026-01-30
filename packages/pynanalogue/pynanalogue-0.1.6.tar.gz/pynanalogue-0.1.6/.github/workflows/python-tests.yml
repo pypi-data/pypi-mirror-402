@@ -1,0 +1,177 @@
+name: Python Tests (3.9-3.14 Ubuntu & Mac), Benchmarks, Linting
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Create virtual environment
+        run: python -m venv .venv
+
+      - name: Activate virtual environment (Unix)
+        run: echo "VIRTUAL_ENV=$(pwd)/.venv" >> $GITHUB_ENV && echo "$(pwd)/.venv/bin" >> $GITHUB_PATH
+
+      - name: Install dev dependencies
+        run: pip install pytest pytest-cov pytest-benchmark
+
+      - name: Build package in release mode
+        run: maturin develop --release
+
+      - name: Run tests with coverage
+        run: pytest tests/ -v --cov=pynanalogue --cov-report=xml --cov-report=term
+
+      - name: (disable for now) Upload coverage to Codecov
+        if: false && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+        uses: codecov/codecov-action@v5
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  benchmark_glibc:
+    name: Benchmarks (glibc)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Create virtual environment
+        run: python -m venv .venv
+
+      - name: Activate virtual environment
+        run: echo "VIRTUAL_ENV=$(pwd)/.venv" >> $GITHUB_ENV && echo "$(pwd)/.venv/bin" >> $GITHUB_PATH
+
+      - name: Install dev dependencies
+        run: pip install pytest pytest-benchmark
+
+      - name: Build package in release mode
+        run: maturin develop --release
+
+      - name: Create benchmark storage directory
+        run: mkdir -p ${{ github.workspace }}/benchmarks
+
+      - name: Run benchmarks
+        run: pytest tests/ --benchmark-only --benchmark-autosave --benchmark-storage=${{ github.workspace }}/benchmarks
+
+      - name: Store benchmark results
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v6
+        with:
+          name: benchmark-results-glibc
+          path: ${{ github.workspace }}/benchmarks/*
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  benchmark_musl:
+    name: Benchmarks (musl)
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/pypa/musllinux_1_2_x86_64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          . "$HOME/.cargo/env"
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install system dependencies
+        run: |
+          apk add --no-cache \
+            bzip2-dev \
+            xz-dev \
+            zlib-dev \
+            zlib-static \
+            curl-dev \
+            openssl-dev \
+            build-base
+
+      - name: Set environment variables
+        run: echo "CFLAGS=-I/usr/include" >> $GITHUB_ENV
+
+      - name: Install maturin and Python dependencies
+        run: |
+          cd /opt/python/cp311-cp311/bin
+          ./python3 -m pip install maturin pytest pytest-benchmark
+
+      - name: Build package in release mode
+        run: |
+          . "$HOME/.cargo/env"
+          /opt/python/cp311-cp311/bin/maturin build --release
+          /opt/python/cp311-cp311/bin/python3 -m pip install target/wheels/*.whl
+
+      - name: Create benchmark storage directory
+        run: mkdir -p ${{ github.workspace }}/benchmarks
+
+      - name: Run benchmarks
+        run: /opt/python/cp311-cp311/bin/pytest tests/ --benchmark-only --benchmark-autosave --benchmark-storage=${{ github.workspace }}/benchmarks
+
+      - name: Store benchmark results
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v6
+        with:
+          name: benchmark-results-musl
+          path: ${{ github.workspace }}/benchmarks/*
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  lint:
+    name: Linting & Type Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Run ruff linter
+        run: ruff check tests/
+
+      - name: Check Python formatting
+        run: ruff format --check tests/
