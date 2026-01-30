@@ -1,0 +1,227 @@
+# Quantum Code
+
+[![PyPI version](https://badge.fury.io/py/quantum-code.svg)](https://pypi.org/project/quantum-code/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI](https://github.com/Codewithevilxd/quantum-code/workflows/CI/badge.svg)](https://github.com/Codewithevilxd/quantum-code/actions)
+
+**Enterprise-Grade Multi-Model Code Analysis MCP Server**
+
+Quantum Code is a production-ready AI orchestration platform that seamlessly integrates with Claude Code CLI to deliver comprehensive code review, security analysis, and multi-agent consensus using multiple large language models simultaneously. Built for modern development teams requiring automated code quality assurance.
+
+## 🚀 Key Features
+
+### Core Capabilities
+- **🔍 Automated Code Review** - Comprehensive analysis with OWASP Top 10 security validation
+- **💬 Intelligent Chat** - Context-aware development assistance with repository understanding
+- **🔄 Multi-Model Comparison** - Parallel execution across different AI providers
+- **🎭 Consensus Engine** - Multi-agent debate with independent analysis and critique
+- **🛡️ Security First** - Built-in vulnerability detection and code quality assurance
+
+### Model Support
+- **🤖 Multi-Provider Integration** - OpenAI GPT, Anthropic Claude, Google Gemini, OpenRouter
+- **🖥️ Hybrid Execution** - Seamless mixing of CLI and API-based models
+- **🏷️ Smart Aliasing** - Intuitive model shortcuts (`mini`, `sonnet`, `gemini`)
+- **🧵 Context Persistence** - Thread-safe conversation management across review sessions
+
+### Enterprise Features
+- **⚡ High Performance** - Async architecture with parallel model execution
+- **🔧 Configurable** - Flexible model selection and parameter tuning
+- **📊 Analytics** - Token usage tracking and performance metrics
+- **🔒 Secure** - Isolated execution environments and credential management
+
+## 🚀 Quick Start
+
+### Installation
+
+```bash
+pip install quantum-code
+```
+
+### Basic Usage
+
+```bash
+# Start the MCP server
+quantum-server
+
+# Or use CLI for direct code review
+quantum src/ --model gemini-3
+
+# Get help
+quantum --help
+```
+
+### Claude Code Integration
+
+Add to `~/.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "quantum": {
+      "command": "quantum-server"
+    }
+  }
+}
+```
+
+## 📊 Performance & Architecture
+
+### Performance Metrics
+
+| Capability | Performance | Benchmark |
+|------------|-------------|-----------|
+| **Multi-Model Execution** | ⚡ 3 models in ~10s | 3x faster than sequential |
+| **Async Processing** | 🔄 Non-blocking I/O | Python asyncio framework |
+| **Context Management** | 💾 Thread-safe persistence | Across review sessions |
+| **Response Optimization** | 📊 Minimal latency | Only slowest model time |
+
+### System Architecture
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Claude Code   │───▶│  Quantum Code    │───▶│  AI Providers   │
+│     Client      │    │   MCP Server     │    │  (GPT, Claude,  │
+└─────────────────┘    └──────────────────┘    │   Gemini, etc.) │
+                              │                └─────────────────┘
+                              ▼
+                       ┌──────────────────┐
+                       │  Analysis Tools  │
+                       │ • Code Review    │
+                       │ • Security Scan  │
+                       │ • Chat Assistant │
+                       │ • Model Compare  │
+                       └──────────────────┘
+```
+
+## 🤖 Supported Models
+
+### API Models
+- **OpenAI**: `gpt-5-mini`, `gpt-5.2`, `gpt-5.1-codex`
+- **Anthropic**: `claude-haiku-4.5`, `claude-sonnet-4.5`, `claude-opus-4.5`
+- **Google**: `gemini-2.5-pro`, `gemini-3-flash`, `gemini-3-pro`
+- **Azure OpenAI**: `azure-gpt-5-mini`
+- **AWS Bedrock**: `bedrock-claude-4-5-sonnet`
+
+### CLI Models
+- **Gemini CLI**: `gemini-cli` (alias: `gem-cli`)
+- **Codex CLI**: `codex-cli` (alias: `cx-cli`)
+- **Claude CLI**: `claude-cli` (alias: `cl-cli`)
+
+## 🔧 Configuration
+
+### Environment Variables
+
+```bash
+# API Keys (at least one required)
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+GEMINI_API_KEY=...
+
+# Model Settings
+DEFAULT_MODEL=gemini-3
+DEFAULT_MODEL_LIST=codex,gemini-3,sonnet
+DEFAULT_TEMPERATURE=0.2
+
+# Server Settings
+LOG_LEVEL=INFO
+MAX_FILES_PER_REVIEW=100
+MAX_FILE_SIZE_KB=50
+```
+
+### Model Configuration
+
+Create `~/.quantum_code/config.yaml`:
+
+```yaml
+version: "1.0"
+models:
+  my-custom-model:
+    litellm_model: openai/gpt-4o
+    aliases:
+      - custom
+    notes: "My custom GPT-4o configuration"
+```
+
+## 📋 Usage Examples
+
+### Code Review
+```bash
+# Review with specific model
+quantum src/ --model sonnet
+
+# Multi-model analysis
+quantum src/ --models codex,gemini-3,sonnet
+```
+
+### Interactive Chat
+```bash
+# Chat with repository context
+quantum chat "How does the authentication work?"
+```
+
+### Model Comparison
+```bash
+# Compare different approaches
+quantum compare "Best state management for React app?"
+```
+
+## 🛡️ Security & Quality
+
+- **OWASP Top 10 Analysis** - Automated security vulnerability detection
+- **Performance Patterns** - Code efficiency and optimization suggestions
+- **Architecture Review** - Design pattern and structural analysis
+- **Multi-Model Consensus** - Cross-validation from different AI perspectives
+
+## 🔄 Workflow Modes
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| **codereview** | Systematic code analysis | Code quality, security, performance |
+| **chat** | Interactive development help | Questions, explanations, guidance |
+| **compare** | Multi-model comparison | Architecture decisions, approach evaluation |
+| **debate** | Consensus building | Complex decisions, validation |
+
+## 📈 Architecture
+
+### Core Components
+
+- **FastMCP Server** - Model Context Protocol implementation
+- **LiteLLM Integration** - Unified API for 100+ LLM providers
+- **Async Processing** - Concurrent model execution
+- **Context Management** - Thread-safe request scoping
+- **Artifact Storage** - File output management
+
+### Design Principles
+
+- **DRY (Don't Repeat Yourself)** - Single source of truth for schemas
+- **Type Safety** - Full Pydantic validation
+- **Async-First** - All I/O operations are asynchronous
+- **Factory Pattern** - Auto-generated MCP tools from schemas
+
+## 🤝 Contributing
+
+We welcome contributions! See our [GitHub repository](https://github.com/Codewithevilxd/quantum-code) for:
+
+- Development setup instructions
+- Code standards and guidelines
+- Testing procedures
+- Pull request process
+
+## 📄 License
+
+MIT License - see [LICENSE](https://github.com/Codewithevilxd/quantum-code/blob/main/LICENSE) file for details.
+
+## 👨‍💻 Author
+
+**Nishant Gaurav** - [Codewithevilxd](https://github.com/Codewithevilxd)
+
+## 🔗 Links
+
+- **Homepage**: [https://github.com/Codewithevilxd/quantum-code](https://github.com/Codewithevilxd/quantum-code)
+- **PyPI**: [https://pypi.org/project/quantum-code/](https://pypi.org/project/quantum-code/)
+- **Issues**: [https://github.com/Codewithevilxd/quantum-code/issues](https://github.com/Codewithevilxd/quantum-code/issues)
+
+---
+
+**Quantum Code** - *Multi-Model AI Orchestration for Superior Code Analysis*
