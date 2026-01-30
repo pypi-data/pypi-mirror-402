@@ -1,0 +1,286 @@
+Metadata-Version: 2.4
+Name: ika
+Version: 2.0.3
+Summary: Unofficial Python package to control IKA products; not affiliated with IKA.
+Home-page: https://gitlab.com/heingroup/ika
+Author: Veronica Lai
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: pyserial
+Dynamic: author
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: license-file
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# ika
+
+Unofficial Python package to control IKA products; we are not affiliated with IKA.
+
+Package not compatible with Mac OS
+
+## Products supported and tested
+- Magnetic stirrer
+  - IKA Magnetic Stirrer model C-MAG HS 7
+      - https://www.ika.com/en/Products-Lab-Eq/Magnetic-Stirrers-Hot-Plate-Lab-Mixer-Stirrer-Blender-csp-188/C-MAG-HS-7-control-Downloads-cpdl-20002694/
+  - IKA RCT 5 digital
+      - https://www.ika.com/en/Products-Lab-Eq/Magnetic-Stirrers-Hot-Plate-Lab-Mixer-Stirrer-Blender-csp-188/RCT-5-digital-cpdt-20002704/
+- Thermoshaker
+  - IKA MATRIX Orbital Delta plus
+    - https://www.ika.com/en/Products-Lab-Eq/Thermoshakers-csp-918/MATRIX-Orbital-Delta-Plus-cpdt-10006853/
+- Chiller
+  - RC 2 Lite
+    - https://www.ika.com/en/Products-Lab-Eq/Temperature-Control-Circulation-and-Immersion-thermostat-csp-272/RC-2-lite-cpdt-25006624/
+- Vacuum pump
+  - Vacstar control
+    - https://www.ika.com/en/Products-Lab-Eq/Vacuum-csp-158/VACSTAR-control-cpdt-20109375/ 
+      - Note that you need to plug into the micro usb slot on the operator panel, not the usb b slot on back of the 
+        vacuum pump
+- Overhead stirrer
+  - Microstar 30
+    - https://www.ika.com/en/Products-Lab-Eq/Overhead-Stirrers-Agitator-Blender-Lab-mixer-csp-187/MICROSTAR-30-digital-cpdt-25004884/
+
+### Basics
+
+Make sure you have installed the necessary driver for your computer:
+- https://www.ika.com/en/Products-Lab-Eq/Magnetic-Stirrers-Hot-Plate-Lab-Mixer-Stirrer-Blender-csp-188/C-MAG-HS-7-control-Package-Downloads-cpdl-10003279/
+
+To control a magnetic stirrer with the `ika` package, you need to identify the comport the device is when connected to
+your computer.
+
+### Example usage
+
+#### Magnetic stirrer
+```python
+import time
+from ika.magnetic_stirrer import MagneticStirrer
+
+port = 'COM5'
+plate = MagneticStirrer(device_port=port)
+plate.start_stirring()
+plate.set_target_temperature(100)
+time.sleep(10)
+plate.set_target_temperature(200)
+plate.stop_stirring()
+
+plate.set_target_temperature(20)
+plate.start_heating()
+plate.set_target_temperature(19)
+time.sleep(5)
+plate.stop_heating()
+
+```
+
+#### Thermoshaker
+```python
+import time
+import logging
+
+from ika.thermoshaker import Thermoshaker
+
+logger = logging.getLogger(__name__)
+format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+logging.basicConfig(format=format, level=logging.DEBUG)
+
+
+if __name__ == '__main__':
+    port = 'COM8'  # todo set to the correct port
+    ts = Thermoshaker(port)
+
+    ts.set_watchdog_safety_temperature(15.5)
+    ts.start_watchdog_mode_1(30)
+    ts.start_watchdog_mode_2(30)
+    ts.switch_to_normal_operation_mode()
+
+    actual_temperature = ts.temperature()
+    set_temperature = ts.target_temperature()
+    actual_speed = ts.speed()
+    set_speed = ts.target_speed()
+    logger.info(f'actual temperature: {actual_temperature}, '
+                f'set temperature: {set_temperature}, '
+                f'actual speed: {actual_speed}, '
+                f'set speed: {set_speed}')
+
+    logger.info('change the set temperature to 30 and speed to 500')
+    ts.set_target_temperature(30)
+    ts.set_target_speed(500)
+    set_temperature = ts.target_temperature()
+    set_speed = ts.target_speed()
+    logger.info(f'set temperature: {set_temperature}, '
+                f'set speed: {set_speed}')
+
+    logger.info('start tempering and shaking')
+    ts.start_heating()
+    ts.start_shaking()
+
+    time.sleep(5)
+
+    actual_temperature = ts.temperature()
+    actual_speed = ts.speed()
+    logger.info(f'actual temperature: {actual_temperature}, '
+                f'actual speed: {actual_speed}')
+
+    logger.info('change the set temperature to 25 and speed 0')
+    ts.set_target_temperature(25)
+    ts.set_target_speed(0)
+    set_temperature = ts.target_temperature()
+    set_speed = ts.target_speed()
+    logger.info(f'set temperature: {set_temperature}, '
+                f'set speed: {set_speed}')
+    actual_temperature = ts.temperature()
+    actual_speed = ts.speed()
+    logger.info(f'actual temperature: {actual_temperature}, '
+                f'actual speed: {actual_speed}')
+
+    logger.info('stop tempering and shaking')
+    ts.stop_heating()
+    ts.stop_shaking()
+```
+
+#### Chiller
+```python
+import time
+import logging
+
+from ika.chiller import Chiller
+
+logger = logging.getLogger(__name__)
+format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+logging.basicConfig(format=format, level=logging.DEBUG)
+
+
+if __name__ == '__main__':
+    port = 'COM14'  # todo set to the correct port
+
+    c = Chiller(port=port)
+
+    c.set_watchdog_safety_temperature(10)
+    # c.start_watchdog_mode_1(20)
+    # c.start_watchdog_mode_2(30)
+
+    actual_temperature = c.temperature()
+    setting_temperature = c.target_temperature()
+    logger.info(f'actual temperature: {actual_temperature}, '
+                f'setting temperature: {setting_temperature}')
+
+    logger.info('change the setting temperature to 8.5')
+    c.set_target_temperature(8.5)
+    setting_temperature = c.target_temperature()
+    logger.info(f'setting temperature: {setting_temperature}')
+
+    logger.info('start tempering')
+    c.start_heating()
+
+    time.sleep(5)
+
+    actual_temperature = c.temperature()
+    logger.info(f'actual temperature: {actual_temperature}')
+
+    logger.info('change the set temperature to 8')
+    c.set_target_temperature(8.0)
+    setting_temperature = c.target_temperature()
+    logger.info(f'setting temperature: {setting_temperature}')
+    actual_temperature = c.temperature()
+    logger.info(f'actual temperature: {actual_temperature}')
+
+    logger.info('stop tempering')
+    c.stop_heating()
+
+    print('done')
+```
+
+#### Vacuum pump
+
+```python
+import time
+import logging
+
+from ika.vacuum_pump import VacuumPump, EvacuatingMode
+
+logger = logging.getLogger(__name__)
+format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+logging.basicConfig(format=format, level=logging.DEBUG)
+
+
+if __name__ == '__main__':
+    port = 'COM9'  # todo set to the correct port
+
+    vp = VacuumPump(port=port)
+
+    logger.info(f'device name: {vp.name()}')
+    logger.info(f'device type: {vp.device_type()}')
+    logger.info(f'device firmware version: {vp.firmware_version()}')
+    logger.info(f'device firmware version date: {vp.firmware_version_date()}')
+    logger.info(f'device mac address: {vp.mac_address()}')
+    logger.info(f'device paired mac address: {vp.paired_mac_address()}')
+
+    vp.set_watchdog_safety_pump_rate(10)
+    vp.start_watchdog_mode_1(30)
+    logger.info(f'watchdog communication time: {vp.watchdog_communication_time}')
+
+    logger.info('switch to normal mode')
+    vp.switch_to_normal_operation_mode()
+
+    logger.info('set to program evacuating mode')
+    vp.set_evacuating_mode(EvacuatingMode.PROGRAM)
+    logger.info(f'evacuating mode is: {vp.evacuating_mode()}')
+    logger.info('set to percent evacuating mode')
+    vp.set_evacuating_mode(EvacuatingMode.PERCENT)
+    logger.info(f'evacuating mode is: {vp.evacuating_mode()}')
+    logger.info('set to automatic evacuating mode')
+    vp.set_evacuating_mode(EvacuatingMode.AUTOMATIC)
+    logger.info(f'evacuating mode is: {vp.evacuating_mode()}')
+    logger.info('set to manual evacuating mode')
+    vp.set_evacuating_mode(EvacuatingMode.MANUAL)
+    logger.info(f'evacuating mode is: {vp.evacuating_mode()}')
+
+    logger.info(f'current set pressure point to go to: {vp.target_pressure()}')
+    logger.info('set the set pressure point to go to to 1010 mbar')
+    vp.set_target_pressure(1010)
+    logger.info('set the set pressure point to go to to 1024 mbar')
+    vp.set_target_pressure(1024)
+
+    logger.info('start')
+    vp.start()
+    time.sleep(1)
+    logger.info(f'current pressure measurement: {vp.pressure()} mbar')
+    logger.info('stop')
+    vp.stop()
+
+    print('done')
+```
+
+#### Overhead stirrer
+
+```python
+import time
+from ika.overhead_stirrer import OverheadStirrer
+
+if __name__ == '__main__':
+    port = 'COM9'  # todo set this
+    stirrer = OverheadStirrer(port=port)
+    print(f'stirrer name: {stirrer.name()}')
+    print('set speed to 30')
+    stirrer.set_target_speed(30)
+    print(f'stirrer set speed: {stirrer.target_speed()}')
+    print('start stirring')
+    stirrer.start_stirring()
+    time.sleep(5)
+    print(f'stirrer current speed: {stirrer.speed()}')
+    print('set speed to 40')
+    stirrer.set_target_speed(40)
+    time.sleep(3)
+    print(f'stirrer set speed: {stirrer.target_speed()}')
+    print(f'stirrer current speed: {stirrer.speed()}')
+    print(f'stirrer torque: {stirrer.torque()}')
+    print('stop stirring')
+    stirrer.stop_stirring()
+    print(f'stirrer set speed: {stirrer.target_speed()}')
+    print(f'stirrer temperature: {stirrer.temperature()}')
+```
