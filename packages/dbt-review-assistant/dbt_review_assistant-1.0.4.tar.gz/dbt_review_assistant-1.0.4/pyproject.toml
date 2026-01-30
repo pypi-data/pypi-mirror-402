@@ -1,0 +1,87 @@
+[project]
+name = "dbt-review-assistant"
+version = "1.0.4"
+description = "Pre-commit hooks for dbt projects"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "colorconsole>=0.8.0",
+    "jinja2>=3.1.6",
+    "jsonschema>=4.25.1",
+    "packaging>=25.0",
+    "prettytable>=3.16.0",
+    "pyyaml>=6.0.3",
+]
+
+[project.urls]
+Repository = "https://github.com/dbt-review-assistant/dbt-review-assistant"
+
+[build-system]
+requires = ["setuptools >= 64"]
+
+[tool.setuptools.package-data]
+"src" = ["py.typed"]
+
+[dependency-groups]
+dev = [
+    "setuptools>=64",
+    "mypy==1.18.2",
+    "pre-commit==4.3.0",
+    "pytest==8.4.2",
+    "yamllint>=1.37.1",
+    "types-jsonschema>=4.25.1.20251009",
+    "types-pyyaml>=6.0.12.20250915",
+    "pytest-cov>=7.0.0",
+    "tox-uv>=1.29.0",
+    "pytest-sugar>=1.1.1",
+    "ruff>=0.14.2",
+]
+
+[project.scripts]
+dbt-review-assistant = "checks.entrypoint:entrypoint"
+dbtra = "checks.entrypoint:entrypoint"
+
+[tool.ruff.lint]
+# Enable all `pydocstyle` rules, limiting to those that adhere to the
+# Google convention via `convention = "google"`, below.
+select = ["D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore all directories named `tests`.
+"tests/**" = ["D"]
+# Ignore all files that start with `test_.py`.
+"test_*.py" = ["D"]
+
+[tool.tox]
+requires = ["tox>=4", "tox-uv>=1.29.0"]
+env_list = ["lint", "type", "3.14t", "3.14", "3.13", "3.12", "3.11", "3.10"]
+
+[tool.tox.env_run_base]
+description = "run unit tests"
+deps = [
+    "pytest>=8",
+    "pytest-sugar",
+]
+commands = [["uv", "run", "pytest", { replace = "posargs", default = ["tests"], extend = true }]]
+
+[tool.tox.env.lint]
+description = "run linters"
+skip_install = true
+deps = ["ruff"]
+commands = [["ruff", { replace = "posargs", default = ["check"], extend = true} ]]
+
+[tool.tox.env.type]
+description = "run type checks"
+deps = ["mypy", "types-PyYAML", "types-jsonschema"]
+commands = [["mypy", { replace = "posargs", default = ["src"], extend = true} ]]
+
+[tool.tox.gh.python]
+"3.14t" = ["3.14t"]
+"3.14" = ["3.14", "type", "lint"]
+"3.13" = ["3.13"]
+"3.12" = ["3.12"]
+"3.11" = ["3.11"]
+"3.10" = ["3.10"]
