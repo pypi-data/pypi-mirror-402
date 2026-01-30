@@ -1,0 +1,145 @@
+[project]
+name = "xplan-tools"
+version = "1.13.1"
+description = "Manage XPlanung data"
+authors = [
+    { name = "Tobias Kraft", email = "tobias.kraft@gv.hamburg.de" },
+    { name = "Polichronis Muratidis", email = "polichronis.muratidis@gv.hamburg.de" },
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Framework :: Pydantic :: 2",
+    "License :: OSI Approved :: European Union Public Licence 1.2 (EUPL 1.2)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+]
+readme = "README.md"
+license = "EUPL-1.2-or-later"
+license-files = ["LICENSE.md"]
+dependencies = [
+    "lxml>=5.3.0",
+    "sqlalchemy>=2.0.36",
+    "pydantic>=2.10.3",
+    "geoalchemy2>=0.16",
+    "typer>=0.15.0",
+    "psycopg[binary]>=3.2",
+    "numpy>=1.26.4",
+    "pandas>=2.2.2",
+    "pytz>=2024.1",
+    "openpyxl>=3.1",
+    "shapely>=2.0.4",
+    "httpx>=0.27.2",
+    "roman>=4.2",
+    "pyyaml>=6",
+    "gdal>=3.6.3",
+    "alembic>=1.16.4,<2",
+    "python-dateutil>=2.9,<3",
+    "pydantic-settings>=2.12.0,<3",
+    "pydantic-extra-types[semver]",
+    "deprecated"
+]
+requires-python = ">=3.10,<3.14"
+
+[project.urls]
+Homepage = "https://gitlab.opencode.de/xleitstelle/xplanung/xplan-tools"
+Issues = "https://gitlab.opencode.de/xleitstelle/xplanung/xplan-tools/-/issues"
+
+[project.scripts]
+xplan-tools = "xplan_tools.main:app"
+
+[tool.ruff.lint]
+ignore = ["E402"]
+extend-select = ["I", "D"]
+
+[tool.ruff.lint.per-file-ignores]
+"xplan_tools/model/appschema/*" = [
+    "D100",
+    "D101",
+    "D200",
+    "D205",
+    "D212",
+    "D415",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.pytest.ini_options]
+markers = [
+    "cli: marks tests for the cli tool",
+    "helper_functions_54_60: marks tests for helper functions in version migration",
+    "officialDocumentation: marks tests for methods, used in mapping onto officialDocumentation",
+    "SpatialPlan: marks tests for methods, used in mapping onto SpatialPlan",
+    "SupplementaryAndZoning: marks tests for methods used in mapping onto SupplementaryRegulation and ZoningElement",
+    "codelist_mappings: marks tests for codelist mappings for SupplementaryRegulation and ZoningElement",
+    "helper_functions: marks tests for helper functions in INSPIRE mapping",
+    "transformer_6x_plu: marks tests for INSPIRE transformer class",
+    "gml: marks tests for GMLAdapter and GMLRepository",
+    "jsonfg: marks tests for JsonFGAdapter and JsonFGRepository",
+    "db: marks tests for coretable and DBRepository",
+    "shape: marks tests for ShapeRepository",
+    "util: marks tests for utility functions and classes",
+    "stylesheet: mark tests for stylesheet mapping rules",
+    "base: marks tests for base classes",
+    "schema: marks tests for schema creation",
+    "alembic: marks tests for alembic migrations",
+    "serial",
+]
+
+[tool.coverage.run]
+omit = ["tests/*", "xplan_tools/interface/base.py",  "xplan_tools/model/migrations/*"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = ["pre-commit>=4", "ruff>=0.8", "python-dotenv", "ipykernel"]
+test = [
+    "pytest>=8.3.4,<9",
+    "coverage",
+    "faker",
+    "pytest-postgresql",
+    "xmlschema",
+]
+docs = [
+    "mkdocs>=1.6.1,<2",
+    "mkdocstrings[python]>=0.27.0",
+    "mkdocs-material",
+    "markdown-exec[ansi]",
+]
+build = ["pyinstaller", "pyinstaller-hooks-contrib", "poetry>=2.0.0"]
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "win-64"]
+
+[tool.pixi.pypi-dependencies]
+xplan-tools = { path = ".", editable = true }
+
+[tool.pixi.tasks]
+
+[tool.pixi.dependencies]
+gdal = ">=3.9.1,<4"
+libgdal-core = ">=3.9.1,<4"
+libgdal-pdf = ">=3.9.1,<4"
+libgdal-pg = ">=3.9.1,<4"
+libspatialite = ">=5.1.0,<6"
+
+# [tool.pixi.feature.test.dependencies]
+# postgresql = "*"
+
+[tool.pixi.environments]
+default = { features = [
+    "dev",
+    "docs",
+    "build",
+    "test",
+], solve-group = "default" }
+prod = { features = [], solve-group = "default" }
+docs = { features = ["docs"], solve-group = "default" }
+build = { features = ["build"], solve-group = "default" }
+test = { features = ["test"], solve-group = "default" }
+
+[tool.pixi.activation.env]
+SPATIALITE_LIBRARY_PATH = "$PIXI_PROJECT_ROOT/.pixi/envs/$PIXI_ENVIRONMENT_NAME/lib/mod_spatialite.so"
