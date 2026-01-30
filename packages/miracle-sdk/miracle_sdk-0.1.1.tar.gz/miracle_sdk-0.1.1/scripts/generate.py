@@ -1,0 +1,160 @@
+import os
+import yaml
+import re
+from typing import List, Dict, Any, Optional
+
+# Constants
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+OPENAPI_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "../../miracle-readme/openapi"))
+OUTPUT_FILE = os.path.abspath(os.path.join(SCRIPT_DIR, "../src/miracle/client.py"))
+BASE_URL = "https://ref.miracle-api.workers.dev/exec"
+
+def to_snake_case(name: str) -> str:
+    """Converts a string to snake_case."""
+    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+
+def clean_description(desc: str) -> str:
+    """Cleans up description text for docstrings."""
+    if not desc:
+        return ""
+    lines = desc.strip().split('\n')
+    return "\n        ".join(lines)
+
+def parse_yaml(file_path: str) -> Optional[Dict[str, Any]]:
+    """Parses a single OpenAPI YAML file."""
+    try:
+        with open(file_path, 'r') as f:
+            return yaml.safe_load(f)
+    except Exception as e:
+        print(f"Skipping {file_path}: {e}")
+        return None
+
+def generate_method(path: str, method_data: Dict[str, Any], domain: str) -> str:
+    """Generates the Python code for a single API method."""
+    op_id = method_data.get('operationId', '')
+    if not op_id:
+        # Fallback if operationId is missing, though we expect it
+        return ""
+    
+    # Normalize method name: getPediatricVentricleZScore -> pediatric_ventricle_zscore
+    method_name = to_snake_case(op_id)
+    if method_name.startswith("get_"):
+        method_name = method_name[4:] # Remove 'get_' prefix
+    
+    description = clean_description(method_data.get('description', ''))
+    
+    params = method_data.get('parameters', [])
+    
+    args_list = []
+    payload_dict = []
+    docstring_args = []
+    
+    for param in params:
+        name = param.get('name')
+        if not name or name == 'domain': 
+            continue # Domain is hardcoded per file usually, or handled specially
+            
+        schema = param.get('schema', {})
+        p_type = schema.get('type', 'string')
+        p_enum = schema.get('enum', [])
+        p_desc = param.get('description', '')
+        
+        # Determine Python type hint
+        py_type = "str"
+        if p_type == "number" or p_type == "integer":
+            py_type = "float"
+        
+        if p_enum:
+             enum_options = ", ".join([f"'{e}'" for e in p_enum])
+             # For simpler generation, we use basic types but document enums
+             # In a more advanced version, we could generate Literal types
+             # For now, let's stick to str/float but add valid values to docstring
+             docstring_args.append(f"{name} ({py_type}): {p_desc}. Options: [{enum_options}]")
+        else:
+             docstring_args.append(f"{name} ({py_type}): {p_desc}")
+
+        args_list.append(f"{name}: {py_type}")
+        payload_dict.append(f"'{name}': {name}")
+
+    # The domain is often passed as a query param, finding it from example or param default
+    # But checking our YAMLs, 'domain' is a required param. 
+    # Let's find the default value for 'domain' if it exists in the parameters
+    domain_val = domain # Default to filename-based or passed in
+    
+    for param in params:
+        if param.get('name') == 'domain':
+             if 'example' in param:
+                 domain_val = param['example']
+             elif 'schema' in param and 'example' in param['schema']:
+                 domain_val = param['schema']['example']
+             elif 'default' in param:
+                 domain_val = param['default']
+             elif 'schema' in param and 'default' in param['schema']:
+                 domain_val = param['schema']['default']
+             break
+
+    payload_str = ", ".join(payload_dict)
+    if payload_str:
+        payload_str = f", {payload_str}"
+        
+    docstring = "\n        ".join(docstring_args)
+    
+    code = f"""
+    def {method_name}(self, {", ".join(args_list)}) -> Dict[str, Any]:
+        \"\"\"
+        {description}
+        
+        Args:
+            {docstring}
+        \"\"\"
+        params = {{'domain': '{domain_val}'{payload_str}}}
+        return self._make_request(params)
+"""
+    return code
+
+def main():
+    print("Generating client...")
+    
+    methods_code = []
+    
+    files = sorted([f for f in os.listdir(OPENAPI_DIR) if f.endswith('.yaml')])
+    
+    for filename in files:
+        file_path = os.path.join(OPENAPI_DIR, filename)
+        data = parse_yaml(file_path)
+        if not data: continue
+        
+        # Iterate paths
+        for path, path_item in data.get('paths', {}).items():
+            if 'get' in path_item:
+                # We assume filename or domain logic correlates
+                domain_guess = filename.replace('.yaml', '')
+                code = generate_method(path, path_item['get'], domain_guess)
+                if code:
+                    methods_code.append(code)
+
+    # Header
+    header = f"""# AUTO-GENERATED FILE. DO NOT EDIT MANUALLY.
+# Generated by scripts/generate.py
+
+from typing import Dict, Any, Optional
+from .core import BaseClient
+
+class Miracle(BaseClient):
+    \"\"\"
+    Official Python Client for the MIRACLE API.
+    
+    Base URL: {BASE_URL}
+    \"\"\"
+"""
+    
+    with open(OUTPUT_FILE, 'w') as f:
+        f.write(header)
+        for method in methods_code:
+            f.write(method)
+            
+    print(f"Successfully generated {len(methods_code)} methods in {OUTPUT_FILE}")
+
+if __name__ == "__main__":
+    main()
