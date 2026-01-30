@@ -1,0 +1,111 @@
+[project]
+name = "snowfakery-mcp"
+dynamic = ["version"]
+description = "MCP server for authoring, analyzing, debugging, and running Snowfakery recipes"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["fastmcp>=2.14.3", "openai>=2.15.0", "snowfakery>=4.2.1"]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "pytest>=9.0.2",
+    "pytest-anyio>=0.0.0",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.14.11",
+]
+evals = ["inspect-ai>=0.3.160"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+norecursedirs = ["Snowfakery", ".venv", "dist", "build", "*.egg"]
+markers = [
+    "anyio: async integration tests",
+    "integration: integration tests",
+    "unit: unit tests",
+    "slow: marks tests as slow",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["snowfakery_mcp"]
+omit = ["snowfakery_mcp/__main__.py", "snowfakery_mcp/bundled_*/*"]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+fail_under = 75
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "if typing.TYPE_CHECKING:",
+    "@abstractmethod",
+    "@abc.abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[project.scripts]
+snowfakery-mcp = "snowfakery_mcp.server:run"
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "snowfakery_mcp/__about__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["snowfakery_mcp"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "snowfakery_mcp/schema/*.py",
+    "snowfakery_mcp/schema/*.json",
+    "snowfakery_mcp/bundled_docs/**/*.py",
+    "snowfakery_mcp/bundled_docs/**/*.md",
+    "snowfakery_mcp/bundled_examples/**/*.py",
+    "snowfakery_mcp/bundled_examples/**/*.yml",
+    "README.md",
+    "MCP_SERVER_SPEC.md",
+    "RELEASE.md",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+exclude = ["evals/"]
+
+# External libraries may not ship full typing.
+[[tool.mypy.overrides]]
+module = ["fastmcp.*", "snowfakery.*"]
+ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["snowfakery_mcp", "tests", "scripts", "evals"]
+exclude = ["Snowfakery", "notebooks", ".venv", "dist", "logs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["snowfakery_mcp"]
+
+[tool.ruff.format]
+line-ending = "lf"
