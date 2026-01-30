@@ -1,0 +1,49 @@
+name: Generate Archive Information
+
+on:
+  push:
+    branches:
+      - main
+      - "*"
+    tags:
+      - "*"
+  pull_request:
+  schedule:
+    # Weekly Monday 9AM build
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+jobs:
+  generate-archive-info:
+    name: Generate archive information
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/spacetelescope/rad.git
+
+      - name: Install uv and setup Python
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          python-version: "3.13"
+          activate-environment: true
+
+      - name: Install RAD
+        run: |
+          uv pip install -e ".[test]"
+
+      - name: Generate archive information
+        run: |
+          python scripts/archive.py --save_dir="${{ github.workspace }}/archive"
+
+      - name: Upload archive information
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: archive
+          path: ${{ github.workspace }}/archive/
