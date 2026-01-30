@@ -1,0 +1,84 @@
+Metadata-Version: 2.3
+Name: catch-sunset
+Version: 0.1.6
+Summary: Add your description here
+Author: ojr@core6a
+Author-email: ojr@core6a <ojr@core6a>
+Requires-Dist: astral>=3.2
+Requires-Dist: click>=8.3.0
+Requires-Dist: console>=0.9912
+Requires-Dist: python-dateutil>=2.9.0.post0
+Requires-Dist: requests
+Requires-Dist: skyfield>=1.53
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+
+# Catch Sunset
+
+A CLI tool to track sunset, sunrise, moonrise, and moonset events with optional alarm notifications via ntfy.sh.
+
+## Installation
+
+```bash
+uv sync
+```
+
+## Usage
+
+```bash
+# Show today's events
+catch-sunset today
+
+# Show today's events with alarm notifications for sunrise and sunset
+catch-sunset today -s -S
+
+# Show tomorrow's events with custom ntfy topic
+catch-sunset tomorrow -s -S --ntfy-topic mysunset
+
+# Show events with custom cloud cover threshold (only notify if ≤30% clouds)
+catch-sunset today -s -S --cloud-threshold 30
+
+# Show events for a date range
+catch-sunset range --start-date 2025-01-15 --end-date 2025-01-20
+```
+
+## Features
+
+- Auto-detects location via IP geolocation
+- Manual location specification via --lat and --lon
+- Configurable alert buffer time
+- Optional alarm notifications via ntfy.sh
+- Shows moon phase and moonrise/moonset during full moon periods
+- Granular cloud cover display with 5-level emoji system (☀️ 🌤️ ⛅ 🌥️ ☁️)
+- Configurable cloud cover threshold for notifications (default: 50%)
+- Smart notification system: only alerts when sky conditions are favorable
+
+## Cloud Cover Notifications
+
+By default, notifications are sent only when cloud cover is 50% or less. This threshold can be customized:
+
+**Via CLI flag:**
+```bash
+# Only notify if very clear (≤25% clouds)
+catch-sunset today -s -S --cloud-threshold 25
+
+# Notify even with more clouds (≤75% clouds)
+catch-sunset today -s -S --cloud-threshold 75
+```
+
+**Via config file** (`~/.config/influxdb/totalconfig.conf`):
+```ini
+[ntfy sunset]
+server = https://ntfy.sh
+topic = mytopic
+cloud_cover_threshold = 50
+```
+
+### Cloud Cover Icons
+
+The tool displays granular cloud cover information:
+- ☀️ **0-10%**: Sunny, perfect conditions
+- 🌤️ **11-35%**: Mostly sunny
+- ⛅ **36-65%**: Partly cloudy
+- 🌥️ **66-90%**: Mostly cloudy
+- ☁️ **91-100%**: Overcast
