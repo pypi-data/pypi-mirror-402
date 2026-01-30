@@ -1,0 +1,88 @@
+[project]
+name = "stac-fastapi-geoparquet"
+version = "0.0.4"
+description = "A stac-fastapi implementation with a stac-geoparquet backend"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "attr>=0.3.2",
+    "fastapi>=0.115.8",
+    "geojson-pydantic>=1.2.0",
+    "obstore>=0.8.0",
+    "pydantic>=2.10.4",
+    "pystac>=1.13.0",
+    "rustac>=0.7.0",
+    "stac-fastapi-api>=5.0.2",
+    "stac-fastapi-extensions>=5.0.2",
+    "stac-fastapi-types>=5.0.2",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Development Status :: 1 - Planning",
+]
+
+[project.optional-dependencies]
+lambda = ["mangum==0.20.0"]
+serve = ["uvicorn>=0.34.0"]
+
+[project.urls]
+Documentation = "https://stac-utils.github.io/stac-fastapi-geoparquet"
+Github = "https://github.com/stac-utils/stac-fastapi-geoparquet"
+Issues = "https://github.com/stac-utils/stac-fastapi-geoparquet/issues"
+Changelog = "https://github.com/stac-utils/stac-fastapi-geoparquet/blob/main/CHANGELOG.md"
+
+[dependency-groups]
+dev = [
+    "fastapi[standard]>=0.115.6",
+    "mkdocs-material>=9.6.5",
+    "mypy>=1.15.0",
+    "pystac[validation]>=1.12.2",
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.25.3",
+    "ruff>=0.9.7",
+]
+validate = ["stac-api-validator>=0.6.3"]
+deploy = [
+    "aws-cdk-lib>=2.130.0",
+    "constructs>=10.3.0",
+    "eoapi-cdk>=8.0.2",
+    "pydantic>=2.10.4",
+    "pydantic-settings>=2.8.0",
+]
+
+[tool.uv]
+default-groups = ["dev", "validate"]
+
+[tool.mypy]
+strict = true
+files = ["src/**/*.py", "infrastructure/**/*.py"]
+exclude = ["infrastructure/aws/cdk.out/.*", ".venv/*"]
+plugins = "pydantic.mypy"
+
+[[tool.mypy.overrides]]
+module = ["magnum", "config", "stac_fastapi.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    "error",
+    'ignore:datetime.datetime.utcfromtimestamp\(\) is deprecated and scheduled for removal in a future version.:DeprecationWarning',
+    "ignore:Using extra keyword arguments on `Field` is deprecated and will be removed.:pydantic.warnings.PydanticDeprecatedSince20",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src/"]
+include = ["stac_fastapi.geoparquet"]
