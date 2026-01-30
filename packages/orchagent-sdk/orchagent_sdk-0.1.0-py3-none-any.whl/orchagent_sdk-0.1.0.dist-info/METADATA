@@ -1,0 +1,164 @@
+Metadata-Version: 2.4
+Name: orchagent-sdk
+Version: 0.1.0
+Summary: SDK for building OrchAgent agents - enables agent-to-agent calls with local execution support
+License: MIT
+Project-URL: Homepage, https://orchagent.io
+Project-URL: Documentation, https://docs.orchagent.io
+Project-URL: Repository, https://github.com/jp730/orchagent-sdk
+Keywords: orchagent,agents,ai,sdk
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: httpx>=0.26.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23.0; extra == "dev"
+
+# OrchAgent SDK
+
+Official Python SDK for building [OrchAgent](https://orchagent.io) agents with agent-to-agent call support.
+
+## Installation
+
+```bash
+pip install orchagent-sdk
+```
+
+## Quick Start
+
+```python
+from orchagent import AgentClient
+
+# Create a client (uses ORCHAGENT_SERVICE_KEY env var)
+client = AgentClient()
+
+# Call another agent
+async def my_orchestrator(input_data):
+    result = await client.call("joe/leak-finder@v1", {"url": input_data["repo"]})
+    return result
+```
+
+## Features
+
+- **Agent-to-agent calls** - Call other agents from within your orchestrator agent
+- **Service key authentication** - Automatic auth via `ORCHAGENT_SERVICE_KEY` env var
+- **Call chain tracking** - Prevents circular dependencies (A calls B calls A)
+- **Deadline propagation** - Timeout context flows through the call chain
+- **Local execution mode** - Test orchestrators locally with `orch run --with-deps`
+
+## Usage
+
+### Basic Usage
+
+```python
+from orchagent import AgentClient
+
+client = AgentClient()
+result = await client.call("org/agent@v1", {"input": "data"})
+```
+
+### With FastAPI
+
+Extract call context from incoming requests:
+
+```python
+from fastapi import Request
+from orchagent import AgentClient
+
+@app.post("/analyze")
+async def analyze(request: Request, input: AnalyzeInput):
+    # Automatically extracts call chain, deadline, etc. from request headers
+    client = AgentClient.from_request(request)
+    secrets = await client.call("joe/leak-finder@v1", {"url": input.repo_url})
+    return {"secrets": secrets}
+```
+
+### Error Handling
+
+```python
+from orchagent import (
+    AgentClient,
+    DependencyCallError,
+    CallChainCycleError,
+    TimeoutExceededError,
+)
+
+try:
+    result = await client.call("org/agent@v1", data)
+except CallChainCycleError:
+    # Would create a circular dependency
+    pass
+except TimeoutExceededError:
+    # Deadline passed
+    pass
+except DependencyCallError as e:
+    # Agent returned an error
+    print(f"Status: {e.status_code}, Body: {e.response_body}")
+```
+
+## Local Execution Mode
+
+When running with `orch run --with-deps`, the SDK automatically detects local mode and spawns sub-agents as local subprocesses instead of making HTTP calls.
+
+```bash
+# Agents are executed locally as subprocesses
+orch run orchagent/security-review --with-deps --input '{"path": "."}'
+```
+
+This is controlled by the `ORCHAGENT_LOCAL_EXECUTION=true` environment variable, which the CLI sets automatically.
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `ORCHAGENT_SERVICE_KEY` | Service key for API authentication |
+| `ORCHAGENT_GATEWAY_URL` | Gateway URL (default: `https://api.orchagent.io`) |
+| `ORCHAGENT_LOCAL_EXECUTION` | Enable local subprocess execution |
+| `ORCHAGENT_AGENTS_DIR` | Path to local agents (default: `~/.orchagent/agents`) |
+
+## API Reference
+
+### AgentClient
+
+```python
+class AgentClient:
+    def __init__(
+        self,
+        service_key: str | None = None,      # From ORCHAGENT_SERVICE_KEY
+        gateway_url: str | None = None,       # From ORCHAGENT_GATEWAY_URL
+        call_chain: list[str] | None = None,  # Current call chain
+        deadline_ms: int | None = None,       # Deadline timestamp
+        max_hops: int | None = None,          # Max remaining hops
+    ): ...
+
+    @classmethod
+    def from_request(cls, request, service_key=None) -> "AgentClient": ...
+
+    async def call(
+        self,
+        agent_ref: str,           # "org/agent@version"
+        input_data: dict,         # Input payload
+        endpoint: str | None,     # Optional endpoint override
+        timeout: float | None,    # Optional timeout in seconds
+    ) -> Any: ...
+```
+
+### Exceptions
+
+- `AgentClientError` - Base exception
+- `DependencyCallError` - Agent call failed (has `status_code`, `response_body`)
+- `CallChainCycleError` - Would create circular dependency
+- `TimeoutExceededError` - Deadline passed
+- `LocalExecutionError` - Subprocess execution failed (has `exit_code`, `stderr`)
+
+## License
+
+MIT
