@@ -1,0 +1,187 @@
+# ZahlWort2num (v.1.0.1)
+
+🇩🇪 🇩🇪 🇩🇪
+A small but useful package (due to shortage of/low quality support for `lang_de`) for handy conversion of German numerals (incl. ordinal numbers) written as strings to numbers.
+
+To put it differently: _It allows reverse text normalization for numbers_.
+
+This package might be a good complementary lib to https://github.com/savoirfairelinux/num2words
+
+# PyPI Project Page
+https://pypi.org/project/zahlwort2num/
+
+# Web Demo
+Try the interactive web demo: [zahlwort2num Demo](index.html)
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Usage](#usage)
+- [Features](#features-)
+- [Development](#development)
+- [Roadmap / Known Issues](#roadmap--known-issues)
+- [Acknowledgments](#acknowledgments-)
+
+# Installation
+
+```bash
+pip install zahlwort2num
+```
+
+# Usage
+
+### Basic Usage
+
+```python
+import zahlwort2num as w2n
+```
+
+### Examples
+
+```python
+# Basic cardinal numbers
+w2n.convert('Zweihundertfünfundzwanzig')  # => 225
+
+# Ordinal numbers (return as string with dot)
+w2n.convert('neunte')  # => '9.'
+
+# Negative numbers
+w2n.convert('minus siebenhundert Millionen achtundsiebzig')  # => -700000078
+
+# Complex large numbers
+w2n.convert('sechshundertdreiundfünfzigtausendfünfhunderteinundzwanzig')  # => 653521
+
+# Fractions
+w2n.convert('ein und zwei')  # => 0.5
+w2n.convert('drei viertel')  # => 0.75
+w2n.convert('ein halb')      # => 0.5
+
+# Decimals
+w2n.convert('zwei komma fünf')  # => 2.5
+w2n.convert('zehn komma eins')  # => 10.1
+
+# Regional variants
+w2n.convert('zwoa')      # => 2  (Austrian)
+w2n.convert('dreissig')  # => 30 (Swiss)
+```
+
+### Command Line Usage
+
+Use quotes around parameters containing spaces:
+
+```bash
+zahlwort2num-convert 'eine Million siebenhunderteinundzwanzig'
+```
+
+# Development
+
+### Setup
+
+Install development dependencies:
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+### Testing
+
+Run the test suite:
+
+```bash
+python3 -m unittest
+```
+
+### Linting
+
+Run the linter:
+
+```bash
+python3 -m venv venv
+source ./venv/bin/activate
+python3 -m pip install flake8
+flake8 ./zahlwort2num/*.py --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+```
+
+# Documentation
+
+*More comprehensive documentation and examples coming soon.*
+
+# Features ✨
+
+- **Large Numbers**: Theoretically supports numbers from 0 up to 999 × 10^27
+- **Command Line Interface**: Use from terminal with `zahlwort2num-convert`
+- **Ordinal Numbers**: Supports ordinal numerals (e.g., "erste", "zweite") with inflections (suffixes like 'ste', 'ten', etc.)
+  - Returns strings with dots for ordinals (e.g., '15.' instead of integer)
+- **Case & Whitespace Handling**: Fault-tolerant with trailing whitespaces and case variations
+- **Signed Numbers**: Handles negative numbers (e.g., 'minus zehn') and negative ordinals
+- **Swiss German Support**: Includes Swiss variants (e.g., "dreissig" vs "dreißig")
+- **Austrian German Support**: Includes Austrian variants (e.g., "zwoa" for 2)
+- **Fault Tolerance**: Handles ß → ss conversion and other common variations
+- **Fraction Support**: Advanced fraction conversion
+  - Basic fractions (e.g., "ein und zwei" → 0.5)
+  - Extended fractions (e.g., "drei viertel" → 0.75, "ein halb" → 0.5)
+- **Decimal Support**: Decimal number conversion (e.g., "zwei komma fünf" → 2.5)
+
+# Roadmap / Known Issues
+
+- [x] ~~Make POC, functional for all common cases~~
+- [x] ~~Ordinal number support~~
+- [x] ~~Handle exceptions and trailing whitespaces~~
+- [x] ~~Create package structure and publish to PyPI~~
+- [x] ~~Command line support~~
+- [x] ~~Support both direct and indirect forms (einhundert/hundert)~~
+- [x] ~~Simplify/refactor POC code and improve documentation~~
+- [x] ~~Add "zwo" variant support~~
+- [x] ~~Add linter and test suite~~
+- [x] ~~Swiss German variants~~
+- [x] ~~Fault tolerance (ß → ss conversion)~~
+- [x] ~~Support for scales larger than 10^60~~
+- [x] ~~Ordinal numbers with large scales (e.g., "Millionste")~~
+- [x] ~~Performance improvements (tail recursion, etc.)~~
+- [x] ~~Better error handling and validation~~
+- [x] ~~Basic fraction support~~
+- [x] ~~More comprehensive test cases~~
+- [x] ~~Extended fraction support (e.g., "drei viertel" → 0.75)~~
+- [x] ~~Decimal number support (e.g., "zwei komma fünf" → 2.5)~~
+- [x] ~~Austrian German variants~~
+
+# Changelog
+
+## v1.0.1 (2026-01-22)
+- Documentation improvements and changelog cleanup
+
+## v1.0.0 (2026-01-22)
+- Added extended fraction support (e.g., "drei viertel" → 0.75, "ein halb" → 0.5)
+- Added decimal number conversion (e.g., "zwei komma fünf" → 2.5)
+- Added Austrian German variants (e.g., "zwoa" for 2)
+- Enhanced test coverage and documentation
+
+## v0.4.3 (2026-01-22)
+- Enhanced testing and performance improvements
+- Bug fixes and documentation updates
+
+## v0.4.0 (2022-10-28)
+- Major feature expansion with large scale numbers and complex ordinals
+- Performance optimizations and enhanced error handling
+
+## v0.3.0 (2022-01-09)
+- Ordinal number support and Swiss German variants
+- Fault tolerance improvements
+
+## v0.2.1 (2019-05-22)
+- Command line interface and polish improvements
+
+## v0.1.9 (2019-05-08)
+- Swiss German support and ß/ss conversion
+- Enhanced regional compatibility
+
+## v0.1.6 (2019-05-05)
+- Initial release with core German number parsing
+- Basic fraction support and negative numbers
+
+# Acknowledgments
+
+Special thanks to our contributors:
+- [@warichet](https://github.com/warichet) for bug fixes and "hundert" support
+- [@spatialbitz](https://github.com/spatialbitz) for enhanced test cases
+- [@psawa](https://github.com/psawa) for "zwo" variant support and unit tests
