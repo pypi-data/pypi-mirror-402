@@ -1,0 +1,297 @@
+# Jasni Python SDK
+
+Official Python SDK for the [Jasni AI](https://jasni.ai) Email API. Build AI-powered email automation, agents, and integrations.
+
+## Installation
+
+```bash
+pip install jasni-sdk
+```
+
+## Quick Start
+
+```python
+from jasni import Jasni
+
+# Initialize the client with your API key
+jasni = Jasni("jsk_your_api_key")
+
+# List your email accounts
+accounts = jasni.accounts.list()
+print(f"You have {accounts.total} accounts")
+
+# Send an email
+result = jasni.emails.send(
+    from_="me@mail.jasni.ai",
+    to="recipient@example.com",
+    subject="Hello from Jasni!",
+    text="This email was sent using the Jasni Python SDK.",
+)
+print(f"Email sent with ID: {result.message_id}")
+```
+
+## Async Support
+
+The SDK also supports async operations:
+
+```python
+import asyncio
+from jasni import AsyncJasni
+
+async def main():
+    jasni = AsyncJasni("jsk_your_api_key")
+    
+    # List emails
+    emails = await jasni.emails.list(account="me@mail.jasni.ai")
+    for email in emails.emails:
+        print(f"- {email.subject}")
+
+asyncio.run(main())
+```
+
+## Features
+
+### Email Accounts
+
+```python
+# List all accounts
+accounts = jasni.accounts.list()
+
+# Create a new account
+new_account = jasni.accounts.create(
+    username="myaccount",
+    name="My Account"
+)
+
+# Delete an account
+jasni.accounts.delete("myaccount@mail.jasni.ai")
+```
+
+### Emails
+
+```python
+# List emails from an account
+emails = jasni.emails.list(
+    account="me@mail.jasni.ai",
+    folder="INBOX",
+    limit=20
+)
+
+# Get a specific email
+email = jasni.emails.get(
+    uid=123,
+    account="me@mail.jasni.ai"
+)
+
+# Send an email
+jasni.emails.send(
+    from_="me@mail.jasni.ai",
+    to=["recipient1@example.com", "recipient2@example.com"],
+    subject="Hello!",
+    text="Plain text body",
+    html="<p>HTML body</p>",
+    cc="cc@example.com",
+    bcc="bcc@example.com"
+)
+
+# Reply to an email
+jasni.emails.reply(
+    uid=123,
+    account="me@mail.jasni.ai",
+    text="Thanks for your email!",
+    reply_all=False
+)
+
+# Forward an email
+jasni.emails.forward(
+    uid=123,
+    account="me@mail.jasni.ai",
+    to="colleague@example.com",
+    text="FYI - see below"
+)
+
+# Mark as read/unread
+jasni.emails.mark_as_read(123, account="me@mail.jasni.ai")
+jasni.emails.mark_as_unread(123, account="me@mail.jasni.ai")
+
+# Delete an email
+jasni.emails.delete(123, account="me@mail.jasni.ai")
+```
+
+### Email Labels
+
+```python
+# Get labels for an email
+labels = jasni.emails.labels.list(
+    uid=123,
+    account="me@mail.jasni.ai"
+)
+
+# Assign labels to an email
+jasni.emails.labels.assign(
+    uid=123,
+    account="me@mail.jasni.ai",
+    labels=["Important", "Work"],
+    agent_name="my-classifier"
+)
+
+# Remove labels from an email
+jasni.emails.labels.remove(
+    uid=123,
+    account="me@mail.jasni.ai",
+    label_ids=["label-id-1", "label-id-2"]
+)
+```
+
+### Drafts
+
+```python
+# List drafts
+drafts = jasni.drafts.list(account="me@mail.jasni.ai")
+
+# Create a draft
+draft = jasni.drafts.create(
+    account="me@mail.jasni.ai",
+    to="recipient@example.com",
+    subject="Draft subject",
+    text="Draft body"
+)
+
+# Update a draft
+jasni.drafts.update(
+    account="me@mail.jasni.ai",
+    uid=123,
+    subject="Updated subject",
+    text="Updated body"
+)
+
+# Delete a draft
+jasni.drafts.delete(account="me@mail.jasni.ai", uid=123)
+```
+
+### Labels
+
+```python
+# List all labels
+labels = jasni.labels.list(include_count=True)
+
+# Create a label
+label = jasni.labels.create(
+    name="Important",
+    color="#ff0000",
+    description="Important emails"
+)
+```
+
+### Webhooks
+
+```python
+# List webhooks
+webhooks = jasni.webhooks.list()
+
+# Create a webhook
+webhook = jasni.webhooks.create(
+    url="https://my-server.com/webhook",
+    events=["email.received", "email.sent"],
+    description="My email webhook"
+)
+# Save the secret! It's only returned on creation
+print(f"Webhook secret: {webhook.webhook.secret}")
+
+# Update a webhook
+jasni.webhooks.update(
+    id="webhook-id",
+    url="https://new-url.com/webhook",
+    active=False
+)
+
+# Delete a webhook
+jasni.webhooks.delete("webhook-id")
+```
+
+## Error Handling
+
+The SDK raises specific exceptions for different error cases:
+
+```python
+from jasni import Jasni
+from jasni.errors import (
+    JasniError,
+    AuthenticationError,
+    NotFoundError,
+    ValidationError,
+    RateLimitError,
+    ConflictError,
+    ServerError,
+)
+
+jasni = Jasni("jsk_your_api_key")
+
+try:
+    email = jasni.emails.get(uid=999, account="me@mail.jasni.ai")
+except AuthenticationError:
+    print("Invalid API key")
+except NotFoundError:
+    print("Email not found")
+except RateLimitError as e:
+    print(f"Rate limited. Retry after {e.retry_after} seconds")
+except ValidationError as e:
+    print(f"Invalid request: {e}")
+except ServerError:
+    print("Server error, please try again later")
+except JasniError as e:
+    print(f"API error: {e}")
+```
+
+## Configuration
+
+```python
+from jasni import Jasni
+
+# Custom base URL (for self-hosted or testing)
+jasni = Jasni(
+    "jsk_your_api_key",
+    base_url="https://custom-api.jasni.ai"
+)
+
+# With timeout configuration
+jasni = Jasni(
+    "jsk_your_api_key",
+    timeout=30.0  # seconds
+)
+```
+
+## Webhook Signature Verification
+
+Verify webhook signatures to ensure requests are from Jasni:
+
+```python
+from jasni.webhooks import verify_signature
+
+# In your webhook handler
+def handle_webhook(request):
+    payload = request.body
+    signature = request.headers.get("X-Jasni-Signature")
+    
+    if verify_signature(payload, signature, webhook_secret):
+        # Process the webhook
+        data = json.loads(payload)
+        print(f"Received event: {data['event']}")
+    else:
+        return "Invalid signature", 401
+```
+
+## Requirements
+
+- Python 3.8+
+- httpx
+- pydantic
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Support
+
+- Documentation: [https://docs.jasni.ai](https://docs.jasni.ai)
+- Email: support@jasni.ai
