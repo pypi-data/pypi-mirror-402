@@ -1,0 +1,182 @@
+Metadata-Version: 2.4
+Name: opentrans
+Version: 0.1.1
+Summary: A directory-preserving AI translator using Ollama.
+Project-URL: Homepage, https://github.com/RainStorm108/opentrans
+Project-URL: Documentation, https://rainstorm108.github.io/OpenTrans/
+Project-URL: Issues, https://github.com/RainStorm108/opentrans/issues
+Author: Hydrangea
+License: MIT
+License-File: LICENSE.md
+Keywords: ai,automation,llm,ollama,translation
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Topic :: Text Processing :: Linguistic
+Requires-Python: >=3.9
+Requires-Dist: click
+Requires-Dist: ollama>=0.1.0
+Requires-Dist: pydantic
+Requires-Dist: pydantic-settings
+Requires-Dist: pyyaml
+Requires-Dist: tqdm>=4.66.0
+Description-Content-Type: text/markdown
+
+# OpenTrans
+
+**OpenTrans** is a privacy-first, local-LLM batch translation utility using Ollama. It is designed to mirror a source directory into a target language while preserving the exact file hierarchy.
+
+## Key Features
+
+* **Local-First (Ollama):** Private, cost-free translation using models like Gemma, Llama 3, or DeepSeek.
+* **Syntax Shielding:** Automatically protects code blocks (```), inline code (`), LaTeX math ($), and Markdown links from being corrupted by the LLM.
+* **Directory Mirroring:** Recursively replicates your source folder structure in the output destination.
+* **Parallel Processing:** Uses `ThreadPoolExecutor` for high-speed batch handling of large file sets.
+* **Smart Caching:** Uses hashing to track file changes. Only files that have been modified since the last run are sent to the LLM, saving significant time and compute resources.
+* **Resilient File Handling:** Automatically pulls required models from Ollama with a real-time progress bar if they are missing.
+
+## Quick Usage
+
+Simply provide the input directory and the target output directory.
+
+```bash
+opentrans ./docs ./translated_docs --config ./config.yaml
+
+```
+
+**Example Output:**
+
+```text
+Target Language: Chinese
+Input:  /home/user/Projects/OpenTrans/docs
+Output: /home/user/Projects/OpenTrans/translated_docs
+Using Model: translategemma:4b
+
+Translating Files: 100%|████████████████████████████████| 12/12 [00:45<00:00, 3.7s/file]
+
+Complete.
+```
+
+## Running Examples
+
+```bash
+# Translating Docusaurus
+opentrans ./Example/Docusaurus/docs ./Example/Docusaurus/i18n/zh-hans/docusaurus-plugin-content-blog/current ./config.yaml    
+```
+
+## Installation
+
+### Setup 
+
+OpenTrans requires Ollama to be installed and running on your local machine.
+
+1. Install Ollama: Follow instructions at [Ollama](https://ollama.com/download)
+
+2. Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
+
+```shell
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv tool install .
+```
+
+3. Install OpenTrans
+
+```bash
+git clone https://github.com/rainstorm108/OpenTrans.git
+cd OpenTrans
+uv pip install .
+```
+
+4. run
+
+```bash
+opentrans ./docs ./translated_docs --config ./config.yaml
+```
+
+### For Developers
+
+1. Environment Setup
+
+```bash
+uv sync
+source .venv/bin/activte
+hatch shell
+uv pip install -e .
+```
+
+2. Running Tests
+
+```bash
+hatch test
+```
+
+## Folder Structure
+
+```text
+OpenTrans/
+├── src/
+│   └── opentrans/
+│       ├── __init__.py        
+│       ├── main.py            # CLI interface using Click
+│       ├── settings.py        # Translate settings
+│       ├── translator.py      # Translate logic
+│       ├── cache_manager.py   # Manages translation caching using content hashing to skip unchanged files.
+│       └── hasher.py          # Hash file for cache
+├── tests/
+│   ├── test_cache_manager.py
+│   ├── test_hasher.py
+│   └── test_translator.py
+├── config.yaml                # Global settings (model, language, etc.)
+├── pyproject.toml
+└── README.md 
+
+```
+
+## Workflow
+
+```mermaid
+graph TD
+    %% Setup Phase
+    Start((Start)) --> CheckRunning{Ollama Running?}
+    CheckRunning -- No --> Err[Error: Start Ollama]
+    CheckRunning -- Yes --> CheckModel{Model Exists?}
+    
+    CheckModel -- No --> Pull[Download Model with Progress Bar]
+    Pull --> Init
+    CheckModel -- Yes --> Init[Load Paths & Config]
+
+    %% The Loop
+    Init --> NextFile{Next File?}
+    NextFile -- No --> Exit([Exit])
+    NextFile -- Yes --> IsTranslatable{File Type Supported?}
+
+    %% Branching Logic
+    IsTranslatable -- No --> Mirror[Copy Original File]
+    IsTranslatable -- Yes --> Shield[Apply Syntax Placeholders]
+    
+    Shield --> Trans[Translate via Ollama API]
+    Trans --> Restore[Restore Protected Code/Math]
+    Restore --> Save[Create Dir & Save File]
+    Save --> NextFile
+
+```
+
+## Todo
+
+* [x] Click-based CLI interface
+* [x] Placeholder-based syntax protection (Code/LaTeX)
+* [x] Multi-threaded parallel processing
+* [x] Implement hash caching to skip unchanged files
+* [ ] Finish the Docusaurus translate script
+* [ ] User Tree-sitter to replace the code blocks before translation instead of regex
+* [ ] Add support for more file types
+* [ ] ...
+
+## License
+
+This project is licensed under the MIT License.
