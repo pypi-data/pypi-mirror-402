@@ -1,0 +1,74 @@
+import json
+from typing import Any
+
+from collections.abc import Mapping
+
+
+class DotDict(dict):
+    def __init__(self, *args: Any) -> None:
+        """This class simplifies the use of "."-separated
+        keys when defining a nested dictionary:::
+
+            >>> from nectar.profile import Profile
+            >>> keys = ['profile.url', 'profile.img']
+            >>> values = ["http:", "foobar"]
+            >>> p = Profile(keys, values)
+            >>> print(p["profile"]["url"])
+            http:
+
+        """
+        if len(args) == 2:
+            for i, item in enumerate(args[0]):
+                t = self
+                parts = item.split(".")
+                for j, part in enumerate(parts):
+                    if j < len(parts) - 1:
+                        t = t.setdefault(part, {})
+                    else:
+                        t[part] = args[1][i]
+        elif len(args) == 1 and isinstance(args[0], dict):
+            for k, v in args[0].items():
+                self[k] = v
+        elif len(args) == 1 and isinstance(args[0], str):
+            for k, v in json.loads(args[0]).items():
+                self[k] = v
+
+
+class Profile(DotDict):
+    """This class is a template to model a user's on-chain
+    profile according to Hive profile metadata conventions.
+    """
+
+    def __init__(self, *args: Any) -> None:
+        """
+        Initialize a Profile by delegating to the DotDict initializer.
+
+        This constructor accepts the same arguments as DotDict.
+        """
+        super().__init__(*args)
+
+    def __str__(self) -> str:
+        return json.dumps(self)
+
+    def update(self, *args: Any, **kwargs: Any) -> None:
+        """
+        Update the profile with mapping/iterable semantics while preserving nested-merge behavior for mappings.
+        """
+        if args:
+            mapping = args[0]
+            if isinstance(mapping, Mapping):
+                for k, v in mapping.items():
+                    if isinstance(v, Mapping):
+                        self.setdefault(k, {}).update(v)
+                    else:
+                        self[k] = v
+                return
+        # Fallback to dict.update behavior
+        super().update(*args, **kwargs)
+
+    def remove(self, key: str) -> None:
+        parts = key.split(".")
+        if len(parts) > 1:
+            self[parts[0]].pop(".".join(parts[1:]))
+        else:
+            super().pop(parts[0], None)
