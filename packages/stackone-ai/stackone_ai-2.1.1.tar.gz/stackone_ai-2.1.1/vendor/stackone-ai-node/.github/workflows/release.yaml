@@ -1,0 +1,52 @@
+name: Release Package
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release-please.outputs.release_created }}
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
+        id: release-please
+        with:
+          release-type: node
+
+  publish-package:
+    runs-on: ubuntu-latest
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created  }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Setup Node.js for npm
+        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          registry-url: 'https://registry.npmjs.org'
+          node-version: lts/*
+
+      - name: 📦 Pack package
+        run: nix develop --command pnpm pack
+
+      - name: 🚀 Publish package
+        shell: bash
+        run: |
+          PACKAGE_TGZ=$(ls *.tgz | head -n 1)
+          echo "Publishing package: $PACKAGE_TGZ"
+          npm publish "$PACKAGE_TGZ" --access public

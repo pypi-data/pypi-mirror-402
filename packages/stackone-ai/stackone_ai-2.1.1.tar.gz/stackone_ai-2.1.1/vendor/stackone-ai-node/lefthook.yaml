@@ -1,0 +1,22 @@
+pre-commit:
+  piped: true
+  jobs:
+    - name: gitleaks
+      run: gitleaks protect --staged --config .gitleaks.toml
+    - name: oxlint
+      glob: '*.{ts,tsx,js,jsx,mts,cts}'
+      run: pnpm oxlint --max-warnings=0 --type-aware --type-check --fix {staged_files}
+      stage_fixed: true
+    - name: oxfmt
+      glob: '*'
+      run: pnpm oxfmt --no-error-on-unmatched-pattern {staged_files}
+      stage_fixed: true
+    - name: nixfmt
+      glob: '*.nix'
+      run: nix develop --command nixfmt {staged_files}
+      stage_fixed: true
+
+pre-push:
+  jobs:
+    - name: knip
+      run: pnpm run lint:knip

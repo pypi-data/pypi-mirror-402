@@ -1,0 +1,35 @@
+name: "CI: Flake check"
+
+on:
+  push:
+    paths:
+      - "flake.nix"
+      - "flake.lock"
+      - ".github/workflows/nix-flake.yaml"
+      - ".github/actions/setup-nix/**"
+  pull_request:
+    paths:
+      - "flake.nix"
+      - "flake.lock"
+      - ".github/workflows/nix-flake.yaml"
+      - ".github/actions/setup-nix/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Check flake syntax and structure
+  flake-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # v31.9.0
+        with:
+          github_access_token: ${{ github.token }}
+
+      - name: Check flake
+        run: nix flake check --all-systems --print-build-logs --show-trace
