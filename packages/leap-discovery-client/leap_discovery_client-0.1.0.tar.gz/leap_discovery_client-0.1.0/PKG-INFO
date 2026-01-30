@@ -1,0 +1,310 @@
+Metadata-Version: 2.4
+Name: leap-discovery-client
+Version: 0.1.0
+Summary: Python SDK for the Discovery Engine API
+Project-URL: Homepage, https://github.com/leap-laboratories/discovery
+Project-URL: Documentation, https://github.com/leap-laboratories/discovery
+Project-URL: Repository, https://github.com/leap-laboratories/discovery
+Author: Leap Laboratories
+License: MIT
+Keywords: api,data-analysis,discovery,machine-learning,sdk
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.10
+Requires-Dist: httpx>=0.24.0
+Requires-Dist: pydantic>=2.0.0
+Provides-Extra: dev
+Requires-Dist: pytest-asyncio>=0.21.0; extra == 'dev'
+Requires-Dist: pytest>=7.0.0; extra == 'dev'
+Provides-Extra: pandas
+Requires-Dist: pandas>=2.0.0; extra == 'pandas'
+Description-Content-Type: text/markdown
+
+# Discovery Engine Python SDK
+
+Python client library for the Discovery Engine API.
+
+## Installation
+
+```bash
+pip install leap-discovery-client
+```
+
+For pandas DataFrame support:
+
+```bash
+pip install leap-discovery-client[pandas]
+```
+
+## Quick Start
+
+```python
+from discovery import Client
+
+# Initialize client - automatically uses the production API
+client = Client(api_key="your-api-key")
+
+# Analyze a dataset and wait for results
+result = client.analyze(
+    file="data.csv",
+    target_column="price",
+    mode="fast",
+    description="House price dataset from Kaggle",
+    column_descriptions={
+        "age": "Age of the house in years",
+        "price": "Sale price in USD"
+    },
+    visibility="public",
+    wait=True  # Wait for completion and return full results
+)
+
+print(f"Run ID: {result.run_id}")
+print(f"Status: {result.status}")
+print(f"Found {len(result.patterns)} patterns")
+```
+
+## Features
+
+- **Simple API**: Single `analyze()` method handles the entire workflow
+- **Complete Results**: Returns everything shown in the Discovery dashboard
+- **Pandas Support**: Upload DataFrames directly with automatic column inference
+- **Async Support**: Use `analyze_async()` for async workflows
+- **Polling**: Automatically wait for completion with configurable timeout
+
+## What You Get Back
+
+The SDK returns an `AnalysisResult` with everything the Discovery dashboard shows:
+
+### Summary (LLM-generated)
+
+```python
+result.summary.overview           # High-level explanation of findings
+result.summary.key_insights       # List of main takeaways
+result.summary.novel_patterns     # Novel pattern explanations
+result.summary.surprising_findings
+result.summary.statistically_significant
+result.summary.data_insights      # Important features, correlations
+```
+
+### Patterns
+
+```python
+for pattern in result.patterns:
+    print(f"Pattern {pattern.id}: {pattern.description}")
+    print(f"  Direction: {pattern.direction}")
+    print(f"  Lift: {pattern.lift_value}")
+    print(f"  Support: {pattern.support_count} ({pattern.support_percentage:.1%})")
+    print(f"  P-value: {pattern.p_value}")
+    print(f"  Type: {pattern.pattern_type} / {pattern.novelty_type}")
+    print(f"  Conditions: {pattern.conditions}")
+    print(f"  Citations: {len(pattern.citations)}")
+```
+
+### Columns with Feature Importance
+
+```python
+for col in result.columns:
+    print(f"{col.display_name}")
+    print(f"  Type: {col.type} ({col.data_type})")
+    print(f"  Stats: mean={col.mean}, std={col.std}, min={col.min}, max={col.max}")
+    print(f"  Null %: {col.null_percentage}")
+    if col.feature_importance_score:
+        print(f"  Importance: {col.feature_importance_score}")
+```
+
+### Correlation Matrix
+
+```python
+for entry in result.correlation_matrix:
+    print(f"{entry.feature_x} <-> {entry.feature_y}: {entry.value:.3f}")
+```
+
+### Feature Importance
+
+```python
+if result.feature_importance:
+    print(f"Model type: {result.feature_importance.kind}")
+    print(f"Baseline: {result.feature_importance.baseline}")
+    for score in result.feature_importance.scores:
+        print(f"  {score.feature}: {score.score}")
+```
+
+## Configuration
+
+The client automatically uses the production API endpoint. For testing or custom deployments, you can override the URL via the `DISCOVERY_API_URL` environment variable:
+
+```bash
+export DISCOVERY_API_URL="https://custom-api.example.com"
+```
+
+## Configuration Options
+
+All dashboard options are supported:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `file` | `str`, `Path`, or `DataFrame` | - | Dataset file or pandas DataFrame |
+| `target_column` | `str` | - | Name of column to predict |
+| `mode` | `"fast"` / `"deep"` | `"fast"` | Analysis depth |
+| `visibility` | `"public"` / `"private"` | `"public"` | Dataset visibility |
+| `task` | `str` | auto | `"regression"`, `"binary_classification"`, or `"multiclass_classification"` |
+| `description` | `str` | - | Dataset description |
+| `column_descriptions` | `Dict[str, str]` | - | Column name -> description mapping |
+| `timeseries_groups` | `List[Dict]` | - | Timeseries column groups |
+| `auto_train_num_trials` | `int` | 1 | Number of training trials |
+| `auto_train_max_epochs` | `int` | 10 | Maximum training epochs |
+| `auto_report_use_llm_evals` | `bool` | `True` | Use LLM for descriptions |
+| `wait` | `bool` | `False` | Wait for completion |
+| `wait_timeout` | `float` | `None` | Max seconds to wait |
+
+## Async Usage
+
+```python
+import asyncio
+from discovery import Client
+
+async def main():
+    async with Client(api_key="...") as client:
+        # Start analysis without waiting
+        result = await client.analyze_async(
+            file=df,
+            target_column="target"
+        )
+        print(f"Started run: {result.run_id}")
+
+        # Later, get results
+        result = await client.get_results(result.run_id)
+        
+        # Or wait for completion
+        result = await client.wait_for_completion(result.run_id, timeout=600)
+
+asyncio.run(main())
+```
+
+## Step-by-Step API
+
+For more control, use the individual methods:
+
+```python
+# 1. Upload file
+file_info = await client.upload_file("data.csv")
+
+# 2. Create dataset
+dataset = await client.create_dataset(
+    title="My Dataset",
+    description="...",
+    total_rows=1000
+)
+
+# 3. Link file to dataset
+await client.create_file_record(dataset["id"], file_info)
+
+# 4. Define columns
+columns = await client.create_columns(dataset["id"], [
+    {"name": "age", "display_name": "Age", "type": "continuous", ...},
+    {"name": "price", "display_name": "Price", "type": "continuous", ...},
+])
+
+# 5. Start run
+run = await client.create_run(
+    dataset["id"],
+    target_column_id=columns[1]["id"],
+    task="regression",
+    mode="fast"
+)
+
+# 6. Get results
+result = await client.get_results(run["id"])
+```
+
+## Data Types
+
+### AnalysisResult
+
+```python
+@dataclass
+class AnalysisResult:
+    run_id: str
+    report_id: Optional[str]
+    status: str  # "pending", "processing", "completed", "failed"
+    
+    # Dataset metadata
+    dataset_title: Optional[str]
+    dataset_description: Optional[str]
+    total_rows: Optional[int]
+    target_column: Optional[str]
+    task: Optional[str]
+    
+    # Results
+    summary: Optional[Summary]
+    patterns: List[Pattern]
+    columns: List[Column]
+    correlation_matrix: List[CorrelationEntry]
+    feature_importance: Optional[FeatureImportance]
+    
+    # Job tracking
+    job_id: Optional[str]
+    job_status: Optional[str]
+    error_message: Optional[str]
+```
+
+### Pattern
+
+```python
+@dataclass
+class Pattern:
+    id: str
+    task: str
+    target_column: str
+    direction: str  # "min" or "max"
+    p_value: float
+    conditions: List[Dict]  # Continuous, categorical, or datetime conditions
+    lift_value: float
+    support_count: int
+    support_percentage: float
+    pattern_type: str  # "validated" or "speculative"
+    novelty_type: str  # "novel" or "confirmatory"
+    target_score: float
+    description: str
+    novelty_explanation: str
+    target_class: Optional[str]
+    target_mean: Optional[float]
+    target_std: Optional[float]
+    citations: List[Dict]
+```
+
+### Column
+
+```python
+@dataclass
+class Column:
+    id: str
+    name: str
+    display_name: str
+    type: str  # "continuous" or "categorical"
+    data_type: str  # "int", "float", "string", "boolean", "datetime"
+    enabled: bool
+    description: Optional[str]
+    
+    # Statistics
+    mean: Optional[float]
+    median: Optional[float]
+    std: Optional[float]
+    min: Optional[float]
+    max: Optional[float]
+    iqr_min: Optional[float]
+    iqr_max: Optional[float]
+    mode: Optional[str]
+    approx_unique: Optional[int]
+    null_percentage: Optional[float]
+    
+    # Feature importance
+    feature_importance_score: Optional[float]
+```
