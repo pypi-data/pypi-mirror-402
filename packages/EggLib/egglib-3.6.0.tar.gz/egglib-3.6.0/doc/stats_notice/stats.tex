@@ -1,0 +1,1790 @@
+\documentclass{scrartcl}
+
+\usepackage{enumitem}
+\usepackage{setspace}
+\usepackage{color}
+\usepackage{amsmath}
+\usepackage{upgreek}
+\usepackage{xfrac}
+\usepackage{hyperref}
+\usepackage{graphicx}
+
+\newcommand{\cpp}[1]{{\color{blue}{\texttt{#1}}}}
+
+\begin{document}
+
+\title{EggLib's Statistics}
+\subtitle{Version: 3.0.0}
+\author{St\'ephane De Mita \and Mathieu Siol}
+\date{\today}
+
+\maketitle
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{abstract}
+
+This documents lists all statistics computed by EggLib in the
+context of population genetics analysis and provides the formul\ae\ used
+and bibliographic references.
+
+The standard form of accepted data is site, allowing to load data taken
+from sequence alignments, large-scale sequencing or genotyping data, or
+other kinds of markers. Typically, it is expected that the user verifies
+that the site is polymorphic. In addition, the user may have previously
+checked that the site contains enough non-missing data (using
+\cpp{FreqBase::nsam()}, also available from \cpp{FreqBase}'s
+subclasses). \cpp{FreqBase} 
+
+In equations, statistics are named using mathematical notations that are
+not necessarily matching notations from the literature (in particular
+when notations have been inconsistent or when several statistics have
+identical names). For example, in this document, Tajima's $D$ and Fu and
+Li's $D$ are named $D_t$ and $D_{fl}$, respectively, in this document.
+The corresponding accessing functions in the C++ library are given in
+this format: \cpp{Diversity1::D()} and \cpp{Diversity1::Dfl()}. \\
+
+\noindent
+\textbf{Reference:} De Mita S. \& M. Siol. 2012. {EggLib: processing,
+analysis and simulation tools for population genetics and genomics}.
+\href{http://www.biomedcentral.com/1471-2156/13/27/abstract}
+{\textit{BMC Genet.} \textbf{13}:~27} \\
+
+\noindent
+\textbf{URL:} \url{http://egglib.sourceforge.net/}
+
+\end{abstract}
+
+\begin{center}
+    \includegraphics[width=0.2\textwidth,keepaspectratio=true]{v3.jpg}
+\end{center}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+
+\tableofcontents
+
+\newpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Single-site statistics}
+
+These statistics are computed from a single site. Many biological
+marker can fit in this category, including SNPs, SSRs and haplotypes
+after phase reconstruction. Analyzes are provided by the
+\cpp{SiteDiversity} class and data may be loaded from
+several classes (\cpp{Site}, \cpp{DataMatrix}
+or \cpp{VcfParser}).
+
+    %%%%%%%%%%%%%
+
+\subsection{Basic statistics}
+
+The first set of statistics are not really statistics in themselves but are
+important. They can be computed by several methods. In addition to this
+list, the sample sizes are available in the object used to analyze
+polymorphism (usually a subclass of \cpp{FreqBase}). \\
+
+\begin{tabular}{l l l l}                                                                               \hline
+    Stat   &  Accessing method                   &  Explanation                                     \\ \hline
+    $k$    &  \cpp{SiteDiversity::k()}           &  Number of populations                           \\
+    $k_e$  &  \cpp{SiteDiversity::keff()}        &  --- with enough samples \dag                    \\
+    $n_s$  &  \cpp{SiteDiversity::ns()}          &  Number of analyzed samples                      \\
+    $I_o$  &  \cpp{SiteDiversity::orientable()}  &  1 if the site is orientable, 0 otherwise \ddag  \\
+    $d$    &  \cpp{SiteDiversity::derived()}     &  Sum of frequencies of derived alleles \S        \\ \hline
+\end{tabular}
+
+\begin{itemize}
+    \item[\dag] The criterion depends on the method called: at least two
+        samples for standard and differentiation statistics, at least
+        one sample (or diploid sample) for Weir and Cockerham's
+        \textit{F}-statistics (except with two levels of structure where
+        this statistic is not computed) and for allele size variance.
+    \item[\ddag] A site is orientable if and only if exactly one
+        ingroup-specific allele is present in the outgroup.
+    \item[\S] Also available per population.
+\end{itemize}
+
+As set of standard statistics are computed by \cpp{SiteDiversity::stats()}, \\
+\cpp{SiteDiversity::vstats()} (for the allele size variance) and for
+$\uptheta$ estimators, directly by accessors. \\
+
+\begin{tabular}{l l l}                                                                                                         \hline
+    Stat                &   Accessing method                         &  Explanation                                         \\ \hline
+    $A$                 &  \cpp{SiteDiversity::Atot()}               &  Number of alleles \dag                              \\
+    $A_e$               &  \cpp{SiteDiversity::Aeff()}               &  --- excluding outgroup-specific alleles \dag \ddag  \\
+    $\upepsilon$        &  \cpp{SiteDiversity::S()}                  &  --- present in one copy (singletons) \dag           \\
+    $\upepsilon_d$      &  \cpp{SiteDiversity::Sd()}                 &  --- present in one copy (only derived) \dag         \\
+    $R$                 &  \cpp{SiteDiversity::R()}                  &  Allelic richness \ddag                              \\
+    $H'$                &  \cpp{SiteDiversity::pairdiff()}           &  Average number of pairwise differences              \\
+    $H'_{ij}$           &  \cpp{SiteDiversity::pairdiff\_inter(i,j)} &  --- between populations $i$ and $j$                 \\
+    $H_e$               &  \cpp{SiteDiversity::He()}                 &  Unbiased heterozygosity \ddag                       \\
+    $V$                 &  \cpp{SiteDiversity::V()}                  &  Allele size variance \ddag                          \\
+    $\hat{\uptheta}_I$  &  \cpp{SiteDiversity::thetaIAM()}           &  Estimator of $\uptheta$ assuming IAM \ddag          \\
+    $\hat{\uptheta}_S$  &  \cpp{SiteDiversity::thetaSMM()}           &  Estimator of $\uptheta$ assuming SMM \ddag          \\ \hline
+\end{tabular}
+
+\begin{itemize}
+    \item[\dag] An allele is an instance of a marker (nucleotide,
+        haplotype, band or any other) which is present at a non-null
+        frequency (even if fixed) in the considered sample.
+    \item[\ddag] Also available per population.
+\end{itemize}
+
+\begin{displaymath}
+    H' = 1 - \sum_i^{A_e} {p_i}^2
+\end{displaymath}
+
+\begin{displaymath}
+    H'_{ij} = \sum_k^{A_e} p_{ki} \cdot p_{kj}
+\end{displaymath}
+
+\begin{displaymath}
+    H_e = H' \frac{n_s}{n_s-1}
+\end{displaymath}
+
+\begin{displaymath}
+    R = \frac{A_e-1}{n_s-1}
+\end{displaymath}
+
+\begin{displaymath}
+    V = \frac{1}{n_s} \sum_i^{A_e} \left( p_i X_i \right)^2 - \left( \frac{1}{n_s} \sum_i^{A_e} p_i X_i \right)^2
+\end{displaymath}
+
+\begin{displaymath}
+    \hat{\uptheta}_I = \frac{H_e}{1-H_e}
+\end{displaymath}
+
+\begin{displaymath}
+    \hat{\uptheta}_S = \frac{1}{2} \left[ \frac{1}{\left( 1-H_e \right)^2} - 1 \right]
+\end{displaymath}
+
+with $p_i$, the relative frequency of allele $i$, $p_{ij}$ the relative
+frequency of allele $i$ in population $j$, and $X_i$ the integer value
+of allele $i$, which is interpreted as the allele size when it is used. \\
+
+\noindent
+The observed (absolute of frequency can be accessed from the class
+\cpp{GenoFreq} which is designed to hold diploid data (actually, it
+can support any ploidy, provided that it is consistent over samples). \\
+
+\begin{tabular}{l l}                                                           \hline
+    Accessing method           &  Explanation                                \\ \hline
+    \cpp{GenoFreq::Ho()}       &  Absolute frequency of heterozygotes        \\
+    \cpp{GenoFreq::Ho(k)}      &  --- in population $k$                      \\
+    \cpp{GenoFreq::Ho\_out()}  &  --- in the outgroup                        \\
+    \cpp{GenoFreq::het(a)}     &  --- for allele $a$ \dag                    \\
+    \cpp{GenoFreq::het(a,p)}   &  --- for allele $a$ in population $k$ \dag  \\ \hline
+\end{tabular}
+
+\begin{itemize}
+    \item[\dag] Number of heterozygotes containing the allele $a$ (at
+        least one copy, whenever higher level of ploidy are used).
+\end{itemize}
+
+\paragraph{Note} $H_e$ and $R$ are not defined if $n_s <2$. $V$ is not
+defined if $n_s = 0$.
+
+    %%%%%%%%%%%%%
+
+\subsection{Weir and Cockerham's \textit{F}-statistics}
+
+The fixation indices defined by Weir \& Cockerham (1984) are implemented
+in three variants of the methods \cpp{SiteDiversity::fstats()},
+depending on whether one or two levels of structure are processed and
+whether genotypes are available. The statistics are not computed directly in
+the C++ library (in order to let the user compute sums if needed). They
+can be computed using the components of variances.
+
+\paragraph{Diploid data, one level of structure} In the standard case,
+the components of variance are computed as follows (Weir \& Cockerham
+1984): \\
+
+\begin{tabular}{l l l}                                                               \hline
+    Stat  &  Accessing method          &  Source of variance                      \\ \hline
+    $a$   &  \cpp{SiteDiversity::a()}  &  Between populations                     \\
+    $b$   &  \cpp{SiteDiversity::b()}  &  Between individuals within populations  \\
+    $c$   &  \cpp{SiteDiversity::c()}  &  Within individuals                      \\ \hline
+\end{tabular}
+\\
+
+\begin{displaymath}
+    a = \sum_i^{A_e} \frac{\bar{n}}{n_c} \left\{ s^2_i - \frac{1}{\bar{n}-1} \left[ \bar{p}_i(1-\bar{p}_i) - \frac{k_e-1}{k_e}s_i - \frac{1}{4}\bar{h}_i\right]\right\}
+\end{displaymath}
+
+\begin{displaymath}
+    b = \sum_i^{A_e} \frac{\bar{n}}{\bar{n}-1} \left[ \bar{p}_i(1-\bar{p}_i) - \frac{k_e-1}{k_e} s^2_i - \frac{2\bar{n}-1}{4\bar{n}} \bar{h}_i \right]
+\end{displaymath}
+
+\begin{displaymath}
+    c = \sum_i^{A_e} \frac{1}{2} \bar{h}_i
+\end{displaymath}
+
+with:
+
+\begin{displaymath}
+    \bar{n} = \frac{1}{k_e}\sum_i^{k_e} n_i
+\end{displaymath}
+
+\begin{displaymath}
+    n_c = \frac{1}{k_e-1} \left( k_e \cdot \bar{n} - \frac{1}{k_e \cdot \bar{n}}\sum_i^{k_e} {n_i}^2 \right)
+\end{displaymath}
+
+\begin{displaymath}
+    \bar{h}_i = \frac{1}{\bar{n} \cdot k_e} \sum_j^{k_e} h_j
+\end{displaymath}
+
+\begin{displaymath}
+    \bar{p}_i = \frac{1}{k_e} \sum_j^{k_e} \frac{p_{ij}}{n_j}
+\end{displaymath}
+
+\begin{displaymath}
+    s^2_i = \frac{1}{\bar{n}(k_e-1)} \sum_j^{k_e} n_j (p_{ij} - \bar{p}_i)
+\end{displaymath}
+
+where $n_j$ is the number of diploid individuals in population $j$,
+$h_j$ is the number of heterozygotes in population $j$ and $p_{ij}$ is
+the relative frequency of allele $i$ in population $j$.
+
+The user may compute the final statistics using the relations, where
+$\hat{F}$ is the estimator corresponding to $F_{it}$, $\hat{\uptheta}$
+to $F_{st}$, and $\hat{f}$ to $F_{is}$, summing the numerator and
+denominator as needed over loci:
+
+\begin{displaymath}
+    1 - \hat{F} = \frac{c}{a+b+c}
+\end{displaymath}
+
+\begin{displaymath}
+    \hat{\uptheta} = \frac{a}{a+b+c}
+\end{displaymath}
+
+\begin{displaymath}
+    1 - \hat{f} = \frac{c}{b+c}
+\end{displaymath}
+
+\paragraph{Diploid data, two levels of structure} Here is how are
+computed the components of variance when populations are arranged in
+clusters (Weir \& Cockerham 1984): \\
+
+\begin{tabular}{l l l}                                                                 \hline
+    Stat   &  Accessing method           &  Source of variance                      \\ \hline
+    $a$    &  \cpp{SiteDiversity::a()}   &  Between clusters                        \\
+    $b_2$  &  \cpp{SiteDiversity::b2()}  &  Between populations within clusters     \\
+    $b_1$  &  \cpp{SiteDiversity::b1()}  &  Between individuals within populations  \\
+    $c$    &  \cpp{SiteDiversity::c()}   &  Within individuals                      \\ \hline
+\end{tabular}
+\\
+
+\begin{displaymath}
+    a = \sum_i^{A_e} \frac{1}{2 n_2 n_3} \left[ n_3 \upalpha_i - n_1 \upbeta_i - (n_3-n_1) \upgamma_i \right]
+\end{displaymath}
+
+\begin{displaymath}
+    b_2 = \sum_i^{A_e} \frac{1}{2 n_3} \left( \upbeta_i - \upgamma_i \right)
+\end{displaymath}
+
+\begin{displaymath}
+    b_1 = \sum_i^{A_e} \frac{1}{2} \left( \upgamma_i - \updelta_i \right)
+\end{displaymath}
+
+\begin{displaymath}
+    c = \sum_i^{A_e} \updelta_i
+\end{displaymath}
+
+$\upalpha_i$, $\upbeta_i$, $\upgamma_i$ and $\updelta_i$ correspond,
+respectively, to \textit{MSP}, \textit{MSD}, \textit{MSI} and
+\textit{MSG} in Weir and Cockerham (1984). To compute them, we define:
+$K$, the number of clusters; $r_i$, the number of populations in cluster
+$i$; $n_{ij}$ the number of diploid samples of population $j$ of cluster
+$i$; $n_{i.}$ the number of diploid samples in cluster $i$; and $n_{..}$
+the total number of diploid samples. $r'_i$ is the number of populations
+with at least one sample in cluster $i$, $K'$ the number of clusters
+$i$ such that $r'_i > 0$ and $r'$ is the number of populations with at
+least one diploid sample. Then we have:
+
+\begin{displaymath}
+    n_1 = \frac{1}{K'-1} \sum_i^{K'} \sum_j^{r'_i} \frac{(n_{..} - n_{i.}) {n_{ij}}^2}{n_{i.}n_{..}}
+\end{displaymath}
+
+\begin{displaymath}
+    n_2 = \frac{1}{K'-1} \left( n_{..} - \frac{1}{n_{..}} \sum_i^{K'} {n_{i.}}^2 \right)
+\end{displaymath}
+
+\begin{displaymath}
+    n_3 = \frac{1}{r' - K'} \left( n_{..} - \sum_i^{K'} \frac{1}{n_{i.}} \sum_j^{r'_i} {n_{ij}}^2 \right)
+\end{displaymath}
+
+Let $p_{ijk}$ be the relative frequency of allele $i$ in population $k$
+of cluster $j$, $p_{ij.}$ the relative frequency of allele $i$ in
+cluster $j$ and $p_{i.}$ the relative frequency of allele $i$ in the
+whole sample. $k_{ijk}$ is the relative frequency of heterozygotes for
+allele $i$ in population $k$ of cluster $j$. Then we have:
+
+\begin{displaymath}
+    \upalpha_i = \frac{2}{K'-1} \sum_j^{K'} n_{j.} (p_{ij.} - p_{i..})^2
+\end{displaymath}
+
+\begin{displaymath}
+    \upbeta_i = \frac{2}{r'-K'} \sum_j^{K'} \sum_k^{r'_j} n_{jk} (p_{ijk} - p_{ij.})^2
+\end{displaymath}
+
+\begin{displaymath}
+    \upgamma_i = \frac{1}{n_{..} - r'} \left[ 2 \sum_j^{K'} \sum_k^{r'_j} n_{jk} \cdot p_{ijk}(1-p_{ijk}) - \frac{1}{2} \sum_j^{K'} \sum_k^{r'_j} n_{jk} \cdot h_{ijk} \right]
+\end{displaymath}
+
+\begin{displaymath}
+    \updelta_i = \frac{1}{n_{..}} \sum_j^{K'} \sum_k^{r'_j} n_{jk} \cdot h_{ijk}
+\end{displaymath}
+
+There is now two levels fixation indices corresponding to
+between-population differentiation that may be computed,
+$\hat{\uptheta}_1$ and $\hat{\uptheta}_2$, but once again only the
+components of variance are exposed by the library, to allow summing over
+loci:
+
+\begin{displaymath}
+    1 - \hat{F} = \frac{c}{a+b_1+b_2+c}
+\end{displaymath}
+
+\begin{displaymath}
+    \hat{\uptheta}_1 = \frac{a+b_2}{a+b_1+b_2+c}
+\end{displaymath}
+
+\begin{displaymath}
+    \hat{\uptheta}_2 = \frac{a}{a+b_1+b_2+c}
+\end{displaymath}
+
+\paragraph{Haploid data, one level of structure} It is also possible to
+compute $\hat{\uptheta}$ (corresponding to $F_{st}$) with haploid data.
+Again, the C++ library provides only the terms to compute the value, as
+$n$, the numerator, and $d$, the denominator (Weir and Hill, 2002).
+\\
+
+\begin{tabular}{l l l}                                          \hline
+    Stat  &  Accessing method          & Source of variance  \\ \hline
+    $n$   &  \cpp{SiteDiversity::n()}  & Between population  \\
+    $d$   &  \cpp{SiteDiversity::d()}  & Total               \\ \hline
+\end{tabular}
+\\
+
+\begin{displaymath}
+    n = \sum_i^{A_e} \upalpha_i - \updelta_i
+\end{displaymath}
+
+\begin{displaymath}
+    d = \sum_i^{A_e} \upalpha_i + (n_c -1) \updelta_i
+\end{displaymath}
+
+where $\upalpha_i$ is \textit{MSP} and $\updelta_i$ is \textit{MSG} (for
+locus $i$) in Weir and Cockerham (2002) and are computed as follows
+(all terms as previously defined):
+
+\begin{displaymath}
+    \upalpha_i = \frac{1}{k_e} \sum_j^{k_e} n_j(p_{ij}-\bar{p}_i)^2
+\end{displaymath}
+
+and
+
+\begin{displaymath}
+    \updelta_i = \frac{1}{\bar{n}(k_e-1)} \sum_i^{k_e} n_j p_{ij}(1-p_{ij})
+\end{displaymath}
+
+Finally, $\hat{\uptheta}$
+can be obtained easily:
+
+\begin{displaymath}
+    \hat{\uptheta} = \frac{n}{d}
+\end{displaymath}
+
+\paragraph{Note} The components of variance are not computed if
+$k_e < 2$ or if $\bar{n} = k_e$ (meaning that there is not more than one
+sample per population). In the case with two levels of structure, the
+computation is also skipped if the number of clusters is $<2$ or if
+there is not more than one population per cluster (that is, if $r' = K'$).
+
+    %%%%%%%%%%%%%
+
+\subsection{Differentiation statistics}
+
+The method \cpp{SiteDiversity::hstats()} computes the
+differentiation index $D$ of Jost (2008), Nei's $G_{st}$ and Hudson's
+$H_{st}$ (Hudson \textit{et al.} 1992a), as well as Nei and Chesser's
+$\hat{G}_{st}$ (Nei and Chesser 1983) and Hedrick's $\hat{G}'_{st}$
+(Hedrick 2005). All but $D$ are not available directly but must be
+computed by the user using terms provided by the C++ library. \\
+
+\begin{tabular}{l l l}                                                                        \hline
+    Stat           &  Accessing method                &  Explanation                       \\ \hline
+    $D_j$          &  \cpp{SiteDiversity::D()}        &  Jost's differentiation index $D$  \\
+    $H_s$          &  \cpp{SiteDiversity::Hs()}       &  Within-population diversity       \\
+    $\tilde{H}_t$  &  \cpp{SiteDiversity::Httilde()}  &  Total diversity, Hudson's formula \\
+    $\hat{H}_s$    &  \cpp{SiteDiversity::Hse()}      &  Estimator of $H_s$                \\
+    $\hat{H}_t$    &  \cpp{SiteDiversity::Hte()}      &  Estimator of the total diversity  \\  \hline
+\end{tabular}
+\\
+
+\begin{displaymath}
+    H_s = \frac{1}{n_s} \sum_i^{k_e} n_i H_{e,i}
+\end{displaymath}
+
+\begin{displaymath}
+    \tilde{H}_t = H' + \frac{H_s}{k_e \tilde{n}}
+\end{displaymath}
+
+where $H_{e,i}$ is $H_e$ for population $i$ and $\tilde{n}$ is such that:
+
+\begin{displaymath}
+    \frac{1}{\tilde{n}} = \frac{1}{k_e} \sum_i^{k_e}\frac{1}{n_i}
+\end{displaymath}
+
+Hudson's, Nei's, Nei and Chesser's and Hedrick's $F$-statistics must be
+computed by the user as:
+
+\begin{displaymath}
+    H_{st} = 1 - \frac{H_s}{H_e}
+\end{displaymath}
+
+\begin{displaymath}
+    G_{st} = 1 - \frac{H_s}{\tilde{H_t}}
+\end{displaymath}
+
+\begin{displaymath}
+    \hat{G}_{st} = 1 - \frac{\hat{H}_s}{\hat{H}_t}
+\end{displaymath}
+
+\begin{displaymath}
+    \hat{G}'_{st} = \frac{\hat{G}_{st}(k_e-1+\hat{H}_s)}{(k_e-1)(1-\hat{H}_s)}
+\end{displaymath}
+
+In contrast, Jost's $D$ is computed directly using the relation:
+
+\begin{displaymath}
+    D_j = \frac{ (\hat{H}_t - \hat{H}_s)} {1-\hat{H}_s} \cdot \frac{h_e}{k_e-1}
+\end{displaymath}
+
+where:
+
+\begin{displaymath}
+    \hat{H}_s = \frac{1}{k_e} \sum_i^{k_e} H'_i
+\end{displaymath}
+
+\begin{displaymath}
+    \hat{H}_t = 1 - \left( \sum_i^{A_e} \frac{1}{k_e} \sum_j^{k_e} p_{ij} \right)^2 + \frac{\hat{H}_s} {2 \tilde{n} k_e}
+\end{displaymath}
+
+$H'_i$ (as defined above) is the biaised heterogyzosity, or the average
+number of pairwise differences, in population $i$. The statistics are
+not defined if $k_e < 2$.
+
+    %%%%%%%%%%%%%
+
+\subsection{Allele status}
+
+The class \cpp{AlleleStatus} is dedicated to analyze the qualitative
+pattern of allele frequencies over several population. The following
+categories are defined: \\
+
+\begin{tabular}{l l}                                                                     \hline
+    Method                            &  Explanation                                  \\ \hline
+    \cpp{AlleleStatus::num\_pop()}    &  Number of populations                        \\
+    \cpp{AlleleStatus::fixed()}       &  Number of fixed alleles \dag                 \\
+    \cpp{AlleleStatus::shared\_sl()}  &  Number of shared alleles \dag                \\
+    \cpp{AlleleStatus::shared\_ss()}  &  Number of shared polymorphisms \dag          \\
+    \cpp{AlleleStatus::specific()}    &  Number of population-specific alleles \ddag  \\
+    \cpp{AlleleStatus::specific()}    &  --- only derived alleles \ddag               \\ \hline
+\end{tabular}
+
+\begin{itemize}
+    \item[\dag] Also available for all population pairs.
+    \item[\ddag] Also available for all populations.
+\end{itemize}
+
+If several sites are loaded, the sums are available as separate methods.
+A fixed allele is at frequency 0 in a population and at relative
+frequency 1 in another population. A shared allele is present in two
+populations, but might be fixed in either or both. A shared polymorphism
+is like a shared allele, but must be segregating in both populations. A
+population-specific allele is present in only one population.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Multi-site statistics with unphased data}
+
+These statistics are computed by the \cpp{Diversity1} class using
+several sites but only considering allele frequencies.
+
+    %%%%%%%%%%%%%
+
+\subsection{Basic statistics}
+
+They are computed on the fly by \cpp{Diversity1::load()} and updated at
+each loaded site. \\
+
+\begin{tabular}{l l l}      \hline
+    Stat                &  Accessing method                &  Explanation                                \\ \hline
+    $L$                 &  \cpp{Diversity1::num\_sites()}  &  Number of loaded sites \dag \ddag          \\
+    $n_m$               &  \cpp{Diversity1::nsmax()}       &  Maximal number of exploitable samples \dag \\
+    $S$                 &  \cpp{Diversity1::S()}           &  Number of loaded sites \dag                \\
+    $\uppi$             &  \cpp{Diversity1::Pi()}          &  Diversity                                  \\
+    $\upeta$            &  \cpp{Diversity1::eta()}         &  Minimal number of mutations \dag           \\
+    $\Upsilon$          &  \cpp{Diversity1::singletons()}  &  Total number of singletons                 \\
+    $\hat{\uptheta}_t$  &  \cpp{Diversity1::thetaT()}      &  Tajima's $\theta$ estimator                \\
+    $D_{a,ij}$          &  \cpp{Diversity1::Da()}          &  Net pairwise distance $D_a$ $\sharp$       \\
+    $D_{xy,ij}$         &  \cpp{Diversity1::Dxy()}         &  Net pairwise distance $D_{xy}$ $\sharp$    \\
+    $P_m$               &  \cpp{Diversity1::pM(i,j)}       &  $P$-value of Li's MFDM test                \\ \hline
+\end{tabular}
+
+\begin{itemize}
+    \item[\dag] A version is also available for orientable sites only.
+    \item[\ddag] Also available for the number of sites used in Li's MDFM test.
+    \item[$\sharp$] Provided for the first pair of populations ($i=1$ and $j=2$).
+\end{itemize}
+
+\begin{displaymath}
+    \uppi = \sum_i^S H_{e,i}
+\end{displaymath}
+
+\begin{displaymath}
+    \upeta = \sum_i^S A_{e,i} - 1
+\end{displaymath}
+
+\begin{displaymath}
+    \Upsilon = \sum_i^S \epsilon_i - 1
+\end{displaymath}
+
+\begin{displaymath}
+    \hat{\uptheta}_t = \sum_i^S 1 - \sum_j^{A_{e,i}} \frac{c_{ij} (c_{ij}-1)} {n_{s,i}(n_{s,i}-1)} \quad \mbox{(Tajima 1983)}
+\end{displaymath}
+
+\begin{displaymath}
+    D_{xy,ij} = \sum_k^S H'_{kij}
+\end{displaymath}
+
+\begin{displaymath}
+    D_{a,ij} = \sum_k^S H'_{kij} - \frac{H_{e,ki}+H_{e,kj}}{2}
+\end{displaymath}
+
+\begin{displaymath}
+    P_m = \min_i^S \left (\begin{cases}
+        \mbox{undefined}        &  \mbox{if } d_i < n_{s,i} / 2 \\
+        1                       &  \mbox{if } d_i = n_{s,i} / 2 \\
+        \frac{2(n_{s,i} - d_i)}{n_{s,i}-1}  &  \mbox{otherwise}
+    \end{cases} \right) \quad \mbox{(Li 2011)}
+\end{displaymath}
+
+with:
+
+\begin{itemize}
+    \item[] $n_{s,i}$ -- the number of exploitable samples for site $i$
+    \item[] $H_{e,i}$ -- the unbiased heterozygosity of site $i$
+    \item[] $H_{e,ij}$ -- the unbiased heterozygosity of site $i$ for population $j$ only
+    \item[] $A_{e,i}$ -- the number of alleles of sites $i$
+    \item[] $\upepsilon_i$ -- the number of singletons at site $i$
+    \item[] $c_{ij}$ -- the absolute frequency of allele $j$ in site $i$
+    \item[] $H'_{kij}$ -- the average number of pairwise differences at site $k$ between populations $i$ and $j$
+    \item[] $d_i$ -- the sum of frequencies of derived alleles at site $i$
+\end{itemize}
+
+    %%%%%%%%%%%%%
+
+\subsection{Neutrality tests without outgroup}
+
+The method \cpp{Diversity1::basic()} computes the
+following neutrality tests and associated statistics: \\
+
+\begin{tabular}{l l l}                                                                              \hline
+    Stat                &  Accessing method            &  Explanation                            \\ \hline
+    $n_e$               &  \cpp{Diversity1::nseff()}   &  Average number of exploitable samples  \\
+    $\hat{\uptheta}_w$  &  \cpp{Diversity1::thetaW()}  &  $\uptheta$ estimator based on $S$      \\
+    $D_t$               &  \cpp{Diversity1::D()}       &  Tajima's $D$                           \\
+    $D_\upeta$          &  \cpp{Diversity1::Deta()}    &  Tajima's $D$ using $\upeta$ for $S$    \\
+    $D^*_{fl}$          &  \cpp{Diversity1::Dstar()}   &  Fu and Li's $D$ without an outgroup    \\
+    $F^*_{fl}$          &  \cpp{Diversity1::Fstar()}   &  Fu and Li's $F$ without an outgroup    \\ \hline
+\end{tabular}
+\\
+
+\begin{displaymath}
+    n_e = \frac{1}{L} \sum_i^{L} n_{s,i}
+\end{displaymath}
+
+\begin{displaymath}
+    \hat{\uptheta}_w = \frac{S}{a_1} \quad \mbox{(Watterson 1975)}
+\end{displaymath}
+
+\begin{displaymath}
+    D_t = \frac{\uppi - \hat{\uptheta}_w}{\sqrt{\operatorname{var}(\uppi - \hat{\uptheta}_w)}} \quad \mbox{(Tajima 1989)}
+\end{displaymath}
+
+\begin{displaymath}
+    D_\upeta = \frac{\uppi - \upeta}{\sqrt{\operatorname{var}(\uppi - \hat{\uptheta}_w)}}
+\end{displaymath}
+
+with:
+
+\begin{displaymath}
+    \operatorname{var}(\uppi - \hat{\uptheta}_w) = e_1 S + e_2 S(S-1)
+\end{displaymath}
+
+using:
+
+\begin{itemize}
+    \item[] $n'_e = \operatorname{round}(n_e)$
+    \item[] $a_1 = \sum_i^{n'_e - 1} \frac{1}{i}$
+    \item[] $a'_1 = \sum_i^{n'_e} \frac{1}{i}$
+    \item[] $a_2 = \sum_i^{n'_e-1} \frac{1}{i^2}$
+    \item[] $b_1 = \frac{n_e+1 }{ 3(n_e-1)}$
+    \item[] $b_2 = \frac{2(n_e^2 + n_e+3)}{9n_e(n_e-1)}$
+    \item[] $c_1 = b_1 - \frac{1}{a_1}$
+    \item[] $c_2 = b_2 - \frac{n_e+2}{a_1 n_e} + \frac{a_2}{a_1^2}$
+\end{itemize}
+
+\begin{displaymath}
+    D^*_{fl} = \frac{ \frac{n_e}{n_e-1} \upeta - a_1 \Upsilon}  {\sqrt{u_{d*} \upeta + v_{d*} \upeta^2}} \quad \mbox{(Fu \& Li 1993)}
+\end{displaymath}
+
+\begin{displaymath}
+    F^*_{fl} = \frac{\Pi_n - \frac{n_e-1}{n_e} S_s}  {\sqrt{u_{d*} \upeta + v_{d*} \upeta^2}} \quad \mbox{(\textit{id.})}
+\end{displaymath}
+
+using:
+
+\begin{itemize}
+    \item[] $c_n = \frac{2[n_e a_1 - 2(n_e -1)]}{(ne-1)(n_e-2)} \quad \mbox{ if } n_e > 2 \mbox{ (otherwise: 1)}$ 
+    \item[] $d_n = c_n + \frac{n_e-2}{(n_e-1)^2} + \frac{2}{n_e-1} \cdot \left( \frac{3}{2} - \frac{2a'_1-3}{n_e-2} - \frac{1}{n_e} \right)$
+    \item[] $v_{d*} = \frac{1}{{a_1}^2+a_2} \left[ \left( \frac{n_e}{n_e-1} \right)^2 a_2 + {a_1}^2 d_n - \frac{2n_e}{(n_e-1)^2} a_1(a_1+1)   \right]$
+    \item[] $u_{d*} = \frac{n_e}{n_e-1} (a_1 - \frac{n_e}{n_e-1}) - v_{d*}$
+    \item[] $\Pi_n = \frac{2}{n_e(n_e-1)} \sum_i^S H'_i \quad \mbox{ where } H'_i \mbox{ is the average number of pairwise differences for site } i$
+    \item[] $v_{f*} = \frac{1}{{a_1}^2+a_2} \left[ d_n + \frac{2({n_e}^2+n_e+3)}{9n_e(n_e-1)} - \frac{2}{n_e-1} (4a_2 - 6 + \frac{8}{n_e}) \right]$
+    \item[] $u_{f*} = \frac{1}{a_1} \left[ \frac{n_e}{n_e-1}  + \frac{n_e+1}{3(n_e-1)} - \frac{4}{n_e(n_e-1)}  + \frac{2(n_e+1)}{(n_e-1)^2} \cdot (a'_1 - \frac{2n_e}{n_e+1}) \right] - v_{f*}$
+\end{itemize}
+
+\paragraph{Note} It is up to the user to skip computations in cases
+where data are not computable, that is when $n_e < 2$.
+
+    %%%%%%%%%%%%%
+
+\subsection{Neutrality tests with outgroup}
+
+The method \cpp{Diversity1::oriented()} assumes that
+loaded data contain at least one outgroup with exploitable data and computes the
+following neutrality tests and associated statistics: \\
+
+\begin{tabular}{l l l}
+    \hline
+    Stat                &  Accessing method            &  Explanation                                            \\ \hline
+    $n_o$               &  \cpp{Diversity1::nseffo()}  &  Average number of samples for orientable sites         \\
+    $\hat{\uptheta}_l$  &  \cpp{Diversity1::thetaH()}  &  $\uptheta$ estimator based on the number of mutations  \\
+    $\hat{\uptheta}_h$  &  \cpp{Diversity1::thetaH()}  &  $\uptheta$ estimator based on derived alleles          \\
+    $H_{fw}$            &  \cpp{Diversity1::Hns()}     &  Fay and Wu's $H$, unstandardized                       \\
+    $H'_{fw}$           &  \cpp{Diversity1::Hsd()}     &  Fay and Wu's $H$, standardized                         \\
+    $E$                 &  \cpp{Diversity1::E()}       &  Zeng \textit{et al.}'s $E$                             \\
+    $D_{fl}$            &  \cpp{Diversity1::Dfl()}     &  Fu and Li's $D$                                        \\
+    $F_{fl}$            &  \cpp{Diversity1::F()}       &  Fu and Li's $F$                                        \\ \hline
+\end{tabular}
+\\
+
+\begin{displaymath}
+    n_o = \frac{1}{S_o} \sum_i^{S_o} n_{s,i}
+\end{displaymath}
+
+\begin{displaymath}
+    \hat{\uptheta}_h = \frac{2} {n_{mo}(n_{mo}-1)} \sum_i^{n_{mo}-1} i^2 \upxi_i
+\end{displaymath}
+
+\begin{displaymath}
+    \hat{\uptheta}_l = \frac{1}{n_{mo}} \sum_i^{n_{mo}-1} i \upxi_i
+\end{displaymath}
+
+\begin{displaymath}
+    H_{fw} = \uppi \frac{S_o}{S} - \hat{\uptheta}_h \quad \mbox{(Fay \& Wu 2000)}
+\end{displaymath}
+
+\begin{displaymath}
+    H'_{fw} = \frac{\uppi \frac{S_o}{S} - \hat{\uptheta}_l} {\sqrt{V_z}} \quad \mbox{(Zeng \textit{et al.} 2006)}
+\end{displaymath}
+
+\begin{displaymath}
+    E = \frac{\hat{\theta}_l - \hat{\theta}_w} {\sqrt{V_e}} \quad \mbox{(\textit{id.})}
+\end{displaymath}
+
+using:
+
+\begin{itemize}
+    \item[] $S_o$ -- the number of loaded orientable sites, assuming
+        they are all polymorphic
+    \item[] $n_{mo}$ -- the maximal number of samples over orientable
+        sites
+    \item[] $n'_o = \operatorname{round}(n_o)$
+    \item[] $\upxi_i$ -- the number of sites for which $d = i$
+    \item[] $a_{1o} = \sum_i^{n'_o-1} \frac{1}{i}$
+    \item[] $a'_{1o} = \sum_i^{n'_o} \frac{1}{i}$
+    \item[] $a_{2o} = \sum_i^{n'_o-1} \frac{1}{i^2}$
+    \item[] $a'_{2o} = \sum_i^{n'_o} \frac{1}{i^2}$
+    \item[] $\hat{\uptheta}_s = \frac{S_o}{a_{1o}}$
+    \item[] $\hat{\uptheta}'_s = \frac{S_o(S_o-1)}{{a_{1o}}^2+a_{2o}}$
+    \item[] $V_z = \frac{n_o - 2}{6(n_o-1)} \hat{\uptheta}_s + \frac{18{n_o}^2(3n_o+2)a'_{2o} - (88{n_o}^3+9{n_o}^2-13n_o+6)}{9n_o(n_o-1)^2} \hat{\uptheta}'_s$
+    \item[] $V_e = \left[ \frac{n_o}{2(n_o-1)}-\frac{1}{a_{1o}} \right] \hat{\uptheta}_s + \left[ \frac{a_{2o}}{{a_{1o}}^2} + 2a_{2o}\left(\frac{n_o}{n_o-1}\right)^2 - \frac{2(n_oa_{2o}-n_o+1)}{a_{1o}(n_o-1)} - \frac{3n_o+1}{n_o-1} \right] \hat{\uptheta}'_s$
+\end{itemize}
+
+\begin{displaymath}
+    D_{fl} = \frac{\upeta_o - a_{1o} \Upsilon_d} {\sqrt{u_d \upeta_o + v_d {\upeta_o}^2}} \quad \mbox{(Fu \& Li 1993)}
+\end{displaymath}
+
+\begin{displaymath}
+    F_{fl} = \frac{\Pi_{no} - \Upsilon_d} {\sqrt{u_f \upeta_o + v_f {\upeta_o}^2}} \quad \mbox{(\textit{id.})}
+\end{displaymath}
+
+with:
+
+\begin{itemize}
+    \item[] $c_{no} = \frac{2[n_o a_{1o} - 2(n_o -1)]}{(no-1)(n_o-2)} \quad \mbox{ if } n_o > 2 \mbox{ (otherwise: 1)}$ 
+    \item[] $A_{d,i}$ -- the number of derived alleles at site $i$
+    \item[] $\epsilon_{d,i}$ -- the number of derived singletons at site $i$
+    \item[] $\upeta_o = \sum_i^{S_o} A_{d,i} - 1$
+    \item[] $\Upsilon_d = \sum_i^{S_o} \epsilon_{d,i}$
+    \item[] $\Pi_{no} = \frac{2}{n_o(n_o-1)} \sum_i^{S_o} H'_i \quad \mbox{ where } H'_i \mbox{ is the average number of pairwise differences for site } i$
+    \item[] $v_d = 1 + \frac{{a_{1o}}^2}{a_{2o}+{a_{1o}}^2} \cdot \left( c_{no} - \frac{n_o+1}{n_o-1} \right)$
+    \item[] $u_d = a_{1o} - 1 - v_d$
+    \item[] $v_f = \frac{1}{{a_{1o}}^2 + a_{2o}} \left[ c_{no} + \frac{2({n_o}^2+n_o+3)}{9n_o(n_o-1)} - \frac{2}{n_o-1} \right] $
+    \item[] $u_f = \frac{1}{a_{1o}} \left[ 1 + \frac{n_o+1}{3(n_o-1)} - \frac{4(n_o+1)}{(n_o-1)^2} \cdot \left( a'_{1o} - \frac{2n_o}{n_o+1} \right) \right] - v_f$
+\end{itemize}
+
+\paragraph{Note} The same restrictions as for the statistics without
+outgroup apply. The fact that statistics without outgroup can be
+computed does not necessarily imply that statistics with outgroup can be
+computed, as non-orientable sites may be rejected. In contrast, the
+opposite holds (if statistics with outgroup can be computed, then
+statistics without outgroup can be computed as well).
+
+    %%%%%%%%%%%%%
+
+\subsection{Paralog divergence}
+
+The method of Innan (2003) is implemented in the class \cpp{ParalogPi}
+which takes standard \cpp{Site} objects for which the
+populations represent paralog classes, and for which each sample
+represent a paralog copy of an individual, where individuals must be
+represented by one copy in each class. The class computes the following
+statistics: \\
+
+\begin{tabular}{l l l}                                                                                                   \hline
+    Stat            &  Accessing method                 &  Explanation                                                \\ \hline
+    $K$             &  \cpp{ParalogPi.num\_paralogs()}  &  Number of paralogs                                         \\
+    $n$             &  \cpp{ParalogPi.num\_samples()}   &  Number of samples                                          \\
+    $S$             &  \cpp{ParalogPi.num\_sites()}     &  Number of analyzed sites                                   \\
+    $S_i$           &  \cpp{ParalogPi.num\_sites(i)}    &  Number of exploitable sites for paralog $i$ \dag           \\
+    $S_{ij}$        &  \cpp{ParalogPi.num\_sites(i,j)}  &  Number of exploitable sites for paralogs $i$ and $j$ \dag  \\
+    $\uppi_{w,i}$   &  \cpp{ParalogPi.Piw()}            &  Within-paralog $\uppi$ for paralog $i$                     \\
+    $\uppi_{b,ij}$  &  \cpp{ParalogPi.Pib()}            &  Between-paralog $\uppi$ for paralogs $i$ and $j$           \\ \hline
+\end{tabular}
+
+\begin{itemize}
+    \item[\dag] A site is exploitable is there if at least two samples
+        with exploitable data for each of the concerned paralogs.
+\end{itemize}
+
+\begin{displaymath}
+    \uppi_{w,i} =
+        \sum_s^{S_i}
+            \frac{2}{n_{si}(n_{si}-1)}
+            \sum_m^{n_{si}-1}
+                \sum_{n=m+1}^{n_{si}}
+                    \begin{cases}
+                        0 & \text{if } d_{mis} = d_{nis} \\
+                        1 & \text{otherwise}
+                    \end{cases}
+\end{displaymath}
+
+\begin{displaymath}
+    \uppi_{b,ij} =
+        \sum_s^{S_{ij}}
+            \sum_k^{n_p-1}
+                \sum_{l=k+1}^{n_p}
+                    \frac{1}{n_{si}n_{sj}}
+                        \sum_m^{n_{si}}
+                            \sum_n^{n_{sj}}
+                                \begin{cases}
+                                    0 & \text{if } d_{mis} = d_{njs} \\
+                                    1 & \text{otherwise}
+                                \end{cases}
+\end{displaymath}
+
+where $n_{si}$ is the number of exploitable samples for paralog $i$ at
+site $s$, the number of exploitable samples for both paralogs $i$ and
+$j$ at site $s$ and $d_{mis}$ is the allele of sample $m$ for paralog
+$i$ at site $s$.
+
+\paragraph{Note} $\uppi_{w,i}$ is not defined if $S_i < 1$ and
+    $\uppi_{b,ij}$ is not defined if $S_{ij} < 1$.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Multi-site statistics with phased data}
+
+These statistics are computed by the \cpp{Diversity2} class using
+several sites for which the phase is known. The class \cpp{Site} (which
+implies that the phase is known) must be used.
+
+    %%%%%%%%%%%%%
+
+\subsection{Basic statistics}
+
+They are computed on the fly by \cpp{Diversity2::load()} and updated a
+ each loaded site. \\
+
+\begin{tabular}{l l l}                                                                           \hline
+    Stat   &  Accessing method                     &  Explanation                             \\ \hline
+    $n_s$  &  \cpp{Diversity2::num\_samples()}     &  Number of samples                       \\
+    $S$    &  \cpp{Diversity2::num\_sites()}       &  Number of loaded sites \dag             \\
+    $S^*$  &  \cpp{Diversity2::num\_orientable()}  &  --- orientable only \dag                \\
+    $S_c$  &  \cpp{Diversity2::num\_clear()}       &  --- with no missing data \dag           \\
+    $k$    &  \cpp{Diversity2::k()}                &  Average number of pairwise differences  \\
+    $k^*$  &  \cpp{Diversity2::ko()}               &  --- for orientable sites only           \\ \hline
+\end{tabular}
+
+\begin{itemize}
+    \item[$\dag$] They are all assumed to be polymorphic.
+\end{itemize}
+
+$$ k = \sum_i^S H'_i $$
+
+$$ k^* = \sum_i^{S^*} H'_i $$
+
+with:
+
+\begin{itemize}
+    \item[] $H'_i$ -- the average number of pairwise differences for site $i$
+\end{itemize}
+
+    %%%%%%%%%%%%%
+
+\subsection{Singleton-based statistics}
+
+They are computed by \cpp{Diversity2::singletonStats()} following
+Ramos-Onsins \& Rozas (2002). \\
+
+\begin{tabular}{l l p{0.5\textwidth}}                                                                                      \hline
+    Stat     &   Accessing method        &  Explanation                                                                 \\ \hline
+    $R_2$    &  \cpp{Diversity2::R2()}   &  Test based on the number of singletons                                      \\
+    $R^*_2$  &  \cpp{Diversity2::R2E()}  &  --- using external mutations                                                \\
+    $R_3$    &  \cpp{Diversity2::R3()}   &  --- variant                                                                 \\
+    $R^*_3$  &  \cpp{Diversity2::R3E()}  &  --- variant, using external mutations                                       \\
+    $R_4$    &  \cpp{Diversity2::R4()}   &  --- variant                                                                 \\
+    $R^*_4$  &  \cpp{Diversity2::R4E()}  &  --- variant, using external mutations                                       \\
+    $C_h$    &  \cpp{Diversity2::Ch()}   &  Test based on the difference of the number of singletons to its expectation \\
+    $C^*_h$  &  \cpp{Diversity2::ChE()}  &  --- using external mutations                                                \\ \hline
+\end{tabular}
+\\
+
+$$ R_n = \frac{1}{S} \left( \frac{1}{n_s} \sum_i^{n_s} (\uptau_i - \sfrac{k}{2})^n \right)^{\sfrac{1}{n}} $$
+
+$$ R^*_n = \frac{1}{S} \left( \frac{1}{n_s} \sum_i^{n_s} (\uptau^*_i - \sfrac{k}{2})^n \right)^{\sfrac{1}{n}} $$
+
+$$ C_h = \frac{S}{m(S-m)} \left(\sum_i^{n_s} \uptau_i - m\right)^2 $$
+
+$$ C^*_h = \frac{S^*}{m^*(S^*-m^*)} \left(\sum_i^{n_s} \uptau^*_i - m^*\right)^2 $$
+
+with:
+
+\begin{itemize}
+    \item[] $\uptau_i$ -- the number of singletons carried by sequence $i$
+    \item[] $\uptau^*_i$ -- the number of derived singletons carried by sequence $i$
+    \item[] $m = k \frac{n_s}{n_s-1}$
+    \item[] $m^* = k^* \frac{n_s}{n_s-1}$
+\end{itemize}
+
+\paragraph{Note}
+
+Statistics are undefined if there is less than one polymorphic site
+loaded (less than one polymorphic orientable site for statistics based
+on the number of derived singleton).
+
+    %%%%%%%%%%%%%
+
+\subsection{Partition-based statistics}
+
+They are computed by \cpp{Diversity2::partitionStats()} following Wall
+(1999). \\
+
+\begin{tabular}{l l p{0.5\textwidth}}                  \hline
+    Stat  &  Accessing method       &  Explanation  \\ \hline
+    $B$   &  \cpp{Diversity2::B()}  &  Wall's $B$   \\
+    $Q$   &  \cpp{Diversity2::Q()}  &  Wall's $Q$   \\ \hline
+\end{tabular}
+\\
+
+$$ B = \frac{B'} {S_c-1} $$
+$$ Q = \frac{B+n_p} {S_c} $$
+
+where $B'$ is the number of pairs of adjacent sites that induce the
+sample partition and $n_p$ is the number of distinct partitions induced
+by all sites.
+
+\paragraph{Note}
+
+Only sites without any missing data are considered, and $B$ and $Q$ are
+not defined if $S_c < 2$. 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Haplotype analysis}
+
+The class \cpp{Haplotypes} allows to identify haplotypes from a set of
+sites. By default, the method \cpp{Haplotypes::find\_haplotypes()}
+ignores samples with missing data. Samples without missing data are
+affected to haplotypes that all differ at at least one site. The method
+\cpp{Haplotypes::impute\_haplotypes()} attempts to affect each samples
+with some (small) number of missing data to one of the haplotypes
+identified by \cpp{Haplotypes::find\_haplotypes()}. This class can
+generate a \cpp{Site} instance for computing site statistics (which are
+described above).
+
+In this section we discuss statistics available in the \cpp{Haplotypes}
+class, plus the \cpp{Fs()} function. \\
+
+\noindent
+\begin{tabular}{l l l}                                                                                  \hline
+    Stat      &  Accessing method                     &  Explanation                                 \\ \hline
+    $K$       &  \cpp{Haplotypes::num\_haplotypes()}  &  Number of haplotypes                        \\
+    $D_{ij}$  &  \cpp{Haplotypes::get\_dist()}        &  Differences between haplotypes $i$ and $j$  \\
+    $F_{st}$  &  \cpp{Haplotypes::Fst()}              &  Population fixation index                   \\
+    $K_{st}$  &  \cpp{Haplotypes::Hst()}              &  Population fixation index                   \\
+    $S_{nn}$  &  \cpp{Haplotypes::Snn()}              &  Nearest neighbor statistics                 \\
+    $F_s$     &  \cpp{Fs()}                           &  Fu's $F_s$                                  \\ \hline
+\end{tabular}
+\\
+
+The method \cpp{Haplotypes::compute\_dist()} generates the matrix of
+$D_{ij}$ values, and \cpp{Haplotypes::stats()} computes the fixation
+indexes, and \cpp{Haplotypes::Snn()} computes $S_{nn}$ directly (on the
+fly).
+
+$$ F_{st} = 1 - \frac{H_w} {H_b}  \quad \mbox{(Hudson \textit{et al.} 1992b)} $$
+
+where $H_w$ is the average number of pairwise differences of samples
+within populations and $H_b$ is the average number of pairwise
+differences of samples between populations.
+
+$$ K_{st} = 1 - \frac{K_s} {K_t}  \quad \mbox{(Hudson \textit{et al.} 1992a)} $$
+
+with:
+
+$$ K_s = \frac{1}{n_s} \sum_i^{k} \frac{K_i}{n_i-1} $$
+
+$$ K_t = \frac{1}{n_s(n_s-1)} \sum_i^{n_s-1} \sum_{j=i+1}^{n_s} D_{ij} $$
+
+where $n_s$ is the total number of samples, $k$ is the number of
+populations, $n_i$ is the number of samples in population $i$, $K_i$ is
+the sum of number of pairwise differences between samples of population
+$i$. Note that $K_s$ is half the average number of pairwise differences
+within populations, and $K_t$ is half the average number of pairwise
+differences in the total.
+
+$$ S_{nn} = \frac{1}{n_s} \sum_i^{n_s} \frac{N^*_i}{N_i} \quad \mbox{(Hudson 2000)} $$
+
+where $N_i$ is the number of ``nearest neigbhor'' of sample $i$ (that
+is, sequences that have the minimum of pairwise differences), and
+$N^*_i$ is the number of nearest neighbors that belong to the population
+of sample $i$.
+
+$$ F_s = \ln\frac{S'}{1-S'} \quad \mbox{(Fu 1997)} $$
+
+with:
+
+$$ S' = \sum_{i=K}^{n_s} \frac{|S_i| \uppi^k} {\sum_{i=0}^{n_s-1} \uppi + i} $$
+
+where $S_{nk}$ are the Stirling numbers of the first kind. 
+
+\paragraph{Note}
+$F_{st}$ is not defined if there is no polymorphism at all, $K_{st}$ is
+not if there is no between-population polymorphism, or no within- or
+between-population pairs at all. $S_{nn}$ is not defined if there is
+less than two samples. $F_s$ is not defined if there is no polymorphism
+and cannot be computed if the number of samples is over a given
+threshold.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Linkage disequilibrium analyses}
+
+The analyses based on linkage disequilibrium are available through three
+different classes: \cpp{PairwiseLD} for processing a single pair of
+sites, \cpp{MatrixLD} for processing all pairs within a set of sites,
+and \cpp{Rd}, which is devoted to a single statistic ($\bar{r}_d$).
+
+    %%%%%%%%%%%%%
+
+\subsection{Pairwise linkage disequilibrium}
+
+The class \cpp{PairwiseLD} processes a single pair of sites, which will
+be represented by indices $i$ and $j$. The method
+\cpp{PairwiseLD.process()} determines the following variables: \\
+
+\begin{tabular}{l l l}                                                                                    \hline
+    Stat         &  Accessing method                   &  Explanation                                   \\ \hline
+    $A_i$        &  \cpp{PairwiseLD::num\_alleles1()}  &  Number of alleles for site $i$                \\
+    $A_j$        &  \cpp{PairwiseLD::num\_alleles2()}  &  Number of alleles for site $j$                \\
+    $n_s$        &  \cpp{PairwiseLD::nsam()}           &  Number of analyzed samples                    \\
+    $P_{im}$     &  \cpp{PairwiseLD::freq1()}          &  Absolute frequency of allele $m$ at site $i$  \\
+    $P_{jn}$     &  \cpp{PairwiseLD::freq2()}          &  Absolute frequency of allele $n$ at site $j$  \\
+    $P_{ij,mn}$  &  \cpp{PairwiseLD::freq()}           &  Absolute frequency of genotype $\{m, n\}$     \\ \hline
+\end{tabular}
+\\
+
+The relative frequencies are:
+
+\begin{itemize}
+    \item[] $p_{im} =    \sfrac{P_{im}}{n_s}$
+    \item[] $p_{jn} =    \sfrac{P_{jn}}{n_s}$
+    \item[] $p_{ij,mn} = \sfrac{P_{ij,mn}}{n_s}$
+\end{itemize}
+
+The method \cpp{PairwiseLD.compute()} computes linkage disequilibrium
+statistics for a given pair of alleles at the two sites, say $a$ at site
+$i$ and $b$ at site $j$: \\
+
+\begin{tabular}{l l l}                                                                      \hline
+    Stat             &  Accessing method         &  Explanation                          \\ \hline
+    $D_{ij,ab}$      &  \cpp{PairwiseLD::D()}    &  Standard linkage disequilibrium $D$  \\
+    $D'_{ij,ab}$     &  \cpp{PairwiseLD::Dp()}   &  Standardized linkage disequilibrium  \\
+    $r_{ij,ab}$      &  \cpp{PairwiseLD::r()}    &  Correlation coefficient              \\
+    ${r_{ij,ab}}^2$  &  \cpp{PairwiseLD::rsq()}  &  Squared correlation coefficient      \\ \hline
+\end{tabular}
+\\
+
+\begin{displaymath}
+    D_{ij,ab} = p_{ij,ab} - p_{im} p_{jn}
+\end{displaymath}
+
+\begin{displaymath}
+    D'_{ij,ab} = \frac{D_{ij,ab}} {D^*_{ij,ab}} \quad \text{(Lewontin 1964)}
+\end{displaymath}
+
+where $ D^*_{ij,ab} = \begin{cases}
+    \min[p_{im}p_{jn}, (1-p_{im})(1-p_{jn})]  &   \text{ if } D_{ij,ab} < 0  \\
+    \min[p_{im}(1-p_{jn}), (1-p_{im})p_{jn}]  &   \text{ otherwise}
+\end{cases} $
+
+\begin{displaymath}
+    r_{ij,ab} = \frac{D_{ij,ab}} {\sqrt{p_{im}(1-p_{im})p_{jn}(1-p_{jn})}} \quad \text{(Hill \& Robertson 1968)}
+\end{displaymath}
+
+\paragraph{Note}
+Statistics are not computed if there is no valid samples (samples must
+be exploitable at both sites), no polymorphism, or if the pairwise
+comparison does not pass the criteria fixed by options to the
+\cpp{Pairwise::process()} method.
+
+    %%%%%%%%%%%%%
+
+\subsection{Linkage disequilibrium matrix}
+
+The class \cpp{MatrixLD} processes all pairs from a set of \cpp{Site}
+instances. After loading all sites and computing linkage disequilibrium
+using \cpp{MatrixLD::computeLD()}, the following variables are
+available: \\
+
+\begin{tabular}{l l l}                                                                           \hline
+    Stat      &  Accessing method                &  Explanation                               \\ \hline
+    $n_s$     &  \cpp{MatrixLD::nsam()}          &  Number of analyzed samples                \\
+    $n_t$     &  \cpp{MatirxLD::num\_tot()}      &  Total number of processed pairs of sites  \\
+    $n_p$     &  \cpp{MatrixLD::num\_pairs()}    &  Number of accepted pairs of sites \dag    \\
+    $n_{ap}$  &  \cpp{MatrixLD::num\_alleles()}  &  Total number of pairs of alleles          \\
+    $d_{ij}$  &  \cpp{MatrixLD::distance()}      &  Distance between sites $i$ and $j$        \\ \hline
+\end{tabular}
+
+\begin{itemize}
+    \item[\dag] Sites are filtered according to user-provided thresholds
+        (number of samples used and allele frequency).
+\end{itemize}
+
+The linkage disequilibrium statistics can be accessed through the class
+\cpp{PairwiseLD} which is provided for all
+accepted pairs of sites.
+
+\noindent The method \cpp{MatrixLD::computeStats()} computes neutrality
+tests based on pairwise linkage disequilibrium. \\
+
+\begin{tabular}{l l l}                                                                                        \hline
+    Stat            &  Accessing method                           &  Explanation                           \\ \hline
+    $n'_{ap}$       &  \cpp{MatrixLD::num\_allele\_pairs()}       &  Number of used pairs of alleles \dag  \\
+    $n''_{ap}$      &  \cpp{MatrixLD::num\_allele\_pairs\_adj()}  &  Number of used pairs of alleles \ddag \\
+    $Z_{nS}$        &  \cpp{MatrixLD::ZnS()}                      &  Kelly's $Z_{nS}$                      \\
+    $Z^*_{nS}$      &  \cpp{MatrixLD::ZnS\_star1()}               &  Kelly's $Z^*_{nS}$                    \\
+    ${Z^*_{nS}}^*$  &  \cpp{MatrixLD::ZnS\_star2()}               &  Kelly's ${Z^*_{nS}}^*$                \\
+    $Z_a$           &  \cpp{MatrixLD::Za}                         &  Rozas \textit{et al.}'s $Z_a$         \\
+    $Z_Z$           &  \cpp{MatrixLD::ZZ}                         &  Rozas \textit{et al.}'s $Z_Z$         \\ \hline
+\end{tabular}
+
+\begin{itemize}
+    \item[\dag] $n'_{ap}$ may be smaller than $n_{ap}$ if there are
+        sites with more than two alleles (see remark below for the
+        treatment of sites with more than two alleles).
+    \item[\ddag] $n''_{ap}$ is the same as $n'_{ap}$ but considering
+        pairs of adjacent sites.
+\end{itemize}
+
+The user may select three strategies for processing sites that exhibit
+more than two alleles:
+
+\begin{enumerate}
+    \item Ignore all pairs for which one site has more than two alleles.
+    \item Use the most frequent allele at each site.
+    \item Use all possible pairs of alleles.
+\end{enumerate}
+
+\begin{displaymath}
+    Z_{nS} = \frac{1}{n'_{ap}} \sum_i^{n'_{ap}} {r_i}^2 \quad \text{(Kelly 1997)}
+\end{displaymath}
+
+\begin{displaymath}
+    Z^*_{nS} = Z_{nS} + 1 - \frac{1}{n'_{ap}}\sum_i^{n'_{ap}} {D'_i}^2 \quad \text{(\textit{id.})}
+\end{displaymath}
+
+\begin{displaymath}
+    {Z^*_{nS}}^* = \frac {Z_{nS}} {\frac {1} {n'_{ap}} \sum_i^{n'_{ap}} {D'_i}^2} \quad \text{(\textit{id.})}
+\end{displaymath}
+
+\begin{displaymath}
+    Z_a = \frac{1}{n''_{ap}} \sum_i^{n'_{ap}} 
+        \begin{cases}
+            {r_i}^2  &  \text{for adjacent sites} \\
+            0        &  \text{otherwise}
+        \end{cases} \quad \text{(Rozas \textit{et al.} 2001)}
+\end{displaymath}
+
+\begin{displaymath}
+    Z_Z = Z_a - Z_{nS} \quad \text{(\textit{id.})}
+\end{displaymath}
+
+where ${r_i}^2$ is the squared correlation coefficient for a given pair
+of alleles of a pair of sites, noted ${r_{ij,ab}}^2$ above, and $D'_i$
+is Lewontin's $D'$ value for the same pair of sites ($D'_{ij,ab}$).
+
+\paragraph{Note} Kelly's and Rozas \textit{et al.}'s  statistics are
+not defined if the number of processed pairs $n'_{ap}$ and $n''_{ap}$,
+respectively, is 0.
+
+    %%%%%%%%%%%%%
+
+\subsection{$R_{min}$ and $\bar{r}_d$}
+
+$R_{min}$ (Hudson \& Kaplan 1985) is computed by the method
+\cpp{MatrixLD::computeRmin()} which exposes the following values: \\
+
+\begin{tabular}{l l}                                                                                 \hline
+    Accessing method                    &  Explanation                                            \\ \hline
+    \cpp{MatrixLD::Rmin()}              &  $R_{min}$, the minimal number of recombination events  \\
+    \cpp{MatrixLD::Rmin\_num\_sites()}  &  Number of sites used to compute $R_{min}$              \\
+    \cpp{MatrixLD::Rmin\_left()}        &  Get an recombination interval (left bound)             \\
+    \cpp{MatrixLD::Rmin\_right()}       &  Get an recombination interval (rigth bound)            \\ \hline
+\end{tabular}
+\\
+
+For a rigorous description of the algorithm for computing $R_{min}$, see
+Appendix 2 of Hudson \& Kaplan (1985). In short, $R_{min}$ is computed
+as the smallest possible number of non-overlapping intervals between
+sites violating the four-gamete rule (if the four gametes are present
+in the sample for a given pair of sites, then a recombination must have
+occurred between these sites). In case of oriented sites, the
+four-gamete rule becomes the three-gamete rule and the approach is
+unchanged. The positions of sites defining the final set of
+non-overlapping intervals are available as \cpp{MatrixLD::Rmin\_left()}
+and \cpp{MatrixLD::Rmin\_right()}.
+
+\paragraph{Note} If there are less than two sites, \cpp{MatrixLD::Rmin\_num\_sites()}
+is set to 0. If \cpp{MatrixLD::Rmin\_num\_sites()} is less than 2, all
+the other $R_{min}$ variables are defined.
+\\
+
+\noindent The class \cpp{Rd} is specifically dedicated to the $\bar{r}_d$
+statistic. \\
+
+\begin{tabular}{l l l}                                                              \hline
+    Stat         &  Accessing method  &  Explanation                             \\ \hline
+    $\bar{r}_d$  &  \cpp{Rd::rD()}    &  Multilocus linkage disequilibrium \dag  \\ \hline
+\end{tabular}
+
+\begin{itemize}
+    \item[\dag] $\bar{r}_d$ is available for per population and for the
+        total sample.
+\end{itemize}
+
+$$ \bar{r}_d = \frac{\sum_i^{S-1}\sum_{j=i+1}^S \operatorname{cov}(d_i, d_j)}
+                    {\sum_i^{S-1}\sum_{j=i+1}^S\sqrt{\operatorname{var}(d_i)\operatorname{var}(d_j)}}$$
+
+where $S$ is the number of loaded sites (which must all be polymorphic),
+$\operatorname{var}(d_i)$ is the variance of the genetic distance
+between samples at site $i$ (skipping samples that have missing data at
+this site), and $\operatorname{cov}(d_i, d_j)$ is the covariance of the
+genetic distance between samples at sites $i$ and $j$ (skipping samples
+with missing data at either site). The genetic distance is 0 or 1 when
+alleles are loaded, and 0, 1 or 2 when genotypes are loaded.
+
+\paragraph{Note} $\bar{r}_d$ is always computed, but its value is not
+defined if there is not polymorphism (this may happen easily within
+populations).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Extended haplotype heterozygosity}
+
+EHH statistics are computed by two classes, \cpp{EHH} for phased data
+and \cpp{EHHG} for unphased diploid data (using observed heterozygosity).
+Both \cpp{EHH} and \cpp{EHHG} classes process full sites. Individuals
+must match over sites in both cases. \cpp{EHH} ignores genotypes while
+\cpp{EHHG} requires them. Both classes require that a core site is
+loaded first and then distant sites. In this section, all EHH statistics
+are renamed using a variety of Greek letters (the correspondance can be
+found in tables listing EHH statistics).
+
+    %%%%%%%%%%%%%
+
+\subsection{EHH with phased data}
+
+\paragraph{Variables}
+
+Here are the variables used for computing EHH statistics: \\
+
+\begin{tabular}{ l l }                                                                                            \hline
+    Stat        &  Explanation                                                                                 \\ \hline
+    $L$         &  Number of sites (excluding core)                                                            \\
+    $K_0$       &  Number of core haplotypes                                                                   \\
+    $K_s$       &  Number of haplotypes at site $s$                                                            \\
+    $R$         &  Number of populations                                                                       \\
+    $n_{ir}$    &  Number of samples of core haplotype $i$ in population $r$                                   \\
+    $n_{i*}$    &  Number of samples of core haplotype $i$ in total                                            \\
+    $n_{*r}$    &  Number of samples in population $r$                                                         \\
+    $n_{**}$    &  Total number of samples                                                                     \\
+    $P_{sijk}$  &  Probability that sample $j$ of core haplotype $i$ is haplotype $k$ at site $s$              \\
+    $D_{sij}$   &  Allele index for sample $j$ of core haplotype $i$ at site $s$                               \\
+    $H_{sk}$    &  Allele index for haplotype $k$ at site $s$                                                  \\
+    $A_s$       &  Number of alleles at site $s$                                                               \\
+    $f_{sak}$   &  Frequency (at current site $s$) of allele $a$ in samples of haplotype $k$ at site $s-1$     \\
+    $d_s$       &  Distance of site $s$ from core site (note: $d_s \geq 0$, $d_s \geq d_{s-1}$ and $d_0 = 0$)  \\ \hline
+\end{tabular}
+\\
+
+\noindent For readability, iterators names are used consistently in
+this section and the next one: \\
+
+\begin{tabular}{l}            \hline
+    Iterator               \\ \hline
+    $1 \leq s \leq L$      \\
+    $1 \leq i \leq K_0$    \\
+    $1 \leq j \leq n_{i*}$ \\
+    $1 \leq k \leq K_s$    \\
+    $1 \leq r \leq R$      \\
+    $1 \leq a \leq A_s$    \\ \hline
+\end{tabular}
+\\
+
+\noindent In addition, the following indicator functions are defined:
+
+\begin{displaymath}
+I(x,y) = \begin{cases}
+    1, & \text{if } x = y \\
+    0, & \text{otherwise}
+    \end{cases}
+\end{displaymath}
+
+\begin{displaymath}
+    V(s,i,j,k) = \begin{cases}
+    0, & \text{if } D_{sijk} \text{ is missing}\\
+    1, & \text{otherwise}
+  \end{cases}
+\end{displaymath}
+
+\begin{displaymath}
+    M(i,j,r) = \begin{cases}
+    1, & \text{if sample } i \text{ of population } j \text{ belongs to population } r \\
+    0, & \text{otherwise}
+   \end{cases}
+\end{displaymath}
+
+With $*$ used as a wild card for representing the whole sample, we have
+$M(i,j,*) = 1$ \\
+
+\paragraph{Accessory statistics}
+
+\noindent Below is the list of accessory statistics computed by the
+class \cpp{EHH}: \\
+
+\noindent \begin{tabular}{ l l l }                                                                             \hline
+    Stat      &  Method                      &  Explanation                                                 \\ \hline
+    $K_0$     &  \cpp{EHH::Kcore()}          &  Number of core haplotypes \dag                              \\
+    $K_s$     &  \cpp{EHH::K()}              &  Current number of haplotypes \ddag                          \\
+    $R$       &  \cpp{EHH::R()}              &  Number of populations \dag                                  \\
+    $n_{**}$  &  \cpp{EHH::nsam()}           &  Number of samples \dag\S$\sharp$                            \\
+              &  \cpp{EHH::ncur()}           &  Number of exploitable samples at last distant site \ddag\S  \\
+              &  \cpp{EHH::num\_decay()}     &  Number of EHH values that reached decay threshold \ddag     \\
+              &  \cpp{EHH::num\_intrg()}     &  Number of iHH values still incrementing \ddag               \\
+              &  \cpp{EHH::num\_intrg\_c()}  &  Number of iHHc values still incrementing \ddag              \\
+              &  \cpp{EHH::intrg\_S()}       &  True if iES is still incrementing \ddag                     \\ \hline
+\end{tabular}
+
+\begin{itemize}
+    \item[$\dag$] Available after the core site has been loaded, if
+        there was exploitable polymorphism.
+    \item[$\ddag$] Available after at least one distant site has been
+        loaded, also requiring exploitable polymorphism.
+    \item[\S] Available for population $r$ ($n_{*r}$), for core
+        haplotype $i$ ($n_{i*}$), for population $r$ and haplotype $i$
+        jointly ($n_{ir}$), and for the total ($n_{**}$).
+    \item[$\sharp$] Samples with missing data at core are ignored
+        throughout all loaded distant sites.
+\end{itemize}
+
+\paragraph{EHH statistics}
+
+\noindent Below is the list of EHH statistics computed by the class
+\cpp{EHH}: \\
+
+\setstretch{1.1}
+\noindent \begin{tabular}{ l l l }                                                                                           \hline
+    Stat                  &  Method               &  Explanation                                                          \\ \hline
+    $\Psi_{sir}$          &  \cpp{EHH::EHHi()}    &  EHH for core haplotype $i$ \dag                                      \\
+    $\Psi'_{sir}$         &  \cpp{EHH::EHHc()}    &  EHH for the complement of core haplotype $i$ \dag                    \\
+    $\Upsilon_{sir}$      &  \cpp{EHH::rEHH()}    &  EHHr for core haplotype $i$ \dag                                     \\
+    $\uppsi_{sir}$        &  \cpp{EHH::iHH()}     &  iHH for core haplotype $i$ \ddag                                     \\
+    $\uppsi'_{sir}$       &  \cpp{EHH::iHHc()}    &  iHH for the complement of core haplotype $i$ \ddag                   \\
+    $\uplambda_{sir}$     &  \cpp{EHH::iHS()}     &  iHS for core haplotype $i$ \ddag                                     \\
+    $\Phi_{sr}$           &  \cpp{EHH::EHHS()}    &  EHHS (for whole site) \S                                             \\
+    $\upphi_{sr}$         &  \cpp{EHH::iES()}     &  iES ratio \S                                                         \\
+    $\updelta^t_{ir}$     &  \cpp{EHH::decay()}   &  EHH decay distance for core haplotype $i$ at threshold $t$ $\sharp$  \\
+    $\bar{\updelta}^t_r$  &  \cpp{EHH::davg()}    &  average of EHH decay distance with threshold $t$  $\sharp$           \\
+    $\dot{\updelta}^t_r$  &  \cpp{EHH::dmax()}    &  maximum of EHH decay distance with threshold $t$  $\sharp$           \\
+    $\upgamma^t_r$        &  \cpp{EHH::decayS()}  &  EHHS decay distance for at threshold $t$  $\sharp$                   \\ \hline
+\end{tabular}
+\setstretch{1}
+
+\begin{itemize}
+    \item[--] Note: $s$ stands for the current site and and $r$ for one
+        population. All statistics that are expressed for a population
+        are also available for the total.
+    \item[\dag] Following Sabeti \textit{et al.} (2002).
+    \item[\ddag] Following Voight \textit{et al.} (2006).
+    \item[\S] Following Tang \textit{et al.} (2007).
+    \item[$\sharp$] After Ram\'irez-Soriano \textit{et al.} (2008).
+\end{itemize}
+
+\paragraph{Computation}
+
+Here, we will allow for missing data, therefore we need to compute the
+probabilities of haplotypes taking into account allele frequencies for
+each loaded distant site. For a starter, if $k > K_{s-1}$, then
+$P_{(s-1)ijk} = P_{(s-1)ijp}$ where $p$ is the parent of $k$ (this is
+how we find probabilities of haplotypes at previous sites by following
+the haplotype hierarchy).
+
+\begin{displaymath}
+f_{sak} = \sum_{i=1}^{K_0} { \sum_{j=1}^{n_{i*}} { I(D_{sij},a) \cdot P_{(s-1)ijk} } } /
+    \sum_{i=1}^{K_0} { \sum_{j=1}^{n_{i*}} { V(D_{sij}) \cdot P_{(s-1)ijk} } }
+\end{displaymath}
+
+\begin{displaymath}
+P_{0ijk} = \begin{cases}
+    1, & \text{if } i \neq k\\
+    0, & \text{otherwise}
+  \end{cases}
+\end{displaymath}
+
+\begin{displaymath}
+    P_{sijk} =
+    \begin{cases}
+        P_{(s-1)ijk} \cdot f_{sD_{sij}k} , & \text{if } V(D_{sij}) = 0 \\
+        P_{(s-1)ijk} ,                     & \text{if } D_{sij} = H_{sk} \\
+        0 ,                                & \text{otherwise}
+    \end{cases}
+\end{displaymath}
+
+The EHH statistics are computed as follows (note that statistics
+computed for a population $r$ can also be computed for the total):
+
+\begin{displaymath}
+    \Psi_{sir} = \sum_{k=1}^{K_s}\left(\frac{1}{n_{ir}}\sum_{j=1}^{N_{i*}}{M(i,j,r) \cdot p_{sijk}}\right)^2
+\end{displaymath}
+
+\begin{displaymath}
+    \Psi'_{sir} = \sum_{k=1}^{K_s}\left(\frac{1}{n_{*r} - n_{ir}}\sum_{i' \neq i}^{K_0}\sum_{j=1}^{N_{i*}}{M(i,j,r) \cdot p_{si'jk}}\right)^2
+\end{displaymath}
+
+\begin{displaymath}
+    \Upsilon_{sir} = \Psi_{sir} / \Psi'_{sir}
+\end{displaymath}
+
+IHH:
+
+\begin{displaymath}
+    \uppsi_{sir} = \sum_{s'=1}^s \frac{(d_{s'}-d_{s'-1}) (\Psi_{s'ir} + \Psi_{(s'-1)ir})}{2}
+\end{displaymath}
+
+\begin{displaymath}
+    \uppsi'_{sir} = \sum_{s'=1}^s \frac{(d_{s'}-d_{s'-1})(\Psi'_{s'ir} + \Psi'_{(s'-1)ir})}{2}
+\end{displaymath}
+
+\begin{displaymath}
+    \uplambda_{sir} = \ln \left( \frac{\uppsi'_{sir}}{\uppsi_{sir}} \right)
+\end{displaymath}
+
+EHHS and iES:
+
+\begin{displaymath}
+    \Phi_{sr} = \frac
+        { 1 - \frac{n_{*r}}{n_{*r}-1} \left[ 1 - \frac{1}{{n_{*r}}^2} \sum_{k=1}^{K_s}{\left(\sum_{i=1}^{K_0}\sum_{j=1}^{n_{i*}}M(i,j,r) \cdot p_{ijk} \right)^2 } \right] }
+        { 1 - \frac{n_{*r}}{n_{*r}-1} \left( 1 - \frac{1}{{n_{*r}}^2} \sum_{i=1}^{K_0}{n_{ir}}^2 \right) }
+\end{displaymath}
+
+\begin{displaymath}
+    \upphi_{sr} = \sum_{s'=1}^s \frac{(d_{s'}-d_{s'-1}) (\Phi_{s'r} + \Phi_{(s'-1)r})}{2}
+\end{displaymath}
+
+Decay statistics:
+
+\begin{displaymath}
+    \updelta^t_{ir} = d_s \text{ such as } \Psi_{(s-1)ir} > t \text{ and } \Psi_{sir} \leq t
+\end{displaymath}
+
+\begin{displaymath}
+    \bar{\updelta}^t_r = \frac{1}{N_{*r}} \sum_{i=1}^{K_0}N_{ir}\updelta^t_{ir}
+\end{displaymath}
+
+\begin{displaymath}
+    \dot{\updelta}^t_r = \max_i{\updelta^t_{ir}}
+\end{displaymath}
+
+\begin{displaymath}
+    \upgamma^t_r = d_s \text{ such as } \Phi_{(s-1)r} > t \text{ and } \Phi_{sr} \leq t
+\end{displaymath}
+
+    %%%%%%%%%%%%%
+
+\subsection{EHH with unphased data}
+
+\paragraph{Variables}
+
+Here are the variables used for computing EHHG statistics: \\
+
+\begin{tabular}{ l l }                                                                                           \hline
+    Stat       &  Explanation                                                                                 \\ \hline
+    $L$        &  Number of sites (excluding core)                                                            \\
+    $K_0$      &  Number of core genotypes                                                                    \\
+    $K_s$      &  Number of genotypes at site $s$                                                             \\
+    $R$        &  Number of populations                                                                       \\
+    $n_r$      &  Number of samples in population $r$                                                         \\
+    $n_*$      &  Total number of samples                                                                     \\
+    $T_{sgh}$  &  Probability of $g$ at site $s$ given $h$ at $s-1$                                           \\
+    $P_{sig}$  &  Probability that sample $i$ is genotype $g$ at site $s$                                     \\
+    $D_{si}$   &  Genotype index for sample $i$ at site $s$                                                   \\
+    $d_s$      &  Distance of site $s$ from core site (note: $d_s \geq 0$, $d_s \geq d_{s-1}$ and $d_0 = 0$)  \\ \hline
+\end{tabular}
+\\
+
+\noindent Here are the iterators used while computing EHHG statistics: \\
+
+\begin{tabular}{l}              \hline
+    Iterator                 \\ \hline
+    $1 \leq s \leq L$        \\
+    $1 \leq i \leq n_*$      \\
+    $1 \leq r \leq R$        \\
+    $1 \leq g \leq K_s$      \\
+    $1 \leq h \leq K_{s-1}$  \\ \hline
+\end{tabular}
+\\
+
+\noindent In addition, the following indicating functions are defined:
+
+\begin{displaymath}
+    I(x,y) = \begin{cases}
+        1, & \text{if } x = y \\
+        0, & \text{otherwise}
+    \end{cases}
+\end{displaymath}
+
+\begin{displaymath}
+    V(s,i,k) = \begin{cases}
+        1, & \text{if } D_{sik} \text{ is not missing} \\
+        0, & \text{otherwise}
+      \end{cases}
+\end{displaymath}
+
+\begin{displaymath}
+    M(i,r) = \begin{cases}
+        1, & \text{if sample } i \text{ belongs to population } r \\
+        0, & \text{otherwise}
+       \end{cases}
+\end{displaymath}
+
+With $*$ used as a wild card for representing the whole sample, we have
+$M(i,*) = 1$
+
+\begin{displaymath}
+    H(s,g) = \begin{cases}
+        1, & \text{if } g \text{ is homozygote} \\
+        0, & \text{otherwise}
+    \end{cases}
+\end{displaymath}
+
+\paragraph{Accessory statistics}
+
+\noindent Below is the list of accessory statistics computed by the
+class \cpp{EHHG}: \\
+
+\noindent \begin{tabular}{ l l l }                                                                    \hline
+    Stat     &  Method               &  Explanation                                                \\ \hline
+    $K_s$    &  \cpp{EHHG::K()}      &  Current number of haplotypes \ddag                         \\
+    $R$      &  \cpp{EHHG::R()}      &  Number of populations \dag                                 \\
+    $n_{*}$  &  \cpp{EHHG::nsam()}   &  Number of samples (including missing data at core) \dag\S  \\
+             &  \cpp{EHHG::ncur()}   &  Number of exploitable samples at last distant site \dag\S  \\
+             &  \cpp{EHHG::intrg()}  &  True if iES is still incrementing \ddag                    \\ \hline
+\end{tabular}
+
+\begin{itemize}
+    \item[$\dag$] Available after the core site has been loaded, if
+        there was exploitable polymorphism.
+    \item[$\ddag$] Available after at least one distant site has been
+        loaded, also requiring exploitable polymorphism.
+    \item[\S] Available for population $r$ ($n_r$) and for total ($n_*$).
+\end{itemize}
+
+\paragraph{EHHG statistics}
+
+\noindent Below is the list of EHH statistics computed by the class
+\cpp{EHHG}: \\
+
+\setstretch{1.1}
+\noindent \begin{tabular}{ l l l }                                              \hline
+    Stat            &  Method               &  Explanation                   \\ \hline
+    $\Phi_{sr}$     &  \cpp{EHHG::EHHS()}   &  EHHS value \S                 \\
+    $\upphi_{sr}$   &  \cpp{EHHG::iES()}    &  iES ratio \S                  \\
+    $\upgamma^t_r$  &  \cpp{EHHG::decay()}  &  EHHS decay distance $\sharp$  \\ \hline
+\end{tabular}
+\setstretch{1}
+
+\begin{itemize}
+    \item[--] Note: $s$ stands for the current site and and $r$ for one
+        population. All statistics are also available for the total.
+    \item[\S] Following Tang \textit{et al.} (2007).
+    \item[$\sharp$] After Ram\'irez-Soriano \textit{et al.} (2008).
+\end{itemize}
+
+\paragraph{Computation}
+
+The computation of EHHG statistics is based on the matrix of
+probabilities of all possible genotypes which is updated at each site.
+
+\begin{displaymath}
+    T_{sgh} = \frac{\sum_{i=1}^n{I(D_{si},g) \cdot P_{(s-1)ih}}} {\sum_{i=1}^n{P_{(s-1)ih}}}
+\end{displaymath}
+
+\begin{displaymath}
+    P_{sig} = \begin{cases}
+        \sum_{h=1}^{K_{s-1}}P_{(s-1)ih} \cdot T_{sgh},  & \text{if } V(D_{si}) = 0 \\
+        1,                                              & \text{if } D_{si} = g    \\
+        0,                                              & \text{otherwise}
+    \end{cases}
+\end{displaymath}
+
+The initial probability values are determined as follows:
+
+\begin{displaymath}
+    P_{0ig} = \begin{cases}
+        \frac{\sum_{j=1}^{n*}{I(D_{sj},g)}}{n*},   & \text{if } V(D_{si}) = 0 \\
+        1,                                        & \text{if }D_{si} = g      \\
+        0,                                        & \text{otherwise}
+    \end{cases}
+\end{displaymath}
+
+The EHHG statistics are computed as follows (note that statistics
+computed for a population $r$ can also be computed for the total):
+
+\begin{displaymath}
+    \Phi_{sr} = \frac{\sum_{i=1}^{n_*}{M(i,r)\sum_{g=1}^{K_s}H(s,g) \cdot P_{sig}}}
+        {\sum_{i=1}^{n_*}{M(i,r)\sum_{g=1}^{K_0}H(0,g) \cdot P_{0ig}}}
+\end{displaymath}
+
+\begin{displaymath}
+    \upphi_{sr} = \sum_{s'=1}^s \frac{(d_{s'}-d_{s'-1}) (\Phi_{s'r} + \Phi_{(s'-1)r})}{2}
+\end{displaymath}
+
+\begin{displaymath}
+    \upgamma^t_r = d_s \text{ such as } \Phi_{(s-1)r} > t \text{ and } \Phi_{sr} \leq t
+\end{displaymath}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Coding site analysis}
+
+The analysis of coding data is performed site-by-site. Each coding site
+is passed through a triplet of \cpp{Site} to the class \cpp{CodingSite}
+which performs elementary operations. \cpp{CodingSite} computes the
+following values: \\
+
+\begin{tabular}{l l l}                                                                             \hline
+    Stat        &  Method                          &  Explanation                               \\ \hline
+    $n$         &  \cpp{Codingsite::ns()}          &  Number of samples                         \\
+    $n_e$       &  \cpp{Codingsite::nseff()}       &  Number of exploitable samples \dag        \\
+    $n_{stop}$  &  \cpp{Codingsite::nstop()}       &  Number of stop codons \ddag               \\
+    $L_{NS}$    &  \cpp{Codingsite::NSsites()}     &  Estimated number of non-synonymous sites  \\ \hline
+\end{tabular}
+
+\begin{itemize}
+    \item[\dag] Samples containing missing data at either position of
+        the codon are excluded. Samples presenting a stop codons may be
+        excluded as well, depending of the value of an option.
+    \item[\ddag] Returns the number of stop codons even if stop codons
+        are considered as missing data.
+\end{itemize}
+
+In addition, \cpp{CodingSite} provides a \cpp{Site} instance containing
+the amino acid value for every sample, and another for codons recoded as
+a single integer. These objects can be used to compute actual diversity
+statistics using any other class of the libraty, typically
+\cpp{SiteDiversity}. \\
+
+\noindent
+The estimated number of non-synonymous sites $L_{NS}$ is computed as:
+
+$$ L_{NS} = \frac{1}{n_e}  \sum_i^{n_e} \sum_j^3 F_{ij} \quad \text{(Nei \& Gojobori 1986)} $$
+
+where $F_{ij}$ is the proportion of nucleotide substitutions affecting
+the codon of sample $i$ at position $j$ that would lead to an amino acid
+changes. The possible values of $F_{ij}$ are in principle 0,
+$\sfrac{1}{3}$, $\sfrac{2}{3}$ and 1 (there are three possible
+nucleotide substitutions). If stop codons are ignored, nucleotide
+substitutions causing a change to a stop codons are discarded. Otherwise
+there are considered as non-synonymous changes.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{References}
+
+\begin{flushleft}
+\begin{enumerate}[leftmargin=!,labelindent=5pt,itemindent=-15pt]
+
+    \item[] Agapow P.-M \& A. Burt. 2001. Indices of multilocus linkage
+        disequilibrium. \textit{Mol. Ecol. Res.} \textbf{1}:~101-102.
+
+    \item[] Fay J.~C. \& C.~I Wu. 2000. Hitchhiking under positive
+        Darwinian selection. \textit{Genetics} \textbf{155}:~1405-1413.
+
+    \item[] Fu Y.-X. 1997. Statistical tests of neutrality of mutations
+        against population growth, hitchhiking and background selection.
+        \textit{Genetics} \textbf{147}:~915-925.
+
+    \item[] Fu Y.-X. \& W.-H. Li 1993. Statistical tests of neutrality
+        of mutations. \textit{Genetics} \textbf{133}:~693-709.
+
+    \item[] Hedrick P.~W. 2005. A standardized genetic differentiation
+        measure. \textit{Evolution} \textbf{17}:~4015-4026.
+
+    \item[] Hill W.~G. \& A. Robsetson A. 1968. Linkage disequilibrium
+        in finite populations. \textit{Theor. Popul. Biol.}
+        \textbf{38}:~226-231.
+
+    \item[] Hudson R.~R. 2000. A new statistic for detecting genetic
+        differentiation. \textit{Genetics} \textbf{155}:~2011-2014.
+
+    \item[] Hudson R.~R., D.~D. Boos \& N.~L. Kaplan. 1992a. A
+        statistical test for detecting geographic subdivision.
+        \textit{Mol. Biol. Evol.} \textbf{9}:~138-151.
+
+    \item[] Hudson R.~R \& N.~L Kaplan. 1985. Statistical properties of
+        the number of recombination events in the history of a sample of
+        DNA sequences. \textit{Genetics} \textbf{111}:~147-164.
+
+    \item[] Hudson R.~R., M. Slatkin \& W.~P. Maddison. 1992b.
+        Estimation of levels of gene flow from DNA sequence data.
+        \textit{Genetics} \textbf{132}:~583-589.
+
+    \item[] Innan H. 2003. The coalescent and infinite-site model of a
+        small multigene family. \textit{Genetics} \textbf{163}:~803-810.
+
+    \item[] Jost L. 2008. $G_{st}$ and its relatives do not measure
+        differentiation. \textit{Mol. Ecol.} \textbf{17}:~4015-4026.
+
+    \item[] Kelly J.~K. 1997. A test of neutrality based on interlocus
+        associations. \textit{Genetics} \textbf{146}:~1197-1206.
+
+    \item[] Lewontin R.~C. 1964. The interaction of selection and
+        linkage. I. General considerations; heterotic models.
+        \textit{Genetics} \textbf{49}:~49-67.
+
+    \item[] Li H.-P. 2011. A new test for detecting recent positive
+        selection that is free from the confounding impacts of
+        demography. \textit{Mol. Biol. Evol.} \textbf{28}:~365-375.
+
+    \item[] Nei, M. \& R.~K. Chesser. 1983. Estimation of fixation
+        indexes and gene diversities. \textit{Annals Human Genet.}
+        \textbf{47}:~253-259.
+
+    \item[] Nei M. \& T. Gojobori. 1986. Simple methods for estimating
+        the numbers of synonymous and nonsynonymous nucleotide
+        substitutions. \textit{Mol. Biol. Evol.} \textbf{3}:~418-426.
+
+    \item[] Ram\'irez-Soriano A., S.~E. Ramos-Onsins, J. Rozas, F.
+        Calafell \& A. Navarro. 2008. Statistical power analysis of
+        neutrality tests under demographic expansions, contractions and
+        bottlenecks with recombination. \textit{Genetics}
+        \textbf{179}:~555-567.
+
+    \item[] Ramos-Onsins S.~E. \& J. Rozas. 2002. Statistical
+        properties of new neutrality tests against population growth.
+        \textit{Mol. Biol. Evol.} \textbf{19}:~2092-2100.
+
+    \item[] Rozas J., M. Gullaud, G. Blandin \& M. Aguad\'e. 2001. DNA
+        variation at the \textit{rp49} gene region of \textit{Drosophila
+        simulans}: evolutionary inferences from an unusual haplotype
+        structure. \textit{Genetics} \textbf{158}:~1147-1155.
+
+    \item[] Sabeti P.~C., D.~E. Reich, J.~M. Higgins, H.~Z.~P. Levine,
+        D.~J. Richter, S.~F. Schaffner, S.~B. Gabriel, J.~V. Platko,
+        N.~J. Patterson, G.~J. McDonald, H.~C. Ackerman, S.~J. Campbell,
+        D. Altshuler, R. Cooper, D. Kwiatkowski, R. Ward \& E.~S.
+        Lander. 2002. Detecting recent positive selection in the human
+        genome from haplotype structure. \textit{Nature} \textbf{419}:
+        832-837.
+
+    \item[] Tajima T. 1983. Evolutionary relationship of DNA sequences
+        in finite populations. \textit{Genetics} \textbf{105}:~437-460.
+
+    \item[] Tajima T. 1989. Statistical method for testing the neutral
+        mutation hypothesis by DNA polymorphism. \textit{Genetics}
+        \textit{123}:~585-595.
+
+    \item[] Tang K., K.~R. Thornton \& M. Stoneking. 2007. A new
+        approach for using genome scans to detect recent positive
+        selection in the human genome. \textit{PLoS Biol.}
+        \textbf{5}:~e171.
+
+    \item[] Voight B.~F., S. Kudaravalli, X. Wen \& J.~K. Pritchard.
+        2006. A map of recent positive selection in the human genome.
+        \textit{PLoS Biol} \textbf{4}:~e772
+
+    \item[] Wall J.~D. 1999. Recombination and the power of statistical
+        tests of neutrality. \textit{Genet. Res.} \textbf{74}:~65-79.
+
+    \item[] Watterson G. 1975. On the number of segretating sites in
+        genetical models without recombination. \textit{Theor. Popul.
+        Biol.} \textbf{7}:~256-276.
+
+    \item[] Weir B.~C. \& C.~C. Cockerham. 1984. Estimating
+        {\em F}-statistics for the analysis of population structure.
+        \textit{Evolution} \textbf{38}:~1358-1370.
+
+    \item[] Weir B.~C. \& W.~H. Hill. 2002. Estimating
+        {\em F}-statistics. \textit{Annu. Rev. Genet.}
+        \textbf{36}:~721-750.
+
+    \item[] Zeng K., Y.-X. Fu, S. Shi \& C.~I Wu. 2006. Statistical
+        tests for detecting positive selection by utilizing
+        high-frequency variants. \textit{Genetics}
+        \textbf{174}:~1431-1439.
+
+\end{enumerate}
+\end{flushleft}
+
+\end{document}

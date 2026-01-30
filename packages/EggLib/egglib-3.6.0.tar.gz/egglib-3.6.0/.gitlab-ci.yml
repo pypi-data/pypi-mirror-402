@@ -1,0 +1,132 @@
+variables:
+    ANY_VERSION: /v?\d\.\d+\.\d+(?:-?\w+\d+)?/
+    DEV_VERSION: /v?\d\.\d+\.\d+:-?\w+\d+/
+    FINAL_VERSION: /v?\d\.\d+\.\d+/
+    TEST_FLAG: /.*\[test\]\.*/i
+    DOC_FLAG: /.*\[doc\]\.*/i
+
+default:
+    image: sdemita/fedora41-egglib-deps:v5
+
+stages:
+    - build
+    - test
+    - deploy
+
+### build ###
+
+# compile the package for later stages
+build_wheel:
+    stage: build
+    script:
+        - python -m build --wheel -o build-dir .
+    artifacts:
+        paths:
+            - build-dir
+        expire_in: 10 minutes
+    rules:
+        - if: $CI_COMMIT_TAG =~ $ANY_VERSION
+        - if: $CI_COMMIT_TITLE =~ $TEST_FLAG
+        - if: $CI_COMMIT_BRANCH == "master"
+
+### tests ###
+
+# standard test suite
+test_standard:
+    stage: test
+    dependencies:
+        - build_wheel
+    script:
+        - pip install build-dir/*
+        - egglib-config apps -s -f muscle muscle5 -f phyml phyml
+            -f codeml codeml -f clustal clustalo
+            -f makeblastdb makeblastdb -f blastn blastn
+            -f blastp blastp -f blastx blastx -f tblastn tblastn
+            -f tblastx tblastx -f dnadist dnadist -f protdist protdist
+            -f neighbor neighbor
+        - egglib-test -e --all
+    rules:
+        - if: $CI_COMMIT_TAG =~ $ANY_VERSION
+        - if: $CI_COMMIT_TITLE =~ $TEST_FLAG
+
+# test muscle3 alternative wrapper
+test_muscle3:
+    stage: test
+    dependencies:
+        - build_wheel
+    script:
+        - pip install build-dir/*
+        - egglib-config apps -s -c muscle muscle3
+        - egglib-test -ek muscle3
+    rules:
+        - if: $CI_COMMIT_TAG =~ $ANY_VERSION
+        - if: $CI_COMMIT_TITLE =~ $TEST_FLAG
+
+# test version number
+check_version:
+    stage: test
+    dependencies:
+        - build_wheel
+    script:
+        - |
+          pip install build-dir/*
+          cat > check-version.py << EOF
+          import egglib, os, re
+          print(f'check version')
+          print('    tag:', os.environ['CI_COMMIT_TAG'])
+          print('    version:', egglib.__version__)
+          res = re.match(f'v{egglib.__version__}$', os.environ['CI_COMMIT_TAG'])
+          if res is None: raise RuntimeError('! invalid version tag')
+          print('passed')
+          EOF
+          python check-version.py
+    rules:
+        - if: $CI_COMMIT_TAG =~ $ANY_VERSION
+
+### deploy ###
+
+# generate official doc
+pages:
+    stage: deploy
+    dependencies:
+        - build_wheel
+    script:
+        - python -m pip install build-dir/*
+        - python -m sphinx -a doc/ public/
+        - mv doc/doc_egglib2 public/v2
+        - mv doc/data public/
+    artifacts:
+        paths:
+            - public
+    rules:
+        - if: $CI_COMMIT_BRANCH == "master"
+
+# generate official doc from last stable version of git
+pages_git:
+    stage: deploy
+    dependencies: []
+    script:
+        - pip install egglib
+        - python -m sphinx -a doc/ public/
+        - mv doc/doc_egglib2 public/v2
+        - mv doc/data public/
+    artifacts:
+        paths:
+            - public
+    rules:
+        - if: $CI_COMMIT_TITLE =~ $DOC_FLAG
+
+# publish release to PyPI
+release:
+    stage: deploy
+    id_tokens:
+        PYPI_ID_TOKEN:
+            aud: pypi
+    dependencies: []
+    script:
+        - pip install build twine
+        - python -m build --sdist .
+        - python -m twine check dist/egglib-${CI_COMMIT_TAG:1}.tar.gz
+        - python -m twine upload dist/egglib-${CI_COMMIT_TAG:1}.tar.gz
+    rules:
+        - if: $CI_COMMIT_TAG =~ $FINAL_VERSION
