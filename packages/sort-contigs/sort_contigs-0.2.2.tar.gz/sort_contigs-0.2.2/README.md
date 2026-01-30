@@ -1,0 +1,64 @@
+sort-contigs
+================
+
+***sort-contigs - Order genome assembly contigs by alignment to reference .fasta***
+
+**Author: Paul Grablowitz**
+
+**Source: [Github](https://github.com/paul-gra/sort-contigs)**
+
+# Description
+
+This python program, `sort-contigs`, sorts contigs from a query FASTA file
+based on their alignment to a target reference genome using a PAF
+(Pairwise Alignments Format) file. 
+
+It determines the best matching target contig and optimal orientation
+(forward or reverse complement) for each query contig, then orders the
+query contigs along each target contig according to their alignment
+positions. Unaligned contigs are appended at the end. 
+
+Query contigs are assigned to target contigs by identifying the target
+contigs with the largest sum of aligned bases. Assigned query contigs
+are ordered along a target contig by identifying the location with the
+longest alignment. The same alignment is used to define optimal
+orientation of query contigs respective to assigned target contigs.
+
+The sorted contigs are written to an output FASTA file, with an option
+to rename them sequentially.
+
+The script uses `BioPython` for FASTA handling and
+`pandas` for PAF file processing.
+
+# Usage 
+
+The program can be used as in following example:
+
+## Alignment
+
+The first step consists of aligning the query genome to the target
+reference. The code below is a minimal example and may be required to
+be adjusted for certain conditions.
+
+``` shell
+# Align query assembly to target genome
+minimap2 \
+	-x asm5 \
+	target.fasta \
+	query.fasta \
+	> alignment.paf
+```
+
+## Reordering
+
+The following code shows an example, how to perform reordering of
+query contigs respective to alignment to target reference.
+
+```shell
+# Perform reordering steps based on supplied alignment
+sort-contigs \
+	-p alignment.paf \
+	-q query.fasta \
+	-t target.fasta \
+	-o query-reordered.fasta
+```
