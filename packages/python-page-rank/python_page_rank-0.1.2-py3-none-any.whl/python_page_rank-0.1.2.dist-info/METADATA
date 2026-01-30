@@ -1,0 +1,254 @@
+Metadata-Version: 2.4
+Name: python-page-rank
+Version: 0.1.2
+Summary: Static import graph + PageRank for Python projects
+License: MIT License
+        
+        Copyright (c) 2026
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+Keywords: pagerank,static-analysis,imports,dependency-graph
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Dynamic: license-file
+
+# Python Page Rank
+
+Static dependency analysis and PageRank-style importance scoring for Python modules.
+
+This tool scans a Python codebase, builds a directed import graph between modules, and computes a PageRank-like score indicating which modules are most *structurally important* based on how much other code depends on them.
+
+No code execution and no imports.
+
+---
+
+### Quickstart
+Install from PyPI: 
+```
+pip install python-page-rank
+```
+- Run on a project directory: `python-page-rank .`    
+- Show the top 5 ranked modules: `python-page-rank . --n 5`    
+- Emit JSON instead of a table: `python-page-rank . --json` 
+
+Run from src: 
+```
+python cli.py /path/to/project
+```
+
+---
+
+## What it does
+
+- Recursively scans a project directory for `.py` files
+- Parses files using `AST` (no code execution)
+- Builds a **module-level dependency graph** from `import` / `from X import Y`
+- Computes PageRank over that graph
+- Outputs per-file:
+  - lines of code (LOC)
+  - number of importers
+  - PageRank score
+
+Typical uses:
+- identify central / risky modules
+- guide refactors
+- estimate blast radius of changes
+- understand large or unfamiliar codebases
+
+---
+
+## What it does **not** do (by design)
+
+- Execute or import any project code
+- Modify files
+- Resolve runtime-dependent imports
+- Guess ambiguous dependencies
+
+This is a **conservative static analyzer**.
+
+---
+
+## How imports are handled
+
+### Supported
+
+- `import package.module`
+- `import package.module as alias`
+- `from package import module`
+- `from package.subpackage import thing`
+
+All resolved to absolute module paths and mapped to files when possible.
+
+### Intentionally ignored
+
+- `from . import models`   
+- `from .. import utils`
+
+These produce **no edge** in the graph.
+
+**Why:**  
+The AST provides no absolute module path (`node.module is None`). Resolving these requires guessing project roots and can be wrong in multi-root or namespace-package layouts. This behavior is deliberate and covered by tests.
+
+---
+
+## Directory handling
+
+The scanner:
+
+- automatically detects multiple import roots
+- prefers the **shortest valid module path** when duplicates exist
+- skips common junk directories:
+  - `.git`, `.venv`, `venv`, `node_modules`, `__pycache__`, etc.
+
+This allows it to work on:
+
+- monorepos
+- Django / FastAPI projects
+- repos with multiple top-level packages
+
+---
+
+## PageRank details
+
+- Standard iterative PageRank
+- Damping factor: `0.85`
+- Teleportation distributes rank uniformly
+- Ranks are normalized to sum to `1.0`
+
+**Interpretation:**  
+A module is "important" if many important modules depend on it.
+
+This measures **structural importance**, not runtime usage frequency.
+
+---
+
+## Example
+
+```
+python-page-rank /path/to/project
+```
+
+Example output:
+
+```
+Module                                     LOC  Importers   PageRank
+----------------------------------------------------------------------
+MyApp\authentication\models.py              29         12   0.114471
+MyApp\common\utils.py                       66          6   0.094118
+MyApp\payments\models.py                   168         15   0.053272
+...
+```
+
+---
+
+## CLI usage
+
+The tool is intended to be run from the command line.
+
+### Syntax
+```
+python-page-rank [path] [--n N] [--alpha A] [--iters I] [--json] [--include-init] 
+```
+
+### Arguments
+
+path  
+Project root directory to scan.  
+Optional. Defaults to the current directory (`.`).
+
+--n N
+Number of top-ranked files to display.  
+Optional. Default is `10`.
+
+--alpha A
+PageRank damping factor.  
+Optional. Default is `0.85`.
+
+--iters ITERS
+Number of PageRank iterations to run.  
+Optional. Default is `50`.
+
+--json  
+Prints results as JSON instead of a text table.
+
+--include-init  
+Include `__init__.py` files in the output.  
+By default, package initializer files are hidden to reduce noise.
+
+---
+
+### Examples
+
+Analyze the current directory with default settings: `python-page-rank`  
+Analyze a specific project directory: `python-page-rank MyApp`  
+Show only the top 10 ranked files: `python-page-rank --n 10`  
+Use a custom damping factor and iteration count: `python-page-rank --alpha 0.9 --iters 100`  
+Analyze a directory and output results as JSON: `python-page-rank MyApp --json`  
+Combine options: `python-page-rank MyApp --n 20 --alpha 0.8 --iters 75 --json`  
+
+---
+
+### Notes
+
+- The analysis is fully static
+- No code is executed
+- Imports are resolved via AST parsing only
+- `PYTHONPATH` and runtime environment are ignored
+
+---
+
+## Tests
+
+Tests cover:
+
+- absolute import resolution
+- multi-root handling
+- preference of shortest module paths
+- ignored relative dot-imports
+- stability of PageRank output
+
+Run tests with:
+
+```
+python -m pytest
+```
+
+---
+
+## Limitations (read before filing issues)
+
+- Relative imports without explicit module paths are ignored
+- Namespace packages may require manual root layout
+- Large repos may take time due to full AST parsing
+- No attempt is made to infer dynamic imports
+
+These are **tradeoffs**, not bugs.
+
+---
+
+## License
+
+MIT License
+
+---
+
+## Disclaimer / Caveat
+
+If you need aggressive inference, this tool is intentionally not that.
