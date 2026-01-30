@@ -1,0 +1,25 @@
+# Docker Compose production overrides
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# On VPS, this file is used alongside docker-compose.yml.
+# Images are pulled from ghcr.io instead of building locally.
+
+services:
+  backend:
+    image: ghcr.io/${GITHUB_REPO:-lyptus-research/human-eval}/backend:${VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./data/human_eval.db
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
+      - CORS_ORIGINS=${CORS_ORIGINS:-["https://cyber-task-horizons.com"]}
+
+  frontend:
+    image: ghcr.io/${GITHUB_REPO:-lyptus-research/human-eval}/frontend:${VERSION:-latest}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Mount SSL certificates (managed by certbot on host)
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./nginx-ssl.conf:/etc/nginx/conf.d/default.conf:ro
