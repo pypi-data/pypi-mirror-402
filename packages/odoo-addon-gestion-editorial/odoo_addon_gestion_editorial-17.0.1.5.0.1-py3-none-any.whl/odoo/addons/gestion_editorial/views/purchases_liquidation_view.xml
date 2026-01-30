@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+  <record id="purchase_deposit_editorial_view_tree" model="ir.ui.view">
+    <field name="name">purchase.deposit.editorial.view.tree</field>
+    <field name="model">purchase.order</field>
+    <field name="arch" type="xml">
+        <tree decoration-muted="state == 'cancel'"
+          class="o_purchase_order" 
+          sample="1">
+          <field name="priority" optional="show" widget="priority" nolabel="1"/>
+          <field name="partner_ref" optional="hide"/>
+          <field name="name" string="Reference" readonly="1" decoration-bf="1" decoration-info="state in ('draft','sent')"/>
+          <field name="date_approve" widget="date" column_invisible="context.get('quotation_only', False)" optional="show"/>
+          <field name="partner_id" readonly="state in ['cancel', 'done', 'purchase']"/>
+          <field name="company_id" groups="base.group_multi_company" options="{'no_create': True}" optional="show" readonly="state in ['cancel', 'done', 'purchase']"/>
+          <field name="company_id" groups="!base.group_multi_company" column_invisible="True" readonly="state in ['cancel', 'done', 'purchase']"/>
+          <field name="user_id" widget="many2one_avatar_user" optional="hide"/>
+          <field name="date_order" column_invisible="not context.get('quotation_only', False)" readonly="state in ['cancel', 'done', 'purchase']" optional="show"/>
+          <field name="activity_ids" widget="list_activity" optional="show"/>
+          <field name="origin" optional="show"/>
+          <field name="amount_untaxed" sum="Total Untaxed amount" string="Untaxed" widget="monetary" optional="hide"/>
+          <field name="amount_total" sum="Total amount" widget="monetary" optional="show" decoration-bf="1"/>
+          <field name="currency_id" column_invisible="True" readonly="state in ['cancel', 'done', 'purchase']"/>
+          <field name="state" column_invisible="True"/>
+        </tree>
+    </field>
+  </record>
+
+  <record id="action_purchases_liquidation_editorial" model="ir.actions.act_window">
+    <field name="name">Liquidaciones de compras</field>
+    <field name="res_model">purchase.order</field>
+    <field name="view_mode">tree,kanban,form</field>
+    <field name="view_id" ref="purchase.purchase_order_view_tree"/>
+    <field name="search_view_id" ref="purchase.purchase_order_view_search"/>
+    <field name="context">{'order_type': 'PURCHASE_LIQ'}</field>
+    <field name="domain">[('order_type', '=', 'PURCHASE_LIQ')]</field>
+  </record>
+
+  <record id="action_deposit_return_purchases_editorial" model="ir.actions.act_window">
+    <field name="name">Devoluciones de depósito de compras</field>
+    <field name="res_model">purchase.order</field>
+    <field name="view_mode">tree,kanban,form</field>
+    <field name="view_id" ref="purchase_deposit_editorial_view_tree"/>
+    <field name="search_view_id" ref="purchase.purchase_order_view_search"/>
+    <field name="domain">[('order_type', '=', 'PURCHASE_DEPR')]</field>
+    <field name="context">{'order_type': 'PURCHASE_DEPR'}</field>
+  </record>
+
+  <menuitem
+    id="submenu_liquidation_purchases"
+    name="Liquidaciones de compras"
+    parent="purchase.menu_procurement_management"
+    sequence="10"
+    action="action_purchases_liquidation_editorial"
+    groups="purchase.group_purchase_manager"
+  />
+  <menuitem
+    id="submenu_liquidation_deposit_return_purchases"
+    name="Devoluciones de depósito"
+    parent="purchase.menu_procurement_management"
+    sequence="11"
+    action="action_deposit_return_purchases_editorial"
+    groups="purchase.group_purchase_manager"
+  />
+
+  <record id="purchase_liq_editorial_form_view" model="ir.ui.view">
+    <field name="name">purchase.order.editorial.form.view</field>
+    <field name="model">purchase.order</field>
+    <field name="inherit_id" ref="purchase.purchase_order_form"/>
+    <field name="arch" type="xml">
+      <xpath expr="//field[@name='partner_id']" position="after">
+        <field name="order_type" invisible="1" readonly="1"/>
+        <field name="is_deposit_purchase" invisible="1" readonly="1"/>
+      </xpath>
+
+      <!-- Change view titles -->
+      <xpath expr="//div[@class='oe_title']" position="replace">
+        <div class="oe_title">
+            <span class="o_form_label" 
+              invisible="state not in ('draft', 'sent') or order_type in ('PURCHASE_LIQ', 'PURCHASE_DEPR')">Quote request</span>
+            <span class="o_form_label" 
+              invisible="state in ('draft', 'sent') or order_type in ('PURCHASE_LIQ', 'PURCHASE_DEPR')">Purchase order</span>
+            
+            <h1 class="d-flex">
+                <field name="priority" widget="priority" class="me-3"/>
+                <field name="name" readonly="1"/>
+            </h1>
+        </div>
+      </xpath>
+
+      <!-- Hide create invoice button for purchase liq returns + purchases in deposit -->
+      <xpath expr="//button[@name='action_create_invoice'][@class='oe_highlight']" position="attributes">
+          <attribute name="invisible">is_deposit_purchase or order_type == 'PURCHASE_DEPR' or state not in ('purchase', 'done') or invoice_status in ('no', 'invoiced')</attribute>
+      </xpath>
+      <xpath expr="//button[@name='action_create_invoice'][not(@class='oe_highlight')]" position="attributes">
+          <attribute name="invisible">is_deposit_purchase or order_type == 'PURCHASE_DEPR' or state not in ('purchase', 'done') or invoice_status not in ('no', 'invoiced') or not order_line</attribute>
+      </xpath>
+
+    <!-- Add buttons search deposit-->
+    <xpath expr="//notebook" position="before">      
+    <button name="%(action_liquidation_wizard_purchases)d" string="Buscar productos en depósito compras" type="action" class="oe_highlight"
+        invisible="order_type not in ('PURCHASE_LIQ','PURCHASE_DEPR') or state != 'draft' or partner_id == False"
+        context="{'partner_id': partner_id, 'liquidation_id': id, 'liquidation_type': order_type}"/>
+    </xpath>
+
+    </field>
+  </record>
+
+</odoo>
