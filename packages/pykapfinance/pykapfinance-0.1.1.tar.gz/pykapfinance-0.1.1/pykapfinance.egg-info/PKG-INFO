@@ -1,0 +1,517 @@
+Metadata-Version: 2.4
+Name: pykapfinance
+Version: 0.1.1
+Summary: Python client library for KAP (Kamuyu Aydınlatma Platformu) API
+Home-page: https://github.com/cagrigungor/pykap
+Author: Çağrı Güngör
+Author-email: Çağrı Güngör <iletisim@cagrigor.com>
+Project-URL: Homepage, https://github.com/cagrigungor/pykap
+Project-URL: Bug Reports, https://github.com/cagrigungor/pykap/issues
+Project-URL: Documentation, https://github.com/cagrigungor/pykap/blob/main/README.md
+Project-URL: Source, https://github.com/cagrigungor/pykap
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Financial and Insurance Industry
+Classifier: Topic :: Office/Business :: Financial
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: requests>=2.28.0
+Dynamic: author
+Dynamic: home-page
+Dynamic: license-file
+Dynamic: requires-python
+
+# PyKAP - Python KAP API Kütüphanesi
+
+PyKAP, Türkiye'nin Kamuyu Aydınlatma Platformu (KAP) API'si için kapsamlı bir Python istemci kütüphanesidir.
+
+## Özellikler
+
+PyKAP, KAP API'sinin tüm servislerini destekler:
+
+- **Token Yönetimi**: Otomatik token oluşturma ve yenileme
+- **Bildirim Servisleri**: Bildirimleri listeleme, detay görüntüleme, ek dosya indirme
+- **Şirket Bilgileri**: Şirket listesi, detayları ve menkul kıymet bilgileri
+- **Fon Bilgileri**: Fon listesi ve detaylı fon bilgileri
+- **Bloklanmış Bildirimler**: Erişime kapatılmış bildirimleri görüntüleme
+- **Hak Kullanım**: Kurumsal işlem süreç durumları
+- **Gelişmiş Arama**: Şirket koduna göre arama ve filtreleme
+
+## Kurulum
+
+```bash
+pip install -r requirements.txt
+```
+
+Geliştirme kurulumu için:
+
+```bash
+pip install -e .
+```
+
+## Hızlı Başlangıç
+
+### Temel Kullanım
+
+```python
+from pykap import KAPClient
+
+# Test ortamı için istemci oluşturma (varsayılan API key ile)
+client = KAPClient(test_mode=True)
+
+# Şirket listesini alma
+companies = client.get_members()
+print(f"Toplam {len(companies)} şirket bulundu")
+
+# Son bildirim indeksini öğrenme
+last_index = client.get_last_disclosure_index()
+print(f"Son bildirim indeksi: {last_index}")
+
+# Bildirimleri listeleme
+disclosures = client.get_disclosures(
+    disclosure_index=last_index - 50,
+    disclosure_type="ODA"  # Özel Durum Açıklamaları
+)
+
+for disclosure in disclosures:
+    print(f"{disclosure.title} - {disclosure.disclosure_index}")
+```
+
+### Kendi API Anahtarlarınızı Kullanma
+
+Kendi API key ve secret bilgilerinizle:
+
+```python
+from pykap import KAPClient
+
+# Özel API anahtarları ile
+client = KAPClient(
+    test_mode=True,
+    api_key="your-api-key-here",
+    api_secret="your-api-secret-here"
+)
+
+# Ya da config dosyasından
+from config import API_KEY, API_SECRET
+
+client = KAPClient(
+    test_mode=True,
+    api_key=API_KEY,
+    api_secret=API_SECRET
+)
+```
+
+### Üretim Ortamı Kullanımı
+
+Üretim ortamında token gereklidir:
+
+```python
+# Üretim ortamı için istemci
+client = KAPClient(
+    test_mode=False,
+    api_key="your-api-key",
+    api_secret="your-api-secret",
+    auto_refresh_token=True
+)
+
+# Token otomatik olarak oluşturulur ve yenilenir
+# Manuel token oluşturmak için:
+token = client.generate_token()
+print(f"Token: {token}")
+```
+
+### Bildirim Detayı ve Ek İndirme
+
+```python
+# Bildirim detayını alma
+detail = client.get_disclosure_detail(
+    disclosure_index=1211180,
+    file_type="data"  # 'html' veya 'data'
+)
+
+print(f"Konu: {detail.subject.tr}")
+print(f"Özet: {detail.summary.tr}")
+print(f"Yayın Zamanı: {detail.time}")
+
+# Ek dosyaları indirme
+if detail.attachment_urls:
+    for attachment in detail.attachment_urls:
+        print(f"İndiriliyor: {attachment.file_name}")
+        
+        # URL'den attachment ID'yi çıkar
+        attachment_id = attachment.url.split('/')[-1]
+        file_content = client.download_attachment(attachment_id)
+        
+        # Dosyayı kaydet
+        with open(attachment.file_name, 'wb') as f:
+            f.write(file_content)
+```
+
+### Şirket Bilgileri
+
+```python
+# Hisse koduna göre şirket bulma
+company = client.get_company_by_stock_code("THYAO")
+if company:
+    print(f"Şirket: {company.title}")
+    print(f"ID: {company.id}")
+    print(f"Tip: {company.member_type}")
+
+# Şirket detaylarını alma
+detail = client.get_member_detail(company.id)
+print(detail)
+
+# Şirketlerin menkul kıymet bilgileri
+securities = client.get_member_securities()
+for item in securities[:5]:
+    print(f"{item.member.sirket_unvan}:")
+    for security in item.securities:
+        print(f"  - {security.isin_desc} ({security.borsa_kodu})")
+```
+
+### Belirli Bir Şirkete Ait Bildirimleri Arama
+
+```python
+# Şirket bildirimlerini arama
+company = client.get_company_by_stock_code("THYAO")
+if company:
+    disclosures = client.search_disclosures_by_company(
+        company_id=company.id,
+        disclosure_type="ODA"
+    )
+    
+    for disclosure in disclosures[:10]:
+        print(f"{disclosure.title}")
+```
+
+### Fon Bilgileri
+
+```python
+# Aktif fonları listeleme
+funds = client.get_funds(fund_state=["Y"])  # Y=Aktif
+
+for fund in funds[:10]:
+    print(f"{fund.fund_name} ({fund.fund_code})")
+    print(f"  Tip: {fund.fund_type}")
+    print(f"  Durum: {fund.fund_state}")
+
+# Fon detayı
+fund_detail = client.get_fund_detail(fund_id=4282)
+print(fund_detail)
+```
+
+### Bloklanmış Bildirimler
+
+```python
+# Erişime kapatılmış bildirimleri listeleme
+blocked = client.get_blocked_disclosures()
+
+for item in blocked:
+    print(f"Bildirim ID: {item.disclosure_index}")
+    print(f"Tip: {item.blocked_type}")
+    print(f"Neden: {item.is_blocked_description_tr}")
+```
+
+### Hak Kullanım Süreç Durumu
+
+```python
+# Kurumsal işlem durumlarını sorgulama
+statuses = client.get_ca_event_status(process_ref_ids=[12941, 13214])
+
+for status in statuses:
+    print(f"Süreç ID: {status.ref_id}")
+    print(f"Durum: {status.status_text}")
+    if status.complete_date:
+        print(f"Tamamlanma: {status.complete_date}")
+```
+
+### Context Manager Kullanımı
+
+```python
+# Otomatik kaynak yönetimi
+with KAPClient(test_mode=True) as client:
+    companies = client.get_members()
+    print(f"{len(companies)} şirket bulundu")
+    # Client otomatik olarak kapatılır
+```
+
+## Bildirim Tipleri ve Sınıfları
+
+### Bildirim Sınıfları (DisclosureClass)
+
+```python
+from pykap.models import DisclosureClass
+
+# FR - Finansal Rapor Bildirimi
+# ODA - Özel Durum Açıklaması Bildirimi
+# DG - Diğer Bildirim
+# DUY - Düzenleyici Kurum Bildirimi
+
+disclosures = client.get_disclosures(
+    disclosure_index=1000000,
+    disclosure_class=DisclosureClass.FR
+)
+```
+
+### Bildirim Tipleri (DisclosureType)
+
+```python
+from pykap.models import DisclosureType
+
+# FR - Finansal Rapor
+# ODA - Özel Durum Açıklaması
+# DG - Diğer
+# DUY - Düzenleyici Kurum
+# FON - Fon Bildirimi
+# CA - Hak Kullanım Bildirimi
+
+disclosures = client.get_disclosures(
+    disclosure_index=1000000,
+    disclosure_type=DisclosureType.ODA
+)
+```
+
+### Şirket Tipleri (MemberType)
+
+```python
+from pykap.models import MemberType
+
+# IGS - İşlem Gören Şirket
+# IGMS - İşlem Görmeyen Şirket
+# YK - Yatırım Kuruluşu
+# PYS - Portföy Yönetim Şirketi
+# FK - Fon Kurucu
+# Ve daha fazlası...
+```
+
+## Gelişmiş Kullanım
+
+### Özel Filtreleme
+
+```python
+# Belirli bir dönem için bildirimleri alma
+start_index = 1200000
+end_index = 1200100
+
+all_disclosures = []
+current_index = start_index
+
+while current_index < end_index:
+    batch = client.get_disclosures(
+        disclosure_index=current_index,
+        disclosure_class="FR"
+    )
+    all_disclosures.extend(batch)
+    
+    if batch:
+        # Sonraki batch için index güncelle
+        current_index = int(batch[-1].disclosure_index) + 1
+    else:
+        break
+
+print(f"Toplam {len(all_disclosures)} bildirim bulundu")
+```
+
+### Hata Yönetimi
+
+```python
+from pykap.exceptions import (
+    KAPAuthenticationError,
+    KAPAPIError,
+    KAPValidationError
+)
+
+try:
+    # Geçersiz index
+    disclosures = client.get_disclosures(disclosure_index=100)
+    
+except KAPValidationError as e:
+    print(f"Geçersiz parametre: {e}")
+    
+except KAPAuthenticationError as e:
+    print(f"Kimlik doğrulama hatası: {e}")
+    
+except KAPAPIError as e:
+    print(f"API Hatası: {e}")
+    print(f"Hata Kodu: {e.error_code}")
+    print(f"HTTP Durum: {e.status_code}")
+```
+
+## API Referansı
+
+### KAPClient Metodları
+
+#### Token Yönetimi
+- `generate_token()` - Yeni token oluştur (üretim ortamı)
+
+#### Bildirim Servisleri
+- `get_disclosures(disclosure_index, disclosure_type, disclosure_class, company_id)` - Bildirim listesi
+- `get_disclosure_detail(disclosure_index, file_type, sub_report_list)` - Bildirim detayı
+- `download_attachment(attachment_id)` - Ek dosya indir
+- `get_last_disclosure_index()` - Son bildirim indeksi
+
+#### Şirket Servisleri
+- `get_members()` - Tüm şirketler
+- `get_member_detail(member_id)` - Şirket detayı
+- `get_member_securities()` - Menkul kıymet bilgileri
+- `get_company_by_stock_code(stock_code)` - Hisse koduna göre şirket bul
+
+#### Fon Servisleri
+- `get_funds(fund_state, fund_class, fund_type)` - Fon listesi
+- `get_fund_detail(fund_id)` - Fon detayı
+
+#### Diğer Servisler
+- `get_blocked_disclosures()` - Bloklanmış bildirimler
+- `get_ca_event_status(process_ref_ids)` - Hak kullanım durumu
+- `search_disclosures_by_company(company_id, start_index, disclosure_type)` - Şirket bildirimlerini ara
+
+## Proje Yapısı
+
+```
+pykap/
+├── pykap/
+│   ├── __init__.py          # Paket başlatma
+│   ├── client.py            # Ana API istemcisi
+│   ├── models.py            # Veri modelleri
+│   └── exceptions.py        # Özel hatalar
+├── examples/
+│   └── basic_usage.py       # Kullanım örnekleri
+├── setup.py                 # Kurulum dosyası
+├── requirements.txt         # Bağımlılıklar
+├── README.md               # Bu dosya
+└── LICENSE                 # Lisans
+```
+
+## Kimlik Doğrulama
+
+### API Anahtarları
+
+Kendi API anahtarlarınızı kullanmak için:
+
+1. **config.py dosyasını düzenleyin:**
+```python
+API_KEY = "sizin-api-key-buraya"
+API_SECRET = "sizin-api-secret-buraya"
+TEST_MODE = True
+```
+
+2. **Doğrudan kod içinde kullanın:**
+```python
+client = KAPClient(
+    test_mode=True,
+    api_key="your-api-key",
+    api_secret="your-api-secret"
+)
+```
+
+### Test Ortamı
+Test ortamında kimlik doğrulama gerekmez (API key ile):
+
+```python
+client = KAPClient(
+    test_mode=True,
+    api_key="your-test-api-key"
+)
+```
+
+### Üretim Ortamı
+Üretim ortamında API Key ile token alınmalıdır:
+
+```python
+client = KAPClient(
+    test_mode=False,
+    api_key="your-production-api-key",
+    auto_refresh_token=True
+)
+# Token otomatik olarak yönetilir (24 saat geçerli)
+```
+
+### Varsayılan API Key
+
+API Key belirtilmezse, kütüphane varsayılan değeri kullanır:
+- Varsayılan: `29223dec-32bc-49fb-919f-51405d110ab2`
+
+## Önemli Notlar
+
+1. **Bildirim İndeksi**: disclosureIndex 538004'ten başlar. 84196-538004 arası KAP 4.0 öncesi verilerdir.
+
+2. **Token Süresi**: Üretim ortamında token 24 saat geçerlidir. `auto_refresh_token=True` ile otomatik yenilenir.
+
+3. **Erişime Kapatılmış Bildirimler**: KVKK nedeniyle bazı bildirimler erişime kapatılmıştır. `get_blocked_disclosures()` ile listelenebilir.
+
+4. **Rate Limiting**: API'ye aşırı istek göndermekten kaçının.
+
+5. **Veri Güncelliği**: API üzerinden alınan veriler geçmiş tarihli canlı ortam verileridir ve güncel durumdan farklılık gösterebilir.
+
+## Katkıda Bulunma
+
+Katkılar memnuniyetle karşılanır! Lütfen:
+
+1. Fork yapın
+2. Feature branch oluşturun (`git checkout -b feature/amazing-feature`)
+3. Değişikliklerinizi commit edin (`git commit -m 'Add amazing feature'`)
+4. Branch'inizi push edin (`git push origin feature/amazing-feature`)
+5. Pull Request oluşturun
+
+## Lisans
+
+Bu proje MIT lisansı altında lisanslanmıştır - detaylar için [LICENSE](LICENSE) dosyasına bakın.
+
+## İletişim
+
+- **KAP Destek**: kapdestek@mkk.com.tr
+- **KAP İletişim**: https://www.mkk.com.tr/iletisim-formu
+- **Sorumlu Kurum**: Kamuyu Aydınlatma Hizmetleri Direktörlüğü
+
+## Faydalı Bağlantılar
+
+- [KAP Resmi Sitesi](https://www.kap.org.tr)
+- [KAP API Dokümantasyonu](https://apigwdev.mkk.com.tr)
+- [MKK Resmi Sitesi](https://www.mkk.com.tr)
+
+## Hata Kodları
+
+| Kod | Açıklama |
+|-----|----------|
+| ER001 | Servis erişim yetkiniz bulunmamaktadır |
+| ER002 | Unauthorized request |
+| ER003 | Tanımlı olmayan IP adresinden erişim |
+| ER004 | Token geçersiz |
+| ER005 | IP bilgisi doğrulanamadı |
+| ER006 | Geçersiz token |
+| ER007 | Token bilgisi doğrulanamadı |
+| ER008 | Authorization token is not valid |
+
+## Örnekler
+
+Daha fazla örnek için [examples](examples/) klasörüne bakın.
+
+## Performans İpuçları
+
+1. Test ortamını geliştirme için kullanın
+2. Toplu sorgularda sayfalama kullanın
+3. Token'ı önbelleğe alın (üretimde)
+4. Context manager kullanın
+5. Gereksiz detay sorgularından kaçının
+
+## Sürüm Geçmişi
+
+### v1.0.0 (2026-01-22)
+- İlk sürüm
+- Tüm KAP API servisleri destekleniyor
+- Test ve üretim ortamı desteği
+- Otomatik token yönetimi
+- Kapsamlı hata yönetimi
+
+---
+
+**Not**: Bu kütüphane resmi bir KAP/MKK ürünü değildir. Bağımsız bir açık kaynak projesidir.
