@@ -1,0 +1,202 @@
+# locus
+
+[![Github Actions](https://github.com/lycantropos/locus/workflows/CI/badge.svg)](https://github.com/lycantropos/locus/actions/workflows/ci.yml "Github Actions")
+[![Documentation](https://readthedocs.org/projects/locus/badge/?version=latest)](https://locus.readthedocs.io/en/latest "Documentation")
+[![Codecov](https://codecov.io/gh/lycantropos/locus/branch/master/graph/badge.svg)](https://codecov.io/gh/lycantropos/locus "Codecov")
+[![License](https://img.shields.io/github/license/lycantropos/locus.svg)](https://github.com/lycantropos/locus/blob/master/LICENSE "License")
+[![PyPI](https://badge.fury.io/py/locus.svg)](https://badge.fury.io/py/locus "PyPI")
+
+In what follows `python` is an alias for `python3.10` or `pypy3.10`
+or any later version (`python3.11`, `pypy3.11` and so on).
+
+## Installation
+
+### Prerequisites
+
+Install the latest `pip` & `setuptools` packages versions
+
+```bash
+python -m pip install --upgrade pip setuptools
+```
+
+### User
+
+Download and install the latest stable version from `PyPI` repository
+
+```bash
+python -m pip install --upgrade locus
+```
+
+### Developer
+
+Download the latest version from `GitHub` repository
+
+```bash
+git clone https://github.com/lycantropos/locus.git
+cd locus
+```
+
+Install
+
+```bash
+python -m pip install -e '.'
+```
+
+## Usage
+
+```python
+>>> import math
+>>> from fractions import Fraction
+>>> from ground.context import Context
+>>> context = Context(coordinate_factory=Fraction, sqrt=math.sqrt)
+>>> Box, Point, Segment = (
+...     context.box_cls,
+...     context.point_cls,
+...     context.segment_cls
+... )
+>>> from locus import kd
+>>> points = list(map(Point, range(-10, 11), range(0, 20)))
+>>> kd_tree = kd.Tree(points, context=context)
+>>> kd_tree.nearest_index(Point(0, 0)) == 5
+True
+>>> kd_tree.nearest_point(Point(0, 0)) == Point(-5, 5)
+True
+>>> kd_tree.n_nearest_indices(2, Point(0, 0)) == [6, 5]
+True
+>>> kd_tree.n_nearest_points(2, Point(0, 0)) == [Point(-4, 6), Point(-5, 5)]
+True
+>>> kd_tree.find_box_indices(Box(-1, 1, 0, 10)) == [9, 10]
+True
+>>> kd_tree.find_box_points(Box(-1, 1, 0, 10)) == [Point(-1, 9), Point(0, 10)]
+True
+>>> from locus import r
+>>> boxes = list(
+...     map(Box, range(-10, 11), range(0, 20), range(-20, 0), range(-10, 11))
+... )
+>>> r_tree = r.Tree(boxes, context=context)
+>>> r_tree.nearest_index(Point(0, 0)) == 10
+True
+>>> r_tree.nearest_box(Point(0, 0)) == Box(0, 10, -10, 0)
+True
+>>> r_tree.n_nearest_indices(2, Point(0, 0)) == [10, 11]
+True
+>>> r_tree.n_nearest_boxes(2, Point(0, 0)) == [
+...     Box(0, 10, -10, 0), Box(1, 11, -9, 1)
+... ]
+True
+>>> r_tree.find_subsets_indices(Box(0, 10, -10, 10)) == [10]
+True
+>>> r_tree.find_subsets(Box(0, 10, -10, 10)) == [Box(0, 10, -10, 0)]
+True
+>>> r_tree.find_supersets_indices(Box(0, 10, -10, 0)) == [10]
+True
+>>> r_tree.find_supersets(Box(0, 10, -10, 0)) == [Box(0, 10, -10, 0)]
+True
+
+```
+
+## Development
+
+### Bumping version
+
+#### Prerequisites
+
+Install [bump-my-version](https://github.com/callowayproject/bump-my-version#installation).
+
+#### Release
+
+Choose which version number category to bump following [semver
+specification](http://semver.org/).
+
+Test bumping version
+
+```bash
+bump-my-version bump --dry-run --verbose $CATEGORY
+```
+
+where `$CATEGORY` is the target version number category name, possible
+values are `patch`/`minor`/`major`.
+
+Bump version
+
+```bash
+bump-my-version bump --verbose $CATEGORY
+```
+
+This will set version to `major.minor.patch`.
+
+### Running tests
+
+#### Plain
+
+Install with dependencies
+
+```bash
+python -m pip install -e '.[tests]'
+```
+
+Run
+
+```bash
+pytest
+```
+
+#### `Docker` container
+
+Run
+
+- with `CPython`
+
+  ```bash
+  docker-compose --file docker-compose.cpython.yml up
+  ```
+
+- with `PyPy`
+
+  ```bash
+  docker-compose --file docker-compose.pypy.yml up
+  ```
+
+#### `Bash` script
+
+Run
+
+- with `CPython`
+
+  ```bash
+  ./run-tests.sh
+  ```
+
+  or
+
+  ```bash
+  ./run-tests.sh cpython
+  ```
+
+- with `PyPy`
+
+  ```bash
+  ./run-tests.sh pypy
+  ```
+
+#### `PowerShell` script
+
+Run
+
+- with `CPython`
+
+  ```powershell
+  .\run-tests.ps1
+  ```
+
+  or
+
+  ```powershell
+  .\run-tests.ps1 cpython
+  ```
+
+- with `PyPy`
+
+  ```powershell
+  .\run-tests.ps1 pypy
+  ```
