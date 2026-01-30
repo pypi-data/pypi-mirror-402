@@ -1,0 +1,378 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test-without-dask:
+    name: ${{ matrix.python-version }}-build-without-dask
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create conda environment
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          cache-downloads: true
+          cache-environment: true
+          micromamba-version: 'latest'
+          environment-file: ci/environment.yml
+          create-args: |
+            python=${{ matrix.python-version }}
+          cache-environment-key: micromamba-${{ matrix.python-version }}-${{ runner.os }}
+
+      - name: Conda info
+        run: conda info
+
+      - name: Install roms-tools
+        shell: micromamba-shell {0}
+        run: |
+           python -V
+           python -m pip install -e . --force-reinstall
+
+      - name: Running Tests without Dask
+        shell: bash -l {0}
+        run: |
+           python -V
+           coverage run --rcfile=coverage.toml -m pytest --verbose roms_tools/tests/*
+
+      - name: Get coverage report
+        shell: bash -l {0}
+        run: |
+          coverage report -m || true
+          coverage xml || true
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4.0.1
+        continue-on-error: true
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: without-dask
+          name: without-dask-py${{ matrix.python-version }}
+          fail_ci_if_error: false
+
+  test-with-dask-1:
+    name: 3.13-build-with-dask-1
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create conda environment
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          cache-downloads: true
+          cache-environment: true
+          micromamba-version: 'latest'
+          environment-file: ci/environment.yml
+          create-args: |
+            python=${{ matrix.python-version }}
+          cache-environment-key: micromamba-${{ matrix.python-version }}-${{ runner.os }}
+
+      - name: Conda info
+        run: conda info
+
+      - name: Install roms-tools
+        shell: micromamba-shell {0}
+        run: |
+           python -V
+           python -m pip install -e .[dask]  --force-reinstall
+
+      - name: Running Tests with Dask
+        shell: bash -l {0}
+        run: |
+           python -V
+           coverage run --rcfile=coverage.toml -m pytest --use_dask --verbose roms_tools/tests/ --ignore=roms_tools/tests/test_setup/test_boundary_forcing.py --ignore=roms_tools/tests/test_setup/test_initial_conditions.py --ignore=roms_tools/tests/test_setup/test_surface_forcing.py
+
+      - name: Get coverage report
+        shell: bash -l {0}
+        run: |
+          coverage report -m || true
+          coverage xml || true
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4.0.1
+        continue-on-error: true
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: with-dask-1
+          name: with-dask-1-py${{ matrix.python-version }}
+          fail_ci_if_error: false
+
+  test-with-dask-2:
+    name: 3.13-build-with-dask-2
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create conda environment
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          cache-downloads: true
+          cache-environment: true
+          micromamba-version: 'latest'
+          environment-file: ci/environment.yml
+          create-args: |
+            python=${{ matrix.python-version }}
+          cache-environment-key: micromamba-${{ matrix.python-version }}-${{ runner.os }}
+
+      - name: Conda info
+        run: conda info
+
+      - name: Install roms-tools
+        shell: micromamba-shell {0}
+        run: |
+           python -V
+           python -m pip install -e .[dask]  --force-reinstall
+
+      - name: Running Tests with Dask
+        shell: bash -l {0}
+        run: |
+           python -V
+           coverage run --rcfile=coverage.toml -m pytest --use_dask --verbose roms_tools/tests/test_setup/test_boundary_forcing.py roms_tools/tests/test_setup/test_initial_conditions.py roms_tools/tests/test_setup/test_surface_forcing.py
+
+      - name: Get coverage report
+        shell: bash -l {0}
+        run: |
+          coverage report -m || true
+          coverage xml || true
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4.0.1
+        continue-on-error: true
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: with-dask-2
+          name: with-dask-2-py${{ matrix.python-version }}
+          fail_ci_if_error: false
+
+  test-with-streaming:
+    name: 3.13-build-with-streaming
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.fork == false
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create conda environment
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          cache-downloads: true
+          cache-environment: true
+          micromamba-version: 'latest'
+          environment-file: ci/environment.yml
+          create-args: |
+            python=${{ matrix.python-version }}
+          cache-environment-key: micromamba-${{ matrix.python-version }}-${{ runner.os }}
+
+      - name: Conda info
+        run: conda info
+
+      - name: Install roms-tools
+        shell: micromamba-shell {0}
+        run: |
+           python -V
+           python -m pip install -e .[stream]  --force-reinstall
+
+      - name: Running Tests with Streaming
+        shell: bash -l {0}
+        env:
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+        run: |
+           python -V
+           copernicusmarine login
+           coverage run --rcfile=coverage.toml -m pytest -m stream --stream --use_dask --use_gcsfs --use_copernicus --verbose roms_tools/tests/*
+
+      - name: Get coverage report
+        shell: bash -l {0}
+        run: |
+          coverage report -m || true
+          coverage xml || true
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4.0.1
+        continue-on-error: true
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: with-streaming
+          name: with-streaming
+          fail_ci_if_error: false
+
+  test-with-dask-and-xesmf-1:
+    name: 3.13-build-with-dask-and-xesmf-1
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create conda environment
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          cache-downloads: true
+          cache-environment: true
+          micromamba-version: 'latest'
+          environment-file: ci/environment-with-xesmf.yml
+          create-args: |
+            python=${{ matrix.python-version }}
+          cache-environment-key: micromamba-${{ matrix.python-version }}-${{ runner.os }}
+
+      - name: Conda info
+        run: conda info
+
+      - name: Install roms-tools
+        shell: micromamba-shell {0}
+        run: |
+           python -V
+           python -m pip install -e .[dask]  --force-reinstall
+
+      - name: Running Tests with Dask and Xesmf
+        shell: bash -l {0}
+        run: |
+           python -V
+           coverage run --rcfile=coverage.toml -m pytest --use_dask --verbose roms_tools/tests/ --ignore=roms_tools/tests/test_setup/test_boundary_forcing.py --ignore=roms_tools/tests/test_setup/test_initial_conditions.py --ignore=roms_tools/tests/test_setup/test_surface_forcing.py
+
+      - name: Get coverage report
+        shell: bash -l {0}
+        run: |
+          coverage report -m || true
+          coverage xml || true
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4.0.1
+        continue-on-error: true
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: with-dask-and-xesmf-1
+          name: with-dask-and-xesmf-1
+          fail_ci_if_error: false
+
+  test-with-dask-and-xesmf-2:
+    name: 3.13-build-with-dask-and-xesmf-2
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create conda environment
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          cache-downloads: true
+          cache-environment: true
+          micromamba-version: 'latest'
+          environment-file: ci/environment-with-xesmf.yml
+          create-args: |
+            python=${{ matrix.python-version }}
+          cache-environment-key: micromamba-${{ matrix.python-version }}-${{ runner.os }}
+
+      - name: Conda info
+        run: conda info
+
+      - name: Install roms-tools
+        shell: micromamba-shell {0}
+        run: |
+           python -V
+           python -m pip install -e .[dask]  --force-reinstall
+
+      - name: Running Tests with Dask and Xesmf
+        shell: bash -l {0}
+        run: |
+           python -V
+           coverage run --rcfile=coverage.toml -m pytest --use_dask --verbose roms_tools/tests/test_setup/test_boundary_forcing.py roms_tools/tests/test_setup/test_initial_conditions.py roms_tools/tests/test_setup/test_surface_forcing.py
+
+      - name: Get coverage report
+        shell: bash -l {0}
+        run: |
+          coverage report -m || true
+          coverage xml || true
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4.0.1
+        continue-on-error: true
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: with-dask-and-xesmf-2
+          name: with-dask-and-xesmf-2
+          fail_ci_if_error: false
+
+  test-glorys-regional-invariance:
+    name: 3.13-build-glorys-regional-invariance
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.fork == false
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create conda environment
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          cache-downloads: true
+          cache-environment: true
+          micromamba-version: 'latest'
+          environment-file: ci/environment.yml
+          create-args: |
+            python=${{ matrix.python-version }}
+          cache-environment-key: micromamba-${{ matrix.python-version }}-${{ runner.os }}
+
+      - name: Conda info
+        run: conda info
+
+      - name: Install roms-tools
+        shell: micromamba-shell {0}
+        run: |
+           python -V
+           python -m pip install -e .[dask] --force-reinstall
+           python -m pip install copernicusmarine
+
+      - name: Running Tests without Dask
+        shell: bash -l {0}
+        env:
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+        run: |
+           python -V
+           copernicusmarine login
+           coverage run --rcfile=coverage.toml -m pytest --use_copernicus --use_dask --verbose -k "test_invariance_to_get_glorys_bounds" roms_tools/tests/
+
+      - name: Get coverage report
+        shell: bash -l {0}
+        run: |
+          coverage report -m || true
+          coverage xml || true
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4.0.1
+        continue-on-error: true
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          flags: glorys-regional-invariance
+          name: glorys-regional-invariance
+          fail_ci_if_error: false
