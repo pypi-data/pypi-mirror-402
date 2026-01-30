@@ -1,0 +1,77 @@
+basic-settings:
+  quarantine: &quarantine {{server.storage}}/quarantine/{{pipeline.name}}
+  root: &root {{server.storage}}/root/{{pipeline.name}}
+version: 1
+pipeline:
+  name: {{pipeline.name}}
+  version: 1.0
+  author: CTP Admin
+  server:
+    maxthreads: 20
+    port: {{server.port}}
+  stages:
+    import:
+      type: {{pipeline.import_type}}Import
+      {% if ((pipeline.import_type == 'Dicom') or (pipeline.import_type == 'Http')) %}
+      port: {{pipeline.import_port}}
+      {%endif%}
+      {% if ((pipeline.import_type == 'Directory') or (pipeline.import_type == 'Archive')) %}
+      path: {{pipeline.import_path}}
+      {%endif%}
+      quarantine: *quarantine
+      root: *root
+    object_input_tracker:
+      type: ObjectTracker
+      root: *root
+    series_filter:
+      type: Filter
+      script: scripts/DicomFilter.script
+      root: *root
+      quarantine: *quarantine
+    modality_filter:
+      type: Filter
+      script: scripts/ModalityFilter.script
+      root: *root
+      quarantine: *quarantine
+    description_blacklist:
+      type: Filter
+      script: scripts/SeriesDescriptionBlacklist.script
+      root: *root
+      quarantine: *quarantine
+    anonymizer:
+      type: Anonymizer
+      id: Anonymizer
+      quarantine: *quarantine
+      root: *root
+      script: scripts/DicomAnonymizer.script
+    {% if project %}
+    xnat_specifier:
+      type: Anonymizer
+      script: scripts/XNATSpecifier.script
+      root: *root
+      quarantine: *quarantine
+    {%endif%}
+    export:
+      type: {{pipeline.export_type}}Export
+      {% if ((pipeline.export_type == 'Dicom') or (pipeline.export_type == 'Http')) %}
+      url: {{pipeline.export_url}}
+      {% elif ((pipeline.export_type == 'File') or (pipeline.export_type == 'Directory')) %}
+      path: {{pipeline.export_path}}
+      {%endif%}
+      quarantine: *quarantine
+      root: *root
+scripts:
+  profilename: Anonymize 1.0
+  dateinc: -9999
+  include:
+    - BurnedInPixelsFilter.script 
+    - DicomAnonymizer.script 
+    - DicomFilter.script 
+    - DicomPixelAnonymizer.script 
+    - ModalityFilter.script 
+    - SeriesDescriptionBlacklist.script 
+    - XNATSpecifier.script
+  {% if project %}
+  projectname: {{project.xnat_id}}
+  uidroot: {{project.uid_root}}
+  {%endif%}

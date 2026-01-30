@@ -1,0 +1,59 @@
+basic-settings:
+  quarantine: &quarantine /data/quarantines/default-pipeline
+  root: &root /data/root/default-pipeline
+
+pipeline:
+  name: default-pipeline
+  version: 1.0
+  author: CTP Admin
+
+  server:
+    maxthreads: 20
+    port: 1080
+
+  blocks:
+    import:
+      name: DicomImport
+      port: 11112
+      quarantine: *quarantine
+    dicom_filter:
+      name: DicomFilter
+      script: scripts/DicomFilter.script
+      root: *root
+      quarantine: *quarantine
+    modality_filter:
+      name: ModalityFilter
+      script: scripts/ModalityFilter.script
+      root: *root
+      quarantine: *quarantine
+    series_blacklist_filter:
+      name: SeriesBlacklistFilter
+      script: scripts/SeriesDescriptionBlacklist.script
+      root: *root
+      quarantine: *quarantine
+    Lookup-table-checker:
+      type: LookupTableChecker
+      id: LookupTableChecker
+      root: *root
+    anonymizer:
+      id: Anonymizer
+      quarantine: *quarantine
+    xnat_specifier:
+      name: XNATSpecifier
+      script: scripts/XNATSpecifier.script
+      root: *root
+      quarantine: *quarantine
+    export:
+      xnat_url: dicom://CTP:XNAT@xnat.test:8143
+      quarantine: *quarantine
+      root: *root
+scripts:
+  dateinc: -9999
+  profilename: Anonymize
+  projectname: TestStudy
+  uidroot: 1.2.826.0.1.3680043.10.104.
+{% if ((project) and (project.lookuptable)) %}
+project:
+  lookuptable:
+    {{project.lookuptable}}
+{%endif%}

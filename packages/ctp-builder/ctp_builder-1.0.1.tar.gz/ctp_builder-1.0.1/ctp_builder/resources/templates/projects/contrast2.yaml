@@ -1,0 +1,85 @@
+basic-settings:
+  quarantine: &quarantine {{server.storage}}/quarantine/{{pipeline.name}}
+  root: &root {{server.storage}}/root/{{pipeline.name}}
+version: 1
+pipeline:
+  name: {{pipeline.name}}
+  version: 1.0
+  author: A.Versteeg
+  server:
+    maxthreads: 20
+    port: {{server.port}}
+  stages:
+    import:
+      type: {{pipeline.import_type}}Import
+      {% if ((pipeline.import_type == 'Dicom') or (pipeline.import_type == 'Http')) %}
+      port: {{pipeline.import_port}}
+      {%endif%}
+      {% if ((pipeline.import_type == 'Directory') or (pipeline.import_type == 'Archive')) %}
+      path: {{pipeline.import_path}}
+      {%endif%}
+      quarantine: *quarantine
+      root: *root
+    object_input_tracker:
+      type: ObjectTracker
+      root: *root
+    # series_filter:
+    #   type: Filter
+    #   script: scripts/DicomFilter.script
+    #   root: *root
+    #   quarantine: *quarantine
+    modality_filter:
+      type: Filter
+      script: scripts/ModalityFilter.script
+      root: *root
+      quarantine: *quarantine
+    description_blacklist:
+      type: Filter
+      script: scripts/SeriesDescriptionBlacklist.script
+      root: *root
+      quarantine: *quarantine
+    Lookup-table-checker:
+      type: LookupTableChecker
+      id: LookupTableChecker
+      root: *root
+    anonymizer:
+      type: Anonymizer
+      id: Anonymizer
+      quarantine: *quarantine
+      root: *root
+      script: scripts/ContrastAnonymizer.script
+    {% if project %}
+    xnat_specifier:
+      type: Anonymizer
+      script: scripts/XNATSpecifier.script
+      root: *root
+      quarantine: *quarantine
+    {%endif%}
+    object_export_tracker:
+      type: ObjectTracker
+      root: *root
+    export:
+      type: {{pipeline.export_type}}Export
+      {% if ((pipeline.export_type == 'Dicom') or (pipeline.export_type == 'Http')) %}
+      url: {{pipeline.export_url}}
+      {%endif%}
+      {% if ((pipeline.export_type == 'File') or (pipeline.export_type == 'Directory')) %}
+      path: {{pipeline.export_path}}
+      structure: "(0013,1010)_(0013,1011)/(0010,0020)/(0008,0020)/(0008,103e)"
+      {%endif%}
+      quarantine: *quarantine
+      root: *root
+project:
+  profilename: Erasmus MC BIGR v1.0
+  dateinc: -9999
+  {% if project %}
+  projectname: {{project.xnat_id}}
+  uidroot: {{project.uid_root}}
+  {%endif%}
+scripts:
+  - BurnedInPixelsFilter.script 
+  - ContrastAnonymizer.script 
+  - DicomPixelAnonymizer.script 
+  - ModalityFilter.script 
+  - SeriesDescriptionBlacklist.script 
+  - XNATSpecifier.script

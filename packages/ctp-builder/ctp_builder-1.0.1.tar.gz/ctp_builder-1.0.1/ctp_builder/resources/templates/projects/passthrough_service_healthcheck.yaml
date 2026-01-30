@@ -1,0 +1,44 @@
+basic-settings:
+  quarantine: &quarantine {{server.storage}}/quarantine/{{pipeline.name}}
+  root: &root {{server.storage}}/root/{{pipeline.name}}
+version: 1
+pipeline:
+  name: {{pipeline.name}}
+  version: 1.0
+  author: CTP Admin
+  server:
+    maxthreads: 20
+    port: {{server.port}}
+  stages:
+    import:
+      type: {{pipeline.import_type}}Import
+      {% if ((pipeline.import_type == 'Dicom') or (pipeline.import_type == 'Http')) %}
+      port: {{pipeline.import_port}}
+      {%endif%}
+      {% if ((pipeline.import_type == 'Directory') or (pipeline.import_type == 'Archive')) %}
+      path: {{pipeline.import_path}}
+      {%endif%}
+      quarantine: *quarantine
+      root: *root
+    filter:
+      type: Filter
+      script: ./scripts/HealthCheckFilter.script
+    export:
+      type: {{pipeline.export_type}}Export
+      {% if ((pipeline.export_type == 'Dicom') or (pipeline.export_type == 'Http')) %}
+      url: {{pipeline.export_url}}
+      {%endif%}
+      {% if ((pipeline.export_type == 'File') or (pipeline.export_type == 'Directory')) %}
+      root: {{pipeline.export_path}}
+      structure: "(0010,0020)/(0008,0020)/(0020,000d)/(0008,103e)"
+      {%endif%}
+      quarantine: *quarantine
+      root: *root
+scripts:
+  include:
+    - HealthCheckFilter.script
+{% if ((project) and (project.lookuptable)) %}
+project:
+  lookuptable:
+    {{project.lookuptable}}
+{%endif%}

@@ -1,0 +1,61 @@
+basic-settings:
+  quarantine: &quarantine {{server.storage}}/quarantine/{{pipeline.name}}
+  root: &root {{server.storage}}/root/{{pipeline.name}}
+version: 1
+pipeline:
+  name: {{pipeline.name}}
+  version: 1.0
+  author: CTP Admin
+  server:
+    maxthreads: 20
+    port: {{server.port}}
+  stages:
+    import:
+      type: {{pipeline.import_type}}Import
+      port: {{pipeline.import_port}}
+      quarantine: *quarantine
+    object_input_tracker:
+      type: ObjectTracker
+    dicom_filter:
+      type: Filter
+      script: scripts/DicomFilter.script
+      root: *root
+      quarantine: *quarantine
+    modality_filter:
+      type: Filter
+      script: scripts/ModalityFilter.script
+      root: *root
+      quarantine: *quarantine
+    description_blacklist:
+      type: Filter
+      script: scripts/SeriesDescriptionBlacklist.script
+      root: *root
+      quarantine: *quarantine
+    Lookup-table-checker:
+      type: LookupTableChecker
+      id: LookupTableChecker
+      root: *root
+    anonymizer:
+      type: Anonymizer
+      id: Anonymizer
+      quarantine: *quarantine
+    xnat_specifier:
+      type: Anonymizer
+      script: scripts/XNATSpecifier.script
+      root: *root
+      quarantine: *quarantine
+    export:
+      type: {{pipeline.export_type}}Export
+      url: {{pipeline.export_url}}
+      quarantine: *quarantine
+      root: *root
+scripts:
+  profilename: Erasmus MC BIGR v1.0
+  dateinc: -9999
+  projectname: {{project.xnat_id}}
+  uidroot: {{project.uid_root}}
+{% if ((project) and (project.lookuptable)) %}
+project:
+  lookuptable:
+    {{project.lookuptable}}
+{%endif%}%   
