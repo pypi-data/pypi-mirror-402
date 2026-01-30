@@ -1,0 +1,73 @@
+.default_rules: &default_rules
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
+      changes:
+        - .gitlab-ci.yml
+        - line_racer/**/*
+        - tests/**/*
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
+      changes:
+        - .gitlab-ci.yml
+        - line_racer/**/*
+        - tests/**/*
+
+stages:
+  - build
+  - test
+  - deploy
+
+build-py-venv:
+  image: registry.gitlab.com/david_haegele/line_racer:build
+  stage: build
+  <<: *default_rules
+  interruptible: true
+  script:
+    - python3 -m venv $CI_PROJECT_DIR/venv
+    - source $CI_PROJECT_DIR/venv/bin/activate
+    - pip install tox
+  artifacts:
+    expire_in: 30 minutes
+    paths:
+      - $CI_PROJECT_DIR/venv/*
+
+test-tox-flake8:
+  image: registry.gitlab.com/david_haegele/line_racer:build
+  stage: test
+  interruptible: true
+  <<: *default_rules
+  before_script:
+    - source $CI_PROJECT_DIR/venv/bin/activate
+  script:
+    - tox -e flake8
+  needs:
+    - job: build-py-venv
+      artifacts: true
+
+
+test-tox-py:
+  image: registry.gitlab.com/david_haegele/line_racer:build
+  stage: test
+  interruptible: true
+  <<: *default_rules
+  before_script:
+    - source $CI_PROJECT_DIR/venv/bin/activate
+  script:
+    - tox -e py
+  needs:
+    - job: build-py-venv
+      artifacts: true
+
+deploy-pypi:
+  image: registry.gitlab.com/david_haegele/line_racer:build
+  stage: deploy
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
+      changes:
+        - .gitlab-ci.yml
+        - line_racer/**/*
+        - tests/**/*
+  script:
+    - python3 -m build --sdist
+    - twine check dist/*
+    - twine upload dist/*
+
