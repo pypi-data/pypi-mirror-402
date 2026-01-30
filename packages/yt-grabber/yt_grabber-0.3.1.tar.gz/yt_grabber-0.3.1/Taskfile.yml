@@ -1,0 +1,73 @@
+version: '3'
+
+tasks:
+  install:
+    desc: Install dependencies
+    sources:
+      - pyproject.toml
+      - uv.lock
+    cmds:
+      - uv sync
+
+  lint:
+    desc: Run ruff linter (includes isort)
+    sources:
+      - src/**/*.py
+      - tests/**/*.py
+    cmds:
+      - uv run ruff check .
+
+  format:
+    desc: Run ruff formatter
+    sources:
+      - src/**/*.py
+      - tests/**/*.py
+    cmds:
+      - uv run ruff format .
+
+  format-check:
+    desc: Check formatting without making changes
+    sources:
+      - src/**/*.py
+      - tests/**/*.py
+    cmds:
+      - uv run ruff format --check .
+
+  mypy:
+    desc: Run mypy type checker
+    sources:
+      - src/**/*.py
+    cmds:
+      - uv run mypy src/
+
+  test:
+    desc: Run pytest with coverage
+    sources:
+      - src/**/*.py
+      - tests/**/*.py
+    cmds:
+      - uv run pytest
+
+  test-unit:
+    desc: Run unit tests only
+    cmds:
+      - uv run pytest tests/unit/
+
+  test-integration:
+    desc: Run integration tests only
+    cmds:
+      - uv run pytest tests/integration/
+
+  fix:
+    desc: Auto-fix linting and formatting issues
+    cmds:
+      - uv run ruff check --fix .
+      - uv run ruff format .
+
+  ci:
+    desc: Run all checks (lint, format-check, mypy, test) - for CI/CD
+    cmds:
+      - task: lint
+      - task: format-check
+      - task: mypy
+      - task: test
