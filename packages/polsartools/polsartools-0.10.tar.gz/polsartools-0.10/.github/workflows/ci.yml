@@ -1,0 +1,474 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    if: contains(github.event.head_commit.message, 'build') || contains(github.event.pull_request.title, 'build')
+    name: Build ${{ matrix.os }} ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        # os: [ubuntu-latest, windows-latest, macos-latest,macos-13]
+        # os: [ubuntu-latest]
+
+        python-version: ["3.12"]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: update Python version in env-template.yml (windows/linux)
+      if: runner.os == 'Windows' || runner.os == 'Linux'
+      run: |
+        sed -i "s/python/python=${{ matrix.python-version }}/g" env-template.yml
+
+    - name: Replace Python version in env-template.yml (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        sed -i '' "s/python/python=${{ matrix.python-version }}/g" env-template.yml 
+
+    # Set up Miniconda for Conda build
+    - name: Set up Miniconda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        # miniconda-version: "latest"
+        activate-environment: pst-env
+        environment-file: env-template.yml
+        auto-activate-base: false
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install Conda dependencies (Windows)
+      if: runner.os == 'Windows'
+      run: |
+            conda init cmd.exe  # Initialize Conda for Windows
+            refreshenv  # Refresh environment variables (needed on Windows)
+            conda activate pst-env  # Activate the Conda environment
+            conda info --envs
+            conda install -y conda-build anaconda-client
+
+    - name: Install Conda dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        conda init bash 
+
+        # Check if ~/.bashrc exists. If not, use ~/.bash_profile
+        if [ -f ~/.bashrc ]; then
+          source ~/.bashrc  # Use .bashrc if it exists
+        else
+          source ~/.bash_profile  # Fallback to .bash_profile
+        fi
+
+        conda activate pst-env  # Activate the environment
+        echo "Active Conda Environment:"
+        conda info --envs  # Print the list of Conda environments and show the active one
+        conda install -y conda-build anaconda-client  # Install Conda build tools into pst-env
+
+
+    - name: Install Conda dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        conda init bash 
+        # # Detect architecture dynamically
+        # ARCH=$(uname -m)
+        # if [ "$ARCH" == "x86_64" ]; then
+        #   arch -x86_64 /bin/bash -c "conda config --set subdir osx-64"
+        # else
+        #   conda config --set subdir osx-arm64
+        # fi
+        # Check if ~/.bashrc exists. If not, use ~/.bash_profile
+        if [ -f ~/.bashrc ]; then
+          source ~/.bashrc  # Use .bashrc if it exists
+        else
+          source ~/.bash_profile  # Fallback to .bash_profile
+        fi
+        # echo "Installing for $ARCH architecture"
+        conda activate pst-env  # Activate the environment
+        echo "Active Conda Environment:"
+        conda info --envs  # Print the list of Conda environments and show the active one
+        conda install -y conda-build anaconda-client  # Install Conda build tools into pst-env
+        
+
+    # Install GDAL system dependencies based on the OS
+    - name: Install GDAL system dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo add-apt-repository ppa:ubuntugis/ubuntugis-unstable
+        sudo apt-get update
+        sudo apt-get install -y gdal-bin libgdal-dev
+
+     
+    - name: Install GDAL system dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew update
+        brew install gdal
+        brew upgrade gdal
+
+    - name: Cache Homebrew dependencies (macOS)
+      if: runner.os == 'macOS'
+      uses: actions/cache@v4.2.3
+      with:
+        path: |
+          /opt/homebrew
+          /usr/local
+        key: ${{ runner.os }}-homebrew-${{ hashFiles('**/Brewfile') }}
+        restore-keys: |
+          ${{ runner.os }}-homebrew-
+            
+    - name: Set up MSVC environment (Windows)
+      if: runner.os == 'Windows'
+      uses: ilammy/msvc-dev-cmd@v1
+
+    
+
+###############################################################################
+      # Cache Conda packages
+################################################################################
+
+    - name: Cache Conda packages and environments on Windows
+      if: runner.os == 'Windows'
+      uses: actions/cache@v4.2.3
+      with:
+        path: |
+          C:\Miniconda\pkgs
+          C:\Miniconda\envs
+        key: windows-conda-pkgs-${{ hashFiles('**/env-template.yml') }}
+        restore-keys: |
+          windows-conda-
+
+    - name: Cache Conda packages and environments on macOS
+      if: runner.os == 'macOS'
+      uses: actions/cache@v4.2.3
+      with:
+        path: |
+          /Users/runner/miniconda3/pkgs
+          /Users/runner/miniconda3/envs
+        key: macos-conda-pkgs-${{ hashFiles('**/env-template.yml') }}
+        restore-keys: |
+          macos-conda-
+
+    - name: Cache Conda packages and environments on Linux
+      if: runner.os == 'Linux'
+      uses: actions/cache@v4.2.3
+      with:
+        path: |
+          /usr/share/miniconda/pkgs
+          /usr/share/miniconda/envs
+        key: linux-conda-pkgs-${{ hashFiles('**/env-template.yml') }}
+        restore-keys: |
+          linux-conda-
+
+##################################################################################
+            # Build and install polsartools pip package
+###################################################################################
+
+    - name: Install polsartools pip package (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        conda init cmd.exe  # Initialize Conda for Windows
+        refreshenv  # Refresh environment variables (needed on Windows)
+        conda activate pst-env  # Activate the Conda environment
+        conda info --envs
+        python -m pip install --upgrade pip
+        python -m pip install . 
+
+    - name: Test with pytest (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        conda init cmd.exe  # Initialize Conda for Windows
+        refreshenv  # Refresh environment variables (needed on Windows)
+        conda activate pst-env  # Activate the Conda environment
+        conda info --envs
+        pytest -v ./polsartools/tests/test_all.py
+
+
+    - name: Install polsartools pip package (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        conda init bash 
+
+        # Check if ~/.bashrc exists. If not, use ~/.bash_profile
+        if [ -f ~/.bashrc ]; then
+          source ~/.bashrc  # Use .bashrc if it exists
+        else
+          source ~/.bash_profile  # Fallback to .bash_profile
+        fi
+        conda activate pst-env  # Activate the environment
+        echo "Active Conda Environment:"
+        conda info --envs  # Print the list of Conda environments and show the active one
+
+        python -m pip install --upgrade pip
+        python -m pip install .  
+
+    - name: Install polsartools pip package (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        conda init bash 
+
+        # ARCH=$(uname -m)
+        # if [ "$ARCH" == "x86_64" ]; then
+        #   arch -x86_64 /bin/bash -c "conda config --set subdir osx-64"
+        # else
+        #   conda config --set subdir osx-arm64
+        # fi
+
+        # Check if ~/.bashrc exists. If not, use ~/.bash_profile
+        if [ -f ~/.bashrc ]; then
+          source ~/.bashrc  # Use .bashrc if it exists
+        else
+          source ~/.bash_profile  # Fallback to .bash_profile
+        fi
+        
+        # echo "Building for $ARCH architecture"
+        conda activate pst-env  # Activate the environment
+        echo "Active Conda Environment:"
+        conda info --envs  # Print the list of Conda environments and show the active one
+
+        python -m pip install --upgrade pip
+        python -m pip install .  
+
+
+
+    - name: Test with pytest (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        conda init bash 
+
+        # Check if ~/.bashrc exists. If not, use ~/.bash_profile
+        if [ -f ~/.bashrc ]; then
+          source ~/.bashrc  # Use .bashrc if it exists
+        else
+          source ~/.bash_profile  # Fallback to .bash_profile
+        fi
+        conda activate pst-env  # Activate the environment
+        pytest -v ./polsartools/tests/test_all.py
+
+##########################################################################
+# Build wheels with cibuildwheel
+##########################################################################
+
+    - name: Clean build artifacts (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        find . -name '*.so' -delete
+        rm -rf build/ dist/ *.egg-info wheelhouse
+
+    - name: Clean build artifacts (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        Remove-Item -Recurse -Force "*.so" -ErrorAction SilentlyContinue
+
+        # Clean directories if they exist
+        if (Test-Path "build") {
+          Remove-Item -Recurse -Force "build"
+        }
+
+        if (Test-Path "dist") {
+          Remove-Item -Recurse -Force "dist"
+        }
+
+        if (Test-Path "*.egg-info") {
+          Remove-Item -Recurse -Force "*.egg-info"
+        }
+
+        if (Test-Path "wheelhouse") {
+          Remove-Item -Recurse -Force "wheelhouse"
+        }
+
+
+
+    - name: Build wheels with cibuildwheel (Linux)
+      if: runner.os == 'Linux'
+      env:
+        # CIBW_BUILD: "cp36-manylinux_x86_64 cp37-manylinux_x86_64"  
+        CIBW_BUILD: "cp38-manylinux_x86_64 cp39-manylinux_x86_64 cp310-manylinux_x86_64 cp311-manylinux_x86_64 cp312-manylinux_x86_64 cp313-manylinux_x86_64"   
+        CIBW_OUTPUT_DIR: wheelhouse
+      run: |
+        conda init bash 
+        # Check if ~/.bashrc exists. If not, use ~/.bash_profile
+        if [ -f ~/.bashrc ]; then
+          source ~/.bashrc  # Use .bashrc if it exists
+        else
+          source ~/.bash_profile  # Fallback to .bash_profile
+        fi
+        conda activate pst-env  
+        echo "Active Conda Environment:"
+
+        python -m cibuildwheel --output-dir wheelhouse
+    
+    
+    - name: Build wheels with cibuildwheel (macOS)
+      if: runner.os == 'macOS'
+      env:
+        # Initially, leave CIBW_BUILD unset to be configured dynamically
+        CIBW_OUTPUT_DIR: wheelhouse
+      run: |
+        conda init bash
+
+        # Check if ~/.bashrc exists. If not, use ~/.bash_profile
+        if [ -f ~/.bashrc ]; then
+          source ~/.bashrc  # Use .bashrc if it exists
+        else
+          source ~/.bash_profile  # Fallback to .bash_profile
+        fi
+
+        conda activate pst-env
+        echo "Active Conda Environment:"
+
+        # Detect the architecture of the runner (ARM or Intel) on macOS
+        if [[ "$(uname -m)" == "x86_64" ]]; then
+          # Intel architecture (x86_64) - macOS
+          ARCH="macosx_x86_64"
+          # export CIBW_BUILD="cp38-macosx_x86_64 cp39-macosx_x86_64"
+          export CIBW_BUILD="cp38-macosx_x86_64 cp39-macosx_x86_64 cp310-macosx_x86_64 cp311-macosx_x86_64 cp312-macosx_x86_64 cp313-macosx_x86_64"
+        elif [[ "$(uname -m)" == "arm64" ]]; then
+          # ARM architecture (arm64) - macOS Apple Silicon
+          ARCH="macosx_arm64"
+          # export CIBW_BUILD="cp38-macosx_arm64 cp39-macosx_arm64"
+          export CIBW_BUILD="cp38-macosx_arm64 cp39-macosx_arm64 cp310-macosx_arm64 cp311-macosx_arm64 cp312-macosx_arm64 cp313-macosx_arm64"
+        else
+          echo "Unsupported architecture: $(uname -m)"
+          exit 1
+        fi
+
+        echo "Building for architecture: $ARCH"
+        echo "CIBW_BUILD: $CIBW_BUILD"
+
+        # Run cibuildwheel to build the wheels
+        python -m cibuildwheel --output-dir wheelhouse
+
+
+    - name: Build wheels with cibuildwheel (Windows)
+      if: runner.os == 'Windows'
+      env:
+        # CIBW_BUILD: "cp36-win_amd64 cp37-win_amd64"  # For Windows x86_64
+        CIBW_BUILD: "cp38-win_amd64 cp39-win_amd64 cp310-win_amd64 cp311-win_amd64 cp312-win_amd64 cp313-win_amd64"
+        CIBW_OUTPUT_DIR: wheelhouse
+      run: |
+        conda init cmd.exe  # Initialize Conda for Windows
+        refreshenv  # Refresh environment variables (needed on Windows)
+        conda activate pst-env  # Activate the Conda environment
+        echo "Active Conda Environment:"
+
+        python -m cibuildwheel --output-dir wheelhouse
+
+    - name: Upload wheel artifacts
+      uses: actions/upload-artifact@v4.6.0
+      with:
+        name: python-wheels-${{ matrix.os }}-${{ matrix.python-version }}-${{ github.run_id }}  # Unique name based on run ID
+        path: wheelhouse/*.whl
+        if-no-files-found: ignore
+        overwrite: false
+        include-hidden-files: false
+
+
+##########################################################################
+
+
+##########################################################################
+# Build conda packages with conda-build
+##########################################################################
+    - name: Build Conda package (macOS)
+      if: runner.os == 'macOS' 
+      run: |
+        conda init bash 
+        # Check if ~/.bashrc exists. If not, use ~/.bash_profile
+        if [ -f ~/.bashrc ]; then
+          source ~/.bashrc  # Use .bashrc if it exists
+        else
+          source ~/.bash_profile  # Fallback to .bash_profile
+        fi
+        conda activate pst-env  
+        echo "Active Conda Environment:"
+        conda info --envs  # Print the list of Conda environments and show the active one
+
+        conda install --yes pip
+        python -m pip install --upgrade pip
+
+        # Detect the architecture of the runner (ARM or Intel) on macOS 
+        if [[ "$(uname -m)" == "x86_64" ]]; then
+          # Intel architecture (x86_64) - macOS Intel
+          ARCH="osx-x86_64"
+        elif [[ "$(uname -m)" == "arm64" ]]; then
+          # ARM architecture (arm64) - macOS Apple Silicon
+          ARCH="osx-arm64"
+        else
+          echo "Unsupported architecture: $(uname -m)"
+          exit 1
+        fi
+
+        echo "Building for $ARCH architecture"
+        conda config --add channels conda-forge
+        conda config --set channel_priority strict
+        # conda build ./conda-recipe --output-folder output --python 3.8
+        # conda build ./conda-recipe --output-folder output --python 3.9
+        # conda build ./conda-recipe --output-folder output --python 3.10
+        conda build ./conda-recipe --output-folder output --python 3.11
+        conda build ./conda-recipe --output-folder output --python 3.12
+        conda build ./conda-recipe --output-folder output --python 3.13
+
+
+    - name: Build Conda package (Linux)
+      if: runner.os == 'Linux' 
+      run: |
+        conda init bash 
+        # Check if ~/.bashrc exists. If not, use ~/.bash_profile
+        if [ -f ~/.bashrc ]; then
+          source ~/.bashrc  # Use .bashrc if it exists
+        else
+          source ~/.bash_profile  # Fallback to .bash_profile
+        fi
+        conda activate pst-env  
+        echo "Active Conda Environment:"
+        conda info --envs  # Print the list of Conda environments and show the active one
+
+        conda install --yes pip
+        python -m pip install --upgrade pip
+        conda config --add channels conda-forge
+        conda config --set channel_priority strict
+        # conda build ./conda-recipe --output-folder output --python 3.7
+        # conda build ./conda-recipe --output-folder output --python 3.8
+        # conda build ./conda-recipe --output-folder output --python 3.9
+        # conda build ./conda-recipe --output-folder output --python 3.10
+        conda build ./conda-recipe --output-folder output --python 3.11
+        conda build ./conda-recipe --output-folder output --python 3.12
+        conda build ./conda-recipe --output-folder output --python 3.13  
+        
+
+    - name:  Build Conda package (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        conda init cmd.exe  # Initialize Conda for Windows
+        refreshenv  # Refresh environment variables (needed on Windows)
+        conda activate pst-env  # Activate the Conda environment
+        echo "Active Conda Environment:"
+        conda info --envs  # Print the list of Conda environments and show the active one
+        python -m pip install --upgrade pip
+        conda config --add channels conda-forge
+        conda config --set channel_priority strict
+        conda build ./conda-recipe --output-folder output --python 3.7 --debug
+
+
+    - name: Upload conda package
+      uses: actions/upload-artifact@v4.6.0
+      with:
+        name: conda-package-${{ matrix.os }}-${{ matrix.python-version }}-${{ github.run_id }}
+        path: |
+          output/**/*.tar.bz2
+          output/**/*.conda
+        if-no-files-found: ignore
+        overwrite: false
+        include-hidden-files: false
+
+  ###########################################################################
