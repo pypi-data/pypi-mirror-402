@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="{{ url_for('c2c_static', path='/favicon-32x32.png') }}"
+      referrerpolicy="no-referrer"
+      crossorigin="anonymous"
+      integrity="{{ integrity['favicon-32x32.png'] }}"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="{{ url_for('c2c_static', path='/favicon-16x16.png') }}"
+      referrerpolicy="no-referrer"
+      crossorigin="anonymous"
+      integrity="{{ integrity['favicon-16x16.png'] }}"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css"
+      integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('c2c_static', path='/index.css') }}"
+      integrity="{{ integrity['index.css'] }}"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <title>Camptocamp ASGI Utils tools</title>
+  </head>
+  <body>
+    <div class="container-fluid">
+      <h1>Camptocamp ASGI Utils tools</h1>
+
+      <!-- Authentication -->
+      {% if auth_type in (AuthenticationType.SECRET, AuthenticationType.GITHUB) %}
+      <h2>Authentication</h2>
+      {% if auth_type == AuthenticationType.SECRET %}
+      {% if not is_auth %}
+      <form action="{{ url_for('c2c_index') }}" method="post" target="_self">
+        <input type="password" name="secret" placeholder="Secret" required />
+        <button type="submit">Login</button>
+      </form>
+      {% else %}
+      <p>Authenticated with a secret.</p>
+      {% endif %}
+      {% elif auth_type == AuthenticationType.GITHUB %}
+      {% if not is_auth %}
+      <p>
+        <a href="{{ url_for('c2c_github_login') }}">Login with GitHub</a>
+      </p>
+      {% else %}
+      <p>
+        Logged in as: <a href="{{ user['url'] }}">{{ user['name'] }}</a><br />
+        <a href="{{ url_for('c2c_github_logout') }}">Logout</a>
+      </p>
+      {% endif %}
+      {% endif %}
+      {% endif %}
+
+      {% if has_access %}
+      <h2>Headers
+      <admin-link
+        data="headers"
+        admin-class="btn btn-primary"
+        admin-href="{{ url_for('c2c_headers') }}"
+        admin-role="button"
+        >get</admin-link
+      ></h2>
+      <c2c-headers data="headers"></c2c-headers>
+
+      <h2>Logging</h2>
+      <c2c-logging-get data="logging-get" application-module="{{application_module}}" action="{{url_for('c2c_logging_level')}}"></c2c-logging-get>
+      <c2c-logging data="logging-get"></c2c-logging>
+      <hr>
+      <c2c-logging-set application-module="{{application_module}}" action="{{url_for('c2c_logging_level')}}"></c2c-logging-set>
+      <hr>
+      <admin-link
+        data="logging-overrides"
+        admin-class="btn btn-primary"
+        admin-href="{{ url_for('c2c_logging_overrides') }}"
+        admin-role="button"
+        >Get overrides</admin-link
+      ></h2>
+      <c2c-logging-overrides data="logging-overrides"></c2c-logging-overrides>
+
+      {% endif %}<!-- has_access -->
+
+      <h2>Health checks</h2>
+      <c2c-health-check-form data="health-checks" action="{{url_for('c2c_health_checks')}}" dataOnError="true"></c2c-health-check-form>
+      <c2c-health-check data="health-checks"></c2c-health-check>
+
+      <script type="module" src="{{ url_for('c2c_static', path='/index.js') }}"
+        referrerpolicy="no-referrer"
+        crossorigin="anonymous"
+        integrity="{{ integrity['index.js'] }}"
+      ></script>
+    </div>
+  </body>
+</html>
