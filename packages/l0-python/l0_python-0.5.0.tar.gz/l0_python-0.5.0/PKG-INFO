@@ -1,0 +1,208 @@
+Metadata-Version: 2.4
+Name: l0-python
+Version: 0.5.0
+Summary: L0 regularization for sparse neural networks and intelligent sampling
+Author-email: PolicyEngine <hello@policyengine.org>
+License: MIT License
+        
+        Copyright (c) 2025 PolicyEngine
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+        
+Project-URL: Homepage, https://github.com/PolicyEngine/L0
+Project-URL: Repository, https://github.com/PolicyEngine/L0
+Project-URL: Documentation, https://github.com/PolicyEngine/L0#readme
+Project-URL: Issues, https://github.com/PolicyEngine/L0/issues
+Keywords: l0,regularization,sparsity,neural networks,calibration
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: torch>=2.0.0
+Requires-Dist: numpy>=1.20.0
+Requires-Dist: scipy>=1.7.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-cov>=3.0; extra == "dev"
+Requires-Dist: black>=22.0; extra == "dev"
+Requires-Dist: build>=1.3; extra == "dev"
+Requires-Dist: scikit-learn>=1.0; extra == "dev"
+Requires-Dist: yaml-changelog>=0.3.0; extra == "dev"
+Requires-Dist: twine>=4.0.0; extra == "dev"
+Provides-Extra: docs
+Requires-Dist: jupyter-book>=1.0; extra == "docs"
+Requires-Dist: jupyter>=1.0; extra == "docs"
+Requires-Dist: notebook>=7.0; extra == "docs"
+Requires-Dist: ipykernel>=6.0; extra == "docs"
+Provides-Extra: examples
+Requires-Dist: matplotlib>=3.3; extra == "examples"
+Requires-Dist: tqdm>=4.60; extra == "examples"
+Requires-Dist: pandas>=1.3; extra == "examples"
+Requires-Dist: scikit-learn>=1.0; extra == "examples"
+Requires-Dist: torchvision>=0.15; extra == "examples"
+Dynamic: license-file
+
+# L0 Regularization
+
+[![PyPI version](https://badge.fury.io/py/l0-python.svg)](https://pypi.org/project/l0-python/)
+[![CI](https://github.com/PolicyEngine/L0/actions/workflows/push.yml/badge.svg)](https://github.com/PolicyEngine/L0/actions)
+
+A PyTorch implementation of L0 regularization based on [Louizos, Welling, & Kingma (2017)](https://arxiv.org/abs/1712.01312), designed for survey calibration and sparse regression.
+
+## Installation
+
+```bash
+pip install l0-python
+```
+
+For development:
+```bash
+git clone https://github.com/PolicyEngine/L0.git
+cd L0
+pip install -e .[dev]
+```
+
+## Our Approach to Test-Time Gates
+
+The original Hard Concrete formulation uses temperature (β) during training to control the sharpness of stochastic gates. At test time, there's a design choice: whether to include temperature in the deterministic gate computation.
+
+We include temperature at test time:
+```python
+# Our approach: include temperature
+z = sigmoid(log_alpha / beta) * (zeta - gamma) + gamma
+
+# Alternative: omit temperature
+z = sigmoid(log_alpha) * (zeta - gamma) + gamma
+```
+
+Including temperature produces sharper 0/1 decisions, which we find beneficial for achieving clean sparsity in our applications. See `examples/sparse_regression_demo.py` for a demonstration on a 4-variable regression problem.
+
+## Primary Use Case: Survey Calibration
+
+This package was developed for PolicyEngine's survey calibration, where we select a sparse subset of survey households while matching population targets.
+
+```python
+import numpy as np
+from scipy import sparse as sp
+from l0.calibration import SparseCalibrationWeights
+
+# Setup: Q targets, N households
+Q, N = 200, 10000
+M = sp.random(Q, N, density=0.3, format="csr")  # Household characteristics
+y = np.random.uniform(1e6, 1e8, size=Q)          # Population targets
+
+# Initialize model
+model = SparseCalibrationWeights(
+    n_features=N,
+    beta=0.35,
+    gamma=-0.1,
+    zeta=1.1,
+    init_keep_prob=0.5,
+    init_weights=1.0,
+    log_weight_jitter_sd=0.05,
+    device="cuda",
+)
+
+# Train with L0+L2 regularization
+model.fit(
+    M=M,
+    y=y,
+    lambda_l0=1e-6,
+    lambda_l2=1e-8,
+    lr=0.15,
+    epochs=2000,
+    loss_type="relative",
+    verbose=True,
+)
+
+# Get results
+active = model.get_active_weights()
+print(f"Selected {active['count']} of {N} households")
+print(f"Sparsity: {model.get_sparsity():.1%}")
+```
+
+### Key Features
+
+- **Non-negative weights**: Constrained via log-space parameterization
+- **L0 sparsity**: Directly minimizes the count of active weights
+- **Relative loss**: Scale-invariant for targets spanning orders of magnitude
+- **Group-wise averaging**: Balance loss across target groups with different sizes
+- **GPU support**: CUDA acceleration for large problems
+
+## Sparse Regression
+
+For sparse linear regression with scipy sparse matrices:
+
+```python
+from scipy import sparse as sp
+from l0.sparse import SparseL0Linear
+
+# Sparse design matrix
+X = sp.random(1000, 500, density=0.1, format="csr")
+y = np.random.randn(1000)
+
+model = SparseL0Linear(n_features=500)
+model.fit(X, y, lambda_l0=0.001, epochs=1000)
+
+# Get sparse coefficients
+coef = model.get_coefficients(threshold=0.01)
+```
+
+## Example: Variable Selection
+
+The `examples/sparse_regression_demo.py` script demonstrates L0 regularization on a simple problem where the true coefficients are `[1, 0, -2, 0]`:
+
+```bash
+python examples/sparse_regression_demo.py
+```
+
+Output:
+```
+True coefficients:        [ 1.  0. -2.  0.]
+Recovered coefficients:   [ 1.039  0.    -2.069 -0.   ]
+Gates:                    [1. 0. 1. 0.]
+```
+
+The model correctly identifies that only variables 1 and 3 contribute to the outcome.
+
+## Testing
+
+```bash
+pytest tests/ -v --cov=l0
+```
+
+## Citation
+
+```bibtex
+@article{louizos2017learning,
+  title={Learning Sparse Neural Networks through L0 Regularization},
+  author={Louizos, Christos and Welling, Max and Kingma, Diederik P},
+  journal={arXiv preprint arXiv:1712.01312},
+  year={2017}
+}
+```
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
