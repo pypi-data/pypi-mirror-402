@@ -1,0 +1,70 @@
+Metadata-Version: 2.1
+Name: django-tasks-local
+Version: 2.0
+Summary: Zero-infrastructure task backends for Django 6 (thread pool and process pool)
+Author-Email: Chris Beaven <smileychris@gmail.com>
+License: MIT
+Classifier: Development Status :: 4 - Beta
+Classifier: Framework :: Django
+Classifier: Framework :: Django :: 6.0
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Project-URL: Homepage, https://github.com/lincolnloop/django-tasks-local
+Project-URL: Documentation, https://lincolnloop.github.io/django-tasks-local/
+Requires-Python: >=3.12
+Requires-Dist: django>=6.0
+Description-Content-Type: text/markdown
+
+# django-tasks-local
+
+Zero-infrastructure task backends for Django 6.
+
+Django 6 ships with `ImmediateBackend` (blocks the request) and `DummyBackend` (does nothing). This package provides **background execution with zero infrastructure**:
+
+- **ThreadPoolBackend** - I/O-bound tasks (emails, API calls, database)
+- **ProcessPoolBackend** - CPU-bound tasks (image processing, data analysis)
+
+No Redis, Celery, or database required.
+
+## Installation
+
+```bash
+pip install django-tasks-local
+```
+
+## Quick Start
+
+```python
+# settings.py
+TASKS = {
+    "default": {"BACKEND": "django_tasks_local.ThreadPoolBackend"},
+}
+```
+
+```python
+from django.tasks import task
+
+@task
+def send_welcome_email(user_id):
+    ...
+
+send_welcome_email.enqueue(user.id)
+```
+
+## Documentation
+
+- [Usage Guide](https://lincolnloop.github.io/django-tasks-local/usage/) - Configuration, multiple backends, retrieving results
+- [API Reference](https://lincolnloop.github.io/django-tasks-local/api/) - Backend capabilities and methods
+- [Gotchas](https://lincolnloop.github.io/django-tasks-local/gotchas/) - Limitations and edge cases
+
+## Limitations
+
+- **In-memory only** - Results lost on restart
+- **No scheduling** - `supports_defer = False`
+- **No priority** - FIFO execution
+
+For persistence, see [django-tasks](https://pypi.org/project/django-tasks/) which provides `DatabaseBackend` and `RQBackend`.
