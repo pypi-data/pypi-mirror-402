@@ -1,0 +1,11 @@
+# OpenQuantum
+
+## Updata 2026.01.22.
+/x-poem: Projection-Operator embEdding froM eXcited wavefunctions neural-nets/
+
+Representing molecular excited-state wavefunctions on quantum computers through these schemes requires more qubits than the number of electrons contained in the molecule, as these qubits are used to describe the spin-orbital information of the electrons. This largely limits the direct application of commercial quantum computers to molecular and material design. The cost of building quantum computers increases sharply with the number of qubits, which is a direct challenge for future quantum computing applications.  
+
+We can assert that the information obtained from simulating electronic systems according to the Schrödinger equation and first principles on classical computers is a subset of what quantum computers can achieve for the same task. This makes it highly attractive to develop a class of algorithms that integrate cost-controllable quantum computing into material design.  
+
+First, we used PySCF to obtain the ground-state wavefunctions of molecular candidates. Second, to obtain the excited-state wavefunctions of the molecules, we constructed a Slater-Ansatz and solved it in the form of a neural network wavefunction combined with Monte Carlo sampling. Further, under the action of selected projection operators, the computed excited-state wavefunctions yielded a low-dimensional effective Hamiltonian. When we chose the chemical basis sets "3-21g" and "6-31g**", we obtained the density matrices of input quantum states, respectively. 
+
