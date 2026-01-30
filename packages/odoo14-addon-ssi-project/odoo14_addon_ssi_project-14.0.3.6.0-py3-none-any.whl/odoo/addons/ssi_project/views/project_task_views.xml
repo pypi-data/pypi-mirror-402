@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2022 OpenSynergy Indonesia
+     Copyright 2022 PT. Simetri Sinergi Indonesia
+     License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl). -->
+<odoo>
+<record id="project_task_view_kanban" model="ir.ui.view">
+     <field name="name">project.task kanban</field>
+     <field name="model">project.task</field>
+     <field name="inherit_id" ref="project.view_task_kanban" />
+     <field name="priority" eval="10" />
+     <field name="arch" type="xml">
+          <data>
+               <xpath expr="//field[@name='kanban_state']" position="before">
+                    <field name="dependency_state" widget="state_selection" />
+               </xpath>
+          </data>
+     </field>
+</record>
+
+<record id="project_task_view_tree" model="ir.ui.view">
+     <field name="name">project.task tree</field>
+     <field name="model">project.task</field>
+     <field name="inherit_id" ref="project.view_task_tree2" />
+     <field name="priority" eval="10" />
+     <field name="arch" type="xml">
+          <data>
+               <xpath expr="//field[1]" position="before">
+                    <xpath expr="//field[@name='sequence']" position="move" />
+               </xpath>
+               <xpath expr="//field[@name='date_deadline']" position="before">
+                    <field name="milestone_id" optional="hide" />
+               </xpath>
+               <xpath expr="//field[@name='sequence']" position="attributes">
+                    <attribute name="widget">handle</attribute>
+                    <attribute name="readonly">0</attribute>
+                    <attribute name="invisible">0</attribute>
+               </xpath>
+          </data>
+     </field>
+</record>
+
+<record id="project_task_view_form" model="ir.ui.view">
+     <field name="name">project.task form</field>
+     <field name="model">project.task</field>
+     <field name="inherit_id" ref="project.view_task_form2" />
+     <field name="mode">extension</field>
+     <field name="priority" eval="10" />
+     <field name="arch" type="xml">
+          <data>
+
+               <xpath expr="//field[@name='project_id']" position="after">
+                    <xpath expr="//field[@name='partner_id']" position="move" />
+               </xpath>
+               <xpath expr="//field[@name='project_id']" position="after">
+                    <field
+                        name="deliverable_id"
+                        domain="[('project_id','=',project_id),('state','=','open'),('ttype','=','single')]"
+                    />
+               </xpath>
+
+               <xpath expr="//field[@name='active']" position="after">
+                    <separator string="Time Constrains" colspan="2" />
+                    <xpath expr="//field[@name='date_deadline']" position="move" />
+                    <field name="phase_id" domain="[('project_id','=',project_id)]" />
+                    <separator string="Assignment" colspan="2" />
+                    <xpath expr="//field[@name='user_id']" position="move" />
+               </xpath>
+               <xpath expr="//notebook" position="inside">
+                    <page name="specification" string="Specification">
+                         <field name="specification" widget="ace" />
+                    </page>
+                    <page name="dependency" string="Dependency">
+                         <group name="dependency1" colspan="4" col="2">
+                              <field name="dependency_state" widget="state_selection" />
+                         </group>
+                         <separator string="Predecessors" />
+                         <field name="predecessor_ids">
+                              <tree editable="top">
+                                   <field name="project_id" />
+                                   <field
+                                    name="predecessor_task_id"
+                                    domain="[('project_id','=',project_id)]"
+                                />
+                                   <field name="dependency_type" />
+                                   <field name="predecessor_task_stage_id" />
+                              </tree>
+                         </field>
+                         <separator string="Sucessors" />
+                         <button
+                            name="%(create_sucessor_task_action)d"
+                            string="Sucessor Tasks"
+                            type="action"
+                            icon="fa-file"
+                            class="oe_highlight"
+                            style="margin-right:4px"
+                        />
+                         <field
+                            name="sucessor_ids"
+                            create="false"
+                            edit="false"
+                            delete="false"
+                        >
+                              <tree>
+                                   <field name="project_id" />
+                                   <field name="task_id" />
+                                   <field name="dependency_type" />
+                                   <field name="task_stage_id" />
+                              </tree>
+                         </field>
+                    </page>
+                    <page name="instruction" string="Instruction">
+                         <group
+                            name="task_instruction"
+                            string="Task"
+                            colspan="4"
+                            col="2"
+                        />
+                         <field name="instruction_ids">
+                              <tree editable="top">
+                                   <field name="sequence" widget="handle" />
+                                   <field name="name" />
+                                   <field name="url" widget="url" />
+                              </tree>
+                         </field>
+                    </page>
+               </xpath>
+          </data>
+     </field>
+</record>
+
+<record id="project_task_view_search" model="ir.ui.view">
+    <field name="name">project.task search</field>
+    <field name="model">project.task</field>
+    <field name="inherit_id" ref="project.view_task_search_form" />
+    <field name="arch" type="xml">
+        <xpath expr="//group" position="before">
+            <separator />
+            <filter name="state_new" string="New" domain="[('state','=','draft')]" />
+            <filter
+                    name="state_open"
+                    string="In Progress"
+                    domain="[('state','=','open')]"
+                />
+            <filter name="state_done" string="Done" domain="[('state','=','done')]" />
+            <filter
+                    name="state_pending"
+                    string="Pending"
+                    domain="[('state','=','pending')]"
+                />
+            <filter
+                    name="state_cancel"
+                    string="Cancel"
+                    domain="[('state','=','cancelled')]"
+                />
+
+            <separator />
+            <filter
+                    name="kanban_blocked"
+                    string="Blocked"
+                    domain="[('kanban_state','=','blocked')]"
+                />
+            <filter
+                    name="kanban_not_blocked"
+                    string="Not Blocked"
+                    domain="[('kanban_state','!=','blocked')]"
+                />
+            <separator />
+            <filter
+                    name="blocked"
+                    string="Blocked By Dependency"
+                    domain="[('dependency_state','=','blocked')]"
+                />
+            <filter
+                    name="not_blocked"
+                    string="Not Blocked By Dependency"
+                    domain="[('dependency_state','!=','blocked')]"
+                />
+        </xpath>
+    </field>
+</record>
+
+
+<menuitem
+        name="Tasks"
+        id="project.menu_project_management"
+        parent="project.menu_main_pm"
+        action="project.action_view_all_task"
+        sequence="2"
+        groups="task_viewer_group"
+    />
+</odoo>
