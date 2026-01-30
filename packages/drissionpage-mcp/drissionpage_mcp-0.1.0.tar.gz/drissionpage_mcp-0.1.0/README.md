@@ -1,0 +1,348 @@
+# DrissionPage MCP Server
+
+> Professional browser automation for Claude Code and MCP clients powered by DrissionPage
+
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![DrissionPage](https://img.shields.io/badge/DrissionPage-4.0%2B-green.svg)](https://github.com/g1879/DrissionPage)
+[![MCP](https://img.shields.io/badge/MCP-1.0%2B-purple.svg)](https://modelcontextprotocol.io/)
+
+[English Version](README.md) | [中文版本](README_CN.md)
+
+---
+
+## 🚀 What is DrissionPage MCP?
+
+DrissionPage MCP Server brings professional browser automation to Claude Code and other MCP clients. Unlike screenshot-based approaches, it provides **structured, deterministic web automation** through 14 powerful tools.
+
+### ✨ Key Features
+
+- 🎯 **LLM-Optimized** - Works with structured data, no vision models needed
+- ⚡ **Fast & Lightweight** - Built on DrissionPage's efficient engine
+- 🛠️ **14 Automation Tools** - Navigation, element interaction, screenshots, and more
+- 🔒 **Type-Safe** - Full type hints and Pydantic validation
+- 📦 **Easy Integration** - Simple pip install + JSON config
+- 🎨 **Clean Architecture** - Modular, extensible, well-documented
+
+---
+
+## 📦 Installation
+
+### Method 1: From PyPI (Recommended)
+
+```bash
+# Install the package
+pip install drissionpage-mcp
+
+# Configure Claude Code
+# Edit ~/.config/claude-code/mcp_settings.json (macOS/Linux)
+# or %APPDATA%\claude-code\mcp_settings.json (Windows)
+{
+  "mcpServers": {
+    "drissionpage": {
+      "command": "drissionpage-mcp"
+    }
+  }
+}
+
+# Restart Claude Code - Done! 🎉
+```
+
+### Method 2: From Source (For Developers)
+
+```bash
+# Clone and install
+git clone https://github.com/your-username/DrissionMCP.git
+cd DrissionMCP
+pip install -e .
+
+# Configure (see examples/claude-code-config.json)
+# Don't forget to replace <REPLACE_WITH_YOUR_DRISSIONMCP_PATH>!
+```
+
+**📖 Detailed installation guide**: See [QUICKSTART.md](QUICKSTART.md)
+
+---
+
+## 🎯 Quick Start
+
+### Test Installation
+
+```bash
+# Verify everything works
+python playground/quick_start.py
+```
+
+Expected output:
+```
+✅ Loaded 14 tools
+✅ All tests passed!
+```
+
+### Use in Claude Code
+
+Once configured, try these commands:
+
+```
+"Use DrissionPage to navigate to https://example.com and take a screenshot"
+
+"Open Google and search for 'Python web scraping'"
+
+"Visit httpbin.org/forms/post and fill out the form"
+```
+
+**📖 More examples**: See [TESTING_AND_INTEGRATION.md](TESTING_AND_INTEGRATION.md)
+
+---
+
+## 🛠️ Available Tools (14 Total)
+
+### 🌐 Navigation (4 tools)
+| Tool | Description |
+|------|-------------|
+| `page_navigate` | Navigate to a URL |
+| `page_go_back` | Go back in history |
+| `page_go_forward` | Go forward in history |
+| `page_refresh` | Refresh current page |
+
+### 🎯 Element Interaction (3 tools)
+| Tool | Description |
+|------|-------------|
+| `element_find` | Find elements by CSS selector or XPath |
+| `element_click` | Click on an element |
+| `element_type` | Type text into an element |
+
+### 📸 Page Actions (5 tools)
+| Tool | Description |
+|------|-------------|
+| `page_screenshot` | Take a screenshot (full page or viewport) |
+| `page_resize` | Resize browser window |
+| `page_click_xy` | Click at specific coordinates |
+| `page_close` | Close the browser |
+| `page_get_url` | Get current URL |
+
+### ⏱️ Wait Operations (2 tools)
+| Tool | Description |
+|------|-------------|
+| `wait_for_element` | Wait for an element to appear |
+| `wait_time` | Wait for specified seconds |
+
+---
+
+## 📚 Documentation
+
+| Document | Description |
+|----------|-------------|
+| [QUICKSTART.md](QUICKSTART.md) | 5-minute setup guide |
+| [TESTING_AND_INTEGRATION.md](TESTING_AND_INTEGRATION.md) | Testing and integration with various MCP clients |
+| [PUBLISHING.md](PUBLISHING.md) | How to publish and maintain |
+| [examples/README.md](examples/README.md) | Configuration examples |
+
+---
+
+## 🏗️ Architecture
+
+```
+DrissionMCP/
+├── src/
+│   ├── cli.py           # Entry point
+│   ├── server.py        # MCP server implementation
+│   ├── context.py       # Browser lifecycle management
+│   ├── response.py      # Response formatting
+│   ├── tab.py           # Page operations wrapper
+│   └── tools/           # Tool implementations
+│       ├── base.py      # Tool framework
+│       ├── navigate.py  # Navigation tools
+│       ├── element.py   # Element interaction
+│       ├── common.py    # Common operations
+│       └── wait.py      # Wait operations
+├── examples/            # Configuration examples
+├── playground/          # Testing utilities
+└── tests/               # Unit tests
+```
+
+**Design Principles**:
+- ✅ Type-safe tool definitions (Pydantic)
+- ✅ Decorator-based registration
+- ✅ Clean separation of concerns
+- ✅ Comprehensive error handling
+- ✅ Fully async operations
+
+---
+
+## 🧪 Development
+
+### Run Tests
+
+```bash
+# Install dev dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest tests/
+
+# With coverage
+pytest tests/ --cov=src --cov-report=html
+```
+
+### Code Quality
+
+```bash
+# Format
+black src/ tests/
+isort src/ tests/
+
+# Lint
+flake8 src/ tests/
+mypy src/
+```
+
+### Local Testing (No MCP Client Needed)
+
+```bash
+# Interactive testing
+python playground/local_test.py
+```
+
+---
+
+## 🤝 Integration with MCP Clients
+
+### Claude Code
+
+See [QUICKSTART.md](QUICKSTART.md) for detailed setup.
+
+**Config location**: `~/.config/claude-code/mcp_settings.json`
+
+### Claude Desktop
+
+See [examples/claude-desktop-config.json](examples/claude-desktop-config.json)
+
+**Config location**: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
+
+### Other Clients
+
+DrissionPage MCP works with any MCP-compatible client. See [TESTING_AND_INTEGRATION.md](TESTING_AND_INTEGRATION.md) for more details.
+
+---
+
+## 🔧 Configuration
+
+### Basic (After PyPI Install)
+
+```json
+{
+  "mcpServers": {
+    "drissionpage": {
+      "command": "drissionpage-mcp"
+    }
+  }
+}
+```
+
+### Advanced (Custom Options)
+
+```json
+{
+  "mcpServers": {
+    "drissionpage": {
+      "command": "python",
+      "args": ["-m", "src.cli", "--log-level", "DEBUG"],
+      "cwd": "/path/to/DrissionMCP",
+      "env": {
+        "CHROME_PATH": "/custom/chrome/path"
+      }
+    }
+  }
+}
+```
+
+**📖 More examples**: See [examples/README.md](examples/README.md)
+
+---
+
+## 📋 Requirements
+
+- **Python**: 3.8 or higher
+- **Browser**: Chrome or Chromium
+- **MCP Client**: Claude Code, Claude Desktop, or any MCP-compatible client
+
+---
+
+## 🐛 Troubleshooting
+
+### Tools not loading?
+
+```bash
+# Verify installation
+python playground/quick_start.py
+```
+
+### Browser not opening?
+
+- Ensure Chrome/Chromium is installed
+- Check DrissionPage can find your browser:
+  ```bash
+  python -c "from DrissionPage import ChromiumPage; p = ChromiumPage(); print('Success!')"
+  ```
+
+### Claude Code not finding server?
+
+- Verify config file path is correct
+- Check `cwd` path exists (for source install)
+- Restart Claude Code after config changes
+- Check logs: `python -m src.cli --log-level DEBUG`
+
+**📖 More help**: See [TESTING_AND_INTEGRATION.md#troubleshooting](TESTING_AND_INTEGRATION.md#troubleshooting)
+
+---
+
+## 🗺️ Roadmap
+
+### ✅ Completed
+- [x] 14 core automation tools
+- [x] Full MCP protocol support
+- [x] Type-safe architecture
+- [x] Comprehensive documentation
+- [x] Local testing utilities
+
+### 🚧 Planned
+- [ ] Form handling utilities
+- [ ] File upload support
+- [ ] Advanced selectors (shadow DOM, iframes)
+- [ ] Session management
+- [ ] Proxy support
+- [ ] Network interception
+
+---
+
+## 📄 License
+
+This project is licensed under the **Apache License 2.0** - see [LICENSE](LICENSE) for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- Built on [DrissionPage](https://github.com/g1879/DrissionPage) - Excellent browser automation library
+- Follows [Model Context Protocol](https://modelcontextprotocol.io/) specification
+- Inspired by [playwright-mcp](https://github.com/microsoft/playwright-mcp)
+
+---
+
+## 💬 Support
+
+- 📖 [Documentation](TESTING_AND_INTEGRATION.md)
+- 🐛 [Report Issues](https://github.com/your-username/DrissionMCP/issues)
+- 💡 [Feature Requests](https://github.com/your-username/DrissionMCP/issues)
+- 📧 Contact: [Your Email]
+
+---
+
+## 🌟 Star History
+
+If you find this project useful, please give it a star! ⭐
+
+---
+
+**Made with ❤️ for the MCP community**
