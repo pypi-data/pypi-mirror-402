@@ -1,0 +1,68 @@
+# -*- coding: utf-8 -*-
+#!/usr/bin/env python
+
+import os
+import sys
+
+try:
+    from setuptools import setup
+except ImportError:
+    from distutils.core import setup
+
+version = '0.9.3'
+
+if sys.argv[-1] == 'publish':
+    os.system('python setup.py sdist upload')
+    print("You probably want to also tag the version now:")
+    print("  git tag -a %s -m 'version %s'" % (version, version))
+    print("  git push --tags")
+    sys.exit()
+
+readme = open('README.rst').read()
+history = open('HISTORY.rst').read().replace('.. :changelog:', '')
+
+install_requires = []
+try: # flake8: noqa
+    import importlib
+except ImportError:
+    install_requires.append("importlib")
+
+setup(
+    name='django-listable',
+    version=version,
+    description='A reusable Django app to make integrations with the DataTables javascript library easy.',
+    long_description=readme + '\n\n' + history,
+    long_description_content_type="text/x-rst",
+    author='Randle Taylor',
+    author_email='randle.taylor@gmail.com',
+    url='https://github.com/randlet/django-listable',
+    packages=[
+        'listable',
+        'listable.static',
+        'listable.static.listable',
+        'listable.static.listable.css',
+        'listable.static.listable.fonts',
+        'listable.static.listable.img',
+        'listable.static.listable.js',
+        'listable.templates',
+        'listable.templates.listable',
+        'listable.templatetags',
+    ],
+    include_package_data=True,
+    install_requires=install_requires,
+    license="BSD-3-Clause",
+    zip_safe=False,
+    keywords='django-listable',
+    classifiers=[
+        'Development Status :: 4 - Beta',
+        'Framework :: Django',
+        'Intended Audience :: Developers',
+        'Natural Language :: English',
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+    ],
+)
