@@ -1,0 +1,76 @@
+stages:
+  - security
+  - code_checks
+  - tests
+
+test_3.9:
+  stage: tests
+  image: python:3.9-alpine
+  script:
+    - pip install -e ".[dev]"
+    - pytest . -color=yes
+
+test_3.10:
+  stage: tests
+  image: python:3.10-alpine
+  script:
+    - pip install -e ".[dev]"
+    - pytest . -color=yes
+
+test_3.11:
+  stage: tests
+  image: python:3.11-alpine
+  script:
+    - pip install -e ".[dev]"
+    - pytest . -color=yes
+
+test_3.12:
+  stage: tests
+  image: python:3.12-alpine
+  script:
+    - pip install -e ".[dev]"
+    - pytest . -color=yes
+
+test_3.13:
+  stage: tests
+  image: python:3.13-alpine
+  script:
+    - pip install -e ".[dev]"
+    - pytest . -color=yes
+
+linter:
+  stage: code_checks
+  image: ghcr.io/astral-sh/ruff:0.8.6-alpine
+  script:
+    - ruff check --diff
+
+format:
+  stage: code_checks
+  image: ghcr.io/astral-sh/ruff:0.8.6-alpine
+  script:
+    - ruff format --diff
+
+
+include:
+- template: Security/Secret-Detection.gitlab-ci.yml
+
+secret_detection:
+  stage: security
+  extends: .secret-analyzer
+  before_script:
+    - apk add jq
+  artifacts:
+    reports:
+      secret_detection: gl-secret-detection-report.json
+  script:
+    - /analyzer run
+    - if [ "$(eval "$GET_VULNERABILITY_COUNT")" -gt 0 ]; then
+        echo "Vulnerabilities found:";
+        cat gl-secret-detection-report.json | jq --raw-output '.vulnerabilities';
+        exit 1;
+      else
+        echo "No vulnerabilities found.";
+      fi
+  variables:
+    GET_VULNERABILITY_COUNT: "cat gl-secret-detection-report.json | jq --raw-output '.vulnerabilities | length'"
+  allow_failure: false
