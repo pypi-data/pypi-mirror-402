@@ -1,0 +1,47 @@
+from dependency_injector import containers, providers
+from udata_search_service.infrastructure.services import DatasetService, OrganizationService, ReuseService, DataserviceService, TopicService, DiscussionService, PostService
+from udata_search_service.infrastructure.search_clients import ElasticClient
+
+
+class Container(containers.DeclarativeContainer):
+    config = providers.Configuration()
+
+    search_client = providers.Singleton(
+        ElasticClient,
+        url=config.elasticsearch_url
+    )
+
+    organization_service = providers.Factory(
+        OrganizationService,
+        search_client=search_client
+    )
+
+    dataset_service = providers.Factory(
+        DatasetService,
+        search_client=search_client
+    )
+
+    reuse_service = providers.Factory(
+        ReuseService,
+        search_client=search_client
+    )
+
+    dataservice_service = providers.Factory(
+        DataserviceService,
+        search_client=search_client
+    )
+
+    topic_service = providers.Factory(
+        TopicService,
+        search_client=search_client
+    )
+
+    discussion_service = providers.Factory(
+        DiscussionService,
+        search_client=search_client
+    )
+
+    post_service = providers.Factory(
+        PostService,
+        search_client=search_client
+    )
