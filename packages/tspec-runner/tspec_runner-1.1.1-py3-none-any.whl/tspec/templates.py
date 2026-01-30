@@ -1,0 +1,1 @@
+INIT_TEMPLATE = "# New TSpec file\n\n```tspec\nsuite:\n  name: \"suite-name\"\n  tags: []\n  default_timeout_ms: 15000\n  fail_fast: false\n  artifact_dir: \"artifacts\"\n\nvars: {}\n\ncases:\n  - id: \"CASE-001\"\n    title: \"title\"\n    tags: []\n    steps:\n      - do: assert.true\n        with: { value: true, message: \"ok\" }\n    expect: []\n```\n"
