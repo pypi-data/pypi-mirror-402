@@ -1,0 +1,91 @@
+Metadata-Version: 2.4
+Name: bd-jojo-remote-build-mcp
+Version: 0.1.0
+Summary: MCP Server for JoJo Remote Build in BD
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: mcp>=1.0.0
+
+# 如何在 Trae 中配置 jojo-remote-build-server
+
+这是一个基于 MCP (Model Context Protocol) 的服务器，旨在为 Trae IDE 提供 Aweme 项目的自动化远程构建能力。它封装了复杂的 `jojo` 命令行操作，提供了智能的路径修复、错误分析和环境配置功能。
+
+## 功能特性 (Available Tools)
+
+该 MCP Server 提供了以下两个核心工具：
+
+### 1. `init_remote_build_environment` (初始化远程环境)
+用于一键配置远程构建所需的各项环境依赖。
+
+*   **功能**:
+    *   自动执行 `mbox jojo install --remote` (含自动重试机制)。
+    *   自动执行 `mbox jojo recodesign` 配置签名 (支持指定 `device_udid`)。
+    *   自动开启 `mbox jojo remote_mode --build-in-shell`。
+    *   包含智能容错处理（如忽略非致命的下载错误）。
+*   **参数**:
+    *   `project_path` (可选): 项目根目录，默认自动识别。
+    *   `device_udid` (可选): 指定用于签名的设备 UDID（推荐提供，以避免交互式选择）。
+
+### 2. `run_aweme_remote_build` (执行远程构建)
+用于执行 Aweme 项目的完整远程构建流程。
+
+*   **功能**:
+    *   执行标准的 `jojo build` 命令 (arm64, Debug 模式)。
+    *   支持构建前清理 (`clean`)。
+    *   **智能日志分析**: 自动提取编译错误和链接错误，过滤冗余日志，直接展示关键问题。
+    *   **路径自适应**: 自动纠正用户输入的非标准路径（如自动寻找 `Aweme/Aweme` 子目录）。
+*   **参数**:
+    *   `project_path` (可选): 项目根目录。
+    *   `scheme` (可选): 构建 Scheme，默认为 `AwemeInhouseDebug`。
+    *   `clean` (可选): 是否先执行 clean 操作，默认为 `False`。
+
+---
+
+## 1. 准备环境
+
+确保已安装依赖。在终端中运行：
+
+```bash
+# 使用 uv 创建虚拟环境 (指定 Python 3.12)
+uv venv .remote_build_mcp_venv --python 3.12
+
+# 激活虚拟环境
+source .remote_build_mcp_venv/bin/activate
+
+# 安装依赖
+uv pip install -r requirements.txt
+```
+
+## 2. 配置 Trae MCP Server
+
+1. 打开 Trae 设置 (Settings)。
+2. 导航到 **Features** -> **MCP Servers**。
+3. 点击 **Add MCP Server** (或者编辑配置文件)。
+4. 填写以下信息：
+
+*   **Type**: `stdio`
+*   **Name**: `jojo-remote-build` (或你喜欢的名字)
+*   **Command**: `/Users/bytedance/Desktop/jojoRemoteBuildMCP/.venv/bin/python3`
+    *   *注意：请使用虚拟环境中的 Python 绝对路径，确保能找到 `mcp` 库。*
+*   **Arguments**: 
+    *   `/Users/bytedance/Desktop/jojoRemoteBuildMCP/mcp_server.py`
+
+### JSON 配置示例 (如果是直接编辑 JSON)
+
+```json
+{
+  "mcpServers": {
+    "jojo-remote-build": {
+      "command": "/Users/bytedance/Desktop/jojoRemoteBuildMCP/.venv/bin/python3",
+      "args": [
+        "/Users/bytedance/Desktop/jojoRemoteBuildMCP/mcp_server.py"
+      ]
+    }
+  }
+}
+```
+
+## 3. 验证
+
+配置完成后，Trae 应该会显示该 Server 为 "Connected" 状态。
+你可以在 Chat 中尝试询问："执行 Aweme 远程构建"，或者手动调用 `run_aweme_remote_build` 工具。
