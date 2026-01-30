@@ -1,0 +1,209 @@
+name: Test
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+    types: ["opened", "synchronize", "reopened"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: src:.
+
+# =============================================================================
+# Job Execution Order:
+#   1. lint + typecheck (parallel)
+#   2. unit-test (requires lint) - Django configured, NO database
+#   3. integration-test (requires unit-test) - Django + PostgreSQL
+#   4. ci-success (requires all)
+# =============================================================================
+
+jobs:
+  # ===========================================================================
+  # STAGE 1: Static Analysis
+  # ===========================================================================
+
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: uv sync --frozen --dev
+
+      - name: Check Code Formatting
+        run: uv run ruff format --check .
+
+      - name: Check Code Linting
+        run: uv run ruff check .
+
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: uv sync --frozen --dev
+
+      - name: Run MyPy
+        run: uv run mypy src/nazara --no-error-summary
+        continue-on-error: true  # TODO: Enable strict mode once all types are fixed
+
+  # ===========================================================================
+  # STAGE 2: Unit Tests
+  # Unit tests with mocked dependencies. Django configured but no DB access.
+  # Tests: Domain entities, value objects, services with mocked repos.
+  # ===========================================================================
+
+  unit-test:
+    name: Unit Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    needs: [lint]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Dependencies
+        run: uv sync --frozen --dev
+
+      - name: Run Unit Tests
+        run: |
+          uv run pytest tests/unit/ \
+            --cov=src/nazara \
+            --cov-report=term-missing \
+            -v
+
+  # ===========================================================================
+  # STAGE 3: Integration Tests
+  # Tests Django components (models, repositories, services) with PostgreSQL.
+  # ===========================================================================
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [unit-test]
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: nazara
+          POSTGRES_PASSWORD: nazara
+          POSTGRES_DB: nazara_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: uv sync --frozen --dev
+
+      - name: Run Database Migrations
+        run: uv run python manage.py migrate --no-input
+        env:
+          DJANGO_SETTINGS_MODULE: tests.settings
+
+      - name: Run Integration Tests
+        run: |
+          uv run pytest tests/integration/ \
+            --cov=src/nazara \
+            --cov-report=term-missing \
+            -v
+
+  # ===========================================================================
+  # STAGE 4: Final Gate
+  # ===========================================================================
+
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, unit-test, integration-test]
+    if: always()
+
+    steps:
+      - name: Check All Jobs
+        run: |
+          echo "===== Job Results ====="
+          echo "Lint:           ${{ needs.lint.result }}"
+          echo "Typecheck:      ${{ needs.typecheck.result }}"
+          echo "Unit Test:      ${{ needs.unit-test.result }}"
+          echo "Integration:    ${{ needs.integration-test.result }}"
+          echo "======================="
+          
+          # Required jobs
+          if [ "${{ needs.lint.result }}" != "success" ]; then
+            echo "❌ Lint failed"
+            exit 1
+          fi
+          
+          if [ "${{ needs.unit-test.result }}" != "success" ]; then
+            echo "❌ Unit tests failed"
+            exit 1
+          fi
+          
+          if [ "${{ needs.integration-test.result }}" != "success" ]; then
+            echo "❌ Integration tests failed"
+            exit 1
+          fi
+          
+          # Non-blocking jobs
+          if [ "${{ needs.typecheck.result }}" == "failure" ]; then
+            echo "⚠️ Typecheck failed (non-blocking)"
+          fi
+          
+          echo "✅ All required checks passed!"

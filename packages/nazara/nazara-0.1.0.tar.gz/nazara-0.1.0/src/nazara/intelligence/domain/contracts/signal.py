@@ -1,0 +1,13 @@
+from typing import Protocol
+from uuid import UUID
+
+
+class EnrichableSignal(Protocol):
+    @property
+    def id(self) -> UUID: ...
+
+    def set_summary(self, summary: str) -> None: ...
+
+    def set_embedding(self, embedding: list[float]) -> None: ...
+
+    def save(self) -> None: ...
