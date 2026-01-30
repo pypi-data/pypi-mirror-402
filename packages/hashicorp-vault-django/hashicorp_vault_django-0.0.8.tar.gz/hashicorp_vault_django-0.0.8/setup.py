@@ -1,0 +1,101 @@
+import os
+
+from setuptools import setup
+
+README = ""
+readme_path = os.path.join(os.path.dirname(__file__), 'readme.md')
+if os.path.exists(readme_path):
+    with open(readme_path, encoding="utf-8") as f:
+        README = f.read()
+
+setup(
+    name='hashicorp_vault_django',
+    version='0.0.8',
+    packages=['hashicorp_vault'],
+    include_package_data=True,
+    license='MIT License',
+    description='A Django app to manage the application secrets using hashicorp.',
+    long_description=README,
+    long_description_content_type="text/markdown",
+    url='https://github.com/icedreamer-praveen/hashicorp-vault',
+    author='icedreamer-praveen',
+    author_email='prabinchy1234@gmail.com',
+    classifiers=[
+        'Environment :: Web Environment',
+        'Framework :: Django',
+        'Intended Audience :: Developers',
+        'License :: OSI Approved :: MIT License',
+        'Operating System :: OS Independent',
+        'Programming Language :: Python',
+        'Programming Language :: Python :: 3.10',
+        'Topic :: Internet :: WWW/HTTP',
+        'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
+    ],
+    python_requires=">=3.10",
+    install_requires=[
+        "django>=3.2",
+        "hvac>=0.11.2"
+    ],
+    extras_require={
+        "dev": ['twine>=4.0.2'],
+    },
+    keywords=[
+        'vault',
+        'vault-django',
+        'hashicorp',
+        'hashicorp-vault-django',
+        'hashicorp_vault_django',
+        'hashicorp-vault',
+        'vault-secrets',
+        'vault-django',
+        'secrets-management',
+        'hashicorp-vault-integration',
+        'vault-configuration',
+        'vault-authentication',
+        'vault-python-client',
+        'vault-credentials',
+        'django-secrets',
+        'django-vault',
+        'django-config',
+        'django-auth',
+        'django-app',
+        'django-integration',
+        'django-security',
+        'django-secrets-management',
+        'django-settings',
+        'django-configuration',
+        'python-secrets',
+        'python-vault',
+        'python-authentication',
+        'python-security',
+        'python-secrets-management',
+        'python-configuration',
+        'python-integration',
+        'python-django',
+        'python-configuration-management',
+        'python-client',
+        'security',
+        'authentication',
+        'authorization',
+        'token-management',
+        'secure-secrets',
+        'password-management',
+        'token-authentication',
+        'access-management',
+        'infrastructure-secrets',
+        'gcp-secrets',
+        'django-library',
+        'django-tool',
+        'django-package',
+        'secrets-infrastructure',
+        'secrets-django-app',
+        'vault-kv-engine',
+        'vault-auth-backends',
+        'vault-python',
+        'vault-policy',
+        'vault-secrets-backend',
+        'vault-ssl',
+        'vault-token-authentication',
+        'vault-api'
+    ]
+)
