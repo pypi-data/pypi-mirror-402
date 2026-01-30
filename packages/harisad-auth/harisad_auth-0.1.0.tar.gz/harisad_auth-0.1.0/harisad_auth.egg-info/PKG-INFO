@@ -1,0 +1,154 @@
+Metadata-Version: 2.4
+Name: harisad_auth
+Version: 0.1.0
+Summary: Library Auth dengan Double Hashing Argon2id + HMAC-SHA512
+Author: Haris Mujianto
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: argon2-cffi>=21.1.0
+Dynamic: author
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: license-file
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+---
+
+# harisad_auth 🛡️
+
+**harisad_auth** adalah librari Python untuk keamanan autentikasi tingkat tinggi. Librari ini menggabungkan teknik **Double Layer Hashing** (HMAC-SHA512 + Argon2id) untuk menghasilkan hash yang sangat panjang dan tahan terhadap serangan *brute-force* modern. Selain itu, librari ini menyediakan manajemen sesi yang ringan mirip dengan `flask-login`.
+
+---
+
+## ✨ Fitur Utama
+
+* **Ultra-Secure Hashing:** Menggunakan SHA512 sebagai *pre-processor* dan Argon2id sebagai *main hasher*.
+* **Custom Output Length:** Menghasilkan hash sepanjang **128-255 karakter**.
+* **Session Management:** Dilengkapi dengan `LoginManager` dan `UserMixin`.
+* **Pepper Support:** Menambahkan lapisan keamanan rahasia di sisi server.
+* **JSON Ready:** Didesain agar mudah diintegrasikan dengan penyimpanan file JSON atau database SQL.
+
+---
+
+## 🚀 Cara Instalasi
+
+Pastikan Anda telah menginstal dependensi yang diperlukan:
+
+```bash
+pip install argon2-cffi
+
+```
+
+Lalu instal librari ini (jika sudah di PyPI):
+
+```bash
+pip install harisad_auth
+
+```
+
+---
+
+## 🛠️ Panduan Penggunaan
+
+### 1. Enkripsi Password (Double Hashing)
+
+Librari ini menggunakan HMAC-SHA512 yang kemudian dibungkus oleh Argon2id.
+
+```python
+from harisad_auth import SecureHasher
+
+# 1. Inisialisasi dengan Pepper rahasia (Simpan di .env, jangan di DB)
+hasher = SecureHasher(pepper="KunciRahasiaNegara123", hash_len=64)
+
+# 2. Membuat Hash
+password_user = "rahasiaku123"
+hashed_password = hasher.hash_password(password_user)
+
+print(f"Hasil Hash: {hashed_password}")
+print(f"Panjang Hash: {len(hashed_password)} karakter") # ~180-220 karakter
+
+# 3. Verifikasi Password
+is_valid = hasher.verify_password(hashed_password, "rahasiaku123")
+print(f"Status Cocok: {is_valid}") # True
+
+```
+
+### 2. Manajemen Login & Sesi
+
+Gunakan `LoginManager` untuk melacak status pengguna yang sedang aktif di aplikasi Anda.
+
+```python
+from harisad_auth import LoginManager, UserMixin
+
+# 1. Buat Class User Anda sendiri
+class User(UserMixin):
+    def __init__(self, id, username):
+        super().__init__()
+        self.id = id
+        self.username = username
+
+# 2. Setup Manager
+auth_manager = LoginManager()
+
+# 3. Proses Login
+user_data = User(id=101, username="harisad")
+auth_manager.login_user(user_data)
+
+# 4. Cek Status User saat ini
+print(f"User Aktif: {auth_manager.current_user.username}")
+print(f"Status Autentikasi: {auth_manager.current_user.is_authenticated}")
+
+# 5. Logout
+auth_manager.logout_user()
+print(f"Apakah sudah logout? {not auth_manager.current_user.is_authenticated}")
+
+```
+
+### 3. Integrasi dengan Penyimpanan JSON
+
+Contoh penggunaan praktis jika Anda menggunakan file JSON sebagai database:
+
+```python
+import json
+from harisad_auth import SecureHasher, LoginManager
+
+hasher = SecureHasher(pepper="MY_SECRET")
+manager = LoginManager()
+
+# Simulasi database JSON
+db_data = '{"username": "harisad", "password_hash": "$argon2id$v=19$m=65536..."}'
+user_record = json.loads(db_data)
+
+# Logika Verifikasi
+password_input = "password_anda"
+if hasher.verify_password(user_record['password_hash'], password_input):
+    # Buat objek user dan masukkan ke session manager
+    print("Akses Diterima!")
+else:
+    print("Akses Ditolak!")
+
+```
+
+---
+
+## 🔐 Keamanan Kriptografi
+
+Secara teknis, librari ini memproses data dengan alur:
+
+1. **HMAC-SHA512:** Mengamankan password asli dengan *Pepper* rahasia.
+2. **Argon2id:** Melakukan hashing memori-keras pada hasil SHA512 untuk mencegah peretasan menggunakan GPU.
+
+---
+
+## 📜 Lisensi
+
+Proyek ini dilindungi di bawah lisensi **MIT**.
+
+---
