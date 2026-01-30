@@ -1,0 +1,133 @@
+[![github](https://img.shields.io/badge/NASA%20ADS-1994ESASP.373...67J-red)](https://articles.adsabs.harvard.edu/pdf/1994ESASP.373...67J)
+
+# DIPPERpy: Diagnostics Inferring the Physics of Plasma and Emitted Radiation in python
+
+**Author:** Philip G. Judge
+
+**Contact:** judge@ucar.edu ; mauricew@ucar.edu
+
+
+## Summarizing if DIPPERpy is right for you
+
+| <span></span> | <span></span> |
+| --- | --- |
+| **Targeted problems** |  |
+|                  | tenuous plasma, "low energy" regime  |
+|                  | LTE to optically thin plasmas  |
+|                  | compilation of needed rate coefficients  |
+|                  | teaching/learning spectroscopy  |
+|                  | simple statistical equilibrium calculations  |
+|                  | $\quad\quad$- including escape probabilities  |
+|                  | simple non-equilibrium calculations  |
+|                  | $\quad\quad$- evolution of atomic systems  |
+|                  | provide "building blocks" of data and code to permit the user to make more sophisticated calculations  |
+|                  | $\quad\quad$- e.g, detailed radiative transfer or radiation hydrodynamics  |
+| **Limitations**       |  |
+|                  | elements lighter than Zn (nuclear charge 30)  |
+|                  | principal quantum numbers < 10  |
+|                  | incomplete databases  |
+|                  | photoionization data are summed over final states, and are split approximately over fine structure  |
+|                  | no impact line broadening  |
+|                  | no hyperfine structure  |
+|                  | no configuration mixing  |
+| **Cannot handle**     |  |
+|                  | non-Maxwellian particle distributions  |
+|                  | inner shell excitations (high energy phenomena)  |
+|                  | atomic and spectral polarization  |
+|                  | molecules  |
+|                  | accurate radiative transfer  |
+
+<br>
+
+## What makes DIPPERpy unique?
+- It is based upon the fast, flexible database software system written by D. Lindler for IDL, and takes some advantage of this system.
+- It works with quantum numbers for atomic levels, enabling it to perform tasks otherwise difficult or very tedious, including a variety of data checks, calculations
+based upon the atomic numbers, and searching and manipulating data based upon these quantum numbers.
+- In principle, DIPPERpy can handle conditions from LTE to coronal-like conditions.
+- There is some capability for estimating data for which no accurate parameters are
+available, and for accounting for the effects of missing atomic levels.
+
+<span></span>\
+<span></span>
+
+## Requirement
+- A database of atomic quantum states and transition rates is needed. The CHIANTI atomic database has been re-organized and reformatted into an assortment of database files that is convenient for the DIPPERpy code to access it for education and research purposes. 
+- The database file sizes are too large to include in this repository.  
+- The files are within a tar archive compressed with gzip that can be downloaded here: [DIPPERpy_dbase.tar.gz](https://www.mauricewilson.com/static/proxyonepager/datastorage/DIPPERpy_dbase.tar.gz)
+- Unpack the file and make note of the path location for the unpacked "dbase" directory. 
+```
+$ tar -xvz -f DIPPERpy_dbase.tar.gz
+    dbase/
+    dbase/ar85ci.dat
+    dbase/ar85ct.dat
+    dbase/Barklem_dfdata.dat
+    dbase/Barklem_pddata.dat
+    dbase/Barklem_spdata.dat
+    dbase/bass5250.txt
+    dbase/bass6302.txt
+    dbase/bbsql.db
+    dbase/bfsql.db
+    dbase/cbbsql.db
+    dbase/cbfsql.db
+    dbase/ctab.dat
+    dbase/fal.pickle
+    dbase/htab.dat
+    dbase/lvlsql.db
+    dbase/mooreip.dat
+    dbase/pf_Kurucz.input
+    dbase/rh_atoms.pickle
+    dbase/shull82.dat
+    dbase/shull82changes.txt
+    dbase/shull82changes.txt.gz
+```
+
+<span></span>\
+<span></span>
+
+## Setting Conda Environment 
+It is useful to create a conda environment first, like so:
+```
+$ conda create --name dipperpy
+$ conda activate dipperpy
+$ conda install python numpy astropy scipy matplotlib numba
+$ pip install specutils
+```
+
+<span></span>\
+<span></span>
+
+
+## Recommended Option: Direct Installation
+```
+$ conda install -c mauricewilson dipperpy
+
+or, use pip instead...
+
+$ pip install dipperpy 
+
+```
+
+
+
+## Alternative Option: Download/clone the repository and execute (offline) installation
+The DIPPERpy package can be installed via a terminal (for macOS or Linux) or command prompt (for Windows) by running the following lines of code:
+```
+$ git clone https://github.com/MWilson1/dipperpy.git
+$ cd dipperpy
+$ pip install dist/dipperpy-1.0.1.tar.gz
+```
+
+<span></span>\
+<span></span>
+
+
+## Acknowledgment
+DIPPERpy is the python version of the original HAOS-DIPER code written in IDL. HAOS-DIPER grew out of a need to work with and manipulate data for neutral atoms and atomic ions to understand radiation emitted by some space plasmas, notably the solar atmosphere and stellar atmospheres. An early version was described by [Judge and Meisner (1994)](https://ui.adsabs.harvard.edu/abs/1994ESASP.373...67J/abstract).  This IDL code can be found at [www.hao.ucar.edu/modeling/haos-diper/](https://www.hao.ucar.edu/modeling/haos-diper/).
+
+<span></span>\
+Most of the radiative transfer functionality comes from [Lightspinner](https://github.com/Goobley/Lightspinner).  This Lightspinner code is a pure python, stripped-down version of the [Lightweaver code](https://github.com/Goobley/Lightweaver), which is detailed in the [Osborne and Milic (2021)](https://arxiv.org/abs/2107.00475) paper. Both software, as well as DIPPERpy, use a copy of the 'witt.py' code written by Alexander Wittmann and translated into python by Jaime de la Cruz Rodriguez, albeit inspired by Dimitri Mihalas' [Stellar Atmospheres](https://ui.adsabs.harvard.edu/abs/1970stat.book.....M/abstract) textbook.  Lastly, these codes also use the atomic data archived within the [RH code](https://github.com/ITA-Solar/rh).  See the [Uitenbroek (2001)](https://ui.adsabs.harvard.edu/abs/2001ApJ...557..389U/abstract) and [Rybicki and Hummer (1992)](https://articles.adsabs.harvard.edu/pdf/1992A%26A...262..209R) papers for further elaboration regarding the methodology of the RH code.  
+
+ 
+
+
+
