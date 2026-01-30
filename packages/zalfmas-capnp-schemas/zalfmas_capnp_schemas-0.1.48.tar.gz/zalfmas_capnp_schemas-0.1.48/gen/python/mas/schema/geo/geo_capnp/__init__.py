@@ -1,0 +1,56 @@
+"""This is an automatically generated stub for `geo.capnp`."""
+
+import base64
+
+import capnp
+import schema_capnp
+from capnp.lib.capnp import _EnumModule, _InterfaceModule, _StructModule
+
+capnp.remove_import_hook()
+
+# Embedded compiled schemas (base64-encoded)
+_SCHEMA_NODES = [
+    "EFlQBgb/JPzHeSBUkJAAAQgAAxEVchEZlxGVZwAC/2dlby9nZW8uAB9jYXBucFEkAQH/6Owis960KeUAEUFS/8B/uU6nJ5S3ABFBKv9J8EBeJc0a6wARPUr/+4/MOTD88ewAET1i/66RYHhhff+XABE9Qv/ihmkeHLmPyAAROUL/rRTjEz6ZxrAAETU6//hZcyoZpva4ABExMv9K2mY46NtSuQARLVr/Q29vcmRUeXAAAWUPRVBTR/9VVE1Db29yZAAAAP9MYXRMb25DbwAHb3Jkf0dLQ29vcmR/UG9pbnQyRD9Sb3dDb2wfQ29vcmT/UmVjdEJvdW4AA2RzURABAv8sX4C/nvnGuQBRKAIBQTwB/2z5sOP+o16MAFE4AgFBSAH/4Ct5IxB/qb4AUUQCAUFQAf+1RA4mAbYw4QBRTAIBQXABAQwAABEBiv9tYXM6OnNjaAFlbWE6OmdlbwABAQwAABEBev9tYXMuc2NoZQA/bWEuZ2VvAAABDAAAEQEiB2dlbwAAAQwAADEBqgH/Z2l0aHViLmMFb20vemFsZi1ycG0vbWFzX2NhcG5wcm90b19zY2hlbWFzL2dlbi9nbw8vZ2VvAAA=",  # geo/geo.capnp
+    "EB5QBgb/6Owis960KeUAEQ4C/yT8x3kgVJCQAAABMzABegERFcIRHQcAABEZTwAB/2dlby9nZW8uAmNhcG5wOkNvb3JkVHlwZQBQAQFRDAECAAARHRoAAAEBERUiAAABAhENOgAAA2drB3V0bT9sYXRsb24=",  # geo/geo.capnp:CoordType
+    "ECNQBgb/wH+5TqcnlLcAEQ4B/yT8x3kgVJCQAAQHAAAzfAFnAhEVmhEdZwAD/2dlby9nZW8uAWNhcG5wOkVQA1NHURgBAf99K594xGSvzQARKTL/hQhHHphT+8gAESU6//Pil5Tm3mfMABEhOv/hl4dsNQKMlQARHSL/HVHC3t3dr+QAERki/4atOHAw6Ln1ABEVIh93Z3M4ND91dG0yMVM/dXRtMzJOB2drNQdnazQHZ2sz",  # geo/geo.capnp:EPSG
+    "EBlQBgb/fSufeMRkr80AERME/8B/uU6nJ5S3AAABM6wBxwERFcoRIQcAAFEcAwFRKAIBAAD/Z2VvL2dlby4CY2FwbnA6RVBTRy53Z3M4NAAAUAEBAQgAAjEI5hAAAQ==",  # geo/geo.capnp:EPSG.wgs84
+    "EBlQBgb/hQhHHphT+8gAERME/8B/uU6nJ5S3AAABM8oB5wERFdIRIQcAAFEcAwFRKAIBAAD/Z2VvL2dlby4CY2FwbnA6RVBTRy51dG0yMQFTUAEBAQgAAjEI0X8AAQ==",  # geo/geo.capnp:EPSG.utm21S
+    "EBlQBgb/8+KXlObeZ8wAERME/8B/uU6nJ5S3AAABM+oBBwIRFdIRIQcAAFEcAwFRKAIBAAD/Z2VvL2dlby4CY2FwbnA6RVBTRy51dG0zMgFOUAEBAQgAAjEI6GQAAQ==",  # geo/geo.capnp:EPSG.utm32N
+    "EBhQBgb/4ZeHbDUCjJUAERME/8B/uU6nJ5S3AAABMwoCJAIRFboRHQcAAFEYAwFRJAIBAAD/Z2VvL2dlby4BY2FwbnA6RVA/U0cuZ2s1UAEBAQgAAjEI7XoAAQ==",  # geo/geo.capnp:EPSG.gk5
+    "EBhQBgb/HVHC3t3dr+QAERME/8B/uU6nJ5S3AAABMycCQQIRFboRHQcAAFEYAwFRJAIBAAD/Z2VvL2dlby4BY2FwbnA6RVA/U0cuZ2s0UAEBAQgAAjEI7HoAAQ==",  # geo/geo.capnp:EPSG.gk4
+    "EBhQBgb/hq04cDDoufUAERME/8B/uU6nJ5S3AAABM0QCZgIRFboRHQcAAFEYAwFRJAIBAAD/Z2VvL2dlby4BY2FwbnA6RVA/U0cuZ2szUAEBAQgAAjEI63oAAQ==",  # geo/geo.capnp:EPSG.gk3
+    "EE9QBgb/SfBAXiXNGusAUQ4BA/8k/Md5IFSQkAAFAQcAADNpAg4DERW6ER0HAAARGecAAf9nZW8vZ2VvLgFjYXBucDpVVD9NQ29vcmRQAQFREAMEAAAEAQAAEWEqAABRXAMBUWgCAQEBFAEBAAARZWoAAFFkAwFRcAIBEQIBFAECAAARbRIAAFFoAwFRdAIBEQMCFAEDAAARcRIAAFFsAwFReAIBD3pvbmUBBgACAQYAAf9sYXRpdHVkZQAPQmFuZAEMAAIBDAABAXIBCwACAQsAAQFoAQsAAgELAAE=",  # geo/geo.capnp:UTMCoord
+    "EDFQBgb/+4/MOTD88ewAUQ4BAv8k/Md5IFSQkAAEBwAAMxADfwMRFdIRIQcAABEddwAB/2dlby9nZW8uAmNhcG5wOkxhdExvbkNvb3IBZFABAVEIAwQAAAQBAAARKSIAAFEkAwFRMAIBEQEBFAEBAAARLSIAAFEoAwFRNAIBB2xhdAELAAIBCwABB2xvbgELAAIBCwAB",  # geo/geo.capnp:LatLonCoord
+    "EEBQBgb/rpFgeGF9/5cAUQ4BA/8k/Md5IFSQkAAEBwAAM4EDCgQRFbIRHQcAABEZrwAB/2dlby9nZW8uAWNhcG5wOkdLH0Nvb3JkUAEBUQwDBAAABAEAABFFWgAAUUQDAVFQAgERAQEUAQEAABFNEgAAUUgDAVFUAgERAgIUAQIAABFREgAAUUwDAVFYAgH/bWVyaWRpYW4AA05vAQYAAgEGAAEBcgELAAIBCwABAWgBCwACAQsAAQ==",  # geo/geo.capnp:GKCoord
+    "EDBQBgb/4oZpHhy5j8gAUQ4BAv8k/Md5IFSQkAAEBwAAMwwEXQQRFbIRHQcAABEZdwAB/2dlby9nZW8uAWNhcG5wOlBvH2ludDJEUAEBUQgDBAAABAEAABEpEgAAUSQDAVEwAgERAQEUAQEAABEtEgAAUSgDAVE0AgEBeAELAAIBCwABAXkBCwACAQsAAQ==",  # geo/geo.capnp:Point2D
+    "EDBQBgb/rRTjEz6ZxrAAUQ4BAv8k/Md5IFSQkAAEBwAAM18EtAQRFaoRHQcAABEZdwAB/2dlby9nZW8uAWNhcG5wOlJvD3dDb2xQAQFRCAMEAAAEAQAAESkiAABRJAMBUTACAREBARQBAQAAES0iAABRKAMBUTQCAQdyb3cBCQACAQkAAQdjb2wBCQACAQkAAQ==",  # geo/geo.capnp:RowCol
+    "EF1QBgb/+FlzKhmm9rgAUQ4BAf8k/Md5IFSQkABFAQcFAAAztgR1BREVohEdBwAAMRkfAQAB/2dlby9nZW8uAWNhcG5wOkNvB29yZFABAVEUAwQM//8EAQAAEX0aAABReAMBUYQCAQ0B/v8UAQEAABGBOgAAUXwDAVGIAgENAv3/FAECAAARhSIAAFGAAwFRjAIBDQP8/xQBAwAAEYkiAABRhAMBUZACAQ0E+/8UAQQAABGNOgAAUYgDAVGUAgEDZ2sBEP+ukWB4YX3/lwAAAQEQAAE/bGF0bG9uARD/+4/MOTD88ewAAAEBEAABB3V0bQEQ/0nwQF4lzRrrAAABARAAAQdwMkQBEP/ihmkeHLmPyAAAAQEQAAE/cm93Y29sARD/rRTjEz6ZxrAAAAEBEAAB",  # geo/geo.capnp:Coord
+    "EDVQBgb/StpmOOjbUrkAEQ4B/yT8x3kgVJCQAAUCBxABM3cF9gURFcoRIQcAABEddwAAEZEP/2dlby9nZW8uAmNhcG5wOlJlY3RCb3VuZHMAAFABAVEIAwQAAAQBAAARKRoAAFEkAwFRMAIBEQEBFAEBAAARLRoAAFEoAwFRNAIBA3RsARIBAf9K2mY46NtSuQAAAAESAAEDYnIBEgEB/0raZjjo21K5AAAAARIAAUEEAREBev9Db29yZGluYQA/dGVUeXBl",  # geo/geo.capnp:RectBounds
+]
+
+# Load schemas and build module structure
+# Use a shared loader stored on capnp module so capabilities work across schema modules
+if not hasattr(capnp, "_embedded_schema_loader"):
+    capnp._embedded_schema_loader = capnp.SchemaLoader()
+_loader = capnp._embedded_schema_loader
+for _schema_b64 in _SCHEMA_NODES:
+    _schema_data = base64.b64decode(_schema_b64)
+    _node_reader = schema_capnp.Node.from_bytes_packed(_schema_data)
+    _loader.load_dynamic(_node_reader)
+
+# Build module structure inline
+CoordType = _EnumModule(_loader.get(0xE529B4DEB322ECE8).as_enum(), "CoordType")
+EPSG = _StructModule(_loader.get(0xB79427A74EB97FC0).as_struct(), "EPSG")
+EPSG.wgs84 = _loader.get(0xCDAF64C4789F2B7D).as_const_value()
+EPSG.utm21S = _loader.get(0xC8FB53981E470885).as_const_value()
+EPSG.utm32N = _loader.get(0xCC67DEE69497E2F3).as_const_value()
+EPSG.gk5 = _loader.get(0x958C02356C8797E1).as_const_value()
+EPSG.gk4 = _loader.get(0xE4AFDDDDDEC2511D).as_const_value()
+EPSG.gk3 = _loader.get(0xF5B9E8307038AD86).as_const_value()
+UTMCoord = _StructModule(_loader.get(0xEB1ACD255E40F049).as_struct(), "UTMCoord")
+LatLonCoord = _StructModule(_loader.get(0xECF1FC3039CC8FFB).as_struct(), "LatLonCoord")
+GKCoord = _StructModule(_loader.get(0x97FF7D61786091AE).as_struct(), "GKCoord")
+Point2D = _StructModule(_loader.get(0xC88FB91C1E6986E2).as_struct(), "Point2D")
+RowCol = _StructModule(_loader.get(0xB0C6993E13E314AD).as_struct(), "RowCol")
+Coord = _StructModule(_loader.get(0xB8F6A6192A7359F8).as_struct(), "Coord")
+RectBounds = _StructModule(_loader.get(0xB952DBE83866DA4A).as_struct(), "RectBounds")
