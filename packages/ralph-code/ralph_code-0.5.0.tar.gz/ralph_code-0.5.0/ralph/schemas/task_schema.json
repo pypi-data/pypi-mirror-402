@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Ralph Task Schema",
+  "description": "Schema for validating ralph task specifications",
+  "definitions": {
+    "thin_task": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A simple task description string"
+    },
+    "full_task": {
+      "type": "object",
+      "required": ["id", "name", "status", "created_at"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "UUID identifier for the task"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short name/title for the task"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of what the task involves"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in_progress", "completed", "errored"],
+          "description": "Current status of the task"
+        },
+        "prerequisites": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of task IDs that must be completed before this task"
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of criteria that must be met for the task to be considered complete"
+        },
+        "files_to_modify": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of files that will need to be created or modified"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Additional notes or context about the task"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO datetime when the task was created"
+        },
+        "started_at": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "ISO datetime when work on the task began"
+        },
+        "completed_at": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "ISO datetime when the task was completed"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": ["tasks"],
+  "properties": {
+    "tasks": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/definitions/thin_task" },
+          { "$ref": "#/definitions/full_task" }
+        ]
+      },
+      "description": "List of tasks (can be thin tasks or full specs)"
+    }
+  }
+}
