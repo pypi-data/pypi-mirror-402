@@ -1,0 +1,188 @@
+[project]
+name = "nonebot-plugin-icey"
+version = "0.1.3"
+description = "Icey QQ群管助手"
+readme = "README.md"
+requires-python = ">=3.9, <4.0"
+dependencies = [
+    "nonebot2[fastapi]>=2.4.4",
+    "nonebot2[httpx]>=2.4.4",
+    "nonebot2[websockets]>=2.4.4",
+    "nonebot-adapter-onebot>=2.4.6",
+    "nonebot-adapter-telegram>=0.1.0b20",
+    "nonebot-plugin-orm[mysql,postgresql,sqlite]>=0.8.3",
+]
+
+[project.optional-dependencies]
+dev = ["pyright[nodejs]", "ruff"]
+
+[tool.nonebot]
+plugin_dirs = ["./plugins", "./src"]
+builtin_plugins = []
+
+[tool.nonebot.adapters]
+nonebot-adapter-onebot = [
+    { name = "OneBot V11", module_name = "nonebot.adapters.onebot.v11" },
+]
+nonebot-adapter-telegram = [
+    { name = "Telegram", module_name = "nonebot.adapters.telegram" },
+]
+"@local" = []
+
+[tool.nonebot.plugins]
+"@local" = []
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.ruff.lint]
+# For more rules, see https://docs.astral.sh/ruff/rules/.
+select = [
+    "F",     # Pyflakes
+    "W",     # pycodestyle warnings
+    "E",     # pycodestyle errors
+    "I",     # isort
+    "C90",   # mccabe
+    "N",     # pep8-naming
+    "PL",    # pylint
+    "UP",    # pyupgrade
+    "YTT",   # flake8-2020
+    "ANN",   # flake8-annotations
+    "ASYNC", # flake8-async
+    "BLE",   # flake8-blind-except
+    "FBT",   # flake8-boolean-trap
+    "B",     # flake8-bugbear
+    "A",     # flake8-builtins
+    "COM",   # flake8-commas
+    "C4",    # flake8-comprehensions
+    "DTZ",   # flake8-datetimez
+    "T10",   # flake8-debugger
+    "ICN",   # flake8-import-conventions
+    "PIE",   # flake8-pie
+    "T20",   # flake8-print
+    "PYI",   # flake8-pyi
+    "Q",     # flake8-quotes
+    "RSE",   # flake8-raise
+    "RET",   # flake8-return
+    "SIM",   # flake8-simplify
+    "SLOT",  # flake8-slots
+    "TID",   # flake8-tidy-imports
+    "TC",    # flake8-type-checking
+    "ARG",   # flake8-unused-arguments
+    "PTH",   # flake8-use-pathlib
+    # "ERA",   # eradicate
+    "FAST", # FastAPI
+    "PERF", # Perflint
+    "PGH",  # pygrep-hooks
+    "FURB", # refurb
+    "TRY",  # tryceratops
+    "RUF",  # Ruff-specific rules
+]
+ignore = [
+    "E402",    # 模块导入不在文件顶部 (NoneBot 的 require 需要)
+    "B008",    # 函数默认参数调用 (Depends 需要)
+    "UP037",   # 引用类型注解
+    "ANN202",  # 私有函数缺少返回类型
+    "ANN401",  # 动态类型 Any
+    "COM812",  # 缺少尾随逗号
+    "PLC0415", # 顶层之外的导入
+
+    # === 本次新增忽略 ===
+    "ANN201",  # 公共函数缺少返回类型 (太繁琐，忽略)
+    "BLE001",  # 捕获通用 Exception (Bot开发中常见，忽略)
+    "TRY003",  # 在 raise 中包含长消息 (忽略)
+    "SIM103",  # 不需要强制简化 bool(x) 返回 (忽略)
+    "TID252",  # 允许相对导入 (关键！解决你刚才运行报错的问题)
+    "ARG001",  # 允许未使用的参数 (Handler 中常有 unused args)
+    "SIM102",  # 允许嵌套 if
+    "SIM105",  # 允许 try-except-pass
+    "PLR0912", # 允许分支过多
+    "PIE810",  # 允许分开写 startswith
+    "E501",    # 忽略单行代码过长
+    "TC002",   # 忽略 "把第三方导入移到类型检查块中" 的建议
+    "TRY301",  # 忽略 "把 raise 抽象到内部函数" 的建议
+]
+allowed-confusables = [
+    "，",
+    "。",
+    "“",
+    "”",
+    "：",
+    "；",
+    "？",
+    "！",
+    "【",
+    "】",
+    "《",
+    "》",
+    "…",
+    "—",
+    "（",
+    "）",
+    "、",
+]
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true
+
+[tool.pyright]
+# For Pylance/Pyright configurations, see https://microsoft.github.io/pyright/#/configuration.
+pythonVersion = "3.12"
+pythonPlatform = "All"
+typeCheckingMode = "standard"
+
+
+[tool.ruff.lint.per-file-ignores]
+# 忽略所有 __init__.py 文件中的 "模块导入不在顶部" 错误
+# "__init__.py" = ["E402", "F401"] 
+
+# 或者仅针对特定文件
+"./src/nonebot_plugin_icey/__init__.py" = ["E402"]
+
+
+[tool.bumpversion]
+# commit_args = "--no-verify" 
+current_version = "0.1.3"
+commit = true
+message = "release: bump version from {current_version} to {new_version}"
+tag = true
+
+# 配置 1: 更新 pyproject.toml 里的版本号
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+# 只查找 version 字段，这样容错率更高
+search = "version = \"{current_version}\""
+replace = "version = \"{new_version}\""
+
+# 配置 2: (可选) 如果你的 __init__.py 里也有版本号，取消下面的注释并修改路径
+[[tool.bumpversion.files]]
+filename = "src/nonebot_plugin_icey/__init__.py"
+search = "__version__ = \"{current_version}\""
+replace = "__version__ = \"{new_version}\""
+
+# === 新增：让 bumpversion 自动修改 uv.lock ===
+[[tool.bumpversion.files]]
+filename = "uv.lock"
+search = "name = \"nonebot-plugin-icey\"\nversion = \"{current_version}\""
+replace = "name = \"nonebot-plugin-icey\"\nversion = \"{new_version}\""
+
+[tool.poe.tasks]
+bump = "bump-my-version bump"
+
+
+# ❯ uv tool list
+# bump-my-version v1.2.6
+# - bump-my-version
+# nb-cli v1.6.0
+# - nb
+# pip v25.3
+# - pip
+# - pip3
+# - pip3.12
+# poethepoet v0.40.0
+# - poe
+# ruff v0.14.11
+# - ruff
