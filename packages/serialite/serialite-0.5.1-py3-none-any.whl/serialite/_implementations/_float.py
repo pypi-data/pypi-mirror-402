@@ -1,0 +1,51 @@
+__all__ = ["FloatSerializer"]
+
+from collections.abc import Sequence
+from math import inf, isnan, nan
+from typing import Any
+
+from .._base import Serializer
+from .._errors import Errors
+from .._numeric_check import is_real
+from .._result import Failure, Result, Success
+from .._type_errors import ExpectedFloatError
+
+
+class FloatSerializer(Serializer[float]):
+    def __init__(
+        self,
+        nan_values: Sequence[Any] = (nan,),
+        inf_values: Sequence[Any] = (inf,),
+        neg_inf_values: Sequence[Any] = (-inf,),
+    ):
+        self.nan_values = nan_values
+        self.inf_values = inf_values
+        self.neg_inf_values = neg_inf_values
+
+    def from_data(self, data) -> Result[float]:
+        if data in self.nan_values:
+            return Success(nan)
+        elif data in self.inf_values:
+            return Success(inf)
+        elif data in self.neg_inf_values:
+            return Success(-inf)
+        elif is_real(data):
+            return Success(float(data))
+        else:
+            return Failure(Errors.one(ExpectedFloatError(data)))
+
+    def to_data(self, value: float):
+        if not is_real(value):
+            raise ValueError(f"Not a float: {value!r}")
+
+        if isnan(value):
+            return self.nan_values[0]
+        elif value == inf:
+            return self.inf_values[0]
+        elif value == -inf:
+            return self.neg_inf_values[0]
+        else:
+            return float(value)
+
+    def to_openapi_schema(self, force: bool = False):
+        return {"type": "number"}
