@@ -1,0 +1,283 @@
+use super::*;
+use loq_core::report::{Finding, FindingKind, SkipReason, Summary};
+use loq_core::{ConfigOrigin, MatchBy};
+use termcolor::NoColor;
+
+fn output_string<F>(f: F) -> String
+where
+    F: FnOnce(&mut NoColor<Vec<u8>>) -> io::Result<()>,
+{
+    let mut buf = NoColor::new(Vec::new());
+    f(&mut buf).unwrap();
+    String::from_utf8(buf.into_inner()).unwrap()
+}
+
+#[test]
+fn colorspec_helpers_build_correctly() {
+    let fg_spec = fg(Color::Red);
+    assert_eq!(fg_spec.fg(), Some(&Color::Red));
+    assert!(!fg_spec.bold());
+    assert!(!fg_spec.dimmed());
+
+    let bold_spec = bold();
+    assert!(bold_spec.bold());
+    assert!(bold_spec.fg().is_none());
+
+    let dimmed_spec = dimmed();
+    assert!(dimmed_spec.dimmed());
+    assert!(dimmed_spec.fg().is_none());
+}
+
+#[test]
+fn write_line_with_color() {
+    let out = output_string(|w| write_line(w, Some(Color::Red), "hello"));
+    assert_eq!(out, "hello\n");
+}
+
+#[test]
+fn write_line_without_color() {
+    let out = output_string(|w| write_line(w, None, "hello"));
+    assert_eq!(out, "hello\n");
+}
+
+#[test]
+fn format_number_small() {
+    assert_eq!(format_number(42), "42");
+}
+
+#[test]
+fn format_number_hundreds() {
+    assert_eq!(format_number(999), "999");
+}
+
+#[test]
+fn format_number_thousands() {
+    assert_eq!(format_number(1234), "1_234");
+}
+
+#[test]
+fn format_number_millions() {
+    assert_eq!(format_number(1_234_567), "1_234_567");
+}
+
+#[test]
+fn write_block_multiline() {
+    let out = output_string(|w| write_block(w, Some(Color::Red), "line1\nline2\nline3"));
+    assert_eq!(out, "line1\nline2\nline3\n");
+}
+
+#[test]
+fn write_block_single_line() {
+    let out = output_string(|w| write_block(w, Some(Color::Red), "single"));
+    assert_eq!(out, "single\n");
+}
+
+#[test]
+fn write_finding_violation() {
+    let finding = Finding {
+        path: "src/main.rs".into(),
+        config_source: ConfigOrigin::BuiltIn,
+        kind: FindingKind::Violation {
+            limit: 100,
+            actual: 150,
+            over_by: 50,
+            matched_by: MatchBy::Default,
+        },
+    };
+    let out = output_string(|w| write_finding(w, &finding, false));
+    assert!(out.contains("✖"));
+    assert!(out.contains("main.rs"));
+    // Compact format: 150 > 100
+    assert!(out.contains("150"));
+    assert!(out.contains("> 100"));
+}
+
+#[test]
+fn write_finding_violation_verbose_default_match() {
+    let finding = Finding {
+        path: "src/lib.rs".into(),
+        config_source: ConfigOrigin::BuiltIn,
+        kind: FindingKind::Violation {
+            limit: 100,
+            actual: 200,
+            over_by: 100,
+            matched_by: MatchBy::Default,
+        },
+    };
+    let out = output_string(|w| write_finding(w, &finding, true));
+    assert!(out.contains("rule:"));
+    assert!(out.contains("(default)"));
+}
+
+#[test]
+fn write_finding_violation_verbose_rule_match() {
+    let finding = Finding {
+        path: "src/lib.rs".into(),
+        config_source: ConfigOrigin::File(std::path::PathBuf::from("/project/loq.toml")),
+        kind: FindingKind::Violation {
+            limit: 50,
+            actual: 75,
+            over_by: 25,
+            matched_by: MatchBy::Rule {
+                pattern: "**/*.rs".into(),
+            },
+        },
+    };
+    let out = output_string(|w| write_finding(w, &finding, true));
+    assert!(out.contains("rule:"));
+    assert!(out.contains("match: **/*.rs"));
+}
+
+#[test]
+fn write_finding_skip_binary() {
+    let finding = Finding {
+        path: "image.png".into(),
+        config_source: ConfigOrigin::BuiltIn,
+        kind: FindingKind::SkipWarning {
+            reason: SkipReason::Binary,
+        },
+    };
+    let out = output_string(|w| write_finding(w, &finding, false));
+    assert!(out.contains("⚠"));
+    assert!(out.contains("binary file skipped"));
+}
+
+#[test]
+fn write_finding_skip_missing() {
+    let finding = Finding {
+        path: "missing.txt".into(),
+        config_source: ConfigOrigin::BuiltIn,
+        kind: FindingKind::SkipWarning {
+            reason: SkipReason::Missing,
+        },
+    };
+    let out = output_string(|w| write_finding(w, &finding, false));
+    assert!(out.contains("file not found"));
+}
+
+#[test]
+fn write_finding_skip_unreadable() {
+    let finding = Finding {
+        path: "locked.txt".into(),
+        config_source: ConfigOrigin::BuiltIn,
+        kind: FindingKind::SkipWarning {
+            reason: SkipReason::Unreadable("permission denied".into()),
+        },
+    };
+    let out = output_string(|w| write_finding(w, &finding, false));
+    assert!(out.contains("unreadable:"));
+    assert!(out.contains("permission denied"));
+}
+
+#[test]
+fn write_finding_path_without_directory() {
+    let finding = Finding {
+        path: "file.txt".into(),
+        config_source: ConfigOrigin::BuiltIn,
+        kind: FindingKind::Violation {
+            limit: 10,
+            actual: 20,
+            over_by: 10,
+            matched_by: MatchBy::Default,
+        },
+    };
+    let out = output_string(|w| write_finding(w, &finding, false));
+    assert!(out.contains("file.txt"));
+}
+
+#[test]
+fn write_summary_with_violations() {
+    let summary = Summary {
+        total: 10,
+        skipped: 2,
+        passed: 5,
+        errors: 3,
+    };
+    let out = output_string(|w| write_summary(w, &summary));
+    assert!(out.contains("3 violations"));
+}
+
+#[test]
+fn write_summary_all_passed() {
+    let summary = Summary {
+        total: 5,
+        skipped: 0,
+        passed: 5,
+        errors: 0,
+    };
+    let out = output_string(|w| write_summary(w, &summary));
+    assert!(out.contains("✔"));
+    assert!(out.contains("5 files ok"));
+}
+
+#[test]
+fn write_summary_single_violation() {
+    let summary = Summary {
+        total: 1,
+        skipped: 0,
+        passed: 0,
+        errors: 1,
+    };
+    let out = output_string(|w| write_summary(w, &summary));
+    assert!(out.contains("1 violation"));
+    assert!(!out.contains("violations"));
+}
+
+#[test]
+fn print_error_returns_error_status() {
+    use crate::ExitStatus;
+    let mut buf = NoColor::new(Vec::new());
+    let status = print_error(&mut buf, "something went wrong");
+    assert_eq!(status, ExitStatus::Error);
+    let out = String::from_utf8(buf.into_inner()).unwrap();
+    assert!(out.contains("error:"));
+    assert!(out.contains("something went wrong"));
+}
+
+#[test]
+fn write_walk_errors_verbose() {
+    let errors = vec![
+        WalkError {
+            message: "path/to/bad".into(),
+        },
+        WalkError {
+            message: "another/error".into(),
+        },
+    ];
+    let out = output_string(|w| write_walk_errors(w, &errors, true));
+    assert!(out.contains("Skipped paths (2):"));
+    assert!(out.contains("path/to/bad"));
+    assert!(out.contains("another/error"));
+}
+
+#[test]
+fn write_walk_errors_non_verbose() {
+    let errors = vec![WalkError {
+        message: "path/to/bad".into(),
+    }];
+    let out = output_string(|w| write_walk_errors(w, &errors, false));
+    assert!(out.contains("1 path(s) skipped"));
+    assert!(out.contains("--verbose"));
+}
+
+#[test]
+fn write_guidance_single_line() {
+    let out = output_string(|w| write_guidance(w, "Split large files into smaller modules."));
+    assert_eq!(out, "\nSplit large files into smaller modules.\n");
+}
+
+#[test]
+fn write_guidance_multiline() {
+    let guidance = "Consider splitting large files:\n- Extract functions into modules\n- Move tests to test files";
+    let out = output_string(|w| write_guidance(w, guidance));
+    assert!(out.starts_with('\n'));
+    assert!(out.contains("Consider splitting large files:"));
+    assert!(out.contains("- Extract functions into modules"));
+    assert!(out.contains("- Move tests to test files"));
+}
+
+#[test]
+fn write_guidance_preserves_trailing_newline() {
+    let out = output_string(|w| write_guidance(w, "Already has newline\n"));
+    assert_eq!(out, "\nAlready has newline\n");
+}
