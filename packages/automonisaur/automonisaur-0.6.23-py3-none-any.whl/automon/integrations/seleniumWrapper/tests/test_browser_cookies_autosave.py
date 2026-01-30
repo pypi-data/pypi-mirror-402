@@ -1,0 +1,21 @@
+import unittest
+
+from automon.integrations.seleniumWrapper import SeleniumBrowser, ChromeWrapper
+
+browser = SeleniumBrowser()
+browser.config.webdriver_wrapper = ChromeWrapper()
+browser.config.webdriver_wrapper.enable_defaults().enable_headless()
+
+
+class Test(unittest.TestCase):
+    if browser.is_ready():
+
+        def test_autosave(self):
+            if browser.get('http://bing.com'):
+                self.assertTrue(browser.autosaving_cookies())
+
+                browser.quit()
+
+
+if __name__ == '__main__':
+    unittest.main()
