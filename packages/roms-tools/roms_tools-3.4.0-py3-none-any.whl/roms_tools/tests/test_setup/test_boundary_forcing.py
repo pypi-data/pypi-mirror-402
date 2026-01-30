@@ -1,0 +1,738 @@
+import logging
+import os
+import textwrap
+from datetime import datetime
+from pathlib import Path
+from unittest import mock
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pytest
+import xarray as xr
+
+from conftest import calculate_data_hash
+from roms_tools import BoundaryForcing, Grid
+from roms_tools.datasets.download import download_test_data
+from roms_tools.tests.test_setup.utils import download_regional_and_bigger
+
+try:
+    import copernicusmarine  # type: ignore
+except ImportError:
+    copernicusmarine = None
+
+
+@pytest.mark.parametrize(
+    "boundary_forcing_fixture",
+    [
+        "boundary_forcing",
+        "boundary_forcing_with_2d_fill",
+    ],
+)
+def test_boundary_forcing_creation(boundary_forcing_fixture, request):
+    """Test the creation of the BoundaryForcing object."""
+    boundary_forcing = request.getfixturevalue(boundary_forcing_fixture)
+
+    fname1 = Path(download_test_data("GLORYS_NA_20120101.nc"))
+    fname2 = Path(download_test_data("GLORYS_NA_20121231.nc"))
+    assert boundary_forcing.start_time == datetime(2012, 1, 1)
+    assert boundary_forcing.end_time == datetime(2012, 12, 31)
+    assert boundary_forcing.source == {
+        "name": "GLORYS",
+        "path": [fname1, fname2],
+        "climatology": False,
+    }
+    assert boundary_forcing.model_reference_date == datetime(2000, 1, 1)
+    assert all(
+        k in boundary_forcing.boundaries for k in ["south", "east", "north", "west"]
+    )
+
+    assert boundary_forcing.ds.source == "GLORYS"
+    for direction in ["south", "east", "north", "west"]:
+        if boundary_forcing.boundaries[direction]:
+            assert f"temp_{direction}" in boundary_forcing.ds
+            assert f"salt_{direction}" in boundary_forcing.ds
+            assert f"u_{direction}" in boundary_forcing.ds
+            assert f"v_{direction}" in boundary_forcing.ds
+            assert f"zeta_{direction}" in boundary_forcing.ds
+
+    assert len(boundary_forcing.ds.bry_time) == 2
+    assert boundary_forcing.ds.coords["bry_time"].attrs["units"] == "days"
+    assert not hasattr(boundary_forcing.ds, "climatology")
+    assert hasattr(boundary_forcing.ds, "adjust_depth_for_sea_surface_height")
+    assert boundary_forcing.ds.attrs["adjust_depth_for_sea_surface_height"] == "False"
+    assert hasattr(boundary_forcing.ds, "apply_2d_horizontal_fill")
+
+
+def test_boundary_forcing_creation_with_duplicates(
+    boundary_forcing: BoundaryForcing, use_dask: bool
+) -> None:
+    """Test the creation of the BoundaryForcing object with duplicates in source data
+    works as expected.
+    """
+    fname1 = Path(download_test_data("GLORYS_NA_20120101.nc"))
+    fname2 = Path(download_test_data("GLORYS_NA_20121231.nc"))
+
+    boundary_forcing_with_duplicates_in_source_data = BoundaryForcing(
+        grid=boundary_forcing.grid,
+        start_time=boundary_forcing.start_time,
+        end_time=boundary_forcing.end_time,
+        source={"name": "GLORYS", "path": [fname1, fname1, fname2]},
+        apply_2d_horizontal_fill=boundary_forcing.apply_2d_horizontal_fill,
+        use_dask=use_dask,
+    )
+
+    assert boundary_forcing.ds.identical(
+        boundary_forcing_with_duplicates_in_source_data.ds
+    )
+
+
+@pytest.mark.parametrize(
+    "boundary_forcing_fixture",
+    [
+        "bgc_boundary_forcing_from_climatology",
+        "bgc_boundary_forcing_from_unified_climatology",
+    ],
+)
+def test_bgc_boundary_forcing_creation(boundary_forcing_fixture, request):
+    """Test the creation of the BoundaryForcing object."""
+    boundary_forcing = request.getfixturevalue(boundary_forcing_fixture)
+
+    assert boundary_forcing.start_time == datetime(2021, 6, 29)
+    assert boundary_forcing.end_time == datetime(2021, 6, 30)
+    assert boundary_forcing.source["climatology"]
+    assert boundary_forcing.model_reference_date == datetime(2000, 1, 1)
+    assert all(
+        k in boundary_forcing.boundaries for k in ["south", "east", "north", "west"]
+    )
+
+    expected_bgc_variables = [
+        "PO4",
+        "NO3",
+        "SiO3",
+        "NH4",
+        "Fe",
+        "Lig",
+        "O2",
+        "DIC",
+        "DIC_ALT_CO2",
+        "ALK",
+        "ALK_ALT_CO2",
+        "DOC",
+        "DON",
+        "DOP",
+        "DOCr",
+        "DONr",
+        "DOPr",
+        "zooC",
+        "spChl",
+        "spC",
+        "spP",
+        "spFe",
+        "spCaCO3",
+        "diatChl",
+        "diatC",
+        "diatP",
+        "diatFe",
+        "diatSi",
+        "diazChl",
+        "diazC",
+        "diazP",
+        "diazFe",
+    ]
+
+    for direction in ["south", "east", "north", "west"]:
+        if boundary_forcing.boundaries[direction]:
+            for var in expected_bgc_variables:
+                assert f"{var}_{direction}" in boundary_forcing.ds
+
+    assert len(boundary_forcing.ds.bry_time) == 12
+    assert boundary_forcing.ds.coords["bry_time"].attrs["units"] == "days"
+    assert hasattr(boundary_forcing.ds, "climatology")
+
+
+def test_unsuccessful_boundary_forcing_creation_with_1d_fill(use_dask):
+    grid = Grid(
+        nx=2,
+        ny=2,
+        size_x=500,
+        size_y=1000,
+        center_lon=0,
+        center_lat=55,
+        rot=10,
+        N=3,  # number of vertical levels
+        theta_s=5.0,  # surface control parameter
+        theta_b=2.0,  # bottom control parameter
+        hc=250.0,  # critical depth
+    )
+
+    fname = Path(download_test_data("GLORYS_coarse_test_data.nc"))
+
+    with pytest.raises(ValueError, match="consists entirely of NaNs"):
+        BoundaryForcing(
+            grid=grid,
+            start_time=datetime(2021, 6, 29),
+            end_time=datetime(2021, 6, 30),
+            source={"name": "GLORYS", "path": fname},
+            apply_2d_horizontal_fill=False,
+            use_dask=use_dask,
+        )
+
+    fname_bgc = download_test_data("CESM_regional_coarse_test_data_climatology.nc")
+
+    with pytest.raises(ValueError, match="consists entirely of NaNs"):
+        BoundaryForcing(
+            grid=grid,
+            start_time=datetime(2021, 6, 29),
+            end_time=datetime(2021, 6, 30),
+            source={"path": fname_bgc, "name": "CESM_REGRIDDED", "climatology": True},
+            type="bgc",
+            apply_2d_horizontal_fill=False,
+            use_dask=use_dask,
+        )
+
+
+def test_start_time_end_time_error(use_dask):
+    """Test error when start_time and end_time are not both provided or both None."""
+    # Case 1: Only start_time provided
+    with pytest.raises(
+        ValueError, match="Both `start_time` and `end_time` must be provided together"
+    ):
+        BoundaryForcing(
+            grid=None,
+            start_time=datetime(2022, 1, 1),
+            end_time=None,  # end_time is None, should raise an error
+            source={"name": "GLORYS", "path": "glorys_data.nc"},
+            use_dask=use_dask,
+        )
+
+    # Case 2: Only end_time provided
+    with pytest.raises(
+        ValueError, match="Both `start_time` and `end_time` must be provided together"
+    ):
+        BoundaryForcing(
+            grid=None,
+            start_time=None,  # start_time is None, should raise an error
+            end_time=datetime(2022, 1, 2),
+            source={"name": "GLORYS", "path": "glorys_data.nc"},
+            use_dask=use_dask,
+        )
+
+
+def test_start_time_end_time_warning(use_dask, caplog):
+    """Test that a warning is triggered when both start_time and end_time are None."""
+    # Catching the warning during test
+    grid = Grid(
+        nx=3,
+        ny=3,
+        size_x=400,
+        size_y=400,
+        center_lon=-8,
+        center_lat=58,
+        rot=0,
+        N=3,  # number of vertical levels
+        theta_s=5.0,  # surface control parameter
+        theta_b=2.0,  # bottom control parameter
+        hc=250.0,  # critical depth
+    )
+
+    fname1 = Path(download_test_data("GLORYS_NA_20120101.nc"))
+    fname2 = Path(download_test_data("GLORYS_NA_20121231.nc"))
+
+    with caplog.at_level(logging.INFO):
+        BoundaryForcing(
+            grid=grid,
+            start_time=None,
+            end_time=None,
+            source={"name": "GLORYS", "path": [fname1, fname2]},
+            use_dask=use_dask,
+        )
+
+    # Verify the warning message in the log
+    assert (
+        "Both `start_time` and `end_time` are None. No time filtering will be applied to the source data."
+        in caplog.text
+    )
+
+
+def test_boundary_divided_by_land_warning(caplog, use_dask):
+    # Iceland intersects the western boundary of the following grid
+    grid = Grid(
+        nx=5, ny=5, size_x=500, size_y=500, center_lon=-10, center_lat=65, rot=0
+    )
+
+    fname = Path(download_test_data("GLORYS_coarse_test_data.nc"))
+
+    with caplog.at_level(logging.WARNING):
+        BoundaryForcing(
+            grid=grid,
+            start_time=datetime(2021, 6, 29),
+            end_time=datetime(2021, 6, 30),
+            source={"path": fname, "name": "GLORYS", "climatology": False},
+            apply_2d_horizontal_fill=False,
+            use_dask=use_dask,
+        )
+    # Verify the warning message in the log
+    assert "divided by land" in caplog.text
+
+
+def test_1d_and_2d_fill_coincide_if_no_fill(use_dask):
+    grid = Grid(
+        nx=2,
+        ny=2,
+        size_x=500,
+        size_y=1000,
+        center_lon=0,
+        center_lat=55,
+        rot=10,
+        N=3,  # number of vertical levels
+        theta_s=5.0,  # surface control parameter
+        theta_b=2.0,  # bottom control parameter
+        hc=250.0,  # critical depth
+    )
+
+    # this climatology has already filled land values and horizontal fill is skipped
+    fname_bgc = Path(download_test_data("coarsened_UNIFIED_bgc_dataset.nc"))
+
+    kwargs = {
+        "grid": grid,
+        "start_time": datetime(2021, 6, 29),
+        "end_time": datetime(2021, 6, 29),
+        "source": {"path": fname_bgc, "name": "UNIFIED", "climatology": True},
+        "type": "bgc",
+        "use_dask": use_dask,
+    }
+
+    bf_1d_fill = BoundaryForcing(
+        **kwargs,
+        apply_2d_horizontal_fill=False,
+    )
+    bf_2d_fill = BoundaryForcing(
+        **kwargs,
+        apply_2d_horizontal_fill=True,
+    )
+
+    xr.testing.assert_allclose(bf_1d_fill.ds, bf_2d_fill.ds, rtol=1.0e-4)
+
+
+def test_1d_and_2d_fill_coincide_if_no_land(use_dask):
+    # this grid lies entirely over open ocean
+    grid = Grid(nx=5, ny=5, size_x=300, size_y=300, center_lon=-5, center_lat=65, rot=0)
+
+    fname = Path(download_test_data("GLORYS_coarse_test_data.nc"))
+
+    kwargs = {
+        "grid": grid,
+        "start_time": datetime(2021, 6, 29),
+        "end_time": datetime(2021, 6, 29),
+        "source": {"path": fname, "name": "GLORYS", "climatology": False},
+        "use_dask": use_dask,
+    }
+
+    bf_1d_fill = BoundaryForcing(
+        **kwargs,
+        apply_2d_horizontal_fill=False,
+    )
+    bf_2d_fill = BoundaryForcing(
+        **kwargs,
+        apply_2d_horizontal_fill=True,
+    )
+
+    xr.testing.assert_allclose(bf_1d_fill.ds, bf_2d_fill.ds, rtol=1.0e-4)
+
+
+@pytest.mark.parametrize(
+    "boundary_forcing_fixture",
+    [
+        "boundary_forcing",
+        "boundary_forcing_with_2d_fill",
+    ],
+)
+def test_correct_depth_coords_zero_zeta(boundary_forcing_fixture, request, use_dask):
+    boundary_forcing = request.getfixturevalue(boundary_forcing_fixture)
+
+    for direction in ["south", "east", "north", "west"]:
+        if boundary_forcing.boundaries[direction]:
+            # Test that uppermost interface coincides with sea surface height
+            assert np.allclose(
+                boundary_forcing.ds_depth_coords[f"interface_depth_rho_{direction}"]
+                .isel(s_w=-1)
+                .values,
+                0 * boundary_forcing.ds[f"zeta_{direction}"].values,
+                atol=1e-6,
+            )
+
+
+def test_computed_missing_optional_fields(
+    bgc_boundary_forcing_from_unified_climatology,
+):
+    ds = bgc_boundary_forcing_from_unified_climatology.ds
+
+    # Use tight tolerances because 'DOC' and 'DOCr' can have values order 1e-6
+
+    for direction in ["south", "east", "north", "west"]:
+        if bgc_boundary_forcing_from_unified_climatology.boundaries[direction]:
+            # 'DOCr' was missing in the source data and should have been filled with a constant default value
+            assert np.allclose(
+                ds[f"DOCr_{direction}"].std(), 0.0, rtol=1e-10, atol=1e-10
+            ), "DOCr should be constant across space and time"
+            # 'DOC' was present in the source data and should show spatial or temporal variability
+            assert ds[f"DOC_{direction}"].std() > 1e-10, (
+                "DOC should vary across space and time"
+            )
+
+
+@pytest.mark.parametrize(
+    "boundary_forcing_fixture",
+    [
+        "boundary_forcing",
+        "boundary_forcing_with_2d_fill",
+    ],
+)
+def test_boundary_forcing_plot(boundary_forcing_fixture, request):
+    """Test plot."""
+    boundary_forcing = request.getfixturevalue(boundary_forcing_fixture)
+
+    for direction in ["south", "east", "north", "west"]:
+        if boundary_forcing.boundaries[direction]:
+            for layer_contours in [False, True]:
+                boundary_forcing.plot(
+                    var_name=f"temp_{direction}", layer_contours=layer_contours
+                )
+                boundary_forcing.plot(
+                    var_name=f"u_{direction}", layer_contours=layer_contours
+                )
+                boundary_forcing.plot(
+                    var_name=f"v_{direction}", layer_contours=layer_contours
+                )
+            boundary_forcing.plot(var_name=f"zeta_{direction}")
+            boundary_forcing.plot(var_name=f"vbar_{direction}")
+            boundary_forcing.plot(var_name=f"ubar_{direction}")
+
+            # Test that passing a matplotlib.axes.Axes works
+            fig, ax = plt.subplots(1, 1)
+            boundary_forcing.plot(var_name=f"temp_{direction}", ax=ax)
+            boundary_forcing.plot(var_name=f"zeta_{direction}", ax=ax)
+
+
+@pytest.mark.parametrize(
+    "boundary_forcing_fixture",
+    [
+        "boundary_forcing",
+        "boundary_forcing_with_2d_fill",
+    ],
+)
+def test_boundary_forcing_save(boundary_forcing_fixture, request, tmp_path):
+    """Test save method."""
+    boundary_forcing = request.getfixturevalue(boundary_forcing_fixture)
+
+    for file_str in ["test_bf", "test_bf.nc"]:
+        # Create a temporary filepath using the tmp_path fixture
+        for filepath in [
+            tmp_path / file_str,
+            str(tmp_path / file_str),
+        ]:  # test for Path object and str
+            # Test saving without grouping
+            saved_filenames = boundary_forcing.save(filepath, group=False)
+
+            filepath_str = str(Path(filepath).with_suffix(""))
+            expected_filepath = Path(f"{filepath_str}.nc")
+
+            assert saved_filenames == [expected_filepath]
+            assert expected_filepath.exists()
+            expected_filepath.unlink()
+
+            # Test saving with grouping
+            saved_filenames = boundary_forcing.save(filepath, group=True)
+
+            filepath_str = str(Path(filepath).with_suffix(""))
+            expected_filepath = Path(f"{filepath_str}_2012.nc")
+
+            assert saved_filenames == [expected_filepath]
+            assert expected_filepath.exists()
+            expected_filepath.unlink()
+
+
+@pytest.mark.parametrize(
+    "boundary_forcing_fixture",
+    [
+        "bgc_boundary_forcing_from_climatology",
+        "bgc_boundary_forcing_from_unified_climatology",
+    ],
+)
+def test_bgc_boundary_forcing_plot(boundary_forcing_fixture, request):
+    """Test plot method."""
+    bgc_boundary_forcing = request.getfixturevalue(boundary_forcing_fixture)
+
+    for direction in ["south", "east", "north", "west"]:
+        if bgc_boundary_forcing.boundaries[direction]:
+            bgc_boundary_forcing.plot(var_name=f"ALK_{direction}", layer_contours=True)
+
+
+@pytest.mark.parametrize(
+    "boundary_forcing_fixture",
+    [
+        "bgc_boundary_forcing_from_climatology",
+        "bgc_boundary_forcing_from_unified_climatology",
+    ],
+)
+def test_bgc_boundary_forcing_save(boundary_forcing_fixture, tmp_path, request):
+    """Test save method."""
+    bgc_boundary_forcing = request.getfixturevalue(boundary_forcing_fixture)
+
+    for file_str in ["test_bf", "test_bf.nc"]:
+        # Create a temporary filepath using the tmp_path fixture
+        for filepath in [
+            tmp_path / file_str,
+            str(tmp_path / file_str),
+        ]:  # test for Path object and str
+            # Test saving without partitioning and grouping
+            saved_filenames = bgc_boundary_forcing.save(filepath, group=False)
+
+            filepath_str = str(Path(filepath).with_suffix(""))
+            expected_filepath = Path(f"{filepath_str}.nc")
+            assert saved_filenames == [expected_filepath]
+            assert expected_filepath.exists()
+            expected_filepath.unlink()
+
+            # Test saving without partitioning but with grouping
+            saved_filenames = bgc_boundary_forcing.save(filepath, group=True)
+
+            filepath_str = str(Path(filepath).with_suffix(""))
+            expected_filepath = Path(f"{filepath_str}_clim.nc")
+            assert saved_filenames == [expected_filepath]
+            assert expected_filepath.exists()
+            expected_filepath.unlink()
+
+
+@pytest.mark.parametrize(
+    "bdry_forcing_fixture",
+    [
+        "boundary_forcing",
+        "bgc_boundary_forcing_from_climatology",
+        "bgc_boundary_forcing_from_unified_climatology",
+    ],
+)
+def test_roundtrip_yaml(bdry_forcing_fixture, request, tmp_path, use_dask):
+    """Test that creating a BoundaryForcing object, saving its parameters to yaml file,
+    and re-opening yaml file creates the same object.
+    """
+    bdry_forcing = request.getfixturevalue(bdry_forcing_fixture)
+
+    # Create a temporary filepath using the tmp_path fixture
+    file_str = "test_yaml"
+    for filepath in [
+        tmp_path / file_str,
+        str(tmp_path / file_str),
+    ]:  # test for Path object and str
+        bdry_forcing.to_yaml(filepath)
+
+        bdry_forcing_from_file = BoundaryForcing.from_yaml(filepath, use_dask=use_dask)
+
+        assert bdry_forcing == bdry_forcing_from_file
+
+        filepath = Path(filepath)
+        filepath.unlink()
+
+
+def test_files_have_same_hash(boundary_forcing, tmp_path, use_dask):
+    yaml_filepath = tmp_path / "test_yaml_.yaml"
+    filepath1 = tmp_path / "test1.nc"
+    filepath2 = tmp_path / "test2.nc"
+
+    boundary_forcing.to_yaml(yaml_filepath)
+    boundary_forcing.save(filepath1, group=True)
+    bdry_forcing_from_file = BoundaryForcing.from_yaml(yaml_filepath, use_dask=use_dask)
+    bdry_forcing_from_file.save(filepath2, group=True)
+
+    filepath_str1 = str(Path(filepath1).with_suffix(""))
+    filepath_str2 = str(Path(filepath2).with_suffix(""))
+    expected_filepath1 = f"{filepath_str1}_2012.nc"
+    expected_filepath2 = f"{filepath_str2}_2012.nc"
+
+    # Only compare hash of datasets because metadata is non-deterministic with dask
+    hash1 = calculate_data_hash(expected_filepath1)
+    hash2 = calculate_data_hash(expected_filepath2)
+
+    assert hash1 == hash2, f"Hashes do not match: {hash1} != {hash2}"
+
+    yaml_filepath.unlink()
+    Path(expected_filepath1).unlink()
+    Path(expected_filepath2).unlink()
+
+
+@pytest.mark.parametrize(
+    "bdry_forcing_fixture",
+    [
+        "bgc_boundary_forcing_from_climatology",
+        "bgc_boundary_forcing_from_unified_climatology",
+    ],
+)
+def test_files_have_same_hash_clim(bdry_forcing_fixture, tmp_path, use_dask, request):
+    bgc_boundary_forcing = request.getfixturevalue(bdry_forcing_fixture)
+
+    yaml_filepath = tmp_path / "test_yaml"
+    filepath1 = tmp_path / "test1.nc"
+    filepath2 = tmp_path / "test2.nc"
+
+    bgc_boundary_forcing.to_yaml(yaml_filepath)
+    bgc_boundary_forcing.save(filepath1, group=True)
+    bdry_forcing_from_file = BoundaryForcing.from_yaml(yaml_filepath, use_dask=use_dask)
+    bdry_forcing_from_file.save(filepath2, group=True)
+
+    filepath_str1 = str(Path(filepath1).with_suffix(""))
+    filepath_str2 = str(Path(filepath2).with_suffix(""))
+    expected_filepath1 = f"{filepath_str1}_clim.nc"
+    expected_filepath2 = f"{filepath_str2}_clim.nc"
+
+    # Only compare hash of datasets because metadata is non-deterministic with dask
+    hash1 = calculate_data_hash(expected_filepath1)
+    hash2 = calculate_data_hash(expected_filepath2)
+
+    assert hash1 == hash2, f"Hashes do not match: {hash1} != {hash2}"
+
+    yaml_filepath.unlink()
+    Path(expected_filepath1).unlink()
+    Path(expected_filepath2).unlink()
+
+
+def test_from_yaml_missing_boundary_forcing(tmp_path, use_dask):
+    yaml_content = textwrap.dedent(
+        """\
+    ---
+    roms_tools_version: 0.0.0
+    ---
+    Grid:
+      nx: 100
+      ny: 100
+      size_x: 1800
+      size_y: 2400
+      center_lon: -10
+      center_lat: 61
+      rot: -20
+      topography_source:
+        name: ETOPO5
+      hmin: 5.0
+    """
+    )
+    # Create a temporary filepath using the tmp_path fixture
+    file_str = "test_yaml"
+    for yaml_filepath in [
+        tmp_path / file_str,
+        str(tmp_path / file_str),
+    ]:  # test for Path object and str
+        # Write YAML content to file
+        if isinstance(yaml_filepath, Path):
+            yaml_filepath.write_text(yaml_content)
+        else:
+            with open(yaml_filepath, "w") as f:
+                f.write(yaml_content)
+
+        with pytest.raises(
+            ValueError, match="No BoundaryForcing configuration found in the YAML file."
+        ):
+            BoundaryForcing.from_yaml(yaml_filepath, use_dask=use_dask)
+
+        yaml_filepath = Path(yaml_filepath)
+        yaml_filepath.unlink()
+
+
+@pytest.mark.stream
+@pytest.mark.use_dask
+@pytest.mark.use_copernicus
+def test_default_glorys_dataset_loading(tiny_grid: Grid) -> None:
+    """Verify the default GLORYS dataset is loaded when a path is not provided."""
+    start_time = datetime(2010, 2, 1)
+    end_time = datetime(2010, 3, 1)
+
+    with mock.patch.dict(
+        os.environ, {"PYDEVD_WARN_EVALUATION_TIMEOUT": "90"}, clear=True
+    ):
+        bf = BoundaryForcing(
+            grid=tiny_grid,
+            source={"name": "GLORYS"},
+            type="physics",
+            start_time=start_time,
+            end_time=end_time,
+            use_dask=True,
+            bypass_validation=True,
+        )
+
+        expected_vars = {"u_south", "v_south", "temp_south", "salt_south"}
+        assert set(bf.ds.data_vars).issuperset(expected_vars)
+
+
+@pytest.mark.use_copernicus
+@pytest.mark.skipif(copernicusmarine is None, reason="copernicusmarine required")
+@pytest.mark.parametrize(
+    "grid_fixture",
+    [
+        "tiny_grid_that_straddles_dateline",
+        "tiny_grid_that_straddles_180_degree_meridian",
+        "tiny_rotated_grid",
+    ],
+)
+def test_invariance_to_get_glorys_bounds(tmp_path, grid_fixture, use_dask, request):
+    start_time = datetime(2012, 1, 1)
+    grid = request.getfixturevalue(grid_fixture)
+
+    regional_file, bigger_regional_file = download_regional_and_bigger(
+        tmp_path, grid, start_time
+    )
+
+    bf_from_regional = BoundaryForcing(
+        grid=grid,
+        source={"name": "GLORYS", "path": str(regional_file)},
+        type="physics",
+        start_time=start_time,
+        end_time=start_time,
+        apply_2d_horizontal_fill=True,
+        use_dask=use_dask,
+    )
+    bf_from_bigger_regional = BoundaryForcing(
+        grid=grid,
+        source={"name": "GLORYS", "path": str(bigger_regional_file)},
+        type="physics",
+        start_time=start_time,
+        end_time=start_time,
+        apply_2d_horizontal_fill=True,
+        use_dask=use_dask,
+    )
+
+    # Use assert_allclose instead of equals: necessary for grids that straddle the 180° meridian.
+    # Copernicus returns data on [-180, 180] by default, but if you request a range
+    # like [170, 190], it remaps longitudes. That remapping introduces tiny floating
+    # point differences in the longitude coordinate, which will then propagate into further differences once you do regridding.
+    # Need to adjust the tolerances for these grids that straddle the 180° meridian.
+    xr.testing.assert_allclose(
+        bf_from_bigger_regional.ds, bf_from_regional.ds, rtol=1e-4, atol=1e-5
+    )
+
+
+@pytest.mark.parametrize(
+    "use_dask",
+    [pytest.param(True, marks=pytest.mark.use_dask), False],
+)
+def test_nondefault_glorys_dataset_loading(small_grid: Grid, use_dask: bool) -> None:
+    """Verify a non-default GLORYS dataset is loaded when a path is provided."""
+    start_time = datetime(2012, 1, 1)
+    end_time = datetime(2012, 12, 31)
+
+    local_path = Path(download_test_data("GLORYS_NA_20120101.nc"))
+
+    with mock.patch.dict(
+        os.environ, {"PYDEVD_WARN_EVALUATION_TIMEOUT": "90"}, clear=True
+    ):
+        bf = BoundaryForcing(
+            grid=small_grid,
+            source={
+                "name": "GLORYS",
+                "path": local_path,
+            },
+            type="physics",
+            start_time=start_time,
+            end_time=end_time,
+            use_dask=use_dask,
+        )
+
+        expected_vars = {"u_south", "v_south", "temp_south", "salt_south"}
+        assert set(bf.ds.data_vars).issuperset(expected_vars)
