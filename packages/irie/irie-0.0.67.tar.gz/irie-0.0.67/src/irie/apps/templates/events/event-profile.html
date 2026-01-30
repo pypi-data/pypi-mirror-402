@@ -1,0 +1,166 @@
+{% extends "layouts/base.html" %}
+{% load get %}
+{% load nbi %}
+{% block title %}Event (<code>{{ event.usgsid }}</code>){% endblock %} 
+{% block stylesheets %}
+
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
+<style>
+.crop {
+  width: 100%; /* 200px;*/
+  height: auto ; /* 150px; */
+  overflow: hidden;
+}
+.crop img {
+    width: 100%;
+    height: auto;
+    margin: -200px 0 -100px -100px;
+}
+</style>
+<style>
+@media print {
+  @page {
+    size: 8.5in 11in;
+  }
+  #event-table, #rendering, #structureProfile {
+    display:    none;
+    visibility: hidden;
+    max-width:  0;
+  }
+  #page {
+    width: 100%; 
+    margin-left:   0;
+    margin-right:  0;
+    margin-top:    0.5in;
+    margin-bottom: 0.75in;
+    float: none !important;
+  }
+  html, body {
+    margin:  0 !important;
+    padding: 0 !important;
+    height: 99%;
+    width: 100%;
+    float: none !important;
+  }
+  body {
+    font: 10pt "Computer Modern", Georgia, "Times New Roman", Times, serif;
+    line-height: 1.1;
+    background: #fff !important;
+    color: #000;
+  }
+  h1 {
+    font-size: 16pt;
+  }
+  h2, h3, h4 {
+    font-size: 14pt;
+  }
+  main, div.print {
+    visibility: visible;
+    width: auto; /* 100%; */
+    font-size: 10pt;
+    margin: 0; /* 0.50in 0.5in 0.5in 0.5in; */
+    float: none ! important;
+    page-break-inside:auto ;
+    /* height: 900px; */
+  }
+  tr    { page-break-inside:avoid; page-break-after:auto }
+  thead { display:table-header-group }
+  tfoot { display:table-footer-group }
+  table {
+    border-bottom: 2px solid black;
+    border-top: 2px solid black;
+    font-size: 8pt;
+    visibility: visible;
+    width: 100%; 
+    margin: 0; 
+    float: none;
+    page-break-inside:auto ; 
+    page-break-after:auto;
+  }
+  hr, img, nav, footer, .button, #rendering, #event-table {
+    visibility: hidden;
+    display: none;
+    max-height: 0;
+    max-width: 0;
+  }
+}
+.ct-series-a .ct-point, .ct-series-a .ct-line, .ct-series-a .ct-bar, .ct-series-a .ct-slice-donut{
+  stroke: #506690;
+}
+.ct-series-b .ct-point, .ct-series-b .ct-line, .ct-series-b .ct-bar, .ct-series-b .ct-slice-donut {
+  stroke: #61DAFB;
+}
+</style>
+{% endblock stylesheets %}
+
+{% block content %}
+<div class="print">
+    {% if event.origin_type.lower == "recorded" %}
+    {% include 'events/profile/usgs.html' with event=event %}
+    {% else %}
+    {% include 'events/profile/sgmd.html' with event=event %}
+    {% endif %}
+
+    <div id="event-table" open>
+      <h3>Records</h3>
+      {% if event.records %}
+      <div class="row">
+        <div class="col-10 mb-4">
+        <div class="card card-body border-0 shadow table-wrapper table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Record ID</th>
+                <th>Station</th>
+                {% if event.origin_type.lower == "recorded" %}
+                <th>Date</th>
+                {% endif %}
+                <th>Asset</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for record in event.records.all %}
+              <tr style="cursor: pointer;" >
+                <td><a href="">{{ record.id }}</a></td>
+                <td>{{ record.cesmd }}</td>
+                {% if event.origin_type.lower == "recorded" %}
+                <td>{{ event.upload_date }}</td>
+                {% endif %}
+                {% if record.asset %}
+                <td><a href="{% url 'asset_profile' record.asset.calid %}">
+                  {{ record.asset.name }}</a></td>
+                {% else %}
+                <td>-</td>
+                {% endif %}
+                <td>{{ record.notes }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <nav>
+            <ul class="pagination" id="event-pagination"></ul>
+          </nav>
+      </div>
+      </div>
+      {% endif %}
+    </div>
+    <hr>
+
+    {# STRUCTURE PROFILE #}
+
+
+</div>
+{% endblock content %}
+
+<script>
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+</script>
+{% block javascripts %}
+<script>
+{% include "includes/paginate.js" %}
+// Initialize the table pagination
+new TablePagination('event-table', 'event-pagination', 'searchInput', 10);
+</script>
+{% endblock javascripts %}
