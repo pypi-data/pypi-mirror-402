@@ -1,0 +1,132 @@
+[build-system]
+requires = ["flit_core >=3.11,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "powerpax"
+description = "Small collection of useful utilities for JAX"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE.txt"]
+authors = [
+  {name = "Karl Otness"},
+]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Operating System :: OS Independent",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
+dynamic = ["version"]
+
+dependencies = [
+  "jax>=0.4.6",
+]
+
+[project.urls]
+Homepage = "https://github.com/karlotness/powerpax"
+Documentation = "https://powerpax.readthedocs.io"
+"Source Code" = "https://github.com/karlotness/powerpax"
+"Bug Tracker" = "https://github.com/karlotness/powerpax/issues"
+
+[dependency-groups]
+test = [
+  "jax[cpu]",
+  "pytest",
+  "hypothesis",
+]
+
+[tool.flit.sdist]
+include = ["tests/"]
+exclude = ["**/*~"]
+
+[tool.tox]
+envlist = ["py3", "lint", "type"]
+
+[tool.tox.env_run_base]
+description = "Run tests"
+dependency_groups = ["test"]
+commands = [["pytest", {replace = "posargs", extend = true}]]
+passenv = ["CI"]
+setenv = {JAX_PLATFORMS = "cpu"}
+
+[tool.tox.env.lint]
+description = "Check code for style and formatting"
+skip_install = true
+ignore_errors = true
+dependency_groups = []
+deps = [
+  "ruff>=0.1.5",
+  "black>=26.1.0,<27",
+]
+commands = [
+  ["ruff", "check", "--", "src{/}powerpax", "tests", "docs"],
+  ["black", "--check", "--diff", "src{/}powerpax", "tests", "docs"],
+]
+setenv = {}
+
+[tool.tox.env.type]
+description = "Check types in library source"
+dependency_groups = []
+deps = [
+  "mypy>=1.0.0",
+]
+commands = [["mypy", "src{/}powerpax"]]
+
+[tool.tox.env.docs]
+description = "Build documentation site"
+dependency_groups = []
+deps = ["-r docs{/}requirements.txt"]
+commands = [["sphinx-build", "-W", "-b", "html", "{tox_root}{/}docs", "{tox_root}{/}docs{/}_build{/}html"]]
+setenv = {PYDEVD_DISABLE_FILE_VALIDATION = "1"}
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = ["tests"]
+addopts = [
+  "--import-mode=importlib",
+]
+
+[tool.ruff]
+extend-exclude = ["docs/_build/"]
+src = ["src"]
+line-length = 88
+respect-gitignore = true
+fix = false
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "N", "RUF", "UP", "C4", "YTT", "T10", "T20", "ICN", "SIM", "NPY", "PT", "PIE", "FURB", "ARG", "TRY"]
+ignore = ["UP015", "SIM108", "RUF022", "TRY003"]
+
+[tool.ruff.lint.flake8-import-conventions]
+[tool.ruff.lint.flake8-import-conventions.extend-aliases]
+"jax.numpy" = "jnp"
+"equinox" = "eqx"
+"powerpax" = "ppx"
+
+[tool.ruff.lint.flake8-pytest-style]
+parametrize-names-type = "csv"
+
+[tool.mypy]
+warn_unused_configs = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+no_implicit_reexport = true
+strict_equality = true
+disallow_untyped_defs = false
