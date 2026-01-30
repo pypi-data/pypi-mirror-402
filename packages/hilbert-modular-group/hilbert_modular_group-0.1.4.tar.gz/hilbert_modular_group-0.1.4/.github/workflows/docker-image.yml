@@ -1,0 +1,32 @@
+name: Docker Image CI with tox
+
+on:
+  pull_request:
+    branches:
+    - main
+    - develop
+  push:
+    branches:
+    - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Get current date
+      id: date
+      run: echo "date=$(date +'%s')" >> $GITHUB_OUTPUT
+
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Build the Docker image
+      run: docker build . --file Dockerfile.passagemath --tag hilbertmodgroup:${{ steps.date.outputs.date }}
+
+    - name: Run doctests
+      run: docker run --rm hilbertmodgroup:${{ steps.date.outputs.date }} test
+
+    - name: Run linting checks
+      run: docker run --rm hilbertmodgroup:${{ steps.date.outputs.date }} lint
