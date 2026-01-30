@@ -1,0 +1,68 @@
+[package]
+name = "calimero-client-py"
+version = "0.3.0"
+edition = "2021"
+authors = ["Calimero Limited <info@calimero.network>"]
+description = "Python client library for Calimero Network"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/calimero-network/core"
+keywords = ["calimero", "blockchain", "api", "client", "web3", "python"]
+categories = ["api-bindings", "blockchain", "web-programming"]
+# Ensure source distribution includes all necessary files
+include = [
+    "src/**/*.rs",
+    "Cargo.toml",
+    "Cargo.lock",
+    "README.md",
+    "LICENSE*",
+    "CHANGELOG.md",
+]
+readme = "README.md"
+
+# Make this package standalone, not part of the workspace
+[workspace]
+
+[lib]
+name = "calimero_client_py"
+crate-type = ["cdylib"]
+
+[dependencies]
+# Core Calimero crates (using master branch from GitHub)
+calimero-client = { git = "https://github.com/calimero-network/core", branch = "master" }
+calimero-primitives = { git = "https://github.com/calimero-network/core", branch = "master" }
+calimero-server-primitives = { git = "https://github.com/calimero-network/core", branch = "master" }
+calimero-context-config = { git = "https://github.com/calimero-network/core", branch = "master" }
+
+# Python bindings
+pyo3 = { version = "0.22", features = ["auto-initialize"] }
+
+# Additional dependencies that might be needed
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+url = "2.5"
+hex = "0.4"
+eyre = "0.6"
+sha2 = "0.10"
+dirs = "5.0"
+chrono = { version = "0.4", features = ["serde"] }
+camino = "1.1"
+async-trait = "0.1"
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[features]
+default = []
+python = ["pyo3/auto-initialize"]
+
+[profile.release]
+strip = "symbols"
+lto = true
+codegen-units = 1
+opt-level = "z"
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true
