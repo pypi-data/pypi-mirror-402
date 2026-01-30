@@ -1,0 +1,358 @@
+Metadata-Version: 2.4
+Name: angular_range_ops
+Version: 0.1.0
+Summary: A Python toolkit for angular range operations supporting intersection, union, and difference operations on angular intervals
+Author-email: wangheng <wangfaofao@gmail.com>
+License: MIT
+Keywords: angle,range,interval,intersection,union,difference,geometry
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Topic :: Scientific/Engineering :: Mathematics
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0; extra == "dev"
+Dynamic: license-file
+
+# Angular Range Operations (角度区间操作工具)
+[简体中文](#简体中文) | [English](#english)
+---
+## 简体中文
+一个用于处理角度区间运算的Python工具库，支持角度区间（0-360度）的交集、并集、差集等操作。
+### 功能特性
+- ✅ 支持多个区间的交集、并集、差集运算
+- ✅ 自动处理跨越0/360度边界的区间
+- ✅ 基于扫描线算法，高效处理任意数量的区间
+- ✅ 提供覆盖矩阵分析功能
+- ✅ 支持区间排列组合和效率评估
+### 模块说明
+#### ops.py - 核心区间操作模块（推荐使用）
+提供了改进的区间操作算法，支持多个区间的运算。
+**核心算法思想**：
+1. 收集所有区间的起止点作为分界点
+2. 将分界点归一化到[0, 360)范围
+3. 用分界点将[0, 360)分割成多个子区间
+4. 构建覆盖矩阵：子区间中点 × 原始区间 → 0/1矩阵
+5. 根据矩阵模式计算交集、并集、差集
+**主要函数**：
+- `intersection()` - 多区间交集
+- `union()` - 多区间并集
+- `difference()` - 区间差集
+- `build_coverage_matrix()` - 构建覆盖矩阵
+### 安装
+#### 从 PyPI 安装（推荐）
+```bash
+pip install angular_range_ops
+```
+#### 从源码安装
+```bash
+# 克隆或下载项目
+git clone <repository-url>
+cd angular_range_ops
+# 安装
+pip install .
+# 或者以开发模式安装
+pip install -e .
+```
+**要求**：Python 3.9+，无需额外依赖
+### 快速开始
+#### 基本用法
+```python
+from angular_range_ops import intersection, union, difference
+# 示例1: 计算多个区间的交集
+ranges = [[10, 100], [50, 120], [80, 150]]
+result = intersection(ranges)
+print(f"交集: {result}")
+# 输出: 交集: [[80, 100]]
+# 示例2: 计算多个区间的并集
+ranges = [[10, 50], [100, 150], [30, 120]]
+result = union(ranges)
+print(f"并集: {result}")
+# 输出: 并集: [[10, 150]]
+# 示例3: 计算区间差集
+base = [0, 360]
+subtract = [[10, 50], [100, 150], [200, 250]]
+result = difference(base, subtract)
+print(f"差集: {result}")
+# 输出: 差集: [[0, 10], [50, 100], [150, 200], [250, 360]]
+```
+#### 处理跨越0/360度边界的区间
+```python
+# 示例4: 跨界区间的交集
+# [350, 370] 表示从350度到10度（跨越0度）
+ranges = [[350, 370], [340, 380]]
+result = intersection(ranges)
+print(f"交集: {result}")
+# 输出: 交集: [[0, 10], [350, 360]]
+# 示例5: 跨界区间的并集
+ranges = [[350, 370], [10, 30]]
+result = union(ranges)
+print(f"并集: {result}")
+# 输出: 并集: [[0, 30], [350, 360]]
+# 示例6: 从完整圆中减去跨界区间
+base = [0, 360]
+subtract = [[350, 370], [100, 150]]
+result = difference(base, subtract)
+print(f"差集: {result}")
+# 输出: 差集: [[10, 100], [150, 350]]
+```
+#### 使用覆盖矩阵分析区间关系
+```python
+from angular_range_ops import build_coverage_matrix
+# 构建覆盖矩阵
+ranges = [[10, 100], [50, 150], [200, 250]]
+sub_ranges, matrix = build_coverage_matrix(ranges)
+print("覆盖矩阵分析:")
+for i, (sr, row) in enumerate(zip(sub_ranges, matrix)):
+    print(f"子区间 {sr}: {row}")
+# 输出:
+# 子区间 [0, 10]: [0, 0, 0]      # 盲区
+# 子区间 [10, 50]: [1, 0, 0]     # 只被区间1覆盖
+# 子区间 [50, 100]: [1, 1, 0]    # 被区间1和2覆盖
+# 子区间 [100, 150]: [0, 1, 0]   # 只被区间2覆盖
+# 子区间 [150, 200]: [0, 0, 0]   # 盲区
+# 子区间 [200, 250]: [0, 0, 1]   # 只被区间3覆盖
+# 子区间 [250, 360]: [0, 0, 0]   # 盲区
+```
+### API 文档
+#### `intersection(ranges: List[List[float]]) -> List[List[float]]`
+计算多个区间的交集。
+**参数**：
+- `ranges`: 区间列表，每个区间格式为 `[start, end]`，单位为度
+**返回**：
+- 交集区间列表
+**示例**：
+```python
+ranges = [[10, 100], [50, 120], [80, 150]]
+result = intersection(ranges)
+# 返回: [[80, 100]]
+```
+---
+#### `union(ranges: List[List[float]]) -> List[List[float]]`
+计算多个区间的并集。
+**参数**：
+- `ranges`: 区间列表，每个区间格式为 `[start, end]`，单位为度
+**返回**：
+- 并集区间列表
+**示例**：
+```python
+ranges = [[10, 50], [100, 150], [30, 120]]
+result = union(ranges)
+# 返回: [[10, 150]]
+```
+---
+#### `difference(base_range: List[float], subtract_ranges: List[List[float]]) -> List[List[float]]`
+计算区间差集：base_range - union(subtract_ranges)。
+**参数**：
+- `base_range`: 基础区间 `[start, end]`
+- `subtract_ranges`: 要减去的区间列表
+**返回**：
+- 差集区间列表
+**示例**：
+```python
+base = [0, 360]
+subtract = [[10, 50], [100, 150]]
+result = difference(base, subtract)
+# 返回: [[0, 10], [50, 100], [150, 360]]
+```
+---
+#### `build_coverage_matrix(ranges: List[List[float]]) -> Tuple[List[List[float]], List[List[int]]]`
+构建覆盖矩阵，用于分析区间覆盖关系。
+**参数**：
+- `ranges`: 输入区间列表
+**返回**：
+- `(sub_ranges, matrix)` 元组
+  - `sub_ranges`: 分割后的子区间列表
+  - `matrix`: 覆盖矩阵，`matrix[i][j] = 1` 表示子区间i的中点在原始区间j内
+**示例**：
+```python
+ranges = [[10, 100], [50, 150]]
+sub_ranges, matrix = build_coverage_matrix(ranges)
+# sub_ranges: [[0, 10], [10, 50], [50, 100], [100, 150], [150, 360]]
+# matrix: [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]
+```
+### 注意事项
+1. **角度范围**：所有角度单位为度（0-360），内部会自动处理归一化
+2. **跨界区间**：区间 `[350, 370]` 表示从350度到10度，会自动分割为 `[350, 360]` 和 `[0, 10]`
+3. **空区间**：长度为0的区间（如 `[10, 10]`）会被自动过滤
+4. **完整覆盖**：长度 >= 360度的区间会被视为完整圆 `[0, 360]`
+5. **浮点精度**：内部使用 `EPSILON = 1e-9` 处理浮点数比较
+### 作者
+wangheng
+### 许可证
+MIT License - 详见 [LICENSE](LICENSE) 文件
+---
+## English
+A Python toolkit for angular range operations, supporting intersection, union, and difference operations on angular intervals (0-360 degrees).
+### Features
+- ✅ Support intersection, union, and difference operations on multiple ranges
+- ✅ Automatic handling of ranges crossing 0/360 degree boundaries
+- ✅ Efficient processing of arbitrary number of ranges using sweep line algorithm
+- ✅ Coverage matrix analysis functionality
+- ✅ Support for range permutation and efficiency evaluation
+### Module Description
+#### ops.py - Core Range Operation Module (Recommended)
+Provides improved range operation algorithms supporting operations on multiple ranges.
+**Core Algorithm Concept**:
+1. Collect start and end points of all ranges as boundary points
+2. Normalize boundary points to [0, 360) range
+3. Partition [0, 360) into multiple sub-ranges using boundary points
+4. Build coverage matrix: sub-range midpoints × original ranges → 0/1 matrix
+5. Calculate intersection, union, and difference based on matrix patterns
+**Main Functions**:
+- `intersection()` - Multiple range intersection
+- `union()` - Multiple range union
+- `difference()` - Range difference
+- `build_coverage_matrix()` - Build coverage matrix
+### Installation
+#### Install from PyPI (Recommended)
+```bash
+pip install angular_range_ops
+```
+#### Install from Source
+```bash
+# Clone or download the project
+git clone <repository-url>
+cd angular_range_ops
+# Install
+pip install .
+# Or install in development mode
+pip install -e .
+```
+**Requirements**: Python 3.9+, no additional dependencies
+### Quick Start
+#### Basic Usage
+```python
+from angular_range_ops import intersection, union, difference
+# Example 1: Calculate intersection of multiple ranges
+ranges = [[10, 100], [50, 120], [80, 150]]
+result = intersection(ranges)
+print(f"Intersection: {result}")
+# Output: Intersection: [[80, 100]]
+# Example 2: Calculate union of multiple ranges
+ranges = [[10, 50], [100, 150], [30, 120]]
+result = union(ranges)
+print(f"Union: {result}")
+# Output: Union: [[10, 150]]
+# Example 3: Calculate range difference
+base = [0, 360]
+subtract = [[10, 50], [100, 150], [200, 250]]
+result = difference(base, subtract)
+print(f"Difference: {result}")
+# Output: Difference: [[0, 10], [50, 100], [150, 200], [250, 360]]
+```
+#### Handling Ranges Crossing 0/360 Degree Boundaries
+```python
+# Example 4: Intersection of boundary-crossing ranges
+# [350, 370] represents a range from 350 degrees to 10 degrees (crossing 0)
+ranges = [[350, 370], [340, 380]]
+result = intersection(ranges)
+print(f"Intersection: {result}")
+# Output: Intersection: [[0, 10], [350, 360]]
+# Example 5: Union of boundary-crossing ranges
+ranges = [[350, 370], [10, 30]]
+result = union(ranges)
+print(f"Union: {result}")
+# Output: Union: [[0, 30], [350, 360]]
+# Example 6: Subtract boundary-crossing range from complete circle
+base = [0, 360]
+subtract = [[350, 370], [100, 150]]
+result = difference(base, subtract)
+print(f"Difference: {result}")
+# Output: Difference: [[10, 100], [150, 350]]
+```
+#### Using Coverage Matrix for Range Relationship Analysis
+```python
+from angular_range_ops import build_coverage_matrix
+# Build coverage matrix
+ranges = [[10, 100], [50, 150], [200, 250]]
+sub_ranges, matrix = build_coverage_matrix(ranges)
+print("Coverage matrix analysis:")
+for i, (sr, row) in enumerate(zip(sub_ranges, matrix)):
+    print(f"Sub-range {sr}: {row}")
+# Output:
+# Sub-range [0, 10]: [0, 0, 0]      # Blind spot
+# Sub-range [10, 50]: [1, 0, 0]     # Covered only by range 1
+# Sub-range [50, 100]: [1, 1, 0]    # Covered by ranges 1 and 2
+# Sub-range [100, 150]: [0, 1, 0]   # Covered only by range 2
+# Sub-range [150, 200]: [0, 0, 0]   # Blind spot
+# Sub-range [200, 250]: [0, 0, 1]   # Covered only by range 3
+# Sub-range [250, 360]: [0, 0, 0]   # Blind spot
+```
+### API Documentation
+#### `intersection(ranges: List[List[float]]) -> List[List[float]]`
+Calculate the intersection of multiple ranges.
+**Parameters**:
+- `ranges`: List of ranges, each range in format `[start, end]`, unit in degrees
+**Returns**:
+- List of intersection ranges
+**Example**:
+```python
+ranges = [[10, 100], [50, 120], [80, 150]]
+result = intersection(ranges)
+# Returns: [[80, 100]]
+```
+---
+#### `union(ranges: List[List[float]]) -> List[List[float]]`
+Calculate the union of multiple ranges.
+**Parameters**:
+- `ranges`: List of ranges, each range in format `[start, end]`, unit in degrees
+**Returns**:
+- List of union ranges
+**Example**:
+```python
+ranges = [[10, 50], [100, 150], [30, 120]]
+result = union(ranges)
+# Returns: [[10, 150]]
+```
+---
+#### `difference(base_range: List[float], subtract_ranges: List[List[float]]) -> List[List[float]]`
+Calculate range difference: base_range - union(subtract_ranges).
+**Parameters**:
+- `base_range`: Base range `[start, end]`
+- `subtract_ranges`: List of ranges to subtract
+**Returns**:
+- List of difference ranges
+**Example**:
+```python
+base = [0, 360]
+subtract = [[10, 50], [100, 150]]
+result = difference(base, subtract)
+# Returns: [[0, 10], [50, 100], [150, 360]]
+```
+---
+#### `build_coverage_matrix(ranges: List[List[float]]) -> Tuple[List[List[float]], List[List[int]]]`
+Build coverage matrix for analyzing range coverage relationships.
+**Parameters**:
+- `ranges`: List of input ranges
+**Returns**:
+- Tuple `(sub_ranges, matrix)`
+  - `sub_ranges`: List of partitioned sub-ranges
+  - `matrix`: Coverage matrix, `matrix[i][j] = 1` means sub-range i's midpoint is in original range j
+**Example**:
+```python
+ranges = [[10, 100], [50, 150]]
+sub_ranges, matrix = build_coverage_matrix(ranges)
+# sub_ranges: [[0, 10], [10, 50], [50, 100], [100, 150], [150, 360]]
+# matrix: [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]
+```
+### Notes
+1. **Angular Range**: All angles are in degrees (0-360), internally normalized automatically
+2. **Boundary-Crossing Ranges**: Range `[350, 370]` represents from 350 to 10 degrees, auto-partitioned to `[350, 360]` and `[0, 10]`
+3. **Empty Ranges**: Zero-length ranges (e.g., `[10, 10]`) are automatically filtered
+4. **Complete Coverage**: Ranges with length >= 360 degrees are treated as complete circle `[0, 360]`
+5. **Floating-Point Precision**: Internal use of `EPSILON = 1e-9` for floating-point comparison
+### Author
+wangheng
+### License
+MIT License - see [LICENSE](LICENSE) file for details
