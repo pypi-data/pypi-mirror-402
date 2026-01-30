@@ -1,0 +1,1 @@
+mpl.rcParams['font.family'] = ['Times New Roman','SimSun']
