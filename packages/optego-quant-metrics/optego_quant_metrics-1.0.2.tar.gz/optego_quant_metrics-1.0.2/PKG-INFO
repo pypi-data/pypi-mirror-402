@@ -1,0 +1,239 @@
+Metadata-Version: 2.4
+Name: optego-quant-metrics
+Version: 1.0.2
+Summary: A Python package for quantitative portfolio metrics calculations, including Deflated Sharpe Ratio (DSR)
+Project-URL: Homepage, https://github.com/optego/quant-metrics
+Project-URL: Repository, https://github.com/optego/quant-metrics
+Author: Optego
+License-File: LICENSE
+Keywords: dsr,finance,metrics,portfolio,quantitative,sharpe-ratio
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Financial and Insurance Industry
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Office/Business :: Financial :: Investment
+Requires-Python: >=3.12
+Requires-Dist: numpy>=1.24.0
+Requires-Dist: scipy>=1.10.0
+Provides-Extra: dev
+Requires-Dist: bump2version>=1.0.1; extra == 'dev'
+Requires-Dist: pre-commit; extra == 'dev'
+Requires-Dist: pytest-cov; extra == 'dev'
+Requires-Dist: pytest>=7.0.0; extra == 'dev'
+Description-Content-Type: text/markdown
+
+# Quant Metrics
+
+[![Code Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/optego/quant-metrics)
+
+A Python package for quantitative portfolio metrics calculations, designed for portfolio management and algorithmic trading strategy evaluation.
+
+## Overview
+
+Quant Metrics provides tools for calculating various quantitative metrics used in portfolio management and algorithmic trading. The package supports calculating metrics for multiple strategies simultaneously from CSV files or programmatically.
+
+Currently supported metrics:
+- **Deflated Sharpe Ratio (DSR)**: Accounts for multiple testing and non-normal return distributions when evaluating multiple strategies.
+- **Sharpe Ratio**: Risk-adjusted return metric
+- **Probabilistic Sharpe Ratio (PSR)**: Probability that Sharpe ratio is positive
+- **Skewness**: Measure of asymmetry in return distribution
+- **Kurtosis**: Measure of tail heaviness in return distribution
+- **Volatility (Sharpe)**: Adjusted volatility accounting for skewness and kurtosis
+- **SR***: Sharpe Ratio* accounting for multiple testing
+- **Variance Across Trials**: Variance of Sharpe ratios across all strategies
+
+## Installation
+
+```bash
+pip install optego-quant-metrics
+```
+
+Or using `uv`:
+
+```bash
+uv pip install optego-quant-metrics
+```
+
+## Features
+
+- **Deflated Sharpe Ratio (DSR)**: Adjusts the Sharpe ratio to account for:
+  - Multiple testing concerns (testing many strategies)
+  - Non-normal return distributions (skewness and kurtosis)
+  - Automatically determines number of trials from your data
+
+- **Comprehensive Metrics**: Calculate multiple metrics for portfolio strategies
+
+## Usage
+
+### Deflated Sharpe Ratio (DSR)
+
+The Deflated Sharpe Ratio is essential when testing multiple strategies, as it corrects for the inflation of the Sharpe ratio due to multiple testing.
+
+**From CSV file:**
+
+```python
+from pathlib import Path
+from quant_metrics import calculate_dsr_from_formula
+
+# Load strategy returns from CSV file
+# Number of trials is automatically determined from the number of strategies in the CSV
+csv_path = Path("strategy_returns.csv")
+dsr_results = calculate_dsr_from_formula(csv_path=csv_path)
+
+# DSR results are returned as percentages
+for strategy, dsr_value in dsr_results.items():
+    print(f"{strategy}: {dsr_value:.2f}")
+```
+
+**From dictionary:**
+
+```python
+from quant_metrics import calculate_dsr_from_formula
+
+strategy_returns = {
+    "Strategy 1": [0.01, 0.02, -0.01, 0.03, ...],
+    "Strategy 2": [0.015, 0.025, -0.005, 0.02, ...],
+}
+
+# Number of trials is automatically determined from the number of strategies in the dictionary
+dsr_results = calculate_dsr_from_formula(
+    strategy_returns=strategy_returns,
+    annual_rate=4.0,
+    periods_per_year=12
+)
+```
+
+### Other Metrics
+
+**Sharpe Ratio:**
+
+```python
+from quant_metrics import calculate_sharpe_ratio
+from pathlib import Path
+
+sharpe_ratios = calculate_sharpe_ratio(csv_path=Path("strategy_returns.csv"))
+```
+
+**Probabilistic Sharpe Ratio (PSR):**
+
+```python
+from quant_metrics import calculate_psr
+from pathlib import Path
+
+psr_results = calculate_psr(csv_path=Path("strategy_returns.csv"))
+# Returns percentages
+```
+
+**Risk-free Rate:**
+
+```python
+from quant_metrics import calculate_risk_free_rate
+
+# Calculate monthly risk-free rate from 4 annual rate
+monthly_rf = calculate_risk_free_rate(4.0, 12)
+print(f"Monthly risk-free rate: {monthly_rf:.6f}")
+```
+
+## CSV File Format
+
+The CSV file should follow this format:
+
+### Structure
+- **First row (Header)**: Column names representing strategy names
+  - The first column can be a date/time identifier (e.g., "Month", "Date") - this column is ignored
+  - Subsequent columns represent strategy names (e.g., "Strategy 1", "Strategy 2", "Strategy 3", ...)
+- **Subsequent rows**: Each row represents a time period (e.g., monthly returns)
+- **Values**: Returns as percentages
+  - Can be formatted with `` symbol (e.g., `2.10`, `-0.96`) - the `` will be automatically stripped
+  - Or as plain numbers (e.g., `2.10`, `-0.96`) representing percentages
+
+### Requirements
+- All strategies must have the same number of data points (rows)
+- Returns should be in percentage format (not decimal format like 0.021 for 2.1)
+- Missing values are not supported - ensure all cells have valid numeric values
+- The number of strategies (columns excluding the first date column) is automatically detected and used as the number of trials
+
+### Example CSV File
+
+**Format 1: With date column and  symbols**
+```csv
+Month,Strategy 1,Strategy 2,Strategy 3,Strategy 4
+1/1/2012,2.10,5.31,7.20,-0.36
+1/2/2012,-0.96,3.91,-3.94,-0.19
+1/3/2012,3.63,5.86,0.01,0.31
+...
+```
+
+**Format 2: Without date column, plain numbers**
+```csv
+Strategy 1,Strategy 2,Strategy 3,Strategy 4
+2.10,5.31,7.20,-0.36
+-0.96,3.91,-3.94,-0.19
+3.63,5.86,0.01,0.31
+...
+```
+
+### Notes
+- If the first column header is not a strategy name (e.g., "Month", "Date", "Period"), it will be automatically skipped
+- Percentage symbols (``) in values are automatically stripped during parsing
+- Values like `2.10` or `2.10` both represent 2.10 return
+- Negative values represent losses (e.g., `-0.96` means -0.96 return)
+
+### Loading CSV Files
+
+When you load a CSV file, the package will:
+1. Read the header row to identify strategy names (skipping the first column if it's not a strategy)
+2. Count the number of strategy columns to determine the number of trials
+3. Parse all return values, automatically handling `` symbols if present
+4. Convert percentage values to decimals for internal calculations
+5. Calculate metrics for each strategy automatically
+
+## Development
+
+### Setup
+
+```bash
+# Install dependencies
+make dep
+
+# Run tests
+make tests
+
+# Format and lint
+make fmt
+
+# Format, lint, and test
+make ft
+```
+
+### Running Tests
+
+```bash
+pytest tests/
+```
+
+## Why DSR?
+
+In portfolio management and algorithmic trading, it's common to test a wide range of strategies before settling on the best-performing one. This multiple testing inflates the Sharpe ratio, making strategies appear better than they actually are. The Deflated Sharpe Ratio (DSR) corrects for:
+
+1. **Multiple Testing**: Accounts for the fact that testing many strategies increases the chance of finding a strategy that appears good by chance
+2. **Non-Normal Distributions**: Adjusts for skewness and kurtosis in return distributions
+
+The DSR formula used is:
+```
+DSR = NORM.S.DIST((Sharpe - SR*) / Volatility (Sharpe))
+```
+
+Where:
+- **SR*** accounts for multiple testing using variance across trials
+- **Volatility (Sharpe)** adjusts for skewness and kurtosis effects
+
+## License
+
+See LICENSE file for details.
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
