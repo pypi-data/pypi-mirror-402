@@ -1,0 +1,110 @@
+Metadata-Version: 2.4
+Name: pyoqs-wasm
+Version: 0.15.0
+Summary: Pyodide-compatible ctypes interface for Open Quantum Safe liboqs
+Project-URL: Homepage, https://github.com/WebOfTrust/pyoqs-wasm
+Project-URL: Repository, https://github.com/WebOfTrust/pyoqs-wasm.git
+Author-email: Open Quantum Safe project <contact@openquantumsafe.org>, Evan Asakawa <evanja57@gmail.com>
+License: MIT License
+        
+        Copyright (c) 2019-2025 Open Quantum Safe project
+        Copyright (c) 2026 Evan Asakawa
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+License-File: LICENSE
+License-File: THIRD_PARTY_LICENSES.md
+Keywords: cryptography,digital-signatures,kem,liboqs,post-quantum,pyodide,wasm
+Classifier: Development Status :: 4 - Beta
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Security
+Classifier: Topic :: Security :: Cryptography
+Requires-Python: >=3.9
+Requires-Dist: pyasn1-alt-modules>=0.4
+Requires-Dist: pyasn1>=0.5
+Requires-Dist: tomli>=2; python_version < '3.11'
+Provides-Extra: dev
+Requires-Dist: nose2>=0.15.1; extra == 'dev'
+Requires-Dist: pytest>=7.0; extra == 'dev'
+Description-Content-Type: text/markdown
+
+# pyoqs-wasm
+
+Pyodide-compatible ctypes interface for Open Quantum Safe (liboqs). This is a refactored liboqs-python wheel designed specifically for WebAssembly environments.
+
+## Installation
+
+### For Pyodide/PyScript
+
+```python
+import micropip
+await micropip.install("pyoqs-wasm")
+```
+
+### For standard Python
+
+```bash
+pip install pyoqs-wasm
+```
+
+## Usage
+
+```python
+import oqs
+
+# List available KEM algorithms
+print(oqs.get_enabled_kem_mechanisms())
+
+# Key Encapsulation
+with oqs.KeyEncapsulation("ML-KEM-768") as kem:
+    public_key = kem.generate_keypair()
+    ciphertext, shared_secret_enc = kem.encap_secret(public_key)
+    shared_secret_dec = kem.decap_secret(ciphertext)
+
+# Digital Signatures  
+with oqs.Signature("ML-DSA-65") as signer:
+    public_key = signer.generate_keypair()
+    signature = signer.sign(b"Message to sign")
+    is_valid = signer.verify(b"Message to sign", signature, public_key)
+```
+
+## Differences from liboqs-python
+
+- Bundles a WebAssembly-compiled `liboqs.so` for use in Pyodide
+- Includes explicit `argtypes` definitions for ctypes WASM compatibility
+- Loads liboqs from the package directory instead of attempting auto-install
+
+## Versioning
+
+The version follows the pattern `X.Y.Z.P` where:
+- `X.Y.Z` is the upstream liboqs-python version
+- `P` is the pyoqs-wasm patch version
+
+## Credits
+
+Based on [liboqs-python](https://github.com/open-quantum-safe/liboqs-python) by the Open Quantum Safe project.
+
+## License
+
+MIT License (same as original liboqs-python). Third-party notices for the
+bundled liboqs binary are in `THIRD_PARTY_LICENSES.md`.
