@@ -1,0 +1,72 @@
+[project]
+name = "pyfimex"
+description = "Python bindings for fimex."
+readme  = "README.md"
+authors = [
+  { name = "Alexander Bürger", email = "alexander.buerger@met.no" },
+]
+maintainers = [
+  { name = "Alexander Bürger", email = "alexander.buerger@met.no" },
+]
+license = "LGPL-3.0-or-later"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=2.0",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+xarray = [
+    "xarray",
+]
+
+[project.urls]
+Repository = "https://github.com/metno/pyfimex"
+Issues = "https://github.com/metno/pyfimex/issues"
+
+[build-system]
+requires = [
+  "py-build-cmake~=0.5",
+  "pybind11~=3.0",
+  "pybind11-stubgen~=2.5",
+]
+build-backend = "py_build_cmake.build"
+
+[tool.py-build-cmake.sdist]
+include = [
+    "pyproject.toml",
+    "CMakeLists.txt",
+    "cmake/*.cmake",
+    "src/_pyfimex",
+    "tests/*.py",
+    "tests/data",
+]
+exclude = []
+
+[tool.py-build-cmake.module]
+name = "pyfimex1"
+
+[tool.py-build-cmake.editable]
+mode = "symlink"
+build_hook = true
+
+[tool.py-build-cmake.cmake]
+minimum_version = "3.18"
+build_type = "Release"
+source_path = "." # Containing CMakeLists.txt
+options = {}
+args = ["-Wdev", "-D CMAKE_FIND_DEBUG_MODE=ON"]
+build_args = ["-j"]
+build_tool_args = []
+install_args = ["--verbose"]
+install_components = ["python_modules"]
+env = {}
+
+[tool.py-build-cmake.stubgen]
+args = ["-v"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[project.entry-points."xarray.backends"]
+fimex = "pyfimex1.xarray:FimexBackendEntrypoint"
