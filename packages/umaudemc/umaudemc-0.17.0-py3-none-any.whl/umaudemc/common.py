@@ -1,0 +1,277 @@
+#
+# Maude (strategy) model-checking utility program
+#
+# Common operations required by most commands
+#
+
+import os
+
+import maude
+
+from . import usermsgs
+
+#
+# Warn about old versions of the maude package installed
+#
+
+if not hasattr(maude.Term, 'getVarName'):
+	usermsgs.print_warning('Version 1.0 of the maude package adds some useful features for this program.\n'
+	                       'Please update.')
+
+	maude.Term.getVarName = lambda self: str(self).split(':')[0] if self.symbol() == \
+		self.symbol().getModule().parseTerm(f'$$$:{self.getSort()}').symbol() else None
+	maude.Term.isVariable = lambda self: self.getVarName() is None
+
+
+class InitialData:
+	"""Initial data of the model-checking problem"""
+
+	def __init__(self):
+		self.module = None
+		self.filename = None
+		self.term = None
+		self.strategy = None
+		self.opaque = []
+		self.full_matchrew = False
+		self.metamodule = None
+
+
+def find_maude_file_abs(filename):
+	"""Find a Maude file with possibly missing extension"""
+	for ext in ['', '.maude', '.fm']:
+		if os.path.isfile(filename + ext):
+			return filename + ext
+	return None
+
+
+class MaudeFileFinder:
+	"""Locate Maude files as Maude does"""
+
+	MAUDE_STD = {'file', 'linear', 'machine-int', 'metaInterpreter', 'model-checker',
+	             'prelude', 'prng', 'process', 'smt', 'socket', 'term-order', 'time'}
+
+
+	def __init__(self):
+		# Maude also considers the current working directory
+		# and the directory of the Maude binary
+		self.paths = [os.path.dirname(maude.__file__),
+		              *os.getenv('MAUDE_LIB', '').split(os.pathsep)]
+
+	def _is_std(self, name):
+		"""Is this a file from the Maude distribution"""
+
+		return name in self.MAUDE_STD or f'{name}.maude' in self.MAUDE_STD
+
+	def find(self, name, cwd):
+		# Absolute path, no ambiguity
+		if os.path.isabs(name):
+			return find_maude_file_abs(name), False
+
+		for path in (cwd, *self.paths):
+			abspath = os.path.join(path, name)
+			fullname = find_maude_file_abs(abspath)
+
+			if fullname is not None:
+				return fullname, path != cwd and self._is_std(name)
+
+		return None, None
+
+
+def find_maude_file(filename):
+	"""Find a Maude file taking MAUDE_LIB into account"""
+
+	return MaudeFileFinder().find(filename, os.getcwd())[0]
+
+
+def parse_initial_data(args):
+	"""Inits Maude and parse common initial data of a model-checking problem"""
+	maude.init(advise=args.advise)
+
+	data = InitialData()
+
+	# Checks whether the file exists
+	data.filename = find_maude_file(args.file)
+
+	if data.filename is None:
+		usermsgs.print_error('No such file.')
+		return None
+
+	if not maude.load(args.file):
+		usermsgs.print_error('Error loading file')
+		return None
+
+	# Loads the module
+
+	if args.module is None:
+		data.module = maude.getCurrentModule()
+
+		if data.module is None:
+			usermsgs.print_error('No last module.')
+			return None
+
+	else:
+		data.module = maude.getModule(args.module)
+
+		if data.module is None:
+			usermsgs.print_error(f'Module {args.module} does not exist.')
+			return None
+
+	# Loads a metamodule (if required)
+
+	if args.metamodule is not None:
+		mt = data.module.parseTerm(args.metamodule)
+
+		if mt is None:
+			usermsgs.print_error('Bad parse for metamodule term.')
+			return None
+
+		data.metamodule = mt
+		data.module = maude.downModule(mt)
+
+		if data.module is None:
+			usermsgs.print_error('Bad metamodule.')
+			return None
+
+	# Parse the initial term
+
+	data.term = data.module.parseTerm(args.initial)
+
+	if data.term is None:
+		usermsgs.print_error('Bad parse for initial term')
+		return None
+
+	# Parse the strategy
+
+	if args.strategy is not None:
+		data.strategy = data.module.parseStrategy(args.strategy)
+
+		if data.strategy is None:
+			usermsgs.print_error('Bad parse for strategy')
+			return None
+
+	else:
+		data.strategy = None
+
+	# Opaque strategies and full matchrew
+
+	data.opaque = [] if args.opaque == '' else args.opaque.split(',')
+	data.full_matchrew = args.full_matchrew
+
+	return data
+
+
+def split_comma(string):
+	"""Split a string as comma-separated list ignoring commas inside parentheses"""
+	result = []
+	left, right, depth = 0, 0, 0
+
+	while right < len(string):
+		if string[right] == '(':
+			depth += 1
+		elif string[right] == ')':
+			depth -= 1
+		elif string[right] == ',' and depth == 0:
+			result.append(string[left:right])
+			left = right + 1
+
+		right = right + 1
+
+	result.append(string[left:])
+	return result
+
+
+def default_model_settings(logic, purge_fails, merge_states, strategy, tableau=False):
+	"""Fill the purge-fails and merge-states defaults"""
+	purge_fails, merge_states = purge_fails, merge_states
+
+	# The branching-time adaptations does not make sense
+	# for strategy-free models
+	if strategy is None:
+		if merge_states not in {'default', 'no'}:
+			usermsgs.print_warning('Merging states does not make sense without a strategy. '
+			                       'Ignoring --merge-states value.')
+		if purge_fails not in {'default', 'no'}:
+			usermsgs.print_warning('Failed states do no make sense without a strategy. '
+			                       'Ignoring --purge-fails flag.')
+
+		return 'no', 'no'
+
+	# The tableau variable indicates whether a tableau-based method will
+	# be used for LTL model-checking. In that case, failed states have to
+	# be purged as for the branching-time logics.
+
+	if purge_fails == 'default':
+		purge_fails = 'yes' if logic in {'CTL', 'CTL*', 'Mucalc'} or tableau else 'no'
+
+	if merge_states == 'default':
+		merge_states = 'state' if logic.startswith('CTL') else ('edge' if logic == 'Mucalc' else 'no')
+
+	return purge_fails, merge_states
+
+
+def load_specification(filename, topic):
+	"""Load specifications from YAML or JSON files"""
+
+	extension = os.path.splitext(filename)[1]
+
+	# The YAML package is only loaded when needed
+	# (pyaml is an optional dependency)
+	if extension in ('.yaml', '.yml'):
+		try:
+			import yaml
+			from yaml.loader import SafeLoader
+
+		except ImportError:
+			usermsgs.print_error(
+				f'Cannot load {topic} from YAML file, since the yaml package is not installed.\n'
+				'Please convert the YAML to JSON or install it with pip install pyaml.')
+			return None
+
+		# The YAML loader is replaced so that entities have its line number
+		# associated to print more useful messages. This is not possible with
+		# the standard JSON library.
+
+		class SafeLineLoader(SafeLoader):
+			def construct_mapping(self, node, deep=False):
+				mapping = super(SafeLineLoader, self).construct_mapping(node, deep=deep)
+				# Add 1 so line numbering starts at 1
+				mapping['__line__'] = node.start_mark.line + 1
+				return mapping
+
+		try:
+			with open(filename) as caspec:
+				return yaml.load(caspec, Loader=SafeLineLoader)
+
+		except yaml.error.YAMLError as ype:
+			usermsgs.print_error(f'Error while parsing {topic} file: {ype}.')
+
+	# TOML format
+	if extension == '.toml':
+		try:
+			import tomllib
+
+		except ImportError:
+			usermsgs.print_error(
+				f'Cannot load {topic} from TOML file, '
+				'which is only available since Python 3.10.')
+			return None
+
+		try:
+			with open(filename, 'rb') as caspec:
+				return tomllib.load(caspec)
+
+		except tomllib.TOMLDecodeError as tde:
+			usermsgs.print_error(f'Error while parsing {topic} file: {tde}.')
+
+	# JSON format
+	else:
+		import json
+
+		try:
+			with open(filename) as caspec:
+				return json.load(caspec)
+
+		except json.JSONDecodeError as jde:
+			usermsgs.print_error(f'Error while parsing {topic} file: {jde}.')
+
+	return None
