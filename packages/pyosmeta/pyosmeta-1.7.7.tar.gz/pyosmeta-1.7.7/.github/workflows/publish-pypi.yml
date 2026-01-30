@@ -1,0 +1,74 @@
+name: Publish to PyPI
+on:
+  release:
+    types: [published]
+  push:
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  # setup build separate from publish
+  # See https://github.com/pypa/gh-action-pypi-publish/issues/217#issuecomment-1965727093
+  build:
+    runs-on: ubuntu-latest
+    # This ensures that the publish action only runs in the main repository
+    # rather than forks
+    environment: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4
+        with:
+          # This fetch element is only important if you are use SCM based
+          # versioning (that looks at git tags to gather the version)
+          fetch-depth: 100
+          persist-credentials: false
+
+      # Need the tags so that setuptools-scm can form a valid version number
+      - name: Fetch git tags
+        run: git fetch origin 'refs/tags/*:refs/tags/*'
+
+      - name: Setup Python
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v5
+        with:
+          python-version: "3.10"
+      - name: Install Hatch
+        run: |
+          pipx install hatch
+          pip list
+
+      - name: Build package using Hatch
+        run: |
+          hatch build
+          echo ""
+          echo "Generated files:"
+          ls -lh dist/
+      # Store an artifact of the build to use in the publish step below
+      - name: Store the distribution packages
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v4
+        with:
+          name: python-package-distributions
+          path: dist/
+  publish:
+    name: >-
+      Publish Python 🐍 distribution 📦 to PyPI
+    if: github.repository_owner == 'pyopensci' && github.event_name == 'release'
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/pyosmeta
+    permissions:
+      id-token: write  # this permission is mandatory for PyPI publishing
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Publish package to PyPI
+        # Only publish to PyPI on release
+        if: github.event_name == 'release'
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0

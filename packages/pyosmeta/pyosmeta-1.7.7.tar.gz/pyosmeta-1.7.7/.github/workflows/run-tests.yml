@@ -1,0 +1,46 @@
+name: Run pyos meta tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    # Runs on Mon and Thu of each week at 00:00 UTC (see https://crontab.guru)
+    - cron: "0 0 * * 1,4"
+
+permissions: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v5
+        with:
+          python-version: "3.10"
+      - name: Install Hatch
+        run: pipx install hatch
+      - name: Run tests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: hatch run test:run-report
+      - name: Run CLIs against website
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eux
+          pip install -e .
+          git clone https://github.com/pyOpenSci/pyopensci.github.io.git
+          cd pyopensci.github.io
+          update-contributors
+          update-reviews
+          update-review-teams
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de  # v5.5.2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
+          files: ./coverage.xml
