@@ -1,0 +1,78 @@
+
+# wrs2-py
+
+A Python port of the R package [WRS2](https://cran.r-project.org/web/packages/WRS2/index.html), which provides robust statistical methods.
+
+## Features
+
+This package currently implements the following methods from WRS2:
+
+- **Location Estimators**: 
+  - `trim_mean`: Trimmed mean.
+  - `winmean`: Winsorized mean.
+  - `winvar`: Winsorized variance.
+  - `winval`: Winsorized values.
+  - `winvarN`: Rescaled Winsorized variance (for standard normal).
+  - `pbos`: One-step percentage bend measure of location.
+  - `trimse`: Standard error of the trimmed mean.
+- **Correlation**:
+  - `wincor`: Winsorized correlation.
+  - `winall`: Winsorized correlation/covariance matrix.
+  - `pbcor`: Percentage bend correlation.
+- **ANOVA (Trimmed Means)**:
+  - `t1way`: Heteroscedastic one-way ANOVA.
+  - `t2way`: Two-way ANOVA.
+  - `rmanova`: One-way repeated measures ANOVA.
+  - `bwtrim`: Between-within subjects (split-plot) ANOVA.
+- **Group Comparison**:
+  - `yuen`: Yuen's test for independent groups.
+  - `yuenbt`: Bootstrap Yuen's test for independent groups.
+
+## Implementation Equivalence Validation
+
+The implementation has been comprehensively verified against the original R package using simulation data. The following table summarizes the equivalence tests:
+
+| Feature | Method | Validation Status | Accuracy (Tolerance) |
+| :--- | :--- | :--- | :--- |
+| **Location** | `winvar`, `winmean`, `winval`, `winvarN`, `trim_mean`, `pbos`, `trimse` | ✅ Passed | $10^{-7}$ |
+| **Correlation** | `wincor` (correlation, covariance) | ✅ Passed | $10^{-7}$ |
+| **Correlation** | `pbcor` (correlation, test-stat, p-value) | ✅ Passed | $10^{-7}$ |
+| **ANOVA** | `t1way` (test-stat, df1, df2, p-value, effsize) | ✅ Passed | $10^{-7}$ (effsize $\pm 0.1$) |
+| **ANOVA** | `t2way` (Qa, Qb, Qab, p-values) | ✅ Passed | $10^{-7}$ (p-value $\pm 10^{-3}$) |
+| **ANOVA** | `rmanova` (test-stat, df1, df2, p-value) | ✅ Passed | $10^{-7}$ |
+| **ANOVA** | `bwtrim` (Qa, Qb, Qab, p-values) | ✅ Passed | $10^{-7}$ (p-value $\pm 10^{-5}$) |
+| **Comparison** | `yuen` (test-stat, p-value, df, diff, effsize) | ✅ Passed | $10^{-7}$ (effsize $\pm 0.1$) |
+| **Comparison** | `yuenbt` (test-stat, diff, p-value*) | ✅ Passed | $10^{-7}$ (p-value $\pm 0.05$) |
+
+*\*Note: Bootstrap results (effsize, yuenbt p-value) may vary slightly due to random sampling, but are statistically consistent with the R implementation.*
+
+## Installation
+
+```bash
+pip install .
+```
+
+## Usage
+
+```python
+import numpy as np
+from wrs2_py import t1way, yuen
+
+# Sample data
+g1 = np.random.normal(0, 1, 30)
+g2 = np.random.normal(0.5, 1, 30)
+g3 = np.random.normal(1, 1, 30)
+
+# One-way ANOVA
+res_anova = t1way([g1, g2, g3])
+print(res_anova)
+
+# Yuen's test
+res_yuen = yuen(g1, g2)
+print(res_yuen)
+```
+
+## References
+
+- Wilcox, R. R. (2017). Introduction to Robust Estimation and Hypothesis Testing. Academic Press.
+- Mair, P., & Wilcox, R. (2020). Robust Statistical Methods in R Using the WRS2 Package. Behavior Research Methods.
