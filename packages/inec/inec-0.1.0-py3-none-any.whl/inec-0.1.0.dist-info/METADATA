@@ -1,0 +1,116 @@
+Metadata-Version: 2.4
+Name: inec
+Version: 0.1.0
+Summary: Method for accessing INEC data directly from Python
+Author-email: Marco Piedra <apiedram@gmail.com>
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: requests
+Dynamic: license-file
+
+# INEC Costa Rica - Python API Module
+
+This module is a powerful Python wrapper designed to facilitate access, exploration, and downloading of microdata from the **Instituto Nacional de Estadística y Censos (INEC)** of Costa Rica. It allows researchers and data analysts to interact with the institutional catalog directly from their development environment.
+
+
+
+---
+
+## 1. Structure & Hierarchy
+
+The module is organized into three main levels to navigate the INEC database:
+
+| Level | Manager Class | Description |
+| :--- | :--- | :--- |
+| **Repositories** | `RepositoryManager` | High-level collections (e.g., REGENAHO, ENIG, Censos). |
+| **Datasets** | `DatasetsManager` | Specific studies or surveys defined by a year or round. |
+| **Variables** | `VariablesManager` | Metadata and data dictionaries for columns within a dataset. |
+
+---
+
+## 2. Initialization
+
+To use this module, you must have an active account on the INEC portal.
+
+### Obtaining your API Key
+1. Go to the [INEC Profile Page](https://sistemas.inec.cr/nada5.4/index.php/auth/profile).
+2. Log in with your credentials.
+3. Look for the **API Key** section to generate or copy your unique token.
+
+### Initialization
+The `autofill_msg` parameter is used to automatically complete the "Purpose of Request" forms required by many datasets.
+
+```python
+from inec_module import INECAPI
+
+client = INECAPI(
+    api_key="YOUR_API_KEY", 
+    email="your@email.com", 
+    password="your_password", 
+    autofill_msg='I want to analyze these variables for time-series research'
+)
+```
+
+## 3. Usage Examples
+
+Repositories (client.repositories)
+
+```python
+# List all available repositories
+repo = client.repositories.show()
+print(repo)
+
+# Automatically fetch and concatenate multiple years of DBs
+# (Searches the 'REGENAHO' repository between 2023 and 2025)
+dataset = client.repositories.get(repositoryid='REGENAHO', start_year=2023, end_year=2025)
+print(dataset)
+# "DATA INTEGRITY NOTICE: Performing blind concatenation of multiple datasets. "
+# "This module does not validate schema consistency, column names, or data types "
+# "across different years. Please verify that variables are harmonized before analysis."
+# "'_source_idno' column is created by the module for track which file produce it"
+```
+
+Datasets (client.datasets)
+
+```python
+# List all datasets
+all_datasets = client.datasets.show()
+print(all_datasets)
+
+# Search for datasets within a repository
+dataset = client.datasets.show(repositoryid='REGENAHO')
+print(dataset)
+
+# Download microdata using internal ID or IDNO string (you can find this ids in their website or using datasets.show() function)
+df_1 = client.datasets.get(113)
+df_2 = client.datasets.get("INEC-Enaho-2025")
+
+# List resources (additional files, questionnaires, etc.) for a study
+resources = client.datasets.resources(113)
+print(resources)
+```
+
+Variables (client.variables)
+
+```python
+# View summary of variables for a study (very general view...)
+var_summary = client.variables.show(128)
+print(var_summary)
+
+# Get full dictionary (ID, description, and documentation links) using internal ID or IDNO string
+variables_1 = client.variables.dictionary("INEC-Enaho-2025")
+print(variables_1)
+
+variables_2 = client.variables.dictionary(113)
+print(variables_2)
+```
+
+## 4. Key Features
+
+- Form Autofill: If a dataset requires a justification form, the module submits it automatically using your autofill_msg.
+
+- Automatic Parsing: Detects .sav (SPSS), .dta (Stata), .csv, and .xlsx extensions and converts them instantly to Pandas DataFrames. (some xlsx could have multiple sheets, be aware of that)
+
+- Session Management: Automatically handles cookie expiration and retries authentication if Unauthorized error occurs.
+
+- Data Integrity: When using repositories.get(), a _source_idno column is added to help track the origin of each row in concatenated datasets.
