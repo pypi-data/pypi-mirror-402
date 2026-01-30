@@ -1,0 +1,21 @@
+################################################################################
+# Test utilities
+
+include(test_util)
+
+################################################################################
+# Tests
+
+create_standard_test_cxx(NAME util SOURCES util.cpp)
+
+if (MUSICA_ENABLE_MICM)
+  add_subdirectory(micm)
+endif()
+
+if (MUSICA_ENABLE_TUVX)
+  add_subdirectory(tuvx)
+endif()
+
+if (MUSICA_ENABLE_CARMA)
+  add_subdirectory(carma)
+endif()
