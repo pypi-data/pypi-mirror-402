@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  pull_request:
+    branches: [ "main" ]
+    types: [opened, synchronize, reopened]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip uv
+          uv venv .venv
+          source .venv/bin/activate
+          uv pip install -r requirements.txt
+          uv pip install ruff
+      - name: Lint with ruff
+        run: |
+          source .venv/bin/activate
+          ruff check .
+          
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install uv
+        run: python -m pip install --upgrade pip uv
+      - name: Check build process
+        run: uv build --sdist --wheel
+
+
