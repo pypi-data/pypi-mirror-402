@@ -1,0 +1,103 @@
+Metadata-Version: 2.4
+Name: adiscstudies
+Version: 1.0.0
+Summary: Single cell studies data model
+Classifier: Topic :: Scientific/Engineering
+Classifier: Intended Audience :: Science/Research
+Description-Content-Type: text/markdown
+
+This package contains the source files and built models for an "ADI" ([Application Data Interface](https://adiframework.com)) schema describing **single cell data collection and analysis studies**.
+
+# Examples
+
+```sh
+pip install adiscstudies
+```
+
+## Tables and fields
+
+```py
+import importlib.resources
+import pandas as pd
+
+with importlib.resources.path('adiscstudies', 'tables.tsv') as path:
+    tables = pd.read_csv(path, sep='\t')
+
+print(tables)
+```
+
+```txt
+                            Name  ...                                         Entity
+                         subject  ...                                  Study subject
+                       diagnosis  ...                                Diagnosis event
+  diagnostic_selection_criterion  ...                 Diagnostic selection criterion
+       specimen_collection_study  ...                   Biospecimen collection study
+     specimen_collection_process  ...                 Biospecimen collection process
+    histology_assessment_process  ...                   Histology assessment process
+...
+```
+
+```py
+import importlib.resources
+with importlib.resources.path('adiscstudies', 'fields.tsv') as path:
+    fields = pd.read_csv(path, sep='\t')
+
+print(fields[fields['Table'] == 'Histological structure identification'][[
+    'Label', 'Table', 'Foreign table', 'Foreign key', 'Ordinality',
+]])
+```
+
+```txt
+                      Label                                  Table                       Foreign table  Foreign key  Ordinality
+     Histological structure  Histological structure identification              Histological structure   Identifier           1
+                Data source  Histological structure identification                           Data file  SHA256 hash           2
+                 Shape file  Histological structure identification                          Shape file   Identifier           3
+Plane coordinates reference  Histological structure identification  Plane coordinates reference system         Name           4
+      Identification method  Histological structure identification                                 NaN          NaN           5
+        Identification date  Histological structure identification                                 NaN          NaN           6
+                  Annotator  Histological structure identification                                 NaN          NaN           7
+```
+
+## SQL
+
+```py
+import importlib.resources
+with importlib.resources.path('adiscstudies', 'schema.sql') as path:
+    sql_create = open(path, 'rt').read()
+
+print(sql_create)
+```
+
+```txt
+CREATE TABLE IF NOT EXISTS subject (
+    identifier VARCHAR(512) PRIMARY KEY,
+    species VARCHAR(512),
+    sex VARCHAR(512),
+    birth_date VARCHAR,
+    death_date VARCHAR,
+    cause_of_death VARCHAR
+);
+
+CREATE TABLE IF NOT EXISTS diagnosis (
+    subject VARCHAR(512) REFERENCES subject(identifier),
+    condition VARCHAR,
+    result VARCHAR(512),
+    assessor VARCHAR(512),
+    date VARCHAR
+);
+
+...
+```
+
+## OWL
+
+```py
+import importlib.resources
+with importlib.resources.path('adiscstudies', 'schema.owl') as path:
+    schema = open(path, 'rt').read()
+
+with open('schema.owl', 'wt') as file:
+    file.write(schema)
+```
+
+Then open `schema.owl` e.g. with [Protege](https://protege.stanford.edu).
