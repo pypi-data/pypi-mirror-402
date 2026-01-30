@@ -1,0 +1,257 @@
+# ContextFS Development Environment
+#
+# Profiles:
+#   - (default/cloud): sync-postgres, sync-api, web - Full cloud stack
+#   - local: All-in-one local client (ChromaDB + SQLite + MCP)
+#   - linux: Linux testing container
+#   - admin: pgAdmin for database management
+#
+# Usage:
+#   docker-compose up -d                    # Start cloud stack (default)
+#   docker-compose --profile local up -d    # Start local client only
+
+services:
+  # ==========================================================================
+  # PostgreSQL for Sync Service (cloud profile)
+  # ==========================================================================
+  sync-postgres:
+    image: pgvector/pgvector:pg16
+    container_name: contextfs-sync-postgres
+    environment:
+      POSTGRES_USER: contextfs
+      POSTGRES_PASSWORD: contextfs
+      POSTGRES_DB: contextfs
+    ports:
+      - "5433:5432"
+    volumes:
+      - sync_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U contextfs -d contextfs"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    profiles:
+      - cloud
+
+  # ==========================================================================
+  # Sync API Service (sync profile)
+  # FastAPI server handling push/pull sync operations
+  # ==========================================================================
+  sync-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.sync
+    container_name: contextfs-sync-api
+    environment:
+      CONTEXTFS_POSTGRES_URL: postgresql://contextfs:contextfs@sync-postgres:5432/contextfs
+      CONTEXTFS_SYNC_PORT: "8766"
+      CONTEXTFS_SYNC_HOST: "0.0.0.0"
+      CORS_ORIGINS: "*"
+      # Admin user (optional)
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # OAuth providers (optional)
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      # Email service (Mailgun)
+      MAILGUN_API_KEY: ${MAILGUN_API_KEY:-}
+      MAILGUN_DOMAIN: ${MAILGUN_DOMAIN:-appmail.magnetonlabs.com}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      # Stripe billing
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO:-}
+      STRIPE_PRICE_TEAM: ${STRIPE_PRICE_TEAM:-}
+    ports:
+      - "8766:8766"
+    volumes:
+      # Mount source for development (hot reload)
+      - ./src/contextfs:/app/src/contextfs:ro
+      - ./service:/app/service:ro
+    depends_on:
+      sync-postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles:
+      - cloud
+
+  # ==========================================================================
+  # ContextFS Web UI - Next.js Dashboard (web profile)
+  # ==========================================================================
+  web:
+    image: node:20-slim
+    container_name: contextfs-web
+    working_dir: /app
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost:8766
+      API_URL_INTERNAL: http://contextfs-sync-api:8766
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-contextfs-dev-secret-change-in-production}
+      # OAuth providers
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../contextfs-web:/app
+      - web_node_modules:/app/node_modules
+    depends_on:
+      - sync-api
+    command: >
+      bash -c "npm install && npm run dev"
+    restart: unless-stopped
+    profiles:
+      - cloud
+
+  # ==========================================================================
+  # Linux Full Client - Ubuntu with AI CLIs (optional)
+  # ==========================================================================
+  linux-full:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.linux-client
+    container_name: contextfs-linux-full
+    environment:
+      CONTEXTFS_SYNC_SERVER: http://contextfs-sync-api:8766
+      PYTHONPATH: /contextfs/src
+      # API keys passed at runtime or via .env
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - .:/contextfs:ro
+      - linux_full_data:/root/.contextfs
+      - linux_npm_cache:/root/.npm
+    depends_on:
+      sync-postgres:
+        condition: service_healthy
+    command: tail -f /dev/null
+    restart: unless-stopped
+    profiles:
+      - linux
+
+  # ==========================================================================
+  # pgAdmin for Database Management (optional)
+  # ==========================================================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: contextfs-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@contextfs.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - sync-postgres
+    restart: unless-stopped
+    profiles:
+      - admin
+
+  # ==========================================================================
+  # ContextFS Local Client - All-in-One (optional)
+  # For Windows/Mac/Linux Docker users: ChromaDB + SQLite + MCP Server
+  #
+  # Setup:
+  #   1. Set CONTEXTFS_WORKSPACE env var to your projects folder
+  #   2. docker-compose --profile local up -d
+  #   3. Use wrapper scripts in scripts/ for CLI access
+  # ==========================================================================
+  local:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.mcp
+    container_name: contextfs-local
+    environment:
+      CONTEXTFS_DATA_DIR: /data
+      CONTEXTFS_MCP_HOST: "0.0.0.0"
+      CONTEXTFS_MCP_PORT: "8003"
+      CONTEXTFS_CHROMA_HOST: "127.0.0.1"
+      CONTEXTFS_CHROMA_PORT: "8000"
+    ports:
+      - "8003:8003"   # MCP Server (SSE endpoint)
+      - "8000:8000"   # ChromaDB (optional, for external access)
+    volumes:
+      - local_data:/data
+      # Mount user's projects folder (set CONTEXTFS_WORKSPACE env var)
+      - ${CONTEXTFS_WORKSPACE:-.}:/workspace:ro
+    restart: unless-stopped
+    profiles:
+      - local
+
+volumes:
+  sync_postgres_data:
+  web_node_modules:
+  linux_full_data:
+  linux_npm_cache:
+  pgadmin_data:
+  local_data:
+
+networks:
+  default:
+    name: contextfs-network
+
+# ==========================================================================
+# Usage Examples
+# ==========================================================================
+# Start default stack (sync-postgres, sync-api, web):
+#   docker-compose up -d
+#
+# Start with Linux testing container:
+#   docker-compose --profile linux up -d
+#
+# Start with pgAdmin:
+#   docker-compose --profile admin up -d
+#
+# View logs:
+#   docker-compose logs -f sync-api
+#
+# Stop all:
+#   docker-compose down
+#
+# Reset database:
+#   docker-compose down -v
+#
+# ==========================================================================
+# Local Client for Windows/Mac/Linux (Docker-based)
+# ==========================================================================
+# Setup (one-time):
+#   1. Set CONTEXTFS_WORKSPACE to your projects folder:
+#      - Windows CMD:    setx CONTEXTFS_WORKSPACE "C:\Users\You\Projects"
+#      - Windows PS:     [Environment]::SetEnvironmentVariable("CONTEXTFS_WORKSPACE", "C:\Users\You\Projects", "User")
+#      - Mac/Linux:      echo 'export CONTEXTFS_WORKSPACE="$HOME/Projects"' >> ~/.bashrc
+#
+#   2. Start the container:
+#      docker-compose --profile local up -d
+#
+#   3. Use CLI via wrapper scripts (in scripts/):
+#      - Windows: contextfs.bat or contextfs.ps1
+#      - Mac/Linux: contextfs.sh
+#
+# Services:
+#   - MCP Server: http://localhost:8003/sse (for Claude Code, Gemini, etc.)
+#   - ChromaDB: http://localhost:8000 (vector embeddings)
+#   - SQLite: /data/context.db (persisted in volume)
+#   - Workspace: /workspace (your projects folder)
+#
+# Configure Claude Code:
+#   {"mcpServers": {"contextfs": {"type": "sse", "url": "http://localhost:8003/sse"}}}
+#
+# Index a repo:
+#   contextfs index /workspace/my-repo
+#
+# ==========================================================================
+# Native Development (macOS/Linux without Docker)
+# ==========================================================================
+# Install ContextFS: pip install contextfs
+# Start servers: contextfs server start
+# This runs ChromaDB (8000) and MCP (8003) natively
+# ==========================================================================
