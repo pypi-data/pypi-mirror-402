@@ -1,0 +1,117 @@
+{$SITE_ADDRESS} {
+    header {
+        Access-Control-Allow-Origin *
+    }
+
+    file_server {
+        root /var/www/html
+    }
+
+    handle /dynimages {
+        @hasPathParam query "path=*"
+        handle @hasPathParam {
+            rewrite * /images/{http.request.uri.query.path}
+        }
+        handle {
+            respond 500 "Bad Request"
+        }
+    }
+
+    handle /dynform-rewrite {
+        @hasIdParam query "id=*"
+        handle @hasIdParam {
+            rewrite * /form-get-{http.request.uri.query.id}.html
+        }
+        handle {
+            respond 500 "Bad Request"
+        }
+    }
+
+    handle /dynform-redirect {
+        @hasIdParam query "id=*"
+        handle @hasIdParam {
+            redir * /form-get-{http.request.uri.query.id}.html 302
+        }
+        handle {
+            respond 500 "Bad Request"
+        }
+    }
+
+    respond /200-response "Never mind" 200
+
+    respond /201-response "Never mind" 201
+
+    respond /202-response "Never mind" 202
+
+    respond /204-response 204
+
+    respond /206-response "Never mind" 206
+
+    respond /300-response "Never mind" 300
+
+    respond /303-response "Never mind" 303
+
+    respond /304-response "Never mind" 304
+
+    respond /305-response "Never mind" 305
+
+    respond /306-response "Never mind" 306
+
+    respond /400-response 400
+
+    respond /401-response 401
+
+    respond /402-response 402
+
+    respond /403-response 403
+
+    respond /404-response 404
+
+    respond /500-response 500
+
+    respond /501-response 501
+
+    respond /502-response 502
+
+    respond // "Hello you" 400
+
+    respond /double-slash/test1 "Hello you" 200
+    respond /double-slash//test1 400
+
+    respond /double-slash/test2 "Hello you v1" 200
+    respond /double-slash//test2 "Hello you v2" 200
+
+    redir /301-internal-redirect-ok /internal_redirect_target.html 301
+    redir /301-external-redirect-ok https://www.example.com 301
+    redir /302-internal-redirect-ok /internal_redirect_target.html 302
+    redir /302-external-redirect-ok https://www.example.com 302
+    redir /307-internal-redirect-ok /internal_redirect_target.html 307
+    redir /307-external-redirect-ok https://www.example.com 307
+    redir /308-internal-redirect-ok /internal_redirect_target.html 308
+    redir /308-external-redirect-ok https://www.example.com 308
+
+    redir /301-internal-redirect-ko /internal_redirect_missing.html 301
+    redir /301-external-redirect-ko https://www.example.invalid 301
+    redir /302-internal-redirect-ko /internal_redirect_missing.html 302
+    redir /302-external-redirect-ko https://www.example.invalid 302
+    redir /307-internal-redirect-ko /internal_redirect_missing.html 307
+    redir /307-external-redirect-ko https://www.example.invalid 307
+    redir /308-internal-redirect-ko /internal_redirect_missing.html 308
+    redir /308-external-redirect-ko https://www.example.invalid 308
+
+    redir /bad-redir-loop-A /bad-redir-loop-B 307
+    redir /bad-redir-loop-B /bad-redir-loop-C 307
+    redir /bad-redir-loop-C /bad-redir-loop-D 307
+    redir /bad-redir-loop-D /bad-redir-loop-B 307
+    redir /bad-redir-target-A https://I%20mNotAhostname 307
+    redir /bad-redir-target-B intent://example.com/path#Intent;scheme=http;package=com.example.myapp;component=com.example.myapp/.MainActivity;end 307
+
+    header /content-types/script1.js Content-Type application/javascript
+    header /content-types/script2.js Content-Type text/javascript
+    header /content-types/style1.css Content-Type text/css
+    header /content-types/style2.css Content-Type idontexist
+    header /content-types/image1.png Content-Type idontexist
+    header /content-types/image2.png Content-Type text/html
+    header /content-types/content2.json Content-Type idontexist
+
+}
