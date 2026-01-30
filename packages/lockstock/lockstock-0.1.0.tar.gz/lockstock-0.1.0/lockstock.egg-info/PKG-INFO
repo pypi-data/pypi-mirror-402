@@ -1,0 +1,353 @@
+Metadata-Version: 2.4
+Name: lockstock
+Version: 0.1.0
+Summary: The TCP/IP of AI Agency - Cryptographic identity and memory for AI agents
+Home-page: https://github.com/lockstock/lockstock
+Author: LockStock Team
+Author-email: hello@lockstock.dev
+Project-URL: Bug Reports, https://github.com/lockstock/lockstock/issues
+Project-URL: Source, https://github.com/lockstock/lockstock
+Project-URL: Documentation, https://docs.lockstock.dev
+Keywords: ai agents identity authentication memory cryptography security
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Topic :: Security :: Cryptography
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: requests>=2.25.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=3.0.0; extra == "dev"
+Requires-Dist: black>=22.0.0; extra == "dev"
+Requires-Dist: flake8>=4.0.0; extra == "dev"
+Requires-Dist: mypy>=0.950; extra == "dev"
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: keywords
+Dynamic: project-url
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# LockStock Python SDK
+
+> **The TCP/IP of AI Agency**
+>
+> Cryptographic identity and memory continuity for autonomous AI agents.
+
+## What is LockStock?
+
+LockStock provides three critical capabilities for AI agents:
+
+1. **The Lock (Security)**: Cryptographic identity verification - agents can't be impersonated
+2. **The Stock (Memory)**: Portable state - agents never forget, even across server migrations
+3. **The Two Smoking Barrels (Proof)**: Unforgeable audit trail - prove what happened, when, in order
+
+## Installation
+
+```bash
+pip install lockstock
+```
+
+## Quick Start
+
+### 1. Bootstrap a New Agent
+
+```python
+from lockstock import LockStockAgent, Task
+
+# Create agent
+agent = LockStockAgent(
+    server_url="https://lockstock.example.com",
+    client_id="trading-bot-42",
+    secret="your-agent-secret-key"
+)
+
+# Bootstrap (first time only)
+agent.bootstrap()
+
+# Agent is now ready with cryptographic identity
+```
+
+### 2. Perform Actions
+
+```python
+# Authenticate each action
+response = agent.authenticate(Task.QUERY)
+
+if response.accepted:
+    print(f"✅ Authenticated at sequence #{agent.passport.last_sequence}")
+    print(f"State hash: {response.state_hash}")
+    print(f"Server timestamp: {response.server_timestamp}")
+```
+
+### 3. Agent Teleportation (Zero-Downtime Migration)
+
+```python
+import json
+
+# On Server A: Export passport
+passport = agent.export_passport()
+with open("passport.json", "w") as f:
+    json.dump(passport, f)
+
+# Upload to S3, Redis, database, anywhere...
+
+# On Server B: Import passport
+with open("passport.json", "r") as f:
+    passport = json.load(f)
+
+agent = LockStockAgent.from_passport(
+    passport=passport,
+    server_url="https://new-server.example.com",
+    secret="your-agent-secret-key"
+)
+
+# Agent continues from EXACTLY where it left off
+# Zero memory loss. Zero downtime.
+```
+
+### 4. View Action History (The Golden Thread)
+
+```python
+# Get complete audit trail
+timeline = agent.get_action_timeline()
+for action in timeline:
+    print(action)
+
+# Output:
+# Seq #1: BOOTSTRAP (hash: a3f4b2e1...)
+# Seq #2: QUERY (hash: b2e1c9d7...)
+# Seq #3: EXECUTE (hash: c9d7a4f8...)
+```
+
+## Use Cases
+
+### Multi-Cloud Migration
+
+```python
+# AWS
+passport = agent.export_passport()
+upload_to_s3("my-bucket", "agent-passport.json", passport)
+
+# Agent crashes on AWS
+
+# Azure
+passport = download_from_s3("my-bucket", "agent-passport.json")
+agent = LockStockAgent.from_passport(passport, server_url="azure-endpoint", secret=secret)
+
+# Agent resumes at exactly the same sequence number
+# No memory loss. Cryptographic proof of continuity.
+```
+
+### Hot Standby (High Availability)
+
+```python
+# Primary agent (active)
+while True:
+    passport = primary_agent.export_passport()
+    redis.set("agent-42-passport", json.dumps(passport))
+    primary_agent.authenticate(Task.QUERY)
+    time.sleep(1)
+
+# Standby agent (passive, different server)
+while True:
+    if not is_primary_alive():
+        # Take over instantly
+        passport_data = redis.get("agent-42-passport")
+        passport = json.loads(passport_data)
+        standby_agent = LockStockAgent.from_passport(passport, server_url, secret)
+        standby_agent.authenticate(Task.EXECUTE)
+        break
+    time.sleep(1)
+```
+
+### LangChain Integration
+
+```python
+from langchain.agents import AgentExecutor
+from lockstock import LockStockAgent, Task
+
+# Wrap your LangChain agent with LockStock
+lockstock_agent = LockStockAgent(
+    server_url="https://lockstock.example.com",
+    client_id="research-agent",
+    secret="agent-secret"
+)
+lockstock_agent.bootstrap()
+
+# Your LangChain agent now has:
+# - Cryptographic identity
+# - Persistent memory across restarts
+# - Clone detection
+# - Audit trail
+
+executor = AgentExecutor(agent=your_agent, tools=tools)
+
+# Before each action, authenticate
+lockstock_agent.authenticate(Task.QUERY)
+result = executor.invoke({"input": "Research AAPL stock"})
+
+# Export passport for crash recovery
+passport = lockstock_agent.export_passport()
+save_passport(passport)
+```
+
+## Error Handling
+
+```python
+from lockstock.exceptions import (
+    CircuitBreakerError,
+    SplitBrainError,
+    MemoryGapError,
+    AuthenticationError,
+)
+
+try:
+    response = agent.authenticate(Task.EXECUTE)
+except CircuitBreakerError as e:
+    # Agent is making requests too fast (rogue behavior detected)
+    print(f"🚨 LOCKED: {e}")
+    # Alert security team, investigate
+except SplitBrainError as e:
+    # Two instances detected (clone attack)
+    print(f"🧠 CLONE DETECTED: {e}")
+    # Emergency shutdown
+except MemoryGapError as e:
+    # Agent has a gap in sequence (data corruption)
+    print(f"⚠️ MEMORY GAP: {e}")
+    # Restore from backup
+except AuthenticationError as e:
+    # Invalid signature or unauthorized task
+    print(f"❌ AUTH FAILED: {e}")
+```
+
+## Features
+
+### Identity = The Sum of History
+
+Traditional auth: "I have the API key" ✅ Authenticated
+
+LockStock: "I have the API key + cryptographic proof of my entire action history" ✅ Authenticated + Verified
+
+### Clone Detection (Split Brain Prevention)
+
+If an attacker clones your agent:
+
+```
+Server: ✅ Primary agent authenticated at Seq #50
+Server: ❌ Clone rejected - parent hash #49 already spent
+        "Split brain detected. Original agent alerted."
+```
+
+### Velocity Monitoring
+
+Built-in circuit breaker detects rogue agents:
+
+```python
+# Normal behavior: 1 req/sec
+agent.authenticate(Task.QUERY)  # ✅ Accepted
+
+# Rogue behavior: 100 req/sec (infinite loop)
+for i in range(100):
+    agent.authenticate(Task.EXECUTE)  # ❌ Circuit breaker trips
+
+# CircuitBreakerError raised
+# Agent locked. Security team alerted.
+```
+
+## API Reference
+
+### `LockStockAgent`
+
+**Constructor:**
+```python
+agent = LockStockAgent(
+    server_url: str,
+    client_id: str,
+    secret: str,
+    passport: Optional[AgentPassport] = None
+)
+```
+
+**Methods:**
+- `bootstrap()` - Initialize new agent identity
+- `authenticate(task: Task) -> VerifyResponse` - Authenticate action
+- `export_passport() -> dict` - Export for migration
+- `get_action_timeline() -> List[str]` - View history
+- `get_status() -> dict` - Get agent status
+
+**Class Methods:**
+- `from_passport(passport, server_url, secret) -> LockStockAgent` - Resume from passport
+
+### `Task` (Enum)
+
+Available task types:
+- `Task.BOOTSTRAP`
+- `Task.DEPLOY`
+- `Task.RESTART`
+- `Task.BACKUP`
+- `Task.UPDATE`
+- `Task.QUERY`
+- `Task.EXECUTE`
+
+### `AgentPassport`
+
+The agent's cryptographic "soul":
+```python
+@dataclass
+class AgentPassport:
+    agent_id: str
+    last_sequence: int
+    last_hash: str
+    state_matrix: Matrix
+    last_server_timestamp: int
+    action_history: List[ActionRecord]
+```
+
+## Architecture
+
+LockStock uses:
+- **Braid Group B₃** over finite field F₆₅₅₃₇ for topological state verification
+- **HMAC-SHA256** for signature verification
+- **Holder-of-Key** authentication (must have full state matrix)
+- **Dual-Timestamp Architecture** (logical sequence + physical server timestamp)
+- **DAG-based Linear Chain** with parent hash validation
+
+## Comparison
+
+| Feature | Session IDs | JWT | LockStock |
+|---------|------------|-----|-----------|
+| Continuity | ❌ None | ❌ Just identity | ✅ Full history |
+| Clone Detection | ❌ No | ❌ No | ✅ Yes |
+| Portability | ❌ Lost on restart | ❌ Not designed for it | ✅ Export/import |
+| Time Dependency | ✅ No | ❌ Yes (exp claim) | ✅ No |
+| Memory | ❌ External DB | ❌ Stateless | ✅ Cryptographic |
+
+## Support
+
+- **Documentation**: https://docs.lockstock.dev
+- **Issues**: https://github.com/lockstock/lockstock/issues
+- **Community**: https://discord.gg/lockstock
+
+## License
+
+MIT License - see LICENSE file for details.
+
+---
+
+**Built with LockStock. The whole nine yards.** 🔒📦💨
