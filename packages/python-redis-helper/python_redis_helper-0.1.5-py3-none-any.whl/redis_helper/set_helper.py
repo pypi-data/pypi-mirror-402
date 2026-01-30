@@ -1,0 +1,211 @@
+# -*- coding: utf-8 -*-
+"""
+# ---------------------------------------------------------------------------------------------------------
+# ProjectName:  redis-helper
+# FileName:     set_helper.py
+# Description:  集合脚手架
+# Author:       ASUS
+# CreateDate:   2025/12/21
+# Copyright ©2011-2025. Hunan xxxxxxx Company limited. All rights reserved.
+# ---------------------------------------------------------------------------------------------------------
+"""
+import redis.asyncio as redis
+from typing import Optional, Union, Set
+
+"""
+无重复
+    *   pending 和 processing 都是 Set，天然保证唯一性
+并发安全
+    *   pop() 原子 Lua 脚本，多消费者同时取任务不会冲突
+    *   requeue / recover 用 pipeline 原子操作
+顺序无关
+    *   Set 是无序的，谁先取到谁执行
+调用方式几乎不变
+    *   pop(), finish(), requeue(), recover() 使用方式和list的一致
+    *   add() 被你弃用，lpush_if_not_exists() 保留去重逻辑
+"""
+
+
+class AsyncReliableQueue:
+    """
+    并发安全、无序、去重的可靠队列（适合多消费者场景）
+    - 若提供 consumer_id：使用私有 processing 队列（推荐）
+    - 若未提供 consumer_id：使用共享 processing 队列
+    """
+
+    def __init__(self, redis: redis.Redis, key: str, consumer_id: Optional[str] = None):
+        self.key = key
+        self.redis = redis
+        self.consumer_id = consumer_id
+
+        # pending 始终是全局共享
+        self.pending = f"queue:pending:set:{key}"  # 待执行任务（唯一）
+
+        # processing 分两种模式
+        if consumer_id:
+            # 每个消费者私有 processing
+            self.processing = f"queue:processing:set:{key}:{consumer_id}"
+        else:
+            # 老模式：所有消费者共享 processing
+            self.processing = f"queue:processing:set:{key}"
+
+        # 原子 pop: 从 pending SPOP 取出任务，加入 processing
+        self.pop_script = self.redis.register_script("""
+        local task = redis.call('SPOP', KEYS[1])
+        if not task then
+            return nil
+        end
+        redis.call('SADD', KEYS[2], task)
+        return task
+        """)
+
+    # ================= API =================
+
+    async def lpush_if_not_exists(self, task: str) -> bool:
+        """
+        去重加入队列（Set 已经保证唯一性）
+        返回 True 表示入队成功，False 表示任务已存在
+        """
+        return bool(await self.redis.sadd(self.pending, task))
+
+    async def pop(self) -> Optional[str]:
+        """
+        消费者原子取任务
+        """
+        return await self.pop_script(keys=[self.pending, self.processing], args=[])
+
+    async def finish(self, task: str):
+        """
+        标记任务完成（幂等）：从 pending 和 processing 中都移除
+        """
+        pipe = self.redis.pipeline()
+        await pipe.srem(self.pending, task)  # 安全移除 pending（即使不存在也没关系）
+        await pipe.srem(self.processing, task)  # 移除 processing
+        await pipe.execute()
+
+    async def requeue(self, task: str):
+        """
+        任务失败回队
+        """
+        pipe = self.redis.pipeline()
+        await pipe.srem(self.processing, task)
+        await pipe.sadd(self.pending, task)
+        await pipe.execute()
+
+    async def recover(self) -> int:
+        """
+        程序启动或人工触发恢复未完成任务
+        - 有 consumer_id：只恢复自己的任务（天然隔离）
+        - 无 consumer_id：恢复所有 processing 任务（⚠️ 有并发风险！）
+        """
+        tasks = await self.redis.smembers(self.processing)
+        if not tasks:
+            return 0
+
+        pipe = self.redis.pipeline()
+        for t in tasks:
+            await pipe.srem(self.processing, t)
+            await pipe.sadd(self.pending, t)
+        await pipe.execute()
+        return len(tasks)
+
+    async def get_all_pending(self, count: int = 0) -> Set[str]:
+        """
+        获取所有待执行任务
+         Args:
+        count: 若 > 0，使用 SSCAN 分批获取（避免大集合阻塞 Redis）；
+               若 = 0，使用 SMEMBERS 一次性获取（适用于小集合）。
+        """
+        members: Set[Union[str, bytes]] = set()
+        if count > 0:
+            cursor = 0
+            while True:
+                cursor, data = await self.redis.sscan(self.pending, cursor=cursor, count=count)
+                members.update(data)
+                if cursor == 0:
+                    break
+        else:
+            members = await self.redis.smembers(self.pending)
+        return members
+
+    async def get_all_processing(self, count: int = 0) -> Set[str]:
+        """
+        获取所有正在处理的任务
+         Args:
+        count: 若 > 0，使用 SSCAN 分批获取（避免大集合阻塞 Redis）；
+               若 = 0，使用 SMEMBERS 一次性获取（适用于小集合）。
+        """
+        members: Set[Union[str, bytes]] = set()
+        if count > 0:
+            cursor = 0
+            while True:
+                cursor, data = await self.redis.sscan(self.processing, cursor=cursor, count=count)
+                members.update(data)
+                if cursor == 0:
+                    break
+        else:
+            members = await self.redis.smembers(self.processing)
+        return members
+
+    # ================= 存在性判断 =================
+    async def in_pending(self, task: str) -> bool:
+        """是否在待执行队列"""
+        return bool(await self.redis.sismember(self.pending, task))
+
+    async def in_processing(self, task: str) -> bool:
+        """是否正在执行"""
+        return bool(await self.redis.sismember(self.processing, task))
+
+    async def exists(self, task: str) -> bool:
+        """
+        是否已在系统中（pending 或 processing）
+        """
+        pipe = self.redis.pipeline()
+        await pipe.sismember(self.pending, task)
+        await pipe.sismember(self.processing, task)
+        in_pending, in_processing = await pipe.execute()
+        return bool(in_pending or in_processing)
+
+    async def is_pending_empty(self) -> bool:
+        """待执行队列是否为空"""
+        return (await self.redis.scard(self.pending)) == 0
+
+    async def is_processing_empty(self) -> bool:
+        """正在处理队列是否为空"""
+        return (await self.redis.scard(self.processing)) == 0
+
+    async def is_empty(self) -> bool:
+        """整个队列（pending + processing）是否为空"""
+        pipe = self.redis.pipeline()
+        await pipe.scard(self.pending)
+        await pipe.scard(self.processing)
+        pending, processing = await pipe.execute()
+        return pending == 0 and processing == 0
+
+    async def get_pending_count(self) -> int:
+        """
+        获取待执行任务数量
+        如果 key 不存在 → 返回 0
+        如果 key 存在但不是 Set → 抛出 redis.exceptions.ResponseError
+        """
+        return await self.redis.scard(self.pending)
+
+    async def get_processing_count(self) -> int:
+        """
+        获取正在处理的任务数量
+        如果 key 不存在 → 返回 0
+        如果 key 存在但不是 Set → 抛出 redis.exceptions.ResponseError
+        """
+        return await self.redis.scard(self.processing)
+
+    async def get_total_count(self) -> int:
+        """
+        获取总任务数（pending + processing）
+        如果 key 不存在 → 返回 0
+        如果 key 存在但不是 Set → 抛出 redis.exceptions.ResponseError
+        """
+        pipe = self.redis.pipeline()
+        await pipe.scard(self.pending)
+        await pipe.scard(self.processing)
+        pending, processing = await pipe.execute()
+        return pending + processing
