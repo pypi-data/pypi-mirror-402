@@ -1,0 +1,366 @@
+import aton
+import shutil
+import pandas
+
+
+folder = 'tests/samples/'
+
+
+def test_normalize_cell_params():
+    cell_params = 'CELL_PARAMETERS (alat= 10.0000)\n    1.00000000000   0.000000000   0.000000000\n   0.000000000   1.000000000   0.000000000 \n 0.000000000   0.000000000   1.0000000 '
+    ideal_params = [
+        'CELL_PARAMETERS alat= 10.0',
+        '1.000000000000000   0.000000000000000   0.000000000000000',
+        '0.000000000000000   1.000000000000000   0.000000000000000',
+        '0.000000000000000   0.000000000000000   1.000000000000000',]
+    normalized_params = aton.api.pwx.normalize_card(cell_params)
+    assert normalized_params == ideal_params
+    # Now check as a list
+    cell_params = cell_params.splitlines()
+    # With bohr values
+    cell_params[0] = r' CELL_PARAMETERS {bohr}'
+    ideal_params[0] = 'CELL_PARAMETERS bohr'
+    normalized_params = aton.api.pwx.normalize_card(cell_params)
+    assert normalized_params == ideal_params
+    # With armstrong values
+    cell_params[0] = r' CELL_PARAMETERS {angstrom}'
+    ideal_params[0] = 'CELL_PARAMETERS angstrom'
+    normalized_params = aton.api.pwx.normalize_card(cell_params)
+    assert normalized_params == ideal_params
+
+
+def test_normalize_atomic_positions():
+    atomic_positions = " ATOMIC_POSITIONS {crystal} \n I   5.000000   0.0000000000000   0.000000000000000 \n C   0.000000000000000   5.000000000000000000   0.000000 "
+    ideal_positions = [
+        'ATOMIC_POSITIONS crystal',
+        'I   5.000000000000000   0.000000000000000   0.000000000000000',
+        'C   0.000000000000000   5.000000000000000   0.000000000000000']
+    normalized_positions = aton.api.pwx.normalize_card(atomic_positions)
+    assert normalized_positions == ideal_positions
+
+
+def test_normalize_atomic_species():
+    atomic_species = " ATOMIC_SPECIES \n     I  126.90400   I.upf  \nHe4   4.0026032497   He.upf\n\n! C   12.01060   C.upf\n ATOMIC_POSITIONS\n '  I   5.000000000000000   0.000000000000000   0.000000000000000'"
+    ideal_species = ['ATOMIC_SPECIES', 'I   126.904   I.upf', 'He4   4.0026032497   He.upf']
+    normalized_species = aton.api.pwx.normalize_card(atomic_species)
+    assert normalized_species == ideal_species
+
+
+def test_read():
+    ideal = {
+        # relax.out
+        'Energy'               : -1000.0,
+        'Volume'               : 2.0,
+        'Density'              : 1.0,
+        'Alat'                 : 10,
+        'BFGS converged'       : True,
+        'BFGS failed'          : False,
+        'Total force'          : 0.000001,
+        'Total SCF correction' : 0.0,
+        'ibrav'                : 1,
+        'Runtime'              : '48m 8.71s',
+        'CELL_PARAMETERS out'  : [
+            'CELL_PARAMETERS alat= 10.0',
+            '1.000000000   0.000000000   0.000000000',
+            '0.000000000   1.000000000   0.000000000',
+            '0.000000000   0.000000000   1.000000000'],
+        'ATOMIC_POSITIONS out' : [
+            'ATOMIC_POSITIONS crystal',
+            'I                1.0000000000        0.0000000000        0.0000000000',
+            'C                0.0000000000        1.0000000000        0.0000000000',
+            'N                0.0000000000        0.0000000000        1.0000000000'],
+        # relax.in
+        'K_POINTS'             : [
+            'K_POINTS automatic',
+            '2 2 2 0 0 0'],
+        'ecutwfc'              : 60.0,
+        'etot_conv_thr'        : 1.0e-12,
+        'max_seconds'          : 1000,
+        'pseudo_dir'           : "'./pseudos/'",
+        'CELL_PARAMETERS' : [
+            'CELL_PARAMETERS alat',
+            '2.000000000000000   0.000000000000000   0.000000000000000',
+            '0.000000000000000   2.000000000000000   0.000000000000000',
+            '0.000000000000000   0.000000000000000   2.000000000000000'],
+        'ATOMIC_SPECIES'       : [
+            'ATOMIC_SPECIES',
+            'I  126.90400   I.upf',
+            'N   14.00650   N.upf',
+            'C   12.01060   C.upf'],
+        'ATOMIC_POSITIONS'     : [
+            'ATOMIC_POSITIONS crystal',
+            'I   5.000000000000000   0.000000000000000   0.000000000000000',
+            'C   0.000000000000000   5.000000000000000   0.000000000000000',
+            'N   0.000000000000000   0.000000000000000   5.000000000000000'],
+    }
+    result = aton.api.pwx.read_dir(folder=folder, in_str='relax.in', out_str='relax.out')
+    for key in ideal:
+        if key in aton.api.pwx.pw_cards:
+            ideal[key] = aton.api.pwx.normalize_card(ideal[key])
+        assert result[key] == ideal[key]
+
+
+def test_read_dirs():
+    directory = folder + 'dirs/'
+    aton.api.pwx.read_dirs(folder=directory, in_str='relax.in', out_str='relax.out', separator='_', type_index=0, id_index=1, exclude='ignored')
+    csv = aton.file.get(directory+'test.csv')
+    assert csv
+    df = pandas.read_csv(csv)
+    assert not df.empty
+    assert df['ID'].to_list() == ['dir1', 'dir2']
+    try:
+        aton.file.remove(directory + 'test.csv')
+    except:
+        pass
+
+
+
+def test_scf_from_relax():
+    ideal = {
+        'calculation'      : "'scf'",
+        'etot_conv_thr'    : 3.0e-12,
+        'celldm(1)'        : 10.0,
+        'ibrav'            : 0,
+        'occupations'      : "'fixed'",
+        'conv_thr'         : 2.0e-12,
+        'ATOMIC_SPECIES'   : [
+            'ATOMIC_SPECIES',
+            'I  126.90400   I.upf',
+            'N   14.00650   N.upf',
+            'C   12.01060   C.upf'],
+        'CELL_PARAMETERS'  : [
+            'CELL_PARAMETERS alat',
+            '1.000000000   0.000000000   0.000000000',
+            '0.000000000   1.000000000   0.000000000',
+            '0.000000000   0.000000000   1.000000000'],
+        'ATOMIC_POSITIONS' : [
+            'ATOMIC_POSITIONS crystal',
+            'I                1.0000000000        0.0000000000        0.0000000000',
+            'C                0.0000000000        1.0000000000        0.0000000000',
+            'N                0.0000000000        0.0000000000        1.0000000000'],
+    }
+    update = {'etot_conv_thr': 3.0e-12}
+    aton.api.pwx.scf_from_relax(folder=folder, update=update)
+    result = aton.api.pwx.read_in(folder + 'scf.in')
+    for key in ideal:
+        if key in ['ATOMIC_SPECIES', 'CELL_PARAMETERS', 'CELL_PARAMETERS out', 'ATOMIC_POSITIONS', 'ATOMIC_POSITIONS out']:
+            ideal[key] = aton.api.pwx.normalize_card(ideal[key])
+        assert result[key] == ideal[key]
+    assert 'A' not in result.keys()
+    try:
+        aton.file.remove(folder + 'scf.in')
+    except:
+        pass
+
+
+def test_update_other_values():
+    tempfile = folder + 'temp.in'
+    shutil.copy(folder + 'relax.in', tempfile)
+    aton.api.pwx.set_value(tempfile, 'celldm(1)', 10.0)
+    modified = aton.api.pwx.read_in(tempfile)
+    assert 'A' not in modified.keys()
+    aton.file.remove(tempfile)
+
+
+def test_set_value():
+    tempfile = folder + 'temp.in'
+    shutil.copy(folder + 'relax.in', tempfile)
+    aton.api.pwx.set_value(tempfile, 'ecutwfc', 80.0)
+    aton.api.pwx.set_value(tempfile, 'ibrav', 5)
+    aton.api.pwx.set_value(tempfile, 'calculation', "'vc-relax'")
+    aton.api.pwx.set_value(tempfile, 'celldm(1)', 10.0)
+    modified = aton.api.pwx.read_in(tempfile)
+    # Check some unmodified values
+    assert modified['max_seconds'] == 1000
+    assert modified['input_dft'] == "'PBEsol'"
+    # Check the modified
+    assert 'A' not in modified.keys()
+    assert modified['ecutwfc'] == 80.0
+    assert modified['ibrav'] == 5
+    assert modified['calculation'] == "'vc-relax'"
+    assert modified['celldm(1)'] == 10.0
+    aton.api.pwx.set_value(tempfile, 'celldm(1)', '')
+    modified = aton.api.pwx.read_in(tempfile)
+    assert 'A' not in modified.keys()
+    assert 'celldm(1)' not in modified.keys()
+    aton.api.pwx.set_value(tempfile, 'CELL_PARAMETERS', '')
+    modified = aton.api.pwx.read_in(tempfile)
+    assert not modified['CELL_PARAMETERS']
+    aton.file.remove(tempfile)
+
+
+def test_add_namelist():
+    tempfile = folder + 'temp_namelist.in'
+    shutil.copy(folder + 'relax.in', tempfile)
+    aton.api.pwx.set_value(tempfile, 'cell_dynamics', "'bfgs'")
+    modified = aton.api.pwx.read_in(tempfile)
+    assert modified['cell_dynamics'] == "'bfgs'"
+    aton.file.remove(tempfile)
+
+
+def test_count_elements():
+    atomic_positions = [
+        'ATOMIC_POSITIONS crystal',
+        'I   5.0000000000        0.0000000000        0.0000000000',
+        'C   0.0000000000        5.0000000000        0.0000000000',
+        'N   0.0000000000        0.0000000000        5.0000000000',
+        'Cl   0.0  0.0  0.0',
+        'Cl  1.0  1.0  1.0']
+    ideal = {'I': 1, 'C': 1, 'N': 1, 'Cl': 2}
+    obtained = aton.api.pwx.count_elements(atomic_positions)
+    for key in ideal.keys():
+        assert ideal[key] == obtained[key]
+    # Again, in case it does something weird
+    obtained = aton.api.pwx.count_elements(atomic_positions)
+    for key in ideal.keys():
+        assert ideal[key] == obtained[key]
+
+
+def test_add_atom():
+    ideal_positions = [
+        'ATOMIC_POSITIONS crystal',
+        'I                5.0000000000        0.0000000000        0.0000000000',
+        'C                0.0000000000        5.0000000000        0.0000000000',
+        'N                0.0000000000        0.0000000000        5.0000000000',
+        'O   0.0  0.0  0.0',
+        'Cl  1.0  1.0  1.0']
+    ideal_positions = aton.api.pwx.normalize_card(ideal_positions)
+    tempfile = folder + 'temp.in'
+    shutil.copy(folder + 'relax.in', tempfile)
+    position_1 = '  O   0.0   0.0   0.0'
+    position_2 = ['Cl', 1.0, 1.0, 1.0]
+    aton.api.pwx.add_atom(filepath=tempfile, position=position_1)
+    aton.api.pwx.add_atom(filepath=tempfile, position=position_2)
+    temp = aton.api.pwx.read_in(tempfile)
+    nat = temp['nat']
+    ntyp = temp['ntyp']
+    atomic_positions = temp['ATOMIC_POSITIONS']
+    assert nat == 5
+    assert ntyp == 5
+    number_of_elements = aton.api.pwx.count_elements(atomic_positions)
+    ideal_dict = {'I':1, 'C':1, 'N':1, 'O':1, 'Cl':1}
+    for key in ideal_dict.keys():
+        assert ideal_dict[key] == number_of_elements[key]
+    # Assert we have the same ATOMIC_POSITIONS
+    for i, ideal in enumerate(ideal_positions):
+        ideal_str = ideal.split()
+        detected_str = atomic_positions[i].split()
+        assert detected_str == ideal_str
+    # Additional surrounding values, just in case
+    assert temp['ibrav'] == 1
+    assert temp['A'] == 10.0
+    assert temp['ecutwfc'] == 60.0
+    assert temp['input_dft'] == "'PBEsol'"
+    aton.file.remove(tempfile)
+
+
+def test_get_atom():
+    relax = folder + 'relax.in'
+    ideal = 'N   0.000000000000000   0.000000000000000   5.000000000000000'
+    approx_list_1 = [0.00, 0.00, 5.0001]
+    approx_list_2 = [0.0, 0.0, 4.9999]
+    approx_str = '0.0000, 0.0000, 5.0001'
+    assert aton.api.pwx.get_atom(filepath=relax, position=approx_list_1, precision=3) == ideal
+    assert aton.api.pwx.get_atom(filepath=relax, position=approx_list_2, precision=3) == ideal
+    assert aton.api.pwx.get_atom(filepath=relax, position=approx_str, precision=3) == ideal
+
+
+def test_bands_kpoints():
+    file = folder + 'bands_kpoints.in'
+    data = aton.api.pwx.read_in(file)
+    assert data['K_POINTS'][1] == '11'
+    assert data['K_POINTS'][2] == '0.00  0.00  0.00  30    !G'
+    assert data['K_POINTS'][12] == '0.50  0.00  0.50  30    !X'
+
+
+def test_scf_fermi():
+    file = folder + 'scf_fermi.out'
+    data = aton.api.pwx.read_out(file)
+    assert data['Efermi'] == 6.5160
+    assert data['Energy'] == -93.45256277
+    assert data['Pressure'] == 19.87
+
+
+def test_ibrav():
+    file = folder + 'relax.in'
+    alats = aton.api.pwx.get_ibrav(filepath=file)
+    assert alats['ibrav'] == 1
+    assert not '?' in alats['ibrav name']
+
+
+def test_set_ibrav():
+    file = folder + 'relax.in'
+    tmp = folder + 'temp_relax_ibrav.in'
+    shutil.copy(file, tmp)
+    aton.api.pwx.set_ibrav(filepath=tmp)
+    data = aton.api.pwx.read_in(tmp)
+    assert data['ibrav'] == 1
+    assert not data['CELL_PARAMETERS']
+    assert data['A'] == 20.0
+    aton.file.remove(tmp)
+
+
+def test_restart_errors():
+    directory = folder + 'restart_errors/'
+
+    test_all = aton.api.pwx.resume_errors(prefix='relax_', folder=directory, timeouted=True, nonstarted=True, testing=True, exclude='copy')
+    assert len(test_all) == 3
+    assert 'relax_failed' in test_all
+    assert 'relax_nonstarted' in test_all
+    assert 'relax_timeouted' in test_all
+    a_data = aton.api.pwx.read_in(directory+'relax_timeouted.in')
+    assert a_data['restart_mode'] == "'restart'"
+    shutil.copy(directory+'relax_timeouted_copy.in', directory+'relax_timeouted.in')
+
+    test_nonstarted = aton.api.pwx.resume_errors(prefix='relax_', folder=directory, timeouted=False, nonstarted=True, testing=True, exclude='copy')
+    assert len(test_nonstarted) == 3
+    assert 'relax_failed' in test_nonstarted
+    assert 'relax_nonstarted' in test_nonstarted
+    assert 'relax_timeouted' in test_nonstarted
+    n_data = aton.api.pwx.read_in(directory+'relax_timeouted.in')
+    assert n_data['restart_mode'] == "'from_scratch'"
+
+    test_timeouted = aton.api.pwx.resume_errors(prefix='relax_', folder=directory, timeouted=True, nonstarted=False, testing=True, exclude='copy')
+    assert len(test_timeouted) == 2
+    assert 'relax_failed' in test_timeouted
+    assert not 'relax_nonstarted' in test_timeouted
+    assert 'relax_timeouted' in test_timeouted
+    t_data = aton.api.pwx.read_in(directory+'relax_timeouted.in')
+    assert t_data['restart_mode'] == "'restart'"
+    shutil.copy(directory+'relax_timeouted_copy.in', directory+'relax_timeouted.in')
+
+    test_failed = aton.api.pwx.resume_errors(prefix='relax_', folder=directory, timeouted=False, nonstarted=False, testing=True, exclude='copy')
+    assert len(test_failed) == 2
+    assert 'relax_failed' in test_failed
+    assert not 'relax_nonstarted' in test_failed
+    assert 'relax_timeouted' in test_failed
+    f_data = aton.api.pwx.read_in(directory+'relax_timeouted.in')
+    assert f_data['restart_mode'] == "'from_scratch'"
+
+
+def test_get_neighbors():
+    ch3nh3 = folder + 'CH3NH3.in'
+
+    pos1 = 'N   0.758865   0.489441   0.431544'
+    pos2 = 'C   0.241135   0.507039   0.469908'
+
+    distance = aton.api.pwx.get_distance(filepath=ch3nh3, position1=pos1, position2=pos2)
+    assert abs(distance - 1.47588) < 1.0e-4
+
+    neighbors = aton.api.pwx.get_neighbors(filepath=ch3nh3, position=pos1, elements='H')
+    assert len(neighbors) == 6
+    assert abs(neighbors[0][1] - 0.81087) < 1.0e-4
+    assert abs(neighbors[1][1] - 1.01133) < 1.0e-4
+    assert abs(neighbors[2][1] - 1.01206) < 1.0e-4
+
+    # Test when the target atom has no neighbors
+    neighbors = aton.api.pwx.get_neighbors(filepath=ch3nh3, position=pos1, elements='N')
+    assert len(neighbors) == 0
+
+    # Test with mixed elements
+    neighbors = aton.api.pwx.get_neighbors(filepath=ch3nh3, position=pos1, elements='C H')
+    assert len(neighbors) == 7
+    neighbors = aton.api.pwx.get_neighbors(filepath=ch3nh3, position=pos1, elements=['N', 'C'])
+    assert len(neighbors) == 1
+    assert neighbors[0][0].startswith('C')
+
