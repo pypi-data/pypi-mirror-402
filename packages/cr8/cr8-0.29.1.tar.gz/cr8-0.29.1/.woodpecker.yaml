@@ -1,0 +1,30 @@
+---
+when:
+  - event: push
+    branch: master
+  - event: pull_request
+
+matrix:
+  python_version:
+    - 3.14
+    - 3.13
+    - 3.12
+    - 3.11
+
+steps:
+  - name: test
+    image: eclipse-temurin:21
+    environment:
+      LANG: en_US.UTF-8
+    commands:
+      - wget https://github.com/astral-sh/uv/releases/download/0.9.17/uv-x86_64-unknown-linux-gnu.tar.gz
+      - tar xvzf uv-x86_64-unknown-linux-gnu.tar.gz
+      - mv uv-x86_64-unknown-linux-gnu/uv /usr/bin
+      - apt-get update
+      - apt-get install --yes git
+      - useradd ci -m
+      - chown ci:ci -R .
+      - su ci -c "uv venv --python ${python_version}"
+      - su ci -c "uv pip install pycodestyle unittest-xml-reporting ."
+      - su ci -c ".venv/bin/python -m pycodestyle cr8"
+      - su ci -c ". .venv/bin/activate && python -m xmlrunner discover -v -o test-results/test/"
