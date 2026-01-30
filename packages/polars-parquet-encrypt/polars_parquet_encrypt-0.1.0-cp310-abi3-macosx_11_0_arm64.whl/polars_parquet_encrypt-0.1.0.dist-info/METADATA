@@ -1,0 +1,218 @@
+Metadata-Version: 2.4
+Name: polars-parquet-encrypt
+Version: 0.1.0
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Rust
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: Implementation :: CPython
+Classifier: Topic :: Scientific/Engineering
+Classifier: Topic :: Software Development :: Libraries
+Requires-Dist: polars>=0.20.0
+License-File: LICENSE
+Summary: Parquet encryption support for Polars, AES-256-GCM page-level encryption, not-production ready
+Keywords: polars,parquet,encryption,dataframe,aes-gcm
+Home-Page: https://gitlab.com/anonym1/polars
+Author-email: Wei Wang <wei.wang@example.com>
+License: MIT
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown; charset=UTF-8; variant=GFM
+Project-URL: Homepage, https://gitlab.com/anonym1/polars
+Project-URL: Issues, https://gitlab.com/anonym1/polars/-/issues
+Project-URL: Repository, https://gitlab.com/anonym1/polars
+
+# polars-parquet-encrypt
+
+Parquet encryption support for Polars with AES-256-GCM page-level encryption.
+
+## Features
+
+- **AES-256-GCM encryption**: Industry-standard authenticated encryption
+- **Page-level encryption**: Each data and dictionary page encrypted independently
+- **Optimized performance**:
+  - Context reuse per column chunk (1000× fewer allocations)
+  - In-place decryption with scratch buffer reuse (zero-copy plaintext extraction)
+- **Simple API**: Easy-to-use `encryption_key` parameter
+- **Cross-platform**: Pre-built wheels for macOS (Intel & ARM) and Linux (x86_64 & ARM64)
+
+## Installation
+
+```bash
+pip install polars-parquet-encrypt
+```
+
+## Usage
+
+### Basic Encryption/Decryption
+
+```python
+import polars as pl
+import os
+
+# Generate 32-byte key for AES-256
+key = os.urandom(32)
+
+# Write encrypted parquet file
+df = pl.DataFrame({
+    "id": [1, 2, 3, 4, 5],
+    "name": ["Alice", "Bob", "Charlie", "David", "Eve"],
+    "salary": [50000, 60000, 75000, 80000, 95000]
+})
+
+df.write_parquet("encrypted.parquet", encryption_key=key)
+
+# Read encrypted parquet file
+df_read = pl.read_parquet("encrypted.parquet", encryption_key=key)
+print(df_read)
+```
+
+### Lazy Scanning with Encryption
+
+```python
+# Lazy scan with encryption
+lf = pl.scan_parquet("encrypted.parquet", encryption_key=key)
+result = lf.filter(pl.col("salary") > 70000).collect()
+print(result)
+```
+
+### Multiple Row Groups
+
+```python
+# Write with specific row group size
+df.write_parquet(
+    "encrypted.parquet",
+    encryption_key=key,
+    row_group_size=1000  # Optimize for your workload
+)
+```
+
+## Security Features
+
+### Encryption
+
+- **Confidentiality**: Page content encrypted with AES-256-GCM
+- **Integrity**: GCM authentication tag (16 bytes) prevents tampering
+- **Unique nonces**: Each page gets a random 12-byte nonce
+- **Format**: `[nonce(12) | ciphertext | tag(16)]`
+
+### What's Encrypted
+
+- ✅ **Data pages**: All column values encrypted
+- ✅ **Dictionary pages**: Dictionary-encoded values encrypted
+- ❌ **Footer metadata**: Schema, row counts, column names remain unencrypted (Plaintext Footer Mode)
+
+### What's Protected
+
+| Threat | Protected |
+|--------|-----------|
+| Data confidentiality | ✅ Yes - AES-256-GCM encryption |
+| Tampering detection | ✅ Yes - GCM authentication tag |
+| Wrong key detection | ✅ Yes - Decryption fails with wrong key |
+| Metadata leakage | ❌ No - Footer is plaintext |
+| Page reordering | ⚠️  Limited - Empty AAD (no position binding) |
+
+## Performance
+
+### Optimizations
+
+**Write Path:**
+- Encryption context created once per column chunk (not per page)
+- Eliminates per-page key cloning and context allocation
+- Better CPU cache locality
+
+**Read Path:**
+- In-place decryption using `decrypt_in_place_detached()`
+- Scratch buffer reused across all pages in column chunk
+- Zero-copy plaintext extraction with `split_off()`
+- 1999× fewer allocations, 1000× less memory copying
+
+### Overhead
+
+```
+File size overhead = 28 bytes × number of pages
+
+Example:
+- 100 MB file with 10,000 pages
+- Overhead: 28 × 10,000 = 280 KB (~0.27% increase)
+```
+
+## Requirements
+
+- **Python**: >= 3.10
+- **Key size**: Exactly 32 bytes (AES-256 only, AES-128/192 not supported)
+- **Polars**: >= 0.20.0
+
+## Key Management
+
+⚠️ **Important**: This library only handles encryption/decryption. You must:
+
+- Generate secure random keys: `os.urandom(32)` or proper KMS
+- Store keys securely (not in code or version control)
+- Manage key distribution to authorized users
+- Handle key rotation (requires rewriting files)
+
+### Example: Environment Variable
+
+```python
+import os
+
+# Store key as base64 in environment variable
+import base64
+
+# Generate and save key (one time)
+key = os.urandom(32)
+print(f"export PARQUET_KEY={base64.b64encode(key).decode()}")
+
+# Load key from environment
+key = base64.b64decode(os.environ["PARQUET_KEY"])
+df.write_parquet("encrypted.parquet", encryption_key=key)
+```
+
+## Platform Support
+
+Pre-built wheels available for:
+
+- **macOS**: ARM64 (Apple Silicon), x86_64 (Intel)
+- **Linux**: x86_64, ARM64 (aarch64)
+- **Python**: 3.10, 3.11, 3.12
+
+For other platforms, installation will build from source (requires Rust toolchain).
+
+## Error Handling
+
+```python
+try:
+    df = pl.read_parquet("encrypted.parquet", encryption_key=wrong_key)
+except pl.ComputeError as e:
+    if "aead::Error" in str(e):
+        print("Wrong encryption key or corrupted data")
+    else:
+        raise
+```
+
+## Technical Details
+
+- **Algorithm**: AES-256-GCM (Galois/Counter Mode)
+- **Key size**: 32 bytes (256 bits)
+- **Nonce size**: 12 bytes (96 bits, random per page)
+- **Authentication tag**: 16 bytes (128 bits)
+- **AAD**: Empty (simplified approach, no ordinal tracking)
+
+For more details, see [PARQUET_ENCRYPTION_DESIGN.md](https://github.com/anonym1/polars/blob/main/PARQUET_ENCRYPTION_DESIGN.md)
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+Issues and pull requests welcome at: https://gitlab.com/anonym1/polars/-/issues
+
+## Acknowledgments
+
+Built on top of [Polars](https://github.com/pola-rs/polars) - blazingly fast DataFrames in Rust and Python.
+
