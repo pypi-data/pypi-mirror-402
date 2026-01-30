@@ -1,0 +1,461 @@
+Metadata-Version: 2.4
+Name: philvault-sdk
+Version: 0.1.0
+Summary: Python SDK for PhilVault authentication and authorization APIs.
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: httpx>=0.20
+
+ # PhilVault SDK
+ 
+ Python SDK for integrating PhilVault authentication and authorization APIs.
+ 
+ ## Install
+ 
+ ```bash
+ pip install ./sdk
+ ```
+ 
+ ## Quick Start
+ 
+ ```python
+ from philvault_sdk import PhilVaultClient
+ 
+ client = PhilVaultClient(
+     base_url="http://localhost:8000",
+     api_key="your-api-key",
+ )
+ 
+ register_result = client.register(
+     username="alice",
+     password="secret",
+     email="alice@example.com",
+ )
+ 
+ access_token = register_result["access_token"]
+ client.set_access_token(access_token)
+ 
+ me = client.me()
+ ```
+ 
+Only `base_url` and `api_key` are required. Other options have defaults.
+
+You can also create the client from environment variables:
+
+```python
+from philvault_sdk import PhilVaultClient
+
+client = PhilVaultClient.from_env()
+```
+
+Default env vars:
+
+- `PHILVAULT_BASE_URL`
+- `PHILVAULT_API_KEY`
+- `PHILVAULT_ACCESS_TOKEN`
+- `PHILVAULT_TIMEOUT`
+- `PHILVAULT_VERIFY_SSL`
+- `PHILVAULT_API_KEY_HEADER`
+- `PHILVAULT_USER_AGENT`
+
+## Async Usage
+
+```python
+import asyncio
+from philvault_sdk import AsyncPhilVaultClient
+
+async def main():
+    async with AsyncPhilVaultClient(
+        base_url="http://localhost:8000",
+        api_key="your-api-key",
+    ) as client:
+        result = await client.login("alice", "secret")
+        client.set_access_token(result["access_token"])
+        me = await client.me()
+        print(me)
+
+asyncio.run(main())
+```
+
+## httpx Usage
+
+Both clients expose `request/get/post/put/patch/delete/head/options` with the same
+signature style as `httpx`. These methods return raw `httpx.Response`, while
+helper methods like `login()` still return parsed JSON dictionaries.
+
+```python
+from philvault_sdk import PhilVaultClient
+
+with PhilVaultClient(base_url="http://localhost:8000", api_key="your-api-key") as client:
+    response = client.get("/healthz")
+    print(response.status_code, response.json())
+```
+
+## Config Options
+
+- `base_url` (required): PhilVault service root, no `/api/v1` suffix
+- `api_key` (required): value for `X-API-Key`
+- `access_token` (optional): Bearer token for authenticated endpoints
+- `timeout` (optional): request timeout in seconds, default `10`
+- `user_agent` (optional): default `philvault-sdk/0.1.0`
+- `verify_ssl` (optional): verify HTTPS certificates, default `True`
+- `api_key_header` (optional): override API key header name, default `X-API-Key`
+- `extra_headers` (optional): dict of extra headers merged into every request
+
+## Client Methods
+
+The sync and async clients expose the same methods. For async usage, add `await`
+and use `AsyncPhilVaultClient`.
+
+### Lifecycle and setup
+
+- `from_env()`: create client from environment variables (see env var list above).
+  Returns: `PhilVaultClient` / `AsyncPhilVaultClient`
+  Example:
+  ```python
+  from philvault_sdk import PhilVaultClient
+
+  client = PhilVaultClient.from_env()
+  ```
+- `set_api_key(api_key)`: update API key (must be non-empty). Useful for rotating keys
+  without re-instantiating the client.
+  Returns: `None`
+  Example:
+  ```python
+  client.set_api_key("new-api-key")
+  ```
+- `set_access_token(access_token)`: set or clear bearer token used for authenticated
+  endpoints. Pass `None` or an empty string to clear.
+  Returns: `None`
+  Example:
+  ```python
+  client.set_access_token(access_token)
+  client.set_access_token(None)
+  ```
+- `close()` / `aclose()`: close underlying httpx client and release resources.
+  Returns: `None`
+  Example:
+  ```python
+  client.close()
+  # or: await client.aclose()
+  ```
+- context manager: ensures automatic close when leaving the block.
+  Returns: client instance within the context.
+  Example:
+  ```python
+  from philvault_sdk import PhilVaultClient, AsyncPhilVaultClient
+
+  with PhilVaultClient(base_url="http://localhost:8000", api_key="key") as client:
+      me = client.me()
+
+  async with AsyncPhilVaultClient(base_url="http://localhost:8000", api_key="key") as client:
+      me = await client.me()
+  ```
+
+### Raw HTTP (httpx style)
+
+These return `httpx.Response`:
+
+- `request(method, path, **kwargs)`
+- `get(path, **kwargs)`
+- `post(path, **kwargs)`
+- `put(path, **kwargs)`
+- `patch(path, **kwargs)`
+- `delete(path, **kwargs)`
+- `head(path, **kwargs)`
+- `options(path, **kwargs)`
+Example:
+```python
+response = client.get("/healthz")
+print(response.status_code)
+print(response.json())
+```
+
+### Auth endpoints
+
+These return parsed JSON `dict`:
+
+- `register(username, password, email=None, domain_roles=None)`  
+  `POST /api/v1/auth/register/`  
+  Creates a new user and returns tokens. `domain_roles` is an optional list of
+  `[domain, role]` pairs, e.g. `[["team-a", "admin"]]`. `password` must be at least
+  8 characters.
+  Returns: `{"user": {...}, "access_token": "...", "refresh_token": "..."}`
+  Example:
+  ```python
+  result = client.register(
+      username="alice",
+      password="secret",
+      email="alice@example.com",
+      domain_roles=[["team-a", "admin"]],
+  )
+  client.set_access_token(result["access_token"])
+  ```
+  Example response:
+  ```python
+  {
+      "user": {
+          "id": "64f1c2a1b2c3d4e5f6a7b8c9",
+          "username": "alice",
+          "email": "alice@example.com",
+          "is_active": True,
+          "is_superuser": False,
+          "domain_roles": [["team-a", "admin"]],
+          "created_at": 1730000000,
+          "updated_at": 1730000000,
+          "last_login": None,
+      },
+      "access_token": "eyJhbGciOi...",
+      "refresh_token": "eyJhbGciOi...",
+  }
+  ```
+- `login(username, password)`  
+  `POST /api/v1/auth/login/`  
+  Authenticates and returns access/refresh tokens.
+  Returns: `{"user": {...}, "access_token": "...", "refresh_token": "..."}`
+  Example:
+  ```python
+  result = client.login("alice", "secret")
+  client.set_access_token(result["access_token"])
+  ```
+  Example response:
+  ```python
+  {
+      "user": {
+          "id": "64f1c2a1b2c3d4e5f6a7b8c9",
+          "username": "alice",
+          "email": "alice@example.com",
+          "is_active": True,
+          "is_superuser": False,
+          "domain_roles": [["team-a", "admin"]],
+          "created_at": 1730000000,
+          "updated_at": 1730000000,
+          "last_login": 1730000500,
+      },
+      "access_token": "eyJhbGciOi...",
+      "refresh_token": "eyJhbGciOi...",
+  }
+  ```
+- `refresh(refresh_token)`  
+  `POST /api/v1/auth/refresh/`  
+  Exchanges a refresh token for a new access token.
+  Returns: `{"access_token": "...", "token_type": "Bearer"}`
+  Example:
+  ```python
+  refreshed = client.refresh(refresh_token)
+  client.set_access_token(refreshed["access_token"])
+  ```
+  Example response:
+  ```python
+  {"access_token": "eyJhbGciOi...", "token_type": "Bearer"}
+  ```
+- `me()`  
+  `GET /api/v1/auth/me/`  
+  Returns the current authenticated user profile.
+  Returns: `{"id": "...", "username": "...", ...}`
+  Example:
+  ```python
+  profile = client.me()
+  ```
+  Example response:
+  ```python
+  {
+      "id": "64f1c2a1b2c3d4e5f6a7b8c9",
+      "username": "alice",
+      "email": "alice@example.com",
+      "is_active": True,
+      "is_superuser": False,
+      "domain_roles": [["team-a", "admin"]],
+      "created_at": 1730000000,
+      "updated_at": 1730000000,
+      "last_login": 1730000500,
+  }
+  ```
+- `change_password(old_password, new_password)`  
+  `POST /api/v1/auth/change-password/`  
+  Changes the current user's password (requires bearer token). `new_password`
+  must be at least 8 characters.
+  Returns: `{"message": "..."}`
+  Example:
+  ```python
+  client.change_password("old-secret", "new-secret")
+  ```
+  Example response:
+  ```python
+  {"message": "Password changed successfully"}
+  ```
+
+### ACL endpoints
+
+These return parsed JSON `dict`:
+
+- `check_permission(user_id, domain, resource_id, action)`  
+  `POST /api/v1/auth/acl/enforce:check`  
+  Checks if a user can perform an action on a resource in a domain. `user_id`
+  must be a valid MongoDB ObjectId string. The backend validates the user exists
+  (invalid id returns `400`, missing user returns `404`).
+  Returns: `{"allowed": bool, "user_id": "...", "domain": "...", "resource_id": "...", "action": "..."}`
+  Example:
+  ```python
+  allowed = client.check_permission(
+      user_id="64f1c2a1b2c3d4e5f6a7b8c9",
+      domain="team-a",
+      resource_id="doc_456",
+      action="read",
+  )
+  ```
+  Example response:
+  ```python
+  {
+      "allowed": True,
+      "user_id": "64f1c2a1b2c3d4e5f6a7b8c9",
+      "domain": "team-a",
+      "resource_id": "doc_456",
+      "action": "read",
+  }
+  ```
+- `check_permission_batch(policies)`  
+  `POST /api/v1/auth/acl/enforce:batch_check`  
+  Batch check. `policies` is a list of `{user_id, domain, resource_id, action}`.
+  Returns: `{"results": [{"user_id": "...", "domain": "...", "resource_id": "...", "action": "...", "allowed": bool}, ...]}`
+  Example:
+  ```python
+  result = client.check_permission_batch([
+      {"user_id": "64f1c2a1b2c3d4e5f6a7b8c9", "domain": "team-a", "resource_id": "doc_1", "action": "read"},
+      {"user_id": "64f1c2a1b2c3d4e5f6a7b8c9", "domain": "team-a", "resource_id": "doc_2", "action": "write"},
+  ])
+  ```
+  Example response:
+  ```python
+  {
+      "results": [
+          {
+              "user_id": "64f1c2a1b2c3d4e5f6a7b8c9",
+              "domain": "team-a",
+              "resource_id": "doc_1",
+              "action": "read",
+              "allowed": True,
+          },
+          {
+              "user_id": "64f1c2a1b2c3d4e5f6a7b8c9",
+              "domain": "team-a",
+              "resource_id": "doc_2",
+              "action": "write",
+              "allowed": False,
+          },
+      ]
+  }
+  ```
+- `add_policy(subject, domain, object_name, action)`  
+  `POST /api/v1/auth/acl/enforce:add`  
+  Adds an ACL policy rule for a subject (user or role).
+  Returns: `{"result": "Policy added", "policy": ["subject", "domain", "object", "action"]}`
+  Example:
+  ```python
+  client.add_policy("user:u_123", "team-a", "doc_456", "read")
+  ```
+  Example response:
+  ```python
+  {"result": "Policy added", "policy": ["user:u_123", "team-a", "doc_456", "read"]}
+  ```
+- `revoke_policy(subject, domain, object_name, action)`  
+  `POST /api/v1/auth/acl/enforce:revoke`  
+  Removes an ACL policy rule.
+  Returns: `{"result": "Policy revoked", "policy": ["subject", "domain", "object", "action"]}`
+  Example:
+  ```python
+  client.revoke_policy("user:u_123", "team-a", "doc_456", "read")
+  ```
+  Example response:
+  ```python
+  {"result": "Policy revoked", "policy": ["user:u_123", "team-a", "doc_456", "read"]}
+  ```
+- `assign_domain_role(user_id, role, domain)`  
+  `POST /api/v1/auth/acl/roles:assign/`  
+  Assigns a role to a user within a domain.
+  Returns: `{"result": "Role assigned", "role": ["user_id", "role", "domain"]}`
+  Example:
+  ```python
+  client.assign_domain_role("64f1c2a1b2c3d4e5f6a7b8c9", "admin", "team-a")
+  ```
+  Example response:
+  ```python
+  {"result": "Role assigned", "role": ["64f1c2a1b2c3d4e5f6a7b8c9", "admin", "team-a"]}
+  ```
+- `remove_domain_role(user_id, role, domain)`  
+  `POST /api/v1/auth/acl/roles:remove/`  
+  Removes a role assignment for a user.
+  Returns: `{"result": "Role removed", "role": ["user_id", "role", "domain"]}`
+  Example:
+  ```python
+  client.remove_domain_role("64f1c2a1b2c3d4e5f6a7b8c9", "admin", "team-a")
+  ```
+  Example response:
+  ```python
+  {"result": "Role removed", "role": ["64f1c2a1b2c3d4e5f6a7b8c9", "admin", "team-a"]}
+  ```
+- `list_domain_roles(user_id, domain)`  
+  `POST /api/v1/auth/acl/roles:list/`  
+  Lists roles for a user in a domain.
+  Returns: `{"roles": ["role_name", ...]}`
+  Example:
+  ```python
+  roles = client.list_domain_roles("64f1c2a1b2c3d4e5f6a7b8c9", "team-a")
+  ```
+  Example response:
+  ```python
+  {"roles": ["admin", "editor"]}
+  ```
+- `add_resource_policy(resource_id, parent_resource_id)`  
+  `POST /api/v1/auth/acl/resources:assign/`  
+  Links a resource to a parent resource (resource hierarchy).
+  Returns: `{"result": "Policy added", "policy": ["resource_id", "parent_resource_id"]}`
+  Example:
+  ```python
+  client.add_resource_policy("doc_456", "folder_1")
+  ```
+  Example response:
+  ```python
+  {"result": "Policy added", "policy": ["doc_456", "folder_1"]}
+  ```
+- `remove_resource_policy(resource_id, parent_resource_id)`  
+  `POST /api/v1/auth/acl/resources:remove/`  
+  Unlinks a resource from its parent.
+  Returns: `{"result": "Policy removed", "policy": ["resource_id", "parent_resource_id"]}`
+  Example:
+  ```python
+  client.remove_resource_policy("doc_456", "folder_1")
+  ```
+  Example response:
+  ```python
+  {"result": "Policy removed", "policy": ["doc_456", "folder_1"]}
+  ```
+
+### Error handling
+
+All helper methods raise `PhilVaultHTTPError` when the HTTP status is 4xx/5xx.
+The exception includes `status_code`, `message`, and (when possible) the parsed
+JSON response payload.
+
+Example:
+```python
+from philvault_sdk import PhilVaultClient
+from philvault_sdk.errors import PhilVaultHTTPError
+
+client = PhilVaultClient(base_url="http://localhost:8000", api_key="bad-key")
+try:
+    client.me()
+except PhilVaultHTTPError as exc:
+    print(exc.status_code)  # 401
+    print(exc.payload)      # {"detail": "Invalid API key"}
+```
+
+Common error responses for auth/ACL endpoints use FastAPI's default shape:
+`{"detail": "..."}`. Typical status codes include `400`, `401`, `404`, `409`,
+and `500` depending on the operation.
+
+ ## Notes
+ 
+ - `base_url` should point to the PhilVault service root (no `/api/v1` suffix).
+ - All `/api/v1/auth/*` endpoints require `X-API-Key`.
+ - Endpoints that require authentication use `Authorization: Bearer <token>`.
