@@ -1,0 +1,2 @@
+class PayloopRequestInterceptedError(Exception):
+    pass
