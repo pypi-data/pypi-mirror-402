@@ -1,0 +1,35 @@
+{
+    "name": "Invoice Som Connexió module",
+    "version": "16.0.1.0.6",
+    "summary": "Customizations for invoicing in Som Connexió.",
+    "author": "Coopdevs Treball SCCL, Som Connexió SCCL",
+    "website": "https://coopdevs.org",
+    "license": "AGPL-3",
+    "category": "Cooperative management",
+    "depends": [
+        "somconnexio",
+        "contract_group_somconnexio",
+        "cooperator_somconnexio",
+        "queue_job",
+        "account",
+        "base_rest",
+        "account_payment_partner",
+        "account_payment_order",
+    ],
+    "data": [
+        "data/account_journal.xml",
+        "views/account_invoice.xml",
+        "views/res_company.xml",
+        "wizards/account_invoice_confirm_between_dates/account_invoice_confirm_between_dates.xml",  # noqa: E501
+        "wizards/account_invoice_regenerate_PDF/account_invoice_regenerate_PDF.xml",
+        "wizards/contract_invoice_payment/contract_invoice_payment.xml",
+        "wizards/invoice_claim_1_send/invoice_claim_1_send.xml",
+        "wizards/payment_order_confirm/payment_order_confirm.xml",
+        "wizards/payment_order_generated_to_uploaded_queued/payment_order_generated_to_uploaded_queued.xml",  # noqa: E501
+        "security/ir.model.access.csv",
+    ],
+    "demo": ["demo/invoice.xml"],
+    "external_dependencies": {"python": ["b2sdk", "bi_sc_client", "pyopencell"]},
+    "application": False,
+    "installable": True,
+}
