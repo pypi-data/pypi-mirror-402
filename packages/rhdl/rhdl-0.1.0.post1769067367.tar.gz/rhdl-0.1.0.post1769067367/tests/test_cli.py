@@ -1,0 +1,180 @@
+import pytest
+
+from rhdlcli.cli import parse_arguments
+
+
+def test_parse_arguments_command_argument():
+    assert parse_arguments(["login"])["command"] == "login"
+    assert parse_arguments(["download", "RHEL-9.4"])["command"] == "download"
+    assert (
+        parse_arguments(["download-pull-secret"])["command"] == "download-pull-secret"
+    )
+
+
+def test_parse_arguments_download_command_no_options():
+    args = parse_arguments(["download", "RHEL-9.4"], "/home/dci")
+    assert args["destination"] == "/home/dci/RHEL-9.4"
+    assert args["tag"] == "milestone"
+    assert args["compose"] == "RHEL-9.4"
+    assert args["include_and_exclude"] == [
+        {"pattern": ".composeinfo", "type": "include"},
+        {"pattern": "metadata/*", "type": "include"},
+        {"pattern": "AppStream/x86_64/os/*", "type": "include"},
+        {"pattern": "BaseOS/x86_64/os/*", "type": "include"},
+        {"pattern": "*", "type": "exclude"},
+    ]
+
+
+def test_parse_arguments_download_command_custom_destination():
+    args = parse_arguments(["download", "RHEL-9.4", "-d", "/tmp/d1"])
+    assert args["destination"] == "/tmp/d1/RHEL-9.4"
+
+    args = parse_arguments(["download", "RHEL-9.4", "--destination", "/tmp/d2"])
+    assert args["destination"] == "/tmp/d2/RHEL-9.4"
+
+    cwd = "/tmp"
+    args = parse_arguments(
+        ["download", "RHEL-9.4", "-d", "../home/rhdl", "-t", "nightly"], cwd
+    )
+    assert args["destination"] == "/home/rhdl/RHEL-9.4"
+
+
+def test_parse_arguments_download_command_custom_tag():
+    assert (
+        parse_arguments(["download", "RHEL-9.4", "-t", "candidate"])["tag"]
+        == "candidate"
+    )
+    assert (
+        parse_arguments(["download", "RHEL-9.4", "--tag", "nightly"])["tag"]
+        == "nightly"
+    )
+
+
+def test_parse_arguments_download_command_include_and_exclude_in_order():
+    assert parse_arguments(
+        [
+            "download",
+            "RHEL-9.4",
+            "-i",
+            "AppStream/x86_64/os/*",
+            "--exclude",
+            "*/aarch64/*",
+            "--include",
+            "BaseOS/x86_64/os/*",
+            "--exclude",
+            "*",
+        ]
+    )["include_and_exclude"] == [
+        {"pattern": "AppStream/x86_64/os/*", "type": "include"},
+        {"pattern": "*/aarch64/*", "type": "exclude"},
+        {"pattern": "BaseOS/x86_64/os/*", "type": "include"},
+        {"pattern": "*", "type": "exclude"},
+    ]
+
+
+def test_parse_arguments_download_pull_secret_no_options():
+    args = parse_arguments(["download-pull-secret"])
+    assert args["destination"].endswith("/.docker/config.json")
+    assert args["force"] is False
+    assert args["merge"] is False
+
+
+def test_parse_arguments_download_pull_secret_custom_destination():
+    args = parse_arguments(
+        ["download-pull-secret", "--destination", "/path/to/pull-secret.json"]
+    )
+    assert args["destination"] == "/path/to/pull-secret.json"
+
+    args = parse_arguments(["download-pull-secret", "-d", "/path/to/pull-secret.json"])
+    assert args["destination"] == "/path/to/pull-secret.json"
+
+
+def test_parse_arguments_download_pull_secret_force():
+    args = parse_arguments(["download-pull-secret", "-f"])
+    assert args["force"]
+
+    args = parse_arguments(["download-pull-secret", "--force"])
+    assert args["force"]
+
+
+def test_parse_arguments_download_pull_secret_merge():
+    args = parse_arguments(["download-pull-secret", "-m"])
+    assert args["merge"]
+
+    args = parse_arguments(["download-pull-secret", "--merge"])
+    assert args["merge"]
+
+
+def test_parse_arguments_download_pull_secret_other_parameter_are_not_present():
+    args = parse_arguments(["download-pull-secret"])
+    assert "compose" not in args
+
+
+def test_should_raise_exception_when_command_is_invalid():
+    with pytest.raises(SystemExit):
+        parse_arguments(["send", "RHEL-9.4"])
+
+
+def test_documentation_saying_default_command_is_equivalent_to():
+    assert parse_arguments(
+        [
+            "download",
+            "RHEL-9.4",
+        ]
+    ) == parse_arguments(
+        [
+            "download",
+            "RHEL-9.4",
+            "--destination",
+            ".",
+            "--include",
+            ".composeinfo",
+            "--include",
+            "metadata/*",
+            "--include",
+            "AppStream/x86_64/os/*",
+            "--include",
+            "BaseOS/x86_64/os/*",
+            "--exclude",
+            "*",
+        ]
+    )
+
+
+def test_with_flat_and_no_destination_should_download_in_current_directory():
+    cwd = "/home/dci"
+    args = parse_arguments(["download", "RHEL-9.4", "--flat"], cwd)
+    assert args["destination"] == "/home/dci"
+    assert args["flat"]
+
+
+def test_with_flat_and_custom_destination_should_download_directly_in_destination():
+    args = parse_arguments(["download", "RHEL-9.4", "--flat", "-d", "/tmp/repo"])
+    assert args["destination"] == "/tmp/repo"
+    assert args["flat"]
+
+
+def test_parse_arguments_creates_subdirectory_by_default():
+    cwd = "/home/user"
+    args = parse_arguments(["download", "RHEL-10"], cwd)
+    assert args["destination"] == "/home/user/RHEL-10"
+    assert args["flat"] is False
+
+    args = parse_arguments(["download", "RHEL-10", "-d", "repos"], cwd)
+    assert args["destination"] == "/home/user/repos/RHEL-10"
+    assert args["flat"] is False
+
+    args = parse_arguments(["download", "RHEL-10", "-d", "/opt/mirrors"], cwd)
+    assert args["destination"] == "/opt/mirrors/RHEL-10"
+    assert args["flat"] is False
+
+
+def test_parse_arguments_force_flag():
+    args = parse_arguments(["download", "RHEL-10"])
+    assert args["force"] is False
+
+    args = parse_arguments(["download", "RHEL-10", "--force"])
+    assert args["force"] is True
+
+    args = parse_arguments(["download", "RHEL-10", "-f"])
+    assert args["force"] is True
