@@ -1,0 +1,116 @@
+[project]
+name = "jmes-tts"
+version = "0.0.2"
+description = "Generate audio from text documents"
+authors = [
+    { name="James Saryerwinnie", email="js@jamesls.com" }
+]
+license = "Apache-2.0"
+readme = "README.md"
+
+
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
+]
+requires-python = ">=3.12.0"
+
+dependencies = [
+  "typer>=0.20.0,<0.22.0",
+  "boto3>=1.34.133,<2.0.0",
+  "botocore-stubs>=1.34.132,<2.0.0",
+  "boto3-stubs[polly,s3]>=1.34.133,<2.0.0",
+]
+
+[dependency-groups]
+dev = [
+  "ast-grep-cli",
+  "pytest>=8.4.2",
+  "pytest-cov>=7.0.0",
+  "mkdocstrings>=0.30.0",
+  "mkdocs-material>=9.6.20",
+  "pymdown-extensions>=10.16.1",
+  "pytest-github-actions-annotate-failures>=0.3.0",
+  "jmeslog>=0.2.0",
+  "poethepoet>=0.37.0",
+  "ruff>=0.13.0",
+  "pyright[nodejs]>=1.1.405",
+  "pygments>=2.19.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jmestts"]
+
+
+[tool.ruff]
+line-length = 79
+
+[tool.ruff.lint]
+extend-select = ["C901", "PLR0915", "E501", "SLF001"]
+
+[tool.ruff.format]
+quote-style = "preserve"
+preview = true
+
+[tool.pytest.ini_options]
+addopts = """\
+    --cov jmestts \
+    --cov-report term-missing \
+    --no-cov-on-fail \
+"""
+
+[tool.coverage.run]
+branch = true
+source = ["src/"]
+
+[tool.coverage.report]
+exclude_lines = [
+    'if TYPE_CHECKING:',
+    'pragma: no cover',
+    'raise NotImplementedError',
+]
+
+[tool.pyright]
+include = ["src"]
+exclude = ["**/__pycache__"]
+
+reportMissingImports = true
+reportMissingTypeStubs = false
+reportTypedDictNotRequiredAccess = false
+
+pythonVersion = "3.12"
+pythonPlatform = "All"
+
+[tool.poe.tasks]
+check = [
+  { cmd = "uv run ruff check ." },
+  { cmd = "uv run ruff format --diff ." },
+  { cmd = "uv run pyright" },
+  { cmd = "uv run ast-grep scan ." },
+]
+test = "uv run pytest tests/"
+stage-release = "python3 ./scripts/stage-release --output staged-release.zip"
+auto-check = [
+  { cmd = "uv run ruff format ." },
+  { cmd = "uv run ruff check --fix ." },
+  { cmd = "uv run pyright" },
+  { cmd = "uv run ast-grep scan ." },
+]
+format-code = [
+  { cmd = "uv run ruff format ." },
+]
+prcheck = ["check", "test"]
+
+# Create a jmes-tts CLI command
+[project.scripts]
+jmes-tts = "jmestts.cli:app"
