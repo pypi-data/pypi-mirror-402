@@ -1,0 +1,56 @@
+name: Publish Python 🐍
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Build react frontend
+        run: |
+          cd streamlit_date_events/frontend
+          npm install
+          npm run build
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to PyPI
+        id: pypi-publish
+        continue-on-error: true
+        env:
+          TWINE_USERNAME: "__token__"
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          python -m twine upload dist/* --verbose
+
+      - name: Check upload status for PyPI
+        if: steps.pypi-publish.outcome == 'failure'
+        run: |
+          echo "❌ PyPI upload failed!"
+          echo "Common errors:"
+          echo "- Version already exists on PyPI (bump version in pyproject.toml)"
+          echo "- Invalid token"
+          echo "- Network issues"
+          exit 1
