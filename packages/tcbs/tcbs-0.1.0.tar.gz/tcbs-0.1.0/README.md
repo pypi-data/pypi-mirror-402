@@ -1,0 +1,404 @@
+# TCBS Python SDK | Thư viện Python TCBS
+
+[English](#english) | [Tiếng Việt](#tiếng-việt)
+
+---
+
+## English
+
+Lightweight Python library for Techcom Securities (TCBS) iFlash Open API.
+
+## ⚠️ CRITICAL SECURITY WARNINGS
+
+### 🔐 API Key Security
+- **NEVER commit your API key to version control** (Git, GitHub, etc.)
+- **NEVER share your API key** with anyone or post it publicly
+- **NEVER hardcode API keys** in your source code
+- Store API keys in environment variables or secure configuration files
+- Add `.key`, `*.key`, and config files to `.gitignore`
+- **Your API key has full access to your trading account** - treat it like your password!
+
+### 💰 Financial Risk Warning
+- **ALWAYS test your code in a safe environment first**
+- **DOUBLE-CHECK all order parameters** before executing trades
+- **Start with small quantities** when testing live trading
+- **Understand that trading operations can result in financial loss**
+- This library executes real trades that affect your P&L (Profit & Loss)
+- **Comment out trading functions** (place_order, update_order) until you're ready
+- **No warranty provided** - use at your own risk
+
+### 🧪 Testing Best Practices
+```python
+# ✅ GOOD: Use environment variables
+import os
+api_key = os.getenv("TCBS_API_KEY")
+
+# ❌ BAD: Hardcoded API key
+api_key = "0001688490-5e56d6b1-b868-45e0-a56a-abfa062ecc2c"  # NEVER DO THIS!
+
+# ✅ GOOD: Test with read-only operations first
+profile = client.get_profile(custody_code="105C334455")
+power = client.get_purchasing_power(account_no="0001170730")
+
+# ⚠️ CAUTION: Comment out trading operations until ready
+# order = client.place_order(...)  # Uncomment only when ready to trade
+```
+
+## Installation
+
+```bash
+pip install tcbs
+```
+
+## Quick Start
+
+```python
+from tcbs import TCBSClient
+
+# Initialize client with your API key
+client = TCBSClient(api_key="your_api_key")
+
+# First call will prompt for OTP (token is cached for 8 hours)
+profile = client.get_profile(custody_code="105C334455")
+
+# Place a stock order
+order = client.place_order(
+    account_no="0001170730",
+    symbol="FPT",
+    side="B",  # Buy
+    price=52000,
+    quantity=100,
+    price_type="LO"  # Limit order
+)
+
+# Get order book
+orders = client.get_order_book(account_no="0001170730")
+
+# Get purchasing power
+power = client.get_purchasing_power(account_no="0001170730", symbol="FPT")
+```
+
+## Features
+
+### Authentication
+- **Automatic token management**: JWT tokens are cached locally (~/.tcbs_token.json)
+- **Auto-refresh**: Prompts for OTP only when token expires (8-hour lifetime)
+- **Secure storage**: Token file has restricted permissions (0600)
+
+### Stock Trading
+```python
+# Place order
+client.place_order(account_no, symbol, side, price, quantity, price_type)
+
+# Update order
+client.update_order(account_no, order_id, price=new_price, quantity=new_qty)
+
+# Cancel order(s)
+client.cancel_order(account_no, order_ids=["order_id_1", "order_id_2"])
+
+# Get orders
+client.get_order_book(account_no)
+client.get_order_by_id(account_no, order_id)
+client.get_matching_details(account_no)
+
+# Purchasing power
+client.get_purchasing_power(account_no)  # General
+client.get_purchasing_power(account_no, symbol="FPT")  # By symbol
+client.get_purchasing_power(account_no, symbol="FPT", price=52000)  # By symbol + price
+
+# Assets
+client.get_asset(account_no)
+client.get_cash_investment(account_no)
+client.get_margin_quota(custody_id)
+```
+
+### Derivative Trading
+```python
+# Get derivative status
+status = client.get_derivative_status(
+    account_id="105C031402",
+    sub_account_id="105C031402A"
+)
+
+# Place derivative order
+order = client.place_derivative_order(
+    account_id="105C031402",
+    sub_account_id="105C031402A",
+    symbol="VN30F2303",
+    side="B",  # Long
+    price=1198.7,
+    volume=1
+)
+
+# Get derivative orders
+orders = client.get_derivative_orders(
+    account_id="105C031402",
+    page_no=1,
+    page_size=20,
+    status="0"  # All
+)
+```
+
+### Market Data
+```python
+# Get market info
+info = client.get_market_info(tickers="FPT,VNM,HPG")
+
+# Get price history
+history = client.get_price_history(ticker="FPT", page=0, size=50)
+
+# Get foreign room
+room = client.get_foreign_room(index="VNINDEX")
+```
+
+## API Reference
+
+### Order Sides
+- `"B"`: Buy (Long for derivatives)
+- `"S"`: Sell (Short for derivatives)
+
+### Price Types
+- `"LO"`: Limit Order
+- `"MP"`: Market Price
+- `"ATO"`: At The Open
+- `"ATC"`: At The Close
+
+### Order Status (Derivatives)
+- `"0"`: All
+- `"1"`: Pending
+- `"2"`: Matched
+
+## Error Handling
+
+```python
+from tcbs import TCBSClient, TCBSAuthError, TCBSAPIError
+
+try:
+    client = TCBSClient(api_key="your_key")
+    orders = client.get_order_book(account_no="0001170730")
+except TCBSAuthError as e:
+    print(f"Authentication failed: {e}")
+except TCBSAPIError as e:
+    print(f"API error: {e}")
+```
+
+## Environment
+
+- **Production**: `https://openapi.tcbs.com.vn` (hardcoded)
+- **Python**: 3.8+
+- **Dependencies**: requests
+
+## License
+
+MIT License
+
+## Support
+
+For API documentation and support, visit:
+- Email: cskh@tcbs.com.vn
+- Website: https://developers.tcbs.com.vn
+
+---
+
+## Tiếng Việt
+
+Thư viện Python nhẹ cho Techcom Securities (TCBS) iFlash Open API.
+
+## ⚠️ CẢNH BÁO BẢO MẬT QUAN TRỌNG
+
+### 🔐 Bảo Mật API Key
+- **TUYỆT ĐỐI KHÔNG commit API key** lên Git, GitHub hay bất kỳ hệ thống quản lý mã nguồn nào
+- **TUYỆT ĐỐI KHÔNG chia sẻ API key** với bất kỳ ai hoặc đăng công khai
+- **TUYỆT ĐỐI KHÔNG hardcode API key** trực tiếp trong mã nguồn
+- Lưu API key trong biến môi trường hoặc file cấu hình bảo mật
+- Thêm `.key`, `*.key` và các file config vào `.gitignore`
+- **API key của bạn có toàn quyền truy cập tài khoản giao dịch** - hãy bảo vệ nó như mật khẩu!
+
+### 💰 Cảnh Báo Rủi Ro Tài Chính
+- **LUÔN LUÔN kiểm tra kỹ code** trong môi trường an toàn trước
+- **KIỂM TRA KỸ tất cả tham số lệnh** trước khi thực hiện giao dịch
+- **Bắt đầu với khối lượng nhỏ** khi test giao dịch thực
+- **Hiểu rằng các thao tác giao dịch có thể gây thua lỗ tài chính**
+- Thư viện này thực hiện giao dịch thực ảnh hưởng trực tiếp đến P&L (Lãi/Lỗ)
+- **Comment các hàm giao dịch** (place_order, update_order) cho đến khi sẵn sàng
+- **Không có bảo hành** - sử dụng với trách nhiệm của bạn
+
+### 🧪 Thực Hành Kiểm Tra Tốt
+```python
+# ✅ TỐT: Sử dụng biến môi trường
+import os
+api_key = os.getenv("TCBS_API_KEY")
+
+# ❌ TỆ: Hardcode API key
+api_key = "0001688490-5e56d6b1-b868-45e0-a56a-abfa062ecc2c"  # TUYỆT ĐỐI KHÔNG LÀM NHƯ VẬY!
+
+# ✅ TỐT: Test với các thao tác chỉ đọc trước
+profile = client.get_profile(custody_code="105C334455")
+power = client.get_purchasing_power(account_no="0001170730")
+
+# ⚠️ THẬN TRỌNG: Comment các thao tác giao dịch cho đến khi sẵn sàng
+# order = client.place_order(...)  # Chỉ bỏ comment khi sẵn sàng giao dịch
+```
+
+## Cài Đặt
+
+```bash
+pip install tcbs
+```
+
+## Bắt Đầu Nhanh
+
+```python
+from tcbs import TCBSClient
+
+# Khởi tạo client với API key (dùng biến môi trường!)
+import os
+client = TCBSClient(api_key=os.getenv("TCBS_API_KEY"))
+
+# Lần gọi đầu tiên sẽ yêu cầu OTP (token được cache 8 giờ)
+profile = client.get_profile(custody_code="105C334455")
+
+# Đặt lệnh mua cổ phiếu (CHỈ KHI ĐÃ KIỂM TRA KỸ!)
+order = client.place_order(
+    account_no="0001170730",
+    symbol="FPT",
+    side="B",  # Mua
+    price=52000,
+    quantity=100,
+    price_type="LO"  # Lệnh giới hạn
+)
+
+# Xem sổ lệnh
+orders = client.get_order_book(account_no="0001170730")
+
+# Xem sức mua
+power = client.get_purchasing_power(account_no="0001170730", symbol="FPT")
+```
+
+## Tính Năng
+
+### Xác Thực
+- **Quản lý token tự động**: JWT token được cache cục bộ (~/.tcbs_token.json)
+- **Tự động làm mới**: Chỉ yêu cầu OTP khi token hết hạn (thời gian sống 8 giờ)
+- **Lưu trữ bảo mật**: File token có quyền hạn chế (0600)
+
+### Giao Dịch Cổ Phiếu
+```python
+# Đặt lệnh
+client.place_order(account_no, symbol, side, price, quantity, price_type)
+
+# Sửa lệnh
+client.update_order(account_no, order_id, price=new_price, quantity=new_qty)
+
+# Hủy lệnh
+client.cancel_order(account_no, order_ids=["order_id_1", "order_id_2"])
+
+# Xem lệnh
+client.get_order_book(account_no)
+client.get_order_by_id(account_no, order_id)
+client.get_matching_details(account_no)
+
+# Sức mua
+client.get_purchasing_power(account_no)  # Tổng quát
+client.get_purchasing_power(account_no, symbol="FPT")  # Theo mã
+client.get_purchasing_power(account_no, symbol="FPT", price=52000)  # Theo mã + giá
+
+# Tài sản
+client.get_asset(account_no)
+client.get_cash_investment(account_no)
+client.get_margin_quota(custody_id)
+```
+
+### Giao Dịch Phái Sinh
+```python
+# Xem trạng thái phái sinh
+status = client.get_derivative_status(
+    account_id="105C031402",
+    sub_account_id="105C031402A"
+)
+
+# Đặt lệnh phái sinh
+order = client.place_derivative_order(
+    account_id="105C031402",
+    sub_account_id="105C031402A",
+    symbol="VN30F2303",
+    side="B",  # Long
+    price=1198.7,
+    volume=1
+)
+
+# Xem lệnh phái sinh
+orders = client.get_derivative_orders(
+    account_id="105C031402",
+    page_no=1,
+    page_size=20,
+    status="0"  # Tất cả
+)
+```
+
+### Dữ Liệu Thị Trường
+```python
+# Thông tin thị trường
+info = client.get_market_info(tickers="FPT,VNM,HPG")
+
+# Lịch sử giá
+history = client.get_price_history(ticker="FPT", page=0, size=50)
+
+# Room ngoại
+room = client.get_foreign_room(index="VNINDEX")
+```
+
+## Tài Liệu API
+
+### Loại Lệnh
+- `"B"`: Mua (Long cho phái sinh)
+- `"S"`: Bán (Short cho phái sinh)
+
+### Loại Giá
+- `"LO"`: Lệnh giới hạn
+- `"MP"`: Giá thị trường
+- `"ATO"`: Khớp lệnh mở cửa
+- `"ATC"`: Khớp lệnh đóng cửa
+
+### Trạng Thái Lệnh (Phái sinh)
+- `"0"`: Tất cả
+- `"1"`: Chờ khớp
+- `"2"`: Đã khớp
+
+## Xử Lý Lỗi
+
+```python
+from tcbs import TCBSClient, TCBSAuthError, TCBSAPIError
+
+try:
+    client = TCBSClient(api_key=os.getenv("TCBS_API_KEY"))
+    orders = client.get_order_book(account_no="0001170730")
+except TCBSAuthError as e:
+    print(f"Lỗi xác thực: {e}")
+except TCBSAPIError as e:
+    print(f"Lỗi API: {e}")
+```
+
+## Môi Trường
+
+- **Production**: `https://openapi.tcbs.com.vn` (hardcoded)
+- **Python**: 3.8+
+- **Dependencies**: requests
+
+## Giấy Phép
+
+MIT License
+
+## Hỗ Trợ
+
+Để biết tài liệu API và hỗ trợ, truy cập:
+- Email: cskh@tcbs.com.vn
+- Website: https://developers.tcbs.com.vn
+
+---
+
+## 🛡️ Disclaimer | Tuyên Bố Miễn Trừ Trách Nhiệm
+
+**EN**: This library is provided "as is" without warranty of any kind. Trading stocks and derivatives involves substantial risk of loss. Always verify your code and test thoroughly before executing real trades. The authors and contributors are not responsible for any financial losses incurred through the use of this library.
+
+**VI**: Thư viện này được cung cấp "nguyên trạng" không có bảo hành dưới bất kỳ hình thức nào. Giao dịch cổ phiếu và phái sinh có rủi ro thua lỗ đáng kể. Luôn kiểm tra code và test kỹ lưỡng trước khi thực hiện giao dịch thực. Tác giả và người đóng góp không chịu trách nhiệm về bất kỳ tổn thất tài chính nào phát sinh từ việc sử dụng thư viện này.
