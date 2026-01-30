@@ -1,0 +1,100 @@
+"""Compare tool implementation - side-by-side multi-model execution with per-model history."""
+
+import logging
+from typing import Literal
+
+from quantum_code.memory.store import make_model_thread_id, store_conversation_turn
+from quantum_code.prompts import COMPARE_PROMPT
+from quantum_code.schemas.base import ModelResponse
+from quantum_code.schemas.compare import CompareResponse
+from quantum_code.utils.intent import extract_intent
+from quantum_code.utils.llm_runner import execute_parallel
+from quantum_code.utils.message_builder import MessageBuilder
+
+logger = logging.getLogger(__name__)
+
+
+async def compare_impl(
+    name: str,
+    content: str,
+    step_number: int,
+    next_action: Literal["continue", "stop"],
+    base_path: str,
+    models: list[str],
+    thread_id: str,
+    relevant_files: list[str] | None = None,
+) -> dict:
+    """Compare implementation with per-model conversation history.
+
+    Each model maintains its own conversation history using composite thread IDs.
+    When called with the same thread_id, each model sees its own prior responses.
+    """
+    logger.info(f"[COMPARE] Starting with {len(models)} models, {len(relevant_files or [])} files")
+
+    # Build per-model messages with individual history
+    per_model_messages: dict[str, list[dict]] = {}
+    for model in models:
+        model_thread_id = make_model_thread_id(thread_id, model)
+        messages = await (
+            MessageBuilder(
+                system_prompt=COMPARE_PROMPT,
+                base_path=base_path,
+                thread_id=model_thread_id,
+                include_history=True,
+            )
+            .add_conversation_history()
+            .add_repository_context()
+            .add_files(relevant_files)
+            .add_user_message(content)
+            .build()
+        )
+        per_model_messages[model] = messages
+
+    # Execute with per-model messages
+    results: list[ModelResponse] = await execute_parallel(
+        models=models,
+        messages=per_model_messages,
+        enable_web_search=True,
+    )
+
+    # Store conversation for successful models
+    for model, response in zip(models, results, strict=True):
+        if response.status == "success":
+            model_thread_id = make_model_thread_id(thread_id, model)
+            await store_conversation_turn(
+                model_thread_id,
+                per_model_messages[model],
+                response.content,
+            )
+
+    # Build response
+    successes = sum(1 for r in results if r.status == "success")
+    if successes == len(results):
+        status = "success"
+        summary = f"Compare complete: all {len(results)} models succeeded"
+    elif successes > 0:
+        status = "partial"
+        failed = [r.metadata.model for r in results if r.status == "error"]
+        summary = f"Compare: {successes}/{len(results)} succeeded. Failed: {', '.join(failed)}"
+    else:
+        status = "error"
+        summary = f"Compare failed: all {len(results)} models failed"
+
+    # Extract intent from first successful response
+    intent: str | None = None
+    for r in results:
+        if r.status == "success":
+            intent = extract_intent(r.content, default="compare")
+            break
+    if intent is None:
+        intent = "compare"
+
+    logger.info(f"[COMPARE] Complete: {successes}/{len(results)} models succeeded, intent={intent}")
+
+    return CompareResponse(
+        thread_id=thread_id,
+        status=status,  # type: ignore[arg-type]
+        summary=summary,
+        results=results,
+        intent=intent,
+    ).model_dump(exclude_none=True)
