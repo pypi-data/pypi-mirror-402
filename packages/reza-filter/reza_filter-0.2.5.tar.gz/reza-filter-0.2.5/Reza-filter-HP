@@ -1,0 +1,92 @@
+import numpy as np
+
+def reza_high_pass_filter(
+    data,
+    fs,
+    fc,
+    c=0.9,
+    offset=1.0,
+    d=None,
+    initial_d=10.0,
+    d_increment=5.0,
+    threshold=1e-4,
+    max_iter=200,
+    axis=-1,
+    return_params=False,
+):
+    """
+    Reza Exponential HIGH-PASS (frequency-domain magnitude template).
+      gain(f) = 1                                  for f >= fc
+              = exp( -c * ((fc - f) + offset)^d )  for f <  fc
+
+    If d is None, d is auto-tuned using edge-sharpness stabilization.
+    """
+    x = np.asarray(data, dtype=float)
+
+    # ---- local helpers ----
+    def _validate():
+        if fs is None or fs <= 0:
+            raise ValueError(f"fs must be positive. Got fs={fs}.")
+        if not isinstance(axis, int):
+            raise ValueError("axis must be an int.")
+        if axis < -x.ndim or axis >= x.ndim:
+            raise ValueError(f"axis={axis} out of bounds for ndim={x.ndim}.")
+        nyq = 0.5 * fs
+        if not (0.0 < fc < nyq):
+            raise ValueError(f"fc must satisfy 0 < fc < fs/2. Got fc={fc}, fs/2={nyq}.")
+
+    def _gain_hp(freqs, fc_, c_, off_, d_):
+        return np.where(
+            freqs >= fc_,
+            1.0,
+            np.exp(-c_ * ((fc_ - freqs) + off_) ** d_),
+        )
+
+    def _auto_tune_d(freqs):
+        d_val = float(initial_d)
+        last_sharp = 0.0
+        sharp_impr = np.inf
+
+        for _ in range(int(max_iter)):
+            g = _gain_hp(freqs, fc, c, offset, d_val)
+
+            idx_fc = int(np.searchsorted(freqs, fc))
+            idx_fc = min(max(idx_fc, 0), len(g) - 1)
+            idx_lo = max(idx_fc - 1, 0)
+            idx_hi = min(idx_fc + 1, len(g) - 1)
+
+            # Sharpness at HP edge (near fc)
+            if idx_lo != idx_fc:
+                sharp = abs(g[idx_fc] - g[idx_lo])
+            else:
+                sharp = abs(g[idx_hi] - g[idx_fc])
+
+            sharp_impr = abs(sharp - last_sharp)
+            if sharp_impr > threshold:
+                last_sharp = sharp
+                d_val += d_increment
+            else:
+                break
+
+        return d_val
+
+    # ---- main ----
+    _validate()
+
+    x_m = np.moveaxis(x, axis, -1)
+    n = x_m.shape[-1]
+    if n < 2:
+        raise ValueError("data length along filtering axis must be >= 2.")
+
+    freqs = np.fft.rfftfreq(n, d=1.0 / fs)
+    d_used = float(d) if d is not None else _auto_tune_d(freqs)
+
+    gain = _gain_hp(freqs, fc, c, offset, d_used)
+    X = np.fft.rfft(x_m, axis=-1)
+    Y = X * gain
+    y_m = np.fft.irfft(Y, n=n, axis=-1)
+    y = np.moveaxis(y_m, -1, axis)
+
+    if return_params:
+        return y, {"d": d_used, "fc": fc, "c": c, "offset": offset}
+    return y
