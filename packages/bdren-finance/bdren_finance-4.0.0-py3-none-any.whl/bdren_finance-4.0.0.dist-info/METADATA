@@ -1,0 +1,457 @@
+Metadata-Version: 2.4
+Name: bdren-finance
+Version: 4.0.0
+Summary: A comprehensive Python package for interacting with the BdREN Finance API
+Home-page: https://github.com/shuvoooo/bdren_finance_api_package
+Author: Shuvo
+Author-email: Shuvo <shuvo.punam@gmail.com>
+License: MIT
+Project-URL: Homepage, https://github.com/shuvoooo/bdren_finance_api_package
+Project-URL: Documentation, https://github.com/shuvoooo/bdren_finance_api_package#readme
+Project-URL: Repository, https://github.com/shuvoooo/bdren_finance_api_package
+Project-URL: Issues, https://github.com/shuvoooo/bdren_finance_api_package/issues
+Keywords: bdren,finance,api,django,accounting,financial
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Topic :: Office/Business :: Financial
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Operating System :: OS Independent
+Classifier: Framework :: Django
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: requests>=2.20.0
+Requires-Dist: urllib3>=1.24.0
+Requires-Dist: Django>=2.0
+Dynamic: author
+Dynamic: home-page
+Dynamic: license-file
+Dynamic: requires-python
+
+# BdREN Finance API Package
+
+A comprehensive Python package for interacting with the BdREN Finance API. This package provides a simple and intuitive interface for managing financial entries, accounts, and transactions.
+
+[![Python Version](https://img.shields.io/badge/python-3.6+-blue.svg)](https://www.python.org/downloads/)
+[![Django Version](https://img.shields.io/badge/django-2.0+-green.svg)](https://www.djangoproject.com/)
+
+## 🚀 Features
+
+- ✅ **Complete API Coverage**: Full support for all BdREN Finance API endpoints
+- ✅ **Type Hints**: Full type annotations for better IDE support
+- ✅ **Error Handling**: Custom exceptions for different error scenarios
+- ✅ **Logging**: Built-in logging for debugging and monitoring
+- ✅ **Validation**: Automatic input parameter validation
+- ✅ **Session Management**: Automatic session handling and cleanup
+- ✅ **Django Integration**: Seamless Django integration
+
+## 📦 Installation
+
+### Using pip
+
+```bash
+pip install bdren-finance
+```
+
+### From source
+
+```bash
+git clone <repository-url>
+cd bdren_finance_api_package
+pip install -e .
+```
+
+### Dependencies
+
+- Python >= 3.6
+- Django >= 2.0
+- requests >= 2.20.0
+- urllib3 >= 1.24.0
+
+## ⚙️ Configuration
+
+Add to your Django `settings.py`:
+
+```python
+# BdREN Finance API Configuration
+BDREN_FINANCE_URL = 'https://finance.bdren.net.bd/'
+BDREN_FINANCE_AUTH_EMAIL = 'your-email@example.com'
+BDREN_FINANCE_AUTH_PASSWORD = 'your-password'
+```
+
+**Recommended: Use environment variables**
+
+```python
+import os
+
+BDREN_FINANCE_URL = os.getenv('BDREN_FINANCE_URL', 'https://finance.bdren.net.bd/')
+BDREN_FINANCE_AUTH_EMAIL = os.getenv('BDREN_FINANCE_AUTH_EMAIL')
+BDREN_FINANCE_AUTH_PASSWORD = os.getenv('BDREN_FINANCE_AUTH_PASSWORD')
+```
+
+## 🎯 Quick Start
+
+```python
+from bdren_finance import get_accounts, create_entry, get_entry, update_entry
+
+# Search for accounts
+accounts = get_accounts(query="1234", _type="sub", field="no")
+print(accounts)
+
+# Create a new entry
+payload = {
+    "transNo": "",
+    "transDate": "2026-01-22",
+    "generalParticular": "Monthly subscription payment",
+    "vouchers": [
+        {
+            "accountNo": 15600005,
+            "drAmount": 1000,
+            "crAmount": 0,
+            "particular": "Bank account debited",
+            "type": "dr"
+        },
+        {
+            "accountNo": 16600114,
+            "drAmount": 0,
+            "crAmount": 1000,
+            "particular": "Revenue account credited",
+            "type": "cr"
+        }
+    ]
+}
+
+result = create_entry(payload)
+print(f"Entry created: {result['id']}")
+
+# Retrieve an entry
+entry = get_entry(12345)
+print(entry)
+
+# Update an entry
+result = update_entry(12345, updated_payload)
+print("Entry updated successfully")
+```
+
+## 📚 API Reference
+
+### Authentication
+
+#### `finance_login_session()`
+Creates an authenticated session with the API.
+
+**Returns:** `requests.Session`
+
+**Raises:** `BdRENFinanceAuthError`, `BdRENFinanceConnectionError`
+
+---
+
+### Accounts
+
+#### `get_accounts(query, _type="all", field="no")`
+Search and retrieve accounts.
+
+**Parameters:**
+- `query` (str): Search query
+- `_type` (str): Account type - `"all"`, `"parent"`, or `"sub"` (default: `"all"`)
+- `field` (str): Search field - `"no"` or `"name"` (default: `"no"`)
+
+**Returns:** `Dict[str, Any]`
+
+**Example:**
+```python
+# Search by account number
+accounts = get_accounts("15600005", _type="sub", field="no")
+
+# Search by name
+accounts = get_accounts("Bank", field="name")
+```
+
+---
+
+### Entries
+
+#### `create_entry(payload)`
+Create a new financial entry.
+
+**Parameters:**
+- `payload` (Union[Dict, str]): Entry data as dict or JSON string
+
+**Payload Structure:**
+```python
+{
+    "transNo": "",  # Leave empty for auto-generation
+    "transDate": "YYYY-MM-DD",  # Required
+    "generalParticular": "Description",  # Required
+    "vouchers": [  # Required, at least one
+        {
+            "accountNo": int,  # Required
+            "drAmount": float,  # Required
+            "crAmount": float,  # Required
+            "particular": "Description",  # Required
+            "type": "dr" | "cr"  # Required
+        }
+    ]
+}
+```
+
+**Returns:** `Dict[str, Any]`
+
+**Example:**
+```python
+from datetime import date
+
+payload = {
+    "transNo": "",
+    "transDate": date.today().strftime("%Y-%m-%d"),
+    "generalParticular": "Internet subscription",
+    "vouchers": [
+        {
+            "accountNo": 15600005,
+            "drAmount": 5000,
+            "crAmount": 0,
+            "particular": "Bank debited",
+            "type": "dr"
+        },
+        {
+            "accountNo": 16600114,
+            "drAmount": 0,
+            "crAmount": 5000,
+            "particular": "Revenue credited",
+            "type": "cr"
+        }
+    ]
+}
+
+result = create_entry(payload)
+```
+
+---
+
+#### `get_entry(entry_id)`
+Retrieve a specific entry.
+
+**Parameters:**
+- `entry_id` (int): Entry ID (must be positive integer)
+
+**Returns:** `Dict[str, Any]`
+
+**Example:**
+```python
+entry = get_entry(12345)
+print(f"Date: {entry['transDate']}")
+print(f"Description: {entry['generalParticular']}")
+```
+
+---
+
+#### `update_entry(trans_id, payload)`
+Update an existing entry.
+
+**Parameters:**
+- `trans_id` (int): Entry ID to update
+- `payload` (Union[Dict, str]): Updated entry data
+
+**Returns:** `Dict[str, Any]`
+
+**Example:**
+```python
+updated_payload = {
+    "transNo": "TR-12345",
+    "transDate": "2026-01-22",
+    "generalParticular": "Updated description",
+    "vouchers": [...]
+}
+
+result = update_entry(12345, updated_payload)
+```
+
+## 🚨 Exception Handling
+
+### Exception Hierarchy
+
+```
+BdRENFinanceAPIError (Base)
+├── BdRENFinanceAuthError
+├── BdRENFinanceConnectionError
+└── BdRENFinanceValidationError
+```
+
+### Example
+
+```python
+from bdren_finance import (
+    get_entry,
+    BdRENFinanceAPIError,
+    BdRENFinanceAuthError,
+    BdRENFinanceConnectionError,
+    BdRENFinanceValidationError
+)
+
+try:
+    entry = get_entry(12345)
+except BdRENFinanceValidationError as e:
+    print(f"Invalid input: {e.message}")
+except BdRENFinanceAuthError as e:
+    print(f"Authentication failed: {e.message}")
+except BdRENFinanceConnectionError as e:
+    print(f"Connection error: {e.message}")
+except BdRENFinanceAPIError as e:
+    print(f"API error: {e.message}")
+    print(f"Status: {e.status_code}")
+```
+
+## 📝 Django View Example
+
+```python
+from django.http import JsonResponse
+from bdren_finance import create_entry, BdRENFinanceAPIError
+
+def create_finance_entry(request):
+    try:
+        payload = {
+            "transNo": "",
+            "transDate": request.POST.get('date'),
+            "generalParticular": request.POST.get('description'),
+            "vouchers": [
+                {
+                    "accountNo": int(request.POST.get('debit_account')),
+                    "drAmount": float(request.POST.get('amount')),
+                    "crAmount": 0,
+                    "particular": request.POST.get('debit_description'),
+                    "type": "dr"
+                },
+                {
+                    "accountNo": int(request.POST.get('credit_account')),
+                    "drAmount": 0,
+                    "crAmount": float(request.POST.get('amount')),
+                    "particular": request.POST.get('credit_description'),
+                    "type": "cr"
+                }
+            ]
+        }
+        
+        result = create_entry(payload)
+        
+        return JsonResponse({
+            'status': 'success',
+            'entry_id': result.get('id')
+        })
+        
+    except BdRENFinanceAPIError as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': e.message
+        }, status=400)
+```
+
+## 🔧 Logging
+
+Configure logging in your Django settings:
+
+```python
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'file': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': 'bdren_finance.log',
+        },
+    },
+    'loggers': {
+        'bdren_finance': {
+            'handlers': ['file'],
+            'level': 'DEBUG',
+        },
+    },
+}
+```
+
+## 🔒 Security Notes
+
+⚠️ **Important:**
+
+1. **SSL Verification**: Disabled by default for internal networks
+2. **Credentials**: Always use environment variables, never hardcode
+3. **Network**: Designed for secure internal networks only
+4. **Logging**: Don't log sensitive information in production
+
+## 🐛 Troubleshooting
+
+### Authentication Failed
+```python
+# Check your settings
+BDREN_FINANCE_AUTH_EMAIL = 'correct-email@example.com'
+BDREN_FINANCE_AUTH_PASSWORD = 'correct-password'
+```
+
+### Connection Timeout
+```python
+# Verify URL ends with /
+BDREN_FINANCE_URL = 'https://finance.bdren.net.bd/'
+```
+
+### Invalid Payload
+```python
+# Ensure all required fields are present
+payload = {
+    "transDate": "2026-01-22",  # Required
+    "generalParticular": "Description",  # Required
+    "vouchers": [...]  # Required, non-empty
+}
+```
+
+## 📖 Full Documentation
+
+For comprehensive documentation, see [DOCUMENTATION.md](DOCUMENTATION.md)
+
+Topics covered:
+- Detailed API reference
+- Advanced examples
+- Best practices
+- Security guidelines
+- Batch processing
+- Django management commands
+- And much more...
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Write tests
+4. Submit a pull request
+
+## 📄 License
+
+Proprietary software developed for BdREN.
+
+## 📞 Support
+
+- Email: support@bdren.net.bd
+- Documentation: [DOCUMENTATION.md](DOCUMENTATION.md)
+
+## 📋 Changelog
+
+### Version 1.0.0 (2026-01-22)
+- Initial release
+- Complete API coverage
+- Type hints support
+- Comprehensive error handling
+- Logging support
+- Full documentation
+
+---
+
+**Made with ❤️ for BdREN**
