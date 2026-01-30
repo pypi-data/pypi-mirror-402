@@ -1,0 +1,155 @@
+import { useStore } from '../../store';
+import type { MessageSeverity } from '../../types';
+
+const severityIcons: Record<MessageSeverity, string> = {
+  error: '\u2298', // ⊘
+  warning: '\u26A0', // ⚠
+  info: '\u2139', // ℹ
+};
+
+export function MessagesPanel() {
+  const {
+    messages,
+    messageFilters,
+    messagesPanelExpanded,
+    messageCounts,
+    isSyncing,
+    toggleMessageFilter,
+    toggleMessagesPanel,
+    sync,
+    selectConcept,
+    selectRelationship,
+  } = useStore();
+
+  // Filter messages based on active filters
+  const filteredMessages = messages.filter((msg) => messageFilters[msg.severity]);
+
+  // Handle clicking on a message to navigate to the element
+  const handleMessageClick = (elementType?: string, elementId?: string) => {
+    if (!elementType || !elementId) return;
+    if (elementType === 'concept') {
+      selectConcept(elementId);
+    } else if (elementType === 'relationship') {
+      selectRelationship(elementId);
+    }
+  };
+
+  // Collapsed bar view
+  if (!messagesPanelExpanded) {
+    const totalCount = messages.length;
+    const hasErrors = messageCounts.error > 0;
+    const hasWarnings = messageCounts.warning > 0;
+
+    return (
+      <div className="messages-bar">
+        <div className="messages-bar-actions">
+          <button
+            className="icon-btn"
+            onClick={toggleMessagesPanel}
+            title="Expand messages panel"
+          >
+            {'\u25B6'} {/* ▶ */}
+          </button>
+          <button
+            className="icon-btn"
+            onClick={sync}
+            disabled={isSyncing}
+            title="Sync with dbt project"
+          >
+            {isSyncing ? '\u23F3' : '\u21BB'} {/* ⏳ or ↻ */}
+          </button>
+        </div>
+        {totalCount > 0 && (
+          <span className={`messages-bar-count ${!hasErrors && !hasWarnings ? 'muted' : ''}`}>
+            {totalCount}
+          </span>
+        )}
+        {hasErrors && (
+          <div className="messages-bar-badge error">!</div>
+        )}
+        {!hasErrors && hasWarnings && (
+          <div className="messages-bar-badge warning">!</div>
+        )}
+      </div>
+    );
+  }
+
+  // Expanded panel view
+  return (
+    <div className="messages-panel">
+      <div className="messages-panel-header">
+        <h3>Messages</h3>
+        <div className="messages-panel-header-actions">
+          <button
+            className="icon-btn"
+            onClick={sync}
+            disabled={isSyncing}
+            title="Sync with dbt project"
+          >
+            {isSyncing ? '\u23F3' : '\u21BB'} {/* ⏳ or ↻ */}
+          </button>
+          <button
+            className="icon-btn"
+            onClick={toggleMessagesPanel}
+            title="Collapse messages panel"
+          >
+            {'\u25C0'} {/* ◀ */}
+          </button>
+        </div>
+      </div>
+
+      <div className="messages-filters">
+        <button
+          className={`filter-toggle ${messageFilters.error ? 'selected error' : 'unselected'}`}
+          onClick={() => toggleMessageFilter('error')}
+        >
+          <span className="filter-toggle-icon">{severityIcons.error}</span>
+          <span className="filter-toggle-count">{messageCounts.error}</span>
+        </button>
+        <button
+          className={`filter-toggle ${messageFilters.warning ? 'selected warning' : 'unselected'}`}
+          onClick={() => toggleMessageFilter('warning')}
+        >
+          <span className="filter-toggle-icon">{severityIcons.warning}</span>
+          <span className="filter-toggle-count">{messageCounts.warning}</span>
+        </button>
+        <button
+          className={`filter-toggle ${messageFilters.info ? 'selected info' : 'unselected'}`}
+          onClick={() => toggleMessageFilter('info')}
+        >
+          <span className="filter-toggle-icon">{severityIcons.info}</span>
+          <span className="filter-toggle-count">{messageCounts.info}</span>
+        </button>
+      </div>
+
+      <div className="messages-list">
+        {filteredMessages.length === 0 ? (
+          <div className="message-item" style={{ justifyContent: 'center', color: 'var(--text-muted)' }}>
+            {messages.length === 0 ? 'Click sync to validate' : 'No messages match filters'}
+          </div>
+        ) : (
+          filteredMessages.map((msg) => (
+            <div
+              key={msg.id}
+              className="message-item"
+              onClick={() => handleMessageClick(msg.elementType, msg.elementId)}
+            >
+              <span className={`message-icon ${msg.severity}`}>
+                {severityIcons[msg.severity]}
+              </span>
+              <span
+                className="message-text"
+                dangerouslySetInnerHTML={{
+                  __html: msg.text.replace(
+                    /'([^']+)'/g,
+                    '<span class="highlight">$1</span>'
+                  ),
+                }}
+              />
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
