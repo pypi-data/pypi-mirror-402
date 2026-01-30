@@ -1,0 +1,193 @@
+# Net2Cell
+
+A Python package for building multi-resolution networks from GMNS (General Modeling Network Specification) format. This tool automatically generates meso-level and micro-level networks from macro networks, supports building networks from OpenStreetMap data, and intelligently generates intersection movements.
+
+## Features
+
+- **Multi-Resolution Network Generation**: Automatically generate meso and micro networks from macro networks
+- **OSM Network Support**: Direct network building from OpenStreetMap files (.osm/.pbf)
+- **Automatic Movement Generation**: Intelligent generation of intersection turning movements
+- **Complex Intersection Handling**: Support for merging and simplifying complex intersections
+- **POI Integration**: Connect Points of Interest (POI) to the road network
+- **Flexible Configuration**: Rich parameter settings for different scenarios
+- **GMNS Standard Output**: Fully compliant with GMNS format specifications
+
+## Installation
+
+### From PyPI
+
+```bash
+pip install net2cell
+```
+
+## Quick Start
+
+```python
+import net2cell as nc
+
+# Load network from GMNS format CSV files
+net = nc.loadNetFromCSV(
+    folder='path/to/network',
+    node_file='node.csv',
+    link_file='link.csv'
+)
+
+# Build multi-resolution networks
+nc.buildMultiResolutionNets(
+    net,
+    generate_micro_net=True,
+    auto_movement_generation=True,
+    exclusive_bike_walk_lanes=True,
+    width_of_lane=3.5,
+    length_of_cell=7.0,
+    num_nodes_for_ramp_alignment=8
+
+)
+
+# Output generated networks to CSV files
+nc.outputNetToCSV(
+    net,
+    output_folder='output',
+    includes=['macro', 'meso', 'micro']
+)
+```
+
+### Build Network from OpenStreetMap
+
+```python
+import net2cell as nc
+
+# Read network from OSM file
+net = nc.getNetFromFile(
+    filename='map.osm',  # or 'map.osm.pbf'
+    network_type='auto',  # 'auto', 'bike', 'walk', or 'all'
+    strict_mode=True,
+    POIs=False
+)
+
+
+nc.outputNetToCSV(net, output_folder='output')
+```
+
+## Input Data Requirements
+
+### GMNS Network Files
+
+**node.csv** (required fields):
+- `node_id`: Unique node identifier
+- `x_coord`: Longitude (lonlat coordinate system) or X coordinate
+- `y_coord`: Latitude (lonlat coordinate system) or Y coordinate
+
+**link.csv** (required fields):
+- `link_id`: Unique link identifier
+- `from_node_id`: Starting node ID
+- `to_node_id`: Ending node ID
+- `lanes`: Number of lanes
+- `geometry`: LineString geometry in WKT format
+
+### OpenStreetMap Files
+
+Supports format:
+- `.osm`: XML format OSM file
+
+## Configuration Parameters
+
+### Multi-Resolution Network Building
+
+`buildMultiResolutionNets()` function parameters:
+
+- `macronet`: Macro network object (required)
+- `generate_micro_net` (default: True): Whether to generate micro network
+- `auto_movement_generation` (default: True): Whether to automatically generate movements
+- `exclusive_bike_walk_lanes` (default: True): Whether to set exclusive bike and walk lanes
+- `connector_type` (default: None): Connector type
+- `width_of_lane` (default: 3.5): Lane width in meters
+- `length_of_cell` (default: 7.0): Cell length in meters for micro network
+- `num_nodes_for_ramp_alignment` (default: 8): Number of nodes for ramp alignment
+
+### OSM Network Building
+
+`getNetFromFile()` function parameters:
+
+- `filename`: OSM file path
+- `network_type` (default: 'auto'): Network type
+  - `'auto'`: Motor vehicle roads
+  - `'bike'`: Bicycle paths
+  - `'walk'`: Pedestrian paths
+  - `'all'`: All types
+- `link_types`: List of road types to include
+- `POIs` (default: False): Whether to read POIs
+- `POI_set`: Set of POI types
+- `strict_mode` (default: True): Strict mode, keeps only the largest connected subgraph
+- `bounds`: Boundary range dictionary `{'minlat', 'minlon', 'maxlat', 'maxlon'}`
+
+### Complex Intersection Handling
+
+`consolidateComplexIntersections()` function parameters:
+
+- `macronet`: Macro network object
+- `auto_identify` (default: True): Automatically identify complex intersections
+- `intersection_list`: Manually specified list of intersections
+- `int_buffer` (default: 20.0): Intersection buffer radius in meters
+
+## Output
+
+The tool generates the following network output files:
+
+### Network Output
+
+`outputNetToCSV()` function parameters:
+
+- `macronet`: Network object
+- `output_folder` (default: ''): Output folder path
+- `includes`: List of network levels to output
+  - `['macro']`: Output macro network only
+  - `['macro', 'meso']`: Output macro and meso networks
+  - `['macro', 'meso', 'micro']`: Output all levels (default)
+
+## Advanced Usage
+
+### Custom Movement Specification
+
+```python
+# Disable automatic movement generation and use user-provided movement.csv
+net = nc.loadNetFromCSV(
+    folder='path/to/network',
+    node_file='node.csv',
+    link_file='link.csv',
+    movement_file='movement.csv'  # Contains user-defined movements
+)
+
+# Build with automatic generation disabled
+nc.buildMultiResolutionNets(
+    net,
+    auto_movement_generation=False
+)
+```
+
+## System Requirements
+
+- Python >= 3.8
+- numpy >= 1.20.0
+- pandas >= 1.3.0
+- shapely >= 2.0.0
+- geopandas >= 0.10.0
+- networkx >= 2.6.0
+- osmium >= 3.5.0
+
+## Citation
+
+If you use this tool in your research, please cite this tool.
+
+## License
+
+This project is licensed under the GNU General Public License v3 or later (GPLv3+) - see the [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+
+## Support
+
+For questions, issues, or feature requests, please contact us.
